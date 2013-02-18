@@ -32,16 +32,16 @@ reload(inj)
 
 # Default data and clock line delays for the two FMC boards/ML605 combination.
 # First 8 values are the delays for bits 0 to 7, 8th value is the delay for the clock line.
-#SN001_ADC_DELAYS = (
-#    [13,19,19,19,19,19,19,19]+[13], # CH0
-#    [18]*8+[0], #CH1
-#    [10]*8+[13], #CH2
-#    [19]*8+[13], #CH3
-#    [18]*8+[0], #CH4
-#    [16]*8+[0], #CH5
-#    [18]*8+[0], #CH6
-#    [14]*8+[0] #CH7
-#    )
+SN001_ADC_DELAYS = (
+   [13,19,19,19,19,19,19,19]+[13], # CH0
+   [18]*8+[0], #CH1
+   [10]*8+[13], #CH2
+   [19]*8+[13], #CH3
+   [18]*8+[0], #CH4
+   [16]*8+[0], #CH5
+   [18]*8+[0], #CH6
+   [14]*8+[0] #CH7
+   )
 # SN001_adc_delays=(
     # [5+16,8+16,8+16,8+16,8+16,8+16,8+16,8+16]+[0], # CH0
     # [2+16]*8+[0], #CH1
@@ -127,7 +127,7 @@ if __name__ == '__main__':
         pass
 
     #ADC_TEST_MODE = 0     #  0= normal, 1= ramp, 2=pulse (1 high, 10 low)
-    ADC_DELAY_TABLE = ADC_DELAYS_REV2_SN0001 # select the table corresponding to the FMC serial number
+    ADC_DELAY_TABLE = ADC_DELAYS_REV2_SN0001  #SN001_ADC_DELAYS # # select the table corresponding to the FMC serial number
     #FREF = 10 # FMC Reference clock frequency 
 
     # Create the new chFPGA object.

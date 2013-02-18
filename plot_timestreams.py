@@ -121,7 +121,8 @@ if __name__ == '__main__':
 
     # Create the new chFPGA object.
     c = chFPGA_controller.chFPGA_controller(adc_delay_table=ADC_DELAY_TABLE, init=1, sampling_frequency=800e6, reference_frequency=10e6) # pylint: disable=C0103
-    r = chFPGA_receiver.chFPGA_receiver()
+    chFPGA_config = c.get_config()
+    r = chFPGA_receiver.chFPGA_receiver(chFPGA_config, ip_address='10.10.10.11', port=41001)
     ##c.sync()
     #inj.set_inject_mode(c,r)
     #dcs = inj.check_fft_dc(c,r)
@@ -146,6 +147,6 @@ if __name__ == '__main__':
 
     #
     
-    #c.close()
-    #r.close()
+    c.close()
+    r.close()
 
