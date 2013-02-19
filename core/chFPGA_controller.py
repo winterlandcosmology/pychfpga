@@ -792,3 +792,20 @@ class chFPGA_controller(object):
             if ant.ant_number in channels:
                 print 'Setting gain of Antenna %i' % ant.ant_number
                 ant.SCALER.SHIFT_LEFT = 1 + log2_gain
+
+    def set_FFT_shift(self, fft_shift=0b11111111111, channels=None):
+        """
+        Sets the FFT shift schedule for the FFT.  Each bit represents a divide by 2 for that stage of the FFT.  Default is to shift every stage.  11 stage FFT, so default is 2**11-1.
+        expects a number  in the range 0b11111111111 (2047) and 0b00000000000 (0).  
+
+        History:
+            2013-02-19 KMB: Added this function
+        """
+
+        if channels is None:
+            channels = self.default_channels
+
+        for ant in self.ANT:
+            if ant.ant_number in channels:
+                print 'Setting FFT shift of antenna %i' % ant.ant_number
+                ant.FFT.FFT_SHIFT = fft_shift
