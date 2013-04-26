@@ -93,7 +93,7 @@ class run_corr():
     def init_housekeeping(self):
         nowtime=time.time()
         #nowtime = 1338143259.2
-        basename = 'out_'+ str(nowtime)+'\\'
+        basename = '/data/out_'+ str(nowtime)+'/'
         #print basename
         os.mkdir(basename)
         os.chdir(basename)
