@@ -169,7 +169,7 @@ ADC_DELAY_TABLE = ADC_DELAYS_REV2_SN0001 # select the table corresponding to the
 NSEC=60*60
 
 if __name__ == "__main__":
-    c = chFPGA_controller.chFPGA_controller(ip_address='10.10.10.11', port_number=41000, adc_delay_table=ADC_DELAY_TABLE, init=1, sampling_frequency=850e6, reference_frequency=10e6) # pylint: disable=C0103
+    c = chFPGA_controller.chFPGA_controller(ip_address='10.10.10.11', port_number=41000, adc_delay_table=ADC_DELAY_TABLE, init=1, sampling_frequency=800e6, reference_frequency=10e6) # pylint: disable=C0103
     chFPGA_config = c.get_config()
     r = chFPGA_receiver.chFPGA_receiver(chFPGA_config, ip_address='10.10.10.11', port=41001)
     #c.sync() sync means crash!!!
