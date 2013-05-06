@@ -67,9 +67,21 @@ class I2C_base(Module_base):
         self.fpga_instance=fpga;
         super(self.__class__,self).__init__(fpga,fpga.SYSTEM_PORT, fpga.SYSTEM_I2C_MODULE)
 
+    I2C_DEVICE_LIST_KC705 = {
+        'FMC': 0x02
+        } 
+    I2C_DEVICE_ADDR_KC705 = 0x74
+
+    def set_i2c_switch(self, device_name):
+        'Selects the active I2C sevice for the platforms that use a I2C switch'
+        if self.fpga_instance.PLATFORM_ID == self.fpga_instance.PLATFORM_ID_KC705:
+            self.i2c_write(addr=self.I2C_DEVICE_ADDR_KC705, data=[self.I2C_DEVICE_LIST_KC705[device_name]])    
+
     def i2c_write_read(self, port=0, addr=0, data=[0], read_length=0, verbose=False, noerror=False):
         """ 
-        Serially writes 1-3 bytes to the specified I2C node, send a restart condition and reads 'read_length' (0-4) bytes. 
+        When data=None, reads 'read_length' (0-3) bytes from the I2C device at specified I2C address in a single I2C transaction, 
+        or, if data is an non-empty array of 1-3 data bytes, writes the data to the specified I2C address, 
+        send a restart condition and reads 'read_length' (0-4) bytes. 
         """
         #verbose=1
         if port<0 or port>1:
@@ -84,10 +96,13 @@ class I2C_base(Module_base):
             print 'i2c_write_read: read_length is out of range'
             raise ValueError()
 
-        write_length=len(data)
-        if write_length>3:
-            print 'i2c_write_read: write length is out of range'
-            raise ValueError()
+        if data is None:
+            write_length = 0
+        else:
+            write_length=len(data)
+            if write_length>3:
+                print 'i2c_write_read: write length is out of range'
+                raise ValueError()
 
         if verbose:
             print 'i2c_write_read:  writing %i and reading %i bytes at port %i at address 0x%02x with the following data:' % (write_length, read_length, port,addr), hex(data)
@@ -103,14 +118,16 @@ class I2C_base(Module_base):
 
         self.write(0x000 + 0x05, port << 4) # disables RESET, set port number
 
-        if data is None: # if we do not write
+        if data is None: # if we do not write any date, we perform a single transaction with BYTES1=read_length and BYTES2=0 
             self.write(0x000 + 0x00, [(addr << 1) + 0x01]) # write I2C address with read flag to the transmit buffer 
             expected_ack = 2**(read_length + 1) - 1;
+            self.write(0x000 + 0x04,[0x00 + read_length]) # Prepare to start transaction by clearing the START bit
+            self.write(0x000 + 0x04,[0x80 + read_length]) # start transaction by creating a 0-to-1 trsnsition on the START bit. Do this as a separate transmission to make sure that the firmware registered the zero
         else: # if we write and optionnally read
             self.write(0x000 + 0x00, [(addr << 1) + 0x00] + data) # write address with write flag and data in transmit buffer (4 bytes max)
             expected_ack= 2**(read_length + write_length + 1 + (read_length != 0)) - 1
-        self.write(0x000 + 0x04,[0x00+(read_length << 4) + write_length]) # Prepare to start transaction by clearing the START bit
-        self.write(0x000 + 0x04,[0x80+(read_length << 4) + write_length]) # start transaction by creating a 0-to-1 trsnsition on the START bit. Do this as a separate transmission to make sure that the firmware registered the zero
+            self.write(0x000 + 0x04,[0x00+(read_length << 4) + write_length]) # Prepare to start transaction by clearing the START bit
+            self.write(0x000 + 0x04,[0x80+(read_length << 4) + write_length]) # start transaction by creating a 0-to-1 trsnsition on the START bit. Do this as a separate transmission to make sure that the firmware registered the zero
         self.wait_for_bit('DONE')
         data=self.read(0x080+0x00, length=4, type=np.uint8)
         ack=self.ACK_STATUS
@@ -166,4 +183,11 @@ class I2C_base(Module_base):
     
 
     def init(self):
+        '''
+        For KC705 Board, set the switch to FMC EEPROM by default
+        '''
+        print '     Platform ID:  ' + str(self.fpga.PLATFORM_ID)
+        if self.fpga.PLATFORM_ID == 1:
+            print '     Setting Default I2C to FMC HPC'
+            self.i2c_write(addr=0x74, data=[2])
         pass

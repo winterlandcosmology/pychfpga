@@ -95,11 +95,15 @@ def plot_TIMESTREAM_frames_multichannel(chFPGA, channels=[0], raw=0, flush=0):
     lineObjects = range(nchan)
     a = chFPGA.read_frames(raw=raw, flush=flush)
     for i,ax in enumerate(axObjects):
-        ax = fig.add_subplot(1,nchan,i+1, autoscale_on=True, xlim=(0, 2048), ylim=(-128, 128))
+        ax = fig.add_subplot(1,nchan,i+1, autoscale_on=False, xlim=(0, 2048), ylim=(-128, 128))
         lineObjects[i], = ax.plot(range(len(a[1])), a[1], 'o-', lw=2)
     ani = animation.FuncAnimation(fig, animate, np.ones(50),
                                       interval=20, blit=False, init_func=anim_init)
-    plt.show()
+    try:
+        plt.show()
+    except KeyboardInterrupt:
+        fig._stop()
+
 
 
 def plot_SPECTRUM_frames(chFPGA, channels=[0], raw=0, flush=0):

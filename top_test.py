@@ -22,6 +22,7 @@ from pychime.common.tests.test_adc_fft_bin import test_adc_fft_bin
 from pychime.common.tests.test_adc_fft_int_power import test_adc_fft_int_power
 from pychime.common.tests.test_adc_fft_level import test_adc_fft_level
 from pychime.common.tests.test_adc_dc import test_adc_dc
+from pychime.common.tests.test_adc_spectrum import test_adc_spectrum
 import pychime.common.tests.test_corr as tc
 
 reload(chFPGA_controller) # just to make sure that any changes to the code are reloaded
@@ -108,6 +109,17 @@ ADC_DELAYS_REV2_SN0001 = (
     [16]*8, #CH7
     )
 
+ADC_DELAYS_REV2_SN0001_KC705_FMC700 = (
+    [13,10,9,10,9,10,9,9], #CH0
+    [7]*8, #CH1 
+    [11,11,8,9,7,8,8,7], #CH2 
+    [6]*8, #CH3
+    [14]*8, #CH4
+    [14]*8, #CH5 
+    [13]*8, #CH6 
+    [0]*8, #CH7
+    )
+
 
 if __name__ == '__main__':        
     print '------------------------'
@@ -137,8 +149,8 @@ if __name__ == '__main__':
     ##c.sync()
     #inj.set_inject_mode(c,r)
     #dcs = inj.check_fft_dc(c,r)
-    #adctest = test_adc_dc(c,r)
-    #stuff = adctest.execute()
+    ######adctest = test_adc_spectrum(c,r)
+    ######stuff = adctest.execute()
     # Displays the system frequencies
     c.status()
     #adctest = test_adc_fft_bin(c,r)

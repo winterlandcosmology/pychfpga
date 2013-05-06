@@ -79,32 +79,32 @@ class ML605_PMBus_base(object):
         # 'VCC_3V3    ' :     (3.30, 10, 1, 3, 0),
     # };
         
-    def read_PMBus(self, controller, command, page=None, phase=None, raw=0, noerror = True):
+    def read_PMBus(self, controller, command, page=None, phase=None, raw=0, noerror = True, verbose = 0):
         """ Reads from the SMBus"""
-        i2c=self.fpga_instance.I2C
-        i2c_addr=52+controller
-        i2c_port=1
+        i2c = self.fpga_instance.I2C
+        i2c_addr = 52 + controller
+        i2c_port = 1
 
-        f=self.PMBus_commands[command]
-        command_code=f[0]
-        format=f[1]
-        conversion_fn=self.PMBus_formats[format][1];
-        length=self.PMBus_formats[format][0];
+        f = self.PMBus_commands[command]
+        command_code = f[0]
+        format = f[1]
+        conversion_fn = self.PMBus_formats[format][1];
+        length = self.PMBus_formats[format][0];
 
         if page is not None:
-            i2c.i2c_write(i2c_port,i2c_addr,[0x00, page], noerror=noerror) # sets the page
+            i2c.i2c_write(i2c_port, i2c_addr, [0x00, page], noerror=noerror) # sets the page
         if phase is not None:
-            i2c.i2c_write(i2c_port,i2c_addr,[0x04, phase], noerror=noerror) # sets the page
+            i2c.i2c_write(i2c_port, i2c_addr, [0x04, phase], noerror=noerror) # sets the page
         
-        data=i2c.i2c_write_read(i2c_port, i2c_addr, [command_code], read_length=length, verbose=1, noerror=noerror) # sets the command
+        data = i2c.i2c_write_read(i2c_port, i2c_addr, [command_code], read_length=length, verbose=verbose, noerror=noerror) # sets the command
         #data=i2c.i2c_read(1,i2c_addr,length=2) # reads two bytes
         #print 'Raw value=',hex(data)
         if raw:
             return data
-        if length==2:
-            data.dtype=np.dtype('<u2'); # lsb is sent first
-        data=data[0];
-        val=conversion_fn(data)
+        if length == 2:
+            data.dtype = np.dtype('<u2'); # lsb is sent first
+        data = data[0];
+        val = conversion_fn(data)
         return val
 
     def write_PMBus(self, controller, command, page, phase, value, noerror = True):
@@ -113,14 +113,14 @@ class ML605_PMBus_base(object):
         i2c_addr=52+controller
         i2c_port=1
 
-        f=self.PMBus_commands[command]
-        command_code=f[0]
-        format=f[1]
-        conversion_fn=self.PMBus_formats[format][2];
-        length=self.PMBus_formats[format][0];
+        f = self.PMBus_commands[command]
+        command_code = f[0]
+        format = f[1]
+        conversion_fn = self.PMBus_formats[format][2];
+        length = self.PMBus_formats[format][0];
 
-        i2c.i2c_write(i2c_port,i2c_addr,[0x00, page], noerror=noerror) # sets the page
-        i2c.i2c_write(i2c_port,i2c_addr,[0x04, phase], noerror=noerror) # sets the phase
+        i2c.i2c_write(i2c_port, i2c_addr, [0x00, page], noerror=noerror) # sets the page
+        i2c.i2c_write(i2c_port, i2c_addr, [0x04, phase], noerror=noerror) # sets the phase
         
         data=conversion_fn(value)
         if length==1:
@@ -128,7 +128,7 @@ class ML605_PMBus_base(object):
         elif length==2:
             data=[ (data & 0xff), (data>>8)] 
         print 'writing bytes:',data
-        data=i2c.i2c_write(i2c_port,i2c_addr,[command_code]+data, noerror=noerror) # sets the command
+        data=i2c.i2c_write(i2c_port, i2c_addr, [command_code] + data, noerror=noerror) # sets the command
         return
 
     def init_PMBus(self):
