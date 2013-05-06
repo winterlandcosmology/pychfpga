@@ -24,6 +24,7 @@ class ACC_base(Module_base):
     CAPTURE_PERIOD = BitField(CONTROL, 0x08, 0, width=32, doc="Number of frames before currently integrated values are transmitted")
     PROBE_ID = BitField(CONTROL, 0x09, 0, width=8, doc="Arbitrary 8-bit number that shows in the header of the transmitted frames to identify the source")
     FRAME_CTR = BitField(STATUS, 0x00, 0, width=8, doc="Number of frames received by the module. Rolls over.")
+    OVERFLOW = BitField(STATUS, 0x01, 0, doc="Overflow detected on CAPTURE FIFO.  Cleared by any reset")
     
     def __init__(self, parent, fpga_instance, port_number, module_number):
         self.parent = parent

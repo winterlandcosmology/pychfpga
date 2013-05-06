@@ -26,7 +26,7 @@ class FMC_EEPROM_base(object):
     def read(self, addr, length=1, **kwargs):
         """ Reads from the EEPROM"""
         i2c = self.fpga_instance.I2C
-
+        i2c.set_i2c_switch('FMC')
         data = i2c.i2c_write_read(self.FMC_EPPROM_PORT, self.FMC_EPPROM_ADDR + ((addr >> 16) & 1), [(addr >> 8) & 0xff, addr & 0xff], read_length=length, **kwargs) # reads a byte
 
         return data

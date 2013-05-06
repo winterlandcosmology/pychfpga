@@ -31,12 +31,12 @@ class ReceiverThread(threading.Thread):
     data_buf = buffer(data)
     data_block = np.zeros((8,2048+9), dtype=np.uint8)
     #Number of frequency bin pairs, Number of antennas, Number of bytes per word, header
-    NUMBER_OF_CORRELATORS = 5
-    NUMBERS_OF_ANTENNAS_TO_CORRELATE = 5
-    NUMBER_OF_MULTIPLIERS = NUMBERS_OF_ANTENNAS_TO_CORRELATE + 1
+    #NUMBER_OF_CORRELATORS = 5
+    #NUMBER_OF_ANTENNAS_TO_CORRELATE = 5 #8
+    #NUMBER_OF_MULTIPLIERS = NUMBER_OF_ANTENNAS_TO_CORRELATE + 1
     #MAX_NUMBER_OF_CHANNELS_PER_CORRELATOR = 128 
     MAX_CORR_FRAME_LENGTH = 512*13+11 #in bytes. The accumulator size is always 512 words, each word being 13 bytes long. A 11 byte header is added. 
-    corr_data_block = np.zeros((NUMBER_OF_MULTIPLIERS * NUMBER_OF_CORRELATORS, MAX_CORR_FRAME_LENGTH), dtype=np.int8)
+    
 #        frame_block = {'timestamp' :0, 'data':frame_data}        
     queue_overflow = 0
     queue_corr_overflow = 0
@@ -44,10 +44,14 @@ class ReceiverThread(threading.Thread):
     store_data = 0 # do not store frame blocks if False
     store_corr_data = 0 # do not store frame blocks if False
     
-    def __init__(self, sock, queue, queue_corr, verbose = 1):
+    def __init__(self, sock, queue, queue_corr, NUMBER_OF_ANTENNAS_TO_CORRELATE, NUMBER_OF_CORRELATORS, verbose = 1):
         self.sock = sock
         self.queue = queue
         self.queue_corr = queue_corr
+        self.NUMBER_OF_CORRELATORS = NUMBER_OF_CORRELATORS
+        self.NUMBER_OF_ANTENNAS_TO_CORRELATE = NUMBER_OF_ANTENNAS_TO_CORRELATE
+        self.NUMBER_OF_MULTIPLIERS = NUMBER_OF_ANTENNAS_TO_CORRELATE + 1
+        self.corr_data_block = np.zeros((self.NUMBER_OF_MULTIPLIERS * self.NUMBER_OF_CORRELATORS, self.MAX_CORR_FRAME_LENGTH), dtype=np.int8)
         self._stop = threading.Event()
         self._flush = threading.Event()
         self.verbose = verbose
@@ -123,7 +127,7 @@ class ReceiverThread(threading.Thread):
                         #Correlator unpack first try very simple. 
                         corr_number &= 0x0F # mask the FRAME ID bits
                         if (mult_number < self.NUMBER_OF_MULTIPLIERS ) :
-                            if ((timestamp != last_corr_timestamp) or (corr_time-last_corr_time > 0.5) ) and (nc>0): #if this is the beginning of a new correlator data block
+                            if ((timestamp != last_corr_timestamp) or (corr_time-last_corr_time > 2.9) ) and (nc>0): #if this is the beginning of a new correlator data block
                                 # If the queue is full, make room by poping the oldest element
                                 if self.store_corr_data: # False if this is the first block to be stored. In this case, do not store the data in case we got partial block after a flush()
                                     if self.queue_corr.full():
@@ -222,26 +226,30 @@ class chFPGA_receiver(object):
     FRAME_LENGTH = 2**LOG2_FRAME_LENGTH
 
     #CHANNELS_PER_CORR = 204
-    NUMBER_OF_ANTENNAS_TO_CORRELATE = 5
-    CHANNELS_PER_CORR_MAX = 512 // NUMBER_OF_ANTENNAS_TO_CORRELATE
+    #NUMBER_OF_ANTENNAS_TO_CORRELATE = 5 #8
     #NUMBER_OF_CORRELATORS = NUMBER_OF_ANTENNAS_TO_CORRELATE
     FREQ_CHANNELS_MAX = 1024
+
     def __init__(self, chFPGA_config, ip_address='10.10.10.11', port=41001, verbose=2):
 
         print '*** Opening receiver sockets ***'
         # Create socket handled and open socket communications to the chFPGA board
         self.sock=SocketIO.DataSocket_base(ip_address, port)
         #self.sock.open()
-
+        #Add configuration 
+        self.chFPGA_config = chFPGA_config
+        self.NUMBER_OF_ANTENNAS_TO_CORRELATE = chFPGA_config.number_of_antennas_to_correlate
+        self.NUMBER_OF_CORRELATORS = chFPGA_config.number_of_correlators
+        self.CHANNELS_PER_CORR_MAX = 512 // self.NUMBER_OF_ANTENNAS_TO_CORRELATE
         # Create a frame a queue and a thread that will fill it
         self.frame_queue = Queue.Queue(maxsize=self.FRAME_BUFFER_LENGTH)
         self.frame_queue_corr = Queue.Queue(maxsize=self.FRAME_BUFFER_LENGTH)
         #self.frame_queue = multiprocessing.Queue(maxsize=1000)
-        self.frame_receiver = ReceiverThread(self.sock.sock, self.frame_queue, self.frame_queue_corr, verbose=0)
+        self.frame_receiver = ReceiverThread(self.sock.sock, self.frame_queue, self.frame_queue_corr, self.NUMBER_OF_ANTENNAS_TO_CORRELATE, self.NUMBER_OF_CORRELATORS, verbose=0)
         self.frame_receiver.start()
-        self.chFPGA_config = chFPGA_config
+        X, Y = np.mgrid[0:self.NUMBER_OF_ANTENNAS_TO_CORRELATE,0:self.NUMBER_OF_ANTENNAS_TO_CORRELATE]
+        self.K = X*self.NUMBER_OF_ANTENNAS_TO_CORRELATE - X*(X+1)/2 + Y
         
-        self.NUMBER_OF_ANTENNAS_TO_CORRELATE = chFPGA_config.number_of_antennas_to_correlate
         
     def __del__(self):
 
@@ -279,7 +287,9 @@ class chFPGA_receiver(object):
     def length(self):
         """ Returns the number of entries in the receiver FIFO """
         
-        return self.frame_queue.qsize()        
+        return self.frame_queue.qsize()
+
+
             
     def read_frames(self, frames=1, verbose=0, raw=0, flush=0, timeout=3):
         """
@@ -375,7 +385,9 @@ class chFPGA_receiver(object):
         Nant = self.NUMBER_OF_ANTENNAS_TO_CORRELATE # Number of correlated antennas c.GPIO.
         Nproducts_max = (Nant*(Nant+1))/2 # Total number of correlation products
         #Nchannels_max = self.CHANNELS_PER_CORR_MAX # Maximum number of frequency channels that can be contained in a frame CHANNELS_PER_CORR_MAX*NUMBER_OF_CORRELATORS
-        linear_map = lambda i, j : (Nant * (Nant + 1) - (Nant - i) * (Nant - i + 1)) / 2 + (j - i) # Maps (i,j) (for j>=i) matrix coordinates into a linear array indexed from 0 to Nant*(Nant-1)/2-1: x0x0, x0x1, x0x2, x0x3, x1x1, x1x2, x1x3, x2x2, x2x3, x3x3
+        ##linear_map = lambda i, j : (Nant * (Nant + 1) - (Nant - i) * (Nant - i + 1)) / 2 + (j - i) # Maps (i,j) (for j>=i) matrix coordinates into a linear array indexed from 0 to Nant*(Nant-1)/2-1: x0x0, x0x1, x0x2, x0x3, x1x1, x1x2, x1x3, x2x2, x2x3, x3x3
+        ### Replace linear map with a Matrix
+
         corr_data=np.zeros((Nproducts_max, self.FREQ_CHANNELS_MAX), dtype=complex)*np.nan  # Dimensions are: (Number_of_products, number_of_frequency_channels)          
 
         # Acquire the data
@@ -415,7 +427,7 @@ class chFPGA_receiver(object):
             if verbose >= 4:
                 print 'Frame data: %s' % (''.join('%02X' % np.uint8(c) for c in in_frame))
             corr_number = frame_id & 0x0F
-            word_number = 0
+            product_number = 0  #counts the products until the end of a correlator frame.  Most basic product counter
             if len(in_frame[11:])%13:
                 print 'Error: number of product bytes (%i) not a multiple of 13' %  (in_frame[11:])
             
@@ -431,31 +443,32 @@ class chFPGA_receiver(object):
                 product = ((r1 << 32) | r2 ) + 1.0j * ((i1 << 32) | i2)
                 #raw_data.append(product)
                 
-                product_number = word_number %  Nant
-                #freq_channel = (word_number // Nant) *2 + corr_number*self.CHANNELS_PER_CORR
-                freq_channel = (word_number // Nant) *2 + corr_number*num_channels_per_correlator # Let's assume that every corr frames have the same number of channels, and that the received frames have no missing data
+                freq_bin_product_number = product_number %  Nant  #Product index within a frequency bin pair 0-Nantenna
+                #freq_channel = (product_number // Nant) *2 + corr_number*self.CHANNELS_PER_CORR
+                #freq_channel = (product_number // Nant) *2 + corr_number*num_channels_per_correlator # Let's assume that every corr frames have the same number of channels, and that the received frames have no missing data
+                freq_channel = (product_number//Nant)*2*Nant + corr_number*2  #the 5 here needs to be gotten from chFPGA.config()
                 # Compute the (i,j) index of each product
                 if mult_id == 0:
-                    i_index = Nant - 1 - product_number
-                    j_index = Nant - 1 - product_number
+                    i_index = Nant - 1 - freq_bin_product_number
+                    j_index = Nant - 1 - freq_bin_product_number
                     freq_channel_offset = 1
                 elif mult_id == Nant:
-                    i_index = product_number
-                    j_index = product_number
+                    i_index = freq_bin_product_number
+                    j_index = freq_bin_product_number
                     freq_channel_offset = 0
-                elif product_number < mult_id: # if we have the 'A' peoducts
+                elif freq_bin_product_number < mult_id: # if we have the 'A' peoducts
                     i_index = Nant - 1 - mult_id
-                    j_index = Nant - mult_id + product_number
+                    j_index = Nant - mult_id + freq_bin_product_number
                     freq_channel_offset = 0
                 else:
                     i_index = mult_id - 1
-                    j_index = mult_id + Nant - product_number - 1
+                    j_index = mult_id + Nant - freq_bin_product_number - 1
                     freq_channel_offset = 1
-                linear_index = linear_map(i_index, j_index)       
+                linear_index = self.K[i_index, j_index]       
                 if verbose >= 3:
-                    print '   Word #%i, product #%i, Freq bin #%i, (i,j)=(%i,%i), k=%i, , value = (%f + %fi)' %(word_number, product_number, freq_channel+freq_channel_offset, i_index, j_index, linear_index, product.real, product.imag )
+                    print '   Word #%i, product #%i, Freq bin #%i, (i,j)=(%i,%i), k=%i, , value = (%f + %fi)' %(product_number, freq_bin_product_number, freq_channel+freq_channel_offset, i_index, j_index, linear_index, product.real, product.imag )
                 corr_data[linear_index, freq_channel+freq_channel_offset] = product
-                word_number += 1   
+                product_number += 1   
             #raw_data = np.array(raw_data)
    
             

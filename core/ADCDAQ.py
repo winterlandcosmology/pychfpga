@@ -193,7 +193,8 @@ class ADCDAQ_base(Module_base):
         """
         # Do nothing if the FMC is not present
         if self.fpga.FMC_present:
-            self.PLL_CLK_SRC = 0 # 
+            self.PLL_CLK_SRC = 0 #
+            self.SAMPLE_DELAY = 0 #  Explicitly set the sample delay to zero 
         else:
             self.PLL_CLK_SRC = 1 # 0 = ADC clk, 1 = SYSTEM clock. use system clock if the ADC is not present
 

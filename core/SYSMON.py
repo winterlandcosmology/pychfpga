@@ -10,6 +10,8 @@ History:
     2011-07-08 : JFC : Created from test code in chFPGA.py
     2011-09-08 JFC : Improve display of status screen
 
+Todo:
+    2013-02-05: This code should be adapted to support the Kintex 7 XADC
 """
 import numpy as np
 
@@ -69,18 +71,23 @@ class SYSMON_base(object):
         fpga.write(fpga.SYSTEM_PORT, fpga.SYSTEM_SYSMON_MODULE, 0x200 + 2 * (addr), [data & 0xFF, data >> 8]) # Sysmon data is LSB first
 
     def init(self):
-        self.write(self.CONFIG1_ADDR, 0x0000)
-        self.write(self.CONFIG2_ADDR, 0x0000)
-        self.write(self.SEQ_ADC_SEL1_ADDR, 0x3F01) # Enable all ADC channels
-        self.write(self.SEQ_ADC_SEL2_ADDR, 0xFFFF)
-        self.write(self.SEQ_ADC_AVG1_ADDR, 0x3F01) # All averaging
-        self.write(self.SEQ_ADC_AVG2_ADDR, 0xFFFF)
-        self.write(self.SEQ_ADC_MODE1_ADDR, 0x0000) # All external channels set to single-ended
-        self.write(self.SEQ_ADC_MODE2_ADDR, 0x0000)
-        self.write(self.SEQ_ADC_ACQTIME1_ADDR, 0x0000) # all set to normal acq time
-        self.write(self.SEQ_ADC_ACQTIME2_ADDR, 0x0000)
-        self.write(self.CONFIG1_ADDR, 0x3000) # 256 averages
-        self.write(self.CONFIG2_ADDR, 0x2000) # Enable ADC channel auto sequencing
+        fpga = self.fpga_instance
+        self.supported_by_platform = fpga.PLATFORM_ID in [fpga.PLATFORM_ID_ML605, fpga.PLATFORM_ID_KC705]
+        
+            
+        if self.supported_by_platform:
+            self.write(self.CONFIG1_ADDR, 0x0000)
+            self.write(self.CONFIG2_ADDR, 0x0000)
+            self.write(self.SEQ_ADC_SEL1_ADDR, 0x3F01) # Enable all ADC channels
+            self.write(self.SEQ_ADC_SEL2_ADDR, 0xFFFF)
+            self.write(self.SEQ_ADC_AVG1_ADDR, 0x3F01) # All averaging
+            self.write(self.SEQ_ADC_AVG2_ADDR, 0xFFFF)
+            self.write(self.SEQ_ADC_MODE1_ADDR, 0x0000) # All external channels set to single-ended
+            self.write(self.SEQ_ADC_MODE2_ADDR, 0x0000)
+            self.write(self.SEQ_ADC_ACQTIME1_ADDR, 0x0000) # all set to normal acq time
+            self.write(self.SEQ_ADC_ACQTIME2_ADDR, 0x0000)
+            self.write(self.CONFIG1_ADDR, 0x3000) # 256 averages
+            self.write(self.CONFIG2_ADDR, 0x2000) # Enable ADC channel auto sequencing
 
 
     def temperature(self, addr):
@@ -108,17 +115,19 @@ class SYSMON_base(object):
             12V Voltage: Measured through a resistor divider (1/24) on Vaux<13>
         """
         #return
-        Vin = self.voltage(self.VAUX_VOLT_ADDR, vref=1.0) * 24
-        Iin = self.voltage(self.VAUX_CURR_ADDR, vref=1.0) / (0.002 * 50)
-        print '--------------- VIRTEX 6 System Monitor statistics ---------------'
-        print 'Core Temperature:   %5.1f C (%.2f C min, %.1f C max)' % (self.temperature(self.TEMP_ADDR), self.temperature(self.TEMP_MIN_ADDR), self.temperature(self.TEMP_MAX_ADDR))
-        print 'VccINT Voltage:     %5.2f V (%.2f V min, %.2f V max)' % (self.voltage(self.VCCINT_ADDR), self.voltage(self.VCCINT_MIN_ADDR), self.voltage(self.VCCINT_MAX_ADDR))
-        print 'VccINT Current:     %5.2f A, (ADC input= %.2f mV' % (self.voltage(self.VAUX_VPVN_ADDR, vref=1.0)/0.005, self.voltage(self.VAUX_VPVN_ADDR, vref=1.0) * 1000)
-        print 'VccAUX Voltage:     %5.2f V (%.2f V min, %.2f V max)' % (self.voltage(self.VCCAUX_ADDR), self.voltage(self.VCCAUX_MIN_ADDR), self.voltage(self.VCCAUX_MAX_ADDR))
-        print '12V Supply Voltage: %5.2f V (ADC input=%.2f V )' % (Vin, self.voltage(self.VAUX_VOLT_ADDR, vref=1.0))
-        print '12V Supply Current: %5.2f A (ADC input=%.2f V )' % (Iin, self.voltage(self.VAUX_CURR_ADDR, vref=1.0))
-        print '12V Power         : %5.2f W ' % (Vin * Iin)
-        print 'VREFP Voltage:      %5.2f V' % (self.voltage(self.VAUX_VREFP_ADDR))
-        print 'VREFN Voltage:      %5.2f V' % (self.voltage(self.VAUX_VREFN_ADDR))
-        print '------------------------------------------------------------------'
-
+        if self.supported_by_platform:
+            Vin = self.voltage(self.VAUX_VOLT_ADDR, vref=1.0) * 24
+            Iin = self.voltage(self.VAUX_CURR_ADDR, vref=1.0) / (0.002 * 50)
+            print '--------------- VIRTEX 6 System Monitor statistics ---------------'
+            print 'Core Temperature:   %5.1f C (%.2f C min, %.1f C max)' % (self.temperature(self.TEMP_ADDR), self.temperature(self.TEMP_MIN_ADDR), self.temperature(self.TEMP_MAX_ADDR))
+            print 'VccINT Voltage:     %5.2f V (%.2f V min, %.2f V max)' % (self.voltage(self.VCCINT_ADDR), self.voltage(self.VCCINT_MIN_ADDR), self.voltage(self.VCCINT_MAX_ADDR))
+            print 'VccINT Current:     %5.2f A, (ADC input= %.2f mV' % (self.voltage(self.VAUX_VPVN_ADDR, vref=1.0)/0.005, self.voltage(self.VAUX_VPVN_ADDR, vref=1.0) * 1000)
+            print 'VccAUX Voltage:     %5.2f V (%.2f V min, %.2f V max)' % (self.voltage(self.VCCAUX_ADDR), self.voltage(self.VCCAUX_MIN_ADDR), self.voltage(self.VCCAUX_MAX_ADDR))
+            print '12V Supply Voltage: %5.2f V (ADC input=%.2f V )' % (Vin, self.voltage(self.VAUX_VOLT_ADDR, vref=1.0))
+            print '12V Supply Current: %5.2f A (ADC input=%.2f V )' % (Iin, self.voltage(self.VAUX_CURR_ADDR, vref=1.0))
+            print '12V Power         : %5.2f W ' % (Vin * Iin)
+            print 'VREFP Voltage:      %5.2f V' % (self.voltage(self.VAUX_VREFP_ADDR))
+            print 'VREFN Voltage:      %5.2f V' % (self.voltage(self.VAUX_VREFN_ADDR))
+            print '------------------------------------------------------------------'
+        else:
+            print 'Not supported on this platform'

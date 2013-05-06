@@ -10,6 +10,7 @@ History:
 
 from pychime.core import chFPGA_controller
 from pychime.core import chFPGA_receiver
+from pychime import receiver_corr_fast
 import numpy as np
 import time, pylab, file_utils, os
 
@@ -18,7 +19,7 @@ class run_corr():
     class for running chFPGA correlator
      out.  
     '''
-    def __init__(self,fpga_ctrl, fpga_recv):
+    def __init__(self,fpga_ctrl, fpga_recv, integration_period=1):
         '''
             The baseclass has one data member, called data. 
             It is meant to hold the results of executing the algorithm once.
@@ -41,8 +42,9 @@ class run_corr():
         time.sleep(1)
         #self.fpga_ctrl.set_corr_reset(False)
         #self.fpga_ctrl.start_data_capture(burst_period_in_seconds=0.9, number_of_bursts=0)
-        self.fpga_ctrl.start_corr_capture(integration_period=1.0)
-        print "set to 1s"
+        #Currently 0.25s is the fastest will go with regular reciever.
+        #self.fpga_ctrl.start_corr_capture(integration_period=1)
+        #print "set to 1s"
         # time.sleep(3)
         # self.fpga_ctrl.start_corr_capture(integration_period=0.1)
         # print "set to 0.1s"
@@ -50,11 +52,13 @@ class run_corr():
         # self.fpga_ctrl.start_corr_capture(integration_period=0.05)
         # print "set to 0.05s"
         # time.sleep(2)
-        #self.fpga_ctrl.start_corr_capture(integration_period=0.01)
-        #print "set to 0.01s"
+        self.integration_period=integration_period
+        self.HOUR = 3600/self.integration_period
+        self.fpga_ctrl.start_corr_capture(integration_period=self.integration_period)
+        print "set to " + str(self.integration_period) + "s"
         time.sleep(2)
         #self.fpga_ctrl.sync()  #sync means crash!
-        self.fpga_recv.flush()
+        #self.fpga_recv.flush()
 
 
 
@@ -75,7 +79,7 @@ class run_corr():
 
         #spectrum = self.fpga_recv.read_frames()
         #spectrum = self.clean_spec(spectrum)
-        data = self.fpga_recv.read_corr_frames(verbose=0)
+        data = self.fpga_recv.read_corr_frames()
         #dout = np.array([output[0],output[1],output[2],output[3],output[4]])
         #data = self.unscramble(dout)
         return data
@@ -125,19 +129,21 @@ class run_corr():
         #Add spectrum file as well
         try:
             timefile, temperaturefile = self.init_housekeeping()
-            while nfiles < 3000:
+            while nfiles < (3000):
                 fileHandle = self.init_file(nfiles)
-                for i in xrange(NSEC):
-                    nowtime=time.time()
+                for i in xrange(3600):
                     data = self.get_data()
-                    interleave_a = self.convert_format(data)
+                    fileHandle.write(data)
+                    #interleave_a = self.convert_format(data)
                     #interleave_a = data
-                    for ia in interleave_a:
-                        fileHandle.write(ia)
-                    print '. ',
-                    temperature = c.ADC_BOARD.AmbTemp.temperature
-                    temperaturefile.write(str(temperature) + '\n' )
-                    timefile.write(str(nowtime) + '\n')
+                    #for ia in interleave_a:
+                    #    fileHandle.write(ia)
+                    if (i % (1/self.integration_period)) == 0:
+                        nowtime=time.time()
+                        print '. ',
+                        temperature = c.ADC_BOARD.AmbTemp.temperature
+                        temperaturefile.write(str(temperature) + '\n' )
+                        timefile.write(str(nowtime) + '\n')
                 fileHandle.close()
                 nfiles += 1
             timefile.close()
@@ -166,16 +172,14 @@ ADC_DELAYS_REV2_SN0001 = (
 
 ADC_DELAY_TABLE = ADC_DELAYS_REV2_SN0001 # select the table corresponding to the FMC serial number
 
-NSEC=60*60
-
 if __name__ == "__main__":
     c = chFPGA_controller.chFPGA_controller(ip_address='10.10.10.11', port_number=41000, adc_delay_table=ADC_DELAY_TABLE, init=1, sampling_frequency=850e6, reference_frequency=10e6) # pylint: disable=C0103
     chFPGA_config = c.get_config()
-    r = chFPGA_receiver.chFPGA_receiver(chFPGA_config, ip_address='10.10.10.11', port=41001)
+    r = receiver_corr_fast.chFPGA_receiver(chFPGA_config, ip_address='10.10.10.11', port=41001)
     #c.sync() sync means crash!!!
 
     #channels=[0,1,2,3]
-    corr = run_corr(c,r)
+    corr = run_corr(c,r, integration_period=1)
     corr.execute()
     c.close()
     r.close()

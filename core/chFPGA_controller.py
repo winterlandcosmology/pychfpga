@@ -149,10 +149,13 @@ class chFPGA_controller(object):
     SYSTEM_SPI_MODULE = 0
     SYSTEM_SYSMON_MODULE = 1
     SYSTEM_FREQ_CTR_MODULE = 2
-    SYSTEM_SYSMOD_MODULE = 3
+    SYSTEM_GPIO_MODULE = 3
     SYSTEM_REFCLK_MODULE = 4
     SYSTEM_I2C_MODULE = 5
 
+    PLATFORM_ID_ML605 = 0
+    PLATFORM_ID_KC705 = 1
+    
     def __init__(self, ip_address='10.10.10.11', port_number=41000, init=1, verbose=2, **kwargs):
         """
         Opens communication with the specified chFPGA. This does not affect the state and operations of chFPGA.
@@ -189,8 +192,12 @@ class chFPGA_controller(object):
             if verbose >= 2: print '  - GPIO'
             self.GPIO = GPIO.GPIO_base(self)
             # get system constants from the FPGA
-            self.NUMBER_OF_CORRELATORS = self.GPIO.NUMBER_OF_CORRELATORS
+            self.PLATFORM_ID = self.GPIO.PLATFORM_ID
             self.NUMBER_OF_ANTENNAS = self.GPIO.NUMBER_OF_ANTENNAS
+            self.NUMBER_OF_CORRELATORS_MAX = self.GPIO.NUMBER_OF_CORRELATORS
+            self.LIST_OF_IMPLEMENTED_CORRELATORS = [i for i in range(8) if bool(self.GPIO.IMPLEMENT_CORR & 2**i) and i<self.NUMBER_OF_CORRELATORS_MAX]
+            #self.LIST_OF_IMPLEMENTED_CORRELATORS = range(self.NUMBER_OF_CORRELATORS)
+            self.NUMBER_OF_CORRELATORS = len(self.LIST_OF_IMPLEMENTED_CORRELATORS)
             self.NUMBER_OF_ANTENNAS_TO_CORRELATE = self.GPIO.NUMBER_OF_ANTENNAS_TO_CORRELATE
             self.LOG2_FRAME_LENGTH = self.GPIO.LOG2_FRAME_LENGTH
             self.FRAME_LENGTH = 2**self.LOG2_FRAME_LENGTH # 2**11 = 2048 time samples per frame
@@ -199,8 +206,7 @@ class chFPGA_controller(object):
             self.CORR_PORT = range(self.NUMBER_OF_ANTENNAS+1, self.NUMBER_OF_ANTENNAS+1+ self.NUMBER_OF_CORRELATORS)
             self.default_channels = range(self.NUMBER_OF_ANTENNAS)
             self.LIST_OF_ANTENNAS_WITH_FFT = [i for i in range(8) if bool(self.GPIO.IMPLEMENT_FFT & 2**i)]
-            #self.LIST_OF_IMPLEMENTED_CORRELATORS = [i for i in range(8) if bool(self.GPIO.IMPLEMENT_CORR & 2**i)]
-            self.LIST_OF_IMPLEMENTED_CORRELATORS = range(self.NUMBER_OF_CORRELATORS)
+            self.PLATFORM_ID = self.GPIO.PLATFORM_ID
                         
             if verbose >= 2: print '  - I2C'
             self.I2C = I2C.I2C_base(self)
@@ -269,7 +275,7 @@ class chFPGA_controller(object):
 
         print '*** Initializing modules ***'
 
-        if verbose >= 2: print '  - SYSMOD'
+        if verbose >= 2: print '  - GPIO'
         self.GPIO.init() # This stops the antenna procesors from sending data. Neeeded if the FPGA is flooding the buffers which prevent subsequent reads to come through
         #self.sock.flush_data_socket() # Now the the data stops coming, flush the buffers
         self.sock.flush()
@@ -296,6 +302,7 @@ class chFPGA_controller(object):
         self.REFCLK.init()
         self.REFCLK.status()
 
+        #Only do for ML605, not KC705 board
         if verbose >= 2: print '  - SYSMON'
         self.SYSMON.init()
         self.SYSMON.status()
@@ -350,6 +357,7 @@ class chFPGA_controller(object):
     def get_config(self):
         config = chFPGA_config()
         config.number_of_antennas_to_correlate = self.NUMBER_OF_ANTENNAS_TO_CORRELATE
+        config.number_of_correlators = self.NUMBER_OF_CORRELATORS
         return config
         
     def update_config(self):
@@ -692,13 +700,16 @@ class chFPGA_controller(object):
             else:
                 self.ANT[ch].INJECT.inject_frame(data)
 
-    def start_corr_capture(self,  integration_period=1.0, capture_period=None, verbose=1):
+    def start_corr_capture(self,  integration_period=1.0, capture_period=None, corr_to_use=None, verbose=1):
         """
         Instructs chFPGA to starts integrating and capturing the correlator outputs at the specified period. The captures data is sent over the Ethernet interface.
         The capture period can be optionnaly specified independently from the integration period. If not specified, it is equal to the integration period.
         This function does not receive the frames from the ethernet port. This has to be done separately.
+
+        corr_to_use -> if not None, is a list specifying which to correlators to use
         History:
             2012-10-02 JFC: Created
+            2013-03-25 KMB
         """
 
         if capture_period is None:
@@ -708,11 +719,21 @@ class chFPGA_controller(object):
         integration_period_in_frames = int(capture_period*1.0/self.FRAME_PERIOD)
 
         self.set_ant_reset(1)            
-        self.set_corr_reset(1)            
-        for corr in self.CORR:
+        self.set_corr_reset(1)
+        if corr_to_use is None:     
+            corrs = self.LIST_OF_IMPLEMENTED_CORRELATORS
+            corrs_not_used = []
+        else:
+            corrs = corr_to_use
+            corrs_not_used = list(set(self.LIST_OF_IMPLEMENTED_CORRELATORS).difference(corr_to_use))
+        for corr_num in corrs:
+            corr = self.CORR[corr_num]
             print 'Configuring correlator %i to integrate over %f seconds (over %i frames) and transmit data every %f seconds (over %i frames)' %  (corr.instance_number, integration_period, integration_period_in_frames, capture_period , capture_period_in_frames)
             corr.ACC.RESET = 0
             corr.ACC.config(integration_period=integration_period_in_frames, capture_period=capture_period_in_frames)
+        for corr_num in corrs_not_used:
+            corr = self.CORR[corr_num]
+            corr.ACC.RESET = 1
         self.set_corr_reset(0)
         self.set_ant_reset(0)            
         #self.sync()
@@ -793,6 +814,7 @@ class chFPGA_controller(object):
                 print 'Setting gain of Antenna %i' % ant.ant_number
                 ant.SCALER.SHIFT_LEFT = 1 + log2_gain
 
+
     def set_FFT_shift(self, fft_shift=0b11111111111, channels=None):
         """
         Sets the FFT shift schedule for the FFT.  Each bit represents a divide by 2 for that stage of the FFT.  Default is to shift every stage.  11 stage FFT, so default is 2**11-1.
@@ -809,3 +831,4 @@ class chFPGA_controller(object):
             if ant.ant_number in channels:
                 print 'Setting FFT shift of antenna %i' % ant.ant_number
                 ant.FFT.FFT_SHIFT = fft_shift
+
