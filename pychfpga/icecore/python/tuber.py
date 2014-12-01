@@ -197,8 +197,16 @@ class TuberHWMResource(HWMResource):
         '''
 
         # Refuse to access to _some_types_of_name
-        if name[0]=='_': raise AttributeError("Refusing to access '%s'" % name)
-
+        #if name[0]=='_': raise AttributeError("Refusing to access '%s'" % name)
+        if name in ('_sa_instance_state',
+                    '_calls', '_tuber_meta',
+                    '_ipython_display_', 'trait_names', '_getAttributeNames',
+                    'getdoc', '__wrapped__', '__call__',
+                    '_repr_html_', '_repr_svg_', '_repr_jpeg_',
+                    '_repr_png_', '_repr_json_', '_repr_javascript_',
+                    '_repr_latex_', '_repr_pdf_'):
+            raise AttributeError
+        
         # Make sure this method is described by metadata
         meta = self._tuber_meta
         if name not in meta.methods and name not in meta.properties:
