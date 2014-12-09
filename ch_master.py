@@ -200,25 +200,26 @@ if __name__ == "__main__":
     exit()
 
   # Build up the adc_delay_table.
-  n = int(conf["n_antenna"])
-  adc_delay = []
-  for i in range(n):
-    name = "ch%02d" % i
-    tmp_delay = []
-    if not name in conf["fpga"]["adc_delay"]:
-      log.critical("Could not find fpga.adc_delay.%s entry in configuration " \
-                   "file." % (name))
-      exit()
-    else:
-      this_chan = conf["fpga"]["adc_delay"][name]
-    for j in range(len(this_chan)):
-      k = int(this_chan[j])
-      tmp_delay.append(k)
-    if len(tmp_delay) != 16:
-      log.critical("Entry fpga.adc_delay.%s needs 16 integer entries." % \
-                   (name))
-      exit()
-    adc_delay.append((tmp_delay[:8],tmp_delay[8:]))
+  if (int(args.configure_fpga) > 0):
+    n = int(conf["n_antenna"])
+    adc_delay = []
+    for i in range(n):
+      name = "ch%02d" % i
+      tmp_delay = []
+      if not name in conf["fpga"]["adc_delay"]:
+        log.critical("Could not find fpga.adc_delay.%s entry in configuration " \
+                     "file." % (name))
+        exit()
+      else:
+        this_chan = conf["fpga"]["adc_delay"][name]
+      for j in range(len(this_chan)):
+        k = int(this_chan[j])
+        tmp_delay.append(k)
+      if len(tmp_delay) != 16:
+        log.critical("Entry fpga.adc_delay.%s needs 16 integer entries." % \
+                     (name))
+        exit()
+      adc_delay.append((tmp_delay[:8],tmp_delay[8:]))
 
   # Create the acquisition object. Pass it the configuration settings so that it
   # can initialise.
