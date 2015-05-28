@@ -27,6 +27,7 @@ from pychfpga import calculate_gains
 from pychfpga.MGADC08 import MGADC08
 from pychfpga.init_links import *
 #import MySQLdb
+from pychfpga.core.icecore import async, async_return
 
 # Should put somewhere else. Flatten arbitrarily deep nested lists
 # from stack overflow
@@ -84,20 +85,21 @@ def convert_types(val):
               pass
       return val
 
+@async
 def get_fpga_hk(fpga):
     ret = {}
-    ret["core_temp"] = fpga.get_motherboard_temperature(fpga.TEMPERATURE_SENSOR.MB_FPGA_DIE)
-    # ret["VCC1V0"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V0)
-    # ret["VCC1V0_GTX"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V0_GTX)
-    # ret["VCC12V0"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC12V0)
-    # ret["VCC12V0_curr"] = fpga.get_motherboard_current(fpga.RAIL.MB_VCC12V0)
-    # ret["VCC5V5"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC5V5)
-    # ret["VCC1V5"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V5)
-    # ret["VCC1V2"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V2)
-    # ret["VCC3V3"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC3V3)
-    # ret["VCC1V8"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V8)
-    # ret["VADJ"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VADJ)
-    return ret
+    ret["core_temp"] = yield fpga.get_motherboard_temperature.async(fpga.TEMPERATURE_SENSOR.MB_FPGA_DIE)
+    ret["VCC1V0"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V0)
+    ret["VCC1V0_GTX"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V0_GTX)
+    ret["VCC12V0"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC12V0)
+    ret["VCC12V0_curr"] = fpga.get_motherboard_current(fpga.RAIL.MB_VCC12V0)
+    ret["VCC5V5"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC5V5)
+    ret["VCC1V5"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V5)
+    ret["VCC1V2"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V2)
+    ret["VCC3V3"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC3V3)
+    ret["VCC1V8"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V8)
+    ret["VADJ"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VADJ)
+    async_return(ret)
 
 # FPGA housekeeping.
 fpga_hk_field = {      "core_temp" : "deg C",

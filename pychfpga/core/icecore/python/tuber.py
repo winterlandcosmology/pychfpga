@@ -133,9 +133,9 @@ class Context(object):
             t2 = time.time()
 
             # Say something about the call
-            l = logging.getLogger(__name__)
-            l.debug('%r: %.500s => %.500s (%f sec)' % (
-                self, calls, response.body, t2-t1))
+            #l = logging.getLogger(__name__)
+            #l.debug('%r: %.500s => %.500s (%f sec)' % (
+            #    self, calls, response.body, t2-t1))
 
             json_out = json.loads(
                 response.body,

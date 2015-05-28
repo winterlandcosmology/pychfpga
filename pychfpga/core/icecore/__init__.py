@@ -23,6 +23,8 @@ from hardware_map import (
     Boolean,
     Session,
     set_session_class,
+    async,
+    async_return,
 )
 
 from tuber import (

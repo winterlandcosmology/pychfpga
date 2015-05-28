@@ -21,6 +21,7 @@ import logging.handlers
 import __main__
 import numpy as np
 import time
+import pickle
 
 # IT IS IMPORTANT TO START THE PATH AT CHFPGA
 from pychfpga.MGADC08 import MGADC08
@@ -71,7 +72,6 @@ if __name__ == '__main__':
     parser.add_argument('-y', '--yamlfile', action = 'store', type=str, default= 'yaml_iceboard_list.txt',  help='Yaml file with list of boards and their respective IP addresses and handlers.')
     parser.add_argument('-d', '--delayfile', action = 'store', type=str, default= 'delays_feb17_2015.pkl',  help='Pickle file with ADC delays.')
     parser.add_argument('-n', '--nframes', action = 'store', type=int, default= 256,  help='Number of frames to save.')
-    parser.add_argument('-f', '--filename', action = 'store', type=str, default= None,  help='Name of file to save raw data.')
 
 
 
@@ -140,25 +140,33 @@ if __name__ == '__main__':
     c.discover_mezzanines()
     # Establish communication with the board and initialize the firmware and software
     c.open(adc_delay_table=ADC_DELAY_TABLE,
-           init=args.init,
+           init=1,
            sampling_frequency=800e6,
            reference_frequency=10e6, data_width=4,
            group_frames=4,
            enable_gpu_link = 1)
 
+    print 'Finished board configuration'
     # Set delays
     with open(args.delayfile) as delayfile:
         delays = pickle.load(delayfile)
 
-    for cc in enumerate(c):
-        cc.set_adc_delays_with_check(delays[int(cc.serial)])
+    for cc in c:
+        try:
+            cc.set_adc_delays_with_check(delays[int(cc.serial)])
+        except:
+            print 'Did not find delay table in %s for board SN%s in slot %d. Using default delay table' %(args.delayfile, cc.serial, cc.slot)
+            cc.set_adc_delays_with_check(ADC_DELAY_TABLE)
 
+    print 'Finished setting delays'
     # Start capturing data
     c.set_data_source('adc')
     c.set_adc_mode('data')
     for cc in c:
-        cc.start_data_capture(burst_period_in_seconds=0.05, source='adc')
+        print 'Starting data capture for board SN%s in slot %d' %(cc.serial, cc.slot)
+        cc.start_data_capture(burst_period_in_seconds=0.1, source='adc')
         rr = chFPGA_receiver(cc.get_config())
+        time.sleep(1)
         data = []
         timestamps = []
         n = 0
@@ -170,10 +178,14 @@ if __name__ == '__main__':
                 timestamps.append(new_frames['timestamp'])
                 n += 1
             except:
-                print "missing a frame, skipping"
+                print 'missing a frame for board SN%s in slot %d. Skipping' %(cc.serial, cc.slot)
 
         data = np.hstack(data)
         timestamps = np.array(timestamps)
-        np.savez('rawdata_SN%s_Slot%d_'+str(time.time())+'.npz', data=data, timestamps=timestamps)
+        filename = 'rawdata_SN%s_Slot%d_%s.npz' %(cc.serial, cc.slot, str(time.time()))
+        np.savez(filename, data=data, timestamps=timestamps)
         cc.stop_data_capture()
         rr.close()
+        cc.close()
+        print 'Raw data saved in '+filename
+        print 'Finished data capture for board SN%s in slot %d\n' %(cc.serial, cc.slot)
