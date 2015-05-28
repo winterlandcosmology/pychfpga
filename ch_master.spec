@@ -30,7 +30,9 @@ n_freq    = integer(min = 1)
 
 [acq]
   base_path = string
+  livefile = string
   frames_per_file = integer(min = 1)
+  frames_per_livefile = integer(min = 1)
   n_frame_buf = integer(min = 10, default = 12)
   producer_max_range = integer(min = 2, default = 3)
   fpga_count_max = integer(default = 4294967295)

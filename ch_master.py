@@ -216,8 +216,8 @@ if __name__ == "__main__":
       name = "ch%02d" % i
       tmp_delay = []
       if not name in conf["fpga"]["adc_delay"]:
-        log.critical("Could not find fpga.adc_delay.%s entry in configuration " \
-                     "file." % (name))
+        log.critical("Could not find fpga.adc_delay.%s entry in " \
+                     "configuration file." % (name))
         exit()
       else:
         this_chan = conf["fpga"]["adc_delay"][name]
@@ -236,19 +236,24 @@ if __name__ == "__main__":
   if (int(args.configure_fpga) > 0): 
       # Create the FPGA controller object.
       # Will now create an array of controller objects indexed by serial number
-      # And program board firmware if needed/requested currently will always reprogram
+      # And program board firmware if needed/requested currently will always
+      # reprogram
       close_all_sockets()
       IceArray.close_all_sessions()
-      ca = IceArray(uri=conf["fpga"]["db_file"], interface_ip_addr=conf["fpga"]["host_ip"])
+      ca = IceArray(uri=conf["fpga"]["db_file"],
+                    interface_ip_addr=conf["fpga"]["host_ip"])
       # Might want to move the list somewhere else/into conf file?
       #ca.load_iceboards('/home/chime/ch_acq/pychfpga/iceboard_list.txt')
       ca.load_iceboards('/home/kbandura/git/ch_acq/pychfpga/iceboard_list.txt')
       ca.discover()
       bitfile_filename = conf["fpga"]["bitfile_name"]
-      fpga_bitstream = ca.get_fpga_bitstream(bitfile_filename, ChimeFpgaFirmware)
-      c = ca.get_iceboards(subarray=[conf["fpga"]["subarray"]]).index_by(IceBoard.serial_number)
+      fpga_bitstream = ca.get_fpga_bitstream(bitfile_filename,
+                                             ChimeFpgaFirmware)
+      c = ca.get_iceboards(subarray=[conf["fpga"]["subarray"]]) \
+                                    .index_by(IceBoard.serial_number)
       c.set_fpga_firmware(fpga_bitstream, force=conf["fpga"]["force"])
-      #Will need to loop this with different delay tables, or reset delay tables later....
+      # Will need to loop this with different delay tables, or reset delay
+      # tables later....
       c.open( \
             adc_delay_table=adc_delay, \
             init=1, \
