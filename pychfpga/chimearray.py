@@ -53,7 +53,7 @@ if __name__ == '__main__':
     reload(logging) # clear any previous logger set-up that is stored in the logging module
     reload(logging.handlers) # we need to reload the handlers as well so they are inheriting from the newly loaded Handler class defined in freshly reloaded logging, not the old one. Otherwise we get errors.
 
-    close_all_sockets()
+    #close_all_sockets()
 
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0]) # description is the first line of the docstring
     parser.add_argument('-t', '--log_target', action='store', type=str, default='stream', help="Logging target ('stream', 'syslog' or a filename)")
@@ -111,7 +111,7 @@ if __name__ == '__main__':
     with open(args.yamlfile, 'rb') as yamlfile:
         ca =  load_yaml(yamlfile)   
     c = ca.query(IceBoardPlus).filter_by(subarray=args.subarray) # c is kind of standard notation for a list of iceboards now.
-    
+    print list(c)
     # Associate the fpga_bitstream with the target Handler    
     c.set_handler(chFPGA_controller, fpga_bitstream)
     

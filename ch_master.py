@@ -89,22 +89,19 @@ def convert_types(val):
 @async
 def get_fpga_hk(fpga):
     """this should parallelize to make one call for all sensors"""
+    sensors = [ fpga.RAIL.MB_VCC1V0,fpga.RAIL.MB_VCC1V0_GTX, 
+        fpga.RAIL.MB_VCC12V0, fpga.RAIL.MB_VCC5V5, fpga.RAIL.MB_VCC1V5,
+        fpga.RAIL.MB_VCC1V2, fpga.RAIL.MB_VCC3V3, fpga.RAIL.MB_VCC1V8,
+        fpga.RAIL.MB_VADJ ]
     with fpga.tuber_context() as ctx:
-        t = yield ctx.get_motherboard_temperature(fpga.TEMPERATURE_SENSOR.MB_FPGA_DIE)
-    # ret["VCC1V0"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V0)
-    # ret["VCC1V0_GTX"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V0_GTX)
-    # ret["VCC12V0"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC12V0)
-    # ret["VCC12V0_curr"] = fpga.get_motherboard_current(fpga.RAIL.MB_VCC12V0)
-    # ret["VCC5V5"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC5V5)
-    # ret["VCC1V5"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V5)
-    # ret["VCC1V2"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V2)
-    # ret["VCC3V3"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC3V3)
-    # ret["VCC1V8"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VCC1V8)
-    # ret["VADJ"] = fpga.get_motherboard_voltage(fpga.RAIL.MB_VADJ)
-    async_return(t)
+        res = yield [ctx.get_motherboard_voltage(s) for s in sensors]
+        res.append( (yield ctx.get_motherboard_current(fpga.RAIL.MB_VCC12V0)) )
+        res.append( (yield ctx.get_motherboard_temperature(fpga.TEMPERATURE_SENSOR.MB_FPGA_DIE)) )
+    async_return(res)
 
 #should be more elegant way...but list fields here to stay compatible
-hk_fields_list = ["core_temp"]
+hk_fields_list = [ "VCC1V0", "VCC1V0_GTX", "VCC12V0", "VCC5V5", "VCC1V5", 
+      "VCC1V2", "VCC3V3", "VCC1V8", "VADJ", "VCC12V0_curr", "core_temp"]
 
 @async
 def get_all_fpga_slots_hk(c):
@@ -112,16 +109,16 @@ def get_all_fpga_slots_hk(c):
 
 # FPGA housekeeping.
 fpga_hk_field = {      "core_temp" : "deg C",
-                       # "VCC1V0" : "V",
-                       # "VCC1V0_GTX" : "V",
-                       # "VCC12V0" : "V",
-                       # "VCC12V0_curr" : "A",
-                       # "VCC5V5" : "V",
-                       # "VCC1V5" : "V",
-                       # "VCC1V2" : "V",
-                       # "VCC3V3" : "V",
-                       # "VCC1V8" : "V",
-                       # "VADJ" : "V",
+                        "VCC1V0" : "V",
+                        "VCC1V0_GTX" : "V",
+                        "VCC12V0" : "V",
+                        "VCC12V0_curr" : "A",
+                        "VCC5V5" : "V",
+                        "VCC1V5" : "V",
+                        "VCC1V2" : "V",
+                        "VCC3V3" : "V",
+                        "VCC1V8" : "V",
+                        "VADJ" : "V",
                 }
 
 # Backplane serial number---eventually this should be queried directly from the

@@ -125,12 +125,12 @@ class Context(object):
                 url=self.obj.tuber_uri,
                 method='POST',
                 body=json.dumps(calls),
-                connect_timeout=10,
+                connect_timeout=10 * 3,
                 request_timeout=10 * 60) # permit calls to be really slow
 
-            t1 = time.time()
+            #t1 = time.time()
             response = yield client.fetch(request)
-            t2 = time.time()
+            #t2 = time.time()
 
             # Say something about the call
             # l = logging.getLogger(__name__)
