@@ -358,7 +358,8 @@ if __name__ == "__main__":
             ni_board = ib
             break  
       # Get noise injectionn gating board. Currently board SN0005 (slot 1)
-      assert args.ni_enable and (ni_board != None), 'Noise injection gating board SN%s not found in subarray %d' %(args.ni_board, conf["fpga"]["subarray"])
+      if args.ni_enable:
+        assert ni_board != None, 'Noise injection gating board SN%s not found in subarray %d' %(args.ni_board, conf["fpga"]["subarray"])
       
       if (int(args.compute_gain) > 0):
           #Shouldn't need for loop here, but initial testing failed in parallel.
@@ -400,9 +401,10 @@ if __name__ == "__main__":
 
       # This is another hack. Have to fix it for DRAO. REALLY: HAVE TO CHANGE IT
       # shuffle_init(list(c),sync_board,frames_per_packet=4, cb1_lanes=16, cb1_bins=64, cb2_lanes=16, cb2_bins=8, cb2_bypass=0, remap=True )
-      shuffle_init(list(c),ni_board, sync_board, frames_per_packet=4, cb1_lanes=16, cb1_bins=64, cb2_lanes=16, cb2_bins=8, cb2_bypass=0, remap=True,
+      d_slots = conf['fpga']['destination_slots'] #[int(ii) for ii in conf["fpga"]["destination_slots"]]
+      shuffle_init(list(c),ni_board, sync_board, dsmap = d_slots, frames_per_packet=4, cb1_lanes=16, cb1_bins=64, cb2_lanes=16, cb2_bins=8, cb2_bypass=0, remap=True,
                    ni_enable = args.ni_enable, ni_offset = args.ni_offset, 
-                   ni_high_time = args.ni_high_time, ni_period = args.ni_period)
+                   ni_high_time = args.ni_high_time-1, ni_period = args.ni_period-1)
 
       #Make sure FPGA throttling is fast enough to send all the data
       #FPGA doesn't seem to change this without a reset...

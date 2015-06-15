@@ -48,7 +48,7 @@ def get_gpu_data(node_number, dna_number):
     return result
 
 #def shuffle_init(c, sync_board, frames_per_packet=1, cb1_lanes=4, cb1_bins=16, cb2_lanes=2, cb2_bins=1, cb2_bypass=0, bp_bypass=0, remap=True):
-def shuffle_init(c, ni_board, sync_board, frames_per_packet=1, cb1_lanes=4, cb1_bins=16, cb2_lanes=2, cb2_bins=1, cb2_bypass=0, bp_bypass=0, remap=True,
+def shuffle_init(c, ni_board, sync_board, dsmap=range(16), frames_per_packet=1, cb1_lanes=4, cb1_bins=16, cb2_lanes=2, cb2_bins=1, cb2_bypass=0, bp_bypass=0, remap=True,
                  ni_enable = False, ni_offset = 0, ni_high_time = 8388608, ni_period = 16777216):
     """ Setup the crossbars and data shuffling in every board of the array.
     """
@@ -78,10 +78,10 @@ def shuffle_init(c, ni_board, sync_board, frames_per_packet=1, cb1_lanes=4, cb1_
         #    pass
         # set the stream ID of every transmitter to (slot_number, analog input) complex number on every bin
         for j,cb in enumerate(bb.CROSSBAR):
-            cb.STREAM_ID = bb.slot-1
+            cb.STREAM_ID = dsmap[bb.slot-1]
 
         for j,cb in enumerate(bb.CROSSBAR2):
-            cb.STREAM_ID = bb.slot-1
+            cb.STREAM_ID = dsmap[bb.slot-1]
 
         # Set the source of the IRIG-B signal
         bb.set_irigb_source('bp_time')
@@ -97,7 +97,7 @@ def shuffle_init(c, ni_board, sync_board, frames_per_packet=1, cb1_lanes=4, cb1_
             bb.CROSSBAR2.set_lane_map(compute_lane_map(bb))
 
         # Initialize the crossbars to select and send data in a specific format
-        bb.init_crossbars(frames_per_packet=frames_per_packet, cb1_lanes=cb1_lanes, cb1_bins=cb1_bins, cb2_lanes=cb2_lanes, cb2_bins=cb2_bins, cb2_bypass=cb2_bypass, remap=remap, bp_bypass=bp_bypass)
+        bb.init_crossbars(dsmap, frames_per_packet=frames_per_packet, cb1_lanes=cb1_lanes, cb1_bins=cb1_bins, cb2_lanes=cb2_lanes, cb2_bins=cb2_bins, cb2_bypass=cb2_bypass, remap=remap, bp_bypass=bp_bypass)
 
     # set-up receivers
     for i, bb in enumerate(c):

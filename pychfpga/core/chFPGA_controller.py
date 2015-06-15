@@ -1508,7 +1508,7 @@ class chFPGA_controller(chFPGAHandler):
                     res['FMC%i ADC%i'%(fmc_number, adc_number)] = adc.get_temperature()
         return res
 
-    def init_crossbars(self, frames_per_packet=3, cb1_lanes=16, cb1_bins=64, cb2_lanes=8, cb2_bins=1, cb2_bypass=False, bp_bypass=1, remap=True):
+    def init_crossbars(self, dsmap=range(16), frames_per_packet=3, cb1_lanes=16, cb1_bins=64, cb2_lanes=8, cb2_bins=1, cb2_bypass=False, bp_bypass=1, remap=True):
         """ Initializes the 1st and 2nd crossbar to reorder and package the channelizer data send to the GPU correlators in the desired format.
 
         `ib` is the IceBoard to be configured.
@@ -1546,7 +1546,7 @@ class chFPGA_controller(chFPGAHandler):
             if remap and not bp_bypass:
                 tx = (self.slot, i)  # unique transmitter id (slot, lane)
                 destination_slot = self.crate.get_matching_rx(tx)[0]
-                bs.select_bins(np.arange(cb1_bins) * cb1_minimum_bin_spacing + (destination_slot-1))
+                bs.select_bins(np.arange(cb1_bins) * cb1_minimum_bin_spacing + (dsmap[destination_slot-1]))
             else:
                 bs.select_bins(np.arange(cb1_bins) * cb1_minimum_bin_spacing)
             # bs.select_bins(np.arange(800))
