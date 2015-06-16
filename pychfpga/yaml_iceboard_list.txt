@@ -23,7 +23,7 @@
    - !IceBoardPlus { serial: "0047", hostname: "10.10.10.47", handler_name: "chFPGA_controller", subarray: 104, slot: -1 }  # broken brought back
    - !IceBoardPlus { serial: "0055", hostname: "10.10.10.55", handler_name: "chFPGA_controller", subarray: 2  , slot:  9 }  # Penticton slot 9
    - !IceBoardPlus { serial: "0063", hostname: "10.10.10.63", handler_name: "chFPGA_controller", subarray: 2  , slot:  7 }  # Penticton slot 7
-   - !IceBoardPlus { serial: "0058", hostname: "10.10.10.58", handler_name: "chFPGA_controller", subarray: 77, slot: 4 }  # McGill JF  Development board
+   - !IceBoardPlus { serial: "0058", hostname: "10.10.10.58", handler_name: "chFPGA_controller", subarray: 66, slot: 4 }  # McGill JF  Development board
    - !IceBoardPlus { serial: "0070", hostname: "10.10.10.70", handler_name: "chFPGA_controller", subarray: 77, slot: 1 }  # McGill crate slot 1
    - !IceBoardPlus { serial: "0049", hostname: "10.10.10.49", handler_name: "chFPGA_controller", subarray: 77, slot: 2 }  # McGill crate slot 4
    - !IceBoardPlus { serial: "0051", hostname: "10.10.10.51", handler_name: "chFPGA_controller", subarray: 77, slot: 9 }  # McGill crate slot 5
@@ -34,5 +34,5 @@
    - !IceBoardPlus { serial: "0065", hostname: "10.10.10.65", handler_name: "chFPGA_controller", subarray: 77, slot: 14 }  # McGill crate slot 11
    - !IceBoardPlus { serial: "0068", hostname: "10.10.10.68", handler_name: "chFPGA_controller", subarray: 77, slot: 11 }  # McGill crate slot 12
    - !IceBoardPlus { serial: "0061", hostname: "10.10.10.61", handler_name: "chFPGA_controller", subarray: 77, slot: 5 }  # McGill crate slot 13
-   - !IceBoardPlus { serial: "0038", hostname: "10.10.10.38", handler_name: "chFPGA_controller", subarray: 77, slot: 6 }  # McGill crate slot 13
+   - !IceBoardPlus { serial: "0038", hostname: "10.10.10.38", handler_name: "chFPGA_controller", subarray: 66, slot: 6 }  # McGill crate slot 13
    - !IceBoardPlus { serial: "0048", hostname: "10.10.10.48", handler_name: "chFPGA_controller", subarray: 77, slot: 7 }  # McGill crate slot 13

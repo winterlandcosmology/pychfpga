@@ -94,10 +94,11 @@ def get_fpga_hk(fpga):
         fpga.RAIL.MB_VCC1V2, fpga.RAIL.MB_VCC3V3, fpga.RAIL.MB_VCC1V8,
         fpga.RAIL.MB_VADJ ]
     with fpga.tuber_context() as ctx:
-        res = yield [ctx.get_motherboard_voltage(s) for s in sensors]
-        res.append( (yield ctx.get_motherboard_current(fpga.RAIL.MB_VCC12V0)) )
-        res.append( (yield ctx.get_motherboard_temperature(fpga.TEMPERATURE_SENSOR.MB_FPGA_DIE)) )
-    async_return(res)
+        a = [ctx.get_motherboard_voltage(s) for s in sensors]
+        a += [ctx.get_motherboard_current(fpga.RAIL.MB_VCC12V0)]
+        b =  ctx.get_motherboard_temperature(fpga.TEMPERATURE_SENSOR.MB_FPGA_DIE)
+        yield ctx._tuber_flush_async()
+    async_return(  [aa.result() for aa in a]+[b.result()] )
 
 #should be more elegant way...but list fields here to stay compatible
 hk_fields_list = [ "VCC1V0", "VCC1V0_GTX", "VCC12V0", "VCC5V5", "VCC1V5", 

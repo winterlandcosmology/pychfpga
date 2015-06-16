@@ -84,7 +84,7 @@ def shuffle_init(c, ni_board, sync_board, dsmap=range(16), frames_per_packet=1, 
             cb.STREAM_ID = dsmap[bb.slot-1]
 
         # Set the source of the IRIG-B signal
-        bb.set_irigb_source('bp_time')
+        bb.set_irigb_source('bp_trig')
         # Set the source of the SYNC signal to irigb
         bb.REFCLK.set_sync_source('bp')#bb.REFCLK.SLAVE=1
         #bb.REFCLK.set_sync_source('irigb')
@@ -132,8 +132,8 @@ def shuffle_init(c, ni_board, sync_board, dsmap=range(16), frames_per_packet=1, 
         
     # sync boards
     #soft_sync(c, sync_board)
-    #irigb_sync(c, delay=5)
-    time_soft_sync(c, sync_board, delay=5)
+    irigb_sync(c, delay=5)
+    #time_soft_sync(c, sync_board, delay=5)
 
 
 # r.CROSSBAR2[0].print_frame_info()
