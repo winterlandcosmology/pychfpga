@@ -222,7 +222,7 @@ if __name__ == "__main__":
 
   # Create the acquisition object. Pass it the configuration settings so that it
   # can initialise.
-  acq = chrx.acq(conf, log, fpga_hk_field)
+  #acq = chrx.acq(conf, log, fpga_hk_field)
 
   # Create the FPGA controller object.
   # Will now create an array of controller objects indexed by serial number
@@ -231,7 +231,7 @@ if __name__ == "__main__":
   IceArray.close_all_sessions()
   ca = IceArray(uri=conf["fpga"]["db_file"], interface_ip_addr=conf["fpga"]["host_ip"])
   # Might want to move the list somewhere else/into conf file?
-  ca.load_iceboards('/home/chime/ch_acq/pychfpga/iceboard_list.txt')
+  ca.load_iceboards('/drives/0/git/ch_acq/pychfpga/iceboard_list.txt')
   ca.discover()
   bitfile_filename = conf["fpga"]["bitfile_name"]
   fpga_bitstream = ca.get_fpga_bitstream(bitfile_filename, ChimeFpgaFirmware)
@@ -284,10 +284,10 @@ if __name__ == "__main__":
   c.fpga.set_data_source("adc") # This should come first.
   c.fpga.set_FFT_bypass(False, channels = all_chan)
   c.fpga.set_FFT_shift(conf["fpga"]["fft_shift"], channels = all_chan)
-  for i, c_element in enumerate(c):      
-    gain_pkl_file = open('/home/chime/ch_acq/gains_'+str(c_element.fpga.GPIO.FPGA_SERIAL_NUMBER)+'.pkl', "rb")
-    gains = pickle.load(gain_pkl_file)
-    c_element.fpga.set_gain(gains, channels = all_chan)
+  #for i, c_element in enumerate(c):      
+  #  gain_pkl_file = open('/home/chime/ch_acq/gains_'+str(c_element.fpga.GPIO.FPGA_SERIAL_NUMBER)+'.pkl', "rb")
+  #  gains = pickle.load(gain_pkl_file)
+  #  c_element.fpga.set_gain(gains, channels = all_chan)
   c.fpga.sync()
   c.fpga.set_send_flags()
   c.fpga.set_offset_binary_encoding()
@@ -306,130 +306,3 @@ if __name__ == "__main__":
   
 
   
-  #Read the FPGA setting back from the FPGA
-  # This will need to change to do multiple boards.  
-  for i, c_element in enumerate(c):
-    fpga_conf = vars(c_element.fpga.get_config())
-  
-  # Create the output directory.
-  time_str = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-  corr_name = None
-  for corr, ser_list in correlator_hash.iteritems():
-    not_found = False
-    if type(fpga_conf["adc_serial"]) is list:
-      for ser in fpga_conf["adc_serial"]:
-        if not ser in ser_list:
-          not_found = True
-          break
-    else:
-      print fpga_conf["adc_serial"]
-      if not fpga_conf["adc_serial"] in ser_list:
-          not_found = True
-    if not_found:
-      continue
-    corr_name = corr
-    break
-  if not corr_name:
-    try:
-      log.critical("Could not find hash for ADC serial numbers %s." %
-                   fpga_conf["adc_serial"])
-    except KeyError:
-      log.critical("Could not find key \"adc_serial\" in FPGA configuration.")
-    exit()
-
-  acq_base_dir = "%s/%s_%s_corr" % (conf["acq"]["base_path"], time_str, \
-                                   corr_name)
-  os.makedirs(acq_base_dir)
-  if not os.path.exists(acq_base_dir):
-    log.critical("Could not create directory \"%s\"." % (acq_base_dir))
-    exit()
-
-  # Create a symbolic link to the output directory.
-  os.unlink(conf["acq"]["curfile"])
-  os.symlink("%s/%s_%s_corr" % (conf["acq"]["base_path"], time_str, corr_name),
-             conf["acq"]["curfile"])
-
-  # Lock the logfile.
-  log_file_lock = "%s/.ch_master.log.lock" % acq_base_dir
-  fp = open(log_file_lock, "w")
-  if not fp:
-    log.error("Could not create lockfile \"%s\"." % log_file_lock)
-  else:
-    fp.close()
-
-  # Start writing to a log file in this directory.
-  acq_log_path = "%s/ch_master.log" % (acq_base_dir)
-  log_file = logging.FileHandler(acq_log_path)
-  log_file.setLevel(logging.DEBUG)
-  log_file.setFormatter(log_fmt)
-  log.addHandler(log_file)
-  log.info("Now logging to \"%s\"." % (acq_log_path))
-        
-  log.info("Sampling frequency is %0.3f MHz." % \
-           float(conf["fpga"]["samp_freq"]))
-
-
-  # Pass FPGA configuration variables to header.
-  for name in fpga_conf:
-    #Hack for now since the gain table is too big to fit in one 64k header 
-    # element
-    if name == 'antenna_scaler_gain':
-      all_val = fpga_conf[name]
-      for value in all_val:
-        val = convert_types(value)
-        val_name = name + str(int(val[0]))
-        #print val_name, val
-        acq.add_header_item(val_name, val)
-    else:
-      #elif name == 'antenna_adc_data_acquisition_delay_tables':
-      #  val = 42
-      #else:
-      val = fpga_conf[name]
-      val = convert_types(val)
-      # Now send FPGA information send to acquisition object's header.
-      #print name
-      #print val
-      #print type(val)
-      acq.add_header_item(name, val)
-
-  # Add some acquisition information to the header, for kicks.
-  acq.add_header_item("system_user", getpass.getuser())
-  acq.add_header_item("collection_server", socket.gethostname())
-  acq.add_header_item("instrument_name", corr_name)
-  acq.add_header_item("archive_version", archive_version)
-  acq.add_header_item("acquisition_name", "%s_%s_corr" % (time_str, corr_name))
-  acq.add_header_item("acquisition_type", "corr")
-
-  # Get the git tag and write it to the header.
-  if not len(args.git_tag):
-    fp = open("/etc/CHIME/version", "r")
-    if not fp:
-      log.critical("Could not find git tag in \"/etc/CHIME/version\".")
-      exit()
-    tag = fp.read().replace("\n", "")
-  else:
-    tag = args.git_tag
-  log.info("Git version is %s." % (tag))
-  acq.add_header_item("git_version_tag", tag)
-
-  # Add the user notes.
-  acq.add_header_item("notes", args.notes)
-
-  # Start the acquisition.
-  acq.start(acq_base_dir, crate_sn, int(conf["fpga"]["subarray"]))
-
-  try:
-    while True:
-      # Pass the acquisition object the board temperatures. This is a temporary
-      # way of doing this!
-      for c_element in c:
-        acq.pass_fpga_amb_temp(0, get_fpga_hk(c_element.fpga, fpga_hk_field))
-      log.info("Read FPGA housekeeping.")
-      time.sleep(conf["acq"]["fpga_hk"]["rate"])
-    acq.stop()
-  except(KeyboardInterrupt, SystemExit):
-    acq.stop()
-
-# Remove log file lock and exit.
-os.remove(log_file_lock)
-log.info("Exiting ch_master now.")

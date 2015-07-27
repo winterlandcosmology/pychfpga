@@ -130,6 +130,8 @@ class IceBoardHardware(object):
 
         self.GPIO_EXPANDER_MAP = {
             # name : (expander object, byte, lsb bit number,  width)
+            'QSFPA_ResetL': (self._gpio_sfp_qsfp, 0, 2, 1),
+            'QSFPB_ResetL': (self._gpio_sfp_qsfp, 0, 7, 1),
             'GP_SW1': (self._gpio_sw_leds, 0, 0, 1),
             'GP_SW2': (self._gpio_sw_leds, 0, 1, 1),
             'GP_SW3': (self._gpio_sw_leds, 0, 2, 1),
@@ -212,7 +214,17 @@ class IceBoardHardware(object):
         self._gpio_power.init(cfg0_def=0b10101000, cfg1_def=0b10101000)
         self._gpio_sw_leds.init(cfg1_def=0b00000000)
         self._gpio_arm_phy_leds.init(cfg0_def=0b11110000)
-        #self._gpio_sfp_qsfp.init(cfg0_def=0b00000000)
+        self._gpio_sfp_qsfp.init(cfg0_def=0b01100011, cfg1_def=0b11001111)
+        #Enable fiber qsfp cable
+        self._gpio_sfp_qsfp.write('CFG0', 0b00000000 , mask = 1<<3)
+        self._gpio_sfp_qsfp.write('OUT0', (0<<3), mask = 1<<3)   
+        self._gpio_sfp_qsfp.write('CFG0', 0b00000000 , mask = 1<<2)
+        self._gpio_sfp_qsfp.write('OUT0', (1<<2), mask = 1<<2)
+
+        self._gpio_sfp_qsfp.write('CFG0', 0b00000000 , mask = 1<<4)
+        self._gpio_sfp_qsfp.write('OUT0', (0<<4), mask = 1<<4)           
+        self._gpio_sfp_qsfp.write('CFG0', 0b00000000 , mask = 1<<7)
+        self._gpio_sfp_qsfp.write('OUT0', (1<<7), mask = 1<<7)
 
     def _init_temperature_sensors(self, temperature_sensor_name=None, bit_resolution=12):
         """
