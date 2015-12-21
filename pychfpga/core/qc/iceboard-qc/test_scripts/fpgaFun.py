@@ -18,17 +18,21 @@ def get_boards(boards=None, ch_acq_path = '../../../../../../ch_acq/'):
     # Add specified boards to hardware map
     hwm = HardwareMap()
     if boards is None:
-        hwm.add(IceBoardPlus('iceboard.local'))
+        ib = [IceBoardPlus('iceboard.local')]
+        hwm.add(ib[0])
     else:
+        ib = []
         for sn in boards:
-            hwm.add(IceBoardPlus('iceboard{:0>4d}.local'.format(int(sn))))
+            new_ib = IceBoardPlus('iceboard{:0>4d}.local'.format(int(sn)))
+            ib.append(new_ib)
+            hwm.add(ib[-1])
     hwm.flush()
 
     found_boards = []
-    for ib in hwm.query(IceBoardPlus):
-        pings = ib.ping()
+    for i in ib:
+        pings = i.ping()
         if pings:
-            found_boards.append(ib)
+            found_boards.append(i)
     return found_boards
 
 def programFpga(board_sn, ch_acq_path = '../../../../../../ch_acq/',  bitfile_path = "../../../../../../chFPGA/xili"
