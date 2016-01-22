@@ -104,22 +104,25 @@ def rampTest(username=str,board_sn=str,board_vn=str,board_md=str,testStatus = EM
 
     test_pass = test_results['status']
     if not test_pass:
-        if test_results['bit_error'] != None:
+        if ('bit_error' in test_results) and (test_results['bit_error'] != None):
             print   "\n | Bit errors found on: " + test_results['bit_error'] + "\n"
             file.write("| Bit errors found on: " + test_results['bit_error'] + "\n")
 
-        if test_results['hist_equal'] != None:
+        if ('hist_equal' in test_results) and (test_results['hist_equal'] != None):
             print   "\n | Channels with non-flat histogram: " + test_results['hist_equal'] + "\n"
             file.write("| Channels with non-flat histogram: " + test_results['hist_equal'] + "\n")
 
-        if test_results['hist_expected'] != None:
+        if ('hist_expected' in test_results) and (test_results['hist_expected'] != None):
             print   "\n | Channels with severely distorted histogram: " + test_results['hist_expected'] + "\n"
             file.write("| Channels with severely distorted histogram: " + test_results['hist_expected'] + "\n")
                         
-        print("\nSmall peaks around a flat histogram or small (< 0.1) error ratios may be attributed to timing issues "
-              "with the ADC mezzanines, but a very distorted histogram may point to more serious issues."
-              "\n If this is found to be the case, the connector to the affected mezzanine or the traces, vias, and "
-              "solder joints connecting it to the FPGA are possible culprits.")
+        print("\nSmall peaks around a flat histogram or small (< 0.1) "
+              "error ratios may be attributed to timing issues "
+              "with the ADC mezzanines, but a very distorted histogram 
+              "may point to more serious issues."
+              "\n If this is found to be the case, the connector to the "
+              "affected mezzanine or the traces, vias, and solder joints "
+              "connecting it to the FPGA are possible culprits.")
               
         file.write("\n")
         print "\n FAILED ramp test. \n\n"

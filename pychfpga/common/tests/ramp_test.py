@@ -28,40 +28,49 @@ def save_timestream_frames(chFPGA_receiver, channels=[0], frames=256, filename='
     chanIndex = np.arange(nchan)
     #chFPGA_receiver.frame_receiver._send_every_frame.clear()     
     #chFPGA_receiver.send_every_frame(False)
-    number_of_frames=0
+    number_of_frames = 0
     missed = 0
+    max_missed = nframes
+    
+    chFPGA_receiver.flush()
+    
     print "Starting Timestream acquisition"
     try:
-        while (frames==0) or (frames!=0 and number_of_frames<frames):
+        while (number_of_frames < frames):
             try:
                 #print "trying to get a frame"
                 a = chFPGA_receiver.read_frames(verbose=0)
                 for chanNum in chanIndex:
                     data_list[number_of_frames,chanNum,:] = a[channels[chanNum]]
-                    #data_list.append(a[channels[chanNum]])
+
                 number_of_frames+=1
                 #print "got a frame"
                 if (number_of_frames % 100) == 0:
                     print 'Captured {0} frames'.format(number_of_frames) 
             except KeyError:
-                print "missing a frame, skipping"
-                print a
-                #chFPGA_receiver.flush()
                 missed += 1
-                pass
+                print "channel %d missing frame.  %d missed frames total." % (channels[chanNum], missed)
+                if (missed >= max_missed):
+                    raise StopIteration
+                else:
+                    pass
             except ValueError:
                 print "got a weird frame... carrying on!"
             except:
                 chFPGA_receiver.close()
-                raise
+                raise StopIteration
+                
     except KeyboardInterrupt:
         chFPGA_receiver.close()
-        raise
-    print "lost {0} to get {1}".format(missed, frames)
+        raise StopIteration
+        
+    print "lost {0} frames in the process of acquiring {1}".format(missed, frames)
+        
     #np.array(data_list)
     np.save(filename,data_list)
 
     print 'Saved {0} frames'.format(number_of_frames)
+    
 
 class test_adc_ramp_histogram(test_BaseClass):
     '''
