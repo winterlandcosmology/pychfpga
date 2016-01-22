@@ -199,9 +199,16 @@ def rampTest(board_sn, directory, ch_acq_path='../../../../../../ch_acq/', host_
 
     print "\nRunning top_test:"
     [c,r] = top_test(board_sn, ch_acq_path=ch_acq_path, host_ip=host_ip)
+    
+    channels=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
 
-    # Timing for ADCs. Calculate proper offsets for this board.
-    ADC_DELAY_TABLE, stuck_bits, bitposgood = c.compute_adc_delay_offsets(channels=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15])
+    # Timing for ADCs. Calculate proper ADC delays for this board.
+    ADC_DELAY_TABLE, stuck_bits, bitposgood = c.compute_adc_delay_offsets(channels=channels)
+    
+    # Repeat delay calculation due to problem that causes the calculation to 
+    # fail the first time
+    ADC_DELAY_TABLE, stuck_bits, bitposgood = c.compute_adc_delay_offsets(channels=channels)
+    
     print "Computed delay table:"
     print repr(ADC_DELAY_TABLE)
     print "Stuck bit flags (0 indicates a stuck bit):"
@@ -231,51 +238,63 @@ def rampTest(board_sn, directory, ch_acq_path='../../../../../../ch_acq/', host_
 
     # Record serials (and other info) of mezzanines
     ipmi = [c._get_mezzanine_mcgill_ipmi(1), c._get_mezzanine_mcgill_ipmi(2)]
+    
+    # Create strings to store results
+    ber_string = None
+    heq_string = None
+    hex_string = None
 
     # Begin Ramp test
     print "\nBegin ramp test:"
     test = test_adc_ramp_histogram(c, r)
-    test.execute(directory)
-    r.close()
+    try:
+        test.execute(directory)
+        
+    except StopIteration: 
+        test_pass = False
+        
+    else:
     
-    # Determine if test is pass or fail.  If fail, determine bad bits.
-    ber_pass = bool(test.test_bit_error_rate.all())
-    heq_pass = bool(test.test_hist_equal.all())
-    hex_pass = bool(test.test_hist_expected.all())
-    test_pass = ber_pass and heq_pass and hex_pass
+        # Determine if test is pass or fail.  If fail, determine bad bits.
+        ber_pass = bool(test.test_bit_error_rate.all())
+        heq_pass = bool(test.test_hist_equal.all())
+        hex_pass = bool(test.test_hist_expected.all())
+        test_pass = ber_pass and heq_pass and hex_pass
+    
+        if not test_pass:
+    
+            nchannels = test.bit_error_rate.shape[0]
+            nbits = test.bit_error_rate.shape[1]
 
-    ber_string = None
-    heq_string = None
-    hex_string = None
-    
-    if not test_pass:
-    
-        nchannels = test.bit_error_rate.shape[0]
-        nbits = test.bit_error_rate.shape[1]
-
-        if not ber_pass:
-            channel_matrix = np.arange(nchannels*nbits).reshape(nchannels,nbits) / nbits
-            bits_matrix = np.arange(nchannels*nbits).reshape(nchannels,nbits) % nbits
+            if not ber_pass:
+                channel_matrix = np.arange(nchannels*nbits).reshape(nchannels,nbits) / nbits
+                bits_matrix = np.arange(nchannels*nbits).reshape(nchannels,nbits) % nbits
         
-            flag_bad = np.logical_not(test.test_bit_error_rate)
-            bad_channels = channel_matrix[flag_bad]
-            bad_bits = bits_matrix[flag_bad]
-            bad_ber = test.bit_error_rate[flag_bad]
-            nbad = len(bad_channels)
-            ber_string = ' - '.join([("Channel %d, Bit %d: %0.2e" % (bad_channels[i], bad_bits[i], bad_ber[i])) for i in range(nbad)])
+                flag_bad = np.logical_not(test.test_bit_error_rate)
+                bad_channels = channel_matrix[flag_bad]
+                bad_bits = bits_matrix[flag_bad]
+                bad_ber = test.bit_error_rate[flag_bad]
+                nbad = len(bad_channels)
+                ber_string = ' - '.join([("Channel %d, Bit %d: %0.2e" % 
+                    (bad_channels[i], bad_bits[i], bad_ber[i])) for i in range(nbad)])
         
-        if not heq_pass:
-            heq_string = ", ".join(["%d" % cc for cc in range(nchannels)[np.logical_not(test.test_hist_equal)]])
+            if not heq_pass:
+                heq_string = ", ".join(["%d" % cc for cc in
+                    range(nchannels)[np.logical_not(test.test_hist_equal)]])
         
-        if not hex_pass:
-            hex_string = ", ".join(["%d" % cc for cc in range(nchannels)[np.logical_not(test.test_hist_expected)]])
+            if not hex_pass:
+                hex_string = ", ".join(["%d" % cc for cc in
+                    range(nchannels)[np.logical_not(test.test_hist_expected)]])
             
+            
+    r.close()
         
-    test_results = {'status':test_pass, 'bit_error':ber_string, 'hist_equal':heq_string, 'hist_expected':hex_string}
+    test_results = {'status':test_pass, 'bit_error':ber_string, 
+                    'hist_equal':heq_string, 'hist_expected':hex_string}
         
-    
     # Return results
     return [test_results, ADC_DELAY_TABLE, stuck_bits, ipmi]
+    
     
 
 def gtx_ber(board_sn, ch_acq_path='../../../../../../ch_acq/', links=None, period=1, power=None,
