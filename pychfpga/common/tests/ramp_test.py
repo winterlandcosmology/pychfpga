@@ -30,7 +30,7 @@ def save_timestream_frames(chFPGA_receiver, channels=[0], frames=256, filename='
     #chFPGA_receiver.send_every_frame(False)
     number_of_frames = 0
     missed = 0
-    max_missed = nframes
+    max_missed = frames
     
     chFPGA_receiver.flush()
     
