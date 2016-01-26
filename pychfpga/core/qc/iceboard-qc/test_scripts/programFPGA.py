@@ -47,22 +47,34 @@ def programFPGA(username=str,board_sn=str,board_vn=str,board_md=str,testStatus =
     
     print "\nWe will now program the FPGA of board " + board_sn + "."
     raw_input("Press Enter to proceed with programming (this may take some time):\t")
-    fpgaFun.programFpga(board_sn, force=True)
+    ib = fpgaFun.programFpga(board_sn, force=True)
 
     # Command to program FPGA using arm.py in old ch_acq, for reference
     #print 'Type in python pychfpga\\arm.py --ip 10.10.10.NUM -f "..\\chFPGA\\xilinx_projects\\CHFPGA_MGK7MB_REV2\\CHFPGA_MGK7MB_REV2.runs\\impl_Rev2\\chFPGA_MGK7MB_Rev2.bit" under this new directory'
     #print 'where NUM is the number of the board (such that 10.10.10.NUM is the IP address programmed onto the board).'
     #notimportant = raw_input("Press Enter to continue:  ")
+    
+    # print "\nCheck the last line of the block of text. Does it say 'Done configuring FPGA'?"
+    # program = raw_input("Enter 'Y' or 'N':  ")
+    # if program == 'Y' or program == 'y':
+    #     file.write('\nOutput stating programming successful: Pass')
+    # else:
+    #     file.write('Output stating programming successful: Fail')
+    #     file.write('\n\n**FPGA Programming Test Overall Status: Fail**')
+    #     file.close()
+    #     return fpgaProgFail(username,board_sn,board_vn,board_md,testStatus)
+    
+    programmed = ib.is_fpga_programmed()
 
-    print "\nCheck the last line of the block of text. Does it say 'Done configuring FPGA'?"
-    program = raw_input("Enter 'Y' or 'N':  ")
-    if program == 'Y' or program == 'y':
-        file.write('\nOutput stating programming successful: Pass')
+    if programmed:
+        file.write('\nFPGA was successfully programmed.')
     else:
-        file.write('Output stating programming successful: Fail')
+        file.write('\nFPGA was not programmed.')
         file.write('\n\n**FPGA Programming Test Overall Status: Fail**')
         file.close()
         return fpgaProgFail(username,board_sn,board_vn,board_md,testStatus)
+        
+        
     print "\nCheck to see there are blinking red lights at the bottom edge of the FPGA. Are they there?"
     lights = raw_input("Enter 'Y' or 'N':   ")
     if lights == 'Y' or lights == 'y':
@@ -77,6 +89,8 @@ def programFPGA(username=str,board_sn=str,board_vn=str,board_md=str,testStatus =
     print "\nIf there are any special concerns regarding the board for this test, please describe them below. If none, enter 'None'. "
     comments = raw_input("Enter your comments:  ")
     file.write('\n\nComments: ' + comments)
+    
+    ib.close()
 
     print "Has everything in this test gone smoothly?"
     check = raw_input("Enter ('Y' or 'N'):  ")
