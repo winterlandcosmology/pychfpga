@@ -71,11 +71,16 @@ def programFpga(board_sn, ch_acq_path = '../../../../../../ch_acq/',  bitfile_pa
     fpga_bitstream = FpgaBitstream(bitfile_path)
 
     # Find iceboard
+    nattempt = 0
     while True:
         ib = get_boards(boards=[board_sn], ch_acq_path=ch_acq_path)
         if len(ib) == 0:
-            if raw_input("\nDid not find board on network with serial {}."
+            if nattempt < 1:
+                nattempt += 1
+                continue
+            elif raw_input("\nDid not find board on network with serial {}."
                          "\nTry again (y/n)?    ".format(board_sn)).lower().strip() == 'y':
+                nattempt = 0
                 continue
             else:
                 raise Exception("Did not find any board on the network with serial number {}".format(board_sn))
@@ -275,16 +280,16 @@ def rampTest(board_sn, directory, ch_acq_path='../../../../../../ch_acq/', host_
                 bad_bits = bits_matrix[flag_bad]
                 bad_ber = test.bit_error_rate[flag_bad]
                 nbad = len(bad_channels)
-                ber_string = ' - '.join([("Channel %d, Bit %d: %0.2e" % 
+                ber_string = '      '.join([("\n      Channel %d, Bit %d: %0.2e" % 
                     (bad_channels[i], bad_bits[i], bad_ber[i])) for i in range(nbad)])
         
             if not heq_pass:
                 heq_string = ", ".join(["%d" % cc for cc in
-                    range(nchannels)[np.logical_not(test.test_hist_equal)]])
+                    np.arange(nchannels, dtype=np.int)[np.logical_not(test.test_hist_equal)]])
         
             if not hex_pass:
                 hex_string = ", ".join(["%d" % cc for cc in
-                    range(nchannels)[np.logical_not(test.test_hist_expected)]])
+                    np.arange(nchannels, dtype=np.int)[np.logical_not(test.test_hist_expected)]])
             
             
     r.close()
