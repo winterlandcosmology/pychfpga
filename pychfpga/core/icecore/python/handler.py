@@ -228,6 +228,8 @@ class HandlerParentAttribute(object):
         self._default = local_default
 
     def __get__(self, obj, objtype=None):
+        if not obj:  #  Do not generate errors if we access this as a class attribute so we can test its presence with getattr.
+            return self
         parent = obj.parent
         try:  # Elevate AttributeError to RuntimeError, otherwise weird
             return self._getter(parent) if parent else self._default
@@ -240,6 +242,9 @@ class Handler(object):
 
     If the handler is provided with a 'parent_getter' function, the parent
     object can be accessed through the 'parent' property.
+
+    Define all attributes that can be initialized with keywords arguments in
+    the class so they won't be passed on to other subclasses.
     """
     __metaclass__ = HandlerMeta  # Allows automatic registration
     __handler_for__ = None  # Do not register this handler
@@ -254,12 +259,15 @@ class Handler(object):
         keyword paramaters are used to set the Handler attributes with the
         same name.
         """
+        # Pass attributes that are not used here to other subclasses (not necessarily 'object', depending on the order of subclasses)
+        super(Handler, self).__init__(**{k:v for k,v in kwargs.items() if not hasattr(type(self), k)})
         self.logger = logging.getLogger(__name__)
         self.logger.debug("%s: Creating handler with parameters %s" %
                           (self.__class__.__name__, kwargs))
         self._parent_getter = parent_getter
-        for (name, value) in kwargs.items():
-            setattr(self, name, value)
+        for k, v in kwargs.items():
+            if hasattr(type(self), k):
+                setattr(self, k, v)
 
     @property
     def parent(self):

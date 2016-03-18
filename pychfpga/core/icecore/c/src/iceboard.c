@@ -32,9 +32,8 @@ tuber_constructor(IceBoard,
 
 	/* Create mutexes */
 	self->fpga_spidev_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-	self->mezz_i2c_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-	self->mezz_frui_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 	self->fpga_jtag_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+	self->i2c_mtx_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 
 	/* Open and configure SPI device */
 	if(!(self->fpga_spidev = fopen(FPGA_SPIDEV, "w")))
@@ -56,8 +55,24 @@ tuber_constructor(IceBoard,
 					gpio->name, gpio->gpio_num);
 	}
 
+	/* Grab IPMI data from motherboard, backplane, and mezzanines */
+	cache_mb_frui(self);
+
+	pthread_mutex_lock(&self->i2c_mtx_lock);
+	cache_mezz_frui(self, 1); /* grab mezzanine data first, since the */
+	cache_mezz_frui(self, 2); /* backplane is not 100% trustworthy */
+	cache_bp_slot(self); /* needs GPIOs */
+	cache_bp_frui(self); /*TODO: make this happen! */
+	pthread_mutex_unlock(&self->i2c_mtx_lock);
+
+	/* Spawn DNS-SD responder */
+	pthread_create(&self->dnssd_thread, NULL,
+			(void*(*)(void*))dnssd_main,
+			self);
+
 	return(self);
 }
+
 
 tuber_destructor(IceBoard,
 		"Clean up after an ICEboard reference.",
@@ -68,9 +83,14 @@ tuber_destructor(IceBoard,
 		if(self->mezz_frui[n])
 			frui_free(self->mezz_frui[n]);
 
+	if(self->bp_frui)
+		frui_free(self->bp_frui);
+
+	if(self->mb_frui)
+		frui_free(self->mb_frui);
+
 	pthread_mutex_destroy(&self->fpga_spidev_lock);
-	pthread_mutex_destroy(&self->mezz_i2c_lock);
-	pthread_mutex_destroy(&self->mezz_frui_lock);
+	pthread_mutex_destroy(&self->i2c_mtx_lock);
 	pthread_mutex_destroy(&self->fpga_jtag_lock);
 	fclose(self->fpga_spidev);
 
@@ -204,4 +224,17 @@ tuber_method(VOID, IceBoard, _set_personality,
 	"its purpose. This is an experiment-specific string (i.e. 'Dfmux')."
 ) {
 	self->personality = strndup(personality, 128);
+}
+
+tuber_method(VOID, IceBoard, _sleep,
+	"Do something, slowly.",
+	1, ((DOUBLE, seconds, NULL, "How long to sleep for.")),
+	1, (CATEGORY_ICEBOARD),
+	"This method only blocks a single thread, so you can use it to "
+	"validate concurrency code upstream. Note that our web server "
+	"uses something like 4 threads, so you will eventually start to "
+	"serialize requests if you call this enough times on a single "
+	"board."
+) {
+	usleep(seconds * 1e6);
 }

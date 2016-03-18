@@ -1,5 +1,5 @@
 # IceBoard base components
-SUBDIRS := libiceboard fastpath iceboard_init
+SUBDIRS := libiceboard fastpath
 
 export BUILD_CC		= gcc
 export CROSS_COMPILE	= arm-buildroot-linux-gnueabihf-

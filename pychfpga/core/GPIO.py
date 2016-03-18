@@ -66,7 +66,8 @@ class GPIO_base(Module_base):
     PWM_HIGH_TIME                       = BitField(CONTROL, 41, 0, width=32, doc='Number of events (frames) to keep the PWM output at High')
     PWM_PERIOD                          = BitField(CONTROL, 45, 0, width=32, doc='Number of events (frames) between PWM High (i.e PWM period)')
     PWM_RESET                           = BitField(CONTROL, 46, 7, width=1, doc='Resets the PWM generator')
-    USER_MUX_SOURCE                     = BitField(CONTROL, 46, 0, width=3, doc='Selects which signal is sent to the SMA-A output. 0=PWM, 1=PPS, 2=SYNC, 3=IRIGB Trigger, 4=BP Buck Sync')
+    BP_GPIO_INT_EN                      = BitField(CONTROL, 46, 4, doc="When '1', the Backplane GPIO_INT is driven by this board. WARNING: Only one board should be enabled at a time.")
+    USER_MUX_SOURCE                     = BitField(CONTROL, 46, 0, width=4, doc='Selects which signal is sent to the SMA-A output.')
 
     TIMESTAMP_VALID                     = BitField(STATUS, 0, 7, doc='Timestamp data valid (i.e. can be read)')
     ADC_SYNC_READBACK                   = BitField(STATUS, 1, 0, doc='Reads back the SYNC bit for debugging')
@@ -86,6 +87,8 @@ class GPIO_base(Module_base):
     NUMBER_OF_CROSSBAR_OUTPUTS          = BitField(STATUS, 21, 0, width=8, doc='Number of crossbar outputs')
     PROTOCOL_VERSION                    = BitField(STATUS, 23, 0, width=16, doc='Protocol version used to manage host software compatibility.')
     CHANNELIZERS_CLOCK_SOURCE           = BitField(STATUS, 24, 0, width=8, doc='Indicates which ADC is used to provide the clock from all channelizers.')
+    ADC_PLL_LOCK0                       = BitField(STATUS, 33, 6,  doc='Lock status of the ADC PLL in FMC0')
+    ADC_PLL_LOCK1                       = BitField(STATUS, 33, 7,  doc='Lock status of the ADC PLL in FMC1')
     CMD_RPLY_PACKET_COUNTERS            = BitField(STATUS, 35, 0, width=16, doc='Number of command and reply packets received since last FPGA configuration. MSB=Commands, LSB=Replies')
     NUMBER_OF_BP_SHUFFLE_LANES          = BitField(STATUS, 36, 0, width=8, doc='Number of backplane links (including the direct internal link)')
 
@@ -148,7 +151,13 @@ class GPIO_base(Module_base):
         'pps': 1,  # 1 PPS signal from the IRIG-B decoder
         'pwm': 2,  # Output from the frame-based pwm generator
         'irigb_trig': 3,
-        'bp_sync': 4}  # Backplane SYNC signal
+        'bp_trig': 4,
+        'bp_time': 5,
+        # 'bp_buck_sync': 6,
+        'refclk': 6,  # 10 MHz reference clock
+        'irigb_gen': 7,
+        'raw_clk': 8,
+        }  # Backplane TRIG signal
 
     def set_user_output_source(self, source):
         """ Set the user output source. 'source' is a string."""
@@ -192,7 +201,7 @@ class GPIO_base(Module_base):
         self.ANT_RESET = 1
         self.CORR_RESET = 1
         # In the alternate code below, we do not use self.ANT_RESET=1 to reset the antenna because this implies reading the control register, and the read data might not get through if too much data is coming in
-        #ant_reset = self.bitfield('ANT_RESET')
+        #ant_reset = self.get_bitfield('ANT_RESET')
         #self.write(ant_reset.addr, 1 << ant_reset.bit)
         #self.write(ant_reset.addr, 0x60) # ** debug  BEWARE: This resets the DATA and CORR IP addresses to zero!!!!!***
         self.HOST_FRAME_READ_RATE = 14  #Indicates how often the host UDP buffers are read. Used to throttle data transmision. Period = 2/125MHz*2^value

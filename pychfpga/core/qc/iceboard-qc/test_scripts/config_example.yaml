@@ -1,0 +1,15 @@
+# Config file. Save the parameters specific to your system here to avoid having to enter them manually.
+
+# Parameters specific to this system
+host_ip: '10.10.10.228'                  # IP address of the network adapter communicating with FPGA (must be gigabit) (e.g. '10.10.10.10')
+user: 'anon_user'                        # Name of person running the QC.
+location: 'McGill'                       # The location where testing is being performed
+use_chfpga_commit_from_config: 'False'   # If it is inconvenient to pull the entire chFPGA repo, can just copy the relevant
+#                                          bitfile and update the commit below.
+
+# Other info
+bitfile_commit: '561b79f'                # See 'use_chfpga_commit_from_config' above
+board_md: 'MGK7MB'
+results_directory: '../../../../../../iceboard-qc/board_files'
+ch_acq_root: '../../../../../'           # Relative to 'iceboard-qc/test_scripts'
+hw_track_directory: '../../../../../../hardware_tracking'

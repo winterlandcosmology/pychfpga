@@ -146,13 +146,11 @@ class IOExpander_base(object):
             raise Exception('The bit name does not exist')
 
         t0 = time.time()
-        while 1:
+        while True:
             if self.read_gpio_bit(bit_name): 
                 return
             if (time.time() - t0) > timeout:
-                warnings.warn('Timeout exceeded while waiting for bit %s' % bit_name)
-                print "Couldn't Lock PLL"
-                break
+                raise RuntimeError('Timeout exceeded while waiting for bit %s' % bit_name)
 
 
     def init(self, verbose=0):

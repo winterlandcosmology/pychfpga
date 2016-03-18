@@ -64,134 +64,23 @@ __all__ = [
 import tornado.gen
 import tornado.ioloop
 
-import functools
-import collections
-import time
-import logging
-from collections import OrderedDict
-import types
 import inspect
+import collections
+import logging
 
 import sqlalchemy
 import sqlalchemy.orm
 import sqlalchemy.ext.declarative
 import sqlalchemy.types
 
-from . import tuber
+import async
+import ccoll
 
 Base = sqlalchemy.ext.declarative.declarative_base()
 
 
 class HWMQueryException(Exception):
     pass
-
-
-class Parallelizable(object):
-    """Base class for calls that can be emitted asynchronously."""
-
-    def __init__(self, coroutine, doc=None):
-        # """ Create  the Paralleizable object that wraps the Tornado coroutine
-        # (i.e. when called, the coroutine returns a Future).
-
-        # We assume that 'coroutine' is an unbound method or function.
-        #  """
-        self.async = coroutine
-        self.doc = doc
-
-    def __get__(self, instance, owner):
-        """If this object is accessed through an instance, return a Parallel
-        object that refer to the coroutine bound to that instance.
-
-        NOTE: this will work only for Parallelizable classes defined as a class attribute, not an instance attribute.
-        """
-
-        if instance is None:
-            return self  # Unbound, with nothing to bind to.
-        else:
-            return self.__class__(coroutine=functools.partial(self.async, instance), doc=inspect.getdoc(self.async))
-
-    __doc__ = property(lambda self: self.doc or self.async.__doc__)
-    # __class__ = property(lambda self: self.async.__class__)
-    # __name__ = property(lambda self: self.async.__name__)
-    # im_func = property(lambda self: self.async.im_func)
-    # func_code = property(lambda self: self.async.func_code)
-    # func_defaults = property(lambda self: self.async.func_defaults)
-
-    def __call__(self, *args, **kwargs):
-        # """ Call the coroutine as a normal synchronous call. This launches an
-        # IOLoop that runs until the coroutine has returned its value.
-        # """
-        old_loop = tornado.ioloop.IOLoop.current()
-        try:
-            io_loop = tornado.ioloop.IOLoop()
-            io_loop.make_current()
-            future = self.async(*args, **kwargs)
-            io_loop.run_sync(tornado.gen.coroutine(lambda: (yield future)))
-            return future.result()
-        finally:
-            io_loop.close()
-            old_loop.make_current()
-
-    def async_call_with(self, vararg_list, *args, **kwargs):
-        """ Call this asynchronous function concurrently for with every value
-        of the iterable vararg_list as first parameter. """
-        arg_list = list(vararg_list)
-        return async_call([self]*len(arg_list), arg_list, *args, **kwargs)
-
-def async(func):
-    """ Decorator that converts a function or method in a future-returning coroutine
-    and wraps it into a Parallelizable object that can be called synchronously
-    (as a normal blocking call, using a=func(...)) or asynchronously (using
-    a=yield func.async(...)).
-    """
-    return Parallelizable(coroutine=tornado.gen.coroutine(func))
-
-def async_return(value):
-    """ Return a value from a coroutine. """
-    raise tornado.gen.Return(value)
-
-def async_call(func_list, variable_arg_list, *args, **kwargs):
-    """ Concurrently call all functions or methods listed in 'func_list'. If
-    'variable_arg_list' is not none, each function will be called with its
-    first argument taken from the corresponding element in that list. Position
-    and keyword arguments that are common to all calls can also be passed.
-    """
-
-    if variable_arg_list is not None:
-        func_list = [functools.partial(func, arg) for (func, arg)
-                     in zip(func_list, variable_arg_list)]
-
-    if all([isinstance(f, Parallelizable) for f in func_list]): # If all the functions are coroutines
-        @async        #  Create a Parallelizable object that runs all coroutines in parallel
-        def p(*args, **kwargs):
-            async_return((yield [f.async(*args, **kwargs) for f in func_list]))
-        return p(*args, **kwargs)
-    else:  # Otherwise, fall back on a looped invocation.
-        return [f(*args, **kwargs) for f in func_list]
-
-
-def asynchronously(p, *args, **kwargs):
-    '''Helper function to call a Parallelizable and get a Future.
-
-    This is useful when writing parallel code. The following:
-
-        @pydfmux.algorithm(pydfmux.Dfmux)
-        def my_alg(ds):
-            yield [asynchronously(d.set_frequency, a, b, c) for d in ds]
-
-    ...will dispatch 'set_frequency' on all of the 'ds' objects
-    asynchronously. It will run much faster than the following:
-
-        @pydfmux.algorithm(pydfmux.Dfmux)
-        def my_alg(ds):
-            for d in ds:
-                d.set_frequency(a, b, c)
-    '''
-
-    if not isinstance(p, Parallelizable):
-        raise TypeError("asynchronously() must receive a Paralellizable as "
-                        "its first argument!")
-    return p.async(p.instance, *args, **kwargs)
 
 
 class HWMQuery(sqlalchemy.orm.Query):
@@ -244,12 +133,8 @@ class HWMQuery(sqlalchemy.orm.Query):
         for (cls, algs) in self._algorithm_registry.iteritems():
             if not issubclass(self.column_descriptions[0]['type'], cls):
                 continue
-            for a in algs:
-                if name == a.__name__:
-                    @functools.wraps(a)
-                    def alg(*args, **kwargs):
-                        return a(self, *args, **kwargs)
-                    return alg
+            if name in algs:
+                return algs[name](self)  # bind with this HWMQuery
 
         # Next, try attributes/methods from contained objects.
         # Special case: if the query returned no results, we can't reliably
@@ -276,7 +161,7 @@ class HWMQuery(sqlalchemy.orm.Query):
         # Get the specified attribute from all objects.
         attrs = [getattr(x, name) for x in self]
 
-        return HWMQueryAttributes(attrs)
+        return ccoll.Ccoll(attrs)
 
     def __dir__(self):
         """Retrieve a list of interesting attributes."""
@@ -333,11 +218,12 @@ class HWMQuery(sqlalchemy.orm.Query):
 
             >>> results.call_with(do_something, foo, bar)
         """
-        # If 'func' is smart enough not to want a parallelized call, obey it.
-        if hasattr(func, '_hwm_call_with_outer'):
+
+        # If 'func' is an algorithm, it doesn't want a parallelized call.
+        if isinstance(func, AlgMarker):
             return func(self, *args, **kwargs)
 
-        return async_call([func] * self.count(), self, *args, **kwargs)
+        return async.async_call([func] * self.count(), self, *args, **kwargs)
 
     def as_dict(self, keys=None, convert_fn=None):
         """
@@ -350,6 +236,7 @@ class HWMQuery(sqlalchemy.orm.Query):
         name of such an attribute, the dictionary will be indexed by the value
         of this attribute. If convert_fn is specified, the attribute values
         will be converted using that function.
+
 
         If 'keys' is a iterable, the values of 'keys' are used directly as an
         index.
@@ -376,177 +263,7 @@ class HWMQuery(sqlalchemy.orm.Query):
             keys = [key[0] for key in self.values(keys)]
             if convert_fn:
                 keys = [convert_fn(key) for key in keys]
-        return HWMQueryAttributes(self, keys)
-
-class HWMQueryAttributes(object):
-    """
-    Class representing a collection of objects that can be accessed and/or
-    called concurrently at any level in a hierarchy of objects. This enable
-    concurrent access in object-oriented programs.
-
-    The collection is stored as a mapping, and is populated with the elements
-    of the iterable 'objects' using the keys provided in 'keys'. If 'keys' is
-    None, the keys are integers from 0 to len(objects)-1 to mimic a list.
-
-    The mapping operates like an ordered dictionary and offers the same methods
-    (.items(), .keys(), __len__() etc...) with the exception that the mapping
-    itself returns an iterable to the objects, not their keys. This behavior is
-    consistent with a HWMQuery object.
-
-    Calling the mapping will concurrently call every object with the provided
-    arguments and will return the result in another HWMQueryAttributes with
-    identical keys.
-
-    Accessing an attribute of the mapping will return a new HWMQueryAttribute
-    containing the that attribute for each of the element of the mapping.
-
-    Indexing the mapping will return the object with the corresponding key.
-    Slices are not supported.
-
-    Calling .getitem(index) on the array will return another mapping where each
-    element was indexed with index.
-
-    As a convenience, the object masquerade as the first element of its
-    collection if that object is callable, and therefore inherits its docstring
-    and call signature, which allows ipython to provide useful hilts during
-    interactive sessions.
-
-    Examples:
-
-    >>> class Obj(object):
-    >>>     def __init__(self, x): self.x = x
-    >>>     def fn(self, y): return (self.x,y)
-    >>>     z=5
-    >>>
-    >>> coll = HWMQueryAttributes([Obj(1), Obj(2), Obj(3), Obj(4)])
-    >>> print coll[3]
-    >>> <__main__.Obj object at 0x000000000BF68320>
-    >>> print list(coll)
-    [<__main__.Obj object at 0x000000000BF68278>, <__main__.Obj object at 0x000000000BF682B0>, <__main__.Obj object at 0x000000000BF682E8>, <__main__.Obj object at 0x000000000BF68320>]
-    >>> print list(coll.z)
-    [5, 5, 5, 5]
-    >>> t1 = coll.fn(10)
-    >>> print list(t1)
-    [(1, 10), (2, 10), (3, 10), (4, 10)]
-    >>> t1[3]
-    (4, 10)
-    >>> print list(t1.getitem(1))
-    [10, 10, 10, 10]
-    """
-
-    # We define those so __setattr__ does not try to send them to objects
-    # during __init__.
-    _has_keys = None
-    _proto = None
-    _dict = None
-    logger = None
-
-    def __init__(self, objects, keys=None):
-        # Do not define a docstring here: for some reason ipython will use it
-        # instead of the dynamic __doc__ defined below.
-        self.logger = logging.getLogger(__name__)
-        self._has_keys = bool(keys)
-        object_list = list(objects)  # in case object = generator or HWMQuery
-        # Get the object that this class will mimic
-        self._proto = object_list[0] if object_list else None
-        keys = keys or range(len(object_list))
-        if len(set(keys)) != len(object_list):
-            raise ValueError('Keys are not unique')
-        self._dict = OrderedDict(sorted(zip(keys, object_list)))
-
-    def __repr__(self):
-        if self._has_keys:
-            return '%s containing:\n{%s}' % (
-                type(self).__name__,
-                ',\n'.join('%s:%r' % (key, value) for
-                           (key, value) in self.items())
-                )
-        else:
-            return '%s containing:\n[%s]' % (
-                type(self).__name__,
-                ',\n'.join(['%r' % value for value in self])
-                )
-
-    def __dir__(self):
-        """Retrieve a list of interesting attributes."""
-        s = (set(self.__dict__.keys()) |
-             set.union(*[set(dir(cls)) for cls in type(self).mro()]) |
-             set.intersection(*[set(dir(obj)) for obj in self]))
-        return [str(item) for item in s]
-
-    # Copy the main attributes of _proto so this class can masquerade as it.
-    __doc__ = property(lambda self: 'Collection of:' + self._proto.__doc__)
-    __class__ = property(lambda self: self._proto.__class__)
-    __name__ = property(lambda self: self._proto.__name__)
-    im_func = property(lambda self: self._proto.im_func)
-    func_code = property(lambda self: self._proto.func_code)
-    func_defaults = property(lambda self: self._proto.func_defaults)
-
-    # Offer a subset of OrderedDict methods. We could just have inherited dict,
-    # but methods that change the dict would have been available, and it is
-    # also tricky to redefine __iter__
-    def __iter__(self): return self._dict.itervalues()
-    def __len__(self): return self._dict.__len__()
-    def __reversed__(self): return self._dict.__reversed__()
-    def items(self): return self._dict.items()
-    def iteritems(self): return self._dict.iteritems()
-    def keys(self): return self._dict.keys()
-    def iterkeys(self): return self._dict.iterkeys()
-    def values(self): return self._dict.values()
-    def itervalues(self): return self._dict.itervalues()
-    def __getitem__(self, index): return self._dict.__getitem__(index)
-
-    def __call__(self, *args, **kwargs):
-        # """ Concurrently calls every element of the collection with the
-        # provided arguments, and resurn the results in a new HWMQueryAttributes
-        # object.
-
-        # It is assumed that we have either functions or already bound methods,
-        # so we don't have to pass those an object-specific parameter.
-        # NOTE: Leave this docstring commented to allow ipython to see the target object doc
-        # """
-        results = async_call(self.values(), None, *args, **kwargs)
-        return HWMQueryAttributes(results,
-                                  self._has_keys and self._dict.keys())
-
-    def getitem(self, index):
-        return self.__getattr__('__getitem__')(index)
-
-    def __getattr__(self, name):
-        """Return a collection of attribute 'name' from each of the current
-        objects.
-        """
-        if not self:
-            raise AttributeError("There are no objects in the list")
-        self._check_collection_attributes(name)
-        return HWMQueryAttributes(
-            [getattr(obj, name) for obj in self],
-            self._has_keys and self._dict.keys())
-
-    def __setattr__(self, name, value):
-        """ Sets a value on a collection of objects.
-        """
-        try:
-            object.__getattribute__(self, name)  # check is attribute exists
-            return object.__setattr__(self, name, value)
-        except AttributeError:  # if attributes does not exist
-            if self._dict:  # 'for obj in self' will call _dict.__len__()
-                self._check_collection_attributes(name)
-                for obj in self:
-                    setattr(obj, name, value)
-
-    def _check_collection_attributes(self, name):
-        """ Checks if all members of the collection has the specified
-        attribute name, otherwise raise an exception"""
-        attr_present = [hasattr(obj, name) for obj in self]
-        if not any(attr_present):
-            raise AttributeError("Attribute %s does not exist on any element "
-                                 "of the current results" % name)
-        elif not all(attr_present):
-            raise AttributeError("Attribute %s must exist on all elements "
-                                 "of the current results" % name)
-
-
+        return ccoll.Ccoll(self, keys)
 
 
 class HWMResource(Base):
@@ -590,6 +307,11 @@ class HWMResource(Base):
         super(Base, self).__init__()
 
 
+class MacroMarker(object):
+    '''Marker class so we can test macros using isinstance(..., MacroMarker)'''
+    pass
+
+
 class macro(object):
     '''Decorator for "macros" that performs some rudimentary typechecking.
 
@@ -621,27 +343,26 @@ class macro(object):
 
         vcs = dec.__valid_classes
 
-        class MacroProto(Parallelizable, MacroMarker):
-            pass
+        class MacroProto(async.Parallelizable, MacroMarker):
+            @tornado.gen.coroutine
+            def __call_async__(self, obj, *args, **kwargs):
 
-        @tornado.gen.coroutine
-        def __call_async__(self, obj, *args, **kwargs):
+                # Check that the macro was called with an allowed class
+                if vcs and not issubclass(obj.__class__, vcs):
+                    raise TypeError(
+                        "Macro called with wrong types! Expected %s, got %s" % (
+                            ', '.join([cls.__name__ for cls in vcs]),
+                            obj.__class__))
 
-            # Check that the macro was called with an allowed class
-            if vcs and not issubclass(obj.__class__, vcs):
-                raise TypeError(
-                    "Macro called with wrong types! Expected %s, got %s" % (
-                        ', '.join([cls.__name__ for cls in vcs]),
-                        obj.__class__))
+                # Say something about the call
+                l = logging.getLogger(__name__)
+                l.debug('%r: Invoking %s(...)' % (obj, func.__name__))
 
-            # Say something about the call
-            l = logging.getLogger(__name__)
-            l.debug('%r: Invoking %s(...)' % (obj, func.__name__))
+                # Invoke the macro.
+                return func(obj, *args, **kwargs)
 
-            # Invoke the macro.
-            return func(obj, *args, **kwargs)
-
-        p = MacroProto(coroutine=__call_async__, doc=inspect.getdoc(func))
+        p = MacroProto()
+        p.__doc__ = inspect.getdoc(func)
 
         # Register this algorithm with the class it's used on.
         if dec.__register:
@@ -706,14 +427,15 @@ class algorithm(object):
 
             return r
 
-        class AlgProto(Parallelizable, AlgMarker):
+        class AlgProto(async.Parallelizable, AlgMarker):
             __name__ = name
 
-        @tornado.gen.coroutine
-        def __call_async__(self, *args, **kwargs):
-            return wrapper(*args, **kwargs)
+            @tornado.gen.coroutine
+            def __call_async__(self, *args, **kwargs):
+                return wrapper(*args, **kwargs)
 
-        p = AlgProto(coroutine=__call_async__, doc=inspect.getdoc(func))
+        p = AlgProto()
+        p.__doc__ = inspect.getdoc(func)
 
         # Register this algorithm with the HWMQuery.
         if dec.__register:

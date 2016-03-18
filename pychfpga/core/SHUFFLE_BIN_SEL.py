@@ -24,25 +24,24 @@ class SHUFFLE_BIN_SEL_base(Module_base):
     # Control bitfields
     RESET                       = BitField(CONTROL, 0, 7, doc="Reset the CH_DIST. Clears FIFO.")
     BYPASS                      = BitField(CONTROL, 0, 6, doc="When high, routes input lane 'x' directly to the output, where x in the index of this bin selector.")
-    HEADER_CAPTURE_DATA_SEL     = BitField(CONTROL, 0, 5, doc=" Select whether we capture Stream ID or timestamps.")
-    HEADER_CAPTURE_LANE_SEL     = BitField(CONTROL, 0, 1, width=4, doc=" Select from which lane the captured data is accessed.")
-    HEADER_CAPTURE_EN           = BitField(CONTROL, 0, 0, doc="Enables capture of header info on all lanes simultaneously.")
+    FIRST_LANE                  = BitField(CONTROL, 0, 0, width=4, doc="Index of the first lane to be sent out")
+    # HEADER_CAPTURE_DATA_SEL     = BitField(CONTROL, 0, 5, doc=" Select whether we capture Stream ID or timestamps.")
 
     STREAM_ID                   = BitField(CONTROL, 2, 4, width=12, doc="Stream ID to be used for tagging the output frames")
     NUMBER_OF_BINS_PER_FRAME    = BitField(CONTROL, 3, 0, width=11, doc="Number of bins extected in each incoming frame")
     FIFO_OVERFLOW_RESET         = BitField(CONTROL, 4, 7, doc="When high, resets the FIFO OVERFLOW flag.")
     NUMBER_OF_WORDS_PER_BIN     = BitField(CONTROL, 4, 0, width=6, doc="Number of words expected in each bin. In 4-bit mode, 1 Word = 4 analog inputs")
     NUMBER_OF_FRAMES_PER_PACKET = BitField(CONTROL, 5, 5, width=3, doc="Number of expected frames per packet. ")
-    NUMBER_OF_LANES             = BitField(CONTROL, 5, 0, width=5, doc="Number of lanes (from lane 0 to lane N-1) to include in the output")
+    LAST_LANE                   = BitField(CONTROL, 5, 0, width=4, doc="Index of the last lane to be transmitted")
 
     # Status bitfields
     FIFO_EMPTY               = BitField(STATUS, 0, 7, doc="Active high when the data FIFO is empty")
+    FLAGS_FIFO_OVERFLOW      = BitField(STATUS, 0, 6, doc="Active high if the flags FIFO has overflowed since the last time the flag was cleared with FIFO_OVERFLOW_RESET")
     IS_RESET                 = BitField(STATUS, 0, 5, doc="High when the module reset line is active")
     COMBINE_DATA_FLAGS       = BitField(STATUS, 0, 4, doc="Active high if this crossbar is configured to pack the data flags two by two. This is used for the 2nd crossbar, where the incoming data flags occupy only 16 bits of the words.")
-    FLAGS_FIFO_OVERFLOW      = BitField(STATUS, 0, 3, doc="Active high if the flags FIFO has overflowed since the last time the flag was cleared with FIFO_OVERFLOW_RESET")
-    HEADER_CAPTURE_DATA      = BitField(STATUS, 1, 0, width=8, doc="")
+    NUMBER_OF_OUTPUTS        = BitField(STATUS, 0, 0, width=4, doc="")
 
-    FIFO_OVERFLOW            = BitField(STATUS, 3, 0, width=16, doc="Active high if any fo the data FIFO has overflowed since the last time the flag was cleared with FIFO_OVERFLOW_RESET")
+    FIFO_OVERFLOW             = BitField(STATUS, 2, 0, width=16, doc="Active high if any fo the data FIFO has overflowed since the last time the flag was cleared with FIFO_OVERFLOW_RESET")
     # TIMESTAMP_CAPTURE        = BitField(STATUS, 4, 0, width=16, doc="")
     # IN_FRAME_CTR             = BitField(STATUS, 0x02, 0, width=8, doc="Number of frames received on lane 0 before the alignment FIFOs. Rolls over.")
     # LANE_CTR                = BitField(STATUS, 0x04, 0, width=4, doc="Debug")
@@ -97,7 +96,8 @@ class SHUFFLE_BIN_SEL_base(Module_base):
         self.NUMBER_OF_FRAMES_PER_PACKET = 4
         self.NUMBER_OF_WORDS_PER_BIN=4
         self.NUMBER_OF_BINS_PER_FRAME = 8
-
+        self.FIRST_LANE = 0
+        self.LAST_LANE = 15
 
 
     def status(self):
@@ -109,26 +109,25 @@ class SHUFFLE_BIN_SEL_base(Module_base):
 
 
 
-    def print_frame_info(self):
-        bs = self
-        ts=[]
-        sid=[]
+    # def print_frame_info(self):
+    #     ts = []
+    #     sid = []
 
-        # get 8 bits of stream ID
-        self.HEADER_CAPTURE_DATA_SEL=0
-        self.HEADER_CAPTURE_EN=1
-        self.HEADER_CAPTURE_EN=0
-        for i in range(16):
-            self.HEADER_CAPTURE_LANE_SEL=i
-            sid.append(self.HEADER_CAPTURE_DATA)
+    #     # get 8 bits of stream ID
+    #     self.HEADER_CAPTURE_DATA_SEL = 0
+    #     self.HEADER_CAPTURE_EN = 1
+    #     self.HEADER_CAPTURE_EN = 0
+    #     for i in range(16):
+    #         self.HEADER_CAPTURE_LANE_SEL = i
+    #         sid.append(self.HEADER_CAPTURE_DATA)
 
-        # get lsb of timestamp
-        self.HEADER_CAPTURE_DATA_SEL=1
-        self.HEADER_CAPTURE_EN=1
-        self.HEADER_CAPTURE_EN=0
-        for i in range(16):
-            self.HEADER_CAPTURE_LANE_SEL=i
-            ts.append(self.HEADER_CAPTURE_DATA)
+    #     # get lsb of timestamp
+    #     self.HEADER_CAPTURE_DATA_SEL = 1
+    #     self.HEADER_CAPTURE_EN = 1
+    #     self.HEADER_CAPTURE_EN = 0
+    #     for i in range(16):
+    #         self.HEADER_CAPTURE_LANE_SEL = i
+    #         ts.append(self.HEADER_CAPTURE_DATA)
 
-        for i in range(len(ts)):
-            print 'Lane %02i: Stream ID=0x%02x, Frame = 0x%02x (delta = %i)' % (i, sid[i], ts[i], ts[i]-ts[0])
+    #     for i in range(len(ts)):
+    #         print 'Lane %02i: Stream ID=0x%02x, Frame = 0x%02x (delta = %i)' % (i, sid[i], ts[i], ts[i]-ts[0])

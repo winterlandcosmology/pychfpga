@@ -39,9 +39,9 @@ class FreqCtr_base(Module_base):
     'ADC_CLK13': 13,
     'ADC_CLK14': 14,
     'ADC_CLK15': 15,
-    'MGT_REFCLK': 16,
-    'MGT_USRCLK2': 17,
-    'FMC_REFCLK': 18,
+    'FMCA_MGT_PLL_REFCLK0': 16, #
+    'FMCB_REFCLK': 17,
+    'FMCA_REFCLK': 18,
     'CLK200': 19,
     'CTRL_CLK': 20,
     'FAN': 21,
@@ -52,6 +52,9 @@ class FreqCtr_base(Module_base):
     'GPU_TXCLK': 26,
     'BP_SHUFFLE_REFCLK': 27,
     'BP_SHUFFLE_TXCLK': 28,
+    'FMCA_MGT_PLL_REFCLK1': 29,  #
+    'FMCB_MGT_PLL_REFCLK0': 30,  #
+    'FMCB_MGT_PLL_REFCLK1': 31,  #
     }
 
     # Create local variables for page numbers tomake the table more readable
@@ -126,11 +129,6 @@ class FreqCtr_base(Module_base):
         fan_gate_time = 0.2
         fan_resolution = 2.0 / fan_gate_time
 
-        if fpga.is_fmc_present(0):
-            fmc_present_string = ''
-        else:
-            fmc_present_string = ' (ADC board not present)'
-
         PLL_CLK_SRC = fpga.GPIO.CHAN_CLK_SRC
         ant_clock_source_string = ('ADC','SYSTEM CLOCK')[PLL_CLK_SRC]
 
@@ -144,14 +142,18 @@ class FreqCtr_base(Module_base):
         print '   SYSMON_CLK:               %7.3f MHz' % (self.read_frequency('SYSMON_CLK', gate_time=gate_time) / 1e6)
         print '   Channelizers clock:       %7.3f MHz (Source= %i (%s))' % (self.read_frequency('ANT_CLK', gate_time=gate_time) / 1e6, PLL_CLK_SRC, ant_clock_source_string)
         print '   Correlator:               %7.3f MHz' % (self.read_frequency('CORR_CLK', gate_time=gate_time) / 1e6)
-        print '   FMC0 Reference:           %7.3f MHz%s' % (self.read_frequency('FMC_REFCLK', gate_time=gate_time) / 1e6, fmc_present_string)
-        print '   FMC1 Reference:           (data not available)'
+        print '   FMCA Reference:           %7.3f MHz%s' % (self.read_frequency('FMCA_REFCLK', gate_time=gate_time) / 1e6, '' if fpga.is_fmc_present(0) else ' (ADC board not present)')
+        print '   FMCA MGT PLL Ref clock 0: %7.3f MHz' % (self.read_frequency('FMCA_MGT_PLL_REFCLK0', gate_time=gate_time) / 1e6)
+        print '   FMCA MGT PLL Ref clock 1: %7.3f MHz' % (self.read_frequency('FMCA_MGT_PLL_REFCLK1', gate_time=gate_time) / 1e6)
+        print '   FMCB Reference:           %7.3f MHz%s' % (self.read_frequency('FMCB_REFCLK', gate_time=gate_time) / 1e6, '' if fpga.is_fmc_present(1) else ' (ADC board not present)')
+        print '   FMCB MGT PLL Ref clock 0: %7.3f MHz' % (self.read_frequency('FMCB_MGT_PLL_REFCLK0', gate_time=gate_time) / 1e6)
+        print '   FMCB MGT PLL Ref clock 1: %7.3f MHz' % (self.read_frequency('FMCB_MGT_PLL_REFCLK1', gate_time=gate_time) / 1e6)
         print '   BP Shuffle Ref clock:     %7.3f MHz' % (self.read_frequency('BP_SHUFFLE_REFCLK', gate_time=gate_time) / 1e6)
         print '   BP Shuffle TX word clock: %7.3f MHz (%0.3f Gbps)' % (bp_shuffle_txclk / 1e6, bp_shuffle_txclk*32*32/33/1e9)
         print '   GPU link Ref clock:       %7.3f MHz' % (self.read_frequency('GPU_REFCLK', gate_time=gate_time) / 1e6)
         print '   GPU link TX word clock:   %7.3f MHz (%0.3f Gbps)' % (gpu_txclk / 1e6, gpu_txclk*32*32/33/1e9)
         for i in range(fpga.NUMBER_OF_ANTENNAS):
-            print '   ADC%02i clock:              %7.3f MHz%s' % (i, self.read_frequency('ADC_CLK%i' % i, gate_time=gate_time) / 1e6, fmc_present_string)
+            print '   ADC%02i clock:              %7.3f MHz%s' % (i, self.read_frequency('ADC_CLK%i' % i, gate_time=gate_time) / 1e6, '' if fpga.is_fmc_present(0) else ' (No ADC board in FMCA - Cannot clock the channelizers)')
         print '   Resolution:     %10.6f MHz' % (resolution / 1e6)
         print '   Gate time:      %.3f s' % (gate_time)
         print '   FPGA Fan speed: %7.0f RPM (resolution %.0f RPM)' % (self.read_frequency('FAN', gate_time=fan_gate_time)*60. / 2, fan_resolution*60. / 2) # 1 Hz=60 RPM, divide by 2 because there is 2 pulses per fan turn

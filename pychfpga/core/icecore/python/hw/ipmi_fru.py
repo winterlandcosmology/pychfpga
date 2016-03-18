@@ -511,13 +511,26 @@ class FRU(object):
         return result
 
     @classmethod
-    def decode(cls, read_function):
+    def decode(cls, str):
         """ Convert IPMI binary data into a FRU object.
 
-        'str = read_function(addr, length) is called to obtain the IPMI binary data.  If length = -1, all data from addr to the end of the IPMI storage should be returned.
+        ``str`` is the string to decode.
+
+        For slow access devices, ``str`` can be function str(addr, length)
+        that is to obtain the IPMI binary data piece by piece as needed so
+        that all the memory device does not have to be read at once.  If
+        length = -1, all data from addr to the end of the IPMI storage should
+        be returned.
 
         """
+
+        if callable(str):
+            read_function = str
+        else:
+            read_function = lambda addr, length, _str=str: _str[addr: addr + length] if length >= 0 else _str[addr:]
+
         buf = read_function(0, 8) # read common header (8 bytes)
+
         if sum(map(ord, buf)) & 0xff:
             raise ValueError('Bad ckecksum in the IPMI Common Header. Is the EEPROM initialized?')
         (

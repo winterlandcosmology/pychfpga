@@ -1,0 +1,562 @@
+%-----------------------------------------------------------------------------------------
+%    PACKAGES
+%-----------------------------------------------------------------------------------------
+
+\documentclass[11pt,article]{memoir}
+\usepackage[marginratio=1:1]{geometry}
+\geometry{letterpaper}
+%\geometry{landscape}                % Activate for for rotated page geometry
+%\usepackage[parfill]{parskip}  % Use space separated paragraphs
+\usepackage{graphicx}
+\usepackage{float}
+\graphicspath{{figures/}} % Set the default folder for images
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{epstopdf}
+\usepackage[T1]{fontenc} % Use 8-bit encoding that has 256 glyphs
+\usepackage[utf8]{inputenc} % Required for including letters with accents
+\usepackage{textcomp}
+\usepackage{lmodern}
+\usepackage[numbers]{natbib}
+\usepackage[textsize=small,textwidth=3cm]{todonotes}
+\usepackage{pdflscape}  % Make a single page landscape
+\usepackage{hyperref}
+\usepackage{enumitem}
+\setlist[1]{noitemsep}
+
+%\DeclareGraphicsRule{.tif}{png}{.png}{`convert #1 `dirname #1`/`basename #1 .tif`.png}
+
+%-----------------------------------------------------------------------------------------
+%    DOCUMENTS SETTINGS
+%-----------------------------------------------------------------------------------------
+
+\counterwithout{section}{chapter}  % Don't show chapter numbers
+\setsecnumdepth{subsubsection}  % Set depth similar to article
+\newcommand*{\sclabel}[1]{\hspace\labelsep \normalfont\scshape #1}  % Label for lists
+\setlength{\marginparwidth}{2.5cm}  % Fix todonotes
+\bibliographystyle{plainnat}
+
+\newcommand*\diff{\mathop{}\!\mathrm{d}}  % Commands for proper differentials
+\newcommand*\Diff[1]{\mathop{}\!\mathrm{d^#1}}  % Commands for proper differentials
+\newcommand{\euler}{\,\mathrm{e}\,}  % Get upright Euler e
+
+%\linespread{1.3}  % "1.5" line spacing
+
+%-----------------------------------------------------------------------------------------
+%    PREAMBLE
+%-----------------------------------------------------------------------------------------
+
+\author{\textsc{Jean-Francois Cliche},
+		\textsc{Tristan Pinsonneault-Marotte}\\
+		}
+\title{Overview of ICEboard quality control}%\\
+       %\large{Subtitle}}
+\date{\today}
+
+%-----------------------------------------------------------------------------------------
+%    DOCUMENT
+%-----------------------------------------------------------------------------------------
+
+\begin{document}
+
+%------------------------------------TITLE-----------------------------------------------
+\maketitle
+
+%------------------------------------INTRO-----------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+This document analyzes the Quality Control (QC) process that will be used to
+validate the proper operation of the circuit boards to be commissioned into the Full CHIME system, including:
+
+\begin{itemize}
+\item FPGA Motherboards (a.k.a. ICEBoards) Model MGK7MB Rev. 4
+\item CHIME ADC Mezzanines, Model MGADC08 Rev. 2
+\item CHIME Backplanes, Model MGK7BP16 Rev. 2
+\end{itemize}
+
+
+\section{Description of the Quality Control process}
+
+The Quality control process consists in the following elements
+\begin{itemize}
+\item Assembly house's Quality control
+\item McGill Quality control
+\item Board tracking database
+\end{itemize}
+
+
+\section{Assembly house Quality control}
+
+% The Assembly house is responsible for purchasing the components,  manage the stocks, set-up
+% the machines that assemble the boards according to our Bill Of Material (BOM),
+% and pass the board through the assembly line.
+
+% Our boards (mainly the IceBoard) are complex since they possess a large number
+% of components, including fine pitch Ball Grid Arrays (BGA) chips such as the
+% FPGA (901 pins), the ARM processor, the DDR RAM chips etc. Manufacturing
+% errors therefore show up from time to time, resulting in a board that is not
+% functional or has partial functionalities. For this reason, quality control
+% checks need to be performed at various levels in order to detect these faulty
+% boards.
+
+
+
+\subsection{Standard internal assembly house checks}
+
+The Assembly house performs a number of basic quality control checks on all boards they
+produce. This Quality Control checks are part of an internal process on the part of the
+Assembly house and are not mandated by McGill.
+
+The objective of those test are to filter out boards that might fail the more extensive QC mandated by McGill.
+
+These tests consist of visual inspection of the board and performing X-Rays of
+critical regions of board, specifically the ARM and DDR Memory ball grid array
+contacts. If any problem is found, the board is reworked by the assembly
+house.
+
+We can have access to the Xray images upon request, but otherwise there is
+little information that would be of use at this point of the QC process.
+
+On the last production of 93 board, no board failed this test.
+
+\subsection{Current IceBoard test procedure}
+
+In order to further qualify the boards, The Assembly house has been
+subcontracted to perform additional functional tests on the IceBoards before
+they are shipped to McGill. The purpose of the test is to let the Assembly
+house catch the errors early and resolve them by themselves, therefore
+reducing the debugging work load on the McGill team.
+
+The tests consist in:
+
+\begin{itemize}
+	\item Visual inspection.
+
+	\item Power rail impedance check. While the board is turned off, the impedance of
+	each power rail is examined at the output of the voltage regulator in order to
+	detect any abnormalities. A low impedance if often observed when a component
+	is damaged, is not installed properly or ir there is a short circuit between
+	pins. This reduces the probability of having large (and potentially
+	destructive) currents flowing through the board when it is powered up.
+
+	\item Power up. An initial power up of the board is performed, with careful
+	attention paid to any signs of problems (e.g. burning smells, current draw) so
+	that power can be interrupted if one is detected.
+
+	\item PLL Programming. The Assembly house connects the IceBoard Phase Locked
+	Loops (PLL) programming port to a computer and programs the non-volatile
+	memory of the PLL to have it generate all the frequencies required to operate
+	the board. The board is power-cycled and the Front panel LEDs should indicate
+	that the PLLs have retained their settings and are locked. Apart from making
+	the board functional, this operation tests the proper assembly of the PLL and
+	the on-board crystal oscillator circuitry.
+
+	\item ARM Memory test. The debugging serial port of the ARM processor is
+	connected to a computer and the board is booted. The normal boot sequence
+	is interrupted by pressing a key on the keyboard and a command is sent to
+	launch a DDR Memory test program. This test identifies soldering problems
+	with the DDR memories.
+
+	\item Full ARM boot test. The IceBoard is rebooted and the ARM is allowed
+	to complete its boot sequence until the command prompt. This validates a
+	large part of the hardware (SD card circuitry, clocks, ARM connectivity
+	etc)
+
+	\item ARM Networking test. A command is issued to the ARM to query the
+	networking address it has obtained from the network router. This checks
+	that one of the ARM Ethernet port (and its PHY device and ancilarry
+	circuitry) is operating properly
+
+\end{itemize}
+
+The execution of these tests are NOT currently scripted, i.e. they are not
+done interactively with a computer runnign a test script. The test results are
+currently not recorded. If an IceBoard fails a test, the Assembly house
+reworks the board until it works, and is then sent to McGill.
+
+These tests have been performed on all 93 IceBoards that have been produced
+during the summer of 2015 for another telescope.
+
+
+\subsection{Future IceBoard test procedures}
+
+In the Full CHIME IceBoard production run, the quality control process
+performed at the Assembly house will be improved in the following way; we will
+
+\begin{itemize}
+	\item Provide an official test procedure document to the Assembly House
+
+	\item Use the test computer at the Assembly House facility to direct the
+	test step-by-step and systematically record all results for each
+	individual boards to improve traceability.
+
+	\item Move some of the automated tests performed at McGill to the Assembly
+	House so more faulty boards are identified before they leave the Assembly
+	house facilities (see McGill testing procedure below).
+
+	\item Include testing boards with CHIME Mezzanines and the test backplane
+	to provide a better test coverage, including Gigabit link tests.
+\end{itemize}
+
+\subsection{CHIME ADC Mezzanine test procedures}
+The Assembly house have not performed quality tests on the CHIME Mezzanines
+produced for the Pathfinder other than their normal in-house verifications.
+The yield on these boards has been excellent once tested at McGill.
+
+We will assess if it is cost- and time-effective to transfer automated tests
+historically performed at McGill on the Mezzanines to the Assembly House. In
+any case, the overall test coverage will remain the same, whether the tests
+are performed at McGill or at the Assembly house.
+
+\subsection{CHIME backplane test procedures}
+
+The Backplanes are relatively simple boards to assemble and are produced in
+small quantities (CHIME need 8 of those). It is therefore not cost effective
+to perform elaborate QC tests at the Assembly House. The Boards produced in
+the past have all been QC'ed at McGill. We will nevertheless assess whether
+basic power tests should be performed at the Assembly house.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{McGill Quality Control}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Current IceBoard tests}
+
+The ICEBoard tests performed at McGill are directed by a Python test script
+running on a host computer. The script directs the operator to perform actions
+and manual verifications and store all the results in a test file. Whenever
+possible possible, the script connects to the board and automatically runs the
+tests, analyzes the results, and store them in the test report.
+
+The test scripts can be found in the \href{https://bitbucket.org/chime/ch_acq}{\path{chime/ch_acq} BitBucket repository}, under
+\path{pychfpga/core/qc/iceboard-qc/test_scripts}. A wrapper script walks the user through the test suite and records the results to files in a specified location.
+
+The test perform the following tasks:
+
+\begin{itemize}
+
+	\item \textbf{Board identification}: A serial number is assigned to the Board and
+	the Both the assembly PCB serial numberrs are entered in the system. All
+	consequentn tests are saved in files associated with the assembly serial
+	number
+
+	\item \textbf{Visual Inspection}: The QC script asks the user to look for specific
+	defects such as scratches, unsoldered or shorted components, as
+	well as to inspect the press-fit backplane GTX connectors for any bent
+	pins.
+
+	\item \textbf{Power system impedance}: This test was performed at the Assembly house and is not performed again unless a board has a problem.
+	% With the board unpowered, the resistance
+	% between ground and an inductor pin of every buck power converter is probed
+	% using a multimeter. Any value below a limit fails the test.
+
+	\item \textbf{Power system test}: An initial power up of the board is
+	performed, with careful attention paid to any signs of problems.
+	Measurements of the switcher and regulator output voltage is not done
+	unless the board has a problem. These tests are run automatically later.
+	The overall current used by the board is measured however.
+	%  (e.g. burning smells,
+	% current draw) so that power can be interrupted if one is detected. The
+	% multimeter is then used to probe the output of every buck converter and
+	% voltage regulator. The data is entered in the test software, and
+	% deviations of over 2\% from the target value generate a test failure. The
+	% overall current used by the board is also checked.
+
+	\item \textbf{PLL Programming}:  Since the PLL programming was done at the Assembly house, this
+	test is normally skipped.
+
+	\item \textbf{Board configuration}: under the script instructions, the operator
+	sets all configuration DIP switches and install all the jumpers required
+	to operate the board normally.
+
+	\item \textbf{ARM initialization}: The board is connected to the network and
+	 powered on and the user is asked to check that a sequence of LEDs
+	 indicating the ARM has booted light up. If this is the case, the script
+	 establishes contact with the board over the network and reads its IP and
+	 MAC address. Using this IP, the user must then check they can
+	 successfully log in to the board over SSH. Next, the board information
+	 (Model, Serial number etc) information is stored in the industry-standard
+	 IPMI format int he board's EEPROM and FLASH memory. This information is
+	 read back and presented to the operator for confirmation, which completes
+	 this test.
+
+	\item \textbf{FPGA programming}: The test involves programming the FPGA through the
+	ARM. Once a heatsink is installed on the FPGA, it gets programmed using
+	the test firmware, and the user is asked to check the output of the
+	streaming logs and that a set of LEDs are blinking to confirm programming
+	was successful.
+
+
+ 	\item \textbf{Power and temperature measurements}: A set of power and
+ 	temperature sensors distributed across the board are read. Temperature
+ 	values outside of a range from 20 to 85°C generate a failure. Power
+ 	measurements (voltages and currents) are checked against a set of
+ 	measurements made previously on a working board, and anything outside of a
+ 	5\% and 20\% tolerance for voltage and current respectively leads to a
+ 	failure. All of these measurements are recorded.
+
+
+	\item Next, the FPGA gets initialized with a software handler. This tests
+	communication with the FPGA using the SFP+ Ethernet adapter. If mezzanines
+	are present, they will be initialized as well and the FPGA will be set up
+	to stream Mezzanine data (no mezzanines are usually installed at this
+	point in the QC). If this step is successful, the configuration of the
+	FPGA firmware is read back from the FPGA and recorded as part of the test results.
+
+	\item \textbf{GTX communications}: For this test, the board is mounted into a `one-
+	slot backplane' that loops back all GTX backplane links, and a QSFP cable
+	is connected to loop back the GPU links as well. A bit error rate test is
+	then performed on all of these links simultaneously (using the
+	`get\_ber()' function of `chime\_array.py'). The test is run for 15 min in
+	three parts, 1 min, 5 min, 9 min, and the overall bit error rate is
+	required to be less than $10^{-13}$ to pass.
+
+	\item \textbf{Mezzanine tests}: The last test requires two known working ADC mezzanines to
+	be installed on the board. The FPGA is then initialized in the same way as
+	in the FPGA test. A table of ADC delays is computed (using
+	`compute\_adc\_delay\_offsets()') and set, and the ADCs are set to an
+	internal ramp mode, so that they produce ramps exercising all available
+	bits. These are recorded by the FPGA and the data is saved and plotted as
+	histograms. A list of errors for every ADC channel is generated, and the
+	user is asked to inspect it along with the histograms. Any non-zero values
+	will generate a failure, as will non-flat histograms. Histograms that do
+	not show a perfectly flat distribution indicate an unreliable bit or
+	errors along the communication lines between the FPGA and the mezzanines,
+	since the ramps should be composed of an equal number of every value.
+
+\end{itemize}
+
+\subsection{Test results}
+
+Out of a procution run of 93 boards, 77 boards were tests using this procedure and 12 tests failed some parts of the tests, resulting in an initial yield of 84\% straing out of the Assembly house. Many of the problems found on the boards are identified and are fixable. Once those boards are reworked, the net yield will be significantly higher.
+
+\subsection{IceBoard Test coverage Analysis}
+
+We performed a  Design Failure Modes and Effect Analysis (DFMEA) in order to possible ways the IceBoard can fail in the manufacturing process and
+to identify the effects those failures can have on the item functionnality. We then analyzed how good the current tests were at detecting those effects, which allowed us to add additional tests to cover the failure modes that were missed in the previous test scripts. The process consisted in:
+
+\begin{itemize}
+	\item  Reviewing the schematics and for each component, identify how that component can fail to fulfill its function after being freshly received from manufacturing. The failures can include:
+		\begin{itemize}
+	     \item Bad soldering
+	     \item Components placed with the wrong orientation
+	     \item Wrong component value or part number
+	     \item Broken connector pin
+	     \item Missing component (or component that was installed when it shouldn't)
+		\end{itemize}
+
+	\item  Assessing the effects of each failure. One failure can have multiple
+        effects at the same time. When effects cascaded in other effects, we
+        attempted to identify the effect that is the most easily visible in
+        the chain.
+    \item Analyze the test script, idendify each test unit, andn umber each test with a unique identifier.
+
+    \item Associate each failure effect with the test that is most likely to detect this effect.
+    \item Quantify the impact of the failures on CHIME operations (some failures happen on hardware that is not used by CHIME and have no effect).
+
+    \item Add any tests that are needed to maximize coverage.
+
+\end{itemize}
+
+The DFMEA spreadsheet resulting from this work is attached to this document.
+
+\subsection{Test needed for CHIME}
+
+The IceBoard test coverage analysis showed that the current tests should be added to minimally cover the hardware that is used by CHIME:
+
+\begin{itemize}
+\item \textbf{Visual inspections}. More detailed inspections should be done on:
+	\begin{itemize}
+	\item ARM Shield installation, and shorts it can cause on adjacent tracks and components
+	\item Stiffener installation
+	\item Board flatness (with a qualified limit)
+	\end{itemize}
+
+\item \textbf{PLL Programming:}
+	\begin{itemize}
+	\item Check and document that the PLL LEDs turn on when using the three reference clock inputs (backplane clock, on-board crystal, SMA input)
+	\end{itemize}
+
+\item \textbf{ARM initialization}:
+	\begin{itemize}
+	\item Readback both the FLASH and EEPROM to check the board information
+	\end{itemize}
+
+\item \textbf{GTX communications}:
+	\begin{itemize}
+	\item Add backplane QSFP link test to the Motherboard QSFP and Bacnplane PCB link test
+	\end{itemize}
+
+\end{itemize}
+
+The Mezzanine and backplane operations are inherently tested when the software initialize them without error and get data from them, although more explicit tests would be desirable. Those tests are listed in the next section.
+
+Note that the test do not cover some failures such as missing or wrong-values decoupling capacitors which have a lot of redundancies and may not cause detectable failures.
+
+\subsection{Tests needed for full coverage}
+
+CHIME uses only a subset of the ICEBoard hardware. The following tests should be added to the list shown in the previous section
+to provide full test coverage of all the IceBoard's hardware:
+
+\begin{itemize}
+
+\item \textbf{Power system test}
+	\begin{itemize}
+	\item Explicitely Check and report the status of every power and fault LED to guarantee coverage of most of the power system
+	\end{itemize}
+
+\item \textbf{ARM initialization}:
+	\begin{itemize}
+	\item Explicitely indicate the LED pattern that is expected for a proper boot (to validate the boot and these LEDs)
+	\item Check proper initialization the second ARM Ethernet port
+	\end{itemize}
+
+\item \textbf{FPGA programming}:
+	\begin{itemize}
+	\item Explicitely check that the DONE led and FPGA LEDs turns on/blink after Programming
+	\end{itemize}
+
+\item \textbf{Power and temperature measurements}:
+	\begin{itemize}
+	\item Read the temperature sensors with the FPGA (in addition to the ARM) to test the FPGA I2C buses
+	\end{itemize}
+
+
+\item \textbf{Peripheral checks (via ARM)}:
+	\begin{itemize}
+	\item Set GPIO LEDs via ARM (GPIO Bus). Check is specified pattern is obtained
+	\item Set GPIO DIP Switches to pattern. Readback. Check if specified values are obtained.
+	\item Check QSFP GPIO Lines (GPIO Bus): PRSNT, RESET, SELECT.
+	\item Read and check SFP PRSNT and FAULT (SFP Bus)
+	\item Read SFP EEPROM via ARM (SFP Bus)
+	\item Read QSFP EEPROM via ARM (QSFP Bus). Set LP Mode readback over EEPROM. (Set INTERRUPT over I2C interface?)
+	\end{itemize}
+
+\item \textbf{Peripherals checks (via FPGA)}:
+	\begin{itemize}
+
+	\item Read all current, voltage and temperatures through the FPGA (SMPS Bus).
+	\item Read SFP EEPROM via FPGA (SFP Bus)
+	\item Read QSFP EEPROM via FPGA (QSFP Bus)
+	\item Read/write GPIO via FPGA (GPIO Bus)
+	\item Set FPGA to send known pattern on SMAs. Check for specified pattern with oscilloscope.
+	\item Read FPGA JTAG info (temperature) via ARM. Read many times to confirm reliability.
+	\item Read Frequency counter for all system frequencies (except Mezz) and check with targets.
+	\end{itemize}
+
+\item \textbf{On-board reset circuitry}:
+	\begin{itemize}
+	 \item Set FPGA MMI register. Press ARM POR reset switch. ARM should reboot with specified sequence of LEDs. Check if FPGA values are reset to defaults.
+	 \item Press ARM MR (Master Reset). ARM should reboot with specified sequence of LEDs.
+	 \item Press MPROG (FPGA PROG) switch. DONE LED must turn OFF
+	 \item Press PD (power down) switch. All specified LEDs must turn OFF
+	\end{itemize}
+
+\item \textbf{Mezzanine tests}:Most of these tests are implicitely done during Mezzanine initialization bus should be more explicit:
+	\begin{itemize}
+	\item Read Mezzanine EEPROM via FPGA (FMC Bus)
+	\item Check if PLL LOCK line is set/unset when PLL is lock/unlocked
+	\item Test Mezzanine PRSNT, POWER GOOD
+	\item Read Mezzanine EEPROM via ARM (ARM Bus)
+	\item Test Mezzanine Power on/off. Check LEDs.
+	\item Read Mezz reference frequencies (2x 10 MHz, GBTCLK)
+	\item Check that SYNC stops clock
+	\item Check SPI Communications with Mezzanine (read/write ADC)
+	\item Check that ADC RESET resets the ADC and IO Expanders
+	\item Use different FMC mezzanine to check all FMC lines not used by CHIME mezzanines.
+	\end{itemize}
+
+\item \textbf{Backplane communications and IO}: Reading the EEPROM is implicit in the test but should be made more explicit:
+	\begin{itemize}
+	\item: Add backplane I2C communication test over I2C to validate I2C circuitry and connectors
+	\end{itemize}
+
+\item \textbf{Rarely used hardware}. test should be added if the following hardware is ever to be used:
+	\begin{itemize}
+	\item Front panel UART port
+	\item Back panel UART Port
+	\item ARM JTAG port
+	\item Full DDR Memory tests
+	\item ARM USB Ports
+	\item ARM SATA Ports
+	\item ARM PCIe link to FPGA
+	\item Mezzanine JTAG Port
+	\item ARM IRQ Line
+	\item GPIO IRQ Line
+	\item FPGA JTAG Lines
+	\item ARM extra backplane I2C links
+	\end{itemize}
+\end{itemize}
+
+
+\subsection{System tests}
+
+
+\subsection{CHIME Mezzanine tests}
+The CHIME Mezzanines are tested using a script that runs the  "Mezzanine tests" part of the ICEBoard tests. All the functionnalities needed by CHIME are covered. The CHIME mezzanine signals related to the Gigabit link connectors, 2nd PLL, hardware PLL LOCK line, and alternate RESET line are not used by CHIME.
+
+\subsection{Backplane Mezzanine tests}
+The tests performed on the backplane are currently limited.
+
+The "Backplane teste" part of the IceBoard tests covers the essential parts. A manual test protocol exists and has been performed on all the existing boards, but this test has to be formalized and additional scripts have to be written to cover all the hardware (GPIO, temperature sensors, reset circuitry etc).
+
+System tests are the best way to identify some problems on the backplane sich as QSFP and PCB link connectivity, clock and signal distribution, etc.
+
+
+\subsection{System tests}
+
+
+Once the IceBoards, Mezzanines and Backplanes have passed their tests, those are assembled in crates, and a pair of crates are connected to build a Full CHIME Quadrant. The array is initialized to perform 512-element shuffle across the backplanes and between the two crates, and stream the data to the 10G Ethernet GPU links. Only one node is connected. We capture raw data on all links of that node and check if the shuffled data matches the result that is expected from the various test patterns that are produced by the channelizers.
+
+
+We have successfully assembled a full CHIME Quadrant (32 IceBoards, no Mezzanines however) from boards that came out directly of the McGill QC described in this document. All boards operated as expected, and the preliminary results showed that the data received by the node is as expected. Obviously, not all GPU links are tested, and no Mezzanines were used, but this
+
+\subsection{Pertinence of performing Boundary scan}
+
+A Boundary Scan consists in using the JTAG serial interface available on many
+digital chips in order to electrically check the connectivity between
+digital components equipped with such an interface. The scan in performed by sending
+test vectors that set the digital outputs of chips to known values and by
+reading back the levels that have been received by the pins of the destination
+chip.
+
+Although the FPGA, ARM processors and FMC Mezzanine connectors are equipped
+with JTAG connectors, the manufacturing and QCing process of the ICEBoard does
+not include Boundary Scans. The reason for this are:
+
+\begin{itemize}
+	\item The main two chips on board, the FPGA and ARM, are pretty much
+       independent and share only a few lines. Testing those lines do not
+       offer a significant coverage to make it worth it the effort in
+       designing a boundary scan  set-up.
+
+	\item The ARM pins mainly connects to DDR Memory, PHY interface and other
+       peripherals, which do not support JTAG.
+
+	\item The FPGA pins mainly connect to the FMC Mezzanines (which has a JTAG
+       connection), but the Mezzanine we use connect those lines to ADCs and
+       DACs that do not support the JTAG Boundary scan.
+\end{itemize}
+
+
+\section{Board tracking}
+
+Every board possess a file that is used to track any test result and repairs
+or modifications made to it. This is created automatically by the McGill QC
+test scripts. This file is automatically pushed in a QC Git repository
+accessible to all board users.
+
+
+%------------------------------------TESTS-----------------------------------------------
+
+%--------------------------------MANUFACTURING-------------------------------------------
+
+
+%------------------------------------APPENDIX---------------------------------------------
+% \appendix
+
+%------------------------------------BIBLIOGRAPHY-----------------------------------------
+%\bibliography{final_report}  % Reference bibtex file here
+
+\end{document}

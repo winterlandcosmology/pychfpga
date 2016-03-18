@@ -9,7 +9,11 @@
 
 #include "iceboard.h"
 #include "iceboard_hw.h"
+#include "i2c_eeprom.h"
+
 #include <errno.h>
+#include <syslog.h>
+
 struct iceboard_gpio *get_gpio_by_netname(const char *name) {
 	int n;
 	struct iceboard_gpio *gpio;
@@ -85,3 +89,34 @@ int gpio_get(struct iceboard_gpio *self, bool set_input) {
 	return(buf[0]=='1');
 }
 
+tuber_method(STRING_CONST, IceBoard, get_clock_source,
+		"Returns the type of clock input selected by iceboard jumpers",
+		0, (),
+		1, (CATEGORY_ICEBOARD),
+		"Checks the state of ARMClkSel0 and ARMClkSel1 lines, "
+		"and computes if Backplane (bp), the SMA(sma) or, "
+		"crystal (xtal) was selected."
+) {
+
+	struct iceboard_gpio *clksel0, *clksel1;
+
+	/* Obtain GPIO references */
+	if(!(clksel0 = get_gpio_by_netname("ARMClkSel0")) ||
+			!(clksel1 = get_gpio_by_netname("ARMClkSel1")))  {
+		oops("Unable to obtain ARMClkSel0, ARMClkSel1!");
+		return NULL;
+	}
+
+	/* Make sure we aren't asserting ARMClkSel0, ARMClkSel1 */
+	(void)gpio_get(clksel0, 1);
+	(void)gpio_get(clksel1, 1);
+
+	/* Checking clock source type */
+	if(gpio_get(clksel1, 0))
+		return CLOCK_SOURCE_XTAL;
+
+	if( gpio_get(clksel0, 0))
+		return CLOCK_SOURCE_SMA;
+
+	return CLOCK_SOURCE_BP;
+}

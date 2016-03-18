@@ -92,14 +92,15 @@ if __name__ == '__main__':
     close_all_sockets()
 
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0]) # description is the first line of the docstring
-    parser.add_argument('-t', '--log_target', action='store', type=str, default='stream', help="Logging target ('stream', 'syslog' or a filename)")
+    parser.add_argument('-t', '--log_target', action='store', type=str, default='syslog', help="Logging target ('stream', 'syslog' or a filename)")
     parser.add_argument('-l', '--log_level', action = 'store', type=str, choices=['info','debug'], default='debug', help='Logging level')    
     parser.add_argument('-f', '--force', action = 'store', type=int, default=0, help='Forces reprogramming of the FPGAs even if they are already programmed')
     parser.add_argument('-i', '--if_ip', action = 'store', type=str, default=None, help='IP address of adapter through which the connection to the FPGA will be established. If not specified, the controller will attempt to identify the proper host based on the FPGA IP address.')
-    parser.add_argument('-b', '--bitfile', action = 'store', type=str, default= '../../chfpga/xilinx_projects/CHFPGA_MGK7MB_REV2/CHFPGA_MGK7MB_REV2.runs/impl_Rev2/chFPGA_MGK7MB_Rev2.bit',  help='Filename of the bitfile used to to program the FPGAs')
+    parser.add_argument('-b', '--bitfile', action = 'store', type=str, default= '/home/chime/firmware/chFPGA_MGK7MB_Rev2_July27_2015.bit',  help='Filename of the bitfile used to to program the FPGAs')
     parser.add_argument('-s', '--subarray', action = 'store', type=int, help='Subarrays to include')
     parser.add_argument('-y', '--yamlfile', action = 'store', type=str, default= 'yaml_iceboard_list.txt',  help='Yaml file with list of boards and their respective IP addresses and handlers.')
-    parser.add_argument('-d', '--delayfile', action = 'store', type=str, default= 'delays_feb17_2015.pkl',  help='Pickle file with ADC delays.')
+    parser.add_argument('-d', '--delayfile', action = 'store', type=str, default= 'delays_aug_2015.pkl',  help='Pickle file with ADC delays.')
+    parser.add_argument('-o', '--slot', action = 'store', type = int, default=1, help = "which slot to run on.")
     args = parser.parse_args()
     log_levels = {'info': logging.INFO, 'debug': logging.DEBUG}
 
@@ -131,8 +132,8 @@ if __name__ == '__main__':
     # Create new fpga query object
     with open(args.yamlfile, 'rb') as yamlfile:
         ca =  load_yaml(yamlfile)   
-    c = ca.query(IceBoardPlus).filter_by(subarray=args.subarray) # c is kind of standard notation for a list of iceboards now.
-    
+    c_rack = ca.query(IceBoardPlus).filter_by(subarray=args.subarray) # c is kind of standard notation for a list of iceboards now.
+    c = c_rack(slot=args.slot)
     # Associate the fpga_bitstream with the target Handler    
     c.set_handler(chFPGA_controller, fpga_bitstream)
     
@@ -157,25 +158,27 @@ if __name__ == '__main__':
     c.set_corr_reset(1)
     time.sleep(0.1)
     c.set_corr_reset(0)
-    for i, c_element in enumerate(c):
-        c_element.set_adc_delays_with_check(delays[int(c_element.serial)])
-        chFPGA_config = c_element.get_config()
-        #r = chFPGA_receiver.chFPGA_receiver(chFPGA_config, \
-        #              ip_address=c_element.fpga_ip_addr, \
-        #              port=c_element.fpga_port_number+1, \
-        #              host_ip = args.if_ip)
-        port = str(c_element.fpga_port_number+1)
-        c_element.set_data_source('adc')
-        c_element.set_adc_mode('data')
-        c_element.set_FFT_bypass(True)
-        c_element.set_scaler_bypass(True)
-        c_element.set_gain((1,27))
-        c_element.set_offset_binary_encoding(0)
-        c_element.start_data_capture(burst_period_in_seconds=0.1, number_of_bursts=0)
-        c_element.sync()
-        time.sleep(4)
-        print_RMS(port)
-        #r.close()
+    #for i, c_element in enumerate(c):
+    c.set_adc_delays_with_check(delays[int(c.serial)])
+    chFPGA_config = c.get_config()
+    #r = chFPGA_receiver.chFPGA_receiver(chFPGA_config, \
+    #              ip_address=c_element.fpga_ip_addr, \
+    #              port=c_element.fpga_port_number+1, \
+    #              host_ip = args.if_ip)
+    port = str(c.fpga_port_number+1)
+    c.set_data_source('adc')
+    c.set_adc_mode('data')
+    c.set_FFT_bypass(True)
+    c.set_scaler_bypass(True)
+    c.set_gain((1,27))
+    c.set_offset_binary_encoding(0)
+    c.set_local_data_port_number(int(port))
+    c.start_data_capture(burst_period_in_seconds=0.1, number_of_bursts=0)
+    c.sync()
+    time.sleep(4)
+    print port
+    print_RMS(port)
+    #r.close()
 
 
 

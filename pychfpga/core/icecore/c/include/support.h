@@ -55,8 +55,6 @@
 #define VALIDATE_STRINGS_fold(d, state, x) state || !strcasecmp(__val, x)
 #define VALIDATE_STRINGS_fold2(d, state, x) state ", " BOOST_PP_STRINGIZE(x)
 
-int fdprintf(int fd, const char *fmt, ...);
+int fdscanf(int fd, const char *fmt, ...);
 
 #endif /* __SUPPORT_H__ */
-
-

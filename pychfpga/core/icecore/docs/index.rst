@@ -68,6 +68,7 @@ How-To Guides
 
    howto/building_a_flash_card
    howto/nfs_root
+   howto/web_development
 
 .. Firmware
 .. --------

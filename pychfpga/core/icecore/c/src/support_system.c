@@ -55,14 +55,3 @@ int fdscanf(int fd, const char *fmt, ...) {
 
 	return(x);
 }
-
-int fdprintf(int fd, const char *fmt, ...) {
-	va_list ap;
-	int x;
-
-	va_start(ap, fmt);
-	x = vdprintf(fd, fmt, ap);
-	va_end(ap);
-	return(x);
-}
-

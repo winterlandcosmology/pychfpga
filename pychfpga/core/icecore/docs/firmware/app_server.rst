@@ -171,6 +171,9 @@ The different components of the application stack are as follows:
    JavaScript "tuber" interface; you can find the source code for it `here
    <https://bitbucket.org/winterlandcosmology/icecore/src/HEAD/www/js/tuber.js>`_.
 
+   For more information on developing web content for the IceBoard, consult
+   :doc:`web_prototyping.rst`.
+
 Building
 --------
 

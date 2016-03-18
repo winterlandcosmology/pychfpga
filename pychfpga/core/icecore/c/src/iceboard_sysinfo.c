@@ -47,19 +47,25 @@ out:
 	return mtd;
 }
 
-frui *IceBoard_get_motherboard_ipmi_raw(void) {
-
+void cache_mb_frui(IceBoard *self) {
 	uint8_t *buf = NULL;
 	char *warning;
 
 	frui_parser *p=NULL;
-	frui *frui=NULL;
 
 	FILE *mtd = NULL;
 	mtd_info_t mtd_info;
 
-	if(!(mtd = get_motherboard_ipmi_file("r")))
+	if(self->mb_frui) {
+		frui_free(self->mb_frui);
+		self->mb_frui = NULL;
+	}
+
+	if(!(mtd = get_motherboard_ipmi_file("r"))) {
+		/* oops() already called */
 		goto out;
+	}
+
 	if(ioctl(fileno(mtd), MEMGETINFO, &mtd_info) == -1) {
 		oops("Unable to call ioctl(MEMGETINFO) on MTD!");
 		goto out;
@@ -79,7 +85,7 @@ frui *IceBoard_get_motherboard_ipmi_raw(void) {
 	/* Try to parse into FRUI structure */
 	if(!(p = frui_parser_new()))
 		goto out;
-	if(!(frui = frui_parser_loadb(p, mtd_info.size, buf))) {
+	if(!(self->mb_frui = frui_parser_loadb(p, mtd_info.size, buf))) {
 		oops("Failed to parse IPMI FRU block! (Is this an uninitialized board?)");
 		goto out;
 	}
@@ -95,11 +101,8 @@ out:
 		free(buf);
 	if(p)
 		frui_parser_free(p);
-
-	return frui;
 }
 
-#ifdef LIBTUBER
 tuber_method(JSON, IceBoard, _get_motherboard_ipmi,
 		"Read the SPI EEPROM, and interpret it as an IPMI descriptor.",
 		0, (),
@@ -110,7 +113,7 @@ tuber_method(JSON, IceBoard, _get_motherboard_ipmi,
 	json_t *result = json_object();
 	frui *frui;
 
-	if((frui = IceBoard_get_motherboard_ipmi_raw())) {
+	if((frui = self->mb_frui)) {
 		if(frui_has_board_info(frui))
 			json_object_set_new(result, "board", json_pack(
 					"{s:s,s:s,s:s,s:s,s:s}",
@@ -130,8 +133,6 @@ tuber_method(JSON, IceBoard, _get_motherboard_ipmi,
 					"serial_number", frui_get_product_serial_number(frui),
 					"asset_tag", frui_get_product_asset_tag(frui),
 					"frui_file_id", frui_get_product_fru_file_id(frui)));
-
-		frui_free(frui);
 	}
 
 	return result;
@@ -148,10 +149,8 @@ tuber_method(STRING, IceBoard, get_motherboard_serial,
 	frui *frui;
 	char *serial = NULL;
 
-	if((frui = IceBoard_get_motherboard_ipmi_raw())) {
+	if((frui = self->mb_frui))
 		serial = strdup(frui_get_board_serial_number(frui));
-		frui_free(frui);
-	}
 	return serial;
 }
 
@@ -161,12 +160,15 @@ tuber_method(VOID, IceBoard, _motherboard_eeprom_write_base64,
 		1, (CATEGORY_ICEBOARD),
 		""
 ) {
-	char *buf = NULL;
+	uint8_t *buf = NULL;
 	int slen, blen;
 	FILE *mtd;
 	mtd_info_t mtd_info;
 	erase_info_t ei;
 	int x;
+	frui_parser *p=NULL;
+	char *warning;
+	frui *frui=NULL;
 
 	if(!(mtd = get_motherboard_ipmi_file("w")))
 		goto out;
@@ -197,6 +199,20 @@ tuber_method(VOID, IceBoard, _motherboard_eeprom_write_base64,
 		goto out;
 	}
 
+	/* Try to parse into FRUI structure into memory BEFORE writing it to
+	   the EEPROM. As a side-effect, we update the local FRUI cache. */
+	if(!(p = frui_parser_new()))
+		goto out;
+	if(!(frui = frui_parser_loadb(p, blen, buf))) {
+		oops("Failed to parse IPMI FRU block! (%s) Refusing to program EEPROM.",
+				frui_parser_get_error(p));
+		goto out;
+	}
+
+	/* Any warnings? Log them. */
+	while((warning = frui_parser_get_warning(p)))
+		syslog(LOG_WARNING, "IPMI parser: %s", warning);
+
 	/* Delete partition */
 	ei.length = mtd_info.erasesize;
 	for(ei.start = 0; ei.start < mtd_info.size; ei.start += mtd_info.erasesize) {
@@ -208,10 +224,19 @@ tuber_method(VOID, IceBoard, _motherboard_eeprom_write_base64,
 	if((x = fwrite(buf, 1, blen, mtd)) != blen)
 		oops("Incomplete MTD write! Write %i of %i bytes.", x, blen);
 
+	/* Replace cached IPMI data */
+	if(self->mb_frui)
+		frui_free(self->mb_frui);
+	self->mb_frui = frui;
+	frui = NULL;
 out:
+
 	if(buf)
 		free(buf);
 	if(mtd)
 		fclose(mtd);
+	if(p)
+		frui_parser_free(p);
+	if(frui)
+		frui_free(frui);
 }
-#endif

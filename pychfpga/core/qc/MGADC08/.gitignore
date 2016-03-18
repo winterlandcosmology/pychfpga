@@ -1,0 +1,2 @@
+# Test results are not meant to be stored in this repository folder, so we ignore xml files.
+test_results

@@ -23,6 +23,7 @@ class PROBER_base(Module_base):
     RESET = BitField(CONTROL, 0x00, 7, doc="Resets the module (including the FIFO)")
     FIFO_RESET = BitField(CONTROL, 0x00, 6, doc="When '1', resets the data FIFO")
     SOURCE_SEL = BitField(CONTROL, 0x00, 5, doc="0 = source selector output (timestream), 1 = scaler output (spectrum)")
+    OFFSET = BitField(CONTROL, 0x00, 0, width=4, doc="Offset for sending data to avoid collisions")
     BURST_LENGTH = BitField(CONTROL, 0x01, 0, width=8, doc="Sets the number of frame to transmit in a burst. 0= Continuous transmission, 1-255 = Trigerred transmission.")
     BURST_PERIOD2 = BitField(CONTROL, 0x02, 0, width=8, doc="8 bit MSB of number of frames between bursts")
     BURST_PERIOD1 = BitField(CONTROL, 0x03, 0, width=8, doc="8 bit middle byte of Number of frames between bursts ")
@@ -63,7 +64,7 @@ class PROBER_base(Module_base):
             if source in self.DATA_SOURCE_TABLE:
                 source = self.DATA_SOURCE_TABLE[source]
             else:
-                ValueError("Unknown data capture source '%s'. Valid sources are %s." % (source, ','.join(self.DATA_SOURCE_TABKE.keys())))
+                ValueError("Unknown data capture source '%s'. Valid sources are %s." % (source, ','.join(self.DATA_SOURCE_TABLE.keys())))
         self.SOURCE_SEL = source
 
 
@@ -77,7 +78,7 @@ class PROBER_base(Module_base):
         """ Returns the interval between data capture bursts. The period is specified in number of frames. This method is used because the property does not yet handle multi-byte values well."""
         return self.BURST_PERIOD0 + (self.BURST_PERIOD1 << 8) + (self.BURST_PERIOD2 << 16)
 
-    def config_capture(self, frames_per_burst=1, burst_period=100, number_of_bursts=0):
+    def config_capture(self, frames_per_burst=1, burst_period=100, number_of_bursts=0, offset=0):
         """
         Configure the capture of data frames for transmisssion over the ethernet link.
             frames_per_burst: number of continuous frames to send in a burst (default=1)
@@ -94,6 +95,7 @@ class PROBER_base(Module_base):
         self.BURST_LENGTH = frames_per_burst
         self.set_burst_period(burst_period)
         self.BURST_NUMBER = number_of_bursts
+        self.OFFSET = offset
 
     def init(self, **kwargs):
         """ Initialize the data capture module"""

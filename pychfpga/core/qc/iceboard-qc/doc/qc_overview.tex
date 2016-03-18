@@ -1,0 +1,113 @@
+%-----------------------------------------------------------------------------------------
+%    PACKAGES
+%-----------------------------------------------------------------------------------------
+
+\documentclass[11pt,article]{memoir}
+\usepackage[marginratio=1:1]{geometry}
+\geometry{letterpaper}
+%\geometry{landscape}                % Activate for for rotated page geometry
+%\usepackage[parfill]{parskip}  % Use space separated paragraphs
+\usepackage{graphicx}
+\usepackage{float}
+\graphicspath{{figures/}} % Set the default folder for images
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{epstopdf}
+\usepackage[T1]{fontenc} % Use 8-bit encoding that has 256 glyphs
+\usepackage[utf8]{inputenc} % Required for including letters with accents
+\usepackage{textcomp}
+\usepackage{lmodern}
+\usepackage[numbers]{natbib}
+\usepackage[textsize=small,textwidth=3cm]{todonotes}
+\usepackage{pdflscape}  % Make a single page landscape
+\usepackage{hyperref}
+%\DeclareGraphicsRule{.tif}{png}{.png}{`convert #1 `dirname #1`/`basename #1 .tif`.png}
+
+%-----------------------------------------------------------------------------------------
+%    DOCUMENTS SETTINGS
+%-----------------------------------------------------------------------------------------
+
+\counterwithout{section}{chapter}  % Don't show chapter numbers
+\setsecnumdepth{subsubsection}  % Set depth similar to article
+\newcommand*{\sclabel}[1]{\hspace\labelsep \normalfont\scshape #1}  % Label for lists
+\setlength{\marginparwidth}{2.5cm}  % Fix todonotes
+\bibliographystyle{plainnat}
+
+\newcommand*\diff{\mathop{}\!\mathrm{d}}  % Commands for proper differentials
+\newcommand*\Diff[1]{\mathop{}\!\mathrm{d^#1}}  % Commands for proper differentials
+\newcommand{\euler}{\,\mathrm{e}\,}  % Get upright Euler e
+
+%\linespread{1.3}  % "1.5" line spacing
+
+%-----------------------------------------------------------------------------------------
+%    PREAMBLE
+%-----------------------------------------------------------------------------------------
+
+\author{\textsc{Tristan Pinsonneault-Marotte}\\
+		\textsc{Add authors...}}
+\title{Overview of ICEboard quality control}%\\
+       %\large{Subtitle}}
+\date{\today}
+
+%-----------------------------------------------------------------------------------------
+%    DOCUMENT
+%-----------------------------------------------------------------------------------------
+
+\begin{document}
+
+%------------------------------------TITLE-----------------------------------------------
+\maketitle
+
+%------------------------------------INTRO-----------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+This document outlines each of the tests that make up the ICEboard quality control (QC) process, as it is performed at the McGill Cosmology Lab and the board's assembly house. For every test, a brief description of the tasks performed will be given, followed by an explanation of how this test reflects the functional state of the hardware.
+
+All of these tests can be found in the \href{https://bitbucket.org/chime/ch_acq}{\path{chime/ch_acq} repository on Bitbucket}, under \path{pychfpga/core/qc/iceboard-qc/test_scripts}, along with a wrapper script that walks the user through the test suite and records the results to files in a specified location.
+
+%------------------------------------TESTS-----------------------------------------------
+\section{Description of tests}
+\subsection{Inspection}
+The first step is a visual inspection. The QC script asks the user to look for any obvious defects such as scratches, unsoldered or shorted components, as well as to inspect the press-fit backplane GTX connectors for any bent pins.
+
+\subsection{Resistance}
+With the board unpowered, the resistance between ground and an inductor pin of every buck power converter is probed using a multimeter. Any value below $5 \Omega$ fails the test. \todo{check this} This test should identify shorts or otherwise damaged circuits.
+
+\subsection{Power}
+An initial power up of the board is performed, with careful attention paid to any signs of problems (e.g. burning smells, current draw) so that power can be interrupted if one is detected. The multimeter is then used to probe the same locations as in the resistance test, only to measure voltage this time. Each buck converter is meant to provide a specific voltage, and deviations of over 2\% from this value generate a failure.
+
+\subsection{ARM initialization}
+Before the ARM is booted for the first time, configuration switches on the circuit board  are set to specified positions. The board is then connected to the network and powered on and the user is asked to check that a sequence of LEDs indicating the ARM has booted light up. If this is the case, the script establishes contact with the board over the network and reads its IP and MAC address. Using this IP, the user must then check they can successfully log in to the board over SSH. Next, the IPMI and EEPROM on the board are written to using a standard format for all boards, that includes the serial and model numbers, and revision. This is read back and presented to the user for confirmation, which completes the test.
+
+\todo{What list of functional hardware components can we claim this requires to complete?}
+
+\subsection{FPGA: programming and reading sensors}
+\label{subsec:fpga}
+The first part of this test just involves programming the FPGA through the ARM. Once a heatsink is installed on the FPGA, it gets programmed using the latest firmware, and the user is asked to check the output of the streaming logs and that a set of LEDs are blinking to confirm programming was successful. Next, the FPGA gets initialized with a software handler. If mezzanines are present, they will be initialized as well and the FPGA will be set up as a receiver (no mezzanines are usually installed at this point in the QC). If this step is successful, the configuration is read back from the FPGA and recorded as part of the test results. Finally a set of power and temperature sensors distributed across the board are read using the FPGA. Temperature values outside of a range from 20 to 85°C generate a failure. Power measurements (voltages and currents) are checked against a set of measurements made previously on a working board, and anything outside of a 5\% and 20\% tolerance for voltage and current respectively leads to a failure. All of these measurements are recorded.
+
+\todo{What list of functional hardware components can we claim this requires to complete?}
+
+\subsection{GTX communications}
+For this test, the board is mounted into a `one-slot backplane' that loops back all GTX backplane links, and a QSFP cable is connected to loop back the GPU links as well. A bit error rate test is then performed on all of these links simultaneously (using the `get\_ber()' function of `chime\_array.py'). The test is run for 15 min in three parts, 1 min, 5 min, 9 min, and the overall bit error rate is required to be less than $10^{-13}$ to pass.
+
+Note that this implementation of the GTX test is new, and hasn't been used on any boards prior to September 2015. Before this, a similar test was performed that used proprietary software from the FPGA chip manufacturer to measure the bit error rate. The new test uses only software from the CHIME code (in `ch\_acq').
+
+\todo{What list of functional hardware components can we claim this requires to complete?}
+
+\subsection{ADC ramps}
+The last test requires two known working ADC mezzanines to be installed on the board. The FPGA is then initialized in the same way as in the FPGA test (Section \ref{subsec:fpga}). A table of ADC delays is computed (using `compute\_adc\_delay\_offsets()') and set, and the ADCs are set to an internal ramp mode, so that they produce ramps exercising all available bits. These are recorded by the FPGA and the data is saved and plotted as histograms. A list of errors for every ADC channel is generated, and the user is asked to inspect it along with the histograms. Any non-zero values will generate a failure, as will non-flat histograms. Histograms that do not show a perfectly flat distribution indicate an unreliable bit or errors along the communication lines between the FPGA and the mezzanines, since the ramps should be composed of an equal number of every value.
+
+\todo{What list of functional hardware components can we claim this requires to complete?}
+
+%--------------------------------MANUFACTURING-------------------------------------------
+\section{QC in two steps}
+Every ICEboard that comes off the assembly line is submitted to this QC process, and the results get recorded, but the tests are performed in two sets at different stages in the board's manufacture. The very first tests: inspection, resistance, and power, are done at the assembly house, where they also attempt to boot the ARM and connect it to a network. These initial tests allow them to weed out any build issues and make the necessary repairs. Only boards that have this basic functionality are delivered to McGill, where the remainder of the quality control takes place.
+
+
+%------------------------------------APPENDIX---------------------------------------------
+\appendix
+
+%------------------------------------BIBLIOGRAPHY-----------------------------------------
+%\bibliography{final_report}  % Reference bibtex file here
+
+\end{document}  

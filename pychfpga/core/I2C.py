@@ -156,10 +156,10 @@ class I2C_base(Module_base):
         if error_msg:
             error_msg = 'write_read:  The following errors occured while writing %i bytes and reading %i bytes on FPGA I2C port %i at address 0x%02x with data %s\n %s' % (write_length, read_length, self.current_port, addr,  hex(read_data), error_msg)
             if noerror:
-                self.logger.warn(error_msg)
+                self.logger.info(error_msg)
             else:
-                self.logger.error(error_msg)
-                raise SystemError(error_msg)
+                self.logger.info(error_msg)
+                raise IOError(error_msg)
 
         return read_data
 

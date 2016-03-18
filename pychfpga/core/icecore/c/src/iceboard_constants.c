@@ -5,6 +5,7 @@
 /* Categories for tuber_methods */
 const char *CATEGORY_ICEBOARD = "IceBoard";
 const char *CATEGORY_MEZZANINE = "Mezzanine";
+const char *CATEGORY_BACKPLANE = "Backplane";
 
 /* Units */
 const char *HZ="Hz";
@@ -47,16 +48,21 @@ const char *MOTHERBOARD_TEMPERATURE_FPGA = "MOTHERBOARD_TEMPERATURE_FPGA";
 const char *MOTHERBOARD_TEMPERATURE_FPGA_DIE = "MOTHERBOARD_TEMPERATURE_FPGA_DIE";
 const char *MOTHERBOARD_TEMPERATURE_PHY = "MOTHERBOARD_TEMPERATURE_PHY";
 
+const char *BACKPLANE_TEMPERATURE_SLOT1 = "BACKPLANE_TEMPERATURE_SLOT1";
+const char *BACKPLANE_TEMPERATURE_SLOT16 = "BACKPLANE_TEMPERATURE_SLOT16";
+
 #ifdef LIBTUBER
 tuber_property(IceBoard, TEMPERATURE_SENSOR, json_pack(
 		"{"
-		" s:s, s:s, s:s, s:s, s:s"
+		" s:s, s:s, s:s, s:s, s:s, s:s, s:s"
 		"}",
 		"MB_POWER", MOTHERBOARD_TEMPERATURE_POWER,
 		"MB_ARM", MOTHERBOARD_TEMPERATURE_ARM,
 		"MB_FPGA", MOTHERBOARD_TEMPERATURE_FPGA,
 		"MB_FPGA_DIE", MOTHERBOARD_TEMPERATURE_FPGA_DIE,
-		"MB_PHY", MOTHERBOARD_TEMPERATURE_PHY
+		"MB_PHY", MOTHERBOARD_TEMPERATURE_PHY,
+		"BP_SLOT1", BACKPLANE_TEMPERATURE_SLOT1,
+		"BP_SLOT16", BACKPLANE_TEMPERATURE_SLOT16
 ));
 #endif
 
@@ -100,4 +106,19 @@ tuber_property(IceBoard, RAIL, json_pack(
 
 #ifdef LIBTUBER
 tuber_property(IceBoard, NUM_MEZZANINES, json_pack("i", NUM_MEZZANINES));
+#endif
+
+const char *CLOCK_SOURCE_XTAL = "CLOCK_SOURCE_XTAL";
+const char *CLOCK_SOURCE_SMA = "CLOCK_SOURCE_SMA";
+const char *CLOCK_SOURCE_BP = "CLOCK_SOURCE_BP";
+
+#ifdef LIBTUBER
+tuber_property(IceBoard, CLOCK_SOURCE, json_pack(
+		"{"
+		" s:s, s:s, s:s"
+		"}",
+		"XTAL", CLOCK_SOURCE_XTAL,
+		"SMA", CLOCK_SOURCE_SMA,
+		"BP", CLOCK_SOURCE_BP
+));
 #endif

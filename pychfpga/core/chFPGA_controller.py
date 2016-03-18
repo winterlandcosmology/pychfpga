@@ -29,19 +29,21 @@ History:
 
 import logging
 import numpy as np
-# import socket #needed for inet_aton
-# import struct
-
-#import pdb
 import time
 
-from .icecore_ext.chfpga_handler import chFPGAHandler
+import subprocess
+import shlex
+import tornado.gen
+import bz2
+
+from .icecore import async, async_return
+from .icecore_ext.iceboard_ext import IceBoardExtHandler
+from chFPGA_receiver import chFPGA_receiver
 
 from pychfpga.common import util
 
 # import Shared_variables # Note: do not reload this module or we will lose acces to the data in it
 import Module
-# import SocketIO
 
 # FPGA subsystems handlers
 import SPI
@@ -50,74 +52,17 @@ import GPIO
 import SYSMON
 import FreqCtr
 import REFCLK
-import MGT
+# import MGT
 
 # FPGA Antenna processor handlers
 import ANT
-import ADCDAQ # Included only so it can be reloaded
-import SRCSEL # Included only so it can be reloaded
-import INJECT # Included only so it can be reloaded
-import FUNCGEN # Included only so it can be reloaded
-import FFT # Included only so it can be reloaded
-import SCALER # Included only so it can be reloaded
-import PROBER # Included only so it can be reloaded
 
 # FPGA Correlator handlers
 import CORR_BLOCK
-
-import CROSSBAR
-# import CH_DIST    # Included only so it can be reloaded
+import chan_crossbar  # Channelizer Crossbar
+import shuffle_crossbar  # Shuffle Crossbar
 import shuffle
-
-import ACC # Included only so it can be reloaded
-
 import GPU
-
-# ML605 FPGA board specific device handlers
-
-# from pychfpga.motherboards import ML605_LCD
-# from pychfpga.motherboards import ML605_PMBus
-# from pychfpga.motherboards import mgk7mb # McGill ICEBoard hardware ressources wrapper
-
-# MGADC08 FMC ADC board device handlers
-#from pychfpga.MGADC08 import MGADC08
-
-# -- Module reloader --
-# Reload modules if we are debugging in case the source code has changed
-
-# MODULE_LIST = (
-#         util,
-#         # SocketIO,
-#         Module,
-#         SPI,
-#         I2C,
-#         GPIO,
-#         SYSMON,
-#         REFCLK,
-# #        MGADC08,
-#         # ML605_LCD,
-#         FreqCtr,
-#         # ML605_PMBus,
-#         ANT,
-#         ADCDAQ,
-#         SRCSEL,
-#         INJECT,
-#         FUNCGEN,
-#         FFT,
-#         SCALER,
-#         PROBER,
-#         CORR_BLOCK,
-#         CROSSBAR,
-#         GPU,
-#         shuffle,
-#         ACC,
-#         MGT,
-#         # mgk7mb,
-# #        MGADC08,
-#         # iceboard
-#         )
-
-# util.reload_modules(MODULE_LIST)
 
 
 # -- chFPGA --
@@ -134,7 +79,7 @@ class chFPGAException(Exception):
         self._logger.exception(message)
 
 
-class chFPGA_controller(chFPGAHandler):
+class chFPGA_controller(IceBoardExtHandler):
     """
     Creates an object that connects to the specified chFPGA board and provides
     the methods to configure it and control its operations.
@@ -160,7 +105,7 @@ class chFPGA_controller(chFPGAHandler):
     _CHAN_BASE_ADDR       = 0x10000  # Channelizer top address
     _CROSSBAR1_BASE_ADDR  = 0x20000  # CROSSBAR top address
     _GPU_LINK_BASE_ADDR   = 0x30000  # GPU Link top address
-    _CORR_BASE_ADDR       = 0x40000  # Correlator ports are determined dynamically based on the info from the firmware
+    _CROSSBAR3_BASE_ADDR  = 0x40000  # Correlator ports are determined dynamically based on the info from the firmware
     _BP_SHUFFLE_BASE_ADDR = 0x50000
     _CROSSBAR2_BASE_ADDR  = 0x60000  # CROSSBAR top address
 
@@ -224,16 +169,17 @@ class chFPGA_controller(chFPGAHandler):
         self._reference_frequency = None
         self._FRAME_PERIOD = None
         self._FMC_present = []  # indicates if the FMC board is present. If not, the modules will act accordingly.
-        self._adc_board = []
+        # self._adc_board = []
         self._last_init_time = None
+        self.recv = None
 
     def open(self, init=1, verbose=0, *args, **kwargs):
 
         super(chFPGA_controller, self).open()
         self.logger.info('%r: Instantiating chFPGA firmware handlers objects' % (self))
 
-        self.read = self.mmi.read
-        self.write = self.mmi.write
+        # self.read = self.mmi.read
+        # self.write = self.mmi.write
 
         if init < 0: # If init<0, we do not perform any communication with the FPGA, so we don't read the firmware configuration
             self._logger.info('%r: Upon user request (init < 0), communication with the FPGA are inhibited. Initialization sequence stops here. Use this for debug only.' % self)
@@ -325,11 +271,11 @@ class chFPGA_controller(chFPGAHandler):
             self.REFCLK = REFCLK.REFCLK_base(self, self._SYSTEM_REFCLK_BASE_ADDR)
 
             self._logger.debug('%r: === Instantiating CHAN' % self)
-            self.ANT = ANT.ANT_base(self, self._CHAN_BASE_ADDR, self._CHAN_ADDR_INCREMENT, self._CHAN_SUBMODULE_ADDR_INCREMENT) # Antenna processors (ADCDAQ, SRCSEL, FFT, SCALER) for each input
+            self.ANT = ANT.ANT_base(self, self._CHAN_BASE_ADDR, self._CHAN_ADDR_INCREMENT, self._CHAN_SUBMODULE_ADDR_INCREMENT) # Antenna processors (ADCDAQ, FUNCGEN,  FFT, SCALER) for each input
             self.ANT_FMC_NUMBER = [i//8 for i in range(self.NUMBER_OF_ANTENNAS)]
 
             self._logger.debug('%r: === Instantiating 1st CROSSBAR' % self)
-            self.CROSSBAR = CROSSBAR.CROSSBAR_base(self, self._CROSSBAR1_BASE_ADDR, self._CROSSBAR_ADDR_INCREMENT, crossbar_level=1) # CROSSBAR block
+            self.CROSSBAR = chan_crossbar.ChanCrossbar(self, self._CROSSBAR1_BASE_ADDR, self._CROSSBAR_ADDR_INCREMENT) # CROSSBAR block
 
             if self.NUMBER_OF_BP_SHUFFLE_LANES:
                 self._logger.debug('%r: === Instantiating Backplane shuffle subsystem' % self)
@@ -337,10 +283,13 @@ class chFPGA_controller(chFPGAHandler):
 
             if self.NUMBER_OF_BP_SHUFFLE_LANES and self.NUMBER_OF_GPU_LINKS:
                 self._logger.debug('%r: === Instantiating 2nd CROSSBAR' % self)
-                self.CROSSBAR2 = CROSSBAR.CROSSBAR_base(self, self._CROSSBAR2_BASE_ADDR, self._CROSSBAR_ADDR_INCREMENT, crossbar_level=2) # CROSSBAR block
+                self.CROSSBAR2 = shuffle_crossbar.ShuffleCrossbar(self, self._CROSSBAR2_BASE_ADDR, self._CROSSBAR_ADDR_INCREMENT, crossbar_level=2, number_of_bin_sel=2) # CROSSBAR block
 
-            self._logger.debug('%r: === Instantiating CORR' % self)
-            self.CORR = CORR_BLOCK.CORR_BLOCK_base(self, self._CORR_BASE_ADDR, self._CORR_ADDR_INCREMENT) # Correlator (XMUL, ACC) for each correlator
+                self._logger.debug('%r: === Instantiating 3rd CROSSBAR' % self)
+                self.CROSSBAR3 = shuffle_crossbar.ShuffleCrossbar(self, self._CROSSBAR3_BASE_ADDR, self._CROSSBAR_ADDR_INCREMENT, crossbar_level=3, number_of_bin_sel=8) # CROSSBAR block
+
+            # self._logger.debug('%r: === Instantiating CORR' % self)
+            # self.CORR = CORR_BLOCK.CORR_BLOCK_base(self, self._CORR_BASE_ADDR, self._CORR_ADDR_INCREMENT) # Correlator (XMUL, ACC) for each correlator
 
             if self.NUMBER_OF_GPU_LINKS:
                 self._logger.debug('%r: === Instantiating GPU LINKS' % self)
@@ -353,25 +302,27 @@ class chFPGA_controller(chFPGAHandler):
             # ---------------------------------------------------------------------
 
             self._logger.info('%r: === Analyzing available FMC Mezzanines' % self)
-            self._adc_board = [
-                self.mezzanine.get(1, None),
-                self.mezzanine.get(2, None)]
+            # self._adc_board = [
+            #     self.mezzanine.get(1, None),
+            #     self.mezzanine.get(2, None)]
 
             self._FMC_present = [False] * self._NUMBER_OF_FMC_SLOTS
             self.ANT_FMC_IS_PRESENT = [False] * self.NUMBER_OF_ANTENNAS
-            for (fmc_number, fmc) in enumerate(self._adc_board):
+            for fmc_number in range(2):
+                fmc = self.mezzanine.get(fmc_number + 1, None)
                 if fmc:
                     self._FMC_present[fmc_number] = fmc.is_present()
                 if self._FMC_present[fmc_number]:
                     self._logger.info('%r:   An MGADC08 ADC Board is present on FMC slot %i' % (self, fmc_number))
                 else:
-                    self._logger.warning('%r:   An MGADC08 ADC Board is *not* present of FMC slot %i' % (self, fmc_number))
+                    self._logger.info('%r:   An MGADC08 ADC Board is *not* present of FMC slot %i' % (self, fmc_number))
 
             # Determine if the FMC board corresponding to each channelizer is present
             # self.ANT_FMC_IS_PRESENT = [self._adc_board[self.ANT_FMC_NUMBER[i]].is_present() for i in range(self.NUMBER_OF_ANTENNAS)]
             for (ant_number, fmc_number) in enumerate(self.ANT_FMC_NUMBER):
-                if self._adc_board[fmc_number]:
-                    self.ANT_FMC_IS_PRESENT[ant_number] = self._adc_board[fmc_number].is_present()
+                mezz = self.mezzanine.get(fmc_number + 1, None)
+                if mezz:
+                    self.ANT_FMC_IS_PRESENT[ant_number] = mezz.is_present()
 
             self.hw.set_led('GP_LED1',1) # Indicate that the Iceboard is ready
 
@@ -398,10 +349,9 @@ class chFPGA_controller(chFPGAHandler):
         Close chFPGA object
         """
         # Close FMC boards
-        while self._adc_board:
-            fmc=self._adc_board.pop()
-            if hasattr(fmc, 'close'):
-                fmc.close()
+        for mezz in self.mezzanine.values():
+            if hasattr(mezz, 'close'):
+                mezz.close()
         super(chFPGA_controller, self).close()  # Make sure we close underlying sytems (sockets, etc)
 
 
@@ -412,6 +362,7 @@ class chFPGA_controller(chFPGAHandler):
              data_width=4,
              group_frames=4,
              enable_gpu_link=1,
+             create_receiver= False,
              verbose=0,
              **kwargs):
         """ Resets the chFPGA firmware to a known state with the specified parameters.
@@ -467,35 +418,44 @@ class chFPGA_controller(chFPGAHandler):
 
         self._logger.info('%r: --- Initializing FMC slots' % self)
 
-        for (fmc_number, fmc) in enumerate(self._adc_board):
-            if fmc and fmc.is_present():
-                self._logger.debug('%r:   Powering up FMC%i' % (self, fmc_number))
-                fmc.set_power(True)
+        # Reduce the power load before we turn on the mezzanines
+        self.set_ant_reset(1)
+        for mezz in self.mezzanine.values():
+            mezz.set_power(False)
+        time.sleep(0.2)  # *** make async
+
+        for mezz_number in (1, 2):
+            if mezz_number in self.mezzanine:
+                mezz = self.mezzanine[mezz_number]
+                self._logger.debug('%r:   Powering up FMC%i' % (self, mezz_number - 1))
+                mezz.set_power(True)
                 time.sleep(0.2) # Give it some time for the power to stabilize
                 # We need to initialize the ADC board befor we initialize ANT (and its data acquisition) because the delay blocks need a clock
-                self._logger.debug('%r:   Initializing FMC%i' % (self, fmc_number))
-                fmc.init(sampling_frequency = sampling_frequency, reference_frequency=reference_frequency)
-                fmc.status()
+                self._logger.debug('%r:   Initializing FMC%i' % (self, mezz_number - 1))
+                mezz.init(sampling_frequency = sampling_frequency, reference_frequency=reference_frequency)
+                mezz.status()
             else:
-                self._logger.debug('%r:    Skipping FMC%i initialization since no board is present in that slot' % (self, fmc_number))
+                self._logger.debug('%r:    Skipping FMC%i initialization since no board is present in that slot' % (self, mezz_number - 1))
 
+        self._logger.debug('%r:   Taking channelizers out of reset after FMC enabling' % (self))
+        self.set_ant_reset(1)
+
+        self._logger.debug('%r:   Sending sync()' % (self))
         self.sync() # might be needed  to make sure that the clock is running to set delays
 
 
 #        self._FMC_present = self._adc_board[0].is_present()
         self._logger.debug('%r: === Initializing Channelizers' % self )
         self.ANT.init(delay_table=adc_delay_table, fmc_present=self.ANT_FMC_IS_PRESENT)
-        self.ANT.status()
+        # self.ANT.status()
 
         self._logger.debug('%r: === Initializing 1st Crossbar' % self )
         if self.NUMBER_OF_CROSSBAR_OUTPUTS > 0:
             self._logger.debug('%r:  - 1st CROSSBAR' % self)
             self.CROSSBAR.init()
-            self.CROSSBAR.status()
+            # self.CROSSBAR.status()
         else:
             self._logger.warning("%r: There is no 1st CROSSBAR module in this firmware build (so there can't be data streamed to the correlators or GPU links!)" % self);
-
-
 
         if self.NUMBER_OF_BP_SHUFFLE_LANES:
             self._logger.debug('%r: === Initializing Backplane Shuffle' % self)
@@ -504,11 +464,18 @@ class chFPGA_controller(chFPGAHandler):
 
         self._logger.debug('%r: === Initializing 2nd Crossbar' % self)
         if self.NUMBER_OF_BP_SHUFFLE_LANES and self.NUMBER_OF_GPU_LINKS:
-            self._logger.debug('%r:   - 2nd CROSSBAR' % self)
             self.CROSSBAR2.init()
-            self.CROSSBAR2.status()
+            # self.CROSSBAR2.status()
         else:
             self._logger.warning("%r: There is no 2nd CROSSBAR module in this firmware build" % self);
+
+        self._logger.debug('%r: === Initializing 3rd Crossbar' % self)
+        if self.NUMBER_OF_BP_SHUFFLE_LANES and self.NUMBER_OF_GPU_LINKS:  # *** Fixme
+            self.CROSSBAR3.init()
+            # self.CROSSBAR3.status()
+        else:
+            self._logger.warning("%r: There is no 3rd CROSSBAR module in this firmware build" % self);
+
 
         self._logger.debug('%r: === Initializing FPGA correlators' % self)
         if self.NUMBER_OF_CORRELATORS > 0:
@@ -525,9 +492,9 @@ class chFPGA_controller(chFPGAHandler):
         self._logger.info('%r: The 1st crossbar will pack %i frames per packet' % (self, group_frames))
 
         if self.GPIO.NUMBER_OF_GPU_LINKS:
+            self.GPU.init()
             self.GPU.set_enable(enable_gpu_link)
 
-        self.CROSSBAR.configure()
         self._logger.info('%r: GPU link is currently %s' % (self, ['Disabled','Enabled'][bool(enable_gpu_link)]))
 
         # MGT is disabled
@@ -554,6 +521,10 @@ class chFPGA_controller(chFPGAHandler):
 
         self._last_init_time = time.time()
 
+        # Create a data receiver
+        if create_receiver:
+            self.get_data_receiver()
+
     # def get_fpga_cookie(self):
     #     """
     #     Reads the FPGA and returns the cookie that identifies the firmware.
@@ -561,7 +532,7 @@ class chFPGA_controller(chFPGAHandler):
     #     """
     #     return self.read(self.mmi._STATUS_BASE_ADDR + self._SYSTEM_GPIO_BASE_ADDR + self._GPIO_COOKIE_REG) & 0x7F
 
-    def get_config(self):
+    def get_config(self, basic = False):
         config = chFPGA_config() # Create empty config container
         # Add configuration parameters
 
@@ -589,32 +560,37 @@ class chFPGA_controller(chFPGAHandler):
         config.system_sampling_frequency = self._sampling_frequency
         config.system_reference_frequency = self._reference_frequency
         config.system_frame_period = self._FRAME_PERIOD
-
-        config.adc_board_is_present = bool(self._adc_board[0])
-        if self._adc_board[0]:
-            config.adc_board_temperature = self._adc_board[0].AmbTemp.temperature
-            config.adc_board_adc_chip_temperature = [adc.get_temperature() for adc in self._adc_board[0].ADC]
-            config.adc_serial = [fmc.serial for fmc in self._adc_board] #self._adc_board[0]._board_info['Serial #']
-        config.antenna_data_source = self.get_data_source()
-        config.antenna_fft_bypass = self.get_FFT_bypass()
-        config.antenna_fft_shift_schedule = self.get_FFT_shift()
-        config.antenna_scaler_gain = self.get_gain()
-        config.antenna_adc_data_acquisition_delay_tables  = self.ANT.get_delays()
-        config.FPGA_board_frequency = self.FreqCtr.read_frequency('CLK200', gate_time=0.05)
-        config.CTRL_clock_frequency = self.FreqCtr.read_frequency('CTRL_CLK', gate_time=0.05)
-        config.ant_clock = self.FreqCtr.read_frequency('ANT_CLK', gate_time=0.05)
-        if self._IMPLEMENT_CORR:
-            config.correlator_clock = self.FreqCtr.read_frequency('CORR_CLK', gate_time=0.05)
-            config.correlator_capture_period_in_frames = [corr.ACC.CAPTURE_PERIOD for corr in self.CORR]
-            config.correlator_integration_period_in_frames = [corr.ACC.INTEGRATION_PERIOD for corr in self.CORR]
-        config.fmc_ref_clock = self.FreqCtr.read_frequency('FMC_REFCLK', gate_time=0.05)
-        config.mgt_ref_clock = self.FreqCtr.read_frequency('MGT_REFCLK', gate_time=0.05)
-        config.mgt_word_clock = self.FreqCtr.read_frequency('MGT_USRCLK2', gate_time=0.05)
-        config.adc_clocks = [self.FreqCtr.read_frequency(('ADC_CLK'+str(i)), gate_time=0.05) for i in range(8)]
-        # config.adc_serial = 'Not available'
         config.motherboard_serial = self.GPIO.FPGA_SERIAL_NUMBER
-        # Add FFT shift, scaler gain, corr integration/capture period etc.
-        # config.freq_flags = self.freq_flags  # JFC: what is that?
+
+
+        if not basic:
+            mezz1 = self.mezzanine.get(1, None)
+            config.adc_board_is_present = bool(mezz1)
+
+            if mezz1:
+                config.adc_board_temperature = mezz1.AmbTemp.temperature
+                config.adc_board_adc_chip_temperature = [adc.get_temperature() for adc in mezz1.ADC]
+                config.adc_serial = [self.mezzanine[mezz_number].serial if mezz_number in self.mezzanine else None for mezz_number in (1, 2)] #mezz1._board_info['Serial #']
+
+            config.antenna_data_source = self.get_data_source()
+            config.antenna_fft_bypass = self.get_FFT_bypass()
+            config.antenna_fft_shift_schedule = self.get_FFT_shift()
+            config.antenna_scaler_gain = self.get_gain()
+            config.antenna_adc_data_acquisition_delay_tables  = self.ANT.get_delays()
+            config.FPGA_board_frequency = self.FreqCtr.read_frequency('CLK200', gate_time=0.05)
+            config.CTRL_clock_frequency = self.FreqCtr.read_frequency('CTRL_CLK', gate_time=0.05)
+            config.ant_clock = self.FreqCtr.read_frequency('ANT_CLK', gate_time=0.05)
+            if self._IMPLEMENT_CORR:
+                config.correlator_clock = self.FreqCtr.read_frequency('CORR_CLK', gate_time=0.05)
+                config.correlator_capture_period_in_frames = [corr.ACC.CAPTURE_PERIOD for corr in self.CORR]
+                config.correlator_integration_period_in_frames = [corr.ACC.INTEGRATION_PERIOD for corr in self.CORR]
+            config.fmc_ref_clock = self.FreqCtr.read_frequency('FMC_REFCLK', gate_time=0.05)
+            config.mgt_ref_clock = self.FreqCtr.read_frequency('MGT_REFCLK', gate_time=0.05)
+            config.mgt_word_clock = self.FreqCtr.read_frequency('MGT_USRCLK2', gate_time=0.05)
+            config.adc_clocks = [self.FreqCtr.read_frequency(('ADC_CLK'+str(i)), gate_time=0.05) for i in range(8)]
+            # config.adc_serial = 'Not available'
+            # Add FFT shift, scaler gain, corr integration/capture period etc.
+            # config.freq_flags = self.freq_flags  # JFC: what is that?
         return config
 
 
@@ -680,9 +656,7 @@ class chFPGA_controller(chFPGAHandler):
     def set_channelizer_config(self, data_source=None, function=None, a=1, b=0, adc_mode='data', adcdaq_mode='data', fft_bypass=None, fft_shift=None, scaler_bypass=None, gain=None, postscaler=None, channels=None):
         """
             Single command used to set multiple channelizer settings. The data processing chain is:
-            ADC --> ADCDAQ --> |        |
-                   FUNCGEN --> | SRCSEL | --> FFT --> SCALER
-                    INJECT --> |        |
+                  ADC --> ADCDAQ --> FUNCGEN --> --> FFT --> SCALER
         """
         if data_source is not None:
             self.set_data_source(data_source, channels=channels)
@@ -708,11 +682,12 @@ class chFPGA_controller(chFPGAHandler):
     set_data_path = set_channelizer_config # for legacy compatibility
 
     def set_data_source(self, source=None,  channels=None):
-        '''
+        """
             Sets the data source on specified channels (or default channels if the channels are not specified).
-        '''
-        if (source is None) or (source.lower() not in self.ANT[0].SRCSEL.DATA_SOURCE_NAMES):
-            raise ValueError("Invalid data source name '%s'. Valid data sources are %s:" % (source, ', '.join(self.ANT[0].SRCSEL.DATA_SOURCE_NAMES.keys())))
+        """
+        data_sources = self.ANT[0].FUNCGEN.DATA_SOURCE_NAMES
+        if (source is None) or (source.lower() not in data_sources):
+            raise ValueError("Invalid data source name '%s'. Valid data sources are %s:" % (source, ', '.join(data_sources.keys())))
 
         if channels is None:
             channels = self.default_channels
@@ -721,23 +696,23 @@ class chFPGA_controller(chFPGAHandler):
         self.set_ant_reset(1) # Reset is needed to resyncronize the system with the new data
         for ch in channels:
             ant = self.ANT[ch]
-            ant.SRCSEL.set_data_source(source.lower())
+            ant.FUNCGEN.set_data_source(source.lower())
         self.set_ant_reset(0) # Reset is needed to resyncronize the system with the new data
         #self.sync() # SYNCs the ADC, and resets (again) the antenna processor to align the data with the ADC
 
 
     def get_data_source(self):
-        '''
+        """
             Returns a list of data source for all channels.
-        '''
-        return [ant.SRCSEL.get_data_source() for ant in self.ANT.values()]
+        """
+        return [ant.FUNCGEN.get_data_source() for ant in self.ANT.values()]
 
 
-    def set_funcgen_function(self, function=None, a=1, b=0, channels=None):
-        '''
+    def set_funcgen_function(self, function=None, channels=None, **kwargs):
+        """
         Sets the waveform generated by the function generator on specified channels (or default channels if the channels are not specified).
         This may cause one frame to partially contain the new waveform.
-        '''
+        """
         if (function is None) or (function.lower() not in self.ANT[0].FUNCGEN.FUNCTION_NAMES):
             raise ValueError("Invalid function generator function '%s'. Valid functions are %s:" % (function, ', '.join(self.ANT[0].FUNCGEN.FUNCTION_NAMES.keys())))
 
@@ -746,7 +721,7 @@ class chFPGA_controller(chFPGAHandler):
 
         for ch in channels:
             ant = self.ANT[ch]
-            ant.FUNCGEN.set_function(function.lower(), a=a, b=b)
+            ant.FUNCGEN.set_function(function.lower(), **kwargs)
 
     def get_adc_board(self, channel):
         """
@@ -756,13 +731,13 @@ class chFPGA_controller(chFPGAHandler):
 
         if isinstance(channel, int):
             #channel = [channel]
-            board_number = channel // 8
-            return self._adc_board[board_number]
+            mezz_number = (channel // 8) + 1
+            return self.mezzanine.get(mezz_number, None)
         else:
             board_list=[]
             for ch in channel:
-                board_number = ch // 8
-                board_list.append(self._adc_board[board_number])
+                mezz_number = (ch // 8) + 1
+                board_list.append(self.mezzanine.get(mezz_number, None))
             return list(set(board_list))
 
     ADC_MODE_NAMES = {
@@ -788,6 +763,13 @@ class chFPGA_controller(chFPGAHandler):
             'ramp': Ramp mode (ADC output contains repeating 0-255 pattern. Note that ADCDAQ inverts bit 7 during acquisition to convert offset binary to 2's complement binary)
             'pulse': Strobe mode (ADC output contains one 0xFF followed by ten 0x00. It repeats with a pariod of 11. Same comment as above)
         """
+        if isinstance(mode, list):
+            if channels:
+                raise RuntimeError('channels cannot be specified when multiple modes are provided')
+            for fmc_number, m in enumerate(mode):
+                self.mezzanine[fmc_number+1].ADC.set_test_mode(test_mode=self.ADC_MODE_NAMES[m.lower()][0])
+            return
+
         if mode.lower() not in self.ADC_MODE_NAMES:
             raise ValueError("Invalid ADC mode '%s'. Valid modes are %s" % (mode, ', '.join(self.ADC_MODE_NAMES.keys())))
         (mode_value, capture_period) = self.ADC_MODE_NAMES[mode.lower()]
@@ -798,8 +780,8 @@ class chFPGA_controller(chFPGAHandler):
         # Set the mode on all affected ADC boards
         adc_boards = self.get_adc_board(channels)
         for adc_board in adc_boards:
-            if not adc_board.is_present():
-                self._logger.warning('%r: ADC Board of FMC slot #%i (%s) is not present. Ignoring set_ADC_mode() command for this board' % (self, adc_board.fmc_number, adc_board.fmc_name))
+            if not adc_board or not adc_board.is_present():
+                self._logger.warning('%r: ADC Board is not present. Ignoring set_ADC_mode() command for this board' % (self))
             else:
                 adc_board.ADC.set_test_mode(test_mode=mode_value)
 
@@ -815,21 +797,24 @@ class chFPGA_controller(chFPGAHandler):
 
     def get_adc_mode(self):
         """
-        Gets the current operating mode of all the ADCs as a string. This
-        assumes all the ADCs are operating in the same mode. If not, an error
-        message will be returned.
+        Gets the current operating mode of all the ADCs as a string.
+
+        If all ADCs operate in the same mode, a single mode string is returned. Otherwise a list of mode strings is returned.
         """
 
-        mode_value = []
+        mode_names = []
         # get the ADC mode number for every ADC board
-        for adc_board in self._adc_board:
-            if adc_board.is_present():
-                mode_value.append(adc_board.ADC.get_test_mode())
-        mode_value = list(set(mode_value)) # eliminate all duplicates. We should be left with only one mode number.
-        if len(mode_value) != 1:
-            raise RuntimeError('The ADC chips on the ADC boards are not ALL in the same mode')
-        mode_string = [key for (key, info) in self.ADC_MODE_NAMES.items() if info[0]==mode_value[0]][0] # get the name of the first ADC mode that matches the provided number
-        return mode_string
+        for mezz_number, mezz in self.mezzanine.items():
+            mode_value = mezz.ADC.get_test_mode()
+            mode_name = [name for (name, value) in self.ADC_MODE_NAMES.items() if value[0] == mode_value][0]
+            mode_names.append(mode_name)
+
+        if len(set(mode_names)) == 1: # eliminate all duplicates. We should be left with only one mode number.
+            return mode_names[0]
+        else:
+            return mode_names
+        # if len(mode_value) != 1:
+        #     raise RuntimeError('The ADC chips on the ADC boards are not ALL in the same mode')
 
     def set_adcdaq_mode(self, mode='data', channels=None):
         """
@@ -867,7 +852,17 @@ class chFPGA_controller(chFPGAHandler):
         for ant in self.ANT.values():
             ant.PROBER.RESET = 1
 
-    def start_data_capture(self, period=None, frames_per_burst=1,  number_of_bursts=0,  channels=None, source='scaler', sync=1, verbose=1, burst_period_in_seconds=None, burst_period_in_frames=None):
+    def get_data_receiver(self):
+        if self.recv:
+            return self.recv
+        chFPGA_config = self.get_config(basic=True)  # get only the info needed to start the receiver
+        self.recv = chFPGA_receiver(chFPGA_config)
+        self.logger.info('Started data receiver threads on %s:%i' % (self.recv.host_ip, self.recv.port_number))
+        self.set_local_data_port_number(self.recv.port_number)
+        return self.recv
+
+
+    def start_data_capture(self, period=None, frames_per_burst=1,  number_of_bursts=0,  channels=None, source='scaler', sync=1, verbose=1, burst_period_in_seconds=None, burst_period_in_frames=None, offset=0):
         """
         Triggers the capture and transmission of ADC (pre-FFT) or SCALER (post
         FFT) data frames the Ethernet port. This function does not receive the
@@ -924,7 +919,7 @@ class chFPGA_controller(chFPGAHandler):
             ant.PROBER.set_data_source(source)
             ant.PROBER.RESET = 1
             ant.PROBER.PROBE_ID = 0xA0 + ant.ant_number
-            ant.PROBER.config_capture(frames_per_burst=frames_per_burst, burst_period=burst_period_in_frames, number_of_bursts=number_of_bursts)
+            ant.PROBER.config_capture(frames_per_burst=frames_per_burst, burst_period=burst_period_in_frames, number_of_bursts=number_of_bursts, offset=offset)
             if ant.ant_number in channels:
                 self._logger.info('%r: Enabling Capture for Antenna %i' % (self, ant.ant_number))
                 ant.PROBER.RESET = 0
@@ -952,8 +947,8 @@ class chFPGA_controller(chFPGAHandler):
         for ch in channels:
             if ch not in self.ANT:
                 self._logger.warning('%r: FFT bypass mode on antena channel %i are not set because that channel is not available' % (self, ch))
-            elif ch not in self.LIST_OF_ANTENNAS_WITH_FFT:
-                self._logger.warning('%r: FFT bypass mode on antena channel %i are not set because that channel does not have an FFT module' % (self, ch))
+            elif ch not in self.LIST_OF_ANTENNAS_WITH_FFT and not bypass_mode:
+                self._logger.warning('%r: FFT bypass mode was disabled on channel %i which has no FFT module. The command will have no effect.' % (self, ch))
             else:
                 self.ANT[ch].FFT.BYPASS = bypass_mode
                 configured_channels.add(ch)
@@ -1010,17 +1005,17 @@ class chFPGA_controller(chFPGAHandler):
         """
         self.GPIO.set_global_trig(trigger_state)
 
-    def inject_frame(self,  data=None, length=None, channels=None):
-        """ Inject a frame of data in the specified antenna processing pipeline"""
-        if channels is None:
-            channels = self.default_channels
-        if isinstance(channels, int):
-            channels = [channels]
-        for ch in channels:
-            if isinstance(data, dict):
-                self.ANT[ch].INJECT.inject_frame(data[ch])
-            else:
-                self.ANT[ch].INJECT.inject_frame(data)
+    # def inject_frame(self,  data=None, length=None, channels=None):
+    #     """ Inject a frame of data in the specified antenna processing pipeline"""
+    #     if channels is None:
+    #         channels = self.default_channels
+    #     if isinstance(channels, int):
+    #         channels = [channels]
+    #     for ch in channels:
+    #         if isinstance(data, dict):
+    #             self.ANT[ch].INJECT.inject_frame(data[ch])
+    #         else:
+    #             self.ANT[ch].INJECT.inject_frame(data)
 
     def start_corr_capture(self,  integration_period=1.0, capture_period=None, corr_to_use=None, verbose=1):
         """
@@ -1137,7 +1132,8 @@ class chFPGA_controller(chFPGAHandler):
         old_adc_mode = self.get_adc_mode()
         self.set_adc_delays([[ [0]*8, [0]*8]] * 16); # Set all sampling delays and offsets to zero
         self.set_adc_mode('pulse') # generate pulse pattern
-
+        for i in range(10):
+            self.sync()
         data={}
         for ch in channels:
             d = np.zeros((32, noffsets), dtype=np.uint8)
@@ -1275,7 +1271,7 @@ class chFPGA_controller(chFPGAHandler):
             if sync:
                 self.sync()
 
-    def set_gain(self, gain=None, postscaler=None, channels=None, use_fixed_gain=False):
+    def set_gain(self, gain=None, postscaler=None, channels=None, use_fixed_gain=False, bank=0, timestamp=None):
         """
         Sets the gain between the (18+18) bits input of the scaler module (from the FFT) to its 4- or 8- bit scaler output.
         The gain can be set individually for every frequency bins and every ADC channel.
@@ -1309,6 +1305,12 @@ class chFPGA_controller(chFPGAHandler):
         If 'postscaler' is specified, it will be used as default value when Glog = None.
 
         'use_fixed_gain': if True, enables the use of fixed gain mode of the scaler module. In this case, 'gain' can only be a scalar. Is False by default. This is normally used
+
+        ``bank`` is the coefficient bank number (0 or 1) to which the
+        coefficient should be written. Once written, the bank is made active. If ``bank`` is None, the currently inactive bank is used.
+
+        If ``timestamp`` is specified, the coefficient bank change occurs only when the
+        frame with the specified timestamp is encountered.
 
         Notes:
             1) The PFB/FFT has an intrisic gain of 512 (a constant FFT input of '1' will yield the value 512 in bin 0 at the input of the scaler.
@@ -1386,7 +1388,7 @@ class chFPGA_controller(chFPGAHandler):
                     self.ANT[ch].SCALER.set_fixed_gain(Glin)
                 else:
                     self.ANT[ch].SCALER.USE_GAIN_TABLE = 1
-                    self.ANT[ch].SCALER.set_gain_table(Glin)
+                    self.ANT[ch].SCALER.set_gain_table(Glin, bank=bank, timestamp=timestamp)
                 configured_channels.add(ch)
         self._logger.info('%r: Setting scaler gains for Antenna %s' % (self, ', '.join([str(i) for i in configured_channels])))
 
@@ -1436,6 +1438,17 @@ class chFPGA_controller(chFPGAHandler):
     def get_user_output_source(self):
         """ Return the name of the source currently routed to SMA-A"""
         return self.GPIO.get_user_output_source()
+
+    def set_sync_source(self, source):
+        """ Sets the source of the signal that will trigger SYNC events.
+        """
+        if source not in self.REFCLK.SYNC_SOURCE_TABLE:
+            raise ValueError('Invalid SYNC source name. Valid names are %s' % ', '.join(self.REFCLK.SYNC_SOURCE_TABLE))
+        self.REFCLK.set_sync_source(source)
+
+    def get_sync_source(self):
+        """ Return the current source used to trigger SYNC events """
+        return self.REFCLK.get_sync_source()
 
     def set_frame_pwm(self, offset, high_time, period, reset=False):
         """ Sets the frame-based PWM generator. All times are stated as the numbe rof frames. A SYNC is needed after changes."""
@@ -1501,98 +1514,402 @@ class chFPGA_controller(chFPGAHandler):
 
     def get_temperatures(self):
         res = {}
-        res['FPGA_core']=self.SYSMON.temperature()
-        for (fmc_number, board) in enumerate(self._adc_board):
-            if board:
-                for (adc_number, adc) in enumerate(board.ADC):
-                    res['FMC%i ADC%i'%(fmc_number, adc_number)] = adc.get_temperature()
+        res['FPGA_core'] = self.SYSMON.temperature()
+        for mezz_number, mezz in self.mezzanine.items():
+            for (adc_number, adc) in enumerate(mezz.ADC):
+                res['FMC%i ADC%i'%(mezz_number-1, adc_number)] = adc.get_temperature()
         return res
 
-    def init_crossbars(self, dsmap=range(16), frames_per_packet=3, cb1_lanes=16, cb1_bins=64, cb2_lanes=8, cb2_bins=1, cb2_bypass=False, bp_bypass=1, remap=True):
-        """ Initializes the 1st and 2nd crossbar to reorder and package the channelizer data send to the GPU correlators in the desired format.
+    def get_total_power(self):
+        return sum(self.get_motherboard_voltage(rail) * self.get_motherboard_current(rail) for rail in (self.RAIL.MB_VCC3V3, self.RAIL.MB_VCC5V5, self.RAIL.MB_VCC12V0))
 
-        `ib` is the IceBoard to be configured.
+
+    def init_crossbars(self, mode=None, dsmap=range(16), frames_per_packet=3, cb1_lanes=16, cb1_bins=64, cb1_bypass=False, cb1_combine_data_flags=0, cb2_lanes=None, cb2_bins=1, cb2_bypass=False, bp_shuffle_bypass=1, crate_shuffle_bypass=1, remap=True, chan8_channel_map=range(16)):
+        """ Initializes the 1st, 2nd and 3rd crossbars.
         """
-        if not self.slot:
-            raise RuntimeError('The slot number is unknown. Cannot route the appropriate bins to the target boards')
 
-        self.set_ant_reset(1)
-        self.set_corr_reset(1)
         cb1 = self.CROSSBAR
         cb2 = self.CROSSBAR2
+        cb3 = self.CROSSBAR3
+
+        number_of_cb1_bin_sel = 16
+        number_of_cb2_bin_sel = 2
+        number_of_cb3_bin_sel = 8
+
+        def get_dest_slot_for_src_lane(src_lane):
+            tx = (self.slot, src_lane)  # unique transmitter id (slot, lane)
+            dest_slot = self.crate.get_matching_rx(tx)[0]
+            return dest_slot
+
+        def get_src_slot_for_dest_lane(dest_lane):
+            rx = (self.slot, dest_lane)
+            src_slot = self.crate.get_matching_tx(rx)[0]
+            return src_slot
 
         if frames_per_packet < 1 or frames_per_packet > 4:
             raise ValueError('Number of frames per packet must be between 1 and 4')
-        if cb1_lanes not in [4,8,12,16]:
+        if cb1_lanes in (4, 8, 12, 16):
+            cb1_lanes = [(0, cb1_lanes/4-1)] * number_of_cb1_bin_sel
+        else:
             raise ValueError('Crossbar 1 number of input lanes must be 4,8,12 or 16')
-        if cb2_lanes % 2:
-            raise ValueError('Crossbar 2 number of input lanes must be a multiple of 2')
 
-        self._logger.info('%r: Configuring crossbars 1 & 2 with frames_per_packet=%i, cb1_lanes=%i, cb1_bins=64, cb2_lanes=%i, cb2_bins=%i, cb2_bypass=%s, bp_bypass=%s' % (self, cb1_lanes, cb1_bins, cb2_lanes, cb2_bins, bool(cb2_bypass), bool(bp_bypass)))
+        if cb2_lanes is None:
+            cb2_lanes = ((0, 15), (0, 15))  # Both bin selectors
 
-        words_per_bin = cb1_lanes / 4
-        cb1_minimum_bin_spacing = 16
-        cb2_minimum_bin_spacing = 8
+        # if cb2_lanes % 2:
+        #     raise ValueError('Crossbar 2 number of input lanes must be a multiple of 2')
 
-        self.BP_SHUFFLE.BYPASS = bp_bypass
 
-        # for gtx in gpu_links.CHANNEL:
-        #     gtx.LOOPBACK = bp_bypass
+        if mode == 'chan8':  # get raw data from the channelizer (all 32-bit sent as is). Only 8 lanes are available to the GPU.
+            cb1_bypass = True
+            cb1_four_bit = False
+            cb1_combine_data_flags = 0
+            bp_shuffle_bypass = True
+            cb2_lane_map = chan8_channel_map # Here we could select which 8 inputs we want to stream to the GPU
+            cb2_bypass = True
+            crate_shuffle_bypass = True
+            cb3_lane_map = range(8)
+            cb3_bypass = True
 
-        # Select the bins so slot 0 receives bins 0-63, slot 1 has 64-127 ... slot 15 hs 960-1023
-        for (i, bs) in enumerate(cb1):
-            bs.GROUP_FRAMES = frames_per_packet
-            bs.NUMBER_OF_LANES = cb1_lanes
-            if remap and not bp_bypass:
-                tx = (self.slot, i)  # unique transmitter id (slot, lane)
-                destination_slot = self.crate.get_matching_rx(tx)[0]
-                bs.select_bins(np.arange(cb1_bins) * cb1_minimum_bin_spacing + (dsmap[destination_slot-1]))
+        elif mode == 'chan4': # get the high nibble of every bytes from two lanes in a single word. Allows Get (4+4) bit data from all channelizers
+            cb1_bypass = True
+            cb1_four_bit = True
+            cb1_combine_data_flags = 0
+            bp_shuffle_bypass = True
+            cb2_lane_map = range(16) # All information
+            cb2_bypass = True
+            crate_shuffle_bypass = True
+            cb3_lane_map = range(8)
+            cb3_bypass = True
+
+
+        elif mode == 'shuffle16':
+            cb1_bypass = False
+            cb1_four_bit = True
+            # BS0 grabs data from FIFO 0-1 (lanes 0-7), BS1 from FIFO 2-3
+            # (lanes 8-15), repeat... We capture 2 words per bin in 2 clocks,
+            # bins are separated by 2 clocks, so we have time to empty the
+            # FIFO
+            cb1_lanes = [(0, 3)] * number_of_cb1_bin_sel
+            cb1_bins = 128
+            cb1_bin_spacing = 1024/cb1_bins  # = 8
+            cb1_combine_data_flags = 1
+            cb1_bin_select_map = [np.arange(cb1_bins)*cb1_bin_spacing+(i % cb1_bin_spacing) for i in range(number_of_cb1_bin_sel)]
+            cb1_output_words_per_bin = 4
+            cb1_output_bins = cb1_bins
+
+            bp_shuffle_bypass = True
+
+            cb2_lane_map = range(16)
+            cb2_bypass = True
+            cb2_input_words_per_bin = cb1_output_words_per_bin
+            cb2_input_bins = cb1_bins
+            # cb2_lanes = ((0, 1), (2, 3))  #BS0 selects sublanes 0-1, BS1 selects sublanes 2-3
+            # cb2_bins = cb1_bins
+            # cb2_bin_spacing = 1
+            # cb2_bin_select_map = [np.arange(cb2_bins)*cb2_bin_spacing for i in range(number_of_cb2_bin_sel)]
+            cb2_output_words_per_bin = cb2_input_words_per_bin
+            cb2_output_bins = cb2_bins
+
+            crate_shuffle_bypass = True
+            cb3_lane_map = range(8)
+            cb3_bypass = True
+            cb3_output_words_per_bin = cb2_input_words_per_bin
+            cb3_output_bins = cb2_input_bins
+
+        elif mode == 'shuffle256':
+            if not self.slot:
+                raise RuntimeError('The slot number is unknown. Cannot route the appropriate bins to the target boards in the same crate')
+
+            cb1_bypass = False
+            cb1_four_bit = True
+            cb1_combine_data_flags = 0
+            cb1_lanes = 16
+            cb1_bins = 64
+            cb1_bin_spacing = 1024/cb1_bins
+            cb1_bin_select_map = [np.arange(cb1_bins)*cb1_bin_spacing+i for i in range(number_of_cb1_bin_sel)]
+            cb1_bin_select_map = [cb1_bin_select_map[dsmap[get_dest_slot_for_src_lane(i)-1]] for i in range(16)]  # reorder cb1_bin_select_map so slot 0 gets cb1_bin_select_map[0], slot 1 gets cb1_bin_select_map[1] etc.
+            cb1_output_words_per_bin = cb1_lanes/4
+            cb1_output_bins = cb1_bins
+
+            bp_shuffle_bypass = False
+
+            # CB2 has 2 BIN_SEL
+            # Each BS captures data from 16 input lanes and has 4 outputs.
+            # Each output covers gathers data from 4 input lanes (sublanes 0-3).
+            #   Output 0: Sublanes 0-3 = Input Lanes 0-3
+            #   Output 1: Sublanes 0-3 = Input Lanes 4-7
+            #   Output 2: Sublanes 0-3 = Input Lanes 8-11
+            #   Output 3: Sublanes 0-3 = Input Lanes 12-15
+            # In this config, we will bypass the crate_shuffle. We therefore want all outputs to output the same bins. So BS0 gets data from half of its sublanes, and BS1 gets data from the other half.
+            # CB2 Output Lane 0: BS0.0: all 64 bins from sublanes 0-1 (Input lanes 0-1   = CH0-31)
+            # CB2 Output Lane 1: BS0.1: all 64 bins from sublanes 0-1 (Input lanes 4-5   = CH64-95)
+            # CB2 Output Lane 2: BS0.2: all 64 bins from sublanes 0-1 (Input lanes 8-9   = CH128-159)
+            # CB2 Output Lane 3: BS0.3: all 64 bins from sublanes 0-1 (Input lanes 12-13 = CH192-223)
+            # CB2 Output Lane 4: BS1.0: all 64 bins from sublanes 2-3 (Input lanes 2-3   = CH32-63)
+            # CB2 Output Lane 5: BS1.1: all 64 bins from sublanes 2-3 (Input lanes 6-7   = CH96-127)
+            # CB2 Output Lane 6: BS1.2: all 64 bins from sublanes 2-3 (Input lanes 10-11 = CH160-191)
+            # CB2 Output Lane 7: BS1.3: all 64 bins from sublanes 2-3 (Input lanes 14-15 = CH224-255)
+            # Crate shuffle is bypassed.
+            # CB3 inputs are therefore identical to CB2 output
+            # CB3 lane map selects data in the order: [BS0.0, BS1.0, BS0.1, BS1.1 ...]
+            # CB3 remapped BIN_SEL inputs are
+            #    CB3 Input Lane 0: 64 bins CH0-31
+            #    CB3 Input Lane 1: 64 bins CH32-63
+            #    CB3 Input Lane 2: 64 bins CH64-95
+            #    CB3 Input Lane 3: 64 bins CH96-127
+            #    CB3 Input Lane 4: 64 bins CH128-159
+            #    CB3 Input Lane 5: 64 bins CH160-191
+            #    CB3 Input Lane 6: 64 bins CH192-223
+            #    CB3 Input Lane 7: 64 bins CH224-255
+            # CB3 outputs are:
+            #    CB3 Output Lane 0: BS0.0: 8 bins (0,8...)  from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 1: BS0.1: 8 bins (1,9...)  from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 2: BS0.2: 8 bins (2,10...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 3: BS0.3: 8 bins (3,11...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 4: BS1.0: 8 bins (4,12...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 5: BS1.1: 8 bins (5,13...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 6: BS1.2: 8 bins (6,14...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 7: BS1.3: 8 bins (7,15...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            cb2_lane_map = self.CROSSBAR2.compute_bp_shuffle_lane_map()
+            cb2_bypass = False
+            cb2_input_words_per_bin = cb1_output_words_per_bin
+            cb2_input_bins = cb1_output_bins
+            cb2_lanes = ((0, 1), (2, 3))  #BS0 selects sublanes 0-1, BS1 selects sublanes 2-3
+            cb2_bins = 64
+            cb2_bin_spacing = 1
+            cb2_bin_select_map = [np.arange(cb2_bins)*cb2_bin_spacing for i in range(number_of_cb2_bin_sel)]
+            cb2_output_words_per_bin = 2 * cb2_input_words_per_bin
+            cb2_output_bins = cb2_bins
+            crate_shuffle_bypass = True
+
+            cb3_lane_map = [0, 4, 1, 5, 2, 6, 3, 7]  # Reorder to get data from lanes 0-1, 2-3, 4-5 ...
+            cb3_bypass = False
+            cb3_input_words_per_bin = cb2_output_words_per_bin
+            cb3_input_bins = cb2_output_bins
+            cb3_lanes = [(0, 7)] * number_of_cb3_bin_sel
+            cb3_bins = 8  # We merge data from 8 full bandwidth input lanes, so we select 1/8th of the bins on each output lane
+            cb3_bin_spacing = 8  # use maximum possible number so we minimize FIFO usage
+            cb3_bin_select_map = [np.arange(cb3_bins)*cb3_bin_spacing+i for i in range(number_of_cb3_bin_sel)]
+            cb3_output_words_per_bin = cb3_input_words_per_bin * 8
+            cb3_output_bins = cb3_bins
+
+        elif mode == 'shuffle512':
+            if not self.slot:
+                raise RuntimeError('The slot number is unknown. Cannot route the appropriate bins to the target boards in the same crate')
+
+            cb1_bypass = False
+            cb1_four_bit = True
+            cb1_combine_data_flags = 0
+            cb1_lanes = 16
+            cb1_bins = 64
+            cb1_bin_spacing = 1024/cb1_bins
+            cb1_bin_select_map = [np.arange(cb1_bins)*cb1_bin_spacing+i for i in range(number_of_cb1_bin_sel)]
+            cb1_bin_select_map = [cb1_bin_select_map[dsmap[get_dest_slot_for_src_lane(i)-1]] for i in range(16)]  # reorder cb1_bin_select_map so slot 0 gets cb1_bin_select_map[0], slot 1 gets cb1_bin_select_map[1] etc.
+            cb1_output_words_per_bin = cb1_lanes/4
+            cb1_output_bins = cb1_bins
+
+            bp_shuffle_bypass = False
+
+            # In this config, we do not bypass the crate_shuffle. Half the bins are sent out, and we receive bins that are the same as those of the direct lanes.
+            # We therefore want BS0 to get half the bins from all input lanes, and BS1 gets the other half of the bins also from all input lanes.
+            # CB2 Output lanes are:
+            #    CB2 Output Lane 0: BS0.0: 32 even bins from sublanes 0-3 (Input lanes 0-3   = CH0-63)
+            #    CB2 Output Lane 1: BS0.1: 32 even bins from sublanes 0-3 (Input lanes 4-7   = CH64-127)
+            #    CB2 Output Lane 2: BS0.2: 32 even bins from sublanes 0-3 (Input lanes 8-11  = CH128-191)
+            #    CB2 Output Lane 3: BS0.3: 32 even bins from sublanes 0-3 (Input lanes 12-15 = CH192-255)
+            #    CB2 Output Lane 4: BS1.0: 32 odd  bins from sublanes 0-3 (Input lanes 0-3   = CH0-63)
+            #    CB2 Output Lane 5: BS1.1: 32 odd  bins from sublanes 0-3 (Input lanes 4-7   = CH64-127)
+            #    CB2 Output Lane 6: BS1.2: 32 odd  bins from sublanes 0-3 (Input lanes 8-11  = CH128-191)
+            #    CB2 Output Lane 7: BS1.3: 32 odd  bins from sublanes 0-3 (Input lanes 12-15 = CH192-255)
+            # Crate shuffle is *not* bypassed
+            # CB3 inputs are therefore:
+            #    CB3 Input Lane 0: 32 even bins CH0-63
+            #    CB3 Input Lane 1: 32 even bins CH64-127
+            #    CB3 Input Lane 2: 32 even bins CH128-191
+            #    CB3 Input Lane 3: 32 even bins CH192-255
+            #    CB3 Input Lane 4: 32 even bins CH256-319
+            #    CB3 Input Lane 5: 32 even bins CH320-383
+            #    CB3 Input Lane 6: 32 even bins CH384-447
+            #    CB3 Input Lane 7: 32 even bins CH448-511
+            # CB3 lane map selects data in the input lane order: [0, 1, 2, 3 ... 7]
+            # CB3 BIN sel inputs are therefore identical to CB3 inputs
+            # CB3 outputs are:
+            #    CB3 Output Lane 0: BS0.0: 4 bins (0,8...)  from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 1: BS0.1: 4 bins (1,9...)  from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 2: BS0.2: 4 bins (2,10...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 3: BS0.3: 4 bins (3,11...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 4: BS1.0: 4 bins (4,12...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 5: BS1.1: 4 bins (5,13...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 6: BS1.2: 4 bins (6,14...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+            #    CB3 Output Lane 7: BS1.3: 4 bins (7,15...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+
+            cb2_lane_map = self.CROSSBAR2.compute_bp_shuffle_lane_map()
+            cb2_bypass = False
+            cb2_lanes = [(0, 3), (0, 3)] # Every output of both bin sels get data from all the 4 sublanes they get.
+            cb2_input_words_per_bin = cb1_output_words_per_bin
+            cb2_input_bins = cb1_output_bins
+            cb2_bins = 32
+            cb2_bin_spacing = 2
+            crate_number = self.crate.crate_number
+            cb2_bin_select_map = [np.arange(cb2_bins)*cb2_bin_spacing + (i^crate_number) for i in range(number_of_cb2_bin_sel)]
+            cb2_output_words_per_bin = cb2_input_words_per_bin * 4
+            cb2_output_bins = cb2_bins
+
+            crate_shuffle_bypass = False
+
+            cb3_lane_map = range(8)
+            cb3_bypass = False
+            cb3_input_words_per_bin = cb2_output_words_per_bin
+            cb3_input_bins = cb2_output_bins
+            cb3_lanes = [(0, 7)] * number_of_cb3_bin_sel
+            cb3_bins = 4
+            cb3_bin_spacing = 8
+            cb3_bin_select_map = [np.arange(cb3_bins)*cb3_bin_spacing+i for i in range(number_of_cb3_bin_sel)]
+            cb3_output_words_per_bin = cb3_input_words_per_bin * 8
+            cb3_output_bins = cb3_bins
+
+        elif mode is None:  # Manual config
+            cb1_four_bit = True
+
+            # cb1_bypass = False
+            cb1_bin_spacing = 1024/cb1_bins
+            cb1_bin_select_map = [(np.arange(cb1_bins)*cb1_bin_spacing+i) % 1024 for i in range(number_of_cb1_bin_sel)]
+
+            crate_shuffle_bypass=1
+
+
+            if bp_shuffle_bypass and self.slot is not None:
+                cb2_lane_map = self.CROSSBAR2.compute_bp_shuffle_lane_map()
             else:
-                bs.select_bins(np.arange(cb1_bins) * cb1_minimum_bin_spacing)
-            # bs.select_bins(np.arange(800))
-        #cb1.configure(cb1_bins)
+                cb2_lane_map = range(16)
 
-        for (i, bs) in enumerate(cb2):
-            bs.BYPASS = bool(cb2_bypass)
-            bs.NUMBER_OF_FRAMES_PER_PACKET = frames_per_packet
-            bs.NUMBER_OF_LANES = cb2_lanes
-            bs.NUMBER_OF_BINS_PER_FRAME = cb1_bins
-            bs.NUMBER_OF_WORDS_PER_BIN = cb1_lanes/4
-            bs.select_bins(np.arange(cb2_bins) * cb2_minimum_bin_spacing + i)
-        #cb2.configure(cb2_bins)
+            cb3_bypass = True
+            cb3_lane_map = range(8)
+
+            cb1_output_words_per_bin = cb1_lanes[0][1]-cb1_lanes[0][0]+1
+            cb1_output_bins = cb1_bins
+
+        else:
+            raise ValueError('Unknown mode')
+
 
         header_size = 16
         packet_flags_size = 4
-        eth_overhead = 42
-        bp_overhead = 8
-        eth_data_rate = 156.25e6 * 66 * 32/33
-        bp_data_rate = 156.25e6* 50 * 32/33
-        packet_rate = 800e6/2048/frames_per_packet
-        cb1_payload_size = header_size + packet_flags_size + frames_per_packet * (words_per_bin * cb1_bins + cb1_bins + 1) * 4
-        cb1_eth_packet_size = (cb1_payload_size+eth_overhead+7)//8*8
-        cb1_eth_data_rate = cb1_eth_packet_size * packet_rate * 8
+        cb1_payload_size = header_size  + frames_per_packet * (cb1_output_words_per_bin * cb1_bins + (cb1_bins if not cb1_combine_data_flags else (cb1_bins+1)//2) + 1) * 4 + packet_flags_size
+        self._logger.info('%r: CROSSBAR1 config: frames_per_packet=%i, cb1_lanes=%s, cb1_bypass=%s, cb1_combine=%s, cb1_bins=%i, cb1_words_per_bin=%i' % (self, frames_per_packet, cb1_lanes, bool(cb1_bypass), bool(cb1_combine_data_flags), cb1_bins, cb1_output_words_per_bin ))
+        self._logger.info('%.32r: CROSSBAR1 output packets payload = %i bytes (%i words)' % (self, cb1_payload_size, (cb1_payload_size+3)//4))
+
+        # cb2_payload_size = header_size + packet_flags_size + frames_per_packet * (cb2_input_words_per_bin * cb2_bins* cb2_lanes + 1*cb2_bins*cb2_lanes/2 + cb2_lanes) * 4
 
 
-        cb1_bp_packet_size = (cb1_payload_size+bp_overhead+7)//8*8
-        cb1_bp_data_rate = cb1_bp_packet_size * packet_rate * 8
 
-        self._logger.info('%.32r: CROSSBAR1 output: payload = %i bytes' % (self, cb1_payload_size))
-        self._logger.info('%.32r: Backplane links: Packet size = %i bytes, data rate = %0.2f Gbps / %0.2f Gbps (%0.2f%%)' % (self, cb1_bp_packet_size, cb1_bp_data_rate/1e9, bp_data_rate / 1e9, cb1_bp_data_rate/bp_data_rate*100))
+        self._logger.info('%r: Configuring crossbars 1 & 2 with frames_per_packet=%i, cb1_lanes=%s, cb1_bins=%i, cb2_lanes=%s, cb2_bins=%i, cb2_bypass=%s, bp_shuffle_bypass=%s' % (self, frames_per_packet, cb1_lanes, cb1_bins, cb2_lanes, cb2_bins, bool(cb2_bypass), bool(bp_shuffle_bypass)))
 
-        cb2_payload_size = header_size + packet_flags_size + frames_per_packet * (words_per_bin * cb2_bins* cb2_lanes + 1*cb2_bins*cb2_lanes/2 + cb2_lanes) * 4
-        cb2_eth_packet_size = (cb2_payload_size + eth_overhead + 7) // 8 * 8
-        cb2_eth_data_rate = cb2_eth_packet_size * packet_rate * 8
-        cb2_fifo_load = cb2_bins * words_per_bin * frames_per_packet - ( cb2_bins * words_per_bin* cb2_minimum_bin_spacing* frames_per_packet / 16)
-        self._logger.info('%.32r: CROSSBAR2 output: payload = %i bytes' % (self, cb2_payload_size))
-        self._logger.info('%.32r: CROSSBAR2 peak FIFO load per frame: %i (Max. 16), Words per frame: %i (max %i)' % (self, cb2_fifo_load,cb2_payload_size/frames_per_packet, 512*bp_data_rate/32/200e6))
+        # Put everything in reset
+        self.set_ant_reset(1)
+        self.set_corr_reset(1)
 
-        if cb2_bypass:
-            self._logger.info('%.32r: GPU link (CROSSBAR1 data): UDP Payload = %i bytes, Ethernet packets = %i bytes, data rate = %0.2f Gbps (%0.2f%%)' % (self, cb1_payload_size, cb1_eth_packet_size, cb1_eth_data_rate/1e9, cb1_eth_data_rate/eth_data_rate*100))
-        else:
-            self._logger.info('%.32r: GPU Link (CROSSBAR2 data): UDP Payload = %i bytes, Ethernet packets = %i bytes, data rate = %0.2f Gbps (%0.2f%%)' % (self, cb2_payload_size, cb2_eth_packet_size, cb2_eth_data_rate/1e9, cb2_eth_data_rate/eth_data_rate*100))
+        #-------------------------
+        # Configure CROSSBAR 1
+        #-------------------------
+        # Select the bins so slot 0 receives bins 0-63, slot 1 has 64-127 ... slot 15 has 960-1023
+        for (cb1_output_lane, bs) in enumerate(cb1):
+            bs.BYPASS = cb1_bypass
+            bs.COMBINE_DATA_FLAGS = cb1_combine_data_flags
+
+            bs.GROUP_FRAMES = frames_per_packet
+            bs.STREAM_ID = self.slot - 1 if self.slot is not None else 0 # The stream ID at the output of CB1 will be 0xSL (S=slot-1, L=lane)
+            bs.FOUR_BITS = cb1_four_bit
+            bs.FIRST_FIFO_NUMBER = cb1_lanes[cb1_output_lane][0]
+            bs.LAST_FIFO_NUMBER = cb1_lanes[cb1_output_lane][1]
+            # bs.NUMBER_OF_LANES = cb1_lanes
+            bs.select_bins(cb1_bin_select_map[cb1_output_lane])
+
+        #-------------------------
+        # Configure BP_SHUFFLE
+        #-------------------------
+        self.BP_SHUFFLE.BYPASS_PCB_SHUFFLE = bp_shuffle_bypass
+
+        #-------------------------
+        # Configure CROSSBAR 2
+        #-------------------------
+        self.CROSSBAR2.set_lane_map(cb2_lane_map)
+        for (cb2_bin_sel, bs) in enumerate(cb2):
+            bs.BYPASS = bool(cb2_bypass)
+            if not cb2_bypass:
+                bs.STREAM_ID = self.slot - 1 if self.slot is not None else 0 # The stream ID at the output of CB2 will be 0xSL (S=slot-1, L=lane)
+                bs.NUMBER_OF_FRAMES_PER_PACKET = frames_per_packet
+                bs.FIRST_LANE = cb2_lanes[cb2_bin_sel][0]
+                bs.LAST_LANE = cb2_lanes[cb2_bin_sel][1]
+                bs.NUMBER_OF_BINS_PER_FRAME = cb2_input_bins
+                bs.NUMBER_OF_WORDS_PER_BIN = cb2_input_words_per_bin
+                bs.select_bins(cb2_bin_select_map[cb2_bin_sel])
+
+
+        #-------------------------
+        # Configure CRATE_SHUFFLE
+        #-------------------------
+        self.BP_SHUFFLE.BYPASS_QSFP_SHUFFLE = crate_shuffle_bypass
+
+        #-------------------------
+        # Configure CROSSBAR 3
+        #-------------------------
+        self.CROSSBAR3.set_lane_map(cb3_lane_map)
+        for (cb3_bin_sel, bs) in enumerate(cb3):
+            bs.BYPASS = bool(cb3_bypass)
+            if not cb3_bypass:
+                bs.STREAM_ID = self.slot - 1  # The stream ID at the output of CB2 will be 0xSL (S=slot-1, L=lane)
+                bs.NUMBER_OF_FRAMES_PER_PACKET = frames_per_packet
+                bs.FIRST_LANE = cb3_lanes[cb3_bin_sel][0]
+                bs.LAST_LANE = cb3_lanes[cb3_bin_sel][1]
+                bs.NUMBER_OF_BINS_PER_FRAME = cb3_input_bins
+                bs.NUMBER_OF_WORDS_PER_BIN = cb3_input_words_per_bin
+                bs.select_bins(cb3_bin_select_map[cb3_bin_sel])
+
+
+
+        # words_per_bin = cb1_lanes / 4
+        # # cb1_minimum_bin_spacing = 16
+        # # cb2_minimum_bin_spacing = 8
+
+
+        # # for gtx in gpu_links.CHANNEL:
+        # #     gtx.LOOPBACK = bp_shuffle_bypass
+
+        # header_size = 16
+        # packet_flags_size = 4
+        # eth_overhead = 42
+        # bp_overhead = 8
+        # eth_data_rate = 156.25e6 * 66 * 32/33
+        # bp_data_rate = 156.25e6* 50 * 32/33
+        # packet_rate = 800e6/2048/frames_per_packet
+        # cb1_payload_size = header_size + packet_flags_size + frames_per_packet * (words_per_bin * cb1_bins + cb1_bins + 1) * 4
+        # cb1_eth_packet_size = (cb1_payload_size+eth_overhead+7)//8*8
+        # cb1_eth_data_rate = cb1_eth_packet_size * packet_rate * 8
+
+
+        # cb1_bp_packet_size = (cb1_payload_size+bp_overhead+7)//8*8
+        # cb1_bp_data_rate = cb1_bp_packet_size * packet_rate * 8
+
+        # self._logger.info('%.32r: CROSSBAR1 output: payload = %i bytes' % (self, cb1_payload_size))
+        # self._logger.info('%.32r: Backplane links: Packet size = %i bytes, data rate = %0.2f Gbps / %0.2f Gbps (%0.2f%%)' % (self, cb1_bp_packet_size, cb1_bp_data_rate/1e9, bp_data_rate / 1e9, cb1_bp_data_rate/bp_data_rate*100))
+
+        # cb2_payload_size = header_size + packet_flags_size + frames_per_packet * (words_per_bin * cb2_bins* cb2_lanes + 1*cb2_bins*cb2_lanes/2 + cb2_lanes) * 4
+        # cb2_eth_packet_size = (cb2_payload_size + eth_overhead + 7) // 8 * 8
+        # cb2_eth_data_rate = cb2_eth_packet_size * packet_rate * 8
+        # cb2_fifo_load = cb2_bins * words_per_bin * frames_per_packet - ( cb2_bins * words_per_bin* cb2_minimum_bin_spacing* frames_per_packet / 16)
+        # self._logger.info('%.32r: CROSSBAR2 output: payload = %i bytes' % (self, cb2_payload_size))
+        # self._logger.info('%.32r: CROSSBAR2 peak FIFO load per frame: %i (Max. 16), Words per frame: %i (max %i)' % (self, cb2_fifo_load,cb2_payload_size/frames_per_packet, 512*bp_data_rate/32/200e6))
+
+        # if cb2_bypass:
+        #     self._logger.info('%.32r: GPU link (CROSSBAR1 data): UDP Payload = %i bytes, Ethernet packets = %i bytes, data rate = %0.2f Gbps (%0.2f%%)' % (self, cb1_payload_size, cb1_eth_packet_size, cb1_eth_data_rate/1e9, cb1_eth_data_rate/eth_data_rate*100))
+        # else:
+        #     self._logger.info('%.32r: GPU Link (CROSSBAR2 data): UDP Payload = %i bytes, Ethernet packets = %i bytes, data rate = %0.2f Gbps (%0.2f%%)' % (self, cb2_payload_size, cb2_eth_packet_size, cb2_eth_data_rate/1e9, cb2_eth_data_rate/eth_data_rate*100))
 
         self.set_corr_reset(0)
         self.set_ant_reset(0)
+
 
     def compute_adc_delay_offsets(self, channels=range(16)):
         """
@@ -1604,37 +1921,240 @@ class chFPGA_controller(chFPGAHandler):
         (bitposgood)  and in that order. Note that stuck bits should all be
         false, bitposgood should be all 1s
         """
-        delaytable = []
-        stuckbits = []
-        bitposgood = []
+        delaytable = {}
+        stuckbits = {}
+        bitposgood = {}
 
         for chan in channels:
-            t=self.read_eye_diagram(channels=[chan], offset=[0]*16, noffsets=11)  # Creating an offset / delay table 11 columns 32 rows
-            if (t[chan] == 0).sum() and (t[chan] == 255).sum():  # Have found both 0 and 255 in the table - Means no stuck bits
-                stuckbits.append(False)
-            else:
-                stuckbits.append(True)  # Stuck bits detected
+            t = self.read_eye_diagram(channels=[chan], offset=[0]*16, noffsets=11)  # Creating an offset / delay table 11 columns 32 rows
+            # Finding both 0 and 255 in the table Means we have no stuck bits
+            stuckbits[chan] = not (np.any(t[chan] == 0) and np.any(t[chan] == 255))
 
-
-            offset = np.where(t[chan].sum(axis=0) == t[chan].sum(axis=0).max())[0][0]  # Choosing the offset by looking at the offset/delay table and picking the column with the highest sum (i.e most 255s)
+            offset = t[chan].sum(axis=0).argmax()  # Choosing the offset by looking at the offset/delay table and picking the column with the highest sum (i.e most 255s)
 
             bitdelay = []
             changood = []
-            for adcbits in range(0,8):
-                pulsedata = t[chan][:,offset]
-                mask = 1 << adcbits #looking at one adc bit at a time
-                chosendelay = int(((mask & pulsedata)*np.arange(32)).sum()/(mask & pulsedata).sum())  #performing a center of mass claculation to pick eye location
-                changood.append( (((t[chan][:, offset])[chosendelay]) & mask) >> adcbits)  # Checking what the bit level at the eye center is
+            for bit in range(8):
+                mask = 1 << bit #looking at one adc bit at a time
+                sample = (t[chan][:,offset]) & mask
+                chosendelay = int((sample * np.arange(32)).sum() / sample.sum())  # performing a center of mass claculation to pick eye location
+                changood.append( (((t[chan][:, offset])[chosendelay]) & mask) >> bit)  # Checking what the bit level at the eye center is
                 bitdelay.append(chosendelay)
-                #self._logger.info( 'Warning: Center of eye diagram on bit %i of channel %i has glitch ' % (adcbits, chan))
+                #self._logger.info( 'Warning: Center of eye diagram on bit %i of channel %i has glitch ' % (bit, chan))
 
             offset = offset - 3  #The difference in offset between a pulse waveform and a ramp
             if offset < 0:  # An untested wrap around conddition (Adam 12/12/2014)
                 offset = offset + 11
 
-            delaytable.append([bitdelay, [offset]*8])  # Building the delay table
-            bitposgood.append([changood])  # Building the eye diagram good table
+            delaytable[chan]= (bitdelay, [offset]*8)  # Building the delay table
+            bitposgood[chan] = changood  # Building the eye diagram good table
 
         return delaytable, stuckbits, bitposgood
 
+    def get_shuffle_status(self, cb1_bin_sel_overflow_reset=False):
+        def cb1_gen(self):
+            yield '-----------------------------------------------------'
+            cb1 = self.CROSSBAR
+            yield ' CROSSBAR 1 '
+            yield '   * CROSSBAR1 Configuration state *'
+            yield '   Chan  Corr  Align Align Align '
+            yield '   RST   RST    RST  Start Stop '
+            yield '   ----- ----- ----- ----- -----'
+            yield '   %5s %5s %5s %5i %5i' % (
+                bool(self.GPIO.ANT_RESET),
+                bool(self.GPIO.CORR_RESET),
+                bool(cb1.ALIGN_RESET),
+                cb1.SOF_WINDOW_START,
+                cb1.SOF_WINDOW_STOP)
+            yield ''
 
+            yield '   * CROSSBAR1 Status *'
+            old_bin_ctr = cb1.CB1_BIN_CTR
+            time.sleep(0.001)  # Wait 1 ms = approx 500 frames
+            new_bin_ctr = cb1.CB1_BIN_CTR
+
+            yield '    Bin'
+            yield '    Ctr'
+            yield '   -----'
+            yield '   %-5s' % (
+                (' OK ','Stuck')[old_bin_ctr==new_bin_ctr]
+                )
+            yield ''
+
+            yield '   * Bin Selectors Configuration state *'
+            yield '   Bin  Stream Inputs Words/ Frames/ Send   Data  Reset Reset'
+            yield '   Sel#   ID   Lanes  Frame  Packet  Flags  Width  Ctrl State'
+            yield '   ---- ------ ------ ------ ------- -----  ----- ----- -----'
+            for (i, bs) in enumerate(cb1):
+                messages = ''
+                if not bs.FOUR_BITS and not bs.EIGHT_BIT_SUPPORT:
+                    messages += '! Eight Bit mode is not supported by this firmware!'
+                yield '   %02i:  0x%03X  %2i/%2i %7i %6i %05s  %5i %5s %5s  Messages:%s' % (
+                    i,
+                    bs.STREAM_ID,
+                    bs.NUMBER_OF_LANES,
+                    self.NUMBER_OF_CROSSBAR_INPUTS,
+                    bs.NUMBER_OF_SELECTED_WORDS,
+                    bs.GROUP_FRAMES,
+                    bool(bs.SEND_FLAGS),
+                    (8,4)[bs.FOUR_BITS],
+                    bool(bs.RESET),
+                    bool(bs.IS_RESET),
+                    messages)
+
+            yield ''
+            yield '   * Bin Selectors Status *'
+            yield '   Bin    Align  Data Data  Frame Data  Global Timestamp  Rst'
+            yield '   Sel#   FIFO   FIFO Flags Flags FIFO  Frame     Ctr    State'
+            yield '          ovfl   ovfl FIFO  FIFO  Empty  Ctr'
+            yield '                      ovfl  ovfl'
+            yield '   -----  ----- ----- ----- ----- ----- ------ --------- -----'
+            for (i, bs) in enumerate(cb1):
+                cb1.LANE_MONITOR_SEL = 6  # Fifo Overflow sticky
+                cb1.LANE_MONITOR_RESET = 1
+                cb1.LANE_MONITOR_RESET = 0
+                lane_mon = cb1.CB1_LANE_MONITOR
+                align_fifo_overflow = bool(lane_mon & (1<<i))  # Sticky bit
+
+                old_global_frame_ctr = bs.IN_FRAME_CTR
+                old_timestamp_ctr = bs.TIMESTAMP_CTR
+                time.sleep(0.001)
+                new_global_frame_ctr = bs.IN_FRAME_CTR
+                new_timestamp_ctr = bs.TIMESTAMP_CTR
+
+                if cb1_bin_sel_overflow_reset:
+                    bs.OVERFLOW_RESET=1
+                    bs.OVERFLOW_RESET=0
+
+                yield '   %04i:  %05s %5s %5s %5s %5s %5s %9s %5s' % (
+                    i,
+                    (' ok ', 'OVFL!')[align_fifo_overflow],
+                    bool(bs.FIFO_OVERFLOW),
+                    bool(bs.DATA_FLAGS_OVERFLOW),
+                    bool(bs.FRAME_FIFO_OVERFLOW),
+                    bool(bs.FIFO_EMPTY),
+                    (' ok ','stuck')[new_global_frame_ctr == old_global_frame_ctr],
+                    (' ok ','stuck')[new_timestamp_ctr == old_timestamp_ctr],
+                    bool(bs.IS_RESET)
+                    )
+
+        def bp_gen(self):
+            yield '-----------------------------------------------------'
+            bp = self.BP_SHUFFLE
+            yield ' BP_SHUFFLE '
+            yield '   * BP_SHUFFLE Configuration state *'
+            yield '   Core  Bypass  TX   '
+            yield '   RST           Test '
+            yield '   ----- ------ ----- '
+            yield '   %5s %6s %5s' % (
+                bool(bp.CORE_RESET),
+                bool(bp.BYPASS),
+                bool(bp.TX_TEST_ENABLE))
+            yield ''
+
+            yield '   * BP_SHUFFLE Status *'
+            old_test_ctr = bp.TEST_CTR
+            time.sleep(0.001)  # Wait 1 ms = approx 500 frames
+            new_test_ctr = bp.TEST_CTR
+
+            yield '    BP   RST   QPLL  QPLL  Test'
+            yield '    RST  Done  RST   Lock  Ctr'
+            yield '   ----- ----- ----- ----- -----'
+            yield '   %5s %5s %5s %5s %5s' % (
+                bool(bp.RESET_MON),
+                bool(bp.RESET_DONE),
+                bool(bp.QPLL_RESET_MON),
+                ''.join('%i'%q.QPLL_LOCK for q in bp.qpll),
+                (' ok ','stuck')[new_test_ctr == old_test_ctr],
+                )
+            yield ''
+
+            yield '   * BP_SHUFFLE Lane Status *'
+            yield '   Lane GTX  Err    FIFO'
+            yield '    #    #   ctr    Ovfl'
+            yield '   ---- ---- ------ -----'
+            for i in range(bp.NUMBER_OF_LINKS+1):
+                gtx = bp.gtx[i-1] if i>0 else None
+                bp.LANE_SEL = i
+                yield '   %4i %04s:%5i %5s' % (
+                    i,
+                    i-1 if gtx else 'N/A',
+                    bp.RX_ERROR_CTR,
+                    bool(bp.FIFO_OVERFLOW)
+                    )
+
+
+        for x in cb1_gen(self):
+            print x
+        for x in bp_gen(self):
+            print x
+
+    def get_crate_id(self):
+        return self.crate.get_id()
+
+    @async
+    def _call_subprocess(self, cmd):
+        """
+        Executes a subprocess in a non-blocking way.
+        """
+        PIPE = subprocess.PIPE
+
+        # ssh_cmd = "ssh root@%s '%s'" % (self.hostname, cmd)
+        split_cmd = shlex.split(cmd)
+        p = subprocess.Popen(split_cmd, stdout=PIPE, stderr=PIPE)
+        while p.poll() is None:
+            yield tornado.gen.moment
+        if p.returncode:
+            raise RuntimeError("The command '%s' returned with the error code %i. stderr is displayed below:\n %s" % (cmd, p.returncode, ''.join(p.stderr.readlines())))
+        async_return(p.stdout.readlines())
+
+
+    @async
+    def arm_exec(self, cmd):
+        """
+        Executes a command on the ARM over SSH.
+        """
+        self.logger.info("%.32r: Executing command '%s' on the ARM" % (self, cmd))
+        ssh_cmd = 'ssh -o "StrictHostKeyChecking no" root@%s "%s"' % (self.hostname, cmd)
+        result = yield self._call_subprocess.async(ssh_cmd)
+        async_return(result)
+
+    @async
+    def arm_scp(self, source_filename, destination_filename='/tmp'):
+        """
+        Sends a file to the arm using scp.
+        """
+        self.logger.info('%.32r: Sending image file %s to the ARM in %s' % (self, source_filename, destination_filename))
+        scp_cmd = 'scp -o "StrictHostKeyChecking no" %s root@%s:%s' % (source_filename, self.hostname, destination_filename)
+        result = yield self._call_subprocess.async(scp_cmd)
+        async_return(result)
+
+    @async
+    def _update_arm_firmware(self, image_filename, delay=120):
+        """
+        Overwrites the ARM firmware on the SD card with the specified image compressed with bzip2.
+
+        !!! WARNING: This is a very ugly hack that can make the SD card
+        inoperable. You must do this only if you are in a position to manually
+        replace a SD card if this fails!!!
+
+        !!! The image must be in BZIP2 format. If not, the ARM won't boot
+        again unless you replace the SD card !!!
+
+        You must power-cycle the board after this command. The normal reboot()
+        method won't work because this corrupts the ARMs filesystem (did we
+        say this was a bad hack?).
+        """
+        image_header = '\xfa\xb8\x00\x10\x8e\xd0\xbc\x00'
+        with bz2.BZ2File(image_filename) as fh:
+            data = fh.read(100)  # read a few bytes to make sure this is really a bz2 file
+            if not data.startswith(image_header):
+                raise RuntimeError('The image does not seem to contain a compressed SDcard image')
+        print '%r: Sending file...' % self
+        yield self.arm_scp.async(image_filename, '/tmp/image.bz2')
+        print '%r: Writing SD card' % self
+        yield self.arm_exec.async('bzcat /tmp/image.bz2 >/dev/mmcblk0')
+        self.logger.info('%.32r: Command completed. Waiting %i seconds to ensure cache is flushed' % (self, delay))
+        print '%r: Waiting %i seconds' % (self, delay)
+        yield tornado.gen.sleep(delay)
+        async_return(True)

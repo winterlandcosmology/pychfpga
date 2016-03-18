@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+sleep 1 #this sleep is needed - need to wait for the thread that is setting up the GPIOs
+
+echo "Flashing LEDs"
+echo 0 > /sys/class/gpio/GP_LED6/value
+echo 0 > /sys/class/gpio/GP_LED7/value
+echo 0 > /sys/class/gpio/GP_LED8/value
+echo out > /sys/class/gpio/GP_LED6/direction
+echo out > /sys/class/gpio/GP_LED7/direction
+echo out > /sys/class/gpio/GP_LED8/direction
+echo 1 > /sys/class/gpio/GP_LED8/value
+sleep 0.2
+echo 1 > /sys/class/gpio/GP_LED7/value
+sleep 0.2
+echo 1 > /sys/class/gpio/GP_LED6/value
+sleep 0.2
+echo 0 > /sys/class/gpio/GP_LED8/value
+sleep 0.2
+echo 0 > /sys/class/gpio/GP_LED7/value
+exit 0

@@ -210,7 +210,7 @@ if __name__ == '__main__':
     c.set_corr_reset(0)
 
     try:
-          delays = pickle.load(open('/home/kbandura/git/ch_acq/pychfpga/delays_mar14_2015_no_errors.pkl'))
+          delays = pickle.load(open('pychfpga/delays_jun_2015_no_error.pkl'))
           #for ice in c:                                             
               #oo = ice.fpga.compute_adc_delay_offsets()
           c.set_adc_delays_with_check( delays[ice.serial] )  #oo[0])

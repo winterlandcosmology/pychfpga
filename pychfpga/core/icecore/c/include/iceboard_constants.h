@@ -10,6 +10,7 @@ typedef int bool;
 /* Categories for tuber_methods */
 extern const char *CATEGORY_ICEBOARD;
 extern const char *CATEGORY_MEZZANINE;
+extern const char *CATEGORY_BACKPLANE;
 
 /* Units */
 extern const char *HZ;
@@ -43,6 +44,9 @@ extern const char *MOTHERBOARD_TEMPERATURE_FPGA;
 extern const char *MOTHERBOARD_TEMPERATURE_FPGA_DIE;
 extern const char *MOTHERBOARD_TEMPERATURE_PHY;
 
+extern const char *BACKPLANE_TEMPERATURE_SLOT1;
+extern const char *BACKPLANE_TEMPERATURE_SLOT16;
+
 /* Motherboard power rails */
 extern const char *MOTHERBOARD_RAIL_VCC3V3;
 extern const char *MOTHERBOARD_RAIL_VCC12V0;
@@ -57,5 +61,9 @@ extern const char *MOTHERBOARD_RAIL_VADJ;
 extern const char *MEZZANINE_RAIL_VCC3V3;
 extern const char *MEZZANINE_RAIL_VCC12V0;
 extern const char *MEZZANINE_RAIL_VADJ;
+
+extern const char *CLOCK_SOURCE_XTAL;
+extern const char *CLOCK_SOURCE_SMA;
+extern const char *CLOCK_SOURCE_BP;
 
 #endif

@@ -1,0 +1,6 @@
+*.pyc
+*.pyo
+*.bak
+/data
+*.7z
+*.zip/

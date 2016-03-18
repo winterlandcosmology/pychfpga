@@ -28,7 +28,7 @@ from pychfpga import calculate_gains
 from pychfpga.MGADC08 import MGADC08
 from pychfpga.init_links import *
 #import MySQLdb
-from pychfpga.core.icecore.hardware_map import asynchronously, async_return, async
+from pychfpga.core.icecore import asynchronously, async_return, async
 
 # Should put somewhere else. Flatten arbitrarily deep nested lists
 # from stack overflow
@@ -208,22 +208,6 @@ if __name__ == "__main__":
   parser.add_argument("-f", "--configure_fpga", action = "store", \
                        default = 1, \
                        help = "1 configure and control fpga.  0 to ignore fpga and just get data from gpu")
-  # Parameters for noise injection
-  parser.add_argument("-i", "--ni_enable", action = "store", \
-                       default = 0, \
-                       help = "Enable the pwm signal for noise injection gating")
-  parser.add_argument("-b", "--ni_board", action = "store", \
-                       type=str, default = '0026', \
-                       help = "Enable the pwm signal for noise injection gating")
-  parser.add_argument("-o", "--ni_offset", action = "store", \
-                       type=int, default=0, \
-                       help = "Offset, in frames, of the pwm signal for noise injection gating")
-  parser.add_argument("-u", "--ni_high_time", action = "store", \
-                       type=int, default=16777216, \
-                       help = "High time, in frames, of the pwm signal for noise injection gating. Default 16777216 frames (~43 secs)")
-  parser.add_argument("-p", "--ni_period", action = "store", \
-                       type=int, default=33554432, \
-                       help = "Period, in frames, of the pwm signal for noise injection gating. Default 33554432 frames (~86 secs)")
   args = parser.parse_args()
 
   # Be paranoid: if the executable is being run from /usr/sbin we can be
@@ -320,12 +304,13 @@ if __name__ == "__main__":
             enable_gpu_link = conf["fpga"]["enable_gpu_link"])
       #Temp solution to load adc_delay from table...
       #try:
-      delays = pickle.load(open('pychfpga/delays_mar14_2015_no_errors.pkl'))
+      delays = pickle.load(open('pychfpga/delays_aug_2015.pkl'))
       for ice in c:
-          ice.set_adc_delays_with_check(delays[int(ice.serial)])
-          log.info("set delays on SN {0}, SLOT {1}".format(ice.serial, ice.slot))
-      #except:
-      #    log.info("Error loading/setting delay tables.  Using default from config file for all boards")
+          #try:
+              ice.set_adc_delays_with_check(delays[int(ice.serial)])
+              log.info("set delays on SN {0}, SLOT {1}".format(ice.serial, ice.slot))
+          #except:
+          #    log.info("Error loading/setting delay tables.  Using default delays from config file for all boards")
       #for cc in c:
       #  cc.GPU.LINK_ENABLE=1
       #  log.info("GPU link enabled on SN {0}, SLOT {1}".format(cc.serial, cc.slot))
@@ -352,30 +337,40 @@ if __name__ == "__main__":
       # Gains will need to be able to handle multiple boards, currently file
       # Will be overwritten when used for more than one board.
       # Make compute gains smarter -> write to db? need boards to actually be different
-      ni_board = None
-      if args.ni_enable:
-        for ib in c:
-          if ib.serial == args.ni_board:
-            ni_board = ib
-            break  
-      # Get noise injectionn gating board. Currently board SN0005 (slot 1)
-      if args.ni_enable:
-        assert ni_board != None, 'Noise injection gating board SN%s not found in subarray %d' %(args.ni_board, conf["fpga"]["subarray"])
       
+      # Get noise injection parameters
+      gpu_intergration_period = conf["gpu"]["gpu_intergration_period"]
+      ni_board = c(serial=conf["fpga"]["ni_board"])
+      ni_enable = conf["fpga"]["ni_enable"]
+      ni_offset = conf["fpga"]["ni_offset"]*gpu_intergration_period
+      ni_high_time = conf["fpga"]["ni_high_time"]*gpu_intergration_period - 1 # the -1 is due to the convention in function set_frame_pwm()
+      ni_period = conf["fpga"]["ni_period"]*gpu_intergration_period - 1
+      ni_board_26m = c(serial=conf["fpga"]["ni_board_26m"])
+      ni_enable_26m = conf["fpga"]["ni_enable_26m"]
+      ni_offset_26m = conf["fpga"]["ni_offset_26m"]*gpu_intergration_period
+      ni_high_time_26m = conf["fpga"]["ni_high_time_26m"]*gpu_intergration_period - 1 # the -1 is due to the convention in function set_frame_pwm()
+      ni_period_26m = conf["fpga"]["ni_period_26m"]*gpu_intergration_period - 1      
+
       if (int(args.compute_gain) > 0):
           #Shouldn't need for loop here, but initial testing failed in parallel.
-          if args.ni_enable:
+          if ni_enable:
               ni_board.set_user_output_source('pwm')
               ni_board.set_frame_pwm(0, 3, 4)
               ni_board.sync()
+          if ni_enable_26m:
+              ni_board_26m.set_user_output_source('pwm')
+              ni_board_26m.set_frame_pwm(0, 3, 4)
+              ni_board_26m.sync()
+          calculate_gain_slots = conf["fpga"]['calculate_gain_slots'] 
           for i, c_element in enumerate(c):
-            fpga_config = c_element.get_config()
-            #fpga_rec = chFPGA_receiver.chFPGA_receiver(fpga_config, \
-            #              ip_address=c_element.fpga_ip_addr, \
-            #              port=c_element.fpga_port_number+1, \
-            #              host_ip = conf["fpga"]["host_ip"])
-            calculate_gains.calculate_gains(c_element,str(c_element.fpga_port_number+1))
-            #fpga_rec.close()
+            if c_element.slot in calculate_gain_slots:
+              fpga_config = c_element.get_config()
+              #fpga_rec = chFPGA_receiver.chFPGA_receiver(fpga_config, \
+              #              ip_address=c_element.fpga_ip_addr, \
+              #              port=c_element.fpga_port_number+1, \
+              #              host_ip = conf["fpga"]["host_ip"])
+              calculate_gains.calculate_gains(c_element,str(c_element.fpga_port_number+1))
+              #fpga_rec.close()
       all_chan = range(16)#range(conf["n_antenna"])
       c.set_data_source("adc") # This should come first.
       c.set_FFT_bypass(False, channels = all_chan)
@@ -391,21 +386,24 @@ if __name__ == "__main__":
       c.set_offset_binary_encoding()
       c.sync()
       # Get sync_board. Currently board SN0008 (slot 16)
-      #sync_board = None
-      #for ib in c:
-      #  if ib.serial == '0008':
-      #    sync_board = ib
-      #    break
-      #if sync_board == None:
-      #  sync_board = c[0]
-      sync_board = c(serial='0008')
+      sync_board = c(serial=conf["fpga"]["sync_board"])
 
       # This is another hack. Have to fix it for DRAO. REALLY: HAVE TO CHANGE IT
       # shuffle_init(list(c),sync_board,frames_per_packet=4, cb1_lanes=16, cb1_bins=64, cb2_lanes=16, cb2_bins=8, cb2_bypass=0, remap=True )
       d_slots = conf['fpga']['destination_slots'] #[int(ii) for ii in conf["fpga"]["destination_slots"]]
-      shuffle_init(list(c),ni_board, sync_board, dsmap = d_slots, frames_per_packet=4, cb1_lanes=16, cb1_bins=64, cb2_lanes=16, cb2_bins=8, cb2_bypass=0, remap=True,
-                   ni_enable = args.ni_enable, ni_offset = args.ni_offset, 
-                   ni_high_time = args.ni_high_time-1, ni_period = args.ni_period-1)
+      shuffle_init(list(c), ni_board, ni_board_26m, sync_board, dsmap = d_slots, frames_per_packet=4, cb1_lanes=16, cb1_bins=64, cb2_lanes=16, cb2_bins=8, cb2_bypass=0, remap=True,
+                   ni_enable = ni_enable, ni_offset = ni_offset, 
+                   ni_high_time = ni_high_time, ni_period = ni_period,
+                   ni_enable_26m = ni_enable_26m, ni_offset_26m = ni_offset_26m, 
+                   ni_high_time_26m = ni_high_time_26m, ni_period_26m = ni_period_26m,
+                   window_start=0, window_stop=50)
+      time.sleep(2)
+      #shuffle_init(list(c), ni_board, ni_board_26m, sync_board, dsmap = d_slots, frames_per_packet=4, cb1_lanes=16, cb1_bins=64, cb2_lanes=16, cb2_bins=8, cb2_bypass=0, remap=True,
+      #             ni_enable = ni_enable, ni_offset = ni_offset, 
+      #             ni_high_time = ni_high_time, ni_period = ni_period,
+      #             ni_enable_26m = ni_enable_26m, ni_offset_26m = ni_offset_26m, 
+      #             ni_high_time_26m = ni_high_time_26m, ni_period_26m = ni_period_26m,
+      #             window_start=200, window_stop=200)
 
       #Make sure FPGA throttling is fast enough to send all the data
       #FPGA doesn't seem to change this without a reset...

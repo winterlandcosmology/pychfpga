@@ -210,8 +210,8 @@ class ReceiverThread(threading.Thread):
                     else:  # unknown frame format
                         print 'Receiver: Frame of %i bytes with unknown identifier 0x%Xx has been received. It was discarded. First bytes are 0x%s' % (nbytes, (self.data[0] & 0xF0) >> 4, ' '.join('%02X' % c for c in self.data[:32]))
 
-        self.queue.task_done()
-        self.queue_corr.task_done()
+        # self.queue.task_done() # JFC: Must be used by queue consumer, not the producer (this thread)
+        # self.queue_corr.task_done()
         print 'Frame acquisition thread is stopped'
 
     def status(self, print_delay=1):
@@ -246,7 +246,7 @@ class chFPGA_receiver(object):
         # Create socket handled and open socket communications to the chFPGA board
         self.ip_address = chFPGA_config.system_fpga_ip_address
         self.host_ip = chFPGA_config.system_interface_ip_address
-        self.sock = SocketIO.DataSocket_base(self.ip_address, host_ip=self.host_ip)
+        self.sock = SocketIO.DataSocket_base(self.ip_address, host_ip=self.host_ip)  # removed , port_number=chFPGA_config.system_local_data_port_number
         self.port_number = self.sock.port_number
         #self.sock.open()
         #Add configuration
@@ -275,6 +275,9 @@ class chFPGA_receiver(object):
         Close object, which releases the socket bindings
         """
         self.frame_receiver.stop()
+        self.frame_receiver.join(1)  # Wait up to the specified amount of time for the thread to complete
+        if self.frame_receiver.isAlive():
+            raise RuntimeError('Could not terminate Frame Receiver thread')
         #self.frame_queue_corr.join()
         #self.frame_queue.join()
         self.sock.close()

@@ -1,0 +1,11 @@
+# Expected values for reading the temperature sensors on the board over i2c
+# These are the maximum and minimum values. Results outside this range will result in test failure.
+
+# Measurements from board 0007
+#TEMP_ARM: 45
+#TEMP_FPGA: 37
+#TEMP_PH': 42
+#TEMP_POWER: 39
+
+MAX: 85
+MIN: 20

@@ -1,6 +1,7 @@
 #include <tuber.h>
 #include <string.h>
 #include <syslog.h>
+#include <unistd.h>
 
 #include "iceboard.h"
 #include "runtime.h"
@@ -9,6 +10,48 @@
 
 #include "i2c_eeprom.h"
 #include "base64.h"
+
+void cache_mezz_frui(IceBoard *self, int mezzanine) {
+	uint8_t buf[2048]; /* Not quite as big as possible, but pretty big */
+	char *warning;
+	i2c_eeprom_handle *h=NULL;
+	frui_parser *p=NULL;
+
+	if(!IceBoard_is_mezzanine_present(self, mezzanine))
+		return;
+
+	if(self->mezz_frui[mezzanine-1]) {
+		frui_free(self->mezz_frui[mezzanine-1]);
+		self->mezz_frui[mezzanine-1] = NULL;
+	}
+
+	if(!(h = i2c_eeprom_open(mezzanine==1 ? "/dev/i2c-5" : "/dev/i2c-6"))) {
+		oops("Unable to open I2C EEPROM! Is there a mezzanine present?");
+		goto out;
+	}
+	if(i2c_eeprom_read(h, buf, 0, sizeof(buf)) != sizeof(buf)) {
+		oops("Error reading raw data from EEPROM!");
+		goto out;
+	}
+
+	/* Try to parse into FRUI structure */
+	if(!(p = frui_parser_new()))
+		goto out;
+	if(!(self->mezz_frui[mezzanine-1] = frui_parser_loadb(p, sizeof(buf), buf))) {
+		oops("Failed to parse IPMI FRU block! (Is this an uninitialized mezzanine?)");
+		goto out;
+	}
+
+	/* Any warnings? Log them. */
+	while((warning = frui_parser_get_warning(p)))
+		syslog(LOG_WARNING, "IPMI parser: %s", warning);
+
+out:
+	if(h)
+		i2c_eeprom_close(h);
+	if(p)
+		frui_parser_free(p);
+}
 
 tuber_method(BOOLEAN, IceBoard, is_mezzanine_present,
 		"Determines if a mezzanine is present.",
@@ -39,7 +82,7 @@ tuber_method(VOID, IceBoard, set_mezzanine_power,
 		"   * 12v\n"
 		"Power-off sequencing follows the same process in reverse. "
 		"FMC specifications state (Obs. 5.28) that any power "
-		"sequencing is acceptable; the ICEboard's hardware is "
+		"sequencing is acceptable; the ICEboard's hardware is " /*'*/
 		"capable of accomodating arbitrary rail ordering (but "
 		"software does not play along at the moment.)"
 ) {
@@ -75,9 +118,11 @@ tuber_method(VOID, IceBoard, set_mezzanine_power,
 		gpio_set(rails[mezzanine-1].rail_12v0, 1);
 		gpio_set(rails[mezzanine-1].rail_3v3, 1);
 		gpio_set(rails[mezzanine-1].rail_vadj, 1);
+		usleep(10000); //This reduces the inrush current and can improve stability  10mS
 		gpio_set(rails[mezzanine-1].pg_c2m, 1);
 	} else {
 		gpio_set(rails[mezzanine-1].pg_c2m, 0);
+		usleep(10000); 
 		gpio_set(rails[mezzanine-1].rail_vadj, 0);
 		gpio_set(rails[mezzanine-1].rail_3v3, 0);
 		gpio_set(rails[mezzanine-1].rail_12v0, 0);
@@ -204,14 +249,17 @@ tuber_method(VOID, IceBoard, _mezzanine_eeprom_write_base64,
 		"overrun the EEPROM. If you did, you probably wrote data to the "
 		"wrong place."
 ) {
-	char *buf = NULL;
+	uint8_t *buf = NULL;
 	int slen, blen;
 	i2c_eeprom_handle *h = NULL;
+	frui_parser *p=NULL;
+	char *warning;
+	frui *frui=NULL;
 
 	VALIDATE_BETWEEN(mezzanine, 1, NUM_MEZZANINES,);
 	VALIDATE_BETWEEN(offset, 0, 131072,);
 
-	pthread_mutex_lock(&self->mezz_i2c_lock);
+	pthread_mutex_lock(&self->i2c_mtx_lock);
 	if(!(h = i2c_eeprom_open(mezzanine==1 ? "/dev/i2c-5" : "/dev/i2c-6"))) {
 		oops("Unable to open I2C EEPROM! Is there a mezzanine present?");
 		goto out;
@@ -233,87 +281,13 @@ tuber_method(VOID, IceBoard, _mezzanine_eeprom_write_base64,
 		goto out;
 	}
 
-	/* Write EEPROM */
-	if(i2c_eeprom_write(h, buf, offset, blen) != blen)
-		oops("Error during EEPROM write!");
-
-out:
-	pthread_mutex_unlock(&self->mezz_i2c_lock);
-
-	if(buf)
-		free(buf);
-	if(h)
-		i2c_eeprom_close(h);
-}
-
-tuber_method(INTEGER, IceBoard, _mezzanine_lock_ipmi_cache,
-		"Increment IPMI cache lock counter; return new value",
-		0, (),
-		1, (CATEGORY_ICEBOARD),
-		"This is an internal method. Don't use it."
-) {
-	int count;
-
-	pthread_mutex_lock(&self->mezz_i2c_lock);
-	count = ++self->mezz_frui_refcount;
-	pthread_mutex_unlock(&self->mezz_i2c_lock);
-
-	return count;
-}
-
-tuber_method(INTEGER, IceBoard, _mezzanine_unlock_ipmi_cache,
-		"Increment IPMI cache lock counter; return new value",
-		0, (),
-		1, (CATEGORY_ICEBOARD),
-		"This is an internal method. Don't use it."
-) {
-	int count;
-
-	pthread_mutex_lock(&self->mezz_i2c_lock);
-	count = --self->mezz_frui_refcount;
-	pthread_mutex_unlock(&self->mezz_i2c_lock);
-
-	return count;
-}
-
-frui *IceBoard_get_mezzanine_ipmi_raw(IceBoard *self, const int mezzanine) {
-	/* MUST be called with mezz_frui_lock */
-
-	uint8_t buf[2048]; /* Not quite as big as possible, but pretty big */
-	char *warning;
-	VALIDATE_BETWEEN(mezzanine, 1, 2, NULL);
-
-	i2c_eeprom_handle *h=NULL;
-	frui_parser *p=NULL;
-
-	if(self->mezz_frui[mezzanine-1]) {
-		/* We have a cached value. If the mezzanine is powered, or if
-		 * we're in the middle of something, return it. (Expectation:
-		 * that only a maniac would hot-swap a powered mezz.) */
-		if(self->mezz_frui_refcount || IceBoard_get_mezzanine_power(self, mezzanine))
-			return(self->mezz_frui[mezzanine-1]);
-
-		/* Otherwise, invalidate the cached copy. We'll replace it. */
-		frui_free(self->mezz_frui[mezzanine-1]);
-		self->mezz_frui[mezzanine-1] = NULL;
-	}
-
-	/* Read raw data from EEPROM */
-	pthread_mutex_lock(&self->mezz_i2c_lock);
-	if(!(h = i2c_eeprom_open(mezzanine==1 ? "/dev/i2c-5" : "/dev/i2c-6"))) {
-		oops("Unable to open I2C EEPROM! Is there a mezzanine present?");
-		goto out;
-	}
-	if(i2c_eeprom_read(h, buf, 0, sizeof(buf)) != sizeof(buf)) {
-		oops("Error reading raw data from EEPROM!");
-		goto out;
-	}
-
-	/* Try to parse into FRUI structure */
+	/* Try to parse into FRUI structure into memory BEFORE writing it to
+	   the EEPROM. As a side-effect, we update the local FRUI cache. */
 	if(!(p = frui_parser_new()))
 		goto out;
-	if(!(self->mezz_frui[mezzanine-1] = frui_parser_loadb(p, sizeof(buf), buf))) {
-		oops("Failed to parse IPMI FRU block! (Is this an uninitialized mezzanine?)");
+	if(!(frui = frui_parser_loadb(p, blen, buf))) {
+		oops("Failed to parse IPMI FRU block! (%s) Refusing to program EEPROM.",
+				frui_parser_get_error(p));
 		goto out;
 	}
 
@@ -321,15 +295,27 @@ frui *IceBoard_get_mezzanine_ipmi_raw(IceBoard *self, const int mezzanine) {
 	while((warning = frui_parser_get_warning(p)))
 		syslog(LOG_WARNING, "IPMI parser: %s", warning);
 
-out:
-	pthread_mutex_unlock(&self->mezz_i2c_lock);
+	/* Write EEPROM */
+	if(i2c_eeprom_write(h, buf, offset, blen) != blen)
+		oops("Error during EEPROM write!");
 
+	/* Replace cached IPMI data */
+	if(self->mezz_frui[mezzanine-1])
+		frui_free(self->mezz_frui[mezzanine-1]);
+	self->mezz_frui[mezzanine-1] = frui;
+	frui = NULL;
+
+out:
+	pthread_mutex_unlock(&self->i2c_mtx_lock);
+
+	if(buf)
+		free(buf);
 	if(h)
 		i2c_eeprom_close(h);
 	if(p)
 		frui_parser_free(p);
-
-	return self->mezz_frui[mezzanine-1];
+	if(frui)
+		frui_free(frui);
 }
 
 tuber_method(JSON, IceBoard, _get_mezzanine_ipmi,
@@ -341,34 +327,37 @@ tuber_method(JSON, IceBoard, _get_mezzanine_ipmi,
 		"retrieve and parse this data, returning it as a JSON "
 		"object if it can be correctly identified."
 ) {
-	json_t *result = json_object();
+	json_t *result;
 	frui *frui;
 
 	VALIDATE_BETWEEN(mezzanine, 1, 2, NULL);
 
-	pthread_mutex_lock(&self->mezz_frui_lock);
-	if((frui = IceBoard_get_mezzanine_ipmi_raw(self, mezzanine))) {
-		if(frui_has_board_info(frui))
-			json_object_set_new(result, "board", json_pack(
-					"{s:s,s:s,s:s,s:s,s:s}",
-					"manufacturer", frui_get_board_manufacturer(frui),
-					"name", frui_get_board_name(frui),
-					"serial_number", frui_get_board_serial_number(frui),
-					"part_number", frui_get_board_part_number(frui),
-					"frui_file_id", frui_get_board_fru_file_id(frui)));
-
-		if(frui_has_product_info(frui))
-			json_object_set_new(result, "product", json_pack(
-					"{s:s,s:s,s:s,s:s,s:s,s:s,s:s}",
-					"manufacturer", frui_get_product_manufacturer(frui),
-					"name", frui_get_product_name(frui),
-					"part_number", frui_get_product_part_number(frui),
-					"version_number", frui_get_product_version_number(frui),
-					"serial_number", frui_get_product_serial_number(frui),
-					"asset_tag", frui_get_product_asset_tag(frui),
-					"frui_file_id", frui_get_product_fru_file_id(frui)));
+	if(!(frui = self->mezz_frui[mezzanine-1])) {
+		oops("Mezzanine %i has no IPMI data! Missing or uninitialized?", mezzanine);
+		return NULL;
 	}
-	pthread_mutex_unlock(&self->mezz_frui_lock);
+
+	result = json_object();
+
+	if(frui_has_board_info(frui))
+		json_object_set_new(result, "board", json_pack(
+				"{s:s,s:s,s:s,s:s,s:s}",
+				"manufacturer", frui_get_board_manufacturer(frui),
+				"name", frui_get_board_name(frui),
+				"serial_number", frui_get_board_serial_number(frui),
+				"part_number", frui_get_board_part_number(frui),
+				"frui_file_id", frui_get_board_fru_file_id(frui)));
+
+	if(frui_has_product_info(frui))
+		json_object_set_new(result, "product", json_pack(
+				"{s:s,s:s,s:s,s:s,s:s,s:s,s:s}",
+				"manufacturer", frui_get_product_manufacturer(frui),
+				"name", frui_get_product_name(frui),
+				"part_number", frui_get_product_part_number(frui),
+				"version_number", frui_get_product_version_number(frui),
+				"serial_number", frui_get_product_serial_number(frui),
+				"asset_tag", frui_get_product_asset_tag(frui),
+				"frui_file_id", frui_get_product_fru_file_id(frui)));
 
 	return result;
 }
@@ -380,16 +369,13 @@ tuber_method(STRING, IceBoard, _get_mezzanine_type,
 	"The mezzanine type is a new parameter for K7-based boards. "
 ) {
 	/* This function returns a malloc()'d string that MUST be free()d! */
-	frui *frui;
 	const char *t=NULL;
 
 	VALIDATE_BETWEEN(mezzanine, 1, NUM_MEZZANINES, NULL);
 
 	/* Refresh the cached value and return that. */
-	pthread_mutex_lock(&self->mezz_frui_lock);
-	if((frui = IceBoard_get_mezzanine_ipmi_raw(self, mezzanine)))
-		t = frui_get_product_part_number(frui);
-	pthread_mutex_unlock(&self->mezz_frui_lock);
+	if(self->mezz_frui[mezzanine-1])
+		t = frui_get_product_part_number(self->mezz_frui[mezzanine-1]);
 
 	if(!t) {
 		oops("Unknown mezzanine type! Is the IPMI block valid?");
@@ -406,16 +392,13 @@ tuber_method(STRING, IceBoard, _get_mezzanine_version,
 	"The mezzanine type is a new parameter for K7-based boards. "
 ) {
 	/* This function returns a malloc()'d string that MUST be free()d! */
-	frui *frui;
 	const char *t=NULL;
 
 	VALIDATE_BETWEEN(mezzanine, 1, NUM_MEZZANINES, NULL);
 
 	/* Refresh the cached value and return that. */
-	pthread_mutex_lock(&self->mezz_frui_lock);
-	if((frui = IceBoard_get_mezzanine_ipmi_raw(self, mezzanine)))
-		t = frui_get_product_version_number(frui);
-	pthread_mutex_unlock(&self->mezz_frui_lock);
+	if(self->mezz_frui[mezzanine-1])
+		t = frui_get_product_version_number(self->mezz_frui[mezzanine-1]);
 
 	if(!t) {
 		oops("Unknown mezzanine version! Is the IPMI block valid?");
@@ -433,16 +416,13 @@ tuber_method(STRING, IceBoard, _get_mezzanine_serial,
 	"EEPROM (which must be programmed during quality control testing.)"
 ) {
 	/* This function returns a malloc()'d string that MUST be free()d! */
-	frui *frui;
 	const char *s=NULL;
 
 	VALIDATE_BETWEEN(mezzanine, 1, NUM_MEZZANINES, NULL);
 
 	/* Refresh the cached value and return that. */
-	pthread_mutex_lock(&self->mezz_frui_lock);
-	if((frui = IceBoard_get_mezzanine_ipmi_raw(self, mezzanine)))
-		s = frui_get_product_serial_number(frui);
-	pthread_mutex_unlock(&self->mezz_frui_lock);
+	if(self->mezz_frui[mezzanine-1])
+		s = frui_get_product_serial_number(self->mezz_frui[mezzanine-1]);
 
 	if(!s) {
 		oops("Unspecified mezzanine serial number! Is the IPMI block valid?");

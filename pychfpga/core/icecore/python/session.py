@@ -57,7 +57,6 @@ import sys
 import mimetypes
 import logging.config
 import hardware_map
-import hwm_assets
 
 
 class HWMCSVConstructor(object):
@@ -263,75 +262,6 @@ def hwm_lookup_constructor(loader, node):
     return obj
 
 
-class AttributeMappingTouchup(object):
-    '''Correctly assign indexes for SQLAlchemy attribute_mapped_collections.
-
-    HWM objects like FMCMezzanines come with index columns like "mezzanine",
-    which indicate their position in a collection (dfmux.mezzanines) starting
-    from 1. This idiom is convenient in ORM-land, but awkward to support in
-    YAML serialization. For example, we would have:
-
-        # BROKEN EXAMPLE
-        !Dfmux
-            hostname: iceboard004.local
-            mezzanines: [ !MGMEZZ04 { serial: FMC2_001, mezzanine: 2 } ]
-
-    The mezzanine number is not really a property of the mezzanine itself --
-    and it's even more awkward when mezzanines are stored separately from their
-    dfmuxes and referred by alias:
-
-        # BROKEN EXAMPLE
-        - &foo_mezz !MGMEZZ04 { serial: FMC2_001, mezzanine: 2 }
-        - !Dfmux
-            hostname: iceboard004.local
-            mezzanines: [ *foo_mezz ]
-
-    Instead, this touchup allows us to express mezzanines as ordinary lists:
-
-        !Dfmux
-            hostname: iceboard004.local
-            mezzanines: [ None, !MGMEZZ04 { serial: FMC2_001 } ]
-
-    ...or as a mapping:
-
-        !Dfmux
-            hostname: iceboard004.local
-            mezzanines:
-                2: !MGMEZZ04 { serial: FMC2_001 }
-    '''
-
-    def __init__(self, group_attribute, member_attribute):
-        self._group_attribute = group_attribute
-        self._member_attribute = member_attribute
-
-    def __call__(self, loader, mapping):
-
-        if self._group_attribute in mapping:
-            values = mapping[self._group_attribute]
-
-            if isinstance(values, list):
-                # We've been provided a list. Start numbering at 1.
-                for (index, value) in enumerate(values):
-                    if not value:
-                        continue
-                    setattr(value, self._member_attribute, index+1)
-
-                mapping[self._group_attribute] = [v for v in values if v]
-
-            elif isinstance(values, dict):
-                # We've been provided a dictionary. Assume the keys
-                # provide the numbering.
-                for (key, value) in values.iteritems():
-                    if not value:
-                        continue
-                    setattr(value, self._member_attribute, key)
-
-                mapping[self._group_attribute] = [v for v in values.values() if v]
-
-            else:
-                raise TypeError("Expected a list, got '%r'!" % values)
-
-
 def logging_constructor(loader, node):
     '''A YAML constructor for Python logging.config.dictConfig() entries'''
 
@@ -340,7 +270,7 @@ def logging_constructor(loader, node):
     return n
 
 
-def register_yaml_object(yaml_tag=None, transforms={}):
+def register_yaml_object(yaml_tag=None, transforms=[]):
     """ Class decorator that adds the decorated class to the YAML class
     registry.
 
@@ -355,12 +285,8 @@ def register_yaml_object(yaml_tag=None, transforms={}):
     """
     def decorator(cls):
         tag = '!' + (yaml_tag or cls.__name__)
-        transform_list = []
-        for (action, params) in transforms.items():
-            if action == 'move_index':
-                transform_list.append(AttributeMappingTouchup(*params))
         YAMLLoader.add_constructor(
-            tag, HWMConstructor(lambda l: cls, transform_list))
+            tag, HWMConstructor(lambda l: cls, transforms))
         return cls
     return decorator
 
@@ -386,9 +312,12 @@ def set_yaml_loader_class(cls):
 __yaml_loader_class = YAMLLoader
 
 
-def load_session(stream):
+def load_session(stream, store=True):
     '''Load a YAML document into a Session object.'''
-    return yaml.load(stream, Loader=__yaml_loader_class)
+    y = yaml.load(stream, Loader=__yaml_loader_class)
+    if store:
+        set_session(y)
+    return y
 
 
 def set_session(session):
@@ -403,4 +332,4 @@ def get_session():
 
 __session_handle = None
 
-# vim: sts=4 ts=4 sw=4 tw=78 smarttab expandtab
+# vim: sts=4 ts=4 sw=4 tw=80 smarttab expandtab

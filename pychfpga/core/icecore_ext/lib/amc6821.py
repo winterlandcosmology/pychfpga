@@ -24,7 +24,7 @@ class AMC6821(object):
         """ Create a fan controller object.
         """
         self._logger = logging.getLogger(__name__)
-        self._logger.debug('%.32r: Instantiating AMC6821 Fan controller object' % self)
+        # self._logger.debug('%.32r: Instantiating AMC6821 Fan controller object' % self)
 
         self._i2c = i2c
         self._bus_name = bus_name

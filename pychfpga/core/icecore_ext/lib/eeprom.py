@@ -129,7 +129,7 @@ class eeprom(object):
         self.i2c.select_bus(self.bus_name, retry=3)
         try:
             self.i2c.write_read(self.address + page, data=[], read_length=0, retry=0 ) #dummy I2C acces
-        except self.i2c.I2CException:
+        except IOError:
             return False
         return True
 

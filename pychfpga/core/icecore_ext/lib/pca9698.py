@@ -98,17 +98,17 @@ class pca9698(object):
         out0_def..out4_def sets the default output state to logic 0 when direction is set to output
         """
 
-        self.write('CFG0', cfg0_def)
-        self.write('CFG1', cfg1_def)
-        self.write('CFG2', cfg2_def)
-        self.write('CFG3', cfg3_def)
-        self.write('CFG4', cfg4_def)
+        self.write_reg('CFG0', cfg0_def)
+        self.write_reg('CFG1', cfg1_def)
+        self.write_reg('CFG2', cfg2_def)
+        self.write_reg('CFG3', cfg3_def)
+        self.write_reg('CFG4', cfg4_def)
 
-        self.write('OUT0', out0_def)
-        self.write('OUT1', out1_def)
-        self.write('OUT2', out2_def)
-        self.write('OUT3', out3_def)
-        self.write('OUT4', out4_def)
+        self.write_reg('OUT0', out0_def)
+        self.write_reg('OUT1', out1_def)
+        self.write_reg('OUT2', out2_def)
+        self.write_reg('OUT3', out3_def)
+        self.write_reg('OUT4', out4_def)
 
     def select(self):
         """
@@ -116,7 +116,7 @@ class pca9698(object):
         """
         self.i2c.select_bus(self.port)
 
-    def write(self, register, value, mask=0xff, select=True):
+    def write_reg(self, register, value, mask=0xff, select=True):
         """
         Writes a byte to the specified register of the IO Expander.
 
@@ -144,9 +144,9 @@ class pca9698(object):
 
         self.i2c.write_read(self.address, data=[register, new_value])
 
-    def read(self, register, select=True):
+    def read_reg(self, register, select=True):
         """
-        Read a value to the specified register
+        Read a value from the specified register (an address or name)
         """
         # Convert port name a port address if the name is in the table. Otherwise use the argument as a port address directly.
         if register in self.REGISTER_TABLE:
@@ -156,6 +156,12 @@ class pca9698(object):
             self.select()
 
         return self.i2c.write_read(self.address, data=[register], read_length=1)[0]
+
+    def write(self, byte, value, mask=0xff, select=True):
+        self.write_reg('OUT%i' % byte, value, mask=mask, select=select)
+
+    def read(self, byte, select=True):
+        return self.read_reg('IN%i' % byte, select=select)
 
     def is_present(self):
         return self.i2c.is_present(self.address, self.port)

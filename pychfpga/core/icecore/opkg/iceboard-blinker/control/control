@@ -1,0 +1,10 @@
+Package: iceboard-blinker
+Version: 1~20150421
+Description: Control interface for IceBoard applications
+Section: science
+Priority: optional
+Maintainer: Adam Gilbert
+Architecture: all
+Homepage: http://bitbucket.org/winterlandcosmology
+Source:
+Depends:

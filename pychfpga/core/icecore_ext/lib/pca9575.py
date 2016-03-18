@@ -48,7 +48,7 @@ class pca9575(object):
         self.address = address
         self.bus_name = port
 
-    def init(self, cfg0_def=0b11111111, cfg1_def=0b11111111, out0_default=None, out1_default=None, verbose=0):
+    def init(self, cfg0_def=0b11111111, cfg1_def=0b11111111, out0_default=None, out1_default=None, bken0=0b10, bken1=0b10, pupd0=0b00001000, pupd1=0b00001000, verbose=0):
         """
         Initialization of PCS8575 I2C IO Extender object
         cfg0_def, cfg1_def sets the default configuration of the I/O pins. By default all pins are inputs.
@@ -61,6 +61,10 @@ class pca9575(object):
 
         self.write_reg('CFG0', cfg0_def)
         self.write_reg('CFG1', cfg1_def)
+        self.write_reg('BKEN0', bken0)
+        self.write_reg('BKEN1', bken1)
+        self.write_reg('PUPD0', pupd0)
+        self.write_reg('PUPD1', pupd1)
 
     def select(self):
         """

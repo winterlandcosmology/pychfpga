@@ -5,11 +5,63 @@ for testing ADC-FPGA communication by sending ADC ramps.
 '''
 
 import numpy as np
+import os
 import matplotlib
 matplotlib.use('Agg')
 import time, pylab, csv
 from pychfpga.common.tests.test_BaseClass import test_BaseClass
-from pychfpga import save_raw_frames
+from pychfpga.core import chFPGA_receiver
+from collections import Counter
+# from pychfpga import save_raw_frames
+
+def save_timestream_frames(chFPGA_receiver, channels=[0], frames=256, filename='data.npy'):    
+    '''
+        Saves data from Acquisition board to numpy array (taken from ch_acq commit d4bf1d69d9d1028e1a73a39
+    '''
+
+    if isinstance(channels,int): # make sure that channel is a array of channels
+        channels=np.array([channels])
+    elif isinstance(channels,list):
+        channels=np.array(channels)
+    nchan = channels.size
+    data_list = np.zeros((frames,nchan,2048), dtype=np.int8)
+    chanIndex = np.arange(nchan)
+    #chFPGA_receiver.frame_receiver._send_every_frame.clear()     
+    #chFPGA_receiver.send_every_frame(False)
+    number_of_frames=0
+    missed = 0
+    print "Starting Timestream acquisition"
+    try:
+        while (frames==0) or (frames!=0 and number_of_frames<frames):
+            try:
+                #print "trying to get a frame"
+                a = chFPGA_receiver.read_frames(verbose=0)
+                for chanNum in chanIndex:
+                    data_list[number_of_frames,chanNum,:] = a[channels[chanNum]]
+                    #data_list.append(a[channels[chanNum]])
+                number_of_frames+=1
+                #print "got a frame"
+                if (number_of_frames % 100) == 0:
+                    print 'Captured {0} frames'.format(number_of_frames) 
+            except KeyError:
+                print "missing a frame, skipping"
+                print a
+                #chFPGA_receiver.flush()
+                missed += 1
+                pass
+            except ValueError:
+                print "got a weird frame... carrying on!"
+            except:
+                chFPGA_receiver.close()
+                raise
+    except KeyboardInterrupt:
+        chFPGA_receiver.close()
+        raise
+    print "lost {0} to get {1}".format(missed, frames)
+    #np.array(data_list)
+    np.save(filename,data_list)
+
+    print 'Saved {0} frames'.format(number_of_frames)
 
 class test_adc_ramp_histogram(test_BaseClass):
     '''
@@ -24,7 +76,7 @@ class test_adc_ramp_histogram(test_BaseClass):
         self.fpga_ctrl.set_data_width(8)
         self.fpga_ctrl.set_offset_binary_encoding(0)
         time.sleep(1)
-        self.fpga_ctrl.start_data_capture(burst_period_in_seconds=0.1, channels=range(16))
+        self.fpga_ctrl.start_data_capture(burst_period_in_seconds=0.1, channels=range(16), source='adc')
         self.fpga_ctrl.sync()
         time.sleep(2)
         return
@@ -32,28 +84,48 @@ class test_adc_ramp_histogram(test_BaseClass):
         
     def plot_histogram(self, filename):
         datas = np.load(filename + '.npy')
+        self.test_hist_equal = np.zeros(16, dtype=np.bool_)
+        self.test_hist_expected = np.zeros(16, dtype=np.bool_)
+        expected_value = datas.shape[2]
         pylab.clf()
-        
         for i in xrange(16):
-            pylab.hist(datas[:,i,:].flatten(), bins=256, range = (-128,127))
+            hist, bins = np.histogram(datas[:,i,:].flatten(), bins=256, range=(-128.5, 127.5))
+            center = (bins[:-1] + bins[1:]) / 2
+            pylab.bar(center, hist, align='center', width=1.0)
+            #pylab.hist(datas[:,i,:].flatten(), bins=256, range = (-128,127))
             pylab.title(filename + ' Channel '+str(i))
             pylab.xlim(-128,127)
             pylab.savefig(filename + '_chan' +str(i)+'.pdf')
             pylab.clf()
+            chist = Counter(hist)
+            self.test_hist_equal[i] = (len(chist) == 1)
+            self.test_hist_expected[i] = (chist.most_common(n=1)[0][0] == expected_value)
+            
 
     def compute_bit_errors(self, fname):
         perfect_ramp = (np.arange(2048) % 256) - 128
         bits = [1,2,4,8,16,32,64,128]
         datas = np.load(fname + '.npy')
         infocsv = open(fname+'.txt', 'w')
+        self.bit_error_rate = np.zeros((16, len(bits)), dtype=np.float64)
+        self.test_bit_error_rate = np.zeros((16, len(bits)), dtype=np.bool_)
         writer = csv.writer(infocsv)
         for i in xrange(16):
             xored = np.bitwise_xor(datas[:,i,:], perfect_ramp)
             for j,bit in enumerate(bits):
                 bad_bit = (np.bitwise_and(xored, bit)>>j).sum()*1.0/len(xored.flatten())
                 writer.writerow([i, j, bad_bit])
+                self.bit_error_rate[i,j] = bad_bit
+                self.test_bit_error_rate[i,j] = (bad_bit == 0.0)
                 print 'chan {0}, bit {1}, error rate {2:.3f}'.format(i, j, bad_bit)
 
+
+    def compress_file(self, fname):
+        # Save data as compressed archive and delete uncompressed file
+        filename = fname + '.npy'
+        data = np.load(filename)
+        np.savez_compressed(fname, data=data)
+        os.remove(filename)
 
 
     def execute(self, fname ):
@@ -61,10 +133,11 @@ class test_adc_ramp_histogram(test_BaseClass):
             self.configure_board()
             self.fpga_recv.flush()
             filename = fname + '.npy'
-            save_raw_frames.save_timestream_frames(self.fpga_recv, channels = range(16), frames=256, filename = filename)
+            save_timestream_frames(self.fpga_recv, channels = range(16), frames=256, filename = filename)
             self.fpga_ctrl.stop_data_capture()
             self.plot_histogram(fname)
             self.compute_bit_errors(fname)
+            self.compress_file(fname)
             #confirm = raw_input('Start print_ramp_errors? This will print error counts until a KeyboardInterrupt. (y/n)\n')
             #if confirm == 'y' or confirm == 'Y':
             #    self.fpga_ctrl.ANT.print_ramp_errors()
@@ -76,7 +149,7 @@ if __name__ == '__main__':
 
     import argparse
     import logging
-    from pychfpga import save_raw_frames
+    #from pychfpga import save_raw_frames
     # from pychfpga.icecore import hardware_map
     # from pychfpga.icecore import tuber
 

@@ -87,18 +87,18 @@ PLLs
 .. note::  The PLLs are factory-programmed and do not need to be programmed
    by the user.
 
-Two PLL chips are used to generate the various clocks required by the ARM and
-FPGA. The non-volatile memory in the PLLs can be programmed through SPI
-interface to generate a set of pre-defined frequencies at startup without FPGA
-and ARM intervention. The IceBoard is factory-programmed to generate the
-mandatory frequencies  needed by the ARM and its PHY (20 MHz, 25 MHz, 100 MHz)
-in addition to frequencies that are typically used by the FPGA (125 MHz for 1G
-Ethernet communications and core system, 156.25 MHz for 10G Ethernet links).
-Some frequency references are duplicated and are fed to multiple MGT
-references in order to reach all the MGTs that are typically used in an array
-(e.g 10G backplane shuffle  uses 15 MGTs and need at least two 156.25 MHz
-references, 10G QSFP links need 8 MGTs and require another 156.25 MHz
-reference, etc).
+Two PLL chips (Texas Instruments CDCE62005) are used to generate the various clocks required by the ARM and
+FPGA from the selected 10 MHz reference clock. The non-volatile memory in the
+PLLs can be programmed through SPI interface to generate a set of pre-defined
+frequencies at startup without FPGA and ARM intervention. The IceBoard is
+factory-programmed to generate the mandatory frequencies  needed by the ARM
+and its PHY (20 MHz, 25 MHz, 100 MHz) in addition to frequencies that are
+typically used by the FPGA (125 MHz for 1G Ethernet communications and core
+system, 156.25 MHz for 10G Ethernet links). Some frequency references are
+duplicated and are fed to multiple MGT references in order to reach all the
+MGTs that are typically used in an array (e.g 10G backplane shuffle  uses 15
+MGTs and need at least two 156.25 MHz references, 10G QSFP links need 8 MGTs
+and require another 156.25 MHz reference, etc).
 
 .. _TableDefaultPLLConfig:
 .. table::  PLL Default Configuration Information
@@ -126,5 +126,112 @@ reference, etc).
     |      +--------+------------+------------------------------------------------+-----------------------------------------------------------------------+
     |      | Out 4  | 10 MHz     | FPGA MGTCLKREF1_115                            | Feedback bypass, for access to original 10 MHz reference, AC coupled  |
     +------+--------+------------+------------------------------------------------+-----------------------------------------------------------------------+
+
+
+PLL Programming
+---------------
+
+The PLL configuration is prepared using the Texas Instruments CDCE62005 EVM
+software (http://www.ti.com/product/CDCE62005/toolssoftware). A snapshot of
+the configuration screen is shown below. The GUI loads and saves INI file that
+contains the hex value that needs to be programmed in the PLL internal EEPROM
+registers to achieve the desired frequencies.
+
+
+.. figure:: ../images/pll_gui.png
+    :align: center
+    :width: 600 px
+
+    PLL Configuration screen
+
+The .INI configuration files for both PLLs are available.
+
+.. _TableDefaultPLLINIFiles:
+.. table::  PLL Default INI Files (Warning: These seem different from what is used by the QC porcess)
+
+    +---------------------+-----------------------+
+    |         PLL1        | PLL2                  |
+    +=====================+=======================+
+    | REGISTERS           |  REGISTERS            |
+    | 0   01260320        |  0   EB840320         |
+    | 1   EB060301        |  1   EB840301         |
+    | 2   011E0302        |  2   EB840302         |
+    | 3   EB040303        |  3   EB860303         |
+    | 4   EB860314        |  4   EB400014         |
+    | 5   10000BE5        |  5   101C0BE5         |
+    | 6   048E09E6        |  6   04AE49A6         |
+    | 7   BD887667        |  7   BDA1F9E7         |
+    | 8   80001808        |  8   80001808         |
+    |                     |                       |
+    | PORTS               |  PORTS                |
+    | 0   DD              |  0   DD               |
+    | 1   EC              |  1   EC               |
+    | 2   DF              |  2   DF               |
+    | 3   F9              |  3   F9               |
+    |                     |                       |
+    | INPUTS              |  INPUTS               |
+    | PRI 10              |  PRI 10               |
+    | SEC 0               |  SEC 0                |
+    | AUX 10              |  AUX 10               |
+    |                     |                       |
+    | EXTERNAL COMPONENTS |  EXTERNAL COMPONENTS  |
+    | C4  1               |  C4  1                |
+    | R4  1               |  R4  1                |
+    | C5  1               |  C5  1                |
+    +=====================+=======================+
+
+
+The PLL is programmed using a 3.3V SPI interface. We typically use the FTDI
+USB-MPSSE (Multi-Protocol Synchronous Serial Engine) cable model C232HM-
+DDHSL-0, which comes with Windows and Linux drivers and example code.
+
+.. figure:: ../images/C232HM-DDHSL-0.jpg
+    :align: center
+    :width: 300 px
+
+    FDTI USB to SPI interface cable used to program the PLLs
+
+
+To program the PLL:
+
+#. Make sure the board is connected to a power supply but turn it off for now.
+
+#. Set the IceBoard to use a valid 10 MHz reference source (needed to check if the PLLs lock properly, not for programming)
+
+#. Locate the PLL Programming pins on the boards. They are just to the left of the ARM shield.
+   Connect the FTDI cable mini wires to the pins as follows:
+
+    - GREEN to (tdo or miso)
+    - YELLOW to (tdi or mosi),
+    - ORANGE to (tck or sck),
+    - BROWN to either csn2 (pll2) or csn1(pll1), and
+    - BLACK to ground.
+
+   When programming PLL1, you'll want the brown wire connected to whichever PLL you wish to program. The csn1 pin corresponds to PLL1.
+   and csn2 pin corresponds to PLL2.
+
+#. Power up the Iceboard
+
+#. We typically do the programming using a small C program ``pllprog.c``
+   compiled on the Linux platform. The value of the PLL registers (from the
+   INI files) are copied into the program, and the program is compiled. When
+   run, the program opens communication with the USB cable and programs the
+   PLL registers. The program can be found in the CHIME ``ch_acq`` repository
+   under the ``/pychfpga/core/qc/iceboard-qc/pll`` folder.
+
+   If you are using a Windows platform, the program can be run under Ubuntu
+   virtual machine running on Oracle VM VirtualBox. Those are all free
+   progams.
+
+   Configure, compile and run the program for both PLLs with the brown wire
+   connected to the corresponding PLL chip select pin csn1 or csn2. When the
+   program is run, you should be able to see an output like this::
+
+      0: 0x01260320 1:0xeb060301 2:0x011e0302 3: 0xeb040303 4: 0xeb860314 ... 9:0x0000001f.
+
+#. After programming of both PLL is done, power cycle the board
+
+#. Check the LED lights at the top left corner of the board. You should see both of the PLL LEDs light up. This means the PLLs are locked."
+
 
 .. vim: sts=3 ts=3 sw=3 tw=78 smarttab expandtab

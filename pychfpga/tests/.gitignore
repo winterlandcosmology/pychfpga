@@ -1,1 +1,7 @@
 results
+_*
+sphinx
+*.png
+*.pdf
+*.xml
+*.rst

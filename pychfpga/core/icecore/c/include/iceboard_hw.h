@@ -62,7 +62,7 @@ static struct iceboard_gpio {
 	{ .gpio_num = 42, .name="GPIO_IRQ", .mode=INPUT, .dfl=HIGH, .lock=PTHREAD_MUTEX_INITIALIZER, },
 
 	{ .gpio_num = 66, .name="ARMClkSel0", .mode=INPUT, .dfl=HIGH, .lock=PTHREAD_MUTEX_INITIALIZER, }, /* GP22 */
-	{ .gpio_num = 67, .name="ARMClkSel1", .mode=INPUT, .dfl=HIGH, .lock=PTHREAD_MUTEX_INITIALIZER, },
+	{ .gpio_num = 71, .name="ARMClkSel1", .mode=INPUT, .dfl=HIGH, .lock=PTHREAD_MUTEX_INITIALIZER, },
 	{ .gpio_num = 68, .name="EnFPGARef", .mode=INPUT, .dfl=HIGH, .lock=PTHREAD_MUTEX_INITIALIZER, },
 
 	{ .gpio_num = 96, .name="BP_ARM_GPIO0", .mode=INPUT, .dfl=HIGH, .lock=PTHREAD_MUTEX_INITIALIZER, }, /* GP30 */
