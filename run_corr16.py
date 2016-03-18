@@ -3,11 +3,11 @@ import time, sys, os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from fpga_array import  FPGAArray, setup_logging 
+from pychfpga.fpga_array import  FPGAArray, setup_logging 
 
 setup_logging()
 
-ca = FPGAArray(iceboards=72, prog=1, open=1)
+ca = FPGAArray(iceboards='10.10.10.52', prog=1, open=1)
 ib= ca.ib[0]
 #print 'Computing & setting ADC delays...'
 #for trial in range(5):
@@ -23,8 +23,8 @@ ca.set_sync_method('local_soft_trigger')
 ca.set_operational_mode('shuffle16', frames_per_packet=2)
 ib.start_data_capture(period=0.1, source='adc')
 
-print 'Getting data receiver'
-r=ib.get_data_receiver()
+#print 'Getting data receiver'
+#r=ib.get_data_receiver()
 ib.sync()
 
 

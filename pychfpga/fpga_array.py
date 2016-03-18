@@ -243,7 +243,7 @@ class FPGAArray(object):
             chimearray_path = os.path.dirname(__file__)
             chimearray_path += '/' if chimearray_path else ''
             bitfile = ( chimearray_path +
-                '../../chfpga/xilinx_projects/CHFPGA_MGK7MB_REV2/CHFPGA_MGK7MB_REV2.runs/impl_Rev2/chFPGA_MGK7MB_Rev2.bit')
+                '../../firmware/chFPGA_MGK7MB_Rev2.bit')
 
 
         self.logger.info('%r: ------------------------' % self)

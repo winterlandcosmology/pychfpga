@@ -139,11 +139,7 @@ class Context(async.Parallelizable):
                 url=self.obj.tuber_uri,
                 method='POST',
                 body=json.dumps(calls),
-<<<<<<< HEAD
-                connect_timeout=10 * 3,
-=======
                 connect_timeout=10 * 60,
->>>>>>> 12431c5da5741a0d74f5d4c09bafad342fc50240
                 request_timeout=10 * 60) # permit calls to be really slow
 
             #t1 = time.time()
