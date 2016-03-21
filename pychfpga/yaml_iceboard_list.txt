@@ -55,7 +55,7 @@ pathfinder:
          - !IceBoardPlus { serial: "0037", hostname: "10.10.10.37",  handler_name: "chFPGA_controller", subarray: 2,   slot: 15 }  # Penticton crate slot 15
          - !IceBoardPlus { serial: "0067", hostname: "10.10.10.67",  handler_name: "chFPGA_controller", subarray: 77,  slot: 7 }  # McGill crate slot 7
          - !IceBoardPlus { serial: "0071", hostname: "10.10.10.71",  handler_name: "chFPGA_controller", subarray: 66,  slot: 8 }  # McGill crate slot 8
-         - !IceBoardPlus { serial: "0052", hostname: "10.10.10.52",  handler_name: "chFPGA_controller", subarray: 66,  slot: 9 }  # McGill crate slot 9
+         - !IceBoardPlus { serial: "0052", hostname: "10.10.10.52",  handler_name: "chFPGA_controller", subarray: 52,  slot: -1 }  # McGill crate slot 9
          - !IceBoardPlus { serial: "0065", hostname: "10.10.10.65",  handler_name: "chFPGA_controller", subarray: 66,  slot: 11 }  # McGill crate slot 11
          - !IceBoardPlus { serial: "0068", hostname: "10.10.10.68",  handler_name: "chFPGA_controller", subarray: 2,   slot: 1 }  # Penticton slot 1
          - !IceBoardPlus { serial: "0061", hostname: "10.10.10.61",  handler_name: "chFPGA_controller", subarray: 77,  slot: 13 }  # McGill crate slot 13

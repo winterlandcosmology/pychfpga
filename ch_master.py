@@ -222,7 +222,7 @@ if __name__ == "__main__":
                                         help = "Current git tag, use: "
                                                    "-g `git describe --tags` ")
     parser.add_argument("-c", "--conf_file", action = "store",
-                                        default = "config.yaml:pathfinder",
+                                        default = "config.yaml:kmb_dev_wvu1",
                                         help = "Configuration file:object.")
     parser.add_argument("-n", "--notes", action = "store",
                                         default = "None.",
@@ -234,7 +234,7 @@ if __name__ == "__main__":
                                         default = 0,
                                         help = "1 to calculate and save FFT scaler gains")
     parser.add_argument("-f", "--configure_fpga", action = "store",
-                                        default = 1,
+                                        default = 0,
                                         help = "1 configure and control fpga.  0 to ignore fpga and just get data from gpu")
 
     args = parser.parse_args()
@@ -505,7 +505,7 @@ if __name__ == "__main__":
                         if not fpga_conf1.adc_serial in ser_list:
                                 not_found = True
                     if not_found:
-                        corr_name = repr(ca.ib[0])
+                        corr_name = "testing_board" #repr(ca.ib[0])
                         continue
                     corr_name = corr
                     break
@@ -560,17 +560,21 @@ if __name__ == "__main__":
         if (int(args.configure_fpga) > 0):
                 # Pass FPGA configuration variables to header.
                 for fpga_slot, slot_conf in fpga_conf.items():
-                    for name in slot_conf:
+                    #print slot_conf.config_protocol_version
+                    for name, conf_values in vars(slot_conf).items():
                         if name == 'antenna_scaler_gain':
                             # Eventually, the gains will be updated whenever they change,
                             # presumably by moving this call somewhere in the loop at the end
                             # of this program.
-                            for val in slot_conf[name]:
+                            for val in conf_values:
                                 v = convert_types(val)
-                                inp = remap_slot[fpga_slot-1] * 16 + remap_adc_sma[int(val[0])]
+                                if fpga_slot:
+                                    inp = remap_slot[fpga_slot-1] * 16 + remap_adc_sma[int(val[0])]
+                                else:
+                                    inp = int(val[0])
                                 acq.pass_fpga_gain(inp, v)
                         else:
-                            val = slot_conf[name]
+                            val = conf_values
                             val = convert_types(val)
                             name = 'Slot_'+ str(fpga_slot) + '_' + name
                             acq.add_header_item(name, val)
@@ -603,7 +607,7 @@ if __name__ == "__main__":
         # Add the user notes.
         acq.add_header_item("notes", args.notes)
 
-        # Start the acquisition.
+        # Start the acquisition.        
         acq.start(acq_base_dir, crate_sn, int(conf.fpga.subarray))
 
     if (int(args.configure_fpga) > 0):
@@ -624,17 +628,18 @@ if __name__ == "__main__":
     frame_range = 2*poll_rate_in_frames
 
     bank_switch_frame = conf.fpga.bank_switch_frame
+
     if ( int(args.configure_fpga) > 0):
             # init gains function kind of a hack.  Should fix.
             current_bank = 0
             next_bank = 1
-            ca.ib.set_next_gain_bank(bank=next_bank)
-            all_next_bank = ca.ib.get_next_gain_bank()
-            for bankset in all_next_bank:
-                    log.info('Set next gain bank to %s' % ( ', '.join([str(i) for i in bankset])))
-            all_banks = ca.ib.get_current_gain_bank()
-            for bankset in all_banks:
-                    log.info('currently using gain banks %s' % ( ', '.join([str(i) for i in bankset])))
+            #ca.ib.set_next_gain_bank(bank=next_bank)
+            #all_next_bank = ca.ib.get_next_gain_bank() 
+            #for bankset in all_next_bank:
+            #        log.info('Set next gain bank to %s' % ( ', '.join([str(i) for i in bankset])))
+            #all_banks = ca.ib.get_current_gain_bank()
+            #for bankset in all_banks:
+            #        log.info('currently using gain banks %s' % ( ', '.join([str(i) for i in bankset])))
 
 
     try:
@@ -663,6 +668,7 @@ if __name__ == "__main__":
                 try:
                     time.sleep(0.1)
                     fpga_frame_count = ca.ib[0].get_frame_number()
+                    print fpga_frame_count
                     try:
                         # Well before switch time.  Set gains in next bank, read back what we set.
                         if (abs(fpga_frame_count - reload_gains_frame) < frame_range) and not gains_reloaded:
