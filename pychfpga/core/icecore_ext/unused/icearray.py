@@ -323,7 +323,7 @@ def close_all_sockets():
     Close all the sockets that has been opened and were registered in the main module __opened_sockets__ attribute.
     """
     if '__opened_sockets__' in vars(__main__): # i.e. if __main__ has an __opened_sockets__ attribute
-        while __main__.__opened_sockets__: # close all sockets so we won't get a 'socket already opened' error because of a previous run
+        while len(__main__.__opened_sockets__) > 0: # close all sockets so we won't get a 'socket already opened' error because of a previous run
             __main__.__opened_sockets__.pop().close()
 
 

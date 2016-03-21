@@ -17,29 +17,10 @@ init_in     = "ch_master_daemon.conf"
 ext_chrx = Extension("chrx", 
                    ["chrx/acq.c", "chrx/chrx.c", "chrx/disc.c", \
                     "chrx/frame.c", "chrx/gpu_acq.c", "chrx/util.c"],
-                   include_dirs = ['/opt/anaconda/include'],
+                   include_dirs = ['/home/chime/anaconda2/include'],
                    libraries = ["hdf5", "hdf5_hl", "m", "pthread"],
-                   library_dirs = ['/opt/anaconda/lib'])
+                   library_dirs = ['/home/chime/anaconda2/lib'])
 
-
-#ext_post_trans = Extension("post_acq.transpose",
-#                     ["post_acq/transpose.pyx", "post_acq/ctranspose.c"],
-#                     libraries = ["gomp"],
-#                     include_dirs=[np.get_include(), '/opt/anaconda/include' ],
-#                     # '-Wa,-q' is max specific and only there because
-#                     # soemthing is wrong with my gcc. It switches to the
-#                     # clang assembler.
-#                     ##extra_compile_args=['-fopenmp', '-O3', '-march=native',
-#                     ##'-Wa,-q', '-std=c99'],
-#                     extra_compile_args=['-fopenmp', '-march=native', '-std=c99'],
-#                     library_dirs = ['/opt/anaconda/lib'],
-#                     )
-
-#ext_post_trunc = Extension("post_acq.truncate",
-#                     ["post_acq/truncate.pyx"],
-#                     include_dirs=[np.get_include(), '/opt/anaconda/include'],
-#                     library_dirs = ['/opt/anaconda/lib'],
-#                     )
 
 # Install the python packages.
 setup(name = "ch_acq",
@@ -48,7 +29,7 @@ setup(name = "ch_acq",
                   "pychfpga.MGADC08", \
                   "post_acq"
                   ],
-      ext_modules = [ext_chrx], #, ext_post_trunc, ext_post_trans],
+      ext_modules = [ext_chrx],
       cmdclass = {'build_ext': build_ext},
      )
 

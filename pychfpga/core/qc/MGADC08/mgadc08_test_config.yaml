@@ -27,7 +27,7 @@ instruments:
     na:        {labpy_object: 'hp8753e',     interface: 'prologix_eth', ip_addr: '10.11.1.132', gpib_addr: 14} # HP8753E Network Analyzer
 
 ?: &default_fpga_array
-    iceboards: 49
+    iceboards: 101
     mdns_delay: 1
 
 
@@ -125,7 +125,7 @@ carrier_tests:
         pow_stab_time: 0.5  # Tibe to wait after board power on and voltage measurmeents
         rails:
             vcc12v: {vmin: 11.9, vmax: 12.2, imin: 0.010, imax: 0.140} #
-            vcc3v3: {vmin: 3.2,  vmax: 3.4,  imin: 2.400, imax: 2.800} #
+            vcc3v3: {vmin: 3.2,  vmax: 3.4,  imin: 2.400, imax: 2.900} #
             vadj:   {vmin: 2.4,  vmax: 2.6,  imin: 0.090, imax: 0.120} #
 
     spi_pll_test:

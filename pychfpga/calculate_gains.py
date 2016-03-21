@@ -207,7 +207,7 @@ def calculate_gains(c, port):
     c.sync()
     channels = range(16)
     #for 4 bit number *sqrt2 since real and imag, check this
-    idealRMS = 2.83 * np.sqrt(2)
+    idealRMS = 1.5 * np.sqrt(2) #2.83 is 1.5bits  1.5 is 0.6bits
     #glog = 13 # not sure why this isn't 9, but seemed to be the case.
     print "configured for sending data to port {0}".format(port)
     rmss = []
@@ -234,7 +234,7 @@ def calculate_gains(c, port):
             gain.append([channel,[glin[channel].tolist(), glog[channel]]])
         c.set_gain(gain)
         time.sleep(1)
-    out1 = open('gains_noisy_{0}.pkl'.format(c.GPIO.FPGA_SERIAL_NUMBER), 'wb')
+    out1 = open('gains_noisy_slot{0}.pkl'.format(c.slot), 'wb')
     pickle.dump(gain,out1)
     out1.close()
     Calc = GainCalc()
@@ -246,7 +246,7 @@ def calculate_gains(c, port):
         flags.append(Calc.mask)
     c.set_gain(gain)
     c.freq_flags = flags
-    output = open('/home/chime/ch_acq/gains_'+str(c.GPIO.FPGA_SERIAL_NUMBER)+'.pkl','wb')
+    output = open('/home/chime/ch_acq/gains_slot'+str(c.slot)+'.pkl','wb')
     pickle.dump(gain, output)
     output.close()
     print "Scaler Gain set and saved"

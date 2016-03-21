@@ -133,12 +133,16 @@ class FPGAArray(object):
                  open=None,
                  if_ip=None,
 
-                 sampling_frequency=800e6,
-                 reference_frequency=10e6,
-                 data_width=4,
+                 # sampling_frequency=800e6,
+                 # reference_frequency=10e6,
+                 # data_width=4,
 
                  sync_method='distributed_time',
                  sync_source='bp_trig',
+
+                 stderr_log_level=None,
+                 syslog_log_level=None,
+
                  **kwargs
                 ):
 
@@ -234,9 +238,39 @@ class FPGAArray(object):
             specified, the system will assume that the FPGA is reached trough
             the same interface that reaches the ARM processor.
 
+        Logging
+        -------
+
+        If logging is not set up by the top level application, you can
+        optionally specify the folowing arguments to create syslog and stderr
+        handlers to help interactive operations. If a handler already exists,
+        its log level is simply updated to prevent duplication of handlers.
+        Log levels can be strings or numerical log levels.
+
+        syslog_log_level: sets up a SYSLOG handler
+
+        stderr_log_level: sets up a handler that prints on stderr
         """
 
-        self.logger = logging.getLogger('')
+        # Make sure the SQL
+        sql_log_level = logging.WARNING
+        sql_logger = logging.getLogger('sqlalchemy.engine.base.Engine')
+        sql_logger.setLevel(sql_log_level)
+
+        self.logger = logging.getLogger()
+
+        # Setup logging. If a handler already exists, its log level is simply updated
+        for (handler_type, log_level) in ((logging.StreamHandler, stderr_log_level), (logging.handlers.SysLogHandler, syslog_log_level)):
+            if log_level:
+                log_handlers = [h for h in self.logger.handlers if isinstance(h, handler_type)]
+                if log_handlers:
+                    log_handler = log_handlers[0]
+                else:
+                    log_handler = handler_type()
+                    self.logger.addHandler(log_handler)
+                log_handler.setLevel(log_level.upper() if isinstance(log_level, str) else log_level)
+                self.logger.setLevel(min(self.logger.level, log_handler.level))  # make sure all messages from this handler are passed by the root handler
+
 
 
         if bitfile is None:
@@ -261,8 +295,8 @@ class FPGAArray(object):
             'prog = %s' % prog,
             'open = %s' % open,
             'no_mezz = %s' % no_mezz,
-            'sampling_frequency = %s' % sampling_frequency,
-            'reference_frequency = %s' % reference_frequency,
+            # 'sampling_frequency = %s' % sampling_frequency,
+            # 'reference_frequency = %s' % reference_frequency,
             'sync_method = %s' % sync_method,
             'sync_source = %s' % sync_source))))
 
@@ -450,8 +484,9 @@ class FPGAArray(object):
             print 'Initializing firmware (calling ib.open())'
             self.ib.open(adc_delay_table=ADC_DELAY_TABLE,
                          init=open,
-                         sampling_frequency=sampling_frequency,
-                         reference_frequency=reference_frequency
+                         **kwargs
+                         # sampling_frequency=sampling_frequency,
+                         # reference_frequency=reference_frequency,
                          )
             self.set_sync_method(method=sync_method, source=sync_source)
 
@@ -757,18 +792,22 @@ class FPGAArray(object):
 
     def set_noise_injection(self, ni_board, ni_enable=False, ni_offset=0, ni_high_time=8388608, ni_period=16777216):
         """ Configure noise injection gating signal"""
+        if isinstance(ni_board, str):
+            ni_board = self.ib.get(serial=ni_board)
+
         if ni_enable:
             ni_board.set_user_output_source('pwm')
             ni_board.set_frame_pwm(ni_offset, ni_high_time, ni_period)
+        else:
+            pass  # maybe we should disable the sma output
+
+    # def get_current_gain_bank(self):
+    #     return [ib.get_current_gain_bank() for ib in self.ib]
 
     def init_shuffle(self,
                      mode,
                      dsmap=range(16),
                      frames_per_packet=1,
-                     cb1_lanes=4, cb1_bins=16, cb1_bypass=False,
-                     bp_bypass=False,
-                     cb2_lanes=2, cb2_bins=1, cb2_bypass=False,
-                     remap=True,
                      chan8_channel_map=range(16)):
         """ Setup the crossbars and data shuffling in every board of the array.
 
@@ -783,7 +822,7 @@ class FPGAArray(object):
         #     raise RuntimeError('All boards must be in the same crate. The provided set of Iceboards have the following crates: %r' % crate_set)
         # crate = crate_set.pop()
 
-        self.logger.info('Configuring crate-wide data shuffling with frames_per_packet=%i, cb1_lanes=%i, cb1_bins=64, cb2_lanes=%i, cb2_bins=%i, cb2_bypass=%s, bp_bypass=%s' % (cb1_lanes, cb1_bins, cb2_lanes, cb2_bins, bool(cb2_bypass), bool(bp_bypass)))
+        self.logger.info('Configuring crate-wide data shuffling with frames_per_packet=%i' % (frames_per_packet))
 
         # Set-up transmitters
         for i, ib in enumerate(self.ib):
@@ -1577,12 +1616,13 @@ class FPGAArray(object):
 
         orphan_iceboards = [ib for ib in self.ib if not ib.crate or not ib.crate.serial]
         corner_label = 'Standalone\nIceboards'
-        col_labels = ['-'] * len(orphan_iceboards)
-        local_row_labels = ['-' + '\n' + row_labels]
+        # col_labels = ['-'] * len(orphan_iceboards)
+        col_labels = ['\nSN%s' % ib.serial for ib in orphan_iceboards]
+        local_row_labels = [row_labels]
         data = []
         for ib in orphan_iceboards:
-            cell = 'SN' + ib.serial + '\n' if add_serial else ''
-            cell += func(ib) if func else ''
+            # cell = 'SN' + ib.serial + '\n' if add_serial else ''
+            cell = func(ib) if func else ''
             data.append([cell])
         if data:
             self.print_table(data, row_labels=local_row_labels, col_labels=col_labels, corner_label=corner_label, line_sep=grid)
@@ -1591,7 +1631,7 @@ class FPGAArray(object):
         if len(self.ic):
             corner_label = 'Crate \\ Slot\n'
             slot_range = range(1, max(self.ic.NUMBER_OF_SLOTS)+1)
-            col_labels = ['%i' % s for s in slot_range]
+            col_labels = ['%i' % (s) for s in slot_range]
             data = []
             valid_crates = [ic for ic in self.ic if ic.serial]
             local_row_labels = [crate.get_id() + '\n' + row_labels for crate in valid_crates]
@@ -1614,6 +1654,36 @@ class FPGAArray(object):
 
     def print_iceboard_power(self):
         self.print_iceboard_table(lambda ib: '%0.1f' % ib.get_total_power())
+
+    def print_iceboard_info(self):
+        info = collections.OrderedDict([
+            ('MB FPGA Die Temp', lambda ib: '%0.1fC' % (ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE))),
+            ('MB FPGA Temp', lambda ib: '%0.1fC' % (ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_FPGA))),
+            ('MB ARM Temp', lambda ib: '%0.1fC' % (ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_ARM))),
+            ('MB PHY Temp', lambda ib: '%0.1fC' % (ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_PHY))),
+            ('MB POW Temp', lambda ib: '%0.1fC' % (ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_POWER))),
+            ('MB VCC12V', lambda ib: '%0.1fV@%0.3fA' % (ib.get_motherboard_voltage(ib.RAIL.MB_VCC12V0), ib.get_motherboard_current(ib.RAIL.MB_VCC12V0))),
+            ('MB VCC3V3', lambda ib: '%0.1fV@%0.3fA' % (ib.get_motherboard_voltage(ib.RAIL.MB_VCC3V3), ib.get_motherboard_current(ib.RAIL.MB_VCC3V3))),
+            ('MB VADJ', lambda ib: '%0.1fV@%0.3fA' % (ib.get_motherboard_voltage(ib.RAIL.MB_VADJ), ib.get_motherboard_current(ib.RAIL.MB_VADJ))),
+            ('MB VCC5V5', lambda ib: '%0.1fV@%0.3fA' % (ib.get_motherboard_voltage(ib.RAIL.MB_VCC5V5), ib.get_motherboard_current(ib.RAIL.MB_VCC5V5))),
+            ('MB VCC1V0', lambda ib: '%0.1fV@%0.3fA' % (ib.get_motherboard_voltage(ib.RAIL.MB_VCC1V0), ib.get_motherboard_current(ib.RAIL.MB_VCC1V0))),
+            ('MB VCC1V0 GTX', lambda ib: '%0.1fV@%0.3fA' % (ib.get_motherboard_voltage(ib.RAIL.MB_VCC1V0_GTX), ib.get_motherboard_current(ib.RAIL.MB_VCC1V0_GTX))),
+            ('MB VCC1V2', lambda ib: '%0.1fV@%0.3fA' % (ib.get_motherboard_voltage(ib.RAIL.MB_VCC1V2), ib.get_motherboard_current(ib.RAIL.MB_VCC1V2))),
+            ('MB VCC1V5', lambda ib: '%0.1fV@%0.3fA' % (ib.get_motherboard_voltage(ib.RAIL.MB_VCC1V5), ib.get_motherboard_current(ib.RAIL.MB_VCC1V5))),
+            ('MB VCC1V8', lambda ib: '%0.1fV@%0.3fA' % (ib.get_motherboard_voltage(ib.RAIL.MB_VCC1V8), ib.get_motherboard_current(ib.RAIL.MB_VCC1V8))),
+            ('Mezz 1 VCC12V', lambda ib: ('%0.1fV@%0.3fA' % (ib.get_mezzanine_voltage(ib.RAIL.MEZZ_VCC12V0, 1), ib.get_mezzanine_current(ib.RAIL.MEZZ_VCC12V0, 1)))),
+            ('Mezz 1 VCC3V3', lambda ib: ('%0.1fV@%0.3fA' % (ib.get_mezzanine_voltage(ib.RAIL.MEZZ_VCC3V3, 1), ib.get_mezzanine_current(ib.RAIL.MEZZ_VCC3V3, 1)))),
+            ('Mezz 1 VADJ', lambda ib: ('%0.1fV@%0.3fA' % (ib.get_mezzanine_voltage(ib.RAIL.MEZZ_VADJ, 1), ib.get_mezzanine_current(ib.RAIL.MEZZ_VADJ, 1)))),
+            ('Mezz 2 VCC12V', lambda ib: ('%0.1fV@%0.3fA' % (ib.get_mezzanine_voltage(ib.RAIL.MEZZ_VCC12V0, 2), ib.get_mezzanine_current(ib.RAIL.MEZZ_VCC12V0, 2)))),
+            ('Mezz 2 VCC3V3', lambda ib: ('%0.1fV@%0.3fA' % (ib.get_mezzanine_voltage(ib.RAIL.MEZZ_VCC3V3, 2), ib.get_mezzanine_current(ib.RAIL.MEZZ_VCC3V3, 2)))),
+            ('Mezz 2 VADJ', lambda ib: ('%0.1fV@%0.3fA' % (ib.get_mezzanine_voltage(ib.RAIL.MEZZ_VADJ, 2), ib.get_mezzanine_current(ib.RAIL.MEZZ_VADJ, 2)))),
+            ('MB Total power', lambda ib: '%0.1fW' % ib.get_total_power()),
+            ])
+
+        def get_info(ib):
+            return '\n'.join(fn(ib) for fn in info.values())
+
+        self.print_iceboard_table(get_info, row_labels='\n'.join(info.keys()))
 
     def print_iceboard_qsfp(self):
         self.print_iceboard_table(lambda ib: '\n'.join(ib.hw.qsfp.get_serial_number().map(str)), grid=1)
@@ -1761,6 +1831,7 @@ def merge_dict(src, dest):
 
 def load_yaml_config(object_names):
     """
+    Loads a YAML file,
     object_names: String or list of strings describing the name of a YAML files and objects to
        load. Name of objects are specified by preceding them with a semicolon.
        Object hierarchy is separated by '.'. An object starting with '.'
@@ -1853,6 +1924,36 @@ def load_yaml_config(object_names):
         #         # print 'Creating %s=%s' % (k, v)
         #         config[k] = v
     return config
+
+def validate_config(config, schema_file):
+    print 'Loading Schema YAML file %s' % schema_file
+    with open(schema_file, 'rb') as yamlfile:
+        schema = load_yaml(yamlfile)
+
+    def validate(config, schema):
+        for key, info in schema.items():
+            type_ = info['type']
+            if key not in config:
+                config[key] = get(schema, 'default', {})
+            value = config[key]
+            if isinstance(info, dict) and 'type' not in info:
+                validate(config[key], schema[key])
+                continue
+            try:
+                if type_ == 'integer':
+                    assert isinstance(value, int) and not ((hasattr(info,'min') and value < info['min']) or (hasattr(info,'max') and value > info['max']))
+                elif type_ == 'float':
+                    assert isinstance(value, float) and not ((hasattr(info,'min') and value < info['min']) or (hasattr(info,'max') and value > info['max']))
+                elif type_ == 'string':
+                    assert isinstance(value, str)
+                elif type_ == 'ip_addr':
+                    socket.inet_aton(value)
+                elif type_ == 'int_list':
+                    assert isinstance(value, list) and all(isinstance(x, int) for x in value)
+            except (AssertionError, socket.error):
+                raise ValueError("Value for %s=%s failed the criteria %s" % (key, value, info) )
+
+    validate(config, schema)
 
 log_levels = {'info': logging.INFO, 'debug': logging.DEBUG, 'warn': logging.WARNING, 'error': logging.ERROR}
 

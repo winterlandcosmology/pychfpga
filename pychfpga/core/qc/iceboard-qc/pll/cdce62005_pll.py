@@ -101,15 +101,41 @@ def read_pll_reg(port, reg):
     #print '%08X' % word
     return word
 
+def write_pll_reg(port, reg, value):
+    if reg<0 or reg>8:
+        raise ValueError('Register number must be between 0 and 8')
+    write_pll(port, reg | (value & 0xFFFFFFF0))
+
+def program_pll2(port, write_eeprom=False):
+    regs= [0xEB840320,
+        0xEB840301,
+        0xEB840302,
+        0xEB860303,
+        0xEB400014,
+        0x101C1E75,
+        0x84BF49A6,
+        0xBDB23BE7,
+        #0x20009D98
+        ]
+    for reg, v in enumerate(regs):
+        write_pll_reg(port, reg, v)
+    if write_eeprom:
+        write_pll(port, 0x0000001F)  # Write to EEPROM, but do not permanently lock it
 
 s=spi.SpiController(cs_count=4, silent_clock=False)
 s.configure(0x403, 0x6014, 0)
 p=s.get_port(0)
 p.set_frequency(1000)
+p1=s.get_port(1)
+p1.set_frequency(1000)
 
-print 'PLL contents is:'
+print 'PLL1 contents is:'
 for i in range(9):
     print 'Register %i: %08X' % (i, read_pll_reg(p,i))
+
+print 'PLL2 contents is:'
+for i in range(9):
+    print 'Register %i: %08X' % (i, read_pll_reg(p1,i))
 
 
 

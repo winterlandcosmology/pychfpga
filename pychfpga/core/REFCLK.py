@@ -117,7 +117,9 @@ class REFCLK_base(Module_base):
         else:
             self.set_sync_delay(delay)
             self.set_refclk_delay(delay)
-        self.pulse_bit('LOCAL_SYNC') # Force the REFCLK state machine to initiate a SYNC event
+        # self.pulse_bit('LOCAL_SYNC') # Force the REFCLK state machine to initiate a SYNC event
+        self.LOCAL_SYNC = 1
+        self.LOCAL_SYNC = 0
         self.wait_for_bit('SYNC_DONE') # Wait until the SYNC process is completed
 
     def set_sync_delay(self, delay):

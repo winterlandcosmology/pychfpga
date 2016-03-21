@@ -49,10 +49,10 @@ The clock can come from the following sources:
         remote source and may not be at the same freuency as the transmit clock
         if independent clocks are used.
 
-The source of the 10 MHz reference clock is selected by installing the jumper
-in the locations listed in :ref:`TableClockSelection`.
-The settings of the jumpers can be read out from the ARM processor to allow the
-control software to detect improper clock source selection.
+  The source of the 10 MHz reference clock is selected by installing the jumper
+  in the locations listed in :ref:`TableClockSelection`.
+  The settings of the jumpers can be read out from the ARM processor to allow the
+  control software to detect improper clock source selection.
 
 .. _TableClockSelection:
 .. table:: Clock Source Jumper Positions
@@ -201,18 +201,21 @@ To program the PLL:
 #. Locate the PLL Programming pins on the boards. They are just to the left of the ARM shield.
    Connect the FTDI cable mini wires to the pins as follows:
 
-    - GREEN to (tdo or miso)
-    - YELLOW to (tdi or mosi),
-    - ORANGE to (tck or sck),
-    - BROWN to either csn2 (pll2) or csn1(pll1), and
+    - GREEN (tdo) to miso
+    - YELLOW (tdi) to mosi,
+    - ORANGE (tck) to sck,
+    - BROWN to either csn1(pll1) or csn2 (pll2) if the programming software supports a single SPI port (C program)
+    - BROWN to csn1 (pll1) and GREY to csn2 (pll2) if the programming software supports multiple SPI port (Python program)
     - BLACK to ground.
 
-   When programming PLL1, you'll want the brown wire connected to whichever PLL you wish to program. The csn1 pin corresponds to PLL1.
-   and csn2 pin corresponds to PLL2.
+
+   If the programming software supports only a single SPI port at a time, you'll need the brown wire connected to whichever PLL you wish to program. The csn1 pin corresponds to PLL1 and csn2 pin corresponds to PLL2.
 
 #. Power up the Iceboard
 
-#. We typically do the programming using a small C program ``pllprog.c``
+#. Using the C-based PLL programing software
+
+   We typically do the programming using a small C program ``pllprog.c``
    compiled on the Linux platform. The value of the PLL registers (from the
    INI files) are copied into the program, and the program is compiled. When
    run, the program opens communication with the USB cable and programs the
@@ -228,6 +231,21 @@ To program the PLL:
    program is run, you should be able to see an output like this::
 
       0: 0x01260320 1:0xeb060301 2:0x011e0302 3: 0xeb040303 4: 0xeb860314 ... 9:0x0000001f.
+
+#. Using the Python-based PLL programing software
+
+   Make sure you meet the following software requirments:
+
+    Python modules:
+        pyftdi (pip install git+https://github.com/eblot/pyftdi.git  to make sure to get the latest version)
+        pyusb (installed when instaklling pyftdi)
+    Driver:
+        Linux: libusb (http://www.libusb.org/)
+        Windows: libusb-win32 (http://www.libusb.org/wiki/libusb-win32)
+
+    In ipython, run the cdce62005_pll.py script. This will read both PLLs.
+
+    Scripts to write the PLL are to be written, but manual writing works using the program_pll() function.
 
 #. After programming of both PLL is done, power cycle the board
 

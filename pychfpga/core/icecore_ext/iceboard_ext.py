@@ -24,7 +24,7 @@ from . import icecrate_ext  # this module is not referenced here, but loading it
 # from lib import tmp100  # I2C Temperature sensor
 from lib import pca9575  # I2C 16-bit IO Expander
 from lib import tca9548a  # I2C switch
-# from lib import ina230  # I2C Voltage and current monitor
+from lib import ina230  # I2C Voltage and current monitor
 from lib import eeprom
 from lib import qsfp
 from lib import gpio
@@ -725,6 +725,20 @@ class IceBoardExtHandler(IceBoardPlusHandler):
         captured_time = self._get_irigb_time(trig=0, format=format)  # The event trigger will automatically trig IRIGB
         return (event_number, captured_time)
 
+    def get_frame_number(self):
+        """
+        Return the number of the next frame passing through the system.
+        """
+        w2 = self.fpga_mmi_read(self._IRIGB_SAMPLE2_ADDR)
+        self.fpga_mmi_write(self._IRIGB_SAMPLE2_ADDR, w2 & ~(1 << 28))
+        self.fpga_mmi_write(self._IRIGB_SAMPLE2_ADDR, w2 | (1 << 28))
+        t0 = time.time()
+        while not self.fpga_mmi_read(self._IRIGB_TARGET1_ADDR) & (1 << 30):
+            if time.time() - t0 > 1:
+                raise RuntimeError('Timeout while waiting for a Frame. Is data flowing out of the ADC data acquisition module?')
+        event_number = self.fpga_mmi_read(self._IRIGB_EVENT_CTR_ADDR)
+        return event_number
+
     def capture_refclk_time(self, trig=True, format='nano'):
         """ Measures the time at which the next 10MHz reference clock rising
         edge occurs.
@@ -895,12 +909,12 @@ class IceBoardHardware(object):
 
     # # Power monitors, on SMPS bus
     # _POWER_ICEVADJ_I2C_ADDR   = 0b1000011 #0x43
-    # _POWER_ICE12V0_I2C_ADDR   = 0b1000111 #0x47
+    _POWER_ICE12V0_I2C_ADDR   = 0b1000111 #0x47
     # _POWER_ICE5V0_I2C_ADDR    = 0b1001000 #0x48
     # _POWER_ICE3V3_I2C_ADDR    = 0b1001001 #0x49
     # _POWER_ICE1V5_I2C_ADDR    = 0b1001100 #0x4C
     # _POWER_ICE1V2_I2C_ADDR    = 0b1001101 #0x4D
-    # _POWER_ICE1V0_I2C_ADDR    = 0b1001110 #0x4E
+    _POWER_ICE1V0_I2C_ADDR    = 0b1001110 #0x4E
     # _POWER_ICE1V8_I2C_ADDR    = 0b1001011 #0x4B
     # _POWER_ICE1V0GTX_I2C_ADDR = 0b1001111 #0x4F
 
@@ -1028,8 +1042,8 @@ class IceBoardHardware(object):
             'FMCB_PG_M2C': (self._gpio_power, 1, 3, 1)
         })
 
-        self._qsfpa = qsfp.QSFP(self._i2c, 'QSFPA', gpio_prefix='QSFPA_', gpio=self._gpio)
-        self._qsfpb = qsfp.QSFP(self._i2c, 'QSFPB', gpio_prefix='QSFPA_', gpio=self._gpio)
+        self._qsfpa = qsfp.QSFP(self._i2c, bus_name='QSFPA', gpio_prefix='QSFPA_', gpio=self._gpio)
+        self._qsfpb = qsfp.QSFP(self._i2c, bus_name='QSFPB', gpio_prefix='QSFPB_', gpio=self._gpio)
 
         self.qsfp = Ccoll((self._qsfpa, self._qsfpb))
         # self._logger.info(' Instantiating I2C temperature sensors')
@@ -1040,13 +1054,13 @@ class IceBoardHardware(object):
 
         # self._logger.info(' Instantiating I2C current/power monitors')
         # self._power_ice_3v3 = ina230.ina230(self._i2c, self._POWER_ICE3V3_I2C_ADDR, 'SMPS')
-        # self._power_ice_12v0 = ina230.ina230(self._i2c, self._POWER_ICE12V0_I2C_ADDR, 'SMPS')
+        self._power_ice_12v0 = ina230.ina230(self._i2c, self._POWER_ICE12V0_I2C_ADDR, 'SMPS')
         # self._power_ice_5v0 = ina230.ina230(self._i2c, self._POWER_ICE5V0_I2C_ADDR, 'SMPS')
         # self._power_ice_1v0_gtx = ina230.ina230(self._i2c, self._POWER_ICE1V0GTX_I2C_ADDR, 'SMPS')
         # self._power_ice_vadj = ina230.ina230(self._i2c, self._POWER_ICEVADJ_I2C_ADDR, 'SMPS')
         # self._power_ice_1v2 = ina230.ina230(self._i2c, self._POWER_ICE1V2_I2C_ADDR, 'SMPS')
         # self._power_ice_1v5 = ina230.ina230(self._i2c, self._POWER_ICE1V5_I2C_ADDR, 'SMPS')
-        # self._power_ice_1v0 = ina230.ina230(self._i2c, self._POWER_ICE1V0_I2C_ADDR, 'SMPS')
+        self._power_ice_1v0 = ina230.ina230(self._i2c, self._POWER_ICE1V0_I2C_ADDR, 'SMPS')
         # self._power_ice_1v8 = ina230.ina230(self._i2c, self._POWER_ICE1V8_I2C_ADDR, 'SMPS')
 
         # self._power_fmca_12v0 = ina230.ina230(self._i2c, self._POWER_FMCA12V0_I2C_ADDR, 'SMPS')
@@ -1119,10 +1133,10 @@ class IceBoardHardware(object):
         140304 JM: created. todo: make more flexible for I/O pin configuration
         of each expander. Need to confirm I/O pin config with JF
         """
-        self._gpio_power.init(cfg0_def=0b10101000,
+        self._gpio_power.init(cfg0_def=0b10101000,  # 1 = input, 0=output
                               cfg1_def=0b10101000,
-                              out0_default=0,
-                              out1_default=0,
+                              out0_default=None,
+                              out1_default=None,
                               bken0=0b00,  # We need to disable 100K internal pull-ups/down so the PG_M2C can work properly (there is another external 100K pull up to VCC3V3 which pulls to GND when there is no power. Pulling up doesn't work when board is off , pull down doesn't work when board is ON)
                               bken1=0b00,
                               pupd0=0b00001000,  # don't care, pullups not enabled
@@ -1183,8 +1197,36 @@ class IceBoardHardware(object):
                 # cfg_reg = 'CFG%i' % fmc
                 # self._gpio_power.write(out_reg, 0b00000000) # Turn off all power signals before we enable the GPIO outputs
                 # self._gpio_power.write(cfg_reg, 0b10101000)
-                self._gpio_power.write(fmc, 0b00000111*bool(fmc_state))  # Turn on power to board
-                self._gpio_power.write(fmc, 0b01010111*bool(fmc_state))  # Set Power Good and CLKDIR to 1
+
+                # Bits are:
+                #  7: SFP_LOS/SFM_ModPrsn
+                #  6: FMC_CLK_DIR
+                #  5: FMC_PRSNT
+                #  4: FMC_PG_C2M
+                #  3: FMC_PG_M2C
+                #  2: FMC_EN_VADJ
+                #  1: FMC_EN_3V3
+                #  0: FMC_EN_12V
+                if fmc_state:
+                    self._gpio_power.write(fmc, 0b00000010, mask=0b00000010)  # Turn on 12V, 3.3V and VADJ power to board
+                    # self._gpio_power.write(fmc, 0b00000110, mask=0b00000110)  # Turn on 12V, 3.3V and VADJ power to board
+                    time.sleep(0.010)
+                    self._gpio_power.write(fmc, 0b00000100, mask=0b00000100)  # Turn on 12V, 3.3V and VADJ power to board
+                    time.sleep(0.100)
+                    self._gpio_power.write(fmc, 0b00000001, mask=0b00000001)  # Turn on 12V, 3.3V and VADJ power to board
+                    time.sleep(0.050)
+                    self._gpio_power.write(fmc, 0b01010000, mask=0b01010000)  # Set Power Good (start switcher) and CLKDIR to 1
+                    time.sleep(0.050)
+                else:
+                    self._gpio_power.write(fmc, 0b00000000, mask=0b01010000)  # Stop mezzanine switcher (PG=0)
+                    time.sleep(0.030)
+                    self._gpio_power.write(fmc, 0b00000000, mask=0b00000001)  # Turn off 12V
+                    time.sleep(0.030)
+                    self._gpio_power.write(fmc, 0b00000000, mask=0b00000010)  # Turn off rail
+                    time.sleep(0.030)
+                    self._gpio_power.write(fmc, 0b00000000, mask=0b00000100)  # Turn off rail
+                    time.sleep(0.100)
+
 
     def set_led(self, led_name, state):
         """

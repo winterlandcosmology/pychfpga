@@ -1,0 +1,58 @@
+# This file is for specifying the entries in the configuration file.
+# This is NOT the configuration file. That file should end in .conf.
+
+n_input: {type: integer, min: 1}
+n_freq: {type: integer, min: 1}
+
+fpga:
+    ip_address: {type: ip_addr}
+    port: {type: integer, min: 1}
+    rec_port: {type: integer, min: 1}
+    samp_freq : float(min: 1)
+    ref_freq: float(min: 1)
+    fft_shift: {type: integer, min: 1}
+    gain: {type: integer, min: 0}
+    data_width: {type: integer, min: 4}
+    group_frames: {type: integer, min: 1 }
+    enable_gpu_link: {type: integer, min: 0 }
+    host_ip: {type: ip_addr}
+    gain_table_pkl: {type: string}
+    subarray: {type: integer, min: 0}
+    bitfile_name: {type: string}
+    force: {type: integer, min: 0}
+    destination_slots: {type: int_list}
+    calculate_gain_slots: {type: int_list}
+    sync_board: {type: string}
+    ni_enable: {type: integer, min: 0 }
+    ni_board: {type: string}
+    ni_offset: {type: integer, min: 0 }
+    ni_high_time: {type: integer, min: 1 }
+    ni_period: {type: integer, min: 1 }
+    ni_enable_26m: {type: integer, min: 0 }
+    ni_board_26m: {type: string}
+    ni_offset_26m: {type: integer, min: 0 }
+    ni_high_time_26m: {type: integer, min: 1 }
+    ni_period_26m: {type: integer, min: 1 }
+    reload_gains_frame: {type: integer, min: 1}
+    gain_switch_frame: {type: integer, min: 1}
+    bank_switch_frame: {type: integer, min: 1}
+    adc_delay: {}
+
+
+gpu:
+    n_gpus: {type: integer, min: 1}
+    n_expected_gpus: {type: integer, min: 1, default: 16}
+    base_listen_port: {type: integer, min: 10000, default: 41000}
+    gpu_intergration_period: {type: integer, min: 32768}
+
+acq:
+    base_path: {type: string}
+    livefile: {type: string}
+    frames_per_file: {type: integer, min: 1}
+    frames_per_livefile: {type: integer, min: 1}
+    n_frame_buf: {type: integer, min: 10, default: 12}
+    producer_max_range: {type: integer, min: 2, default: 3}
+    fpga_count_max: {type: integer, default: 4294967295}
+    acq_loop_poll_rate: {type: float, default: 2}
+    fpga_hk:
+        rate: {type: integer, min: 1, default: 10}

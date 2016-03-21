@@ -757,7 +757,7 @@ class MGADC08CarrierTests():  #
             if stuck_ok and bitpos_ok:
                 break
             trial += 1
-            assert trial < 4, 'Could not compute ADC delays'
+            assert trial < 6, 'Could not compute ADC delays'
             print 'Could not compute ADC delays. Retrying...'
         # Set ADC delays
         ib.set_adc_delays(delay_table)
