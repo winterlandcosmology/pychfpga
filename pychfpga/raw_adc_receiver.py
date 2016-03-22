@@ -35,14 +35,15 @@ class TimestreamUdpHandler(SocketServer.BaseRequestHandler):
             self.timestamp) = struct.unpack_from('>BHHL', self.data)
         self.ant_channel = probe_id & 0x0F
         self.adc_data = np.fromstring(self.data[9:9+2048], dtype=np.int8)
-        #if (self.adc_data.shape[0] != 2048):
-        #    print "bad data?"
-        #    print self.adc_data
-        #    print '#######################'
-        #    print len(self.data)
-        #    print '#######################'
-        #    print len(self.request[0])
-        self.server.data_queue.put((self.timestamp,
+        if (self.adc_data.shape[0] != 2048):
+            print "bad data?"
+            print self.adc_data
+            print '#######################'
+            print len(self.data)
+            print '#######################'
+            print len(self.request[0])
+        else:
+            self.server.data_queue.put((self.timestamp,
                                     self.ant_channel, self.adc_data))
 
 

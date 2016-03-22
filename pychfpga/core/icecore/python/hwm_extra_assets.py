@@ -323,7 +323,8 @@ class IceBoardPlus(IceBoard):
 
             # If a mezzanine is present, get its EEPROM data and search for the first mezzanine class that can decode it.
             try:
-                eeprom_data = self._mezzanine_eeprom_read(m)
+                # eeprom_data = self._mezzanine_eeprom_read(m)  # this does not read all eeprom for some mezxzanines...
+                eeprom_data = self.hw.read_mezzanine_eeprom(m,0,512)
             except tuber.TuberRemoteError:  # If the method does not exist
                 eeprom_data = None
 

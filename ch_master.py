@@ -255,6 +255,7 @@ if __name__ == "__main__":
     # ret = conf.validate(val_conf, preserve_errors = True)
 
     conf = NameSpace(fpga_array.load_yaml_config(args.conf_file))
+    fpga_array_params = conf.fpga.pop('fpga_array_params')
     # if ret != True:
     #     for entry in flatten_errors(conf, ret):
     #         sec_list, key, error = entry
@@ -300,7 +301,7 @@ if __name__ == "__main__":
             # Create the FPGA controller object.
             # Will now create an array of controller objects indexed by serial number
             # And program board firmware if needed/requested currently will always reprogram
-            ca = fpga_array.FPGAArray(**conf.fpga.fpga_array_params)     # Create FPGA array
+            ca = fpga_array.FPGAArray(**fpga_array_params)     # Create FPGA array
             sync_board = ca.ib.get(serial=conf.fpga.sync_board) if conf.fpga.sync_board else None
             ca.set_sync_method(conf.fpga.sync_method, source='bp_trig', master=sync_board, master_time_source='bp_time' if sync_board else None)
 
@@ -460,7 +461,7 @@ if __name__ == "__main__":
             if ni_board_26m:
                 ca.set_noise_injection(ni_board_26m, ni_enable_26m, ni_offset_26m, ni_high_time_26m, ni_period_26m)
             # Initialize data shufling and transmission to the GPU
-            ca.set_operational_mode(conf.fpga.operational_mode, frames_per_packet=conf.fpga.fpga_array_params.group_frames)
+            ca.set_operational_mode(conf.fpga.operational_mode, frames_per_packet=fpga_array_params.group_frames)
             ca.sync()  # synchronize all the boards in the array
 
             time.sleep(2)
@@ -554,7 +555,7 @@ if __name__ == "__main__":
     log.info("Now logging to \"%s\"." % (acq_log_path))
 
     log.info("Sampling frequency is %0.3f MHz." %
-             float(conf.fpga.fpga_array_params.samp_freq))
+             float(fpga_array_params.samp_freq))
 
     if acq:
         if (int(args.configure_fpga) > 0):
