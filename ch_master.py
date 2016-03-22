@@ -254,7 +254,10 @@ if __name__ == "__main__":
     # conf = ConfigObj(args.conf_file, configspec = args.spec_file)
     # ret = conf.validate(val_conf, preserve_errors = True)
 
-    conf = NameSpace(fpga_array.load_yaml_config(args.conf_file))
+    conf_dict = fpga_array.load_yaml_config(args.conf_file)
+    conf = NameSpace(conf_dict)
+    conf_dict['fpga'].pop('fpga_array_params')
+    print conf_dict
     fpga_array_params = conf.fpga.pop('fpga_array_params')
     # if ret != True:
     #     for entry in flatten_errors(conf, ret):
@@ -295,7 +298,7 @@ if __name__ == "__main__":
 
     # Create the acquisition object. Pass it the configuration settings so that it
     # can initialise.
-    acq = chrx.acq(conf, log, 16, fpga_hk_field) if chrx else None
+    acq = chrx.acq(conf_dict, log, 16, fpga_hk_field) if chrx else None
 
     if (int(args.configure_fpga) > 0):
             # Create the FPGA controller object.
@@ -714,7 +717,8 @@ if __name__ == "__main__":
                 log.info("acquiring data...")
             time.sleep(poll_rate)
     except(KeyboardInterrupt, SystemExit):
-        pass
+        if acq:
+            acq.stop()
     finally:
         if acq:
             acq.stop()
