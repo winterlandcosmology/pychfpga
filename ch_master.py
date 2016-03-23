@@ -186,14 +186,16 @@ remap_slot = [5,1,4,0,13,9,12,8,15,11,14,10,7,3,6,2]
 
 def load_gains(ib, bank=0):
     for cc in ib:
-        filename = '/home/chime/ch_acq/gains_slot'+str(cc.slot)+'.pkl'
+        filename = '/home/kbandura/ch_acq/gains_slot'+str(cc.slot)+'.pkl'
         try:
             g_array = pickle.load(open(filename, 'rb'))
-            print 'Setting gains on IceBoard SN%s, slot %i' % (cc.serial, cc.slot)
+            log = logging.getLogger()
+            log.info("setting gains on SN {0}, SLOT {1}".format(ib.serial, ib.slot))
             cc.set_gain(g_array, bank=bank)  # *** should this be bank=all_bank
         except IOError:
             log = logging.getLogger()
             log.warn('Could not load gain file %s. Gains are not set.' % filename)
+            raise
 
 if __name__ == "__main__":
     # Set up logger.
@@ -402,10 +404,11 @@ if __name__ == "__main__":
                             ca.set_noise_injection(ni_board_26m, ni_enable_26m, 0, 3, 4)
                             ni_board_26m.sync()
                     calculate_gain_slots = conf.fpga.calculate_gain_slots
-                    for ib in ca,ib:
-                        if ib.slot in calculate_gain_slots:
-                            fpga_config = ib.get_config()
-                            calculate_gains.calculate_gains(ib, str(ib.fpga_port_number + 1))
+                    for ib in ca.ib:
+                        if ((ib.slot or -1) in calculate_gain_slots):
+                                fpga_config = ib.get_config()
+                                calculate_gains.calculate_gains(ib, str(ib.fpga_port_number + 1))
+
             all_chan = range(16)  # range(conf["n_antenna"])
             ca.ib.set_data_source("adc")  # This should come first.
             ca.ib.set_FFT_bypass(False, channels=all_chan)
@@ -672,7 +675,7 @@ if __name__ == "__main__":
                 try:
                     time.sleep(0.1)
                     fpga_frame_count = ca.ib[0].get_frame_number()
-                    print fpga_frame_count
+                    #print fpga_frame_count
                     try:
                         # Well before switch time.  Set gains in next bank, read back what we set.
                         if (abs(fpga_frame_count - reload_gains_frame) < frame_range) and not gains_reloaded:

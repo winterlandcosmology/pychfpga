@@ -246,7 +246,7 @@ def calculate_gains(c, port):
         flags.append(Calc.mask)
     c.set_gain(gain)
     c.freq_flags = flags
-    output = open('/home/chime/ch_acq/gains_slot'+str(c.slot)+'.pkl','wb')
+    output = open('/home/kbandura/ch_acq/gains_slot'+str(c.slot)+'.pkl','wb')
     pickle.dump(gain, output)
     output.close()
     print "Scaler Gain set and saved"
