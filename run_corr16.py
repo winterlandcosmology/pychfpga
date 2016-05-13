@@ -71,15 +71,18 @@ def plot_spectrum(r, channel = 0, average=1):
     plt.clf()
     data = [r.read_frames()[channel] for _ in range(average)]
     frame_length = len(data[0])
-    a=np.mean(np.abs(pfb_fft(data)), axis=0)
+    #a=np.mean(np.abs(pfb_fft(data)), axis=0)
+    data = np.array(data)
+    a = (np.abs(np.fft.fft(data, axis=1))**2).mean(axis=0)
     fs=800
     f=fs-np.fft.fftfreq(frame_length,1./fs)
     rr=range(frame_length)
-    plt.plot(f[rr], a[rr])
+    plt.plot(f, 10*np.log10(a))
     plt.xlabel('Frequency (MHz)')
     plt.ylabel('Amplitude')
     plt.title('FFT Channel %02i (averaging=%i)' % (channel, average))
-    
+    plt.show()    
+
 def set_test_mode(ib):
     ib.set_data_source('funcgen')
     ib.set_fft_bypass(1)
