@@ -19,7 +19,7 @@ import os
 import sys
 import socket
 import time
-import MySQLdb
+#import MySQLdb
 
 # Dictionary of correlators.
 correlator_hash = {"29821-0000-0003": "stone",
@@ -115,6 +115,7 @@ if __name__ == "__main__":
   fpga = chFPGA_controller.chFPGA_controller( \
              ip_address = conf["fpga"]["ip_address"], \
              port_number = conf["fpga"]["port"], \
+             host_ip = conf["fpga"]["host_ip"],\
              adc_delay_table = adc_delay, \
              verbose = 0, \
              init = 1, \
@@ -184,7 +185,6 @@ if __name__ == "__main__":
   # Pass FPGA configuration variables to header.
   for name in fpga_conf:
     val = fpga_conf[name]
-
     # Do the annoying conversion of numpy types to native Python types. Sigh.
     if isinstance(val, (list, tuple)):
       if isinstance(val[0], (list, tuple)):
@@ -193,6 +193,8 @@ if __name__ == "__main__":
         try:
           if val[0].dtype.kind in ('i', 'u', 'f'):
             val = list(np.asscalar(x) for x in val)
+            if isinstance(val[0], long): # Had to add this, if not get an error
+              val = list(int(x) for x in val)
         except:
           if type(val[0]) == bool:
             val = list(int(x) for x in val)

@@ -6,6 +6,7 @@ n_freq    = integer(min = 1)
 
 [fpga]
   ip_address = ip_addr
+  host_ip = ip_addr
   port = integer(min = 1)
   samp_freq  = float(min = 1)
   ref_freq = float(min = 1)

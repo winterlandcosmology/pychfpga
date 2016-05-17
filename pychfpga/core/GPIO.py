@@ -116,7 +116,7 @@ class GPIO_base(Module_base):
         #ant_reset = self.bitfield('ANT_RESET')
         #self.write(ant_reset.addr, 1 << ant_reset.bit)
         #self.write(ant_reset.addr, 0x60) # ** debug  BEWARE: This resets the DATA and CORR IP addresses to zero!!!!!***
-        self.HOST_FRAME_READ_RATE = 14  #Indicates how often the host UDP buffers are read. Used to throttle data transmision. Period = 2/125MHz*2^value
+        self.HOST_FRAME_READ_RATE = 19  #Indicates how often the host UDP buffers are read. Used to throttle data transmision. Period = 2/125MHz*2^value
         
     def status(self):
         """ Displays the module status"""
