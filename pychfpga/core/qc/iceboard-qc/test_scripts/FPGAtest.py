@@ -233,7 +233,8 @@ def trad_test(username=str,board_sn=str,board_vn=str,board_md=str,testStatus = E
     rails.pop('MEZZ_VADJ')
     rails.pop('MEZZ_VCC3V3')
     rails.pop('MEZZ_VCC12V0')
-    rails.pop('BP_VCC3V3')
+    if 'BP_VCC3V3' in rails.keys():
+        rails.pop('BP_VCC3V3')
 
     # Read voltages
     try:
