@@ -118,7 +118,7 @@ def rampTest(username=str,board_sn=str,board_vn=str,board_md=str,testStatus = EM
                         
         print("\nSmall peaks around a flat histogram or small (< 0.1) "
               "error ratios may be attributed to timing issues "
-              "with the ADC mezzanines, but a very distorted histogram 
+              "with the ADC mezzanines, but a very distorted histogram "
               "may point to more serious issues."
               "\n If this is found to be the case, the connector to the "
               "affected mezzanine or the traces, vias, and solder joints "
