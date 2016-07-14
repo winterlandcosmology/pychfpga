@@ -635,18 +635,18 @@ if __name__ == "__main__":
     frame_range = 2*poll_rate_in_frames
 
     bank_switch_frame = conf.fpga.bank_switch_frame
-
+    gain_reload_period = conf.fpga.gain_reload_period
     if ( int(args.configure_fpga) > 0):
             # init gains function kind of a hack.  Should fix.
             current_bank = 0
             next_bank = 1
-            #ca.ib.set_next_gain_bank(bank=next_bank)
-            #all_next_bank = ca.ib.get_next_gain_bank() 
-            #for bankset in all_next_bank:
-            #        log.info('Set next gain bank to %s' % ( ', '.join([str(i) for i in bankset])))
-            #all_banks = ca.ib.get_current_gain_bank()
-            #for bankset in all_banks:
-            #        log.info('currently using gain banks %s' % ( ', '.join([str(i) for i in bankset])))
+            ca.ib.set_next_gain_bank(bank=next_bank)
+            all_next_bank = ca.ib.get_next_gain_bank() 
+            for bankset in all_next_bank:
+                    log.info('Set next gain bank to %s' % ( ', '.join([str(i) for i in bankset])))
+            all_banks = ca.ib.get_current_gain_bank()
+            for bankset in all_banks:
+                    log.info('currently using gain banks %s' % ( ', '.join([str(i) for i in bankset])))
 
 
     try:
@@ -674,13 +674,21 @@ if __name__ == "__main__":
                          #Right now can miss gain setting stuff if hk takes more than 10s.  Really need to disentangle the two.
                 try:
                     time.sleep(0.1)
-                    fpga_frame_count = ca.ib[0].get_frame_number()
-                    #print fpga_frame_count
+                    true_fpga_frame_count = ca.ib[0].get_frame_number()
+                    fpga_frame_count = true_fpga_frame_count % gain_reload_period
                     try:
                         # Well before switch time.  Set gains in next bank, read back what we set.
                         if (abs(fpga_frame_count - reload_gains_frame) < frame_range) and not gains_reloaded:
                                 load_gains(ca.ib, bank=next_bank)
-                                fpga_gains = {ib.slot: ib.get_gain(bank=next_bank) for ib in ca.ib}
+                                log.debug("Loaded gains")
+                                fpga_gains = {}
+                                for ib in ca.ib:
+                                    if ib.slot == None:
+                                        fpga_gains[0] = ib.get_gain(bank=next_bank)
+                                        log.debug("read back gain from slot")
+                                    else:
+                                        fpga_gains[ib.slot] = ib.get_gain(bank=next_bank)
+                                #fpga_gains = {ib.slot: ib.get_gain(bank=next_bank) for ib in ca.ib}
                                 gains_reloaded = True
                                 bank_switched = False
                                 log.info("Loaded gains into bank %d" % next_bank)
@@ -693,38 +701,47 @@ if __name__ == "__main__":
                                 for fpga_slot, slot_gain in fpga_gains.items():
                                         for val in slot_gain:
                                                 v = convert_types(val)
-                                                inp = remap_slot[fpga_slot-1] * 16 + remap_adc_sma[int(val[0])]
-                                                if acq:
-                                                    acq.pass_fpga_gain(inp, v)
+                                                if fpga_slot < 1:
+                                                    inp = int(val[0])
+                                                else:
+                                                    inp = remap_slot[fpga_slot-1] * 16 + remap_adc_sma[int(val[0])]
+                                                inp = int(inp)
+                                                acq.pass_fpga_gain(inp, v)
                                 hdf5_gains_switched = True
-                                log.info('Changed gains in hdf5 file')
+                                log.debug('Changed gains in hdf5 file')
                         #log.debug("checked for switch gains in hdf5 file time")
                         #shortly after after switch
                         if (abs(fpga_frame_count - bank_switch_frame) < frame_range) and not bank_switched:
                                 ca.ib.set_next_gain_bank(bank = current_bank)
                                 current_bank = (current_bank + 1) % 2
                                 next_bank = (next_bank + 1) % 2
+                                new_gain_switch_frame = (1+(true_fpga_frame_count / gain_reload_period))*gain_reload_period + gain_switch_frame
+                                ca.ib.set_gain_switch_frame_number(frame=new_gain_switch_frame)
                                 gains_reloaded = False
                                 hdf5_gains_switched = False
                                 bank_switched = True
                                 log.debug("changed which gain bank will be written to over to %d" % next_bank)
                                 all_banks = ca.ib.get_current_gain_bank()
                                 for bankset in all_banks:
-                                        log.info('Using gain banks %s' % ( ', '.join([str(i) for i in bankset])))
+                                        log.info('Using other gain banks %s' % ( ', '.join([str(i) for i in bankset])))
                         #log.debug("checked for gain back switch prep time")
                     except:
                         log.critical("something went wrong with gain switching, still aquiring data...")
+                        raise
                 except:
                     log.info("couldn't read fpga frame number... will try again.")
+                    raise
             else:
                 log.info("acquiring data...")
             time.sleep(poll_rate)
     except(KeyboardInterrupt, SystemExit):
-        if acq:
-            acq.stop()
+        raise
+        #if acq:
+        #    acq.stop()
     finally:
-        if acq:
-            acq.stop()
+        #if acq:
+        #    acq.stop()
+        raise
 
 if acq:
     signal.signal(signal.SIGTERM, acq.stop)

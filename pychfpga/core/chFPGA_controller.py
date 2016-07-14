@@ -1401,14 +1401,14 @@ class chFPGA_controller(IceBoardExtHandler):
                 configured_channels.add(ch)
         self._logger.info('%r: Setting scaler gains for Antenna %s' % (self, ', '.join([str(i) for i in configured_channels])))
 
-    def get_gain(self):
+    def get_gain(self, bank=0):
         """
         Returns the log2 SCALER gain each antenna, and the linear gain table used for each antenna or the fixed gain.
         """
         gain_list = []
         for ant in self.ANT.values():
             glog = ant.SCALER.SHIFT_LEFT
-            glin = ant.SCALER.get_gain_table()
+            glin = ant.SCALER.get_gain_table(bank=bank)
             gain_list.append([ant.ant_number, [glin,glog]])
         return gain_list
 
