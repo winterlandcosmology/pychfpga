@@ -627,7 +627,7 @@ if __name__ == "__main__":
 
     gains_reloaded = False
     hdf5_gains_switched = False
-    bank_switched = False
+    bank_switched = True
     hk_rate_in_frames = int(conf.acq.fpga_hk.rate / 2.56e-6)
     poll_rate = conf['acq']['acq_loop_poll_rate'] #in seconds
     poll_rate_in_frames = poll_rate/2.56e-6  #should use fpga config frequency?
@@ -692,12 +692,14 @@ if __name__ == "__main__":
                                 gains_reloaded = True
                                 bank_switched = False
                                 log.info("Loaded gains into bank %d" % next_bank)
+                                log.info("Frame number %d" % fpga_frame_count)
+                                log.info("True frame number %d" % true_fpga_frame_count)
                                 all_banks = ca.ib.get_current_gain_bank()
                                 for bankset in all_banks:
                                         log.info('Using gain banks %s' % ( ', '.join([str(i) for i in bankset])))
                         #log.debug("checked for reload gain time")
                         # Right before switch time
-                        if (abs(fpga_frame_count - (gain_switch_frame + gpu_intergration_period)) < frame_range) and not hdf5_gains_switched:
+                        if (abs(fpga_frame_count - (gain_switch_frame + gpu_intergration_period)) < frame_range) and not hdf5_gains_switched and gains_reloaded:
                                 for fpga_slot, slot_gain in fpga_gains.items():
                                         for val in slot_gain:
                                                 v = convert_types(val)
@@ -709,9 +711,11 @@ if __name__ == "__main__":
                                                 acq.pass_fpga_gain(inp, v)
                                 hdf5_gains_switched = True
                                 log.debug('Changed gains in hdf5 file')
+                                log.info("Frame number %d" % fpga_frame_count)
+                                log.info("True frame number %d" % true_fpga_frame_count)
                         #log.debug("checked for switch gains in hdf5 file time")
                         #shortly after after switch
-                        if (abs(fpga_frame_count - bank_switch_frame) < frame_range) and not bank_switched:
+                        if (abs(fpga_frame_count - (bank_switch_frame+gpu_intergration_period)) < frame_range) and not bank_switched and hdf5_gains_switched:
                                 ca.ib.set_next_gain_bank(bank = current_bank)
                                 current_bank = (current_bank + 1) % 2
                                 next_bank = (next_bank + 1) % 2
@@ -721,6 +725,8 @@ if __name__ == "__main__":
                                 hdf5_gains_switched = False
                                 bank_switched = True
                                 log.debug("changed which gain bank will be written to over to %d" % next_bank)
+                                log.info("Frame number %d" % fpga_frame_count)
+                                log.info("True frame number %d" % true_fpga_frame_count)
                                 all_banks = ca.ib.get_current_gain_bank()
                                 for bankset in all_banks:
                                         log.info('Using other gain banks %s' % ( ', '.join([str(i) for i in bankset])))
