@@ -672,11 +672,13 @@ if __name__ == "__main__":
                 #except:
                 #     log.critical("Did not get FPGA housekeeping, still aquiring data...")
                          #Right now can miss gain setting stuff if hk takes more than 10s.  Really need to disentangle the two.
+                #print enable_gain_switching
                 if ( enable_gain_switching  > 0):
                   try:
                     time.sleep(0.1)
                     true_fpga_frame_count = ca.ib[0].get_frame_number()
                     fpga_frame_count = true_fpga_frame_count % gain_reload_period
+                    #print fpga_frame_count
                     try:
                         # Well before switch time.  Set gains in next bank, read back what we set.
                         if (abs(fpga_frame_count - reload_gains_frame) < frame_range) and not gains_reloaded:
@@ -739,7 +741,7 @@ if __name__ == "__main__":
                     log.info("couldn't read fpga frame number... will try again.")
                     raise
                 else:
-                    pass
+                    print "what going on!"
             else:
                 log.info("acquiring data...")
             time.sleep(poll_rate)
