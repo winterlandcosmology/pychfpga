@@ -138,9 +138,10 @@ class dataProcessor(object):
         self.N_ANT = 16
         # self.h5file = hdf5TimestreamData()
         self.port = port
+        self.run = True
 
     def process(self):
-        while True:
+        while self.run:
             self.timestamp, self.ant, self.adc_data = self.data_queue.get()
             if (self.timestamp == self.old_timestamp):
                 self.all_ts[self.ant] = self.timestamp
@@ -159,7 +160,7 @@ class dataProcessor(object):
                 self.n_ant_rec = 1
             elif (self.timestamp != self.old_timestamp) and (self.n_ant_rec < self.N_ANT):
                 # Start over
-                print "didn't get full set, only received {0} ant. restarting.".format(self.n_ant_rec) # Logging eventually
+                #print "didn't get full set, only received {0} ant. restarting.".format(self.n_ant_rec) # Logging eventually
                 # May not need zeroing data.  Helps debugging
                 self.all_data = np.zeros((16, 2048), dtype=np.int8)
                 self.all_ts = np.zeros(16, dtype=np.int32)
@@ -225,7 +226,7 @@ class receiver(object):
         self.server_threads = []
         self.data_processors = []
         self.data_process_threads = []
-        for port in PORTS:
+        for port in self.PORTS:
             self.data_queues.append(Queue())
             self.out_queues.append(Queue())
             self.servers.append(ThreadedUdpServer((self.HOST, port), TimestreamUdpHandler, self.data_queues[-1]))
@@ -238,11 +239,50 @@ class receiver(object):
             self.data_process_threads[-1].setDaemon(True)
             self.data_process_threads[-1].start()
 
-        def read_data(self):
-            for j, out_q in enumerate(self.out_queues):
-                self.all_ts, self.port, self.all_data = out_q.get()
-            return self.all_ts, self.port, self.all_data
+    def read_data(self):
+        for j, out_q in enumerate(self.out_queues):
+            self.all_ts, self.port, self.all_data = out_q.get()
+        return self.all_ts, self.port, self.all_data
 
+    def stop(self):
+        for i, port in enumerate(self.PORTS):
+            self.servers[i].shutdown()
+            self.servers[i].server_close()
+            self.data_processors[i].run = False
+            self.data_queues[i].queue.clear()
+            self.out_queues[i].queue.clear()
+
+
+class receiver_simple(object):
+    '''
+    Interactive receiver object.  To create port threads, and get data out
+    from those ports.  
+    Should probably fix the 'serve forever bits'
+    '''
+    def __init__(self, ports=[41101], host='10.10.10.25'):
+        self.HOST = host
+        self.PORTS = ports
+        self.data_queues = []
+        self.servers = []
+        self.server_threads = []
+        for port in self.PORTS:
+            self.data_queues.append(Queue())
+            self.servers.append(ThreadedUdpServer((self.HOST, port), TimestreamUdpHandler, self.data_queues[-1]))
+            self.server_threads.append(threading.Thread(target=self.servers[-1].serve_forever))
+            self.server_threads[-1].setDaemon(True)
+            self.server_threads[-1].start()
+            print 'server thread started'
+
+    def read_data(self):
+        for j, out_q in enumerate(self.data_queues):
+            self.all_ts, self.ant, self.all_data = out_q.get()
+        return self.all_ts, self.ant, self.all_data
+
+    def stop(self):
+        for i, port in enumerate(self.PORTS):
+            self.servers[i].shutdown()
+            self.servers[i].server_close()
+            self.data_queues[i].queue.clear()
 
 if __name__ == "__main__":
     HOST = "10.10.10.2"
