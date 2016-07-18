@@ -210,6 +210,40 @@ class dataWriter(object):
             #self.live_h5file.init(n_times=1, n=0)
             #self.live_h5file.close()
 
+class receiver(object):
+    '''
+    Interactive receiver object.  To create port threads, and get data out
+    from those ports.  
+    Should probably fix the 'serve forever bits'
+    '''
+    def __init__(self, ports=[41101], host='10.10.10.25'):
+        self.HOST = host
+        self.PORTS = ports
+        self.data_queues = []
+        self.out_queues = []
+        self.servers = []
+        self.server_threads = []
+        self.data_processors = []
+        self.data_process_threads = []
+        for port in PORTS:
+            self.data_queues.append(Queue())
+            self.out_queues.append(Queue())
+            self.servers.append(ThreadedUdpServer((self.HOST, port), TimestreamUdpHandler, self.data_queues[-1]))
+            self.server_threads.append(threading.Thread(target=self.servers[-1].serve_forever))
+            self.server_threads[-1].setDaemon(True)
+            self.server_threads[-1].start()
+            print 'server thread started'
+            self.data_processors.append(dataProcessor(self.data_queues[-1], self.out_queues[-1], port))
+            self.data_process_threads.append(threading.Thread(target=self.data_processors[-1].process))
+            self.data_process_threads[-1].setDaemon(True)
+            self.data_process_threads[-1].start()
+
+        def read_data(self):
+            for j, out_q in enumerate(self.out_queues):
+                self.all_ts, self.port, self.all_data = out_q.get()
+            return self.all_ts, self.port, self.all_data
+
+
 if __name__ == "__main__":
     HOST = "10.10.10.2"
     PORTS = [41101, 41102, 41103, 41104, 41105, 41106, 41107, 41108, 41109,
