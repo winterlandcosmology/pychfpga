@@ -22,7 +22,8 @@ import pickle
 
 from pychfpga.core import chFPGA_controller
 #from pychfpga.core import chFPGA_receiver
-from timestream_receiver import get_frame
+#from timestream_receiver import get_frame
+import raw_adc_receiver
 
 import numpy as np
 
@@ -153,10 +154,11 @@ def get_frames(port):
     number_of_frames = 0
     frames = 100
     data_list = np.zeros((frames, 16, 2048))
+    r = raw_adc_receiver.receiver(ports = [int(port)], host='10.10.10.25')
     while number_of_frames < frames:
         try:
-            a = get_frame(port)
-            data_list[number_of_frames, :, :] = a.values()[0]
+            a = r.read_data()
+            data_list[number_of_frames, :, :] = a[2]
             #for chanNum in chanIndex:
             #    data_list[number_of_frames,chanNum, :] = a[channels[chanNum]]
             number_of_frames += 1
@@ -169,6 +171,7 @@ def get_frames(port):
     data_list = (data_list.astype(np.int8) ^ np.int8(128)) >> 4
     #data_list = (np.bitwise_xor(data_list.astype(np.int8), 128*np.ones(data_list.shape, dtype=np.int8)).astype(np.int8))/2**4 #data_list/2**4
     data = data_list[:,:,::2] + 1.0j*data_list[:,:,1::2]
+    r.stop()
     return data
 
 
@@ -203,7 +206,7 @@ def calculate_gains(c, port):
     default_log2_gain = 22
     c.set_gain((1,default_log2_gain))
     c.set_local_data_port_number(int(port))
-    c.start_data_capture(burst_period_in_seconds=0.001)
+    c.start_data_capture(burst_period_in_seconds=0.005)
     c.sync()
     channels = range(16)
     #for 4 bit number *sqrt2 since real and imag, check this
