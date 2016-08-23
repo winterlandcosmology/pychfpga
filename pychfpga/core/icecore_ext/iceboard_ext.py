@@ -7,7 +7,7 @@ from calendar import timegm
 import time
 import struct
 import base64
-
+import __main__
 import socket
 
 from ..icecore import IceBoardPlusHandler
@@ -191,13 +191,17 @@ class IceBoardExtHandler(IceBoardPlusHandler):
         # interface that was used. This assumes that both the ARM and FPGAs
         # are accessed through the same interface.
         if not self.interface_ip_addr:  # set the interface only of we haven't manually defined one
-            if self.hostname:
+            if __main__._host_interface_ip_addr:
+                self.interface_ip_addr = __main__._host_interface_ip_addr
+            elif self.hostname:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 s.connect((self.hostname, 80))
                 (self.interface_ip_addr, _) = s.getsockname()
                 s.close()
             else:
                 self.interface_ip_addr = None
+        else:
+            print 'Host interface IP address is already defined to be ',self.interface_ip_addr
 
         # Compute the IP address to use for the FPGA UDP interface For now, we
         # replace a.b.c.d by a.b.3.d. We need to find a more generic mechanism
@@ -221,6 +225,7 @@ class IceBoardExtHandler(IceBoardPlusHandler):
         # -------------------------------------------------------------------------
         # Open the UDP MMI interface
         # -------------------------------------------------------------------------
+        print 'Opening new MMI interface with host interface', self.interface_ip_addr
         from .lib import fpga_mmi
         self.mmi = fpga_mmi.FpgaMmi(
             ip_addr=self.fpga_ip_addr,
