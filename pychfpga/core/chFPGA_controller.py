@@ -1708,6 +1708,7 @@ class chFPGA_controller(IceBoardExtHandler):
             cb1_output_words_per_bin = 16/4
             cb1_output_bins = cb1_bins
 
+            # Backplane shuffle
             bp_shuffle_bypass = False
 
             # CB2 has 2 BIN_SEL
@@ -1747,8 +1748,14 @@ class chFPGA_controller(IceBoardExtHandler):
             #    CB3 Output Lane 5: BS1.1: 8 bins (5,13...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
             #    CB3 Output Lane 6: BS1.2: 8 bins (6,14...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
             #    CB3 Output Lane 7: BS1.3: 8 bins (7,15...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
+
+            # CB2 ALIGN
+            cb2_timeout_period = 0
+            cb2_sof_window_stop = 70
+            # CB2 REMAP
             cb2_lane_map = self.CROSSBAR2.compute_bp_shuffle_lane_map()
             cb2_bypass = False
+            # CB2 BIN_SEL
             cb2_input_words_per_bin = cb1_output_words_per_bin
             cb2_input_bins = cb1_output_bins
             cb2_lanes = ((0, 1), (2, 3))  #BS0 selects sublanes 0-1, BS1 selects sublanes 2-3
@@ -1758,6 +1765,7 @@ class chFPGA_controller(IceBoardExtHandler):
             cb2_output_words_per_bin = 2 * cb2_input_words_per_bin
             cb2_output_bins = cb2_bins
 
+            # QSFP SHUFFLE
             crate_shuffle_bypass = True
 
             cb3_lane_map = [0, 4, 1, 5, 2, 6, 3, 7]  # Reorder to get data from lanes 0-1, 2-3, 4-5 ...
@@ -1821,8 +1829,14 @@ class chFPGA_controller(IceBoardExtHandler):
             #    CB3 Output Lane 6: BS1.2: 4 bins (6,14...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
             #    CB3 Output Lane 7: BS1.3: 4 bins (7,15...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
 
+
+            # CB2 ALIGN
+            cb2_timeout_period = 0
+            cb2_sof_window_stop = 70
+            # CB2 REMAP
             cb2_lane_map = self.CROSSBAR2.compute_bp_shuffle_lane_map()
             cb2_bypass = False
+            # CB@ BIN_SEL
             cb2_lanes = [(0, 3), (0, 3)] # Every output of both bin sels get data from all the 4 sublanes they get.
             cb2_input_words_per_bin = cb1_output_words_per_bin
             cb2_input_bins = cb1_output_bins
@@ -1832,9 +1846,11 @@ class chFPGA_controller(IceBoardExtHandler):
             cb2_bin_select_map = [np.arange(cb2_bins)*cb2_bin_spacing + (i^crate_number) for i in range(number_of_cb2_bin_sel)]
             cb2_output_words_per_bin = cb2_input_words_per_bin * 4
             cb2_output_bins = cb2_bins
-            cb2_timeout_period = 0
-            cb2_sof_window_stop = 70
+
+            # QSFP SHUFFLE
             crate_shuffle_bypass = False
+
+
 
             cb3_lane_map = range(8)
             cb3_bypass = False
