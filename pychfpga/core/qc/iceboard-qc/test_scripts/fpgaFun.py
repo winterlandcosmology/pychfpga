@@ -67,6 +67,8 @@ def programFpga(board_sn, ch_acq_path = '../../../../../../ch_acq/',  bitfile_pa
     fpga_bitstream = FpgaBitstream(bitfile_path)
 
     # Find iceboard
+    # Always fails first time for some reason
+    ib = get_boards(boards=[board_sn], ch_acq_path=ch_acq_path)
     while True:
         ib = get_boards(boards=[board_sn], ch_acq_path=ch_acq_path)
         if len(ib) == 0:

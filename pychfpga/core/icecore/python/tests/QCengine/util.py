@@ -45,14 +45,6 @@ def run_tests(config_file):
     submenus = [NameSpace(menu_item) for menu_item in cfg.menu]
 
 
-    # Update menu with information from the test list
-    for menu_item in test_menu:
-        if menu_item.type == 'test':
-            test = test_list[menu_item.test_tag]
-            if not menu_item.get('description', None):  # Take description from the test list if there is none
-                menu_item.description = test.description
-            menu_item.regex = '(%s|%s)' % (test.path, menu_item.test_tag) # have the menu recognize the test path or key as an other way to select the test
-
     while True:
         print
         print
@@ -76,111 +68,127 @@ def run_tests(config_file):
 
         selection = select_menu_item(submenus, default=default_choice)
         
+        # Update menu with information from the test list
+        
         if selection.type == 'exit':
             # instr.dmm.display('Bye!', '')
             break
         elif selection.type == 'submenu':
-            subcfg = 
+            subcfg = load_config(submenu_list[selection.menu_tag])
+        
+        test_list = NameSpace(subcfg.test_list)  # convert list of (key,values) into an OrderedDict
+         # load test menu and convert each dict element to NameSpace to simplify code
+        test_menu = [NameSpace(menu_item) for menu_item in cfg.menu]
 
-        # Update the menu to indicate which tests have passed.
-        # Also use that information to determine the next test to run by default.
-        default_choice = None
+
+        # Update menu with information from the test list
         for menu_item in test_menu:
             if menu_item.type == 'test':
-                test_tag = menu_item.test_tag
-                passed_list = summary.get_passed(test_list[test_tag].path)
-                dependents_ok = check_test_dependencies(test_tag, test_list, summary)
-                if not passed_list:
-                    menu_item.status = ' ?  '
-                    if not default_choice and dependents_ok:
-                        default_choice = menu_item.key
-                elif all(passed_list):
-                    menu_item.status = 'PASS'
+                test = test_list[menu_item.test_tag]
+                if not menu_item.get('description', None):  # Take description from the test list if there is none
+                    menu_item.description = test.description
+                menu_item.regex = '(%s|%s)' % (test.path, menu_item.test_tag) # have the menu recognize the test path or key as an other way to select the test
+        
+        while True:
+            # Update the menu to indicate which tests have passed.
+            # Also use that information to determine the next test to run by default.
+            default_choice = None
+            for menu_item in test_menu:
+                if menu_item.type == 'test':
+                    test_tag = menu_item.test_tag
+                    passed_list = summary.get_passed(test_list[test_tag].path)
+                    dependents_ok = check_test_dependencies(test_tag, test_list, summary)
+                    if not passed_list:
+                        menu_item.status = ' ?  '
+                        if not default_choice and dependents_ok:
+                            default_choice = menu_item.key
+                    elif all(passed_list):
+                        menu_item.status = 'PASS'
+                    else:
+                        menu_item.status = 'FAIL'
+                        if not default_choice and dependents_ok:
+                            default_choice = menu_item.key
+                    menu_item.status += ', Ready' if dependents_ok and current_model and current_serial else ''
+            if not default_choice or not current_model or not current_serial:
+                default_choice = 'Q'
+    
+            selection = select_menu_item(test_menu, default=default_choice)
+            print
+    
+            if selection.type == 'exit':
+                # instr.dmm.display('Bye!', '')
+                break
+    
+            elif selection.type == 'board_info':
+                if selection.model not in model_number:
+                    print
+                    print '!!!! This is not a valid serial number for this test. Try again.'
                 else:
-                    menu_item.status = 'FAIL'
-                    if not default_choice and dependents_ok:
-                        default_choice = menu_item.key
-                menu_item.status += ', Ready' if dependents_ok and current_model and current_serial else ''
-        if not default_choice or not current_model or not current_serial:
-            default_choice = 'Q'
-
-        selection = select_menu_item(test_menu, default=default_choice)
-        print
-
-        if selection.type == 'exit':
-            # instr.dmm.display('Bye!', '')
-            break
-
-        elif selection.type == 'board_info':
-            if selection.model not in model_number:
+                    current_model = selection.model
+                    current_serial = selection.serial
+                    is_serial_scanned = True
+                    default_choice = selection.next_key
+                    # instr.dmm.display(current_model, current_serial)
+            elif selection.type == 'push':
+                commit_repo(test_results_folder)
+            elif selection.type == 'summary':
+                test_folders = os.path.join(test_results_folder, '%s_SN*/' % (current_model))
+                f = raw_input('Enter destination filename (optional, no extension):')
+                summary_filename = os.path.join(test_results_folder, f+'.csv')
+                XReport.generate_combined_summary(test_folders, subcfg.test_list, output_filename=summary_filename)
+            elif selection.type == 'test':
+                test = test_list[selection.test_tag]
+    
+                if test.require_serial_number and (not is_serial_scanned or not current_serial or not current_model):
+                    print
+                    print '!!!!!!!!!!!!!!!!!!'
+                    print 'Please enter or scan a serial number before beginning a test'
+                    continue
+                # summary_data = xr.generate_summary(summary_filename, data_folder)
+                nose_test_path = test.path
+                test_date = datetime.datetime.now().isoformat().replace(':','_')+'_' if not subcfg.debug.no_date else ''
+    
+    
                 print
-                print '!!!! This is not a valid serial number for this test. Try again.'
-            else:
-                current_model = selection.model
-                current_serial = selection.serial
-                is_serial_scanned = True
-                default_choice = selection.next_key
-                # instr.dmm.display(current_model, current_serial)
-        elif selection.type == 'push':
-            commit_repo(test_results_folder)
-        elif selection.type == 'summary':
-            test_folders = os.path.join(test_results_folder, '%s_SN*/' % (current_model))
-            f = raw_input('Enter destination filename (optional, no extension):')
-            summary_filename = os.path.join(test_results_folder, f+'.csv')
-            XReport.generate_combined_summary(test_folders, cfg.test_list, output_filename=summary_filename)
-        elif selection.type == 'test':
-            test = test_list[selection.test_tag]
-
-            if test.require_serial_number and (not is_serial_scanned or not current_serial or not current_model):
+                print 'Running test %s' % nose_test_path
                 print
-                print '!!!!!!!!!!!!!!!!!!'
-                print 'Please enter or scan a serial number before beginning a test'
-                continue
-            # summary_data = xr.generate_summary(summary_filename, data_folder)
-            nose_test_path = test.path
-            test_date = datetime.datetime.now().isoformat().replace(':','_')+'_' if not cfg.debug.no_date else ''
-
-
-            print
-            print 'Running test %s' % nose_test_path
-            print
-
-            if test.require_serial_number:
-                serial = current_serial
-            else:
-                serial = None
-                is_serial_scanned = False
-
-            params = NameSpace(config_file=config_file, model=current_model, serial=serial)
-            r = XReport.run(nose_test_path, xparams=params)
-            print
-            print
-
-            if params.serial != current_serial:
-                print '**********************************************'
-                print ' **** Serial number is now %s' % (params.serial)
-                print '**********************************************'
-                current_serial = params.serial
-                is_serial_scanned = False
-
-            test_folder = os.path.join(test_results_folder, '%s_SN%s' % (current_model, current_serial))
-            test_data_folder = os.path.join(test_folder, 'data')
-            test_file_name = '%s%s.pdf' %  (test_date, nose_test_path.replace(':', '.'))
-            full_test_filename = os.path.join(test_data_folder, test_file_name)
-
-            if not os.path.exists(test_folder):
-                print 'Creating folder %s' % test_data_folder
-                os.makedirs(test_data_folder)
-
-            # print 'Test data will be stored in %s' % full_test_filename
-            r.write(filename=full_test_filename, formats=cfg.xformat)  # Write the test reports and data
-            # if r.passed:
-            #     default_choice = selection.next_key
-            # else:
-            #     default_choice = 'Q'
-            print 'Generating summary report...'
-            summary_file_name = os.path.join(test_folder, '%s_SN%s_summary.pdf' %  (current_model, current_serial))
-            t = XReport.generate_test_summary(input_folder=test_data_folder, required_tests=cfg.test_list, output_filename=summary_file_name, title='%s_SN%s Summary Test Report' % (current_model, current_serial))
+    
+                if test.require_serial_number:
+                    serial = current_serial
+                else:
+                    serial = None
+                    is_serial_scanned = False
+    
+                params = NameSpace(config_file=config_file, model=current_model, serial=serial)
+                r = XReport.run(nose_test_path, xparams=params)
+                print
+                print
+    
+                if params.serial != current_serial:
+                    print '**********************************************'
+                    print ' **** Serial number is now %s' % (params.serial)
+                    print '**********************************************'
+                    current_serial = params.serial
+                    is_serial_scanned = False
+    
+                test_folder = os.path.join(test_results_folder, '%s_SN%s' % (current_model, current_serial))
+                test_data_folder = os.path.join(test_folder, 'data')
+                test_file_name = '%s%s.pdf' %  (test_date, nose_test_path.replace(':', '.'))
+                full_test_filename = os.path.join(test_data_folder, test_file_name)
+    
+                if not os.path.exists(test_folder):
+                    print 'Creating folder %s' % test_data_folder
+                    os.makedirs(test_data_folder)
+    
+                # print 'Test data will be stored in %s' % full_test_filename
+                r.write(filename=full_test_filename, formats=cfg.xformat)  # Write the test reports and data
+                # if r.passed:
+                #     default_choice = selection.next_key
+                # else:
+                #     default_choice = 'Q'
+                print 'Generating summary report...'
+                summary_file_name = os.path.join(test_folder, '%s_SN%s_summary.pdf' %  (current_model, current_serial))
+                t = XReport.generate_test_summary(input_folder=test_data_folder, required_tests=subcfg.test_list, output_filename=summary_file_name, title='%s_SN%s Summary Test Report' % (current_model, current_serial))
     return locals()  # return a dict of all local variables to help interactive debugging
 
 
