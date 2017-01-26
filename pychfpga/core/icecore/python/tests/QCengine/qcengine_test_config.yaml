@@ -1,0 +1,88 @@
+# Notes:
+#     - Semicolumns must be followed by a space
+#     - Floats must have a decimal point *AND* an exponent sign if an exponent is used (i.e. 10.0 and 10.e+3 is valid, 10e3, 10.e3, 10e+3 are all invalid)
+aliases:
+comment: |
+    This is a long note
+
+    That extends many lines
+        this is indented more
+
+# test_results_folder: './test_results'
+test_results_folder: '../../../../../crate_qc'
+model_number: ['MGK7BP16','MGADC08','MGK7MB']
+xformat: ['pdf']  # Output formats for the test reports. xml is always saved.
+
+
+# DEBUGGING options
+debug:
+    default_model: 'MGK7BP16'
+    default_serial: None
+    no_date: false
+    force_fpga_prog: 2  # 1 - False , 2 - True
+
+?: &default_fpga_array
+    iceboards: 183
+    mdns_delay: 1
+    
+submenu_list:
+    # This list contains all the submenus accessible from the top level menu
+    - [ 'adc', {description: 'ADC level tests',             path: '../../../../qc/MGADC08/mgadc08_test_config.yaml'}]
+    - [ 'mb',  {description: 'Motherboard level tests',     path: None}]
+    - [ 'bp',  {description: 'Backplane level tests',       path: '../../../../qc/MGK7BP16/mgk7bp16_test_config.yaml'}]
+    
+menu:
+    # The menu item will match the user input to either the 'key' field or to the regular expression 'regex'. The matching dictionary is returned.
+    # If a regular expression is given, string parameters are replaced by string_param.format(regex_matched_group_list), i.e. '{0}' is replaced by the first matched group etc. The 'key' and 'regex' fields are excluded from this conversion.
+    # Entry types are:
+    #  test: a test to run. test_tag refers to the test to run in test_list (defined above). A regex entry will be added to match the tets tag and tets path. The description will be taken from the test description if none is provided here.
+    #  exit: exit the menu
+    #  text: do nothing. The description is shown in the menu if there is one.
+    #  board_info: Sets the current board model and serial number. The serial number can be extracted from string parsed by the regex
+    #
+    - { key: '1', type: submenu, menu_tag: adc}
+    - { key: '2', type: submenu, menu_tag: mb}
+    - { key: '3', type: submenu, menu_tag: bp}
+
+
+    - { key: 'S', description: 'Send all new test results data to McGill',                          type: push}
+    - { key: 'R', description: 'Generate summary of all tests',                                     type: summary}
+    - { key: 'Q', description: 'Exit',                                                              type: exit}
+    - {           description: "Start by entering the BP's serial number, then select a test.",     type: text}
+    - { regex: '(0\d{2})',
+
+
+##################################
+# Test-specific parameters
+##################################
+
+crate_tests:
+    setup:
+    
+    bitErrorRate_test:
+        period: 60
+        bp_limit: 1.e-10
+        qsfp_limit: 1.e-10
+        gpu_limit: 50
+        repeat: 3
+
+    reset_test:
+        arm_sleep_time: 30 # ~20 secs
+        pow_sleep_time: 60 # ~40 secs , board 9 crate 18 ~50 secs
+
+    qsfp_test:
+
+    sensor_test:
+        voltage_limits: [3, 3.5]
+        current_limits: [15, 20]
+        temp_limit: 90
+
+    clock_test:
+        max_time_diff: 200000000
+        limits: [9999998, 10000002]
+
+    shuffle_test:
+        time_source: 'bp_time'
+        repeat: 3
+
+    mezzRamp_test:
