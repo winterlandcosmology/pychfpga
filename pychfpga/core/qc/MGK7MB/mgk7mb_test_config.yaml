@@ -1,0 +1,134 @@
+# Notes:
+#     - Semicolumns must be followed by a space
+#     - Floats must have a decimal point *AND* an exponent sign if an exponent is used (i.e. 10.0 and 10.e+3 is valid, 10e3, 10.e3, 10e+3 are all invalid)
+aliases:
+comment: |
+    This is a long note
+
+    That extends many lines
+        this is indented more
+
+# test_results_folder: './test_results'
+test_results_folder: '../../../../../motherboard_qc'
+model_number: ['MGK7MB']
+mgk7mb_model_number: ['MGK7MB']
+xformat: ['pdf']  # Output formats for the test reports. xml is always saved.
+
+# DEBUGGING options
+debug:
+    default_model: 'MGK7MB'
+    default_serial: None
+    no_date: false
+    force_fpga_prog: 2  # 1 - False , 2 - True
+
+
+instruments:
+    dmm:       {labpy_object: 'agilent_dmm', interface: 'lan', ip_addr: '192.168.0.130', gpib_addr: 22} # Agilent 34410A multimeter (we don't use the LAN connection so we can go back in local mode remotely)
+#   ps12v:     {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '10.11.1.132', gpib_addr: 5}  # Agilent E3648A dual output power supply  12V on output 1, output 2 not used
+#   ps3v3_2v5: {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '10.11.1.132', gpib_addr: 6}  # Agilent E3648A dual output power supply. 3.3V on output1, 2.5V on output 2
+#   na:        {labpy_object: 'hp8753e',     interface: 'prologix_eth', ip_addr: '10.11.1.132', gpib_addr: 14} # HP8753E Network Analyzer
+
+
+?: &default_fpga_array
+    iceboards: 183
+    mdns_delay: 1
+
+
+test_list:
+    # This list all the tests that will be done my the test software, in the proper order
+    # path is the argument given to nose to find the test fucntion, in the form of module_path:function or module_path:class.method
+    # This path is also the path used by XReport to identify tests results, with the exception that the semicolon ':' is replaced by a dot '.'
+    - [ 'insp', {description: 'Inspection test',         path: 'mgk7mb_test:MGK7MBTests.insp_test',      required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'res', {description: 'Resistance test',          path: 'mgk7mb_test:MGK7MBTests.res_test',       required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'powup', {description: 'Powerup test',           path: 'mgk7mb_test:MGK7MBTests.powerup_test',   required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'pll', {description: 'Program PLL',              path: 'mgk7mb_test:MGK7MBTests.pll_test',       required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'mem', {description: 'Test ARM memory',          path: 'mgk7mb_test:MGK7MBTests.mem_test',       required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'sens', {description: 'Read board power sensors',path: 'mgk7mb_test:MGK7MBTests.sens_test',      required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'ser', {description: 'Save serial number',       path: 'mgk7mb_test:MGK7MBTests.ser_test',       required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'i2c', {description: 'ARM i2c bus tests',        path: 'mgk7mb_test:MGK7MBTests.i2c_test',       required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'fpga', {description: 'FPGA tests',              path: 'mgk7mb_test:MGK7MBTests.fpga_test',      required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'gtx', {description: 'GTX testing',              path: 'mgk7mb_test:MGK7MBTests.gtx_test',       required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'mezz', {description: 'Basic mezz test',         path: 'mgk7mb_test:MGK7MBTests.mezz_test',       required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'rmp', {description: 'Ramp testing',             path: 'mgk7mb_test:MGK7MBTests.rmp_test',      required: yes, require_serial_number: yes, dependencies: null}]
+
+menu:
+    # The menu item will match the user input to either the 'key' field or to the regular expression 'regex'. The matching dictionary is returned.
+    # If a regular expression is given, string parameters are replaced by string_param.format(regex_matched_group_list), i.e. '{0}' is replaced by the first matched group etc. The 'key' and 'regex' fields are excluded from this conversion.
+    # Entry types are:
+    #  test: a test to run. test_tag refers to the test to run in test_list (defined above). A regex entry will be added to match the tets tag and tets path. The description will be taken from the test description if none is provided here.
+    #  exit: exit the menu
+    #  text: do nothing. The description is shown in the menu if there is one.
+    #  board_info: Sets the current board model and serial number. The serial number can be extracted from string parsed by the regex
+    #
+    - { key: '1', type: test, test_tag: insp}
+    - { key: '2', type: test, test_tag: res}
+    - { key: '3', type: test, test_tag: powup}
+    - { key: '4', type: test, test_tag: pll}
+    - { key: '5', type: test, test_tag: mem}
+    - { key: '6', type: test, test_tag: sens}
+    - { key: '7', type: test, test_tag: ser}
+    - { key: '8', type: test, test_tag: i2c}
+    - { key: '9', type: test, test_tag: fpga}
+    - { key: '10', type: test, test_tag: mezz}
+    - { key: '11', type: test, test_tag: rmp}
+    - { key: '12', type: test, test_tag: gtx}
+
+    - { key: 'S', description: 'Send all new test results data to McGill',                          type: push}
+    - { key: 'R', description: 'Generate summary of all tests',                                     type: summary}
+    - { key: 'Q', description: 'Exit',                                                              type: exit}
+    - {           description: "Start by entering the MB's serial number, then select a test.",     type: text}
+    - { regex: '(0\d{3})', type: board_info, model: 'MGK7MB', serial: '{0}', next_key: '1'}  # 0nnn are MGK7MB Serial number
+
+
+
+##################################
+# Test-specific parameters
+##################################
+
+motherboard_tests:
+    setup:
+         instruments: [dmm] # Subset of instruments we use in the bench tests
+
+    impedance:
+        max_impedance: 1.0e+10  # any measurement more than this is probably not taken correctly
+        test_points:
+        # delay: delay to wait before taking the measurement
+        # zmin: minimum impedance below which the test will fail
+           - ['+V       (P18)',{delay: 0.1, zmin: 500}]
+           - ['12V      (L3)', {delay: 0.1, zmin: 500}]
+           - ['Vadj     (L11)',{delay: 0.1, zmin: 500}]
+           - ['3.3V     (L1)', {delay: 0.1, zmin: 30}]
+           - ['5V       (L4)', {delay: 0.1, zmin: 500}]
+           - ['1V GTX   (L5)', {delay: 0.1, zmin: 200}]
+           - ['1.2V GTX (L6)', {delay: 0.1, zmin: 300}]
+           - ['1V Core  (L8)', {delay: 0.1, zmin: 50}]
+           - ['1.5V     (L7)', {delay: 0.1, zmin: 400}]
+           - ['1.8V     (L9)', {delay: 0.1, zmin: 350}]
+
+    bitErrorRate_test:
+        period: 60
+        bp_limit: 1.e-10
+        qsfp_limit: 1.e-10
+        gpu_limit: 50
+        repeat: 3
+
+    reset_test:
+        arm_sleep_time: 30 # ~20 secs
+        pow_sleep_time: 60 # ~40 secs , board 9 crate 18 ~50 secs
+
+    qsfp_test:
+
+    sensor_test:
+        voltage_limits: [3, 3.5]
+        current_limits: [15, 20]
+        temp_limit: 90
+
+    clock_test:
+        max_time_diff: 200000000
+        limits: [9999998, 10000002]
+
+    shuffle_test:
+        time_source: 'bp_time'
+        repeat: 3
+
+    mezzRamp_test:
