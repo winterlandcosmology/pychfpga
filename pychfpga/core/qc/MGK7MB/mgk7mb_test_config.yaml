@@ -24,7 +24,7 @@ debug:
 
 instruments:
     dmm:       {labpy_object: 'agilent_dmm', interface: 'lan', ip_addr: '192.168.0.130', gpib_addr: 22} # Agilent 34410A multimeter (we don't use the LAN connection so we can go back in local mode remotely)
-#   ps12v:     {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '10.11.1.132', gpib_addr: 5}  # Agilent E3648A dual output power supply  12V on output 1, output 2 not used
+    ps18v:     {labpy_object: 'agilent_N5700', interface: 'lan', ip_addr: '192.168.0.139', gpib_addr: 5}  # Agilent E3648A dual output power supply  12V on output 1, output 2 not used
 #   ps3v3_2v5: {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '10.11.1.132', gpib_addr: 6}  # Agilent E3648A dual output power supply. 3.3V on output1, 2.5V on output 2
 #   na:        {labpy_object: 'hp8753e',     interface: 'prologix_eth', ip_addr: '10.11.1.132', gpib_addr: 14} # HP8753E Network Analyzer
 
@@ -87,24 +87,26 @@ menu:
 
 motherboard_tests:
     setup:
-         instruments: [dmm] # Subset of instruments we use in the bench tests
+         instruments: [dmm,ps18v] # Subset of instruments we use in the bench tests
 
     impedance:
         max_impedance: 1.0e+10  # any measurement more than this is probably not taken correctly
         test_points:
         # delay: delay to wait before taking the measurement
         # zmin: minimum impedance below which the test will fail
-           - ['+V       (P18)',{delay: 0.1, zmin: 500}]
-           - ['12V      (L3)', {delay: 0.1, zmin: 500}]
-           - ['Vadj     (L11)',{delay: 0.1, zmin: 500}]
-           - ['3.3V     (L1)', {delay: 0.1, zmin: 30}]
-           - ['5V       (L4)', {delay: 0.1, zmin: 500}]
-           - ['1V GTX   (L5)', {delay: 0.1, zmin: 200}]
-           - ['1.2V GTX (L6)', {delay: 0.1, zmin: 300}]
-           - ['1V Core  (L8)', {delay: 0.1, zmin: 50}]
-           - ['1.5V     (L7)', {delay: 0.1, zmin: 400}]
-           - ['1.8V     (L9)', {delay: 0.1, zmin: 350}]
-
+           - ['+V (P18)',{delay: 0.2, zmin: 500}]
+           - ['12V (L3)', {delay: 0.2, zmin: 500}]
+           - ['Vadj (L11)',{delay: 0.2, zmin: 500}]
+           - ['3.3V (L1)', {delay: 0.2, zmin: 30}]
+           - ['5V (L4)', {delay: 0.2, zmin: 500}]
+           - ['1V Gt. (L5)', {delay: 0.2, zmin: 200}]
+           - ['1.2V Gt. (L6)', {delay: 0.2, zmin: 300}]
+           - ['1V Co. (L8)', {delay: 0.2, zmin: 50}]
+           - ['1.5V (L7)', {delay: 0.2, zmin: 400}]
+           - ['1.8V (L9)', {delay: 0.2, zmin: 350}]
+    powerup:
+        imax: 0.9
+        imin: 0.5
     bitErrorRate_test:
         period: 60
         bp_limit: 1.e-10

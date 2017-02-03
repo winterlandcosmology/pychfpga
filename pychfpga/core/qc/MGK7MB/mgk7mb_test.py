@@ -11,6 +11,9 @@ import datetime
 from util import NameSpace
 import textwrap
 
+import visa  #run "pip install pyvisa"   and  "pip install -U https://github.com/hgrecco/pyvisa-py/zipball/master"
+
+
 util.add_paths('../..')  # needed to find icecore
 from icecore import XReport as xr
 from icecore.tests.xreport import test_report
@@ -20,6 +23,9 @@ util.add_paths('../../..')  # needed to find fpga_array
 from fpga_array import FPGAArray
 
 TEST_CONFIG_FILE = './mgk7mb_test_config.yaml'
+
+rm = visa.ResourceManager('@py')
+dmm_visa = rm.open_resource('TCPIP0::192.168.0.130::inst0::INSTR')
 
 def wrap(obj, width=80):
     return textwrap.fill(str(obj), width)
@@ -56,6 +62,8 @@ class MGK7MBTests(unittest.TestCase):  #
 
         self.instr.dmm.set_beeper(True)
         self.instr.dmm.display('Ready for','MGK7MB tests')
+
+        self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
 
         xr.header('Test results')
 
@@ -153,13 +161,16 @@ class MGK7MBTests(unittest.TestCase):  #
             for tp_name, limits in NameSpace(cfg.test_points).items():
                 dmm.display('','Measure %s' % tp_name)
                 dmm.select_resistance_measurement()
+                dmm.get_resistance() #Dummy measurement to ensure screen updates
                 while True:
-                    dmm.local()
+                    #dmm.local()
+                    dmm_visa.write("DIAG:LOCAL")
                     input("Apply probe to test point '%s' and press ENTER to measure (Q=Exit):" % tp_name)
                     if limits.delay:
                         dmm.get_resistance()  # make a dummy measurement
                         time.sleep(limits.delay)
                     result = dmm.get_resistance()
+                    time.sleep(1)
                     if result <= cfg.max_impedance: break
                     print 'Impedance is too high. Is the probe really connected?'
                 dmm.beep()
@@ -175,7 +186,8 @@ class MGK7MBTests(unittest.TestCase):  #
         finally:
             test_results.passed = passed
             dmm.display(xr.pass_fail(passed),'Impedance tests')
-            dmm.local()
+            #dmm.local()
+            dmm_visa.write("DIAG:LOCAL")
             xr.save_data(test_results)
 
 
@@ -196,9 +208,31 @@ class MGK7MBTests(unittest.TestCase):  #
         #Fail test if current draw too high
         #If power draw okay - request user to indicate if any of the 9 power LEDs are turned off.
         #If any of the power LEDs are turned off test has failed.
+
         xr.header('Powerup test')
-        print "No test written"
-        passed = True
+        cfg = self.cfg.motherboard_tests.powerup
+        self.instr.ps18v.clear() #Clearing any previous protection
+        self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
+        self.instr.ps18v.control_voltage(voltage=18, readonly=False) #Setting voltage to 18V, power still off
+        self.instr.ps18v.set_current_limit(current=2, ocp=True) #Setting current limit and turning on ocp feature
+
+        while (input_yes_no("Are you ready to apply power to the board? [Y/N]", additional_answers=[]) != True):
+            pass;
+        self.instr.ps18v.output(state=True, readonly=False)
+        self.instr.ps18v.pollstatus(polltime=0.1, runtime=1)
+        status = self.instr.ps18v.status()
+        self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
+        if (status['status']=='OK'):
+            if (status['current'] < cfg.imax) and  ( status['current'] > cfg.imin):
+                passed = True
+            else:
+                passed = False
+                print "Measured current is out of range"
+                assert False, "Current out of range"
+        else:
+            print "Fault detected - either current limiting or off, status is:" + status['status']
+            passed = False
+            assert False, "Fault detected"
 
     def pll_test(self):
         """
