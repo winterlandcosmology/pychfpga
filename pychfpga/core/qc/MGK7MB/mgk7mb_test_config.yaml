@@ -107,6 +107,30 @@ motherboard_tests:
     powerup:
         imax: 0.9
         imin: 0.5
+
+    pll:
+        ilim: 2
+        pll1regs:
+            - 0x01260320
+            - 0xEB060301
+            - 0x011E0302
+            - 0xEB040303
+            - 0xEB860314
+            - 0x101C1E75
+            - 0x849F4FE6
+            - 0xBDB23BE7
+            #- 0x20009CF8
+        pll2regs:
+            - 0xEB840320
+            - 0xEB840301
+            - 0xEB840302
+            - 0xEB860303
+            - 0xEB400014
+            - 0x101C1E75
+            - 0x84BF49A6
+            - 0xBDB23BE7
+            #- 0x20009DD8
+
     bitErrorRate_test:
         period: 60
         bp_limit: 1.e-10
