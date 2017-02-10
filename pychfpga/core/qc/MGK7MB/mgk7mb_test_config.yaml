@@ -35,7 +35,7 @@ instruments:
 
 
 test_list:
-    # This list all the tests that will be done my the test software, in the proper order
+    # This list all the tests that will be done by the test software, in the proper order
     # path is the argument given to nose to find the test fucntion, in the form of module_path:function or module_path:class.method
     # This path is also the path used by XReport to identify tests results, with the exception that the semicolon ':' is replaced by a dot '.'
     - [ 'insp', {description: 'Inspection test',         path: 'mgk7mb_test:MGK7MBTests.insp_test',      required: yes, require_serial_number: yes, dependencies: null}]
@@ -48,8 +48,8 @@ test_list:
     - [ 'i2c', {description: 'ARM i2c bus tests',        path: 'mgk7mb_test:MGK7MBTests.i2c_test',       required: yes, require_serial_number: yes, dependencies: null}]
     - [ 'fpga', {description: 'FPGA tests',              path: 'mgk7mb_test:MGK7MBTests.fpga_test',      required: yes, require_serial_number: yes, dependencies: null}]
     - [ 'gtx', {description: 'GTX testing',              path: 'mgk7mb_test:MGK7MBTests.gtx_test',       required: yes, require_serial_number: yes, dependencies: null}]
-    - [ 'mezz', {description: 'Basic mezz test',         path: 'mgk7mb_test:MGK7MBTests.mezz_test',       required: yes, require_serial_number: yes, dependencies: null}]
-    - [ 'rmp', {description: 'Ramp testing',             path: 'mgk7mb_test:MGK7MBTests.rmp_test',      required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'mezz', {description: 'Basic mezz test',         path: 'mgk7mb_test:MGK7MBTests.mezz_test',      required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'rmp', {description: 'Ramp testing',             path: 'mgk7mb_test:MGK7MBTests.rmp_test',       required: yes, require_serial_number: yes, dependencies: null}]
 
 menu:
     # The menu item will match the user input to either the 'key' field or to the regular expression 'regex'. The matching dictionary is returned.
@@ -104,6 +104,46 @@ motherboard_tests:
            - ['1V Core  (L8)', {delay: 0.1, zmin: 50}]
            - ['1.5V     (L7)', {delay: 0.1, zmin: 400}]
            - ['1.8V     (L9)', {delay: 0.1, zmin: 350}]
+
+    sensors:
+        # need to fill these in
+        current:
+            VCC3V3:
+            VCC12V0:
+            VCC5V5:
+            VCC1V0_GTX:
+            VCC1V0: 
+            VCC1V2: 
+            VCC1V5:    
+            VCC1V8:    
+            VADJ:
+
+        voltage:
+            VCC3V3:
+            VCC12V0:
+            VCC5V5:
+            VCC1V0_GTX:
+            VCC1V0: 
+            VCC1V2: 
+            VCC1V5:    
+            VCC1V8:    
+            VADJ:
+
+        temp:
+            POWER:
+            FPGA:
+            ARM:
+            PHY:
+
+        fmccurrent:
+            VCC3V3: 0.0
+            VCC12V0: 0.0
+            VADJ: 0.0
+
+        fmcvoltage:
+            VCC3V3: 3.3
+            VCC12V0: 12.0
+            VADJ: 3.0
 
     bitErrorRate_test:
         period: 60

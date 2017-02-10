@@ -40,6 +40,12 @@ def input_yes_no(message, additional_answers=[]):
             return key
         print 'Wrong answer. Try again'
 
+def in_range(value, target, margin=0.05):
+  	if(value < target*(1-margin) or value > target*(1+margin)):
+   		return False
+   	else:
+   		return True
+
 class MGK7MBTests(unittest.TestCase):  #
     """
     Perform impedance & power tests on the MGADC08 Mezzanine.
@@ -265,8 +271,127 @@ class MGK7MBTests(unittest.TestCase):  #
         #Turn of board
         #Check if currents/voltages in range
         xr.header('Power sensor test')
-        print "No test written"
-        passed = True
+
+        # Useful shortcuts
+        cfg = self.cfg.motherboard_tests.sensors
+        test_results = NameSpace()
+        passed = False
+
+        try:
+        	print "Creating hardware map"
+        	ca = FPGAArray(iceboards=xr.params.serial)
+        	assert len(ca.ib) != 0, "No motherboard found."
+        	ib = ca.ib[0]
+
+        	assert not ib.is_mezzanine_present(1), "Mezzanine are NOT supposed to be present for this test, found Mezzanine on Slot 1."
+			assert not ib.is_mezzanine_present(2), "Mezzanine are NOT supposed to be present for this test, found Mezzanine on Slot 2."
+
+        	print "Reading Iceboard Power, Current, Voltage & Temperature Sensors"
+        	power, current, voltage, temp = {}, {}, {}, {}
+
+			totalPower = ib.get_motherboard_power()
+			power['VCC3V3'] 	= ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC3V3')
+			power['VCC12V0'] 	= ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC12V0')
+			power['VCC5V5'] 	= ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC5V5')
+			power['VCC1V0_GTX']	= ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC1V0_GTX')
+			power['VCC1V0'] 	= ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC1V0')
+			power['VCC1V2'] 	= ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC1V2')
+			power['VCC1V5']		= ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC1V5')
+			power['VCC1V8']		= ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC1V8')
+			power['VADJ']		= ib.get_motherboard_power('MOTHERBOARD_RAIL_VADJ')
+
+			current['VCC3V3'] 		= ib.get_motherboard_current('MOTHERBOARD_RAIL_VCC3V3')
+			current['VCC12V0'] 		= ib.get_motherboard_current('MOTHERBOARD_RAIL_VCC12V0')
+			current['VCC5V5'] 		= ib.get_motherboard_current('MOTHERBOARD_RAIL_VCC5V5')
+			current['VCC1V0_GTX']	= ib.get_motherboard_current('MOTHERBOARD_RAIL_VCC1V0_GTX')
+			current['VCC1V0'] 		= ib.get_motherboard_current('MOTHERBOARD_RAIL_VCC1V0')
+			current['VCC1V2'] 		= ib.get_motherboard_current('MOTHERBOARD_RAIL_VCC1V2')
+			current['VCC1V5']		= ib.get_motherboard_current('MOTHERBOARD_RAIL_VCC1V5')
+			current['VCC1V8']		= ib.get_motherboard_current('MOTHERBOARD_RAIL_VCC1V8')
+			current['VADJ']			= ib.get_motherboard_current('MOTHERBOARD_RAIL_VADJ')
+
+			voltage['VCC3V3'] 		= ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC3V3')
+			voltage['VCC12V0'] 		= ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC12V0')
+			voltage['VCC5V5'] 		= ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC5V5')
+			voltage['VCC1V0_GTX']	= ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V0_GTX')
+			voltage['VCC1V0'] 		= ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V0')
+			voltage['VCC1V2'] 		= ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V2')
+			voltage['VCC1V5']		= ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V5')
+			voltage['VCC1V8']		= ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V8')
+			voltage['VADJ']			= ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VADJ')
+
+			temp['POWER']	= ib.get_motherboard_temperature('MOTHERBOARD_TEMPERATURE_POWER')	# between the two 1.0V bucks
+			temp['FPGA']	= ib.get_motherboard_temperature('MOTHERBOARD_TEMPERATURE_FPGA')	# near USER SMA
+			temp['ARM']		= ib.get_motherboard_temperature('MOTHERBOARD_TEMPERATURE_ARM')		# under the CPU shield
+			temp['PHY']		= ib.get_motherboard_temperature('MOTHERBOARD_TEMPERATURE_PHY')		# also under the CPU shield
+
+			test_results.power, test_results.current, test_results.voltage, test_results.temp = power, current, voltage, temp
+
+			print "Total Power: ", totalPower
+			for x in power:
+				print x, ':   \t', power[x]
+			print "\nCurrent:"
+			for x in current:
+				print x, ':   \t', current[x]
+			print "\nVoltage:"
+			for x in voltage:
+				print x, ':   \t', voltage[x]
+			print "\nTemperature:"
+			for x in temp:
+				print x, ':\t', temp[x]
+
+			print "Turning on power to FMC slots"
+			ib.set_mezzanine_power(True,1)
+			ib.set_mezzanine_power(True,2)
+			p1, p2 = ib.get_mezzanine_power(1), ib.get_mezzanine_power(2)
+			assert (p1 and p2), "Mezzanines did not turn on properly! Slot 1: %s, Slot 2: %s" % p1, p2
+
+			print "Reading FMC Slot Current & Voltage Sensors"
+			mcurrent, mvoltage = {}, {}
+
+			mcurrent['VCC3V3']	= ib.get_mezzanine_current('MEZZANINE_RAIL_VCC3V3', 1)	,	ib.get_mezzanine_current('MEZZANINE_RAIL_VCC3V3', 2)
+			mcurrent['VCC12V0']	= ib.get_mezzanine_current('MEZZANINE_RAIL_VCC12V0', 1)	,	ib.get_mezzanine_current('MEZZANINE_RAIL_VCC12V0', 2)
+			mcurrent['VADJ']	= ib.get_mezzanine_current('MEZZANINE_RAIL_VADJ', 1)	,	ib.get_mezzanine_current('MEZZANINE_RAIL_VADJ', 2)
+			
+			mvoltage['VCC3V3']	= ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC3V3', 1)	,	ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC3V3', 2)
+			mvoltage['VCC12V0']	= ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC12V0', 1)	,	ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC12V0', 2)
+			mvoltage['VADJ']	= ib.get_mezzanine_voltage('MEZZANINE_RAIL_VADJ', 1)	,	ib.get_mezzanine_voltage('MEZZANINE_RAIL_VADJ', 2)
+
+			test_results.mcurrent, test_results.mvoltage = mcurrent, mvoltage
+
+			print "Current:\t(Slot 1, Slot 2)"
+			for x in mcurrent:
+				print x, ':   \t', mcurrent[x]
+			print "\nVoltage:\t(Slot 1, Slot 2)"
+			for x in mvoltage:
+				print x, ':   \t', mvoltage[x]
+
+			print "Turning on power to FMC slots"
+			ib.set_mezzanine_power(False,1)
+			ib.set_mezzanine_power(False,2)
+			p1, p2 = ib.get_mezzanine_power(1), ib.get_mezzanine_power(2)
+			assert not (p1 or p2), "Mezzanines did not turn off properly! Slot 1: %s, Slot 2: %s" % p1, p2
+
+			values_ok = []
+			for x in current:
+				values_ok.append(in_range(current[x], cfg.current.x))
+			for x in voltage:
+				values_ok.append(in_range(voltage[x], cfg.voltage.x))
+			for x in temp:
+				values_ok.append(in_range(temp[x], cfg.temp.x))
+			for x in mcurrent:
+				values_ok.append(in_range(mcurrent[x], cfg.fmccurrent.x))
+			for x in mvoltage:
+				values_ok.append(in_range(mvoltage[x], cfg.fmcvoltage.x))
+
+			assert min(values_ok), "Sensor Values out of bound!"
+
+			passed = True
+
+		finally:
+			xr.params.test_locals = locals()
+        	test_results.passed = passed
+        	xr.save_data(test_results)
 
     def ser_test(self):
         """
