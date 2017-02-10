@@ -10,6 +10,10 @@ import util
 import datetime
 from util import NameSpace
 import textwrap
+import memtest_rs232 as rs232
+
+import visa  #run "pip install pyvisa"   and  "pip install -U https://github.com/hgrecco/pyvisa-py/zipball/master"
+
 
 util.add_paths('../..')  # needed to find icecore
 from icecore import XReport as xr
@@ -20,6 +24,9 @@ util.add_paths('../../..')  # needed to find fpga_array
 from fpga_array import FPGAArray
 
 TEST_CONFIG_FILE = './mgk7mb_test_config.yaml'
+
+rm = visa.ResourceManager('@py')
+dmm_visa = rm.open_resource('TCPIP0::192.168.0.130::inst0::INSTR')
 
 def wrap(obj, width=80):
     return textwrap.fill(str(obj), width)
@@ -60,11 +67,15 @@ class MGK7MBTests(unittest.TestCase):  #
         cfg = self.cfg.motherboard_tests.setup  # config options pertaining to setup
         self.instr = util.open_instruments(self.cfg.instruments, cfg.instruments)  # open only instruments listed in cfg.instruments
 
-        self.instr.dmm.set_beeper(True)
-        self.instr.dmm.display('Ready for','MGK7MB tests')
+        self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
+        self.instr.ps18v.clear() #Clearing any previous protection
+        self.instr.ps18v.control_voltage(voltage=18, readonly=False) #Setting voltage to 18V, power still off
+        self.instr.ps18v.set_current_limit(current=5, ocp=True) #Setting current limit and turning on ocp feature
 
         xr.header('Test results')
 
+    def tearDown(self):
+        self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
 
     def insp_test(self):
         """
@@ -109,6 +120,8 @@ class MGK7MBTests(unittest.TestCase):  #
         comments = input("If there are any additional comments you wish to make (e.g. scratches, manufacturing problems), please describe below. (If none, enter 'None'): ")
         passed = True
 
+        #Estimate 30 seconds
+
     def res_test(self):
         """
         QC002: Resistance test: Record resistance at various points on the board
@@ -138,6 +151,9 @@ class MGK7MBTests(unittest.TestCase):  #
         """
         xr.header('Resistance test')
 
+        self.instr.dmm.set_beeper(True)
+        self.instr.dmm.display('Ready for','MGK7MB tests')
+
         # Useful shortcuts
         cfg = self.cfg.motherboard_tests.impedance
         dmm = self.instr.dmm  # Multimeter
@@ -159,13 +175,16 @@ class MGK7MBTests(unittest.TestCase):  #
             for tp_name, limits in NameSpace(cfg.test_points).items():
                 dmm.display('','Measure %s' % tp_name)
                 dmm.select_resistance_measurement()
+                dmm.get_resistance() #Dummy measurement to ensure screen updates
                 while True:
-                    dmm.local()
+                    #dmm.local()
+                    dmm_visa.write("DIAG:LOCAL")
                     input("Apply probe to test point '%s' and press ENTER to measure (Q=Exit):" % tp_name)
                     if limits.delay:
                         dmm.get_resistance()  # make a dummy measurement
                         time.sleep(limits.delay)
                     result = dmm.get_resistance()
+                    time.sleep(1)
                     if result <= cfg.max_impedance: break
                     print 'Impedance is too high. Is the probe really connected?'
                 dmm.beep()
@@ -181,10 +200,9 @@ class MGK7MBTests(unittest.TestCase):  #
         finally:
             test_results.passed = passed
             dmm.display(xr.pass_fail(passed),'Impedance tests')
-            dmm.local()
+            #dmm.local()
+            dmm_visa.write("DIAG:LOCAL")
             xr.save_data(test_results)
-
-
 
     def powerup_test(self):
         """
@@ -202,9 +220,48 @@ class MGK7MBTests(unittest.TestCase):  #
         #Fail test if current draw too high
         #If power draw okay - request user to indicate if any of the 9 power LEDs are turned off.
         #If any of the power LEDs are turned off test has failed.
+
         xr.header('Powerup test')
-        print "No test written"
-        passed = True
+        cfg = self.cfg.motherboard_tests.powerup
+        self.instr.ps18v.clear() #Clearing any previous protection
+        self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
+        self.instr.ps18v.control_voltage(voltage=18, readonly=False) #Setting voltage to 18V, power still off
+        self.instr.ps18v.set_current_limit(current=2, ocp=True) #Setting current limit and turning on ocp feature
+
+        while (input_yes_no("Are you ready to apply power to the board? [Y/N]", additional_answers=[]) != True):
+            pass;
+        self.instr.ps18v.output(state=True, readonly=False)
+        self.instr.ps18v.pollstatus(polltime=0.1, runtime=1)
+        status = self.instr.ps18v.status()
+        self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
+        if (status['status']=='OK'):
+            if (status['current'] < cfg.imax) and  ( status['current'] > cfg.imin):
+                passed = True
+            else:
+                passed = False
+                print "Measured current is out of range"
+                assert False, "Current out of range"
+        else:
+            print "Fault detected - either current limiting or off, status is:" + status['status']
+            passed = False
+            assert False, "Fault detected"
+        print "Looks like the current draw is in range"
+        print "\nBe ready to inspect the 9 power LEDs at the back of the board"
+        while (input_yes_no("Are you ready to apply power to the board again? [Y/N]", additional_answers=[]) != True):
+            pass;
+        self.instr.ps18v.output(state=True, readonly=False)
+
+        response = input_yes_no("Are all 9 of the power LEDs turned on? Y/N]", additional_answers=[])
+
+        if response == True:
+            print "Test has passed"
+        else:
+            input("Which lights failed to light up?")
+            #self.instr.ps18v.output(state=False, readonly=False)
+            passed = 0
+            assert False, "Some of the buck converters have not registered power good"
+
+    #Estimate 30 seconds
 
     def pll_test(self):
         """
@@ -226,8 +283,80 @@ class MGK7MBTests(unittest.TestCase):  #
 
         #Think about adding: Check that Both PLL lock (check LED) when using SMA.
         xr.header('PLL test')
-        print "No test written"
-        passed = True
+        import cdce620005_pll_QC as cdce
+        cfg = self.cfg.motherboard_tests.pll
+
+        while (input_yes_no("Please ensure that no flash card is in the board. Ready to continue? [Y/N]", additional_answers=[]) != True):
+            pass;
+        while (input_yes_no("Please connect PLL programming dongle to the 6pin header. Ready to continue? [Y/N]", additional_answers=[]) != True):
+            pass;
+        while (input_yes_no("Are you ready to apply power to the board? [Y/N]", additional_answers=[]) != True):
+            pass;
+
+        self.instr.ps18v.set_current_limit(current=cfg.ilim, ocp=True)  #We dont need much current
+        self.instr.ps18v.output(state=True, readonly=False)
+
+        #cdce.write_pll_reg(cdce.pll1port, 0 , 0) #temporarily make reg 0 on pll 1 wrong
+
+        print "\nComparing PLL1 desired settings with measured settings:"
+        meas_pll1_regs=cdce.read_pll1()
+        pll1_cmp=cdce.comp_reg(cfg.pll1regs, meas_pll1_regs)
+
+        print "\nComparing PLL2 desired settings with measured settings:"
+        meas_pll2_regs=cdce.read_pll2()
+        pll2_cmp=cdce.comp_reg(cfg.pll2regs, meas_pll2_regs)
+
+        if (all(v==0 for v in meas_pll1_regs) and all(v==0 for v in meas_pll1_regs)):
+            while (input_yes_no("All the registers in both PLLs are 0.  Please ensure that dongle orientated correctly on the program header. Ready to continue? [Y/N]", additional_answers=[]) != True):
+                pass;
+            input_yes_no("Out of interest was it on the right way? [Y/N]", additional_answers=[])
+
+        if (all(v==0xFFFFFFFF for v in meas_pll1_regs) and all(v==0xFFFFFFFF for v in meas_pll1_regs)):
+            while (input_yes_no("All the registers in both PLLs are 0xFFFFFFFF.  Please ensure that dongle is plugged into the program header. Ready to continue? [Y/N]", additional_answers=[]) != True):
+                pass;
+            input_yes_no("Out of interest was it plugged in? [Y/N]", additional_answers=[])
+
+        if (pll1_cmp==0):
+            print "\nDifferences were detected on PLL1 - Programing it"
+            cdce.program_pll1(cfg.pll1regs, write_eeprom=True)
+            meas_pll1_regs=cdce.read_pll1()
+            print "\nComparing settings again:"
+            pll1_cmp=cdce.comp_reg(cfg.pll1regs, meas_pll1_regs)
+            if pll1_cmp:
+                print "PLL1 successfully programed"
+            else:
+                passed = False
+                print "Settings are still wrong - is the dongle orientated correctly on the program header?"
+                assert False
+
+        if (pll2_cmp==0):
+            print "\nDifferences were detected on PLL2 - Programing it"
+            cdce.program_pll2(cfg.pll2regs,write_eeprom=True)
+            meas_pll2_regs=cdce.read_pll2()
+            print "\nComparing settings again:"
+            pll2_cmp=cdce.comp_reg(cfg.pll2regs, meas_pll2_regs)
+            if pll_cmp:
+                print "PLL2 successfully programed"
+            else:
+                print "Settings are still wrong - Not sure whats wrong since PLL1 worked, perhaps PLL2 is now locked?"
+                passed = False
+                assert False
+
+        print "Both PLLs have the correct settings programmed"
+        print "Rebooting the board"
+        self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
+        self.instr.ps18v.output(state=True, readonly=False) #Turning power back on
+
+        response = input_yes_no("Are both PLL lock lights turned on? (yellow and green next to 6 pin RS232 header) [Y/N]", additional_answers=[])
+        if response == True:
+            passed = True
+        else:
+            print "Looks like something has gone wrong - retry the test or check PLL soldering"
+            passed = False
+            assert False
+
+        self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
+        #Estimate 10 seconds
 
     def mem_test(self):
         """
@@ -235,23 +364,43 @@ class MGK7MBTests(unittest.TestCase):  #
 
         Procedure:
 
-          - Connect RS232 cable to the board (might need to think about which RS232 port)
+          - Connect RS232 cable to the board
           - Type in serial number of tested board.
           - Enable board power
-          - Interupt boot and start memtest - let run for 3 memory pass runs
-          - Ask user if test passed.
+          - Interupt boot and start memtest - let run for 5 memory pass runs
 
         """
-        #Connect to RS232 dongle
-        #Power up board
-        #Run memtest
-
-        #We may be able to do something like get uboot to test for a dipswitch and automatically run
-        #memtest and flash LEDs to indicate test status. This would mean that RS232 is then only needed
-        #to confirm/diagnose problems rather than the default stratergy
         xr.header('Mem test')
-        print "No test written"
-        passed = True
+
+        while (input_yes_no("Please ensure that a flash card is now plugged into the board. Ready to continue? [Y/N]", additional_answers=[]) != True):
+            pass;
+        while (input_yes_no("Please connect RS232 dongle to connector next to the 3x2 LED stack. Ready to continue? [Y/N]", additional_answers=[]) != True):
+            pass;
+        while (input_yes_no("Are you ready to apply power to the board? [Y/N]", additional_answers=[]) != True):
+            pass;
+
+
+        #chmod 777 /dev/ttyUSB* allowed access to screen, probably not the right thing to do!
+        #Should probably write another permissions file as for the PLL test
+        [ser , rs232dongle_dev] =  rs232.init_rs232()
+        print "Found RS232 dongle on port" + rs232dongle_dev
+
+        self.instr.ps18v.output(state=True, readonly=False) #Ensuring power on N5764A is off
+        rs232.interupt_boot(ser)
+        testpassed = rs232.start_memtest(ser, iterations=5)
+        rs232.close_serial(ser)
+
+        self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
+
+        if testpassed == 1:
+            print "The memory is good - all iterations passed"
+            passed = 1
+        else:
+            print "The memory test failed"
+            passed = False
+            assert False
+
+        #Measured time 90 seconds with 5 iterations (15secs setup, 15secs per iteration)
 
     def sens_test(self):
         """
@@ -392,6 +541,8 @@ class MGK7MBTests(unittest.TestCase):  #
 			xr.params.test_locals = locals()
         	test_results.passed = passed
         	xr.save_data(test_results)
+
+        #Estimate 30 seconds
 
     def ser_test(self):
         """
