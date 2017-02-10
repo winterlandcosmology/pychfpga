@@ -133,6 +133,9 @@ motherboard_tests:
 
     sensors:
         # need to fill these in
+        vlt: 18
+        curlmt: 
+
         current:
             VCC3V3:
             VCC12V0:

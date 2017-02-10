@@ -426,9 +426,28 @@ class MGK7MBTests(unittest.TestCase):  #
         test_results = NameSpace()
         passed = False
 
+        while (input_yes_no("Please ensure that the Mezzanines are NOT mounted on the board for this test. Ready to continue? [Y/N]", additional_answers=[]) != True):
+            pass;
+        while (input_yes_no("Please ensure that a flash card is now plugged into the board. Ready to continue? [Y/N]", additional_answers=[]) != True):
+            pass;
+        while (input_yes_no("Please ensure that the ethernet cable is plugged in to the board. Ready to continue? [Y/N]", additional_answers=[]) != True):
+            pass;
+        while (input_yes_no("Are you ready to apply power to the board? [Y/N]", additional_answers=[]) != True):
+            pass;
+
+        self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
+        self.instr.ps18v.clear() #Clearing any previous protection
+        self.instr.ps18v.control_voltage(voltage=cfg.vlt, readonly=False) #Setting voltage to 18V, power still off
+        self.instr.ps18v.set_current_limit(current=cfg.curlmt, ocp=True) #Setting current limit and turning on ocp feature
+        self.instr.ps18v.output(state=True, readonly=False) #Turning power on
+
         try:
         	print "Creating hardware map"
-        	ca = FPGAArray(iceboards=xr.params.serial)
+        	if xr.params.serial is not None:
+        		serial = xr.params.serial
+        	else:
+        		serial = ['iceboard.local']
+        	ca = FPGAArray(iceboards=serial)
         	assert len(ca.ib) != 0, "No motherboard found."
         	ib = ca.ib[0]
 
@@ -538,6 +557,7 @@ class MGK7MBTests(unittest.TestCase):  #
 			passed = True
 
 		finally:
+			self.instr.ps18v.output(state=False, readonly=False) # Turn power off
 			xr.params.test_locals = locals()
         	test_results.passed = passed
         	xr.save_data(test_results)
