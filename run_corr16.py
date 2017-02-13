@@ -21,7 +21,7 @@ ib= ca.ib[0]
 print 'Setting up data processing'
 ca.set_sync_method('local_soft_trigger')
 ca.set_operational_mode('shuffle16', frames_per_packet=2)
-ib.start_data_capture(period=0.1, source='adc')
+#ib.start_data_capture(period=0.1, source='adc')
 
 #print 'Getting data receiver'
 #r=ib.get_data_receiver()

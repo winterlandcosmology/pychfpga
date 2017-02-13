@@ -745,6 +745,8 @@ if __name__ == "__main__":
             else:
                 log.info("acquiring data...")
             time.sleep(poll_rate)
+            hk_return = ca.ib[0].get_motherboard_temperature(ca.ib[0].TEMPERATURE_SENSOR.MB_FPGA_DIE)
+            print hk_return
     except(KeyboardInterrupt, SystemExit):
         raise
         #if acq:
