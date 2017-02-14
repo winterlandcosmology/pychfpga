@@ -23,8 +23,8 @@ debug:
 
 
 instruments:
-    dmm:       {labpy_object: 'agilent_dmm', interface: 'lan', ip_addr: '192.168.0.130', gpib_addr: 22} # Agilent 34410A multimeter (we don't use the LAN connection so we can go back in local mode remotely)
-    ps18v:     {labpy_object: 'agilent_N5700', interface: 'lan', ip_addr: '192.168.0.139', gpib_addr: 5}  # Agilent E3648A dual output power supply  12V on output 1, output 2 not used
+    dmm:       {labpy_object: 'agilent_dmm', interface: 'lan', ip_addr: '192.168.0.136', gpib_addr: 22} # Agilent 34410A multimeter (we don't use the LAN connection so we can go back in local mode remotely)
+    ps18v:     {labpy_object: 'agilent_N5700', interface: 'lan', ip_addr: '192.168.0.115', gpib_addr: 5}  # Agilent E3648A dual output power supply  12V on output 1, output 2 not used
 #   ps3v3_2v5: {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '10.11.1.132', gpib_addr: 6}  # Agilent E3648A dual output power supply. 3.3V on output1, 2.5V on output 2
 #   na:        {labpy_object: 'hp8753e',     interface: 'prologix_eth', ip_addr: '10.11.1.132', gpib_addr: 14} # HP8753E Network Analyzer
 
@@ -134,29 +134,29 @@ motherboard_tests:
     sensors:
         # need to fill these in
         vlt: 18
-        curlmt: 
+        curlmt: 5
 
         current:
-            VCC3V3:
-            VCC12V0:
-            VCC5V5:
-            VCC1V0_GTX:
-            VCC1V0: 
-            VCC1V2: 
-            VCC1V5:    
-            VCC1V8:    
-            VADJ:
+            VCC3V3:     {nom: 2.05,  pmargin: 0.10,  amargin: 0}     # 10%
+            VCC12V0:    {nom: 0,     pmargin: 0.10,  amargin: 0.005}   # +-5mA
+            VCC5V5:     {nom: 1.069, pmargin: 0.10,  amargin: 0}     # 10%
+            VCC1V0_GTX: {nom: 0.016, pmargin: 0.00,  amargin: 0.05}    # +-50mA
+            VCC1V0:     {nom: 0.162, pmargin: 0.00,  amargin: 0.05}    # +-50mA
+            VCC1V2:     {nom: 0.019, pmargin: 0.00,  amargin: 0.005}   # +-5mA
+            VCC1V5:     {nom: 1.644, pmargin: 0.10,  amargin: 0}     # 10%
+            VCC1V8:     {nom: 0.275, pmargin: 0.10,  amargin: 0}     # 10%
+            VADJ:       {nom: 0.023, pmargin: 0.00,  amargin: 0.005}   # +-5mA
 
         voltage:
-            VCC3V3:
-            VCC12V0:
-            VCC5V5:
-            VCC1V0_GTX:
-            VCC1V0: 
-            VCC1V2: 
-            VCC1V5:    
-            VCC1V8:    
-            VADJ:
+            VCC3V3:     {nom: 3.3,   pmargin: 0.05,  amargin: 0}     # 5%
+            VCC12V0:    {nom: 12,    pmargin: 0.05,  amargin: 0}     # 5%
+            VCC5V5:     {nom: 5.5,   pmargin: 0.05,  amargin: 0}     # 5%
+            VCC1V0_GTX: {nom: 1.05,  pmargin: 0.05,  amargin: 0}     # 5%
+            VCC1V0:     {nom: 1,     pmargin: 0.05,  amargin: 0}     # 5%
+            VCC1V2:     {nom: 1.2,   pmargin: 0.05,  amargin: 0}     # 5%
+            VCC1V5:     {nom: 1.5,   pmargin: 0.05,  amargin: 0}     # 5%
+            VCC1V8:     {nom: 1.8,   pmargin: 0.05,  amargin: 0}     # 5%
+            VADJ:       {nom: 2.5,   pmargin: 0.05,  amargin: 0}     # 5%
 
         temp:
             POWER:
@@ -165,14 +165,20 @@ motherboard_tests:
             PHY:
 
         fmccurrent:
-            VCC3V3: 0.0
-            VCC12V0: 0.0
-            VADJ: 0.0
+            VCC3V3:     {nom: 0,     pmargin: 0.00,  amargin: 0.005}   # +-5mA
+            VCC12V0:    {nom: 0,     pmargin: 0.00,  amargin: 0.005}   # +-5mA
+            VADJ:       {nom: 0,     pmargin: 0.00,  amargin: 0.005}   # +-5mA
 
         fmcvoltage:
-            VCC3V3: 3.3
-            VCC12V0: 12.0
-            VADJ: 3.0
+            VCC3V3:     {nom: 3.3,   pmargin: 0.05,  amargin: 0}     # 5%
+            VCC12V0:    {nom: 12,    pmargin: 0.05,  amargin: 0}     # 5%
+            VADJ:       {nom: 2.5,   pmargin: 0.05,  amargin: 0}     # 5%
+
+        fmcoffvoltage:
+            VCC3V3:     {nom: 0,   pmargin: 0.00,  amargin: 6}     # +-6V
+            VCC12V0:    {nom: 0,   pmargin: 0.00,  amargin: 6}     # +-6V
+            VADJ:       {nom: 0,   pmargin: 0.00,  amargin: 6}     # +-6V
+
 
     bitErrorRate_test:
         period: 60
