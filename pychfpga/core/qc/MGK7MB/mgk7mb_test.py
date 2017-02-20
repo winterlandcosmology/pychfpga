@@ -11,6 +11,8 @@ import datetime
 from util import NameSpace
 import textwrap
 import memtest_rs232 as rs232
+import subprocess
+import shlex
 
 import visa  #run "pip install pyvisa"   and  "pip install -U https://github.com/hgrecco/pyvisa-py/zipball/master"
 
@@ -491,7 +493,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
     def sens_test(self):
         """
-        QC006: Read the onboard power sensors and temperature sensors
+        QC007: Read the onboard power sensors and temperature sensors
 
         Procedure:
 
@@ -678,7 +680,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
     def ser_test(self):
         """
-        QC007: Program boards EEPROM and Flash with serial number
+        QC006: Program boards EEPROM and Flash with serial number
 
         Procedure:
 
@@ -750,18 +752,89 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
         Procedure:
 
-          - Start the i2c test on the computer
+          - Start the i2c test on the computerour
           - Type in serial number of tested board.
           - Check if expected devices are present
           - IOexpanders - GPIO/ LEDs
-          - Check if board thinks its in a backplane or not
           - Measure temperatures
-          - With no mezzanines present - enable disable power - read voltages
 
         """
-        xr.header('Programming serial number')
-        print "No test written"
+        xr.header('Checking I2C connectivity')
+
+        check_bp = input_yes_no("Should this test check for backplane I2C devices? [Y/N]", additional_answers=[])
+
+        cfg = self.cfg.motherboard_tests.i2c_test
+        test_results = NameSpace()
+        passed = False
+
+        ib = self.connect_to_board(xr, cfg)
+        hostname = ib.hostname
+
+        cmd = "ls /sys/bus/i2c/devices/"
+        ssh_cmd = 'ssh -o "StrictHostKeyChecking no" root@%s "%s"' % (hostname, cmd)
+        split_cmd = shlex.split(ssh_cmd)
+
+        p = subprocess.Popen(split_cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = p.stdout.readlines()
+
+        print "Listing all the I2C devices found at /sys/bus/i2c/devices on the board:"
+        print result
+
+        matrix_names = ["pca9548-1-70", "pca9548-2-71"]
+        matrix_addr = ["1-0070\n", "2-0071\n"]
+
+        bus_names = [   "I2C-1", "I2C-2",
+                        "I2C0_PCA954X_FMCA","I2C0_PCA954X_FMCB","I2C0_PCA954X_QSFPA","I2C0_PCA954X_QSFPB",
+                        "I2C0_PCA954X_SFP","I2C0_PCA954X_SMPS","I2C0_PCA954X_BP","I2C0_PCA954X_GPIO",
+                        "I2C1_PCA954X_FMCA","I2C1_PCA954X_FMCB","I2C1_PCA954X_QSFPA","I2C1_PCA954X_QSFPB",
+                        "I2C1_PCA954X_SFP","I2C1_PCA954X_SMPS","I2C1_PCA954X_BP","I2C1_PCA954X_GPIO"]
+        bus_addr = ["i2c-1\n", "i2c-2\n",
+                 "i2c-5\n", "i2c-6\n", "i2c-7\n", "i2c-8\n",
+                 "i2c-9\n", "i2c-10\n", "i2c-11\n", "i2c-12\n",
+                 "i2c-13\n", "i2c-14\n", "i2c-15\n", "i2c-16\n",
+                 "i2c-17\n", "i2c-18\n", "i2c-19\n", "i2c-20\n"]
+
+        power_names = ["VCC12V0","VCC5V5", "VCC3V3",
+                       "VADJ","VCC1V8", "VCC1V5",
+                       "VCC1V2", "VCC1V0", "VCC1V0_GTX",
+                       "FMC_A_VCC3V3", "FMC_A_VCC12V0", "FMC_A_VADJ",
+                       "FMC_B_VCC3V3", "FMC_B_VCC12V0", "FMC_B_VADJ"]
+        power_addr = ["10-0047\n", "10-0048\n", "10-0049\n",
+                      "10-0043\n", "10-004b\n", "10-004c\n",
+                      "10-004d\n", "10-004e\n", "10-004f\n",
+                      "10-0040\n", "10-0041\n", "10-0042\n",
+                      "10-0044\n", "10-0045\n", "10-0046\n"]
+
+        temp_names = [ "POWER", "ARM", "FPGA", "PHY"]
+        temp_addr = ["12-0048\n","12-004a\n","12-004b\n","12-004c\n"]
+
+        io_names = ["pca9575_u41", "pca9575_u42", "pca9575_u48", "pca9575_u59"]
+        io_addr = ["12-0020\n","12-0021\n","12-0022\n","12-0023\n"]
+
+        eeprom_names = ["Motherboard EEPROM"]
+        eeprom_addr = ["12-0057\n"]
+
+        backplane_names = [ "BP_VCC3V3", "BP_Temp1", "BP_Temp2", "Backplane EEPROM"]
+        backplane_addr =  ["19-0040\n", "19-004d\n", "19-004e\n", "19-0054\n"]
+
+        i2c_names = matrix_names + bus_names + power_names + temp_names + io_names + eeprom_names
+        i2c_addr  = matrix_addr  + bus_addr  + power_addr  + temp_addr  + io_addr  + eeprom_addr
+
+        print "\nParsing the list looking for specific devices"
+
         passed = True
+        for i,j in enumerate(i2c_addr):
+            if not(j in result):
+                print "Missing I2C device %s with address %s" %(i2c_names[i], i2c_addr[i])
+                passed = False
+
+        if (check_bp == True):
+            for i,j in enumerate(backplane_addr):
+                if not(j in result):
+                    print "Missing I2C device %s with address %s" %(backplane_names[i], backplane_addr[i])
+                    passed = False
+        assert passed, "Missing I2C devices"
+        print "All devices are present"
 
     def fpga_test(self):
         """
@@ -778,6 +851,17 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
         """
         xr.header('FPGA test')
+
+        cfg = self.cfg.motherboard_tests.fpga_test
+        test_results = NameSpace()
+        passed = False
+
+        while (input_yes_no("Please again ensure that the FPGA heatsink is in place, and with sufficient ventilation [Y/N]", additional_answers=[]) != True):
+            pass;
+        ib = self.connect_to_board(xr, cfg)
+
+
+
         print "No test written"
         passed = True
 

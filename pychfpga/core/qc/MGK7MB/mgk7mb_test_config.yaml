@@ -65,9 +65,9 @@ menu:
     - { key: '3', type: test, test_tag: powup}
     - { key: '4', type: test, test_tag: pll}
     - { key: '5', type: test, test_tag: mem}
-    - { key: '6', type: test, test_tag: sens}
-    - { key: '7', type: test, test_tag: ser}
-    - { key: '8', type: test, test_tag: i2c}
+    - { key: '6', type: test, test_tag: i2c}
+    - { key: '7', type: test, test_tag: sens}
+    - { key: '8', type: test, test_tag: ser}
     - { key: '9', type: test, test_tag: fpga}
     - { key: '10', type: test, test_tag: mezz}
     - { key: '11', type: test, test_tag: rmp}
@@ -185,6 +185,10 @@ motherboard_tests:
         vlt: 18
         curlmt: 5
         rev: 4
+
+    i2c_test:
+        vlt: 18
+        curlmt: 5
 
     bitErrorRate_test:
         period: 60
