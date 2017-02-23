@@ -404,7 +404,7 @@ class MGK7MBBenchTests(unittest.TestCase):  #
         #chmod 777 /dev/ttyUSB* allowed access to screen, probably not the right thing to do!
         #Should probably write another permissions file as for the PLL test
         [ser , rs232dongle_dev] =  rs232.init_rs232()
-        print "Found RS232 dongle on port" + rs232dongle_dev
+        print "Found RS232 dongle on port " + rs232dongle_dev
 
         self.instr.ps18v.output(state=True, readonly=False) #Ensuring power on N5764A is off
         rs232.interupt_boot(ser)
@@ -1101,7 +1101,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
             xr.params.test_locals = locals()  # store local variables for interactive debugging
             #receiver.close()
             xr.save_data(result)
-        
+
 
     def gtx_test(self):
         """

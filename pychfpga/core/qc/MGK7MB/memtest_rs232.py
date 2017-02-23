@@ -10,7 +10,8 @@
 import serial, time
 import re
 import sys
-
+import os
+import subprocess
 
 #code taken from https://github.com/psi46/elComandante/issues/14
 #!/usr/bin/env python2
@@ -83,7 +84,7 @@ def setup_serial(rs232dongle_dev):
         ser.open()
     except Exception, e:
         print "error open serial port: " + str(e)
-        exit()
+        sys.exit()
 
     ser.flushInput() #flush input buffer, discarding all its contents
     ser.flushOutput()#flush output buffer, aborting current output 
@@ -95,6 +96,15 @@ def init_rs232():
         assert rs232dongle_dev, "RS232 Dongle not found!"
     else:
         rs232dongle_dev = find_single_device('0403', '6015')
+
+        #Modifying permisions of USB RS232 device if needed
+        #Would request password
+        stat_command = ['stat', '-c', '%a', rs232dongle_dev]
+        x = int(subprocess.check_output(stat_command))
+        if x != 777:
+            print "\nNeed to change the permissions of %s. Please enter password when asked." %rs232dongle_dev
+            os.system('sudo chmod 777 /dev/ttyUSB*')
+
     ser = setup_serial(rs232dongle_dev)
     return ser , rs232dongle_dev
 
