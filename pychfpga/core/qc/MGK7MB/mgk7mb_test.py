@@ -33,7 +33,10 @@ util.add_paths('../../icecore/python/hw')
 import ipmi_fru as ipmi_fru
 import base64
 
-
+util.add_paths('../../icecore_ext')
+from pychfpga.core.icecore import IceBoardPlusHandler
+import fpga_bitstream as fb
+from pychfpga.core.icecore_ext import IceBoardExtHandler
 
 
 TEST_CONFIG_FILE = './mgk7mb_test_config.yaml'
@@ -490,7 +493,8 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
         assert count<61, "Timed out while looking for the board. Are you sure the ethernet cable is plugged in, or that its serial number is correct?"
 
-        print "We found hostname %s \n" %ib.hostname
+        print "We found hostname %s.\n" %ib.hostname
+
         return ib
 
     def sens_test(self):
@@ -838,6 +842,74 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         assert passed, "Missing I2C devices"
         print "All devices are present"
 
+    def clock_test(self):
+        """
+        QC?: check if board will boot with backplane clock
+
+        Procedure:
+
+          - Start the bp_clock_test test on the computer
+          - Move clock select jumper to backplane
+          - Validate board boots
+          - Check if board reports correct clock source
+
+        """
+        xr.header('Clock source test')
+
+        cfg = self.cfg.motherboard_tests.clock_test
+        test_results = NameSpace()
+        passed = False
+
+        print "\nPlease move the clock source jumper to the Crystal position. "
+        while (input_yes_no("Are you ready to continue? [Y/N]", additional_answers=[]) != True):
+            pass;
+        ib = self.connect_to_board(xr, cfg)
+        clock_source = ib.get_clock_source()
+        self.instr.ps18v.output(state=False, readonly=False) # Turn power off
+
+        if (clock_source == ib.CLOCK_SOURCE.XTAL):
+            print "Clock source is Crystal"
+        else :
+            print "Looks like the board booted but the board reported a different clock source to that specified: %s" %clock_source
+            assert False, "Wrong clock selection detected"
+
+
+        print "\nPlease move the clock source jumper to the SMA position. "
+        print "Please attach an SMA cable between the front panel clock input and backplane clock out SMA"
+        while (input_yes_no("Are you ready to power up the board? [Y/N]", additional_answers=[]) != True):
+            pass;
+
+        ib = self.connect_to_board(xr, cfg, questions = False)
+        clock_source = ib.get_clock_source()
+        self.instr.ps18v.output(state=False, readonly=False) # Turn power off
+
+        if (clock_source == ib.CLOCK_SOURCE.SMA):
+            passed = True
+            print "Board successfully booted and board reported that the SMA clock was used"
+        else:
+            print "Looks like the board booted but the board reported a different clock source to that specified: %s" %clock_source
+            passed = False
+            assert False, "Wrong clock source detected."
+
+        print "\nPlease move the clock source jumper to the backplane position. "
+        while (input_yes_no("Are you ready to power up the board? [Y/N]", additional_answers=[]) != True):
+            pass;
+
+        ib = self.connect_to_board(xr, cfg, questions = False)
+        clock_source = ib.get_clock_source()
+        self.instr.ps18v.output(state=False, readonly=False) # Turn power off
+
+        if (clock_source == ib.CLOCK_SOURCE.BP):
+            passed = True
+            print "Board successfully booted and board reported that the backplane clock was in use"
+        else:
+            print "Looks like the board booted but the board reported a different clock source to that specified: %s" %clock_source
+            passed = False
+            assert False, "Wrong clock source detected."
+
+        passed = True
+        print "Test passed"
+
     def fpga_test(self):
         """
         QC009: check if FPGA can be programmed - I don't think we want to run toptest script
@@ -848,8 +920,9 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
           - Type in serial number of tested board.
           - Connect to ARM and send bit file to FPGA
           - Check if Done pin goes high on ARM
-          - Monitor current draw from FPGA I2C bus
-          - Validate that SFP Present and FAULT line can be read (tests SFP & IO_Extender connectivity)
+          - Monitor power draw
+          - Monitor temperatures
+          - Read eeprom direct from FPGA to test I2C access
 
         """
         xr.header('FPGA test')
@@ -859,12 +932,79 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         passed = False
 
         while (input_yes_no("Please again ensure that the FPGA heatsink is in place, and with sufficient ventilation [Y/N]", additional_answers=[]) != True):
-            pass;
+            pass
+        while (input_yes_no("Please ensure that SFP unit is inserted into board, with an ethernet cable attached. Ready? [Y/N]", additional_answers=[]) != True):
+            pass
+
         ib = self.connect_to_board(xr, cfg)
 
+        print 'Before programming the FPGA die temperature is: %.3f C' % ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE)
+        pre_prog_power = ib.get_motherboard_power(ib.RAIL.MB_VCC3V3) + ib.get_motherboard_power(ib.RAIL.MB_VCC12V0) + ib.get_motherboard_power(ib.RAIL.MB_VCC5V5)
+        print 'Before programming the boards power consumption is: %.3f W' % pre_prog_power
 
 
-        print "No test written"
+        bit = fb.FpgaBitstream(self.cfg.fpga_bit_file)
+        ib.register_fpga_bitstream(bit)
+        ib.set_fpga_bitstream()
+        ib.is_fpga_programmed()
+
+        if(ib.is_voltage_nominal() == True):
+            print "\nThe board reports that all the buck regulators have their voltages within 5% tolerance"
+        else:
+            voltage['VCC3V3']       = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC3V3')
+            voltage['VCC12V0']      = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC12V0')
+            voltage['VCC5V5']       = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC5V5')
+            voltage['VCC1V0_GTX']   = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V0_GTX')
+            voltage['VCC1V0']       = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V0')
+            voltage['VCC1V2']       = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V2')
+            voltage['VCC1V5']       = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V5')
+            voltage['VCC1V8']       = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V8')
+            voltage['VADJ']         = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VADJ')
+
+            for x in voltage:
+                values_ok.append(in_range(voltage[x], cfg.voltage[x]['nom'],cfg.voltage[x]['pmargin'], cfg.voltage[x]['amargin']))
+                if (values_ok[-1]==False):
+                    print "The voltage on %s is out of range - measured voltage is: %.3f" %(x, voltage[x])
+
+            passed = False
+            assert False, "One or more of the buck rails reports that its voltage is out of the permitted 5% tollerance margin"
+
+        cookie = hex(ib.fpga_mmi_read(ib.FPGA_CORE_FIRMWARE_COOKIE_ADDR))
+        print "\nThe FPGA memory map cookie (address 0) is: %s" % cookie
+
+        if (cookie == '0xbeefface'):
+            print "Correct cookie detected - memory map read back looks good"
+        else:
+            print "Invalid cookie detected - letting test continue for now - although FPGA memory map read back may be problematic"
+            while (input_yes_no("Is the jumper J1 shorted? [Y/N]", additional_answers=[]) != True):
+                pass;
+            passed = False
+
+        after_prog_power =  ib.get_motherboard_power(ib.RAIL.MB_VCC3V3) + ib.get_motherboard_power(ib.RAIL.MB_VCC12V0) + ib.get_motherboard_power(ib.RAIL.MB_VCC5V5)
+        print '\nAfter programming the FPGA die temperature is: %.3f C' % ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE)
+        print 'After programming the boards power consumption is: %.3f W' % after_prog_power
+
+        fpga = IceBoardExtHandler(hostname = ib.hostname)
+        try:
+            fpga.open()
+            fpga.is_core_open()
+            print "\nDirect FPGA communications established through SFP unit."
+        except:
+            print "\nCannot communicate directly with the FPGA through the SFP unit."
+            print "Remove the SFP unit, clean the contacts and re-run the test"
+            passed = False
+            assert passed, "\nTest failed"
+
+        print "\nThe firmware operating is version: %s" %fpga.get_fpga_firmware_version()
+
+        print "\nAtempting to read the motherboard eeprom directly from the FPGA - this tests connectivity to I2C matrix"
+        partnum = fpga.hw.read_motherboard_eeprom(40,6)
+        if (partnum == 'MGK7MB'):
+            print "The part number detected in the eeprom is: %s" %fpga.hw.read_motherboard_eeprom(40,6)
+        else:
+            passed = False
+            assert passed, "\nTest failed"
+
         passed = True
 
     def mezz_test(self):

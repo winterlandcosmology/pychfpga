@@ -10,6 +10,7 @@ comment: |
 
 # test_results_folder: './test_results'
 test_results_folder: '../../../../../motherboard_qc'
+fpga_bit_file: '/home/winterlanduser/chfpga/xilinx_projects/CHFPGA_MGK7MB_REV2/CHFPGA_MGK7MB_REV2.runs/impl_Rev2/chFPGA_MGK7MB_Rev2.bit'
 model_number: ['MGK7MB']
 mgk7mb_model_number: ['MGK7MB']
 xformat: ['pdf']  # Output formats for the test reports. xml is always saved.
@@ -38,18 +39,19 @@ test_list:
     # This list all the tests that will be done by the test software, in the proper order
     # path is the argument given to nose to find the test fucntion, in the form of module_path:function or module_path:class.method
     # This path is also the path used by XReport to identify tests results, with the exception that the semicolon ':' is replaced by a dot '.'
-    - [ 'insp', {description: 'Inspection test',         path: 'mgk7mb_test:MGK7MBBenchTests.insp_test',      required: yes, require_serial_number: yes, dependencies: null}]
-    - [ 'res', {description: 'Resistance test',          path: 'mgk7mb_test:MGK7MBBenchTests.res_test',       required: yes, require_serial_number: yes, dependencies: null}]
-    - [ 'powup', {description: 'Powerup test',           path: 'mgk7mb_test:MGK7MBBenchTests.powerup_test',   required: yes, require_serial_number: yes, dependencies: null}]
-    - [ 'pll', {description: 'Program PLL',              path: 'mgk7mb_test:MGK7MBBenchTests.pll_test',       required: yes, require_serial_number: yes, dependencies: null}]
-    - [ 'mem', {description: 'Test ARM memory',          path: 'mgk7mb_test:MGK7MBBenchTests.mem_test',       required: yes, require_serial_number: yes, dependencies: null}]
-    - [ 'sens', {description: 'Read board power sensors',path: 'mgk7mb_test:MGK7MBNetworkTests.sens_test',      required: yes, require_serial_number: yes, dependencies: null}]
-    - [ 'ser', {description: 'Save serial number',       path: 'mgk7mb_test:MGK7MBNetworkTests.ser_test',       required: yes, require_serial_number: yes, dependencies: null}]
-    - [ 'i2c', {description: 'ARM i2c bus tests',        path: 'mgk7mb_test:MGK7MBNetworkTests.i2c_test',       required: yes, require_serial_number: yes, dependencies: null}]
-    - [ 'fpga', {description: 'FPGA tests',              path: 'mgk7mb_test:MGK7MBNetworkTests.fpga_test',      required: yes, require_serial_number: yes, dependencies: null}]
-    - [ 'gtx', {description: 'GTX testing',              path: 'mgk7mb_test:MGK7MBNetworkTests.gtx_test',       required: yes, require_serial_number: yes, dependencies: null}]
-    - [ 'mezz', {description: 'Basic mezz test',         path: 'mgk7mb_test:MGK7MBNetworkTests.mezz_test',      required: yes, require_serial_number: yes, dependencies: null}]
-    - [ 'rmp', {description: 'Ramp testing',             path: 'mgk7mb_test:MGK7MBNetworkTests.rmp_test',       required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'insp',  {description: 'Inspection test',          path: 'mgk7mb_test:MGK7MBBenchTests.insp_test',       required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'res',   {description: 'Resistance test',          path: 'mgk7mb_test:MGK7MBBenchTests.res_test',        required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'powup', {description: 'Powerup test',             path: 'mgk7mb_test:MGK7MBBenchTests.powerup_test',    required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'pll',   {description: 'Program PLL',              path: 'mgk7mb_test:MGK7MBBenchTests.pll_test',        required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'mem',   {description: 'Test ARM memory',          path: 'mgk7mb_test:MGK7MBBenchTests.mem_test',        required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'sens',  {description: 'Read board power sensors', path: 'mgk7mb_test:MGK7MBNetworkTests.sens_test',     required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'ser',   {description: 'Save serial number',       path: 'mgk7mb_test:MGK7MBNetworkTests.ser_test',      required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'i2c',   {description: 'ARM i2c bus tests',        path: 'mgk7mb_test:MGK7MBNetworkTests.i2c_test',      required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'fpga',  {description: 'FPGA tests',               path: 'mgk7mb_test:MGK7MBNetworkTests.fpga_test',     required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'gtx',   {description: 'GTX testing',              path: 'mgk7mb_test:MGK7MBNetworkTests.gtx_test',      required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'mezz',  {description: 'Basic mezz test',          path: 'mgk7mb_test:MGK7MBNetworkTests.mezz_test',     required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'rmp',   {description: 'Ramp testing',             path: 'mgk7mb_test:MGK7MBNetworkTests.rmp_test',      required: yes, require_serial_number: yes, dependencies: null}]
+    - [ 'clk',   {description: 'Clock testing',            path: 'mgk7mb_test:MGK7MBNetworkTests.clock_test',    required: yes, require_serial_number: yes, dependencies: null}]
 
 menu:
     # The menu item will match the user input to either the 'key' field or to the regular expression 'regex'. The matching dictionary is returned.
@@ -68,10 +70,11 @@ menu:
     - { key: '6', type: test, test_tag: i2c}
     - { key: '7', type: test, test_tag: sens}
     - { key: '8', type: test, test_tag: ser}
-    - { key: '9', type: test, test_tag: fpga}
-    - { key: '10', type: test, test_tag: mezz}
-    - { key: '11', type: test, test_tag: rmp}
-    - { key: '12', type: test, test_tag: gtx}
+    - { key: '9', type: test, test_tag: clk}
+    - { key: '10', type: test, test_tag: fpga}
+    - { key: '11', type: test, test_tag: mezz}
+    - { key: '12', type: test, test_tag: rmp}
+    - { key: '13', type: test, test_tag: gtx}
 
     - { key: 'S', description: 'Send all new test results data to McGill',                          type: push}
     - { key: 'R', description: 'Generate summary of all tests',                                     type: summary}
@@ -134,7 +137,6 @@ motherboard_tests:
             #- 0x20009DD8
 
     sensors:
-        # need to fill these in
         vlt: 18
         curlmt: 5
 
@@ -187,6 +189,14 @@ motherboard_tests:
         rev: 4
 
     i2c_test:
+        vlt: 18
+        curlmt: 5
+
+    clock_test:
+        vlt: 18
+        curlmt: 2
+
+    fpga_test:
         vlt: 18
         curlmt: 5
 
