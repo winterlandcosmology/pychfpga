@@ -1,5 +1,7 @@
 
 """ Performs bench tests of the MGADC08 CHIME ADC Mezzanine board.
+	Package requirements: reportlab, rst2pdf, pyserial, pyudev (linux only), pyvisa
+	Use command "pip install <package>" and "pip install -U https://github.com/hgrecco/pyvisa-py/zipball/master"
 """
 import unittest
 import time
@@ -14,7 +16,7 @@ import memtest_rs232 as rs232
 import subprocess
 import shlex
 
-import visa  #run "pip install pyvisa"   and  "pip install -U https://github.com/hgrecco/pyvisa-py/zipball/master"
+import visa
 
 
 util.add_paths('../..')  # needed to find icecore
@@ -898,8 +900,68 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
         """
         xr.header('Ramp test')
-        print "No test written"
-        passed = True
+        # Useful shortcuts
+        cfg = self.cfg.motherboard_tests.ramp
+        test_results = NameSpace()
+        passed = False
+
+        ib = self.connect_to_board(xr, cfg)
+
+        try:
+            test_results.data = []
+            test_results.ramp_ok = []
+
+            for mezz in ib.mezzanine.values():
+                print 'initializing mezzanine...'
+                mezz.init()
+
+                print 'Computing ADC delays...'
+                delay_table = self.set_adc_delays(ib)
+
+                print 'Opening data receiver socket'
+                receiver = ib.get_data_receiver()
+
+                print 'Setting up ramp transmission...'
+                ib.set_adcdaq_mode('data')
+                ib.set_data_source('adc')
+                ib.set_adc_mode('ramp')
+                ib.start_data_capture(period=1, source='adc')
+
+                print 'Syncing...'
+                ib.sync()
+
+                print 'Getting data frames...'
+                receiver.read_frames(flush=1, frames=3)  # flush
+                data = receiver.read_frames(1)
+
+                test_results.data.append(data)
+                plt.figure(1)
+
+                ideal_ramp = (np.arange(2048) - 128).astype(np.int8)
+
+                ramp_ok = []
+                for ch in range(8):
+                    plt.clf()
+                    plt.plot(data[ch])
+                    xr.insert_plot('Ramp capture for %s SN%s CHANNEL %02i' % (xr.params.model, xr.params.serial, ch))
+                    ok = np.all(data[ch] == ideal_ramp)
+                    ramp_ok.append(ok)
+                    if ok:
+                        print 'Channel %02i: OK' % (ch+1)
+                    else:
+                        print 'Channel %02i: ERROR!' % (ch+1)
+
+                test_results.ramp_ok.append(ramp_ok)
+
+                assert all(test_results.ramp_ok), 'One or more channels have ramp errors'
+
+            passed = True
+
+        finally:
+            xr.params.test_locals = locals()  # store local variables for interactive debugging
+            #receiver.close()
+            xr.save_data(result)
+        
 
     def gtx_test(self):
         """

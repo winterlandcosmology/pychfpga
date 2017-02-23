@@ -9,12 +9,14 @@
 
 import serial, time
 import re
+import sys
+
 
 #code taken from https://github.com/psi46/elComandante/issues/14
 #!/usr/bin/env python2
-import pyudev
-
-context = pyudev.Context()
+if sys.platform != 'win32':
+    import pyudev
+    context = pyudev.Context()
 
 def device_by_id(id_vendor, id_product):
     match_devices = []
@@ -44,6 +46,16 @@ def find_single_device(id_vendor, id_product):
         raise ValueError(msg.format(id_vendor, id_product))
     else:
         return devs[0].device_node
+
+def find_dev_windows():
+    import serial.tools.list_ports as listports
+    ports = list(listports.comports())
+    for p in ports:
+        hwid = p.hwid
+        if 'VID:PID=0403:6015' in hwid:
+            port = p
+    if port is not None:
+        return port.device
 
 
 #initialization and open the port
@@ -78,9 +90,13 @@ def setup_serial(rs232dongle_dev):
     return ser
 
 def init_rs232():
+    if sys.platform == 'win32':
+        rs232dongle_dev = find_dev_windows()
+        assert rs232dongle_dev, "RS232 Dongle not found!"
+    else:
         rs232dongle_dev = find_single_device('0403', '6015')
-        ser = setup_serial(rs232dongle_dev)
-        return ser , rs232dongle_dev
+    ser = setup_serial(rs232dongle_dev)
+    return ser , rs232dongle_dev
 
 def interupt_boot(ser):
 

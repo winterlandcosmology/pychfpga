@@ -23,8 +23,8 @@ debug:
 
 
 instruments:
-    dmm:       {labpy_object: 'agilent_dmm', interface: 'lan', ip_addr: '192.168.0.136', gpib_addr: 22} # Agilent 34410A multimeter (we don't use the LAN connection so we can go back in local mode remotely)
-    ps18v:     {labpy_object: 'agilent_N5700', interface: 'lan', ip_addr: '192.168.0.115', gpib_addr: 5}  # Agilent E3648A dual output power supply  12V on output 1, output 2 not used
+    dmm:       {labpy_object: 'agilent_dmm', interface: 'lan', ip_addr: '10.10.10.150', gpib_addr: 22} # Agilent 34410A multimeter (we don't use the LAN connection so we can go back in local mode remotely)
+    ps18v:     {labpy_object: 'agilent_N5700', interface: 'lan', ip_addr: '10.10.10.151', gpib_addr: 5}  # Agilent E3648A dual output power supply  12V on output 1, output 2 not used
 #   ps3v3_2v5: {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '10.11.1.132', gpib_addr: 6}  # Agilent E3648A dual output power supply. 3.3V on output1, 2.5V on output 2
 #   na:        {labpy_object: 'hp8753e',     interface: 'prologix_eth', ip_addr: '10.11.1.132', gpib_addr: 14} # HP8753E Network Analyzer
 
@@ -190,30 +190,5 @@ motherboard_tests:
         vlt: 18
         curlmt: 5
 
-    bitErrorRate_test:
-        period: 60
-        bp_limit: 1.e-10
-        qsfp_limit: 1.e-10
-        gpu_limit: 50
-        repeat: 3
-
-    reset_test:
-        arm_sleep_time: 30 # ~20 secs
-        pow_sleep_time: 60 # ~40 secs , board 9 crate 18 ~50 secs
-
-    qsfp_test:
-
-    sensor_test:
-        voltage_limits: [3, 3.5]
-        current_limits: [15, 20]
-        temp_limit: 90
-
-    clock_test:
-        max_time_diff: 200000000
-        limits: [9999998, 10000002]
-
-    shuffle_test:
-        time_source: 'bp_time'
-        repeat: 3
-
-    mezzRamp_test:
+    ramp:
+        
