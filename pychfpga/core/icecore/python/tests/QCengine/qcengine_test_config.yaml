@@ -49,7 +49,7 @@ menu:
     - { key: 'R', description: 'Generate summary of all tests',                                     type: summary}
     - { key: 'Q', description: 'Exit',                                                              type: exit}
     - {           description: "Start by entering the BP's serial number, then select a test.",     type: text}
-    - { regex: '(0\d{2})',
+    - { regex: '(0\d{2})', type: board_info, model: 'MGK7BP16', serial: '{0}', next_key: '1'}  # 0nn are MGK7BP16 Serial number
 
 
 ##################################

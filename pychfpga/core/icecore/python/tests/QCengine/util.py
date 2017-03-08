@@ -18,8 +18,8 @@ def add_paths(*paths):
         if fullpath not in sys.path:
             sys.path.insert(1, fullpath)
 
-add_paths('..')  # needed to find labpy
-add_paths('../..')  # needed to find icecore
+add_paths('../../../../qc')  # needed to find labpy
+add_paths('../../../..')  # needed to find icecore
 
 import icecore
 from icecore import NameSpace, XReport
@@ -40,9 +40,17 @@ def run_tests(config_file):
     
     submenu_list = NameSpace(cfg.submenu_list)  # convert list of (key,values) into an OrderedDict
 
-
     # load test menu and convert each dict element to NameSpace to simplify code
     submenus = [NameSpace(menu_item) for menu_item in cfg.menu]
+            # Update menu with information from the test list
+
+    for menu_item in submenus:
+        if menu_item.type == 'submenu':
+            submenu = submenu_list[menu_item.menu_tag]
+            if not menu_item.get('description', None):  # Take description from the test list if there is none
+                menu_item.description = submenu.description
+            menu_item.regex = '(%s|%s)' % (submenu.path, menu_item.menu_tag) # have the menu recognize the test path or key as an other way to select the test
+        
 
 
     while True:
@@ -55,9 +63,6 @@ def run_tests(config_file):
             print ' !!! NO SERIAL NUMBER CURRENTLY SELECTED !!!'
         print '---------------------------------------------'
         print
-        # Get a summary of all tests run so far
-        test_folder = os.path.join(test_results_folder, '%s_SN%s' % (current_model, current_serial))
-        summary = XReport.generate_test_summary(input_folder=test_folder, required_tests=cfg.test_list)
         
         default_choice = None
         for menu_item in submenus:
@@ -74,12 +79,15 @@ def run_tests(config_file):
             # instr.dmm.display('Bye!', '')
             break
         elif selection.type == 'submenu':
-            subcfg = load_config(submenu_list[selection.menu_tag])
+            subcfg = load_config(submenu_list[selection.menu_tag].path)
         
         test_list = NameSpace(subcfg.test_list)  # convert list of (key,values) into an OrderedDict
          # load test menu and convert each dict element to NameSpace to simplify code
-        test_menu = [NameSpace(menu_item) for menu_item in cfg.menu]
+        test_menu = [NameSpace(menu_item) for menu_item in subcfg.menu]
 
+        # Get a summary of all tests run so far
+        test_folder = os.path.join(test_results_folder, '%s_SN%s' % (current_model, current_serial))
+        summary = XReport.generate_test_summary(input_folder=test_folder, required_tests=subcfg.test_list)
 
         # Update menu with information from the test list
         for menu_item in test_menu:
@@ -232,6 +240,8 @@ def select_menu_item(menu, default=''):
                 print fmt % (item.get('status',''), item.get('key',''), item.get('description',''))
             # else:
             #     print "    %s" % item['description']
+        elif 'key' in item:
+            print fmt % (item.get('status',''), item.get('key',''), '')
 
     while True:
         choice = raw_input("Enter choice%s: " % (' [%s]' % default if default else '')).strip()
