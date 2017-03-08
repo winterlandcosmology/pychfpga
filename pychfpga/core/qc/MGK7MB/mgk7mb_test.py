@@ -2,6 +2,7 @@
 """ Performs bench tests of the MGADC08 CHIME ADC Mezzanine board.
 	Package requirements: reportlab, rst2pdf, pyserial, pyudev (linux only), pyvisa
 	Use command "pip install <package>" and "pip install -U https://github.com/hgrecco/pyvisa-py/zipball/master"
+    pip install -e git+https://github.com/Eichhoernchen/pybonjour.git#egg=pybonjour
 """
 import unittest
 import time
@@ -26,7 +27,7 @@ from icecore.hw import ipmi_fru
 
 util.add_paths('../../..')  # needed to find fpga_array
 
-#from fpga_array import FPGAArray
+import fpga_array
 from pychfpga.core.icecore import IceBoardPlusHandler
 
 util.add_paths('../../icecore/python/hw')
@@ -38,6 +39,9 @@ from pychfpga.core.icecore import IceBoardPlusHandler
 import fpga_bitstream as fb
 from pychfpga.core.icecore_ext import IceBoardExtHandler
 
+
+import base64
+import re
 
 TEST_CONFIG_FILE = './mgk7mb_test_config.yaml'
 
@@ -80,10 +84,6 @@ class MGK7MBBenchTests(unittest.TestCase):  #
         """
         xr.header('Setting-up')
         self.cfg = util.load_config(TEST_CONFIG_FILE)
-
-        visa_addr = 'TCPIP0::%s::inst0::INSTR' % self.cfg.instruments.dmm['ip_addr']
-        print 'Using visa address %s for multimeter' %visa_addr
-        dmm_visa = rm.open_resource(visa_addr)
 
         cfg = self.cfg.motherboard_tests.bench  # config options pertaining to setup
         self.instr = util.open_instruments(self.cfg.instruments, cfg.instruments)  # open only instruments listed in cfg.instruments
@@ -172,6 +172,9 @@ class MGK7MBBenchTests(unittest.TestCase):  #
         """
         xr.header('Resistance test')
 
+        visa_addr = 'TCPIP0::%s::inst0::INSTR' % self.cfg.instruments.dmm['ip_addr']
+        print 'Using visa address %s for multimeter' %visa_addr
+        dmm_visa = rm.open_resource(visa_addr)
         self.instr.dmm.set_beeper(True)
         self.instr.dmm.display('Ready for','MGK7MB tests')
 
@@ -467,35 +470,36 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         #while (input_yes_no("Do the front panel lights indicate that the board is ready? [Y/N]", additional_answers=[]) != True):
         #    pass;
 
-        if xr.params.serial is not None:
-            serial = 'iceboard%s.local' %xr.params.serial
-            ia = IceBoardPlusHandler(hostname = serial)
-
-        ib = IceBoardPlusHandler(hostname = 'iceboard.local')
-
-        if xr.params.serial is not None:
-            print "Waiting for 'iceboard.local' or '%s' to show up on the network" %serial
+        reload(fpga_array)
+        serial = 'iceboard%s.local' %xr.params.serial
+        print "Waiting for 'iceboard.local' or '%s' to boot and show up on the network" %serial
+        ibs = fpga_array.FPGAArray(iceboards="*", open = 0, prog = 0, mdns_timeout=60, ping=1)
+        if xr.params.serial in ibs.ib.discover_serial().values():
+            print "Found an iceboard with the correct serial number on the network"
+            ib_index = ibs.ib.discover_serial().values().find(xr.params.serial)[0]
+            ib = ibs.ib[ib_index]
+        elif None in ibs.ib.discover_serial().values(): #Empty serial
+            print "Found an iceboard with the no serial number programmed on the network"
+            ib_index = ibs.ib.discover_serial().values().find(None)
+            if len(ib_index)==1:
+                 ib = ibs.ib[ib_index[0]]
+            else:
+                print "More than one iceboard with no serial number was found"
+                assert False, "We don't know which iceboard to connect too"
         else:
-            print "Waiting for 'iceboard.local' to show up on the network"
-        print "Will time out after 60 seconds"
+            print "We did not find a board with the correct serial number or one with no serial programmed"
+            assert False, "IceBoard not found"
 
-        count = 0
-        while True:
-            if xr.params.serial is not None:
-                if ia.ping():
-                    ib = ia
-            if ib.ping():
-                break
-            elif count>60:
-                break
-            count = count + 1
-            time.sleep(1)
-
-        assert count<61, "Timed out while looking for the board. Are you sure the ethernet cable is plugged in, or that its serial number is correct?"
-
-        print "We found hostname %s.\n" %ib.hostname
+        print "We found iceboard with address: %s.\n" %ib.hostname
 
         return ib
+
+    def prog_fpga(self, ib):
+
+        bit = fb.FpgaBitstream(self.cfg.fpga_bit_file)
+        ib.register_fpga_bitstream(bit)
+        ib.set_fpga_bitstream()
+        assert ib.is_fpga_programmed()
 
     def sens_test(self):
         """
@@ -942,10 +946,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         pre_prog_power = ib.get_motherboard_power(ib.RAIL.MB_VCC3V3) + ib.get_motherboard_power(ib.RAIL.MB_VCC12V0) + ib.get_motherboard_power(ib.RAIL.MB_VCC5V5)
         print 'Before programming the boards power consumption is: %.3f W' % pre_prog_power
 
-
-        bit = fb.FpgaBitstream(self.cfg.fpga_bit_file)
-        ib.register_fpga_bitstream(bit)
-        ib.set_fpga_bitstream()
+        self.prog_fpga(ib)
         ib.is_fpga_programmed()
 
         if(ib.is_voltage_nominal() == True):
@@ -984,10 +985,9 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         print '\nAfter programming the FPGA die temperature is: %.3f C' % ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE)
         print 'After programming the boards power consumption is: %.3f W' % after_prog_power
 
-        fpga = IceBoardExtHandler(hostname = ib.hostname)
         try:
-            fpga.open()
-            fpga.is_core_open()
+            ib.open()
+            ib.is_core_open()
             print "\nDirect FPGA communications established through SFP unit."
         except:
             print "\nCannot communicate directly with the FPGA through the SFP unit."
@@ -995,12 +995,12 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
             passed = False
             assert passed, "\nTest failed"
 
-        print "\nThe firmware operating is version: %s" %fpga.get_fpga_firmware_version()
+        print "\nThe firmware operating is version: %s" %ib.get_fpga_firmware_version()
 
         print "\nAtempting to read the motherboard eeprom directly from the FPGA - this tests connectivity to I2C matrix"
-        partnum = fpga.hw.read_motherboard_eeprom(40,6)
+        partnum = ib.hw.read_motherboard_eeprom(40,6)
         if (partnum == 'MGK7MB'):
-            print "The part number detected in the eeprom is: %s" %fpga.hw.read_motherboard_eeprom(40,6)
+            print "The part number detected in the eeprom is: %s" %ib.hw.read_motherboard_eeprom(40,6)
         else:
             passed = False
             assert passed, "\nTest failed"
@@ -1019,14 +1019,116 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
           - Read Mezzanien eeprom check for hardware suitability
           - Power on Mezzanine
           - test Power Good and PRSNT Line
-          - check that SYNC stops clock and that RESET restores ADC registers and IO Expanders registers
           - Test SPI communication with ADC to confirm SPI bus connectivity to Mezz
-          - Check M2C reference clock frequencies (both).
 
         """
         xr.header('Mezz test')
-        print "No test written"
+
+        cfg = self.cfg.motherboard_tests.mezz_test
+        test_results = NameSpace()
+        passed = False
+
+        while (input_yes_no("Please ensure that the Mezzanines ARE mounted on the board for this test. Ready to continue? [Y/N]", additional_answers=[]) != True):
+            pass;
+        ib = self.connect_to_board(xr, cfg)
+
+        assert ib.is_mezzanine_present(1), "Did not find Mezzanine on Slot 1."
+        assert ib.is_mezzanine_present(2), "Did not find Mezzanine on Slot 2."
+
+        self.prog_fpga(ib)
+        ib.is_fpga_programmed()
+        ib.open()
+
+        if not (ib.is_core_open()):
+            assert False , "Cannot communicate directly with the FPGA through the SFP unit."
+        else:
+            print "Communications estabiished with FPGA through SFP unit"
+
+        m1_eeprom = base64.b64decode(ib._mezzanine_eeprom_read_base64(0))
+        m2_eeprom = base64.b64decode(ib._mezzanine_eeprom_read_base64(0))
+        if re.search('MGADC08',m1_eeprom):
+            print "Read Mezzanine 1 eeprom and detected MGADC08"
+        else:
+            print "Read Mezzanine 1 eeprom and did not find MGADC08 - is mezzanien eeprom programed correctly?"
+
+        if re.search('MGADC08',m2_eeprom):
+            print "Read Mezzanine 2 eeprom and detected MGADC08"
+        else:
+            print "Read Mezzanine 2 eeprom and did not find MGADC08 - is mezzanien eeprom programed correctly?"
+
+        #Turning on Mezzanines since they are MGADC08s
+        ib.set_mezzanine_power(True , 1)
+        ib.set_mezzanine_power(True , 2)
+
+        p1, p2 = ib.get_mezzanine_power(1), ib.get_mezzanine_power(2)
+        assert (p1 and p2), "Mezzanines did not turn on properly! Slot 1: %s, Slot 2: %s" % (p1, p2)
+
+        print "Reading FMC Slot Current & Voltage Sensors"
+        mcurrent, mvoltage = {}, {}
+
+        mcurrent['VCC3V3']  = ib.get_mezzanine_current('MEZZANINE_RAIL_VCC3V3', 1)  ,   ib.get_mezzanine_current('MEZZANINE_RAIL_VCC3V3', 2)
+        mcurrent['VCC12V0'] = ib.get_mezzanine_current('MEZZANINE_RAIL_VCC12V0', 1) ,   ib.get_mezzanine_current('MEZZANINE_RAIL_VCC12V0', 2)
+        mcurrent['VADJ']    = ib.get_mezzanine_current('MEZZANINE_RAIL_VADJ', 1)    ,   ib.get_mezzanine_current('MEZZANINE_RAIL_VADJ', 2)
+
+        mvoltage['VCC3V3']  = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC3V3', 1)  ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC3V3', 2)
+        mvoltage['VCC12V0'] = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC12V0', 1) ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC12V0', 2)
+        mvoltage['VADJ']    = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VADJ', 1)    ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VADJ', 2)
+
+        test_results.mcurrent, test_results.mvoltage = mcurrent, mvoltage
+
+        print "Current:\t(Slot 1, Slot 2)"
+        for x in mcurrent:
+            print x, ':   \t', mcurrent[x]
+        print "\nVoltage:\t(Slot 1, Slot 2)"
+        for x in mvoltage:
+            print x, ':   \t', mvoltage[x]
+
+        values_ok = []
+        for x in mcurrent:
+                for i in range(2):
+                    values_ok.append(in_range(mcurrent[x][i], cfg.fmccurrent[x]['nom'],cfg.fmccurrent[x]['pmargin'], cfg.fmccurrent[x]['amargin']))
+                    if (values_ok[-1]==False):
+                        print "The mezzanine current on %s is out of range - measured current is: %.3f" %(x, mcurrent[x][i])
+
+        for x in mvoltage:
+            for i in range(2):
+                values_ok.append(in_range(mvoltage[x][i], cfg.fmcvoltage[x]['nom'],cfg.fmcvoltage[x]['pmargin'], cfg.fmcvoltage[x]['amargin']))
+                if (values_ok[-1]==False):
+                    print "The mezzanine voltage on %s is out of range - measured voltage is: %.3f" %(x, mvoltage[x][i])
+
+        assert min(values_ok), "Sensor Values out of bound!"
+
+
+        #Checking if the mezzanine PG_M2C line is high - its one of the GPIOs that the ARM has access to
+        #A bit over kill but I prefer getting the info via the arm and no tubber command exists for it
+        #Could have gone via the FPGA instead
+        cmd = "cat /sys/class/gpio/FMCA_PG_M2C/value"
+        ssh_cmd = 'ssh -o "StrictHostKeyChecking no" root@%s "%s"' % (ib.hostname, cmd)
+        split_cmd = shlex.split(ssh_cmd)
+        p = subprocess.Popen(split_cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = p.stdout.readlines()
+        if re.search("1",result[0]):
+            print "Mezzanine 1 - PG_M2C line is detected high - mezzanine reports power good"
+        else:
+            print "Mezzanine 1 - PG_M2C line is not high - mezzanine did not report good power"
+            assert False, "Mezzanine 1 - PG_M2C has problems"
+
+        #Checking if the mezzanine PG_M2C line is high - its one of the GPIOs that the ARM has access to
+        #A bit over kill but I prefer getting the info via the arm and no tubber command exists for it
+        #Could have gone via the FPGA instead
+        cmd = "cat /sys/class/gpio/FMCB_PG_M2C/value"
+        ssh_cmd = 'ssh -o "StrictHostKeyChecking no" root@%s "%s"' % (ib.hostname, cmd)
+        split_cmd = shlex.split(ssh_cmd)
+        p = subprocess.Popen(split_cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = p.stdout.readlines()
+        if re.search("1",result[0]):
+            print "Mezzanine 2 - PG_M2C line is detected high - mezzanine reports power good"
+        else:
+            print "Mezzanine 2 - PG_M2C line is not high - mezzanine did not report good power"
+            assert False, "Mezzanine 1 - PG_M2C has problems"
+
         passed = True
+
 
     def rmp_test(self):
         """
@@ -1041,11 +1143,15 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         """
         xr.header('Ramp test')
         # Useful shortcuts
-        cfg = self.cfg.motherboard_tests.ramp
+        cfg = self.cfg.motherboard_tests.rmp_test
         test_results = NameSpace()
         passed = False
 
         ib = self.connect_to_board(xr, cfg)
+
+        self.prog_fpga(ib)
+        ib.is_fpga_programmed()
+        ib.open()
 
         try:
             test_results.data = []
@@ -1100,7 +1206,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         finally:
             xr.params.test_locals = locals()  # store local variables for interactive debugging
             #receiver.close()
-            xr.save_data(result)
+            xr.save_data(test_results)
 
 
     def gtx_test(self):

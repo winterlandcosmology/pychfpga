@@ -398,6 +398,7 @@ class FPGAArray(object):
                     ib = ib_to_ping[i]
                     if ping_successful:
                         ib.hostname = socket.gethostbyname(ib.hostname)
+                        pass
                     else:
                         print ("%r could not be found at '%s'. It is removed from YAML hardware map."
                                            % (ib, ib.tuber_uri))
@@ -2053,7 +2054,7 @@ ICE_PATTERNS = [
         { 'regex': '\*',                          'type': None,         'serial': '*'},  # Stores a an item that selects all units of the current model
         ]
 
-def parse_hw_description_string(hw_description_string, hw_description_table={}, dut_id_patterns=ICE_PATTERNS, hardware_type=None, default_model=None):
+def parse_hw_description_string(hw_description_string, hw_description_table=None, dut_id_patterns=ICE_PATTERNS, hardware_type=None, default_model=None):
     """ Parses a string describing ICE hardware elements (motherboards, crates and mezzanines) and returns a dictionary describing each component.
     Each item is described by a model followed by one or, more serial numbers. A crate number can optionally be specified for crates by following the serial number by ':nnnn'.
     Serial numbers are converted to integers if possible; otherwise, they are stored as a string.
@@ -2080,6 +2081,9 @@ def parse_hw_description_string(hw_description_string, hw_description_table={}, 
     """
     # Extract the crate number
 
+    if hw_description_table is None:
+        hw_description_table = {}
+    print "Hardware description table is", hw_description_table
     # If hw_description_string is a list of string, combine them in one single string
     # print 'parsing:', hw_description_string
     if isinstance(hw_description_string, (list, tuple)):
@@ -2154,7 +2158,7 @@ def parse_hw_description_string(hw_description_string, hw_description_table={}, 
         print hw_description_string
         print ' '*(pos-2)+'^'
         raise ValueError(err)
-    print 'hw_description_table:', hw_description_table
+    #print 'hw_description_table:', hw_description_table
     return hw_description_table
 
 

@@ -74,7 +74,7 @@ def mdns_discover(hwm=None, icecrates=None, iceboards=None, timeout=5, resolve_i
 
         existing_ib = hwm.query(IceBoardPlus).filter_by(serial=ib_serial)
         if existing_ib.count():
-            logger.warning("DNS-SD: IceBoard at %s with serial %s already exists in the hardware map. No action is taken." % (host, ib_serial))
+            #logger.warning("DNS-SD: IceBoard at %s with serial %s already exists in the hardware map. No action is taken." % (host, ib_serial))
             return
 
         ib = IceBoardPlus(hostname=host, serial=ib_serial)

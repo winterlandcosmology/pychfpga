@@ -200,5 +200,19 @@ motherboard_tests:
         vlt: 18
         curlmt: 5
 
-    ramp:
-        
+    mezz_test:
+        vlt: 18
+        curlmt: 5
+        fmccurrent:
+            VCC3V3:     {nom: 2,     pmargin: 0.00,  amargin: 2}   # +-1A
+            VCC12V0:    {nom: 0.1,     pmargin: 0.00,  amargin: 0.1}   # +-100mA
+            VADJ:       {nom: 0.115,   pmargin: 0.00,  amargin: 0.05}   # +-0mA
+
+        fmcvoltage:
+            VCC3V3:     {nom: 3.3,   pmargin: 0.05,  amargin: 0}     # 5%
+            VCC12V0:    {nom: 12,    pmargin: 0.05,  amargin: 0}     # 5%
+            VADJ:       {nom: 2.5,   pmargin: 0.05,  amargin: 0}     # 5%
+
+    rmp_test:
+        vlt: 18
+        curlmt: 5
