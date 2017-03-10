@@ -1276,7 +1276,7 @@ class chFPGA_controller(IceBoardExtHandler):
                 # ant.ADCDAQ.RAMP_ERR_CLEAR = 1
                 if verbose:
                     print '%2i (%08X) ' % (e, be),
-            print
+            #print
         self.set_adc_mode(old_adc_mode)
         return sum(word_errors)
 
@@ -1338,7 +1338,7 @@ class chFPGA_controller(IceBoardExtHandler):
             # first, find the offset for which the smallest number of '1' bits for every bit is as high as possible
             q = np.array([ ((data[i] & (1 << bit)) !=0).sum(axis=0) for bit in range(8)]).min(axis = 0)  # smallest number of '1' for each possuble bit, for each offset
             offset = q.argmax() # offset that has the largest number of '1's
-            print 'CH%02i: offset=%2i : %s' % (ch, offset, q)
+            #print 'CH%02i: offset=%2i : %s' % (ch, offset, q)
 
             n = data[i, :, offset]  # extract the samples for the current channel and selected offset, byt keep all 32 delays
 

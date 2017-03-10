@@ -310,10 +310,9 @@ class MGK7MBBenchTests(unittest.TestCase):  #
         import cdce620005_pll_QC as cdce
         cfg = self.cfg.motherboard_tests.pll
 
-        while (input_yes_no("Please ensure that no flash card is in the board. Ready to continue? [Y/N]", additional_answers=[]) != True):
-            pass;
-        while (input_yes_no("Please connect PLL programming dongle to the 6pin header. Ready to continue? [Y/N]", additional_answers=[]) != True):
-            pass;
+        print "Please ensure that no flash card is in the board."
+        print "Please connect PLL programming dongle to the 6pin header."
+
         while (input_yes_no("Are you ready to apply power to the board? [Y/N]", additional_answers=[]) != True):
             pass;
 
@@ -396,10 +395,9 @@ class MGK7MBBenchTests(unittest.TestCase):  #
         """
         xr.header('Mem test')
 
-        while (input_yes_no("Please ensure that a flash card is now plugged into the board. Ready to continue? [Y/N]", additional_answers=[]) != True):
-            pass;
-        while (input_yes_no("Please connect RS232 dongle to connector next to the 3x2 LED stack. Ready to continue? [Y/N]", additional_answers=[]) != True):
-            pass;
+        print "Please ensure that a flash card is now plugged into the board."
+        print "Please connect RS232 dongle to connector next to the 3x2 LED stack"
+
         while (input_yes_no("Are you ready to apply power to the board? [Y/N]", additional_answers=[]) != True):
             pass;
 
@@ -432,9 +430,11 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
     Perform impedance & power tests on the MGADC08 Mezzanine.
     """
     def setUp(self):
-        """ Prepare the test for execution.
+        """ 
+        Prepare the test for execution.
 
         Here, we grab the command line arguments and parse them.
+
         """
         xr.header('Setting-up')
         self.cfg = util.load_config(TEST_CONFIG_FILE)
@@ -449,13 +449,14 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
         xr.header('Test results')
 
+    def tearDown(self):
+        self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
+
     def connect_to_board(self, xr, cfg , questions = True, powerdown = True):
 
         if questions:
-            while (input_yes_no("Please ensure that a flash card is now plugged into the board. Ready to continue? [Y/N]", additional_answers=[]) != True):
-                pass;
-            while (input_yes_no("Please ensure that the ethernet cable is plugged in to the board. Ready to continue? [Y/N]", additional_answers=[]) != True):
-                pass;
+            print "Please ensure that a flash card is now plugged into the board"
+            print "Please ensure that the ethernet cable is plugged in to the board"
             while (input_yes_no("Are you ready to apply power to the board? [Y/N]", additional_answers=[]) != True):
                 pass;
 
@@ -472,17 +473,17 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
         reload(fpga_array)
         serial = 'iceboard%s.local' %xr.params.serial
-        print "Waiting for 'iceboard.local' or '%s' to boot and show up on the network" %serial
-        ibs = fpga_array.FPGAArray(iceboards="*", open = 0, prog = 0, mdns_timeout=60, ping=1)
+        print "Waiting for 'iceboard.local' or '%s' to boot and show up on the network (30 second timeout)" %serial
+        ibs = fpga_array.FPGAArray(iceboards="*", open = 0, prog = 0, mdns_timeout=30, ping=1)
         if xr.params.serial in ibs.ib.discover_serial().values():
             print "Found an iceboard with the correct serial number on the network"
-            ib_index = ibs.ib.discover_serial().values().find(xr.params.serial)[0]
+            ib_index = ibs.ib.discover_serial().values().index(xr.params.serial)
             ib = ibs.ib[ib_index]
-        elif None in ibs.ib.discover_serial().values(): #Empty serial
+        elif ibs.ib.discover_serial().values().count(None): #Empty serial
             print "Found an iceboard with the no serial number programmed on the network"
-            ib_index = ibs.ib.discover_serial().values().find(None)
-            if len(ib_index)==1:
-                 ib = ibs.ib[ib_index[0]]
+            ib_index = ibs.ib.discover_serial().values().index(None)
+            if ibs.ib.discover_serial().values().count(None)==1:
+                 ib = ibs.ib[ib_index]
             else:
                 print "More than one iceboard with no serial number was found"
                 assert False, "We don't know which iceboard to connect too"
@@ -490,7 +491,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
             print "We did not find a board with the correct serial number or one with no serial programmed"
             assert False, "IceBoard not found"
 
-        print "We found iceboard with address: %s.\n" %ib.hostname
+        print "Connecting to iceboard at : %s.\n" %ib.hostname
 
         return ib
 
@@ -525,8 +526,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         test_results = NameSpace()
         passed = False
 
-        while (input_yes_no("Please ensure that the Mezzanines are NOT mounted on the board for this test. Ready to continue? [Y/N]", additional_answers=[]) != True):
-            pass;
+        print "Please ensure that the Mezzanines are NOT mounted on the board for this test"
         ib = self.connect_to_board(xr, cfg)
 
         try:
@@ -865,8 +865,6 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         passed = False
 
         print "\nPlease move the clock source jumper to the Crystal position. "
-        while (input_yes_no("Are you ready to continue? [Y/N]", additional_answers=[]) != True):
-            pass;
         ib = self.connect_to_board(xr, cfg)
         clock_source = ib.get_clock_source()
         self.instr.ps18v.output(state=False, readonly=False) # Turn power off
@@ -935,11 +933,8 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         test_results = NameSpace()
         passed = False
 
-        while (input_yes_no("Please again ensure that the FPGA heatsink is in place, and with sufficient ventilation [Y/N]", additional_answers=[]) != True):
-            pass
-        while (input_yes_no("Please ensure that SFP unit is inserted into board, with an ethernet cable attached. Ready? [Y/N]", additional_answers=[]) != True):
-            pass
-
+        print "Please again ensure that the FPGA heatsink is in place, and with sufficient ventilation"
+        print "Please ensure that SFP unit is inserted into board, with an ethernet cable attached."
         ib = self.connect_to_board(xr, cfg)
 
         print 'Before programming the FPGA die temperature is: %.3f C' % ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE)
@@ -1028,8 +1023,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         test_results = NameSpace()
         passed = False
 
-        while (input_yes_no("Please ensure that the Mezzanines ARE mounted on the board for this test. Ready to continue? [Y/N]", additional_answers=[]) != True):
-            pass;
+        print "Please ensure that the Mezzanines ARE mounted on the board for this test."
         ib = self.connect_to_board(xr, cfg)
 
         assert ib.is_mezzanine_present(1), "Did not find Mezzanine on Slot 1."
@@ -1146,7 +1140,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         cfg = self.cfg.motherboard_tests.rmp_test
         test_results = NameSpace()
         passed = False
-
+        print "Please ensure mezzanines are loaded, and sufficient cooling for FPGA"
         ib = self.connect_to_board(xr, cfg)
 
         self.prog_fpga(ib)
@@ -1161,49 +1155,81 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
                 print 'initializing mezzanine...'
                 mezz.init()
 
-                print 'Computing ADC delays...'
-                delay_table = self.set_adc_delays(ib)
+            print 'Computing ADC delays...'
+            ib.set_adc_delays(compute_delays=2, save_delays=False, check_sync_delays=True, check_adc_delays=20, verbose=0, retry=5)
+            delay_table = ib.get_adc_delays()
+            print delay_table
+            print '\nOpening data receiver socket'
+            receiver = ib.get_data_receiver()
 
-                print 'Opening data receiver socket'
-                receiver = ib.get_data_receiver()
+            print 'Setting up ramp transmission...'
+            ib.set_adcdaq_mode('data')
+            ib.set_data_source('adc')
+            ib.set_adc_mode('ramp')
+            ib.start_data_capture(period=1, source='adc')
 
-                print 'Setting up ramp transmission...'
-                ib.set_adcdaq_mode('data')
-                ib.set_data_source('adc')
-                ib.set_adc_mode('ramp')
-                ib.start_data_capture(period=1, source='adc')
+            print 'Syncing...'
+            ib.sync()
 
-                print 'Syncing...'
-                ib.sync()
+            print 'Getting data frames...'
+            receiver.read_frames(flush=1, frames=3, verbose =0)  # flush
+            for i in range(16):
+                data = receiver.read_frames(frames = 1, verbose =0)
+                print len(data)
+            #receiver.close()
+            #ib.stop_data_capture()
 
-                print 'Getting data frames...'
-                receiver.read_frames(flush=1, frames=3)  # flush
-                data = receiver.read_frames(1)
+            # frames = 1
+            # good_frames = 0
+            # while (frames!=0 and good_frames<frames):
+            #     try:
+            #         #print "trying to get a frame"
+            #         data = receiver.read_frames(verbose=0)
+            #         for chanNum in range(16):
+            #             data_list[chanNum,:] = data[channels[chanNum]]
+            #         good_frames+=1
+            #         #print "got a frame"
+            #         if (good_frames % 100) == 0:
+            #             print 'Captured {0} frames'.format(good_frames) 
+            #     except KeyError:
+            #         print "missing a frame, skipping"
+            #         print data
+            #         missed += 1
+            #         pass
+            #     except ValueError:
+            #         print "got a weird frame... carrying on!"
+            #     except:
+            #         receiver.close()
+            #         ib.stop_data_capture()
+            #         raise
+            # print "lost {0} to get {1}".format(missed, frames)
+            receiver.close()
+            ib.stop_data_capture()
 
-                test_results.data.append(data)
-                plt.figure(1)
+            test_results.data.append(data)
+            plt.figure(1)
 
-                ideal_ramp = (np.arange(2048) - 128).astype(np.int8)
+            ideal_ramp = (np.arange(2048) - 128).astype(np.int8)
 
-                ramp_ok = []
-                for ch in range(8):
-                    plt.clf()
-                    plt.plot(data[ch])
-                    xr.insert_plot('Ramp capture for %s SN%s CHANNEL %02i' % (xr.params.model, xr.params.serial, ch))
-                    ok = np.all(data[ch] == ideal_ramp)
-                    ramp_ok.append(ok)
-                    if ok:
-                        print 'Channel %02i: OK' % (ch+1)
-                    else:
-                        print 'Channel %02i: ERROR!' % (ch+1)
-
+            ramp_ok = []
+            for ch in range(16):
+                plt.clf()
+                plt.plot(data[ch])
+                xr.insert_plot('Ramp capture for %s SN%s CHANNEL %02i' % (xr.params.model, xr.params.serial, ch))
+                ok = np.all(data[ch] == ideal_ramp)
+                ramp_ok.append(ok)
+                if ok:
+                    print 'Channel %02i: OK' % (ch+1)
+                else:
+                    print 'Channel %02i: ERROR!' % (ch+1)
                 test_results.ramp_ok.append(ramp_ok)
 
-                assert all(test_results.ramp_ok), 'One or more channels have ramp errors'
+            assert all(test_results.ramp_ok), 'One or more channels have ramp errors'
 
             passed = True
 
         finally:
+            ib.close()
             xr.params.test_locals = locals()  # store local variables for interactive debugging
             #receiver.close()
             xr.save_data(test_results)
