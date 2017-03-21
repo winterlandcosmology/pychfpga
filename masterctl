@@ -1,0 +1,84 @@
+#!/usr/bin/env python
+#
+# masterctl: control and query ch_master via the REST interface.
+#
+
+from __future__ import print_function
+
+import click
+import sys
+from ch_master_client import ChMasterClient
+
+
+# Command line interface
+
+@click.group(context_settings=dict(help_option_names=['-h','--help']))
+@click.option('--host', default='localhost', help="ch_master host.")
+@click.option('--port', default=54321, help="ch_master port.", type=int)
+@click.pass_context
+def cli(ctx, host, port):
+    """
+    ch_master command line interface.
+
+    This is called whenever the program is launched, and creates a CHMasterClient onject instance
+    which is stored in the context object for future use by commands.
+    """
+
+    # Hook print functions to provide nicer command line output
+    class ClickChMasterClient(ChMasterClient):
+        def print(self, msg):
+            click.echo(msg)
+        def print_error(self, msg):
+            click.secho(msg, bold=True, fg='red')
+        def error(self, msg):
+            self.print_error(msg)
+            sys.exit(-1)
+
+    # store CHMaster client object in context object so it can be used by CLI commands
+    ctx.obj = ClickChMasterClient(host, port)
+
+
+def add_command(cli, method_name, command_name=None, args=[], help=None):
+    """ Add a command that will call the corresponding method in the ChMasterClient instance.ChMasterClient
+
+    The command description to be shown on the command line can be specified
+    with help. If not specified, the first line of the method docstring is
+    used.
+
+    The command name is identical to the method name, unless an alternate command name is provided.
+    """
+
+    # Get command line description from method docstring if not specified
+    if help is None:
+        help = getattr(ChMasterClient, method_name).__doc__.strip().splitlines()[0]
+    if command_name is None:
+        command_name = method_name
+
+    @cli.command(command_name, short_help=help)
+    @click.pass_context
+    def cmd(ctx, *args, **kwargs):
+        print('Calling ChMasterClient.%s(args=%s, kwargs=%s)' % (method_name, args, kwargs))
+        getattr(ctx.obj, method_name)(*args, **kwargs)   # call method 'name' of CHMasterClient instance
+
+    # Add arguments, if any
+    for a in args:
+        click.option(*a)(cmd)
+
+add_command(cli, 'ping')
+add_command(cli, 'start', args=[('--yaml', '-y')])
+add_command(cli, 'stop')
+add_command(cli, 'switch_gains')
+add_command(cli, 'kotekan_start', args=[('--yaml', '-y')])
+add_command(cli, 'status', 'state') # for some obscure reason ipython fails only with the command 'status', but not anything else.
+add_command(cli, 'get_frequency_map')
+
+
+@cli.command()
+@click.pass_obj
+def nop(obj):
+    """ Do nothing """
+    print('Doing nothing with ', obj)
+
+
+if __name__ == '__main__':
+    cli() # parse the command line argument, and execute the commands

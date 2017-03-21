@@ -654,7 +654,7 @@ class chFPGA_controller(IceBoardExtHandler):
         """
             Sets the default channels to use in other functions when not specifically specified.
         """
-        if isinstance(channels,int):
+        if isinstance(channels, int):
             channels = [channels]
         self.default_channels = channels
 
@@ -665,33 +665,53 @@ class chFPGA_controller(IceBoardExtHandler):
         return self.default_channels
 
 
-    def set_channelizer_config(self, data_source=None, function=None, a=1, b=0, adc_mode='data', adcdaq_mode='data', fft_bypass=None, fft_shift=None, scaler_bypass=None, gain=None, postscaler=None, channels=None):
+    def set_channelizer(self,
+                        adc_mode=None, adcdaq_mode=None,
+                        data_source=None, function=None, a=1, b=0,
+                        fft_bypass=None, fft_shift=None,
+                        scaler_bypass=None, gain=None, postscaler=None, offset_binary_encoding=None,
+                        local_sync=True,
+                        channels=None):
         """
-            Single command used to set multiple channelizer settings. The data processing chain is:
+            Single command used to set all channelizer settings. The data processing chain is:
                   ADC --> ADCDAQ --> FUNCGEN --> --> FFT --> SCALER
         """
+        # Set the ADC chip operational mode (data, ramp, pulse)
+        if adc_mode is not None:
+            self.set_adc_mode(mode=adc_mode, sync=False)
+
+        # Set the FPGA's ADC data acquisition module operational mode
+        if adcdaq_mode is not None:
+            self.set_adcdaq_mode(mode=adcdaq_mode, channels=channels)
+
+        # Set the date source and the function generator that feed the FFT
         if data_source is not None:
-            self.set_data_source(data_source, channels=channels)
+            self.set_data_source(data_source, channels=channels)  # does a channelizer reset
 
         if function is not None:
             self.set_funcgen_function(function=function, a=a, b=b, channels=channels)
 
-        if adcdaq_mode is not None:
-            self.set_adcdaq_mode(mode=adcdaq_mode, channels=channels)
-
+        # Set FFT bypass and shift schedule
         if fft_bypass is not None:
             self.set_fft_bypass(bypass_mode=fft_bypass, channels=channels)
 
         if fft_shift is not None:
             self.set_fft_shift(fft_shift, channels=channels)
 
+        # Set Scaler parameters
+        if scaler_bypass is not None:
+            self.set_scaler_bypass(bypass_mode=scaler_bypass, channels=channels)
+
         if gain is not None:
-            self.set_gain(gain = gain, postscaler = postscaler, channels=channels)
+            self.set_gain(gain=gain, postscaler=postscaler, channels=channels)
 
-        if adc_mode is not None:
-            self.set_adc_mode(mode=adc_mode)
+        if offset_binary_encoding is not None:
+            self.set_offset_binary_encoding(offset=offset_binary_encoding, channels=channels, sync=False)
 
-    set_data_path = set_channelizer_config # for legacy compatibility
+        if local_sync:
+            self.sync()
+
+    # set_data_path = set_channelizer # for legacy compatibility
 
     def set_data_source(self, source=None,  channels=None):
         """
@@ -971,7 +991,7 @@ class chFPGA_controller(IceBoardExtHandler):
                 self.ANT[ch].FFT.BYPASS = bypass_mode
                 configured_channels.add(ch)
         self._logger.info('%r: Setting FFT bypass mode to %s for Antenna %s' % (self, str(bool(bypass_mode)), ', '.join([str(i) for i in configured_channels])))
-        self.reset();
+        # self.reset()
         #self.sync()
 
     set_FFT_bypass = set_fft_bypass # for legacy code compatibility
@@ -1136,7 +1156,7 @@ class chFPGA_controller(IceBoardExtHandler):
         """
         delay_table = None
         delay_table_updated = False
-        if compute_delays < 2: # do not bother getting the source if we are going to recompute the delay table anyways
+        if compute_delays < 2: # don't bother getting delays from the specified source if we are going to recompute the delay table anyways
             if isinstance(source, str):
                 delay_table = self._load_adc_delays(source)
             elif isinstance(source, dict):
@@ -1738,8 +1758,8 @@ class chFPGA_controller(IceBoardExtHandler):
 
     def set_synchronized_gain_switching(self, enable=1):
         for ant in self.ANT.values():
-            ant.SCALER.SYNCHRONIZE_GAIN_BANK=enable
-        self._logger.debug("%r: Syncronized gains for active antennas set to %d" % (self, enable))
+            ant.SCALER.SYNCHRONIZE_GAIN_BANK = enable
+        self._logger.debug("%r: Synchronized gains for active antennas set to %d" % (self, enable))
 
 
     def get_synchronized_gain_switching(self):
@@ -1749,7 +1769,7 @@ class chFPGA_controller(IceBoardExtHandler):
         self._logger.debug("%r: syncronization for gain set to %s" % (self, ', '.join([str(i) for i in enabled])))
         return enabled
 
-    def set_gain_switch_frame_number(self, frame = 2147483647):
+    def set_gain_switch_frame_number(self, frame=2147483647):
         for ant in self.ANT.values():
             ant.SCALER.GAIN_BANK_SWITCH_FRAME_NUMBER = frame
         self._logger.debug("%r: set gain switch number for active antennas to %d" % (self, frame))
@@ -1844,10 +1864,14 @@ class chFPGA_controller(IceBoardExtHandler):
         """ Return the current source used to trigger SYNC events """
         return self.REFCLK.get_sync_source()
 
-    def set_frame_pwm(self, offset, high_time, period, reset=False):
-        """ Sets the frame-based PWM generator. All times are stated as the numbe rof frames. A SYNC is needed after changes."""
-        self.GPIO.set_pwm(offset, high_time, period, reset=False)
-        if reset:
+    def set_pwm(self, enable, offset, high_time, period, local_sync=False):
+        """ Sets the frame-based PWM generator. All times are stated as the number of frames. A SYNC
+        is needed after changes.
+
+        See GPIO.set_pwm() for more details.
+        """
+        self.GPIO.set_pwm(enable=enable, offset=offset, high_time=high_time, period=period, pwm_reset=False)
+        if local_sync:
             self.sync()
 
     def set_adc_mask(self, mask=0xFF, channels=None):
@@ -1975,6 +1999,8 @@ class chFPGA_controller(IceBoardExtHandler):
             crate_shuffle_bypass = True
             cb3_lane_map = range(8)
             cb3_bypass = True
+            crate_number = self.crate.crate_number if self.crate else 0
+            stream_type = 0
 
         elif mode == 'chan4': # get the high nibble of every bytes from two lanes in a single word. Allows Get (4+4) bit data from all channelizers
             cb1_bypass = True
@@ -1986,6 +2012,8 @@ class chFPGA_controller(IceBoardExtHandler):
             crate_shuffle_bypass = True
             cb3_lane_map = range(8)
             cb3_bypass = True
+            crate_number = self.crate.crate_number if self.crate else 0
+            stream_type = 0
 
 
         elif mode == 'shuffle16':
@@ -2015,6 +2043,9 @@ class chFPGA_controller(IceBoardExtHandler):
             # cb2_bin_select_map = [np.arange(cb2_bins)*cb2_bin_spacing for i in range(number_of_cb2_bin_sel)]
             cb2_output_words_per_bin = cb2_input_words_per_bin
             cb2_output_bins = cb2_bins
+
+            crate_number = self.crate.crate_number if self.crate else 0
+            stream_type = 1
 
             crate_shuffle_bypass = True
             cb3_lane_map = range(8)
@@ -2093,7 +2124,8 @@ class chFPGA_controller(IceBoardExtHandler):
             cb2_bin_select_map = [np.arange(cb2_bins)*cb2_bin_spacing for i in range(number_of_cb2_bin_sel)]
             cb2_output_words_per_bin = 2 * cb2_input_words_per_bin
             cb2_output_bins = cb2_bins
-
+            crate_number = self.crate.crate_number
+            stream_type = 2
             # QSFP SHUFFLE
             crate_shuffle_bypass = True
 
@@ -2172,6 +2204,7 @@ class chFPGA_controller(IceBoardExtHandler):
             cb2_bins = 32
             cb2_bin_spacing = 2
             crate_number = self.crate.crate_number
+            stream_type = 3
             cb2_bin_select_map = [np.arange(cb2_bins)*cb2_bin_spacing + (i^crate_number) for i in range(number_of_cb2_bin_sel)]
             cb2_output_words_per_bin = cb2_input_words_per_bin * 4
             cb2_output_bins = cb2_bins
@@ -2202,6 +2235,8 @@ class chFPGA_controller(IceBoardExtHandler):
 
             crate_shuffle_bypass=1
 
+            crate_number = self.crate.crate_number if self.crate else 0
+            stream_type = 4
 
             cb2_input_bins = cb1_bins
             if bp_shuffle_bypass and self.slot is not None:
@@ -2236,6 +2271,7 @@ class chFPGA_controller(IceBoardExtHandler):
         self.set_ant_reset(1)
         self.set_corr_reset(1)
 
+        slot_number = self.slot - 1 if self.slot is not None else 0
         #-------------------------
         # Configure CROSSBAR 1
         #-------------------------
@@ -2245,7 +2281,7 @@ class chFPGA_controller(IceBoardExtHandler):
             bs.COMBINE_DATA_FLAGS = cb1_combine_data_flags
 
             bs.GROUP_FRAMES = frames_per_packet
-            bs.STREAM_ID = self.slot - 1 if self.slot is not None else 0 # The stream ID at the output of CB1 will be 0xSL (S=slot-1, L=lane)
+            bs.STREAM_ID = (stream_type << 8) | (crate_number << 4) | slot_number
             bs.FOUR_BITS = cb1_four_bit
             bs.FIRST_FIFO_NUMBER = cb1_lanes[cb1_output_lane][0]
             bs.LAST_FIFO_NUMBER = cb1_lanes[cb1_output_lane][1]
@@ -2272,7 +2308,7 @@ class chFPGA_controller(IceBoardExtHandler):
         for (cb2_bin_sel, bs) in enumerate(cb2):
             bs.BYPASS = bool(cb2_bypass)
             if not cb2_bypass:
-                bs.STREAM_ID = self.slot - 1 if self.slot is not None else 0 # The stream ID at the output of CB2 will be 0xSL (S=slot-1, L=lane)
+                bs.STREAM_ID = (stream_type << 8) | (crate_number << 4) | slot_number
                 bs.NUMBER_OF_FRAMES_PER_PACKET = frames_per_packet
                 bs.NUMBER_OF_FRAME_FLAGS_WORDS_PER_FRAME=1
                 bs.FIRST_LANE = cb2_lanes[cb2_bin_sel][0]
@@ -2290,7 +2326,7 @@ class chFPGA_controller(IceBoardExtHandler):
         for (cb3_bin_sel, bs) in enumerate(cb3):
             bs.BYPASS = bool(cb3_bypass)
             if not cb3_bypass:
-                bs.STREAM_ID = self.slot - 1  # The stream ID at the output of CB2 will be 0xSL (S=slot-1, L=lane)
+                bs.STREAM_ID = (stream_type << 8) | (crate_number << 4) | slot_number  # The stream ID at the output of CB2 will be 0xSL (S=slot-1, L=lane)
                 bs.NUMBER_OF_FRAMES_PER_PACKET = frames_per_packet
                 bs.NUMBER_OF_FRAME_FLAGS_WORDS_PER_FRAME=2
                 bs.FIRST_LANE = cb3_lanes[cb3_bin_sel][0]
@@ -2480,6 +2516,7 @@ class chFPGA_controller(IceBoardExtHandler):
             print x
         for x in bp_gen(self):
             print x
+
 
     @async
     def get_status(self):

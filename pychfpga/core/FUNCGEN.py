@@ -145,7 +145,7 @@ class FUNCGEN_base(Module_base):
         self.write_ram(0, function_number)
         self.write_ram(1, info + chr(0))
 
-    def get_buffer(self, use_cache=False):
+    def get_buffer(self, use_cache=True):
 
         if use_cache and self.buffer_cache is not None:
             return self.buffer_cache

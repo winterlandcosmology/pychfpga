@@ -77,11 +77,11 @@ class GainCalc(object):
         #The first bin is always bad for some reason
         mask[0] = True
         self.masked = np.ma.array(np.log(signal), mask=mask)
-    
+
     def fourier_filter(self, signal, num_components):
         '''
-        Filters signal with top-hat in fourier space.  Padded with itself on either     side to improve edge behavior. 
-        Should extend to other windows.  
+        Filters signal with top-hat in fourier space.  Padded with itself on either     side to improve edge behavior.
+        Should extend to other windows.
         not assured to maintain signal size
         '''
         signal = np.array(signal)
@@ -213,7 +213,7 @@ def calculate_gains(c, port):
     rmss = []
     for i in range(18):
         data = get_frames(port)
-        # only do for channel 0 for now   
+        # only do for channel 0 for now
         outrms = data[:,:,:].std(axis=0)
         outrms[outrms < 0.8] = 0.8
         rmss.append(outrms.mean())
@@ -222,8 +222,8 @@ def calculate_gains(c, port):
             g = idealRMS*2**(default_log2_gain)/outrms#idealRMS*2**(default_log2_gain-4)/outrms
         else:
             for j, glog1 in enumerate(glog):
-                g[j] = idealRMS*glin[j]*(2**(glog[j]))/outrms[j] #idealRMS*glin*(2**(glog-4))/outrms
-                g[j] = (20.0*g[j] + 80.0*glin[j]*(2**(glog[j])))/100.0
+                g[j] = idealRMS * glin[j] * (2**(glog[j]))/outrms[j] #idealRMS*glin*(2**(glog-4))/outrms
+                g[j] = (20.0 * g[j] + 80.0 * glin[j] * (2**(glog[j])))/100.0
         glin, glog = calc_gains(g)
         print glog
         bad_gains = glin > 2**14
@@ -235,7 +235,7 @@ def calculate_gains(c, port):
         c.set_gain(gain)
         time.sleep(1)
     out1 = open('gains_noisy_slot{0}.pkl'.format(c.slot), 'wb')
-    pickle.dump(gain,out1)
+    pickle.dump(gain, out1)
     out1.close()
     Calc = GainCalc()
     flags = []
@@ -253,7 +253,7 @@ def calculate_gains(c, port):
     c.stop_data_capture()
 
 
-if __name__ == '__main__':        
+if __name__ == '__main__':
 
     try:
         logger.info('Deleting previous chFPGA instances in current namespace')
@@ -288,11 +288,11 @@ if __name__ == '__main__':
         logger.info('   %s = %s' % (key, repr(value)))
     # logger.info('Using Sampling frequency of %0.3f MHz' % args.sampling_frequency)
     # Delete previous instances of 'c' to make sure the sockets are closed. If not, the new object will not be able to open the socket.
-    # pylint: disable=E0601    
+    # pylint: disable=E0601
 
 
     ADC_DELAY_TABLE = ADC_DELAYS_MGK7MB_REV2_MGAC08_REV2 #ADC_DELAYS_REV2_SN0001 ## select the table corresponding to the FMC serial number
-    #FREF = 10 # FMC Reference clock frequency 
+    #FREF = 10 # FMC Reference clock frequency
 
     # Create the new chFPGA object.
     c = chFPGA_controller.chFPGA_controller(ip_address=args.ip, port_number=41000, adc_delay_table=ADC_DELAY_TABLE, init=args.init, sampling_frequency=args.sampling_frequency * 1e6, reference_frequency=10e6, data_width=args.data_width, group_frames=args.group_frames, enable_gpu_link = args.enable_gpu_link, host_ip = args.host_ip) # pylint: disable=C0103

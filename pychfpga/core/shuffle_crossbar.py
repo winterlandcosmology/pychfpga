@@ -12,6 +12,8 @@ CROSSBAR.py module
 """
 
 import logging
+from collections import OrderedDict
+
 import numpy as np
 
 from Module import Module_base, BitField
@@ -89,9 +91,10 @@ class ShuffleCrossbar(Module_base):
         """ Initializes all correlators"""
         self.NUMBER_OF_CROSSBAR_INPUTS = self.NUMBER_OF_INPUT_LANES
         self.NUMBER_OF_CROSSBAR_OUTPUTS = self.NUMBER_OF_OUTPUT_LANES
+        self.NUMBER_OF_OUTPUTS_PER_BIN_SEL = self.NUMBER_OF_CROSSBAR_OUTPUTS/self.NUMBER_OF_BIN_SEL
         self.SOF_WINDOW_STOP = 50
         for bs in self.BIN_SEL:
-            bs.init()
+            bs.init(number_of_inputs=self.NUMBER_OF_INPUT_LANES)
 
         # self.configure() # apply default configuration for now.
     # def select_words(self, words):
@@ -212,6 +215,24 @@ class ShuffleCrossbar(Module_base):
             # print '%s is receiving from %s' % (rx, tx)
             lane_map[tx[0]-1] = i
         return lane_map
+
+    def map(self, data):
+        """
+        Returns a crossbar map that describes the contents of each bin selector.
+        input: {lane:[elements ...], ...}
+        returns: {lane: [elements], ...}
+        format:
+            {lane_number: {channels:[channel numbers...], bins:[bin numbers ...], stream_id:x, ...}, ...}
+        """
+
+        remap_out = {output_lane: data[input_lane] for output_lane, input_lane in enumerate(self.get_lane_map())}
+
+        cb_out = OrderedDict()
+        N = self.NUMBER_OF_OUTPUT_LANES / self.NUMBER_OF_BIN_SEL
+        for bs_number, bs in enumerate(self.BIN_SEL):
+            for sublane, data in bs.map(remap_out).items():
+                cb_out[N * bs_number + sublane] = data
+        return cb_out
 
     def configure(self, number_of_bins_per_crossbar_output= 8):
         """

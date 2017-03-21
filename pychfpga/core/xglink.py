@@ -236,8 +236,9 @@ class GTX(Module_base):
         # self.RXPOLARITY=0
         self.TXPRBSSEL = 0
         self.RXPRBSSEL = 0
-        self.TXDIFFCTRL = 10
-        self.TXPRECURSOR = 0b00000  #DFE cannot compensate pre-cursor
+        self.RXLPMEN = 0  # Use low power mode, not the DFE
+        self.TXDIFFCTRL = 13
+        self.TXPRECURSOR = 4  #DFE cannot compensate pre-cursor (but that seems to give the best result anyway!)
         self.TXPOSTCURSOR = 0b00000
         self.RXMONITORSEL = 1 # 1=AGC, 2=UL, 3=VP loop
         self.RX_DEBUG_CFG = 0x14  # 0x14= Vpeak, 0x2C=AGC

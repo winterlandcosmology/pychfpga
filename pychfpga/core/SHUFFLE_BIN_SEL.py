@@ -11,6 +11,8 @@ SHUFFLE_BIN_SEL.py module
 """
 #import time
 import numpy as np
+from collections import OrderedDict
+
 from Module import Module_base, BitField
 import logging
 
@@ -61,7 +63,23 @@ class SHUFFLE_BIN_SEL_base(Module_base):
         self.crossbar_level = crossbar_level
         super(self.__class__, self).__init__(fpga_instance, base_address, instance_number)
         self.logger = logging.getLogger(__name__)
+        self.NUMBER_OF_INPUTS = None
+        self.cached_bin_select_table = None
         self._lock()
+
+    def init(self, number_of_inputs):
+        """ Initializes SHUFFLE_BIN_SEL"""
+        #self.select_words(self.fpga.FRAME_LENGTH//4) # enable tranmission of all words by default
+        #array doesn't seem to work here....
+#        frequency_bins_per_correlator = 124 # 202-5chan correlator # must be even, max 1010 / number of correlated antennas 124-8 channel.  Should get this from config
+        #self.select_words(range(words_per_correlator)) # enable tranmission 8 words, 16 freq channels by default
+        self.NUMBER_OF_INPUTS = number_of_inputs
+        self.NUMBER_OF_FRAMES_PER_PACKET = 4
+        self.NUMBER_OF_WORDS_PER_BIN=4
+        self.NUMBER_OF_BINS_PER_FRAME = 8
+        self.FIRST_LANE = 0
+        self.LAST_LANE = 15
+
 
     def reset(self):
         """Performs the soft reset of the CH_DIST module."""
@@ -81,7 +99,7 @@ class SHUFFLE_BIN_SEL_base(Module_base):
         If the FFT is bypassed, each word contains 4 8-bit ADC samples instead of a pair of frequency channels.
         """
         # Initialize bin selection mask
-        mask = np.zeros(128, np.uint8) # 128*8 = up to 1024 bins / frame
+        mask = np.zeros(128, np.uint8)  # 128*8 = up to 1024 bins / frame
 
         if isinstance(bins_to_enable, int):
             bins_to_enable = range(bins_to_enable)
@@ -95,20 +113,56 @@ class SHUFFLE_BIN_SEL_base(Module_base):
         self.logger.debug('%.32r: CROSSBAR%i.BIN_SEL[%i] configured to capture %i frequency bins: %s...' % (self.fpga, self.crossbar_level, self.instance_number, len(bins_to_enable), repr(bins_to_enable[:10])))
         # self.logger.debug('%.32r: Mask pattern is: %s' % (self.fpga, ' '.join('%02X'% byte for byte in mask)))
 
-        self.write_ram(0x00, mask) # Write the bin selection mask array
+        self.cached_bin_select_table = mask
+        self.write_ram(0x00, mask)  # Write the bin selection mask array
 
-    def init(self):
-        """ Initializes SHUFFLE_BIN_SEL"""
-        #self.select_words(self.fpga.FRAME_LENGTH//4) # enable tranmission of all words by default
-        #array doesn't seem to work here....
-#        frequency_bins_per_correlator = 124 # 202-5chan correlator # must be even, max 1010 / number of correlated antennas 124-8 channel.  Should get this from config
-        #self.select_words(range(words_per_correlator)) # enable tranmission 8 words, 16 freq channels by default
-        self.NUMBER_OF_FRAMES_PER_PACKET = 4
-        self.NUMBER_OF_WORDS_PER_BIN=4
-        self.NUMBER_OF_BINS_PER_FRAME = 8
-        self.FIRST_LANE = 0
-        self.LAST_LANE = 15
+    def get_selected_bins(self, use_cache=True):
 
+        if use_cache and self.cached_bin_select_table is not None:
+            mask = self.cached_bin_select_table
+        else:
+            mask = self.read_ram(0x00, length=128)  # 128*8 = up to 1024 bins / frame
+
+        bin_map = np.unpackbits(mask[::-1])[::-1]
+        return np.where(bin_map)[0]
+
+    def map(self, input_data):
+        """ Return a bin selector frequency map, which describes the structure and contents of the
+        bin selector output stream.
+        """
+
+        if self.BYPASS:
+            raise RuntimeError('%.32s: CHAN_BIN_SEL cannot yet provide maps in BYPASS mode')
+
+        N = self.NUMBER_OF_INPUTS / self.NUMBER_OF_OUTPUTS;  # number of input lanes per output
+        ch_per_bin = self.NUMBER_OF_WORDS_PER_BIN * 4  # fixme - only 4-bit mode
+        bs_out = OrderedDict()
+        bins = self.get_selected_bins()
+        for sublane in range(self.NUMBER_OF_OUTPUTS):
+            channels = range(N * sublane + self.FIRST_LANE, N * sublane + self.LAST_LANE + 1)
+            d = [input_data[ch]['data'][ch_per_bin * bin_number: ch_per_bin * (bin_number + 1)] for bin_number in bins for ch in channels]
+            bs_out[sublane] = dict(
+                header=dict(
+                    cookie =0xcf,
+                    protocol_version=1,
+                    header_length=4,
+                    stream_id=(self.STREAM_ID << 4) | (self.instance_number*self.NUMBER_OF_OUTPUTS + sublane),
+                    four_bits=self.FOUR_BITS,
+                    use_offset_binary=self.USE_OFFSET_BINARY,
+                    send_flags=self.SEND_FLAGS,
+                    bypass=self.BYPASS,
+                    frames_per_packet=self.NUMBER_OF_FRAMES_PER_PACKET,
+                    bins_per_frame=self.NUMBER_OF_OUTPUT_BINS_PER_FRAME,
+                    words_per_bin=self.NUMBER_OF_OUTPUT_WORDS_PER_BIN,
+                    ancillary=None,
+                    timestamp=0,
+                    ),
+                data=[i for di in d for i in di], # flatten the list of lists,
+                data_flags=None,
+                frame_flags=None,
+                packet_flags=None
+                )
+        return bs_out
 
     def status(self):
         """Displays the status of SHUFFLE_BIN_SEL."""

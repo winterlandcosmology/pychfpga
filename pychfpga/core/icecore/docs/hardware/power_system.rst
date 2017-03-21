@@ -1,0 +1,27 @@
+Iceboard power sequencing
+-------------------------
+Seq1: VCC1V0
+Seq2: VCC1V8a
+Seq3: VCC1V8b
+
+VCC3V3: Seq1
+VCC12V: Seq1
+VCC5V0: Always
+
+VCC1V0: PG_5V
+VCC1V0GTX: PG_5V
+VCC1V2: Seq3
+VCC1V5: Seq2
+VCC1V8: Seq1
+VADJ: Seq1
+
+VCC5V0 -> PG_5V
+	VCC1V0GTX
+	VCC1V0 -> Seq1
+		VCC12V
+		VCC3V3
+		VADJ
+		VCC1V8 -> Seq2
+			VCC1V5
+		VCC1V8 -> Seq3
+			VCC1V2
