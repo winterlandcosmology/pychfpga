@@ -986,7 +986,8 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
             print "\nDirect FPGA communications established through SFP unit."
         except:
             print "\nCannot communicate directly with the FPGA through the SFP unit."
-            print "Remove the SFP unit, clean the contacts and re-run the test"
+            print "Remove the SFP unit, clean the contacts and re-run the test."
+            print "If that does not work its likely that the FPGA bit file is the incorrect version - use latest on jfcdev"
             passed = False
             assert passed, "\nTest failed"
 
@@ -1173,9 +1174,10 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
             print 'Getting data frames...'
             receiver.read_frames(flush=1, frames=3, verbose =0)  # flush
+            data = []
             for i in range(16):
-                data = receiver.read_frames(frames = 1, verbose =0)
-                print len(data)
+                data.append(receiver.read_frames(frames = 1, verbose =0))
+                print len(data[i])
             #receiver.close()
             #ib.stop_data_capture()
 
@@ -1234,10 +1236,63 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
             #receiver.close()
             xr.save_data(test_results)
 
+    def qsfp_test(self):
+
+        """
+        QC0012: Check that QSFP is detected and that eeprom can be read
+
+        Procedure:
+
+          - Perform qsfp test
+          - Check if device is detected
+          - Check eeprom can be read
+
+        """
+        cfg = self.cfg.motherboard_tests.qsfp_test
+        test_results = NameSpace()
+        passed = False
+        print "Please ensure QSFP cable is plugged into the motherboard in both ports, and sufficient cooling for FPGA"
+        ib = self.connect_to_board(xr, cfg)
+
+        self.prog_fpga(ib)
+        ib.is_fpga_programmed()
+        ib.open()
+
+        xr.header('Test-Results')
+        qsfp_info = []
+        try:
+            qsfp_present = [0, 0]
+
+            for i in [1, 2]:
+                if ib.is_qsfp_present(i):
+                    print "Motherboard QSFP module present on port %d" %i
+                    qsfp_present[i-1] = 1
+                else:
+                    print "Motherboard QSFP module NOT present on port %d" %i
+                assert qsfp_present[i-1], "Not all connectors were detected!"
+
+                print "Resetting Module " + repr(i)
+                ib.set_qsfp_gpio(ib.QSFP_GPIO.ResetL, i, False)
+                time.sleep(1)
+                ib.set_qsfp_gpio(ib.QSFP_GPIO.ResetL, i, True)
+                ib.set_qsfp_gpio(ib.QSFP_GPIO.ModSelL, i, False)
+                qsfp_info.append(base64.b64decode(ib._qsfp_eeprom_read_base64(i, 148, 16)).strip())
+                qsfp_info.append(base64.b64decode(ib._qsfp_eeprom_read_base64(i, 196, 16)).strip())
+                print "QSFP module " + repr(i) +" manufactured by: "+ qsfp_info[0] + ". Serial number: " + qsfp_info[1] + ".\n"
+
+            if re.search(cfg.manufacturer,qsfp_info[0]) and re.search(cfg.manufacturer,qsfp_info[2]) and\
+               re.search(cfg.serial,qsfp_info[1]) and re.search(cfg.serial,qsfp_info[3]) :
+                print "Detected that the cable was manufactured by " + cfg.manufacturer + " and has serial " + cfg.serial + " as indicated in the config file."
+                passed = True
+            else:
+                passed = False
+                assert False,"Cable did not read correctly or is not specified correctly in the test config"
+        finally:
+            xr.params.test_locals = locals()
 
     def gtx_test(self):
         """
-        QC0012: Check if high speed links work
+        QC0013: Check if high speed links work
 
         Procedure:
 

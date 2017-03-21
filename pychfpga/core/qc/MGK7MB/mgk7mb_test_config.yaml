@@ -52,7 +52,7 @@ test_list:
     - [ 'mezz',  {description: 'Basic mezz test',          path: 'mgk7mb_test:MGK7MBNetworkTests.mezz_test',     required: yes, require_serial_number: yes, dependencies: null}]
     - [ 'rmp',   {description: 'Ramp testing',             path: 'mgk7mb_test:MGK7MBNetworkTests.rmp_test',      required: yes, require_serial_number: yes, dependencies: null}]
     - [ 'clk',   {description: 'Clock testing',            path: 'mgk7mb_test:MGK7MBNetworkTests.clock_test',    required: yes, require_serial_number: yes, dependencies: null}]
-
+    - [ 'qsfp',  {description: 'QSFP testing',             path: 'mgk7mb_test:MGK7MBNetworkTests.qsfp_test',     required: yes, require_serial_number: yes, dependencies: null}]
 menu:
     # The menu item will match the user input to either the 'key' field or to the regular expression 'regex'. The matching dictionary is returned.
     # If a regular expression is given, string parameters are replaced by string_param.format(regex_matched_group_list), i.e. '{0}' is replaced by the first matched group etc. The 'key' and 'regex' fields are excluded from this conversion.
@@ -73,8 +73,9 @@ menu:
     - { key: '9', type: test, test_tag: clk}
     - { key: '10', type: test, test_tag: fpga}
     - { key: '11', type: test, test_tag: mezz}
-    - { key: '12', type: test, test_tag: rmp}
-    - { key: '13', type: test, test_tag: gtx}
+    - { key: '12', type: test, test_tag: qsfp}
+    - { key: '13', type: test, test_tag: rmp}
+    - { key: '14', type: test, test_tag: gtx}
 
     - { key: 'S', description: 'Send all new test results data to McGill',                          type: push}
     - { key: 'R', description: 'Generate summary of all tests',                                     type: summary}
@@ -216,3 +217,9 @@ motherboard_tests:
     rmp_test:
         vlt: 18
         curlmt: 5
+
+    qsfp_test:
+        vlt: 18
+        curlmt: 5
+        manufacturer: "Molex"
+        serial: "015330112"
