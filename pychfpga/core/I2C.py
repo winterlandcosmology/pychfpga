@@ -104,7 +104,8 @@ class I2C_base(Module_base):
         done_ctr = self.DONE_CTR
 
         if start_ctr != done_ctr:
-            error_msg += 'write_read: start_ctr is different from done_ctr\n'
+            self.logger.warn('write_read: start_ctr is different from done_ctr\n')
+            #error_msg += 'write_read: start_ctr is different from done_ctr\n'
 
         trial = 0
         while True:
@@ -173,11 +174,11 @@ class I2C_base(Module_base):
         """
         return self.write_read(addr=addr,data=data,read_length=0, **kwargs)
 
-    # def reset(self, port=0, verbose=0):
-    #     """
-    #     """
-    #     self.write(0x000+0x05,[0x80+(port<<5)])
-    #     self.write(0x000+0x05,[0x00+(port<<5)])
+    def reset(self, port=0, verbose=0):
+         """
+         """
+         self.write(0x000+0x05,[0x80+(port<<5)])
+         self.write(0x000+0x05,[0x00+(port<<5)])
 
     def status(self, verbose=0):
         # s=self.read(0x04,length=2)

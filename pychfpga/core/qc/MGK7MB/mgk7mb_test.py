@@ -493,7 +493,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
         print "Connecting to iceboard at : %s.\n" %ib.hostname
 
-        return ib
+        return (ib, ibs, ib_index)
 
     def prog_fpga(self, ib):
 
@@ -527,7 +527,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         passed = False
 
         print "Please ensure that the Mezzanines are NOT mounted on the board for this test"
-        ib = self.connect_to_board(xr, cfg)
+        (ib, ibs, ib_index) = self.connect_to_board(xr, cfg)
 
         try:
             #print "Creating hardware map"
@@ -707,7 +707,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         test_results = NameSpace()
         passed = False
 
-        ib = self.connect_to_board(xr, cfg)
+        (ib, ibs, ib_index) = self.connect_to_board(xr, cfg)
         question = "Is this a Rev %d board? [Y/N]" %cfg.rev
         if (input_yes_no(question, additional_answers=[])==True):
             rev = "%d" %cfg.rev
@@ -742,7 +742,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         ib.reboot()
         time.sleep(5) #Need to wait long enough for the board to stop pinging after reboot
 
-        ib = self.connect_to_board(xr, cfg, questions=False, powerdown = False)
+        (ib, ibs, ib_index) = self.connect_to_board(xr, cfg, questions=False, powerdown = False)
 
         #If it fails to connect we don't get this far and test ends
         print "The boards IPMI data is as follows:"
@@ -777,7 +777,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         test_results = NameSpace()
         passed = False
 
-        ib = self.connect_to_board(xr, cfg)
+        (ib, ibs, ib_index) = self.connect_to_board(xr, cfg)
         hostname = ib.hostname
 
         cmd = "ls /sys/bus/i2c/devices/"
@@ -865,7 +865,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         passed = False
 
         print "\nPlease move the clock source jumper to the Crystal position. "
-        ib = self.connect_to_board(xr, cfg)
+        (ib, ibs, ib_index) = self.connect_to_board(xr, cfg)
         clock_source = ib.get_clock_source()
         self.instr.ps18v.output(state=False, readonly=False) # Turn power off
 
@@ -881,7 +881,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         while (input_yes_no("Are you ready to power up the board? [Y/N]", additional_answers=[]) != True):
             pass;
 
-        ib = self.connect_to_board(xr, cfg, questions = False)
+        (ib, ibs, ib_index) = self.connect_to_board(xr, cfg, questions = False)
         clock_source = ib.get_clock_source()
         self.instr.ps18v.output(state=False, readonly=False) # Turn power off
 
@@ -897,7 +897,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         while (input_yes_no("Are you ready to power up the board? [Y/N]", additional_answers=[]) != True):
             pass;
 
-        ib = self.connect_to_board(xr, cfg, questions = False)
+        (ib, ibs, ib_index) = self.connect_to_board(xr, cfg, questions = False)
         clock_source = ib.get_clock_source()
         self.instr.ps18v.output(state=False, readonly=False) # Turn power off
 
@@ -935,7 +935,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
         print "Please again ensure that the FPGA heatsink is in place, and with sufficient ventilation"
         print "Please ensure that SFP unit is inserted into board, with an ethernet cable attached."
-        ib = self.connect_to_board(xr, cfg)
+        (ib, ibs, ib_index) = self.connect_to_board(xr, cfg)
 
         print 'Before programming the FPGA die temperature is: %.3f C' % ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE)
         pre_prog_power = ib.get_motherboard_power(ib.RAIL.MB_VCC3V3) + ib.get_motherboard_power(ib.RAIL.MB_VCC12V0) + ib.get_motherboard_power(ib.RAIL.MB_VCC5V5)
@@ -1025,7 +1025,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         passed = False
 
         print "Please ensure that the Mezzanines ARE mounted on the board for this test."
-        ib = self.connect_to_board(xr, cfg)
+        (ib, ibs, ib_index) = self.connect_to_board(xr, cfg)
 
         assert ib.is_mezzanine_present(1), "Did not find Mezzanine on Slot 1."
         assert ib.is_mezzanine_present(2), "Did not find Mezzanine on Slot 2."
@@ -1142,7 +1142,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         test_results = NameSpace()
         passed = False
         print "Please ensure mezzanines are loaded, and sufficient cooling for FPGA"
-        ib = self.connect_to_board(xr, cfg)
+        (ib, ibs, ib_index) = self.connect_to_board(xr, cfg)
 
         self.prog_fpga(ib)
         ib.is_fpga_programmed()
@@ -1252,7 +1252,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         test_results = NameSpace()
         passed = False
         print "Please ensure QSFP cable is plugged into the motherboard in both ports, and sufficient cooling for FPGA"
-        ib = self.connect_to_board(xr, cfg)
+        (ib, ibs, ib_index) = self.connect_to_board(xr, cfg)
 
         self.prog_fpga(ib)
         ib.is_fpga_programmed()
@@ -1305,8 +1305,40 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
         """
         xr.header('gtx test')
-        print "No test written"
-        passed = True
+        cfg = self.cfg.motherboard_tests.gtx_test
+
+        test_results = NameSpace()
+        passed = False
+        print "Please ensure the QSFP cable is plugged into the motherboard in both ports, and sufficient cooling for FPGA"
+        print "The motherboard must be plugged into the one slot backplane"
+        (ib, ibs, ib_index) = self.connect_to_board(xr, cfg)
+
+        self.prog_fpga(ib)
+        ib.is_fpga_programmed()
+        ib.open()
+
+        xr.header('Test-Results')
+        print "\nMeasuring  gtx error rate over a 20 second period"
+        meas_ber = ibs.get_ber(tx_power = 12, print_=True, period = 20)
+        print
+        print meas_ber
+        def searchErrDict(dic):
+            if dic == {}:
+                yield 0
+            for key in dic.keys():
+                if type(dic[key]) == type({}):
+                    for value in searchErrDict(dic[key]):
+                        yield value
+                elif type(dic[key]) == type([]):
+                    for item in dic[key]:
+                        for value in searchErrDict(item):
+                            yield value
+                else:
+                    yield 1
+
+        #finally:
+            #xr.save_data(status)
+        xr.params.test_locals = locals()
 
 
 if __name__ == '__main__':

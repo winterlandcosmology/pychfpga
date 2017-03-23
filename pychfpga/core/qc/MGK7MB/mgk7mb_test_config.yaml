@@ -223,3 +223,9 @@ motherboard_tests:
         curlmt: 5
         manufacturer: "Molex"
         serial: "015330112"
+
+    gtx_test:
+        vlt: 18
+        curlmt: 5
+        time_source: 'bp_time'
+        repeat: 3
