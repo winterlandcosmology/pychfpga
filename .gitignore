@@ -1,9 +1,12 @@
+*.so
 *.swp
+*.pkl
 *.pyc
 *.pyo
 *.bak
 *.orig
 /Archives
+/build
 *.7z
 out_*/
 /nbproject/

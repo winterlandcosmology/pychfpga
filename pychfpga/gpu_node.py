@@ -72,98 +72,95 @@ class GpuNode(hardware_map.HWMResource, handler.HandlerObject):
 
 
 class GpuNodeHandler(handler.Handler):
+    """
+    You can start the program from:
+
+    /home/chime-user/ch_gpu/build/kotekan
+
+    Run either:
+
+    sudo ./kotekan -c ../../kotekan.conf
+    or
+    sudo ./kotekan
+
+    In that later case you'll need to use the /start endpoint, in the first case it just starts automatically.
+
+    The config file needs to have the "mode" in the "system" section set to "packet_cap"
+    """
+
     __handler_for__ = GpuNode
 
     hostname = handler.HandlerParentAttribute(lambda ib: ib.hostname)
 
-    def __init__(self, hostname=None, node_type='kotekan', **kwargs):
+    def __init__(self, hostname=None, **kwargs):
         super(GpuNodeHandler, self).__init__(**kwargs)
-        if node_type not in self.NODE_TYPES:
-            raise ValueError("Node type can only be one of the following: %s" % ', '.join(self.NODE_TYPES.keys()))
-        self.node_type = node_type
-        (self.number_of_ports, self.inspect_method) = self.NODE_TYPES[node_type]
         if hostname is not None:
-            self.hostname = hostname
+            self.hostname = hostname  # Overrides the HandlerParentAttributes object
 
     def open(self):
         pass
 
-    def _inspect_gamma_win(self, port=0,  number_of_packets=5):
+
+    def send_command(self, command, args):
         """
-        Calls inspect_packet on gamma from a Windows host.
+        Sends a command to the kotekan REST server
 
-        We use the ssh -tt option to spawn a teletype, because the sudoers list is configured to require a TTY to allow sudo.
+        All endpoints return failure status codes if something goes wrong, along with a (sometimes
+        helpful) error message in the "Error: <message>" field of the HTML header.  They don't
+        return any json data on failure at the moment.
+
         """
-        if number_of_packets != 5:
-            raise ValueError('with inspect_pkt_dna_select, number of packets must be 5')
-        command = 'ssh -i %%HOMEPATH%%/.ssh/gamma-user gamma-user@%s -tt "sudo ~/inspect_pkt_dna_select dna0"' % (self.hostname)
-        (data, stderr) = Popen(shlex.split(command), stdout=PIPE, shell=True).communicate()
-        return self.parse_hexdump(data)
-
-    def _inspect_chi(self, port=0, number_of_packets=5):
-        if number_of_packets != 5:
-            raise ValueError('with inspect_pkt_dna_select, number of packets must be 5')
-        command = 'sudo ssh -i /root/.ssh/id_rsa root@%s "/root/inspect_pkt_dna_select dna%i"'  % (self.hostname, port)
-        (data, stderr) = Popen(shlex.split(command), stdout=PIPE).communicate()
-        return self.parse_hexdump(data)
-
-    def _inspect_server(self, port=0, number_of_packets=1):
-        """
-        Obtain data from an inspect server running on the node.
-
-        The server listens to TCP port 5001 and responds with JSON headers followed by binary data.
-        """
-        command = 'dna%i, n=%i\n' % (port, number_of_packets)
-
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(2)
-        sock.connect((self.hostname, 5001))
-        sock.send(command)
-        fh = sock.makefile()
-        packets = []
-        try:
-            for i in range(number_of_packets):
-                header = fh.readline()
-                # print header,
-                h = json.loads(header)
-                # print h
-                err = h['error']
-                if err:
-                    raise RuntimeError('inspect_pkt_server returned the folloring error: %s' % err)
-                n = h['packet_length']
-                packets.append(np.fromstring(fh.read(n), np.uint8))
-        except:
-            raise
-        finally:
-            # print 'closing connection'
-            sock.shutdown(socket.SHUT_RDWR)
-            sock.close()
-        return packets
-
-    def _inspect_kotekan(self, port=0, number_of_packets=1):
-        """
-        Obtain data from an inspect server running on the node.
-
-        The server listens to TCP port 5001 and responds with JSON headers followed by binary data.
-        """
-        command = {"port": port, "num_packets": number_of_packets}
-        resp = requests.post('http://%s:%i/packet_grab' % (self.hostname, 12048), data=json.dumps(command))
+        port = 12048  # hard coded
+        # command = {"port": port, "num_packets": number_of_packets}
+        resp = requests.post('http://%s:%i/%s' % (self.hostname, port, command), data=json.dumps(args))
         if resp.reason != 'OK' or resp.status_code != 200:
-            raise RuntimeError('The server returned the folloring error: %i:%s' % (resp.status_code, resp.reason))
-        return np.fromstring(resp.content, np.uint8).reshape((number_of_packets, -1))
+            raise RuntimeError('The kotekan returned the following error: %i:%s' % (resp.status_code, resp.reason))
+        return resp.content
 
+    def start(self, config):
+        """
+        Requires a json config file. Just returns an html status code on success or failure, and
+        error message if a failure happens (see comment on errors near the end).
+        """
+        data = self.send_command('start', config)
 
-    NODE_TYPES = {
-        'packet_server':  (16, _inspect_server),  # ssh, Logs in as gamma-user, requires a private key in ~/.ssh. Works on windows if ssh (or git) is installed
-        'gamma-win':  (8, _inspect_gamma_win),  # ssh, Logs in as gamma-user, requires a private key in ~/.ssh. Works on windows if ssh (or git) is installed
-        'chi': (16, _inspect_chi),  #
-        'kotekan': (4, _inspect_kotekan),
-        }
+    def stop(self):
+        """
+        Just give it an empty json string {} and it returns a status code for now.  This one takes a
+        little while to return while it clears memory.
+        """
+        return self.send_command('stop', {})
 
+    def status(self):
+        """
+        Give it an empty {}, and returns a json {"running": true/false}.   This will do more
+        interesting things later.
+        """
+        return json.loads(self.send_command('status', {}))
+
+    def packet_grab(self, port=0, number_of_packets=1):
+        """
+        Send it {"num_packets": [1,100]}, returns "Content-Type: application/octet-stream"
+
+        Packet size is html content length divided by num_packets.  Note returns "not found" error
+        code if the system isn't running.
+        """
+
+        data = self.send_command('packet_grab/%i' % port, {'num_packets': number_of_packets})
+        return np.fromstring(data, np.uint8).reshape((number_of_packets, -1))
+
+    def vis(self, freq):
+        """
+        Send it {"freq":[0,64]} - range depends on mode.
+        Sends a binary "Content-Type: application/octet-stream" with size "num_elements * (num_elements + 1) / 2"  i.e. the upper triangle matrix in row major order.
+        """
+        data = self.send_command('vis', {'freq': freq})
+        # return np.fromstring(data, np.uint8).reshape((number_of_packets, -1))
+        return data
 
     def parse_hexdump(self, hexdump):
         """
-        Parses a string as a series of hexdumps. Each packet i sseperated by a single line containing 'Packet'.
+        Parses a string as a series of hexdumps. Each packet is seperated by a single line containing 'Packet'.
         Returns an list containing a uint8 array for each packet.
         """
         packets = []
@@ -178,15 +175,13 @@ class GpuNodeHandler(handler.Handler):
     def capture_raw_packets(self, port, number_of_packets=5):
         """ Parses the inspect_packet output and return the captured packets as a list of strings.
         """
-        if port >= self.number_of_ports:
-            raise ValueError('Invalid dna port number')
-        return self.inspect_method(self, port, number_of_packets)
+        return self.packet_grab(port, number_of_packets)
 
     def capture_packets(self, port=0, number_of_packets=5, print_packet_info=True):
         """ Obtain packets from the node and decode them.
         """
         # Get raw packets
-        raw_packets = self.capture_raw_packets(port, number_of_packets)
+        raw_packets = self.packet_grab(port, number_of_packets)
 
         # Process the packets
         result = []

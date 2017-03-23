@@ -250,7 +250,7 @@ class MGADC08_Handler(FMCMezzanineHandler):
         self.AmbTemp.init()
 
         # self.logger.debug('%.32r:   - IOExpander' % self)
-        self.IOExpander.init()
+        self.IOExpander.init()  # Initializes the register of the IOExpander over SPI (takes some time)
 
         # self.logger.debug('%.32r:   - ADC_PLL' % self)
         self.ADC_PLL.init(fout=2*self.sampling_frequency/1e6, fref=self.reference_frequency/1e6, verbose=verbose)

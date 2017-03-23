@@ -64,6 +64,14 @@ class IceCrateExtHandler(IceCrateHandler):
         return cls._BP_TX_TO_RX_MAP[tx_slot_lane_tuple]
 
     @classmethod
+    def get_pcb_link_map(cls):
+        """
+        Return a dictionnary that maps all receiver id to transmitter id. It is in the format:
+            {(rx_slot,rx_lane): (tx_slot:tx_lane),...}
+        """
+        return cls._BP_RX_TO_TX_MAP
+
+    @classmethod
     def get_rx_net_length(cls, rx_slot_lane_tuple):
         return cls._BP_RX_NET_LENGTH[rx_slot_lane_tuple]
 
@@ -88,9 +96,19 @@ class IceCrateExtHandler(IceCrateHandler):
         """
         pass
 
-    def get_id(self):
-        """ Return a system-unique ID. This can be used to identify links"""
+    def get_string_id(self):
+        """ Return a string composed of the backplane model and serial number that can be used to uniquely identofy a crate in a system"""
         return '%s_SN%s' % (self.part_number, str(self.serial))
+
+    def get_id(self, lane=None):
+        if self.crate_number is not None:
+            id = [self.crate_number]
+        else:
+            id = [self.get_string_id()]
+        if lane:
+            id.append(lane)
+        return tuple(id)
+
 
     def get_number_of_slots(self):
         return self.NUMBER_OF_SLOTS
@@ -1119,3 +1137,27 @@ class IceCrate_MGK7BP1_Handler(IceCrateExtHandler):
     def status(self):
         """Displays the status of the motherboard"""
 
+    def get_qsfp_links(self):
+        """
+        Return a list describing all known GTX nodes connection provided by the QSFP cables on this backplane.
+
+        Each link node is in the format (link_type='BP_QSFP, node_id1, node_id2, link_id).
+
+        Each node id in in the format (crate_id, slot, lane). If we do not
+        know what node is connected to the far end of the cable, node_id2=Node
+        and the the connectivity will be put together by the caller using the
+        link_id field..
+
+        Link_id a unique identifier that is unique for each bi- directional
+        links. In this case, it is a string based on the cable manufacturer,
+        model, serial number and lane number.
+        """
+        # tx_nodes = {}
+        # rx_nodes = {}
+        links = []
+        cable_link_id = 'Loopback'
+        slot = 0 # there is only one QSFP link on this backplane
+        for qsfp_lane in range(4):
+            link_id = cable_link_id+'_%i' % qsfp_lane
+            links.append(('BP_QSFP', (self.get_id(), slot, qsfp_lane), link_id, link_id)) # the link IDs for both ends are the same because the board is wired to loopback the signals on the same port
+        return links

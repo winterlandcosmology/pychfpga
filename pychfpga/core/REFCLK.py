@@ -296,7 +296,7 @@ class REFCLK_base(Module_base):
         for i, adc_board_sync_delay in enumerate(adc_board_sync_delays):
             if adc_board_sync_delay:
                 a = np.array(adc_board_sync_delay) * 2 * np.pi / adc_input_clock_period
-                adc_board_average_sync_delays[i] = int(np.round(np.arctan2(np.sum(np.sin(a)), np.sum(np.cos(a))) / 2 / np.pi * adc_input_clock_period)) % adc_input_clock_period
+                adc_board_average_sync_delays[i] = (int(np.round(np.arctan2(np.sum(np.sin(a)), np.sum(np.cos(a))) / 2 / np.pi * adc_input_clock_period)) + 1) % adc_input_clock_period
             else:
                 adc_board_average_sync_delays[i] = None
 

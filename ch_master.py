@@ -260,13 +260,13 @@ if __name__ == "__main__":
 
     conf = NameSpace(fpga_array.load_yaml_config(args.conf_file))
     fpga_array_params = conf.fpga.pop('fpga_array_params')
-    adc_delay_params = conf.fpga.pop('adc_delay_params')    
+    adc_delay_params = conf.fpga.pop('adc_delay_params')
     # I separate fpga_array_params from conf since the writer to the hdf5 file cannot
     # handle the hardware map object. fpga_array_params is used to program the boards.
     # However, the writer still needs some parameters from fpga_array_params so
     # have to add the manually.
     for key in fpga_array_params.keys():
-        if key != 'hwm': 
+        if key != 'hwm':
             conf.fpga[key] = fpga_array_params[key]
 
     # if ret != True:
@@ -285,141 +285,76 @@ if __name__ == "__main__":
     # Build up the adc_delay_table.
     # Should be 16 different sets of 16.  Have a pickle file, change
     # this to point to it and use each when programming the fpga.
-    if (int(args.configure_fpga) > 0):
-        n = 16 #int(conf["n_antenna"])
-        adc_delay = []
-        for i in range(n):
-            name = "ch%02d" % i
-            tmp_delay = []
-            if not name in conf.fpga.adc_delay:
-                log.critical("%.32r: Could not find fpga.adc_delay.%s entry in " \
-                                         "configuration file." % (self, name))
-                exit()
-            else:
-                this_chan = conf.fpga.adc_delay[name]
-            for j in range(len(this_chan)):
-                k = int(this_chan[j])
-                tmp_delay.append(k)
-            if len(tmp_delay) != 16:
-                log.critical("%.32r: Entry fpga.adc_delay.%s needs 16 integer entries." % \
-                                         (self, name))
-                exit()
-            adc_delay.append((tmp_delay[:8], tmp_delay[8:]))
+
+
+    # JFC: Removed delay loading. This is now done below with ca.set_adc_delays().
+
+    # if (int(args.configure_fpga) > 0):
+    #     n = 16 #int(conf["n_antenna"])
+    #     adc_delay = []
+    #     for i in range(n):
+    #         name = "ch%02d" % i
+    #         tmp_delay = []
+    #         if not name in conf.fpga.adc_delay:
+    #             log.critical("%.32r: Could not find fpga.adc_delay.%s entry in " \
+    #                                      "configuration file." % (self, name))
+    #             exit()
+    #         else:
+    #             this_chan = conf.fpga.adc_delay[name]
+    #         for j in range(len(this_chan)):
+    #             k = int(this_chan[j])
+    #             tmp_delay.append(k)
+    #         if len(tmp_delay) != 16:
+    #             log.critical("%.32r: Entry fpga.adc_delay.%s needs 16 integer entries." % \
+    #                                      (self, name))
+    #             exit()
+    #         adc_delay.append((tmp_delay[:8], tmp_delay[8:]))
 
     # Create the acquisition object. Pass it the configuration settings so that it
     # can initialise.
     acq = chrx.acq(conf, log, 16, fpga_hk_field) if chrx else None
 
     if (int(args.configure_fpga) > 0):
-            # Create the FPGA controller object.
-            # Will now create an array of controller objects indexed by serial number
-            # And program board firmware if needed/requested currently will always reprogram
-            ca = fpga_array.FPGAArray(**fpga_array_params)     # Create FPGA array
-            sync_board = ca.ib.get(serial=conf.fpga.master_sync_board) if conf.fpga.master_sync_board else None
-            ca.set_sync_method(conf.fpga.sync_method, source=conf.fpga.sync_source, master=sync_board, master_time_source=conf.fpga.master_sync_source if sync_board else None)
-            ca.ib.set_adc_mask(0) # null the ADC data before it gets to the channelizers to reduce power consumption
-
-            # c = ca.ib
-
-            # # ca = load_yaml(open('pychfpga/yaml_iceboard_list.txt'))
-            # # close_all_sockets()
-            # # IceArray.close_all_sessions()
-            # # ca = IceArray(uri=conf.fpga.db_file, interface_ip_addr=conf.fpga.host_ip)
-            # # Might want to move the list somewhere else/into conf file?
-            # # ca.load_iceboards('/home/chime/ch_acq/pychfpga/iceboard_list.txt')
-            # # ca.discover()
-            # fpga_bitstream = FpgaBitstream(conf.fpga.bitfile_name)
-            # ChimeFpgaFirmware.register_fpga_bitstream(fpga_bitstream)
-
-            # # bitfile_filename = conf.fpga.bitfile_name
-            # # fpga_bitstream = ca.get_fpga_bitstream(bitfile_filename, ChimeFpgaFirmware)
-            # c = ca.query(IceBoardPlus).filter_by(subarray=conf.fpga.subarray)
-
-            # for ib in c:
-            #     if not ib.ping():
-            #             ca.delete(ib)
-            # ca.commit()
-            # c.set_fpga_bitstream(force=conf.fpga.force)
-
-            # c = ca.get_iceboards(subarray=[conf.fpga.subarray]).index_by(IceBoard.serial_number)
-            # c.set_fpga_firmware(fpga_bitstream, force=conf.fpga.force)
-            # c.discover_mezzanines()
-            # c.discover_crate()
-            # c.open( \
-            #             adc_delay_table=adc_delay, \
-            #             init=1, \
-            #             sampling_frequency=conf.fpga.samp_freq * 1e6, \
-            #             reference_frequency=conf.fpga.ref_freq, \
-            #             data_width=conf.fpga.data_width, \
-            #             group_frames=conf.fpga.group_frames, \
-            #             enable_gpu_link = conf.fpga.enable_gpu_link)
-            # #Temp solution to load adc_delay from table...
-            log.info("%.32r: Loading initial gains" % self)
-            ca.ib.set_adc_delays(**adc_delay_params)
-                        #for cc in c:
-            #  cc.GPU.LINK_ENABLE=1
-            #  log.info("GPU link enabled on SN {0}, SLOT {1}".format(cc.serial, cc.slot))
+            # Create and initialize the FPGA objects and corresponding hardware.
+            ca = fpga_array.FPGAArray(**fpga_array_params)
             if not ca.ib:
                 raise RuntimeError('%.32r: No IceBoard could be found. Are the boards powered up? Is the networking functional?' % self)
 
+            # is this needed?
+            ca.ib.set_adc_mask(0) # (needed?) null the ADC data before it gets to the channelizers to reduce power consumption
+
+            # Setting ADC delays
+            log.info("Setting ADC delays")
+            ca.ib.set_adc_delays(**adc_delay_params)
+
+            # is this needed?
             ca.ib.set_corr_reset(1)
             time.sleep(0.1)
             ca.ib.set_corr_reset(0)
-            # fpga = chFPGA_controller.chFPGA_controller( \
-            #            ip_address = conf.fpga.ip_address, \
-            #            port_number = conf.fpga.port, \
-            #            adc_delay_table = adc_delay, \
-            #            verbose = 0, \
-            #            init = 1, \
-            #            sampling_frequency = conf.fpga.samp_freq * 1e6, \
-            #            reference_frequency = conf.fpga.ref_freq, \
-            #            data_width=conf.fpga.data_width, \
-            #            group_frames=conf.fpga.group_frames, \
-            #            enable_gpu_link = conf.fpga.enable_gpu_link, \
-            #            host_ip = conf.fpga.host_ip)
-
-
-            # Set FPGA controller parameters.
-            # Calculate new gains if necessary
-            # Get config here to be able to create receiver object
-            # Gains will need to be able to handle multiple boards, currently file
-            # Will be overwritten when used for more than one board.
-            # Make compute gains smarter -> write to db? need boards to actually be different
 
             # Get noise injection parameters
-            #gpu_intergration_period = conf.gpu.gpu_intergration_period
-            ni_board = conf.fpga.ni_board
-            ni_enable = conf.fpga.ni_enable
-            ni_offset = conf.fpga.ni_offset
-            ni_high_time = conf.fpga.ni_high_time - 1 # the -1 is due to the convention in function set_frame_pwm()
-            ni_period = conf.fpga.ni_period - 1
-            ni_board_26m = conf.fpga.ni_board_26m
-            ni_enable_26m = conf.fpga.ni_enable_26m
-            ni_offset_26m = conf.fpga.ni_offset_26m
-            ni_high_time_26m = conf.fpga.ni_high_time_26m - 1 # the -1 is due to the convention in function set_frame_pwm()
-            ni_period_26m = conf.fpga.ni_period_26m - 1
+            ni = conf.fpga.ni
+            ni_26m = conf.fpga.ni_26m
 
+            # Calculate gains if requested
             if (int(args.compute_gain) > 0):
-                    #Shouldn't need for loop here, but initial testing failed in parallel.
-                    if ni_enable:
-                            ca.set_noise_injection(ni_board, ni_enable, 0, 3, 4)
-                            ni_board.sync()
-                    if ni_enable_26m:
-                            ca.set_noise_injection(ni_board_26m, ni_enable_26m, 0, 3, 4)
-                            ni_board_26m.sync()
-                    calculate_gain_slots = conf.fpga.calculate_gain_slots
-                    for ib in ca,ib:
-                        if ib.slot in calculate_gain_slots:
-                            fpga_config = ib.get_config()
-                            calculate_gains.calculate_gains(ib, str(ib.fpga_port_number + 1))
+                if ni.board:
+                    ca.set_noise_injection(board=ni.board, enable=ni.enable, offset=0, high_time=3, period=4, local_sync=True)
+                if ni_26m.board:
+                    ca.set_noise_injection(board=ni_26m.board, enable=ni_26m.enable, offset=0, high_time=3, period=4, local_sync=True)
+                #Shouldn't need the 'for' loop here, but initial testing failed if those were called in parallel.
+                for ib in ca.ib:
+                    if ib.slot in conf.fpga.calculate_gain_slots:
+                        fpga_config = ib.get_config()
+                        calculate_gains.calculate_gains(ib, str(ib.fpga_port_number + 1))
             all_chan = range(16)  # range(conf["n_antenna"])
             ca.ib.set_data_source("adc")  # This should come first.
             ca.ib.set_FFT_bypass(False, channels=all_chan)
             ca.ib.set_FFT_shift(conf.fpga.fft_shift, channels=all_chan)
-            
+
             ca.ib.set_synchronized_gain_switching(enable=0)
             ca.ib.set_next_gain_bank(bank=0)
-            all_banks = ca.ib.get_current_gain_bank()            
+            all_banks = ca.ib.get_current_gain_bank()
 
             # Load and set the gains
             log.info("%.32r: Loading initial gains" % self)
@@ -473,12 +408,12 @@ if __name__ == "__main__":
             #                          ni_high_time_26m = ni_high_time_26m, ni_period_26m = ni_period_26m,
             #                          window_start=0, window_stop=50)
 
-            # Setup noise injection enable PWM signals
-            if ni_board:
-                ca.set_noise_injection(ni_board, ni_enable, ni_offset, ni_high_time, ni_period)
-            if ni_board_26m:
-                ca.set_noise_injection(ni_board_26m, ni_enable_26m, ni_offset_26m, ni_high_time_26m, ni_period_26m)
-            # Initialize data shufling and transmission to the GPU
+            # Setup noise injection (enable PWM signals)
+            if ni.board:
+                ca.set_noise_injection(board=ni.board, enable=ni.enable, offset=ni.offset, high_time=ni.high_time, period=ni.period)
+            if ni_26m.board:
+                ca.set_noise_injection(board=ni_26m.board, enable=ni_26m.enable, offset=ni_26m.offset, high_time=ni_26m.high_time, period=ni_26m.period)
+                   # Initialize data shufling and transmission to the GPU
             log.info("%.32r: Setting FPGA operational mode" % self)
             ca.set_operational_mode(conf.fpga.operational_mode, frames_per_packet=fpga_array_params.group_frames)
             log.info("%.32r: Synchronizing the array..." % self)
@@ -638,7 +573,7 @@ if __name__ == "__main__":
 
         # Stop the acq on SIGTERM
         signal.signal(signal.SIGTERM, stop_acq)
-        
+
         # Start the acquisition.
         acq.start(acq_base_dir, crate_sn, int(conf.fpga.subarray))
 

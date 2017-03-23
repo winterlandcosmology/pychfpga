@@ -156,7 +156,7 @@ class ChanBinSel(Module_base):
             mask = self.read_ram(0x00, length =self.fpga.FRAME_LENGTH/2/8)
 
         bin_map = np.unpackbits(mask[::-1])[::-1]
-        return np.where(bin_map)
+        return np.where(bin_map)[0]
 
     def init(self):
         """ Initializes CH_DIST."""
@@ -172,6 +172,42 @@ class ChanBinSel(Module_base):
         self.logger.debug('   RESET: %i' % self.RESET)
         self.logger.debug('   FIFO EMPTY: %i' % self.FIFO_EMPTY)
         self.logger.debug('   FIFO OVERFLOW: %i' % self.FIFO_OVERFLOW)
+
+
+    def map(self, input_data):
+        """ Reorders the data based on the configurationof the bin selector.
+        input data: {channel_number: [data, ...]}
+        output_data: [data, data]
+        """
+
+        if self.BYPASS:
+            raise RuntimeError('%.32s: CHAN_BIN_SEL cannot yet provide maps in BYPASS mode')
+
+        channels = range(self.FIRST_FIFO_NUMBER * 4, self.LAST_FIFO_NUMBER * 4 + 3 + 1)
+        bins = self.get_selected_bins()
+        output_data = [input_data[ch][bin_number]  for bin_number in bins for ch in channels]
+        output_dict = dict(
+            header=dict(
+                cookie=0xcf,
+                protocol_version=1,
+                header_length=4,
+                stream_id=(self.STREAM_ID << 4) | self.instance_number,
+                four_bits=self.FOUR_BITS,
+                use_offset_binary=self.USE_OFFSET_BINARY,
+                send_flags=self.SEND_FLAGS,
+                bypass=self.BYPASS,
+                frames_per_packet=self.GROUP_FRAMES,
+                bins_per_frame=self.NUMBER_OF_SELECTED_WORDS,
+                words_per_bin=len(channels)/4 if self.FOUR_BITS else len(channels)/2,
+                ancillary=None,
+                timestamp=0,
+                ),
+            data=output_data,
+            data_flags=None,
+            frame_flags=None,
+            packet_flags=None
+            )
+        return output_dict
 
     def get_sim_output(self, input_lanes):
         """ Compute the channelizer bin selector output packets.
@@ -199,7 +235,7 @@ class ChanBinSel(Module_base):
         for frame_number in range(number_of_frames/4):
             header_words = np.zeros(4, int)
             header_words[0] = 0x000014CF | (self.STREAM_ID << 20) | (lane_number << 16)
-            header_words[1] = (self.FOUR_BITS << 31) | (self.USE_OFFSET_BINARY << 30) | (self.SEND_FLAGS << 29) | (self.SYPASS << 28) | (frames_per_packet << 24) | (self.NUMBER_OF_SELECTED_WORDS << 12) | (self.NUMBER_OF_LANES <<0 )
+            header_words[1] = (self.FOUR_BITS << 31) | (self.USE_OFFSET_BINARY << 30) | (self.SEND_FLAGS << 29) | (self.BYPASS << 28) | (frames_per_packet << 24) | (self.NUMBER_OF_SELECTED_WORDS << 12) | (self.NUMBER_OF_LANES <<0 )
             header_words[2] = 0
             header_words[3] = frame_number
 
