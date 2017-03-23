@@ -10,7 +10,7 @@ comment: |
 
 # test_results_folder: './test_results'
 test_results_folder: '../../../../../motherboard_qc'
-fpga_bit_file: '/home/winterlanduser/chfpga/xilinx_projects/CHFPGA_MGK7MB_REV2/CHFPGA_MGK7MB_REV2.runs/impl_Rev2/chFPGA_MGK7MB_Rev2.bit'
+fpga_bit_file: '/home/ghsyu/CHIME/chfpga/xilinx_projects/CHFPGA_MGK7MB_REV2/CHFPGA_MGK7MB_REV2.runs/impl_Rev2/chFPGA_MGK7MB_Rev2.bit'
 model_number: ['MGK7MB']
 mgk7mb_model_number: ['MGK7MB']
 xformat: ['pdf']  # Output formats for the test reports. xml is always saved.
@@ -79,9 +79,9 @@ menu:
     - { key: 'S', description: 'Send all new test results data to McGill',                          type: push}
     - { key: 'R', description: 'Generate summary of all tests',                                     type: summary}
     - { key: 'Q', description: 'Exit',                                                              type: exit}
-    - {           description: "Start by entering the MB's serial number, then select a test.",     type: text}
-    - { regex: '(0\d{3})', type: board_info, model: 'MGK7MB', serial: '{0}', next_key: '1'}  # 0nnn are MGK7MB Serial number
-
+    - {           description: "Start by entering the MB's serial number, then select a test or range of tests (e.g. 10-13).",     type: text}
+    - { regex: '(0\d{3})', type: board_info, model: 'MGK7MB', serial: '{0}', next_key: '5'}  # 0nnn are MGK7MB Serial number
+    - { regex: '(\d+\-\d+)', type: range, input: '{0}'} # regex to select a range of options 
 
 
 ##################################

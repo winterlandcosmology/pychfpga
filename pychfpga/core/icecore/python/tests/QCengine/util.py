@@ -19,10 +19,21 @@ def add_paths(*paths):
             sys.path.insert(1, fullpath)
 
 add_paths('../../../../qc')  # needed to find labpy
-add_paths('../../../..')  # needed to find icecore
+add_paths('../../../../')  # needed to find icecore
+add_paths('../../../../icecore_ext')  # needed to find icecore
 
 import icecore
 from icecore import NameSpace, XReport
+
+def flush_input_buffer():
+    try:
+        import termios
+        termios.tcflush(sys.stdin, termios.TCIFLUSH)
+    except ImportError:
+        import msvcrt
+        while msvcrt.kbhit():
+            msvcrt.getch()
+
 
 def run_tests(config_file):
     cfg = load_config(config_file)
@@ -42,28 +53,17 @@ def run_tests(config_file):
 
     # load test menu and convert each dict element to NameSpace to simplify code
     submenus = [NameSpace(menu_item) for menu_item in cfg.menu]
-            # Update menu with information from the test list
-
+        
+    # Update menu with information from the test list
     for menu_item in submenus:
         if menu_item.type == 'submenu':
             submenu = submenu_list[menu_item.menu_tag]
             if not menu_item.get('description', None):  # Take description from the test list if there is none
                 menu_item.description = submenu.description
             menu_item.regex = '(%s|%s)' % (submenu.path, menu_item.menu_tag) # have the menu recognize the test path or key as an other way to select the test
-        
-
 
     while True:
-        print
-        print
-        print '---------------------------------------------'
-        if current_model and current_serial:
-            print 'Currently testing  %s SN%s (Scanned=%s)' % (current_model, current_serial, is_serial_scanned)
-        else:
-            print ' !!! NO SERIAL NUMBER CURRENTLY SELECTED !!!'
-        print '---------------------------------------------'
-        print
-        
+
         default_choice = None
         for menu_item in submenus:
             if menu_item.type == 'submenu':
@@ -72,15 +72,22 @@ def run_tests(config_file):
             default_choice = 'Q'
 
         selection = select_menu_item(submenus, default=default_choice)
-        
-        # Update menu with information from the test list
-        
+                
         if selection.type == 'exit':
             # instr.dmm.display('Bye!', '')
             break
         elif selection.type == 'submenu':
-            subcfg = load_config(submenu_list[selection.menu_tag].path)
-        
+            subpath = submenu_list[selection.menu_tag].path
+            subcfg = load_config(subpath)
+            subfolder = os.path.split(subpath)[0]
+        elif selection.type == 'push':
+                commit_repo(test_results_folder)
+        elif selection.type == 'summary':
+                test_folders = os.path.join(test_results_folder, '%s_SN*/' % (current_model))
+                f = raw_input('Enter destination filename (optional, no extension):')
+                summary_filename = os.path.join(test_results_folder, f+'.csv')
+                XReport.generate_combined_summary(test_folders, subcfg.test_list, output_filename=summary_filename)
+
         test_list = NameSpace(subcfg.test_list)  # convert list of (key,values) into an OrderedDict
          # load test menu and convert each dict element to NameSpace to simplify code
         test_menu = [NameSpace(menu_item) for menu_item in subcfg.menu]
@@ -96,8 +103,17 @@ def run_tests(config_file):
                 if not menu_item.get('description', None):  # Take description from the test list if there is none
                     menu_item.description = test.description
                 menu_item.regex = '(%s|%s)' % (test.path, menu_item.test_tag) # have the menu recognize the test path or key as an other way to select the test
-        
+
         while True:
+            print
+            print
+            print '---------------------------------------------'
+            if current_model and current_serial:
+                print 'Currently testing  %s SN%s (Scanned=%s)' % (current_model, current_serial, is_serial_scanned)
+            else:
+                print ' !!! NO SERIAL NUMBER CURRENTLY SELECTED !!!'
+            print '---------------------------------------------'
+            print
             # Update the menu to indicate which tests have passed.
             # Also use that information to determine the next test to run by default.
             default_choice = None
@@ -153,13 +169,12 @@ def run_tests(config_file):
                     print 'Please enter or scan a serial number before beginning a test'
                     continue
                 # summary_data = xr.generate_summary(summary_filename, data_folder)
+                
+                add_paths(subfolder)
                 nose_test_path = test.path
                 test_date = datetime.datetime.now().isoformat().replace(':','_')+'_' if not subcfg.debug.no_date else ''
     
-    
-                print
-                print 'Running test %s' % nose_test_path
-                print
+                print '\n Running test %s\n' % nose_test_path
     
                 if test.require_serial_number:
                     serial = current_serial
@@ -167,7 +182,7 @@ def run_tests(config_file):
                     serial = None
                     is_serial_scanned = False
     
-                params = NameSpace(config_file=config_file, model=current_model, serial=serial)
+                params = NameSpace(config_file=subpath, model=current_model, serial=serial)
                 r = XReport.run(nose_test_path, xparams=params)
                 print
                 print
@@ -181,7 +196,7 @@ def run_tests(config_file):
     
                 test_folder = os.path.join(test_results_folder, '%s_SN%s' % (current_model, current_serial))
                 test_data_folder = os.path.join(test_folder, 'data')
-                test_file_name = '%s%s.pdf' %  (test_date, nose_test_path.replace(':', '.'))
+                test_file_name = '%s%s.pdf' %  (test_date, os.path.split(subpath)[1])
                 full_test_filename = os.path.join(test_data_folder, test_file_name)
     
                 if not os.path.exists(test_folder):
@@ -197,6 +212,61 @@ def run_tests(config_file):
                 print 'Generating summary report...'
                 summary_file_name = os.path.join(test_folder, '%s_SN%s_summary.pdf' %  (current_model, current_serial))
                 t = XReport.generate_test_summary(input_folder=test_data_folder, required_tests=subcfg.test_list, output_filename=summary_file_name, title='%s_SN%s Summary Test Report' % (current_model, current_serial))
+            elif selection.type == 'range':
+                start, end = selection.input.split('-')
+                for i in xrange(int(start), int(end)+1):
+                    current_test = find_menu_item('{0}'.format(i), test_menu)
+                    test = test_list[current_test.test_tag]
+        
+                    if test.require_serial_number and (not is_serial_scanned or not current_serial or not current_model):
+                        print
+                        print '!!!!!!!!!!!!!!!!!!'
+                        print 'Please enter or scan a serial number before beginning a test'
+                        continue
+                    # summary_data = xr.generate_summary(summary_filename, data_folder)
+                    
+                    add_paths(subfolder)
+                    nose_test_path = test.path
+                    test_date = datetime.datetime.now().isoformat().replace(':','_')+'_' if not subcfg.debug.no_date else ''
+        
+                    print '\n Running test %s\n' % nose_test_path
+        
+                    if test.require_serial_number:
+                        serial = current_serial
+                    else:
+                        serial = None
+                        is_serial_scanned = False
+        
+                    params = NameSpace(config_file=subpath, model=current_model, serial=serial)
+                    r = XReport.run(nose_test_path, xparams=params)
+                    print('\n\n')
+        
+                    if params.serial != current_serial:
+                        print '**********************************************'
+                        print ' **** Serial number is now %s' % (params.serial)
+                        print '**********************************************'
+                        current_serial = params.serial
+                        is_serial_scanned = False
+        
+                    test_folder = os.path.join(test_results_folder, '%s_SN%s' % (current_model, current_serial))
+                    test_data_folder = os.path.join(test_folder, 'data')
+                    test_file_name = '%s%s.pdf' %  (test_date, os.path.split(subpath)[1])
+                    full_test_filename = os.path.join(test_data_folder, test_file_name)
+        
+                    if not os.path.exists(test_folder):
+                        print 'Creating folder %s' % test_data_folder
+                        os.makedirs(test_data_folder)
+        
+                    # print 'Test data will be stored in %s' % full_test_filename
+                    r.write(filename=full_test_filename, formats=cfg.xformat)  # Write the test reports and data
+                    # if r.passed:
+                    #     default_choice = selection.next_key
+                    # else:
+                    #     default_choice = 'Q'
+                    print 'Generating summary report...'
+                    summary_file_name = os.path.join(test_folder, '%s_SN%s_summary.pdf' %  (current_model, current_serial))
+                    t = XReport.generate_test_summary(input_folder=test_data_folder, required_tests=subcfg.test_list, output_filename=summary_file_name, title='%s_SN%s Summary Test Report' % (current_model, current_serial))
+    
     return locals()  # return a dict of all local variables to help interactive debugging
 
 
@@ -244,6 +314,7 @@ def select_menu_item(menu, default=''):
             print fmt % (item.get('status',''), item.get('key',''), '')
 
     while True:
+        flush_input_buffer()
         choice = raw_input("Enter choice%s: " % (' [%s]' % default if default else '')).strip()
         pattern_match = find_menu_item(choice or default, menu)
         if pattern_match:

@@ -57,8 +57,9 @@ menu:
     - { key: 'S', description: 'Send all new test results data to McGill',                          type: push}
     - { key: 'R', description: 'Generate summary of all tests',                                     type: summary}
     - { key: 'Q', description: 'Exit',                                                              type: exit}
-    - {           description: "Start by entering the BP's serial number, then select a test.",     type: text}
+    - {           description: "Start by entering the BP's serial number, then select a test or range of tests (e.g. 5-7).",     type: text}
     - { regex: '(0\d{2})',                                                                          type: board_info, model: 'MGK7BP16', serial: '{0}', next_key: '1'}  # 0nn are MGK7BP16 Serial number
+    - { regex: '\d+\-\d+', type: range, input: '{0}'} # regex to select a range of options 
 
  
 

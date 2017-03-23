@@ -30,7 +30,7 @@ util.add_paths('../../..')  # needed to find fpga_array
 from pychfpga.core.icecore import IceBoardPlusHandler
 
 util.add_paths('../../icecore/python/hw')
-import ipmi_fru as ipmi_fru
+#import ipmi_fru as ipmi_fru
 import base64
 
 util.add_paths('../../icecore_ext')
@@ -39,7 +39,7 @@ import fpga_bitstream as fb
 from pychfpga.core.icecore_ext import IceBoardExtHandler
 
 
-TEST_CONFIG_FILE = './mgk7mb_test_config.yaml'
+TEST_CONFIG_FILE = '/home/ghsyu/CHIME/ch_acq/pychfpga/core/qc/MGK7MB/mgk7mb_test_config.yaml'
 
 rm = visa.ResourceManager('@py')
 
