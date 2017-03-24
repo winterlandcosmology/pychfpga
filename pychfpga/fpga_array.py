@@ -431,6 +431,7 @@ class FPGAArray(object):
                     ib = ib_to_ping[i]
                     if ping_successful:
                         ib.hostname = socket.gethostbyname(ib.hostname)
+                        pass
                     else:
                         print ("%r could not be found at '%s'. It is removed from YAML hardware map."
                                            % (ib, ib.tuber_uri))
@@ -2291,6 +2292,9 @@ def parse_hw_description_string(hw_description_string, hw_description_table=None
     """
     # Extract the crate number
 
+    if hw_description_table is None:
+        hw_description_table = {}
+    print "Hardware description table is", hw_description_table
     # If hw_description_string is a list of string, combine them in one single string
     # print 'parsing:', hw_description_string
     if isinstance(hw_description_string, (list, tuple)):
@@ -2369,7 +2373,7 @@ def parse_hw_description_string(hw_description_string, hw_description_table=None
         print hw_description_string
         print ' '*(pos-2)+'^'
         raise ValueError(err)
-    print 'hw_description_table:', hw_description_table
+    #print 'hw_description_table:', hw_description_table
     return hw_description_table
 
 

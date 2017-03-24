@@ -1156,8 +1156,8 @@ class IceCrate_MGK7BP1_Handler(IceCrateExtHandler):
         # rx_nodes = {}
         links = []
         cable_link_id = 'Loopback'
-        slot = 0 # there is only one QSFP link on this backplane
+        slot = 1 # there is only one QSFP link on this backplane
         for qsfp_lane in range(4):
             link_id = cable_link_id+'_%i' % qsfp_lane
-            links.append(('BP_QSFP', (self.get_id(), slot, qsfp_lane), link_id, link_id)) # the link IDs for both ends are the same because the board is wired to loopback the signals on the same port
+            links.append(('BP_QSFP', (self.get_id(), slot, qsfp_lane), (self.get_id(),slot, qsfp_lane), link_id)) # the node IDs for both ends are the same because the board is wired to loopback the signals on the same port
         return links

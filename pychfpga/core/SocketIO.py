@@ -74,6 +74,7 @@ class DataSocket_base(object):
         self.sock.settimeout(2)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, self.BUFFER_LENGTH)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
 
         self.logger.debug('%r: Using host address %s' % (self, self.host_ip))
         self.logger.info('%r: Opened data UDP Socket' % self)
