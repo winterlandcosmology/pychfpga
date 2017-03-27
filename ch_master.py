@@ -320,6 +320,9 @@ if __name__ == "__main__":
             if not ca.ib:
                 raise RuntimeError('%.32r: No IceBoard could be found. Are the boards powered up? Is the networking functional?' % self)
 
+            sync_board = ca.ib.get(serial=conf.fpga.master_sync_board) if conf.fpga.master_sync_board else None
+            ca.set_sync_method(conf.fpga.sync_method, source=conf.fpga.sync_source, master=sync_board, master_time_source=conf.fpga.master_sync_source if sync_board else None)
+
             # is this needed?
             ca.ib.set_adc_mask(0) # (needed?) null the ADC data before it gets to the channelizers to reduce power consumption
 
@@ -443,8 +446,10 @@ if __name__ == "__main__":
             #log.info("Correlator started with an integration time of %.1f s" % \
             #         (conf.fpga.int_period))
 
-
-
+            log.info("%.32r: Disabling shuffle 3 GTXs" % self)
+            for ib in ca.ib:
+                for qpll in ib.BP_SHUFFLE.qpll[4:]:
+                    qpll.QPLL_PD = 1
 
             #Read the FPGA setting back from the FPGA
             log.info("%.32r: Getting configuration data from all FPGAs" % self)
@@ -609,17 +614,17 @@ if __name__ == "__main__":
             for bankset in all_banks:
                     log.info('%.32r: Currently using gain banks %s' % (self, ', '.join([str(i) for i in bankset])))
 
-    #t0 = time.time()
+    t0 = time.time()
 
     try:
         while True:
 
             # print board info at regular interval
-            #t1 = time.time()
-            #if t1-t0 > 60:
-                #t0 = t1
-                #try: ca.print_iceboard_info()
-                #except: pass
+            t1 = time.time()
+            if t1-t0 > 60:
+                t0 = t1
+                try: ca.print_iceboard_temperatures()
+                except: pass
 
             # Pass the acquisition object the board temperatures. This is a temporary
             # way of doing this!  Check on frame number.  If less than 10sec from 'reload_gains_time'

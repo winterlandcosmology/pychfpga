@@ -2124,7 +2124,7 @@ class chFPGA_controller(IceBoardExtHandler):
             cb2_bin_select_map = [np.arange(cb2_bins)*cb2_bin_spacing for i in range(number_of_cb2_bin_sel)]
             cb2_output_words_per_bin = 2 * cb2_input_words_per_bin
             cb2_output_bins = cb2_bins
-            crate_number = self.crate.crate_number
+            crate_number = self.crate.crate_number  if self.crate.crate_number is not None else 0
             stream_type = 2
             # QSFP SHUFFLE
             crate_shuffle_bypass = True
