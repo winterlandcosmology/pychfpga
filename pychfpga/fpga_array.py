@@ -1640,8 +1640,8 @@ class FPGAArray(object):
             cnt = dest_gtx.ERR_CTR
             err = (float(cnt) * 16) / (period * 10e9)
             err_max = (float(cnt) * 16 + 1) / (period * 10e9)
-
-            print '%r BER = %1.1e (%i errors, BER<%1.1e)' % (link[0], err, cnt, err_max)
+            if print_:
+                    print '%r BER = %1.1e (%i errors, BER<%1.1e)' % (link[0], err, cnt, err_max)
             self.print_flush()
             async_return(err)
 
