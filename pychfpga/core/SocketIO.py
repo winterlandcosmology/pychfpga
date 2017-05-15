@@ -14,6 +14,7 @@ History:
     2014-04-13 JMP: Removed unused class ControlSocket_base. Fixed get_host_addr() so now also works on linux. Small fix on DataSocket_base.__init__ regarding host_ip handling.
 """
 
+import sys
 import socket
 import logging
 import numpy as np
@@ -74,7 +75,7 @@ class DataSocket_base(object):
         self.sock.settimeout(2)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, self.BUFFER_LENGTH)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if sys.platform != 'win32':
+        if sys.platform == 'win32':
             pass
         else:
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
