@@ -242,7 +242,7 @@ class Board(object):
         language_code = ord(data[2])
         if language_code != 0x00:
             raise ValueError('Unsupported language code 0x%02x in the IPMI %s area' % (language_code, cls.__name__))
-        mfg_minutes = ord(data[3]) + ord(data[4])*256 + ord(data[5])*65536
+        mfg_minutes = ord(data[5]) + ord(data[4])*256 + ord(data[3])*65536
         mfg_date = datetime(1996, 1, 1) + timedelta(0, 60*mfg_minutes)
         fields = get_area_fields(data[6:], area_name=cls.__name__)
         return cls(mfg_date=mfg_date,
