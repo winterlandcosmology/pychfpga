@@ -18,7 +18,7 @@ import tornado.tcpclient
 import tornado.web
 
 from pychfpga.Agilent_N5764A import AgilentN5764AHandler
-from pychfpga import Metric, NameSpace
+from pychfpga import Metric, NameSpace, load_yaml_config
 from rest import AsyncRESTClient, AsyncRESTServer, endpoint, coroutine, coroutine_return, sleep, IOLoop  # generic REST servers and clients
 
 
@@ -38,13 +38,18 @@ class PowerSupplyRESTServer(AsyncRESTServer):
     def __init__(self, power_supplies, address='', port=DEFAULT_PORT, ps_address='', ps_port=5025, logging_params={}):
         """ power_supplies list of dict with entries 'type', 'name', and 'hostname'
         """
+        self.log = logging.getLogger(__name__).getChild(self.__class__.__name__)
         self.power_supplies = {}
         for ps in power_supplies:
             type_ = ps.pop('type')
             name = ps.pop('name')
             cls = self.POWER_SUPPLY_CLASSES[type_]
             self.power_supplies[name] = cls(**ps)
-            self.power_supplies[name].open()
+            try:
+                self.power_supplies[name].open()
+            except Exception as e:
+                self.log.error("Could not connect to power supply {}:\n{}".format(name, repr(e)))
+                self.power_supplies.pop(name)
 
         super(PowerSupplyRESTServer, self).__init__(address=address, port=port)
 
@@ -53,6 +58,9 @@ class PowerSupplyRESTServer(AsyncRESTServer):
             ps_names = self.power_supplies.keys()
         else:
             ps_names = [ pn.strip() for pn in ps_names.split(',') ]
+            for pn in ps_names:
+                if not pn in self.power_supplies.keys():
+                    raise RuntimeError("Unknown power supply {}".format(pn))
         return ps_names
 
     @coroutine
@@ -67,9 +75,6 @@ class PowerSupplyRESTServer(AsyncRESTServer):
         ps_names = self._parse_names(ps_names)
         self.log.info('%.32r: Received power on command for %r' % (self, ps_names))
         for pn in ps_names:
-            if not pn in self.power_supplies.keys():
-                raise RuntimeError("Unknown power supply {}".format(pn))
-        for pn in ps_names:
             ps = self.power_supplies[pn]
             if ps.ps.output()['PowerEnabled']:
                 self.log.warning("Power ouput already enabled for {}".format(pn))
@@ -83,9 +88,6 @@ class PowerSupplyRESTServer(AsyncRESTServer):
     def powerOff(self, handler, ps_names=None):
         ps_names = self._parse_names(ps_names)
         self.log.info('%.32r: Received power off command for %r' % (self, ps_names))
-        for pn in ps_names:
-            if not pn in self.power_supplies.keys():
-                raise RuntimeError("Unknown power supply {}".format(pn))
         for pn in ps_names:
             ps = self.power_supplies[pn]
             if not ps.ps.output()['PowerEnabled']:
@@ -169,6 +171,8 @@ def parse_cmdline_args(argv):
     parser.add_argument('args', type=str, choices=['client', 'server'], default='',  help='"server" or "client" ')
     parser.add_argument('-p', '--port', default=33221, type=int, help="Server port")
     parser.add_argument('-n', '--host', default='localhost', type=str, help="Server hostname")
+    parser.add_argument('--config', default=None, type=str, help="Config in YAML filename:subconfig form. Will load the ERH FLA supply by default.")
+    parser.add_argument('--logfile', default=None, type=str, help="Record logs in this file")
     return parser.parse_args(argv)
 
 if __name__ == '__main__':
@@ -181,6 +185,8 @@ if __name__ == '__main__':
 
     Default port is 33221 if not specified.
     """
+    args = parse_cmdline_args(sys.argv[1:])
+
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG) # pass all messages to the handlers
     logger.handlers = []  # clear all existing handlers
@@ -194,18 +200,26 @@ if __name__ == '__main__':
 
     add_handler(logging.StreamHandler(sys.stderr), 'warning')
     add_handler(logging.handlers.SysLogHandler(), 'debug')
+    if args.logfile:
+        add_handler(logging.FileHandler(args.logfile), 'debug')
 
 
     ioloop = IOLoop()
     ioloop.make_current()
-    args = parse_cmdline_args(sys.argv[1:])
+
+    power_supplies = None
+    if args.config is not None:
+        config = load_yaml_config(args.config)
+        if 'power_supplies' in config.keys():
+            power_supplies = config['power_supplies']
+    if power_supplies is None:
+            power_supplies = [{'type': 'AgilentN8731', 'name': 'FLA_east', 'hostname': '10.0.0.40'}]# 'A-N8731A-1553P'}]
 
     first_arg = args.args.lower()
     if first_arg == 'server':
-        rs = PowerSupplyRESTServer(power_supplies=[{'type': 'AgilentN8731', 'name': 'FLA_east', 'hostname': 'A-N8731A-1553P'}], port=args.port, address=args.host)
+        rs = PowerSupplyRESTServer(power_supplies=power_supplies, port=args.port, address=args.host)
         print("Power supply REST Server started. Waiting for REST commands.")
         ioloop.start()
         print("\nI'm done. Bye!")
     elif first_arg == 'client':
         rc = PowerSupplyEasyRESTClient(hostname=args.host, port=args.port)
-        #print('Use rc.run_sync(method_name, args...) to call and run asynchronous (coroutine) client methods in a ioloop. Alternativeny, one can use rc.sync_method_name(args, ...).')
