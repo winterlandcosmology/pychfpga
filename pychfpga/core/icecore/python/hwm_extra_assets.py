@@ -76,7 +76,6 @@ def mdns_discover(hwm=None, icecrates=None, iceboards=None, timeout=5, resolve_i
         if existing_ib.count():
             #logger.warning("DNS-SD: IceBoard at %s with serial %s already exists in the hardware map. No action is taken." % (host, ib_serial))
             return
-
         ib = IceBoardPlus(hostname=host, serial=ib_serial)
 
         bp_slot = tr['backplane-slot'] if 'backplane-slot' in tr else None
@@ -100,11 +99,10 @@ def mdns_discover(hwm=None, icecrates=None, iceboards=None, timeout=5, resolve_i
         # Iceboard
         icecrate_match = icecrates and (icecrates == '*' or any((bp_part_number in model if isinstance(model, (tuple, list)) else bp_part_number == model) and (bp_serial in serials or int_bp_serial in serials) for (model, serials) in icecrates))
         iceboard_match = iceboards and (iceboards == '*' or ib_serial in iceboards or int_ib_serial in iceboards)
-
         if icecrate_match or iceboard_match:
             hwm.add(ib)
             hwm.flush()
-
+        
             # Find is there is IceCrate-derived superclass that handles the
             # reported crate part number
             icecrate_class = None

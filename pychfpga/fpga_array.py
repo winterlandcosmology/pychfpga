@@ -485,7 +485,6 @@ class FPGAArray(object):
             icecrates_to_discover = [(model, [serial]) for model, serial in self.icecrate_map.keys()]
         else:
             icecrates_to_discover = None
-
         if icecrates_to_discover or iceboards_to_discover:
             print 'Discovering IceBoards %s and IceCrates %s...' % (iceboards_to_discover, icecrates_to_discover)
             self.print_flush()
@@ -493,7 +492,9 @@ class FPGAArray(object):
                           icecrates=icecrates_to_discover,
                           iceboards=iceboards_to_discover,
                           timeout=mdns_timeout)
-
+            if not self.hwm.query(IceBoardPlus).count():
+                self.hwm.add(IceBoardPlus('iceboard.local'))
+                self.hwm.flush()
         # Remove iceboards to be excluded (by serial number)
         if exclude_iceboards:
             for ib in self.hwm.query(IceBoardPlus):

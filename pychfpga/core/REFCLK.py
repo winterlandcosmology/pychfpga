@@ -128,7 +128,6 @@ class REFCLK_base(Module_base):
         """
         if delay is None:
             self.set_refclk_delay(self.sync_delay)
-
         else:
             self.set_refclk_delay(delay)
             self.sync_delay = self.get_refclk_delay()  # Save the current delay value
