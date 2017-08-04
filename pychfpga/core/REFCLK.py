@@ -73,7 +73,7 @@ class REFCLK_base(Module_base):
             self.logger.info('%.32r:   REFCLK is using the 10 MHz reference clock from the ADC board' % self.fpga)
             self.REFCLK_SEL = 0  # Use REFCLK coming from the FMC
         else:
-            self.logger.info('%.32r:   REFCLK is using the 10 MHz reference clock from FPGA since the ADC board is not prresent in FMC slot 0' % self.fpga)
+            self.logger.info('%.32r:   REFCLK is using the 10 MHz reference clock from FPGA since the ADC board is not present in FMC slot 0' % self.fpga)
             self.REFCLK_SEL = 1  # Use internally generated REFCLK
 
     SYNC_SOURCE_TABLE = {
