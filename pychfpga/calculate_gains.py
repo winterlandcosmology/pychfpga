@@ -154,7 +154,7 @@ def get_frames(port):
     number_of_frames = 0
     frames = 100
     data_list = np.zeros((frames, 16, 2048))
-    r = raw_adc_receiver.receiver(ports = [int(port)], host='10.10.10.25')
+    r = raw_adc_receiver.receiver(ports = [int(port)], host='10.2.0.10')
     while number_of_frames < frames:
         try:
             a = r.read_data()
@@ -249,7 +249,7 @@ def calculate_gains(c, port):
         flags.append(Calc.mask)
     c.set_gain(gain)
     c.freq_flags = flags
-    output = open('/home/kbandura/ch_acq/gains_slot'+str(c.slot)+'.pkl','wb')
+    output = open('/home/acq-user/acq/ch_acq/gains_slot'+str(c.slot)+'.pkl','wb')
     pickle.dump(gain, output)
     output.close()
     print "Scaler Gain set and saved"

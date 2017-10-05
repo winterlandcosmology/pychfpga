@@ -186,7 +186,7 @@ remap_slot = [5,1,4,0,13,9,12,8,15,11,14,10,7,3,6,2]
 
 def load_gains(ib, bank=0):
     for cc in ib:
-        filename = '/home/kbandura/ch_acq/gains_slot'+str(cc.slot)+'.pkl'
+        filename = '/home/acq-user/acq/ch_acq/gains_slot'+str(cc.slot)+'.pkl'
         try:
             g_array = pickle.load(open(filename, 'rb'))
             log = logging.getLogger()
@@ -224,7 +224,7 @@ if __name__ == "__main__":
                                         help = "Current git tag, use: "
                                                    "-g `git describe --tags` ")
     parser.add_argument("-c", "--conf_file", action = "store",
-                                        default = "config.yaml:kmb_dev_wvu1",
+                                        default = "config.yaml:hirax",
                                         help = "Configuration file:object.")
     parser.add_argument("-n", "--notes", action = "store",
                                         default = "None.",
@@ -512,7 +512,7 @@ if __name__ == "__main__":
                         if not fpga_conf1.adc_serial in ser_list:
                                 not_found = True
                     if not_found:
-                        corr_name = "testing_board" #repr(ca.ib[0])
+                        corr_name = "hirax8" #repr(ca.ib[0])
                         continue
                     corr_name = corr
                     break
@@ -741,7 +741,7 @@ if __name__ == "__main__":
                     log.info("couldn't read fpga frame number... will try again.")
                     raise
                 else:
-                    print "what going on!"
+                    print "Acquiring"
             else:
                 log.info("acquiring data...")
             time.sleep(poll_rate)

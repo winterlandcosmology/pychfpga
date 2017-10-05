@@ -7,7 +7,7 @@ from pychfpga.fpga_array import  FPGAArray, setup_logging
 
 setup_logging()
 
-ca = FPGAArray(iceboards='10.10.10.52', prog=1, open=1)
+ca = FPGAArray(iceboards='10.2.0.20', prog=1, open=1)
 ib= ca.ib[0]
 #print 'Computing & setting ADC delays...'
 #for trial in range(5):
@@ -21,14 +21,14 @@ ib= ca.ib[0]
 print 'Setting up data processing'
 ca.set_sync_method('local_soft_trigger')
 ca.set_operational_mode('shuffle16', frames_per_packet=2)
-#ib.start_data_capture(period=0.1, source='adc')
+ib.start_data_capture(period=0.5, source='adc')
 
-#print 'Getting data receiver'
-#r=ib.get_data_receiver()
+print 'Getting data receiver'
+r=ib.get_data_receiver()
 ib.sync()
 
 
-def print_rms(r, channels = range(8), count=1, delay=1.5):
+def print_rms(r, channels = range(16), count=1, delay=1.5):
     """ Prints the number of bits exercised on the channels specified in ``channels``. 
     ``count`` values are printed, with a delay of ``delay`` between each lines.
     """
