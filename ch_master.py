@@ -419,12 +419,12 @@ if __name__ == "__main__":
 
             for bankset in ca.ib.get_current_gain_bank():
                     log.info('Using gain banks %s' % ( ', '.join([str(i) for i in bankset])))
-
-            # set to only change when at configured frame number
-            ca.ib.set_synchronized_gain_switching(enable=1)
-            # set frame number to switch gains at.
-            gain_switch_frame = conf.fpga.gain_switch_frame
-            ca.ib.set_gain_switch_frame_number(frame=gain_switch_frame)
+            if( int(conf.acq.enable_gain_switching) > 0):
+                # set to only change when at configured frame number
+                ca.ib.set_synchronized_gain_switching(enable=1)
+                # set frame number to switch gains at.
+                gain_switch_frame = conf.fpga.gain_switch_frame
+                ca.ib.set_gain_switch_frame_number(frame=gain_switch_frame)
 
             # set to use bank 1 next, change in loop below. have to do this after config to wait for
             # frame number
@@ -640,9 +640,10 @@ if __name__ == "__main__":
             # init gains function kind of a hack.  Should fix.
             current_bank = 0
             next_bank = 1
-            ca.ib.set_next_gain_bank(bank=next_bank)
-            all_next_bank = ca.ib.get_next_gain_bank() 
-            for bankset in all_next_bank:
+            if ( int(conf.acq.enable_gain_switching) > 0):
+                ca.ib.set_next_gain_bank(bank=next_bank)
+                all_next_bank = ca.ib.get_next_gain_bank() 
+                for bankset in all_next_bank:
                     log.info('Set next gain bank to %s' % ( ', '.join([str(i) for i in bankset])))
             all_banks = ca.ib.get_current_gain_bank()
             for bankset in all_banks:
