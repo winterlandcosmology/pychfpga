@@ -1465,7 +1465,7 @@ class chFPGA_controller(IceBoardExtHandler):
         self.set_adc_mode(old_adc_mode)
         return sum(word_errors)
 
-    def capture_adc_eye_diagram(self, channels=range(16)):
+    def capture_adc_eye_diagram(self, channels=range(16), testforbadspots=0):
         """
         Measures the eye diagram of the ADC digital data lines using the ADCDAQ capture feature.
 
@@ -1511,7 +1511,32 @@ class chFPGA_controller(IceBoardExtHandler):
             adcdaq = self.ANT[ch].ADCDAQ
             for dly in range(32):
                 adcdaq.set_delays(([dly]*8, None, None))  # Set delay, don't change sample delay. No need to sync because sample delay not changed.
-                data[i, dly, :] = adcdaq.capture_pattern(period=11);
+
+                if testforbadspots>0: #Will ensure that only valid eye diagram locations are permitted
+                    avgeye =np.array([[0]*11]*8)  #11 ofsets by 8 bits
+
+                    for count in range(testforbadspots): #How many times we should ensure that the location is reliable
+                        #Splitting into the 8 seperate bits
+                        eye = adcdaq.capture_pattern(period=11)
+                        for bit in range(8):
+                            avgeye[bit]= ((eye & (1<<bit)) >>bit) + avgeye[bit] #summing up how many logic 1's were recieved at each offset
+
+                    for bit in range(8):
+                            #Removing delay rows that have multiple high bits (i.e more than one offset  can give see the pulse)
+                            #We also remove rows that have a non zero bit error rate (i.e the avg is not exactly 1)
+                            if (np.count_nonzero(avgeye[bit]) > 1) or (np.sum(avgeye[bit]) != testforbadspots):  #If the number of 1's measured at that offset didn't add up to the number of tries, we have a bad spot
+                                avgeye[bit] = [0,0,0,0,0,0,0,0,0,0,0] #Bad delay detected, removing  it
+                    avgeye=avgeye/testforbadspots
+
+                    #Recreating the data that capture_pattern would have produced but without the bad spots
+                    eye=eye*0
+                    for bit in range(8):
+                        eye = (avgeye[bit] << bit) + eye
+                    data[i, dly, :] = eye
+
+                else:
+                    data[i, dly, :] = adcdaq.capture_pattern(period=11)
+
         self._set_adc_delays(old_delays) # restore original delays before the function was called
         self.set_adc_mode(old_adc_mode, channels=channels)
         return data
@@ -1541,7 +1566,7 @@ class chFPGA_controller(IceBoardExtHandler):
         else:
             sync_invalid = None
 
-        data = self.capture_adc_eye_diagram(channels) #  N_chan x 32 x 11 array
+        data = self.capture_adc_eye_diagram(channels, testforbadspots=10) #  N_chan x 32 x 11 array
 
         for i, ch in enumerate(channels):
 
