@@ -178,7 +178,7 @@ class Module_base(object):
             bitfield = self.get_bitfield(bitfield)
 
         if (data >= 2**bitfield.width) or data < 0:
-            raise Exception('Bad value %i for memory-mapped property %s' % (data, bitfield))
+            raise Exception('Bad value %r for memory-mapped property %s' % (data, bitfield))
 
         if bitfield.page == BitField.DRP:
             old_data = self.read_drp(bitfield._addr)  # read 16-bit value

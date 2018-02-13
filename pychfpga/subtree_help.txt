@@ -1,6 +1,0 @@
-To push the icecore subtree:
-
-Go to the root of the project (ch_acq)
-Run:
-
-git subtree push --prefix=pychfpga/core/icecore icecore jfcliche --squash

@@ -3,18 +3,20 @@
 # pylint: disable=C0301
 
 """
-CROSSBAR.py module
- Implements interface to the crossbar.
- The crossbar gets data from all channelizers and provide a number of output streams, each of which contain selected frequency channels from those antennas
+CHAN_CROSSBAR.py module
+ Implements the interface to the channelizer crossbar firmware in the FPGA.
 
- History:
- 2013-12-03 : JFC : Created
+The crossbar is the first stage of the corner turn engine. It aligns the packets from all
+channelizers and feeds them to an array of bin selectors. Each bin selector generates a stream of
+data that contains some selected frequency bins from all input channels.
 """
 
 import logging
-import numpy as np
 
+from metrics import Metrics
 from Module import Module_base, BitField
+from .icecore import async, async_return, async_sleep, async_moment
+
 import chan_bin_sel
 
 class ChanCrossbar(Module_base):
@@ -220,6 +222,31 @@ class ChanCrossbar(Module_base):
         print '%20s: %s' % ('INPUT FRAME CTR', ' '.join('%6i' % v for v in input_frame_ctr))
         print '%20s: %s' % ('ALIGN FRAME CTR', ' '.join('%6i' % v for v in align_frame_ctr))
         # print '%20s: %s' % ('ALIGN GLOBAL FRAME CTR', '(common to all lanes) %6i' % self.ALIGN_GLOBAL_FRAME_CTR)
+
+    @async
+    def get_metrics(self):
+        """ Return the monitoring metrics for the 1st crossbar.
+        """
+        metrics = Metrics(
+            type='GAUGE',
+            crate_id=self.fpga.crate.get_string_id() if self.fpga.crate else None,
+            crate_number=self.fpga.crate.crate_number if self.fpga.crate else None,
+            slot=(self.fpga.slot or 0) - 1,
+            id=self.fpga.get_string_id())
+
+        for lane in range(self.NUMBER_OF_CROSSBAR_INPUTS):
+            yield async_moment
+            self.LANE_MONITOR_SEL = lane
+            yield async_moment
+            metrics.add('fpga_crossbar1_reset_state', value=self.RESET_MON, lane=lane)
+            yield async_moment
+            metrics.add('fpga_crossbar1_align_fifo_overflow_flag', value=self.ALIGN_FIFO_OVERFLOW, lane=lane)
+            yield async_moment
+            metrics.add('fpga_crossbar1_input_frame_counter', value=self.INPUT_FRAME_CTR, lane=lane)
+            yield async_moment
+            metrics.add('fpga_crossbar1_align_output_frame_counter', value=self.ALIGN_FRAME_CTR, lane=lane)
+
+        async_return(metrics)
 
     def map(self, input_data):
         """

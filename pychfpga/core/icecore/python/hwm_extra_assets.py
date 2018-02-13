@@ -16,7 +16,7 @@ from . import handler
 from . import session  # YAML loader
 from . import hardware_map
 from . import tuber
-from .async import async, async_return
+from .async import async, async_return, async_moment
 from .hwm_assets import IceBoard, IceBoardHandler, FMCMezzanine, IceCrate, IceCrateHandler
 
 
@@ -48,6 +48,7 @@ def mdns_discover(hwm=None, icecrates=None, iceboards=None, timeout=5, resolve_i
     """
     import pybonjour  # only needed here, and not always installed
 
+
     if hwm is None:
         hwm = hardware_map.HardwareMap()
 
@@ -60,6 +61,17 @@ def mdns_discover(hwm=None, icecrates=None, iceboards=None, timeout=5, resolve_i
     logger = logging.getLogger(__name__)
     fds = []
 
+    # Normalize iceboard and icecrate target lists to the [ (model,[serial1, serial2]), ...] format
+    if isinstance(iceboards, str): # include '*'
+        iceboards = [('*', [iceboards])]
+    iceboards = [entry if isinstance(entry, (list, tuple)) else ('*', [entry]) for entry in iceboards]
+    iceboards = [(model, serials if isinstance(serials, (list, tuple)) else [serials]) for model, serials in iceboards]
+
+    if isinstance(icecrates, str): # include '*'
+        icecrates = [('*', [icecrates])]
+    icecrates = [entry if isinstance(entry, (list, tuple)) else ('*', [entry]) for entry in icecrates]
+    icecrates = [(model, serials if isinstance(serials, (list, tuple)) else [serials]) for model, serials in icecrates]
+
     def resolve_callback(sdRef, flags, iface, err, fullname,
                          host, port, txtRecord, io_loop):
         if err != pybonjour.kDNSServiceErr_NoError:
@@ -67,15 +79,17 @@ def mdns_discover(hwm=None, icecrates=None, iceboards=None, timeout=5, resolve_i
 
         # Parse TXT records. That's where the IceBoard publishes data.
         tr = pybonjour.TXTRecord.parse(txtRecord)
-        if 'motherboard-serial' not in tr:
+        if 'motherboard-serial' not in tr or 'motherboard-part' not in tr:
             logger.warning("DNS-SD: IceBoard at %s was discovered but cannot be added to the hardware map because it does not publish a serial number" % (host))
             return
         ib_serial = tr['motherboard-serial']
+        ib_part_number = tr['motherboard-part']
 
         existing_ib = hwm.query(IceBoardPlus).filter_by(serial=ib_serial)
         if existing_ib.count():
-            #logger.warning("DNS-SD: IceBoard at %s with serial %s already exists in the hardware map. No action is taken." % (host, ib_serial))
+            logger.warning("DNS-SD: IceBoard at %s with serial %s already exists in the hardware map. No action is taken." % (host, ib_serial))
             return
+
         ib = IceBoardPlus(hostname=host, serial=ib_serial)
 
         bp_slot = tr['backplane-slot'] if 'backplane-slot' in tr else None
@@ -97,12 +111,24 @@ def mdns_discover(hwm=None, icecrates=None, iceboards=None, timeout=5, resolve_i
         # If we specify no crate number, or if we have valid backplane
         # information and the backplane match that number, Then add the
         # Iceboard
-        icecrate_match = icecrates and (icecrates == '*' or any((bp_part_number in model if isinstance(model, (tuple, list)) else bp_part_number == model) and (bp_serial in serials or int_bp_serial in serials) for (model, serials) in icecrates))
-        iceboard_match = iceboards and (iceboards == '*' or ib_serial in iceboards or int_ib_serial in iceboards)
+        # icecrate_match = icecrates and (icecrates == '*' or any((bp_part_number in model if isinstance(model, (tuple, list)) else bp_part_number == model) and (bp_serial in serials or int_bp_serial in serials) for (model, serials) in icecrates))
+        # iceboard_match = iceboards and (iceboards == '*' or ib_serial in iceboards or int_ib_serial in iceboards)
+
+
+        iceboard_match = any(
+            (target_model == '*' or ib_part_number == target_model) and
+            ('*' in target_serials or ib_serial in target_serials or int_ib_serial in target_serials)
+            for target_model, target_serials in iceboards)
+
+        icecrate_match = any(
+            (target_model == '*' or bp_part_number == target_model) and
+            ('*' in target_serials or bp_serial in target_serials or int_bp_serial in target_serials)
+            for target_model, target_serials in icecrates)
+
         if icecrate_match or iceboard_match:
             hwm.add(ib)
             hwm.flush()
-        
+
             # Find is there is IceCrate-derived superclass that handles the
             # reported crate part number
             icecrate_class = None
@@ -117,12 +143,12 @@ def mdns_discover(hwm=None, icecrates=None, iceboards=None, timeout=5, resolve_i
                 existing_crate = hwm.query(icecrate_class).filter_by(serial=bp_serial)
                 if existing_crate.count():  # If so, assign it to this iceboard
                     new_crate = existing_crate.one()
-                    logger.info('DNS-SD: IceCrate Model %s SN%s (class %s) is already in the hardware map. Associating IceBoard SN%s with it on slot %s.' % (bp_part_number, bp_serial, new_crate.__class__.__name__, ib_serial, bp_slot))
+                    logger.debug('DNS-SD: IceCrate Model %s SN%s (class %s) is already in the hardware map. Associating IceBoard SN%s with it on slot %s.' % (bp_part_number, bp_serial, new_crate.__class__.__name__, ib_serial, bp_slot))
                     ib.slot = bp_slot  # Add slot before adding crate
                     ib.crate = new_crate
                     hwm.flush()
                 else:  # Otherwise create a new one and assign it
-                    logger.info('DNS-SD: Creating IceCrate Model %s SN%s using class %s and associating IceBoard SN%s with it on slot %s.' % (bp_part_number, bp_serial, icecrate_class.__name__, ib_serial, bp_slot))
+                    logger.debug('DNS-SD: Creating IceCrate Model %s SN%s using class %s and associating IceBoard SN%s with it on slot %s.' % (bp_part_number, bp_serial, icecrate_class.__name__, ib_serial, bp_slot))
                     ib.slot = bp_slot # Add slot before adding crate
                     new_crate = icecrate_class(serial=bp_serial)
                     ib.crate = new_crate
@@ -138,7 +164,7 @@ def mdns_discover(hwm=None, icecrates=None, iceboards=None, timeout=5, resolve_i
                                           rrtype, rrclass, rdata, ttl, ib):
                     if errorCode == pybonjour.kDNSServiceErr_NoError:
                         ib_ip_addr = socket.inet_ntoa(rdata)
-                        logger.info("DNS-SD: IceBoard SN%s hostname %s was resolved and updated to %s" % (ib.serial, ib.hostname, ib_ip_addr))
+                        logger.debug("DNS-SD: IceBoard SN%s hostname %s was resolved and updated to %s" % (ib.serial, ib.hostname, ib_ip_addr))
                         ib.hostname = ib_ip_addr
 
                 query_sdRef = \
@@ -152,7 +178,7 @@ def mdns_discover(hwm=None, icecrates=None, iceboards=None, timeout=5, resolve_i
                     lambda fd, events: pybonjour.DNSServiceProcessResult(query_sdRef),
                     io_loop.READ)
         else:
-            logger.info("DNS-SD: IceBoard SN%s (crate %s SN%s slot %s) was detected but was not added because it did not match the IceBoard serial %s or crate serial %s" % (ib_serial, bp_part_number, bp_serial, bp_slot, iceboards, icecrates))
+            logger.debug("DNS-SD: IceBoard SN%s (crate %s SN%s slot %s) was detected but was not added because it did not match the IceBoard serial %s or crate serial %s" % (ib_serial, bp_part_number, bp_serial, bp_slot, iceboards, icecrates))
 
     def browse_callback(sdRef, flags, iface, err, service,
                         regtype, replyDomain, io_loop):
@@ -187,9 +213,9 @@ def mdns_discover(hwm=None, icecrates=None, iceboards=None, timeout=5, resolve_i
         io_loop.READ)
 
     # Go!
-    logger.info("DNS-SD: Starting mDNS discovery")
+    logger.debug("DNS-SD: Starting mDNS discovery")
     io_loop.start()
-    logger.info("DNS-SD: mDNS discovery has ended")
+    logger.debug("DNS-SD: mDNS discovery has ended")
 
     # Clean up after Bonjour
     for fd in fds:
@@ -243,7 +269,7 @@ class IceBoardPlus(IceBoard):
             hostname=hostname, handler_name=handler_name, **kwargs)
 
         self.logger = logging.getLogger(__name__)
-        self.logger.info('%r: Created instance with args %r' % (self, kwargs))
+        self.logger.debug('%r: Created instance with args %r' % (self, kwargs))
 
     def set_handler(self, handler=None, bitstream=None,
                     configure_fpga=False, force=False, tag=None):
@@ -268,12 +294,14 @@ class IceBoardPlus(IceBoard):
     @async
     def discover_serial(self, update=True):
         """ Discover the serial number of this IceBoard from its IPMI data, and update the hardware map accordingly if `update=True`"""
+        self.logger.info('%r: discovering the serial number of board at %s' % (self, self.tuber_uri))
         try:
             actual_serial = str((yield self.get_motherboard_serial.async()))
         except:  #  Deal with uninitialized boards
             self.logger.warn('%r: Error while attempring to read the board serial number' % (self))
             actual_serial = None
-
+        self.logger.info('%r: got the serial number of board at %s to be %s' % (self, self.tuber_uri, actual_serial))
+        yield async_moment
         if update:
             if not actual_serial:
                 self.logger.warn('%r: Could not read the board serial number from IPMI storage or serial number is null. Serial number is not updated.' % (self))
@@ -281,6 +309,7 @@ class IceBoardPlus(IceBoard):
                 self.logger.warn('%r: The discovered serial number differs from the current (hardware map) one. Updating to the discovered value.' % (self))
             self.serial = actual_serial
             self.hwm.flush()
+        self.logger.info('%r: finished discovering the serial number of board at %s' % (self, self.tuber_uri))
         async_return(self.serial)
 
     @async
@@ -291,7 +320,7 @@ class IceBoardPlus(IceBoard):
             if not actual_slot:
                 self.logger.warn('%r: The board is not connected to a backplane. Slot number is not updated.' % (self))
             elif self.slot and actual_slot != self.slot:
-                self.logger.warn('%r: The discovered slot number differs from the current (hardware map) one. Updating to the discovered slot.' % (self))
+                self.logger.warn('%r: The discovered slot (%s) number differs from the current (hardware map) one (%s). Updating to the discovered slot.' % (self, actual_slot, self.slot))
             self.slot = actual_slot
             self.hwm.flush()
         async_return(self.slot)
@@ -336,18 +365,18 @@ class IceBoardPlus(IceBoard):
             if not ipmi:
                 try:
                     ipmi = self._get_mezzanine_ipmi(m)  # Read IPMI from the ARM's cache
-                    self.logger.info('%r: detect_mezzanines(): read Mezzanine %i EEPROM using the ARM' % (self, m))
+                    self.logger.debug('%r: detect_mezzanines(): read Mezzanine %i EEPROM using the ARM' % (self, m))
                 except tuber.TuberRemoteError:
                     pass
             if not ipmi: # If we still did not get an IPMI block, give up and proceed to the next mezzanine
-                self.logger.info('%r: detect_mezzanines(): Could not decode the EEPROM in Mezzanine %i' % (self, m))
+                self.logger.debug('%r: detect_mezzanines(): Could not decode the EEPROM in Mezzanine %i' % (self, m))
                 continue
 
             # Extract the useful unformation from IPMI
             part_number = ipmi.product.part_number
             serial = ipmi.product.serial_number
 
-            self.logger.info(
+            self.logger.debug(
                 '%r: detect_mezzanines(): Detected Mezzanine '
                 'Model: %s Serial %s in Mezzanine %i'
                 % (self, part_number, serial, m))
@@ -374,7 +403,7 @@ class IceBoardPlus(IceBoard):
                     "class for Mezzanine object of type '%r' "
                     "in mezzanine slot %r" % (self, part_number, m))
             elif update:
-                self.logger.info(
+                self.logger.debug(
                     '%r: detect_mezzanines(): Creating Mezzanine '
                     'Serial %s in Mezzanine %i' % (self, serial, m))
                 new_mezz = mezz_class[m](
@@ -410,7 +439,7 @@ class IceBoardPlus(IceBoard):
             part_number = ipmi.product.part_number
             serial = ipmi.product.serial_number
             slot_number = yield self.get_backplane_slot.async()
-            self.logger.info(
+            self.logger.debug(
                 '%.32r: discover_crate(): '
                 'Detected Backplane Model: %s Serial %s'
                 % (self, part_number, serial)
@@ -448,15 +477,15 @@ class IceBoardPlus(IceBoard):
                     del(self.crate)
 
             if not self.crate:
-                # Chech is a crate with the same serial number already exists
+                # Check is a crate with the same serial number already exists
                 existing_crate = self.hwm.query(icecrate_class).filter_by(serial=serial)
                 if existing_crate.count():  # If so, assign it to this iceboard
-                    self.logger.info(
+                    self.logger.debug(
                         '%.32r: discover_crate(): Reusing IceCrate %s SN%s'
                         % (self, part_number, serial))
                     self.crate = existing_crate.one()
                 else:  # otherwise create a new one and assign it
-                    self.logger.info(
+                    self.logger.debug(
                         '%.32r: discover_crate(): Creating IceCrate %s SN%s'
                         % (self, part_number, serial))
                     new_crate = icecrate_class(serial=serial)
@@ -477,33 +506,49 @@ class IceBoardPlusHandler(IceBoardHandler):
     """ Basic Python handler for the IceBoard.
 
     It provides:
-       - access to the methods and attributes provided by the ARM-based
+       - Access to the methods and attributes provided by the ARM-based
              software through Tuber
-       - offers a standardized memory-mapped interface to the FPGA firmware
-         through the fpga_mmi_read() and fpga_mmi_write() methods.
+       - Access to the memory-mapped registers in the FPGA's firmware using the ARM-FPGA SPI link
+             through the `fpga_mmi_read()` and `fpga_mmi_write()` methods.
 
-    Firmware-specific application handlers should subclass this class.
+    `IceBoardPlusHandler` can be created as a standard Python object initialized with a number of
+    parameters which set corresponding attributes (see below). If a `parent_getter` function is
+    provided, the value of these attributes will instead be fetched
+    dynamically from the parent object. Note that any explicitely specified parameter overrides a
+    parent parameter.
 
-    Any object provided by this this handler can be accessed at any
-    hierarchical level. However, objects that are probided by Tuber have these
-    restrictions:
+    Parameters:
+        parent_getter (func): Function that returns the dynamically return the parent object from which the following parameters will be fetched. Is `None` if there is no parent.
+        hostname (str): hostname or IP address of the ICEBoard ARM processor (mandatory)
+        serial (str): Serial number of the board. Can be provided by the ARM.
+        part_number (str): Part number of the IceBoard. Can be obtained from the ARM.
+        crate (IceCrateHandler): = object that handle the backplane on which the board is connected. `None` if the board is not connected to a backplane.
+        slot (int): Slot number in which the board is installed ona backplane. None if there is no backplane.
+        mezzanine (dict): Map {mezzanine_number: Mezzanine Handler, ...} describing the installed mezzanines. Can be obtained from the ARM.
+        tuber_objname (str): name of the set of software functions that will be provided by the ARM processor through the Tuber interface.
 
-       - attributes and methods whise name begin with '_' are not accessible
-       - modification to the object attributes must be done by a setter
-         function provided by the object.
-       - methods or attribute access can only return string or numeric values,
-         or lists or dictionnary thereof
 
-    NOTE 1: For now, the MMI interface is provided through Tuber using its
-    peek/poke methods, but the interface may transparenly offer faster access
-    methods by redefining the fpga_mmi_read/write methods. For example, the
-    MMI commands might one day bypass Tuber's HTTP/JSON overhead and go
-    through a separate ARM port that forwards the packets directly to the FPGA
-    through SPI or PCIe for maximum speed.
 
-    NOTE 2: This handler does not define a MMI interface that uses the FPGA's
-    ethernet port (e.g. CHIME) . Such functionnality is to be provided by a
-    subclass of this handler if the firmware supports it.
+    .. Any object provided by this this handler can be accessed at any
+    .. hierarchical level. However, objects that are probided by Tuber have these
+    .. restrictions:
+    ..
+    ..    - attributes and methods whise name begin with '_' are not accessible
+    ..    - modification to the object attributes must be done by a setter
+    ..      function provided by the object.
+    ..    - methods or attribute access can only return string or numeric values,
+    ..      or lists or dictionnary thereof
+
+
+    Notes:
+        - The SPI MMI interface is currently provided by peek/poke methods accessed through Tuber.
+          However, if one day the ARM supports it, a faster access could potentially be provided by
+          overriding the fpga_mmi_read/write methods to send the commands to a dedicated ARM port
+          and thus bypass Tuber's HTTP/JSON overhead. Since the SPI link is relatively slow anyway, this might not be useful until a faster ARM-FPGA link is in place (such as the unused PCIe link).
+
+        - This handler does *not* define a MMI interface that uses the FPGA's
+          ethernet port directly through the SFP+ connector. Such functionnality is to be provided by a
+          subclass of this class if the firmware supports it.
     """
 
     __handler_for__ = IceBoardPlus # register this class (and any subclass)
@@ -586,6 +631,10 @@ class IceBoardPlusHandler(IceBoardHandler):
                     if bitstream CRC differ
             force = None: FPGA will be configured only if it is not configured
         '''
+
+        t0 = time.time()
+        self.logger.info('%.32r: called set_fpga_bitstream' % self)
+
         if hasattr(self, 'close'):
             self.close()
 
@@ -593,26 +642,41 @@ class IceBoardPlusHandler(IceBoardHandler):
         # provide it. The str() of the returned object must yield the valid
         # bitstream buffer in a string.
         if buf is None:
-            buf = str(self.get_fpga_bitstream(tag))
-        else:
-            buf = str(buf)
+            buf = self.get_fpga_bitstream(tag)
+        #else:
+        #    buf = str(buf)
 
-        crc32 = zlib.crc32(buf) & 0xFFFFFFFF  # compute CRC32 of the data
+        if hasattr(buf, 'crc32'):
+		crc32 = buf.crc32
+	else:
+		crc32 =  zlib.crc32(str(buf))  # compute CRC32 of the data if it not already precomputed in the 'buf' object
+	crc32 &=  0xFFFFFFFF
+        buf = str(buf)
 
+        self.logger.info('%.32r: getting is_programmed' % self)
         is_fpga_programmed = yield self.is_fpga_programmed.async()
+	t1 = time.time()
+        self.logger.info('%.32r: getting FPGA crc' % self)
         fpga_bitstream_crc = yield self.get_fpga_bitstream_crc.async()
         self.logger.debug('%.32r: fpga_programmed=%s, force=%s, fpga_crc=%08X, bitstream_crc=%08X' % (self, is_fpga_programmed, force, fpga_bitstream_crc or 0, crc32 or 0))
+	t2 = time.time()
         if not is_fpga_programmed or force \
            or (force is not None and (fpga_bitstream_crc != crc32)):
             self.logger.info('%.32r: Configuring FPGA' % self)
-            b64_string = base64.b64encode(str(buf))
+            if hasattr(buf, 'base64'):
+		b64_string = buf.base64
+	    else:
+		b64_string =  base64.b64encode(str(buf))
             # self._set_fpga_bitstream_base64(b64_string)
+            t3 = time.time()
             yield self._set_fpga_bitstream_base64.async(b64_string)
             self.set_fpga_bitstream_crc(crc32)
-            self.logger.info('%r: Done configuring FPGA' % self)
+            t4 = time.time()
+            self.logger.info('%r: Done configuring FPGA. It took %.3fs (%.3fs, %.3fs, %.3fs, %.3fs)' % (self, t4-t0, t1-t0, t2-t1, t3-t2, t4-t3))
         else:
+            t4 = time.time()
             self.logger.info(
-                '%r: FPGA is already configured. Skipping configuration' % self
+                '%.32r: FPGA is already configured. Skipping configuration. Took %.3fs' % (self, t4 - t0)
                 )
 
     def get_fpga_bitstream(self, tag=None):
@@ -691,9 +755,10 @@ class IceBoardPlusHandler(IceBoardHandler):
         async_return(base64.decodestring(data))
 
     # *** JFC: method rename
+    @async
     def _write_motherboard_spi_eeprom_base64(self, *args, **kwargs):
-        return self._motherboard_eeprom_write_base64(*args, **kwargs)
-
+        result = yield self._motherboard_eeprom_write_base64.async(*args, **kwargs)
+        async_return(result)
 
     # def get_motherboard_serial(self):
     #     """ Read the motherboard serial number from the IPMI data. """
@@ -702,15 +767,16 @@ class IceBoardPlusHandler(IceBoardHandler):
 
     # *** JFC: We now have the equivalent ARM method. Will delete this when we
     #     confirm it behaves the same.
+    @async
     def get_slot_number(self):
         """ Reads the GPIO to determine in which slot number this IceBoard is
         connected.
 
         """
-        if self.is_backplane_present():  # Is this test necessary?
-            return self.get_backplane_slot()
+        if (yield self.is_backplane_present.async()):  # Is this test necessary?
+            async_return( (yield self.get_backplane_slot.async()))
         else:
-            return None
+            async_return(None)
 
     # Bitstream management
 
@@ -728,18 +794,19 @@ class IceBoardPlusHandler(IceBoardHandler):
         async_return(crc)
         # return self._bitstream_crc
 
+    @async
     def set_fpga_bitstream_crc(self, crc32):
         """ Return the signature of the firmware currently configured in the
         FPGA.
 
         Returns None if the FPGA is not configured.
         """
-        if self.is_fpga_programmed():
+        if (yield self.is_fpga_programmed.async()):
             # self._bitstream_crc = crc32
-            self.fpga_mmi_write(self.FPGA_FIRMWARE_CRC32_ADDR, crc32)
+            yield self.fpga_mmi_write.async(self.FPGA_FIRMWARE_CRC32_ADDR, crc32)
         else:
             # self._bitstream_crc = None
-            self.fpga_mmi_write(self.FPGA_FIRMWARE_CRC32_ADDR, 0)
+            yield self.fpga_mmi_write.async(self.FPGA_FIRMWARE_CRC32_ADDR, 0)
 
     # def clear_fpga_bitstream(self):
     #     """ Stop the operation of the FPGA.
@@ -751,34 +818,40 @@ class IceBoardPlusHandler(IceBoardHandler):
 
     # Core firmware functions
 
+    @async
     def get_fpga_core_cookie(self):
         """ Return the core FPGA firmware cookie. Should always be 0xBEEFFACE.
         """
-        if not self.is_fpga_programmed():
-            return None
-        return self.fpga_mmi_read(self.FPGA_CORE_FIRMWARE_COOKIE_ADDR)
+        if not (yield self.is_fpga_programmed.async()):
+            async_return(None)
+        cookie = yield self.fpga_mmi_read.async(self.FPGA_CORE_FIRMWARE_COOKIE_ADDR)
+        async_return(cookie)
 
+    @async
     def get_fpga_application_cookie(self):
         """ Return the application-specific FPGA firmware cookie. """
-        if not self.is_fpga_programmed():
-            return None
-        return self.fpga_mmi_read(self.FPGA_APPLICATION_FIRMWARE_COOKIE_ADDR)
+        if not (yield self.is_fpga_programmed.async()):
+            async_return(None)
+        cookie = yield self.fpga_mmi_read.async(self.FPGA_APPLICATION_FIRMWARE_COOKIE_ADDR)
+        async_return(cookie)
 
+    @async
     def get_fpga_serial_number(self):
         """ Return the FPGA serial number, as read from the FPGA's core
         firmware throught the MMI interface. """
         fpga_serial_number = (
-            self.fpga_mmi_read(self.FPGA_SERIAL_NUMBER_LSW_ADDR) |
-            (self.fpga_mmi_read(self.FPGA_SERIAL_NUMBER_MSW_ADDR) << 32)
+            (yield self.fpga_mmi_read.async(self.FPGA_SERIAL_NUMBER_LSW_ADDR)) |
+            (yield (self.fpga_mmi_read(self.FPGA_SERIAL_NUMBER_MSW_ADDR) << 32))
             )
 
-        return fpga_serial_number
+        async_return(fpga_serial_number)
 
+    @async
     def get_fpga_firmware_timestamp(self):
         """ Returns a string containing the date-time of the currrent firmware
         bitstream.
         """
-        timestamp = self.fpga_mmi_read(self.FPGA_FIRMWARE_TIMESTAMP_ADDR)
+        timestamp = yield self.fpga_mmi_read.async(self.FPGA_FIRMWARE_TIMESTAMP_ADDR)
         seconds = (timestamp >> 0) & 0x3F
         minutes = (timestamp >> 6) & 0x3F
         hour = (timestamp >> 12) & 0x1F
@@ -787,15 +860,16 @@ class IceBoardPlusHandler(IceBoardHandler):
         day = (timestamp >> 27) & 0x1F
         timestamp_string = '%04i-%02i-%02i %02i:%02i:%02i' % (
             year + 2000, month, day, hour, minutes, seconds)
-        return timestamp_string
+        async_return(timestamp_string)
 
+    @async
     def check_tuber_version(self):
         """ Check if the ARM processor provides the methods required to run this code. """
 
         required_tuber_methods = [
             'is_fpga_programmed']#, '_mezzanine_eeprom_read_base64']
 
-        (meta, props, tuber_methods) = self._tuber_get_meta()  # get the meta info
+        (meta, props, tuber_methods) = yield self._tuber_get_meta.async()  # get the meta info
         if not tuber_methods:
             raise RuntimeError("%r: The ARM does not publish any methods under the object name '%s'. Was the right Tuber object name used for this ARM firmware?" % (self, self.tuber_objname))
 
@@ -803,7 +877,7 @@ class IceBoardPlusHandler(IceBoardHandler):
             if method not in tuber_methods:
                 raise RuntimeError("%r: The current version of the ARM firmware does not provide the method '%s' that is needed for this application" % (self, method))
 
-        return True
+        async_return(True)
 
     def print_tuber_methods(self):
         """ Print all the methods and properties provided by the Iceboard's

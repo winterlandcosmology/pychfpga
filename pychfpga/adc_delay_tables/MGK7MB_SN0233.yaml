@@ -1,0 +1,70 @@
+- __date__: '2017-06-27T15:54:16.263387'
+  __mezzanines__: {1: MGADC08_SN0292, 2: MGADC08_SN0271}
+  __tag__: default
+  delay_table:
+    0:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [16, 17, 15, 15, 16, 16, 16, 17]
+    1:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [8, 7, 6, 7, 7, 7, 6, 5]
+    2:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [24, 25, 24, 24, 24, 24, 24, 22]
+    3:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [22, 23, 22, 21, 21, 20, 20, 20]
+    4:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [18, 18, 18, 18, 18, 19, 17, 18]
+    5:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [15, 14, 15, 14, 14, 16, 16, 15]
+    6:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [21, 22, 20, 19, 21, 17, 20, 20]
+    7:
+      clock_delay: 0
+      sample_delay: 4
+      tap_delays: [20, 20, 19, 20, 17, 19, 18, 17]
+    8:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [17, 19, 17, 19, 18, 17, 20, 17]
+    9:
+      clock_delay: 0
+      sample_delay: 4
+      tap_delays: [20, 17, 16, 18, 16, 16, 19, 18]
+    10:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [22, 22, 19, 21, 19, 18, 18, 17]
+    11:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [19, 19, 18, 18, 18, 19, 18, 18]
+    12:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [19, 18, 20, 18, 19, 17, 16, 16]
+    13:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [20, 20, 18, 19, 18, 17, 21, 19]
+    14:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [19, 19, 20, 19, 20, 18, 20, 22]
+    15:
+      clock_delay: 0
+      sample_delay: 3
+      tap_delays: [17, 20, 17, 17, 17, 19, 17, 18]
+    sync_delays: [4, 5]
+    valid: true

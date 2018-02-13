@@ -70,10 +70,10 @@ class REFCLK_base(Module_base):
         # self.ENABLE_SYNC_DETECTION = 1
         # self.ENABLE_SYNC_GENERATION = 1
         if self.fpga.is_fmc_present(0):
-            self.logger.info('%.32r:   REFCLK is using the 10 MHz reference clock from the ADC board' % self.fpga)
+            self.logger.debug('%.32r:   REFCLK is using the 10 MHz reference clock from the ADC board' % self.fpga)
             self.REFCLK_SEL = 0  # Use REFCLK coming from the FMC
         else:
-            self.logger.info('%.32r:   REFCLK is using the 10 MHz reference clock from FPGA since the ADC board is not present in FMC slot 0' % self.fpga)
+            self.logger.debug('%.32r:   REFCLK is using the 10 MHz reference clock from FPGA since the ADC board is not prresent in FMC slot 0' % self.fpga)
             self.REFCLK_SEL = 1  # Use internally generated REFCLK
 
     SYNC_SOURCE_TABLE = {
@@ -128,6 +128,7 @@ class REFCLK_base(Module_base):
         """
         if delay is None:
             self.set_refclk_delay(self.sync_delay)
+
         else:
             self.set_refclk_delay(delay)
             self.sync_delay = self.get_refclk_delay()  # Save the current delay value
@@ -305,7 +306,7 @@ class REFCLK_base(Module_base):
                 print 'Sync delay %2i:' % (sync_delay),
                 for i, ch in enumerate(channels):
                     bitstring = bytearray((waveforms[sync_delay][i].astype(np.int8) + ord('0')).tostring() + (' '*(adc_data_clock_period-32)))  # pad in case there the clock period is longer than 32
-                    if rising_edges[sync_delay, i] is not np.NaN:
+                    if ~np.isnan(rising_edges[sync_delay, i]):
                         edge_pos = int(rising_edges[sync_delay, i])
                         if bitstring[edge_pos] == ord('1'):
                             bitstring[edge_pos] = '!' #  we converted the string to bytearray so we could do assignments like this

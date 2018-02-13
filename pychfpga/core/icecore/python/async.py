@@ -2,7 +2,7 @@
 Asynchronous helpers used to bridge pydfmux with the Tornado framework.
 '''
 
-import tornado
+import tornado.ioloop, tornado.gen
 import inspect
 import functools
 

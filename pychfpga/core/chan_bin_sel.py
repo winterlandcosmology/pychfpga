@@ -138,7 +138,7 @@ class ChanBinSel(Module_base):
             mask[j // 8] |= (1 << (j % 8))
         # verbose = False
         # if verbose: print (bins_to_enable)
-        self.logger.info('%.32r: CROSSBAR0.BIN_SEL[%i] Configuring to capture %i frequency bins: %s...' % (self.fpga, self.instance_number, len(bins_to_enable), repr(bins_to_enable[:10])))
+        self.logger.debug('%.32r: CROSSBAR0.BIN_SEL[%i] Configuring to capture %i frequency bins: %s...' % (self.fpga, self.instance_number, len(bins_to_enable), repr(bins_to_enable[:10])))
         # self.logger.debug('Mask pattern is: %s' % ( ' '.join('%02X'% byte for byte in mask)))
         self.NUMBER_OF_SELECTED_WORDS = len(bins_to_enable)
 

@@ -38,7 +38,7 @@ def cli(ctx, host, port):
     ctx.obj = ClickChMasterClient(host, port)
 
 
-def add_command(cli, method_name, command_name=None, args=[], help=None):
+def add_ch_master_command(cli, method_name, command_name=None, args=[], help=None):
     """ Add a command that will call the corresponding method in the ChMasterClient instance.ChMasterClient
 
     The command description to be shown on the command line can be specified
@@ -64,14 +64,14 @@ def add_command(cli, method_name, command_name=None, args=[], help=None):
     for a in args:
         click.option(*a)(cmd)
 
-add_command(cli, 'ping')
-add_command(cli, 'start', args=[('--yaml', '-y')])
-add_command(cli, 'set_state', args=['state'])
-add_command(cli, 'stop')
-add_command(cli, 'switch_gains')
-add_command(cli, 'kotekan_start', args=[('--yaml', '-y')])
-add_command(cli, 'status', 'state') # for some obscure reason ipython fails only with the command 'status', but not anything else.
-add_command(cli, 'get_frequency_map')
+add_ch_master_command(cli, 'ping')
+add_ch_master_command(cli, 'start', args=[('--yaml', '-y')])
+add_ch_master_command(cli, 'set_state', args=['state'])
+add_ch_master_command(cli, 'stop')
+add_ch_master_command(cli, 'switch_gains')
+add_ch_master_command(cli, 'kotekan_start', args=[('--yaml', '-y')])
+add_ch_master_command(cli, 'status', 'state') # for some obscure reason ipython fails only with the command 'status', but not anything else.
+add_ch_master_command(cli, 'get_frequency_map')
 
 
 @cli.command()

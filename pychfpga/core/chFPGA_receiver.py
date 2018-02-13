@@ -4,9 +4,9 @@
 
 """
 chFPGA_reader.py module
- Implements the classes that read the data streams coming from chFPGA.
+Implements the classes that read the data streams coming from chFPGA.
 
- History:
+History:
     2012-07-19 JFC: Created
     2012-10-17 JFC: Modified behavior of receiver for:
         a) If send_every_frame=False, discard the first block of frames after flush() avoid sending partial frame blocks
@@ -36,7 +36,7 @@ class ReceiverThread(threading.Thread):
     #NUMBER_OF_ANTENNAS_TO_CORRELATE = 5 #8
     #NUMBER_OF_MULTIPLIERS = NUMBER_OF_ANTENNAS_TO_CORRELATE + 1
     #MAX_NUMBER_OF_CHANNELS_PER_CORRELATOR = 128
-    MAX_CORR_FRAME_LENGTH = 512*13+11 #in bytes. The accumulator size is always 512 words, each word being 13 bytes long. A 11 byte header is added.
+    MAX_CORR_FRAME_LENGTH = 128*4*5+12 #128 bins x 4 product/bin x 5 bytes/product + 12 header bytes
 
 #        frame_block = {'timestamp' :0, 'data':frame_data}
     queue_overflow = 0
@@ -49,10 +49,10 @@ class ReceiverThread(threading.Thread):
         self.sock = sock
         self.queue = queue
         self.queue_corr = queue_corr
-        self.NUMBER_OF_CORRELATORS = NUMBER_OF_CORRELATORS
-        self.NUMBER_OF_ANTENNAS_TO_CORRELATE = NUMBER_OF_ANTENNAS_TO_CORRELATE
-        self.NUMBER_OF_MULTIPLIERS = NUMBER_OF_ANTENNAS_TO_CORRELATE + 1
-        self.corr_data_block = np.zeros((self.NUMBER_OF_MULTIPLIERS * self.NUMBER_OF_CORRELATORS, self.MAX_CORR_FRAME_LENGTH), dtype=np.int8)
+        self.Nch = NUMBER_OF_ANTENNAS_TO_CORRELATE # Number of analog channels
+        self.Ncorr = NUMBER_OF_CORRELATORS  # Number of correlator cores
+        self.Ncmac = 2* (self.Nch + 1)
+        self.corr_data_block = np.zeros((self.Ncmac * self.Ncorr, self.MAX_CORR_FRAME_LENGTH), dtype=np.uint8)  # pre-allocate the frame assembly array
         self._stop = threading.Event()
         self._flush = threading.Event()
         self.verbose = verbose
@@ -97,7 +97,8 @@ class ReceiverThread(threading.Thread):
         #    data2 = bytearray(buf_size)
         self.sock.settimeout(0.1)
         # self.sock.setblocking(0)
-        print 'Frame acquisition thread is running'
+        if self.verbose:
+            print 'Frame acquisition thread is running'
         while not self._stop.is_set():
             # data = self.sock.read_data(timeout_delay=timeout)
             # Read data from the UDP listening port
@@ -113,106 +114,122 @@ class ReceiverThread(threading.Thread):
                 self.store_corr_data = 0  # do not store data
                 self.queue.queue.clear()
                 self.queue_corr.queue.clear()
-            else:
-                try:
-                    r1, w1, e1 = select.select([self.sock], [], [])
-                    for e in r1:
-                        if e == self.sock:
-                            nbytes = self.sock.recv_into(self.data)
-                except SocketIO.timeout:
-                    nbytes = 0
-                if nbytes:
-                    # print 'Received a frame!!!'
-                    self.n_frames += 1
+                continue
+            try:
+                r1, w1, e1 = select.select([self.sock], [], [])
+                for e in r1:
+                    if e == self.sock:
+                        nbytes = self.sock.recv_into(self.data)
+            except SocketIO.timeout:
+                nbytes = 0
+            if not nbytes:
+                continue
+            # print 'Received a frame!!!'
+            self.n_frames += 1
 
-                    # probe_id = struct.unpack_from('>B', self.data_buf)
-                    frame_id = self.data[0] & 0xF0  # get the frame ID
-                    # Correlator input
-                    # ##### CORRELATOR DATA HANDLER ###########
-                    if (frame_id == 0xF0):  # If correlator data
-                        (corr_number, mult_number, stream_id, word_length, timestamp) = struct.unpack_from('>BHHHL', self.data_buf)
-                        corr_time = time.time()
-                        # Correlator unpack first try very simple.
-                        corr_number &= 0x0F  # mask the FRAME ID bits
-                        if (mult_number < self.NUMBER_OF_MULTIPLIERS ) :
-                            if ((timestamp != last_corr_timestamp) or (corr_time-last_corr_time > 2.9) ) and (nc>0): #if this is the beginning of a new correlator data block
-                                # If the queue is full, make room by poping the oldest element
-                                if self.store_corr_data:  # False if this is the first block to be stored. In this case, do not store the data in case we got partial block after a flush()
-                                    if self.queue_corr.full():
-                                        self.queue_corr.get()
-                                   # Now try to write the data into the Queue.
-                                    try:
-                                        self.queue_corr.put_nowait(self.corr_data_block[0:nc,:nbytes].copy())
-                                        #print 'Corr receiver: Pushing data to Queue with timestamp #%i (delta=%i), dt=%0.3f, # frames = %i' % (timestamp, timestamp - last_corr_timestamp, corr_time - last_corr_time, nc)
-                                    except Queue.Full:
-                                        self.queue_corr_overflow += 1
-                                        print 'Corr Receiver Queue overflow... Should not happen...'
-                                else:
-                                    self.store_corr_data = 1 # next time store the block
-                                nc = 0
-                                last_corr_timestamp = timestamp
-                                last_corr_time = corr_time
-                            if nc >= self.NUMBER_OF_MULTIPLIERS * self.NUMBER_OF_CORRELATORS:
-                                print 'Corr Receiver: Received extra correlator frames for Corr#%i Mult#%i' % (corr_number, mult_number)
-                            else:
-                                #print 'Corr#%i Mult#%i ts=%i, time=%0.3f, dt=%0.3fs' % (corr_number, mult_number, timestamp, corr_time, corr_time-last_corr_time)
-                                self.corr_data_block[nc,:nbytes] = self.data[:nbytes]
-                                nc += 1
+            # probe_id = struct.unpack_from('>B', self.data_buf)
+            frame_id = self.data[0]  # get the frame ID
+            # Correlator input
+            # ##### CORRELATOR DATA HANDLER ###########
+            if (frame_id == 0xBF):  # If correlator data
+                # print 'Got corr frame with frame id', frame_id
+                # (_, _, corr_number, cmac_number, _,  timestamp) = struct.unpack_from('>BBBBLL', self.data_buf)
+                corr_number = self.data[2] & 0x0F
+                cmac_number = self.data[3] % 0xFF
+                timestamp = (self.data[11] << 24) + (self.data[10] << 16) + (self.data[9] << 8) + self.data[8]
+                corr_time = time.time()
+                # Correlator unpack first try very simple.
+                # corr_number &= 0x0F  # mask the FRAME ID bits
+                if nbytes <=12 or nbytes > self.MAX_CORR_FRAME_LENGTH:
+                    if self.verbose:
+                        print "Corr Receiver: Bad frame length of %i bytes" % nbytes
+                elif (cmac_number >= self.Ncmac ) :
+                    if self.verbose:
+                        print "Corr Receiver: Bad multiplier number"
+                else:
+                    if ((timestamp != last_corr_timestamp) or (corr_time - last_corr_time > 2.9) ) and (nc>0): #if this is the beginning of a new correlator data block
+                        # If the queue is full, make room by poping the oldest element
+                        # if nc != self.Ncmac * self.Ncorr:
+                        #     print 'Got only %i packets before a new timestanmp came in' % nc
+                        if self.store_corr_data:  # False if this is the first block to be stored. In this case, do not store the data in case we got partial block after a flush()
+                            if self.queue_corr.full():
+                                self.queue_corr.get()
+                           # Now try to write the data into the Queue.
+                            try:
+                                self.queue_corr.put_nowait(self.corr_data_block[0:nc,:nbytes].copy())
+                                #print 'Corr receiver: Pushing data to Queue with timestamp #%i (delta=%i), dt=%0.3f, # frames = %i' % (timestamp, timestamp - last_corr_timestamp, corr_time - last_corr_time, nc)
+                            except Queue.Full:
+                                self.queue_corr_overflow += 1
+                                print 'Corr Receiver Queue overflow... Should not happen...'
                         else:
-                            print "Corr Receiver: Bad multiplier number"
-                            #Clear stuff? ERROR HANDLE
+                            self.store_corr_data = 1 # next time store the block
+                        nc = 0
+                        last_corr_timestamp = timestamp
+                        last_corr_time = corr_time
+                    if nc >= self.Ncmac * self.Ncorr:
+                        if self.verbose:
+                            print 'Corr Receiver: Received extra correlator frames for Corr#%i Mult#%i' % (corr_number, cmac_number)
+                    else:
+                        #print 'Corr#%i Mult#%i ts=%i, time=%0.3f, dt=%0.3fs' % (corr_number, cmac_number, timestamp, corr_time, corr_time-last_corr_time)
+                        self.corr_data_block[nc,:nbytes] = self.data[:nbytes]
+                        nc += 1
 
-                    ###### TIMESTREAM DATA HANDLER ###########
-                    elif (frame_id == 0xA0): # if timestream or spectrum data
-                        (probe_id, stream_id, word_length, timestamp) = struct.unpack_from('>BHHL', self.data_buf)
-                        # If we don't want to wait for all frames with the same timestanp to be grouped, put the frame immediately on the queue
-                        if self._send_every_frame.is_set():
-                            self.data_block[0,:] = self.data[:2048+9]
-                            # If the queue is full, make room by poping the oldest element
+            ###### TIMESTREAM DATA HANDLER ###########
+            elif (frame_id & 0xF0 == 0xA0): # if timestream or spectrum data
+                (probe_id, stream_id, word_length, timestamp) = struct.unpack_from('>BHHL', self.data_buf)
+                # If we don't want to wait for all frames with the same timestanp to be grouped, put the frame immediately on the queue
+                if self._send_every_frame.is_set():
+                    self.data_block[0,:] = self.data[:2048+9]
+                    # If the queue is full, make room by poping the oldest element
+                    if self.queue.full():
+                        self.queue.get()
+                    # Now try to write the data into the Queue.
+                    try:
+                        self.queue.put_nowait((timestamp, self.data_block[0:1,:].copy()))
+                        #print 'Stored a frame!!!'
+                    except Queue.Full:
+                        self.queue_overflow += 1
+                else: # otherwise store the data only when a new timestanp is received and the numbe of frames is not zero
+                    if (timestamp != last_timestamp) and (n != 0):
+                        #print 'trying to store a frame!!!'
+                        if self.store_data: # False if this is the first block to be stored. In this case, do not store the data in case we got partial block after a flush()
+                        # If the queue is full, make room by poping the oldest element
                             if self.queue.full():
                                 self.queue.get()
-                            # Now try to write the data into the Queue.
+                            # Now write the block of frames to the queue
                             try:
-                                self.queue.put_nowait((timestamp, self.data_block[0:1,:].copy()))
-                                #print 'Stored a frame!!!'
+                                #print 'Storing a frame!!!'
+                                self.queue.put_nowait((timestamp, self.data_block[0:n,:].copy()))
+                                total_queue_entries += 1
+                                #if not (total_queue_entries % 10):
+                                    #print '.',
                             except Queue.Full:
                                 self.queue_overflow += 1
-                        else: # otherwise store the data only when a new timestanp is received and the numbe of frames is not zero
-                            if (timestamp != last_timestamp) and (n != 0):
-                                #print 'trying to store a frame!!!'
-                                if self.store_data: # False if this is the first block to be stored. In this case, do not store the data in case we got partial block after a flush()
-                                # If the queue is full, make room by poping the oldest element
-                                    if self.queue.full():
-                                        self.queue.get()
-                                    # Now write the block of frames to the queue
-                                    try:
-                                        #print 'Storing a frame!!!'
-                                        self.queue.put_nowait((timestamp, self.data_block[0:n,:].copy()))
-                                        total_queue_entries += 1
-                                        #if not (total_queue_entries % 10):
-                                            #print '.',
-                                    except Queue.Full:
-                                        self.queue_overflow += 1
-                                        print 'Timestream Receiver Queue overflow... Should not happen...'
-                                else:
-                                    self.store_data = 1  # next time store the block
-                                last_timestamp = timestamp
-                                n = 0
-                            # Copy the new vector into the block memory buffer
-                            if n < 0 or n >= 16:
-                                print 'Timestream Receiver: received %i Timestrem/Spectrum frames with the same timestamp.' % n
-                            elif nbytes != 2048 + 9:
-                                print 'Timestream Receiver: Timestrem/Spectrum frame has %i bytes instead of 2048+9=2057 bytes. First bytes are: 0x%s' % (nbytes, ' '.join('%02X' % c for c in self.data[:32]))
-                            else:
-                                self.data_block[n, :] = self.data[: 2048 + 9]
-                                n += 1
-                    ###### UNKNOWN FRAME TYPE###########
-                    else:  # unknown frame format
-                        print 'Receiver: Frame of %i bytes with unknown identifier 0x%Xx has been received. It was discarded. First bytes are 0x%s' % (nbytes, (self.data[0] & 0xF0) >> 4, ' '.join('%02X' % c for c in self.data[:32]))
+                                if self.verbose:
+                                    print 'Timestream Receiver Queue overflow... Should not happen...'
+                        else:
+                            self.store_data = 1  # next time store the block
+                        last_timestamp = timestamp
+                        n = 0
+                    # Copy the new vector into the block memory buffer
+                    if n < 0 or n >= 16:
+                        if self.verbose:
+                            print 'Timestream Receiver: received %i Timestrem/Spectrum frames with the same timestamp.' % n
+                    elif nbytes != 2048 + 9:
+                        if self.verbose:
+                            print 'Timestream Receiver: Timestrem/Spectrum frame has %i bytes instead of 2048+9=2057 bytes. First bytes are: 0x%s' % (nbytes, ' '.join('%02X' % c for c in self.data[:32]))
+                    else:
+                        self.data_block[n, :] = self.data[: 2048 + 9]
+                        n += 1
+            ###### UNKNOWN FRAME TYPE###########
+            else:  # unknown frame format
+                if self.verbose:
+                    print 'Receiver: Frame of %i bytes with unknown identifier 0x%2X has been received. It was discarded. First bytes are 0x%s' % (nbytes, frame_id, ' '.join('%02X' % c for c in self.data[:32]))
 
         # self.queue.task_done() # JFC: Must be used by queue consumer, not the producer (this thread)
         # self.queue_corr.task_done()
-        print 'Frame acquisition thread is stopped'
+        if self.verbose:
+            print 'Frame acquisition thread is stopped'
 
     def status(self, print_delay=1):
         last_display_time = 0
@@ -240,7 +257,7 @@ class chFPGA_receiver(object):
     #NUMBER_OF_CORRELATORS = NUMBER_OF_ANTENNAS_TO_CORRELATE
     FREQ_CHANNELS_MAX = 1024
 
-    def __init__(self, chFPGA_config):
+    def __init__(self, chFPGA_config, verbose=1):
 
         print '*** Opening receiver sockets ***'
         # Create socket handled and open socket communications to the chFPGA board
@@ -251,18 +268,23 @@ class chFPGA_receiver(object):
         #self.sock.open()
         #Add configuration
         self.chFPGA_config = chFPGA_config
-        self.NUMBER_OF_ANTENNAS_TO_CORRELATE = chFPGA_config.number_of_antennas_to_correlate
-        self.NUMBER_OF_CORRELATORS = chFPGA_config.number_of_correlators
-        self.CHANNELS_PER_CORR_MAX = 512 // max(1, self.NUMBER_OF_ANTENNAS_TO_CORRELATE)
+        self.Nch = chFPGA_config.number_of_antennas_to_correlate
+        self.Ncorr = chFPGA_config.number_of_correlators
+        self.Ncmac = 2 * (self.Nch + 1)
+        # self.CHANNELS_PER_CORR_MAX = 512 // max(1, self.Nch)
         # Create a frame a queue and a thread that will fill it
         self.frame_queue = Queue.Queue(maxsize=self.FRAME_BUFFER_LENGTH)
         self.frame_queue_corr = Queue.Queue(maxsize=self.FRAME_BUFFER_LENGTH)
         #self.frame_queue = multiprocessing.Queue(maxsize=1000)
-        self.frame_receiver = ReceiverThread(self.sock.sock, self.frame_queue, self.frame_queue_corr, self.NUMBER_OF_ANTENNAS_TO_CORRELATE, self.NUMBER_OF_CORRELATORS, verbose=0)
+        self.frame_receiver = ReceiverThread(self.sock.sock, self.frame_queue, self.frame_queue_corr, self.Nch, self.Ncorr, verbose=verbose)
         self.frame_receiver.start()
-        X, Y = np.mgrid[0:self.NUMBER_OF_ANTENNAS_TO_CORRELATE,0:self.NUMBER_OF_ANTENNAS_TO_CORRELATE]
-        self.K = X * self.NUMBER_OF_ANTENNAS_TO_CORRELATE - X*(X+1)/2 + Y
+        X, Y = np.mgrid[0:self.Nch,0:self.Nch]
+        self.K = X * self.Nch - X*(X+1)/2 + Y
         self.define_sort_array()
+
+        if self.Ncorr:
+            self.raw_corr_map = self.raw_corr_map()
+            self.rm = self.reverse_map(self.raw_corr_map)
 
 
     def __del__(self):
@@ -290,7 +312,8 @@ class chFPGA_receiver(object):
         #self.sock.flush_data_socket() # This cause conflict with the background socket operations
         self.frame_receiver.flush(1)
         while (not self.frame_queue.empty()) or (not self.frame_queue_corr.empty()):
-            pass
+            print 'data_queue_empty=%s, corr_queue_empty=%s' % (self.frame_queue.empty(),self.frame_queue_corr.empty())
+            time.sleep(0.1)
         self.frame_receiver.flush(0)
         #with self.frame_queue.mutex:
         #    self.frame_queue.queue.clear()
@@ -324,7 +347,7 @@ class chFPGA_receiver(object):
         """
 
         # Acquire the data
-        data={}
+        data = {}
         if flush:
             self.flush()
 
@@ -332,7 +355,7 @@ class chFPGA_receiver(object):
         #j=0
         #while 1:
             #j+=1
-            if verbose>1 or (verbose==1 and (j % 100 ==99 or j==frames-1)):
+            if verbose > 1 or (verbose==1 and (j % 100 ==99 or j==frames-1)):
                 print 'Acquiring Frame %i (%.0f%%)' % ((j+1),(100*(j+1)/frames))
             #try:
             data_block = self.frame_queue.get(timeout=timeout)
@@ -381,7 +404,7 @@ class chFPGA_receiver(object):
                     data[channel]=np.hstack((data[channel],raw_data));
         return data
 
-    def read_corr_frames(self, flush=0, timeout=3, verbose=2):
+    def read_corr_frames(self, flush=0, timeout=3, verbose=2, raw=False, complete_set=True, max_trials = 15):
         """
         Get correlator frames that were captured by the capture thread, combine them, and return a processed complex correlation array.
 
@@ -400,99 +423,143 @@ class chFPGA_receiver(object):
             121021 JFC: Updated for multi-correlator data processing.
             121126 JM: initialized corr_data as a matrix of nan (before it was started as matrix of zeros).
         """
-        Nant = self.NUMBER_OF_ANTENNAS_TO_CORRELATE # Number of correlated antennas c.GPIO.
-        Nproducts_max = (Nant*(Nant+1))/2 # Total number of correlation products
-        #Nchannels_max = self.CHANNELS_PER_CORR_MAX # Maximum number of frequency channels that can be contained in a frame CHANNELS_PER_CORR_MAX*NUMBER_OF_CORRELATORS
-        ##linear_map = lambda i, j : (Nant * (Nant + 1) - (Nant - i) * (Nant - i + 1)) / 2 + (j - i) # Maps (i,j) (for j>=i) matrix coordinates into a linear array indexed from 0 to Nant*(Nant-1)/2-1: x0x0, x0x1, x0x2, x0x3, x1x1, x1x2, x1x3, x2x2, x2x3, x3x3
-        ### Replace linear map with a Matrix
+        raw_corr_data = np.zeros((self.Ncorr, self.Ncmac, 512), dtype=complex)*np.nan  # Dimensions are: (corr_number, cmac_number,  product_number)
 
-        corr_data=np.zeros((Nproducts_max, self.FREQ_CHANNELS_MAX), dtype=complex)*np.nan  # Dimensions are: (Number_of_products, number_of_frequency_channels)
-
-        # Acquire the data
-        #data={}
-        #need to change flush to take a queue object
+        # Flush the queue. Need to change flush to take a queue object
         if flush:
             self.flush()
 
-        #for j in range(frames):
-        #j=0
-        #while 1:
-            #j+=1
-        #    if verbose>1 or (verbose==1 and (j % 100 ==99 or j==frames-1)):
-        #        print 'Acquiring Frame %i (%.0f%%)' % ((j+1),(100*(j+1)/frames))
-            #try:
-        in_frames = self.frame_queue_corr.get(timeout=timeout)
-        #except Queue.`:
-        #    return None
-        if verbose >= 1:
-            print 'Got a data block of shape ', np.shape(in_frames)
-        #in_frames =  data_block
-        #block_timestamp = 0
-        #data['timestamp'] = block_timestamp
-        for in_frame in in_frames[:]:
-            if(len(in_frame) < self.CORR_FRAME_HEADER_LENGTH):
-                print 'Bad header'
-                break
+        # Acquire the data
+
+        trial = 0
+        while True:
+            frames = self.frame_queue_corr.get(timeout=timeout)
+
+            if verbose >= 1:
+                print 'Got a data block of shape ', np.shape(frames)
+
+            if not complete_set or len(frames) == self.Ncorr * self.Ncmac:
+                for frame in frames[:]:
+                    if(len(frame) < self.CORR_FRAME_HEADER_LENGTH):
+                        print 'Bad header'
+                        break
+                    else:
+                        (_, _, corr_id, cmac_id, _, timestamp) = struct.unpack_from('<BBBBLL', frame)
+
+                    if verbose >= 4:
+                        print 'Frame data: %s' % (''.join('%02X' % np.uint8(c) for c in frame))
+
+                    if len(frame[12:]) % 5:
+                        print 'Error: number of product bytes (%i) not a multiple of 5' %  (frame[12:])
+
+                    num_products = len(frame[12:])/5 # Total number of products in the frame (for all channels)
+                    if num_products % self.Nch:
+                        print 'Error: number of products (%i)  not a multiple of the number of channelizers (%i)' % (num_products, self.Nch)
+                    if verbose >=2:
+                        print 'Frame header information:  corr#=%i, cmac#=%i, timestamp=0x%X ' % (corr_id, cmac_id, timestamp)
+
+                    # chop the data in 5-byte chunks and compute ``num_products`` 40-bit words
+                    # print frame[12:].reshape(num_products, 5)
+                    w = np.flipud((frame[12:].reshape(num_products, 5).view(np.uint8) * [1, 1<<8, 1<<16, 1<<24, 1<<32]).sum(-1))
+                    re = np.int32((w >> 18) & 0x3FFFF)
+                    re[(re & (1 << 17)) != 0] -= 1 << 18
+                    im = np.int32(w & 0x3FFFF)
+                    im[(im & (1 << 17)) != 0] -= 1 << 18
+                    v = re + 1j*im
+                    raw_corr_data[corr_id, cmac_id, 0:len(v)] = v
+                if not complete_set or not np.any(np.isnan(raw_corr_data)):
+                    break
+                print 'There are missing frames'
             else:
-                (frame_id, mult_id, stream_id, word_length, timestamp) = struct.unpack_from('>BHHHL', in_frame)
-                #data['mult_id'] = mult_id
+                if verbose:
+                    print 'Got %i frames instead of %i' % (len(frames), self.Ncorr * self.Ncmac)
+            trial += 1
+            if trial >= max_trials:
+                raise RuntimeError('Could not get a complete correlator frame set after %i trials' % trial)
+            if verbose:
+                print 'Retrying'
 
-            #Return numpy complex128's  Check if this shifting is correct
-            #not shifting through correctly yet.
-            #not sure if the word thing will work, might need indexes or something
-            #raw_data = []
-            #in_frame[11+13*i:24+13*i] i from 0 to 512
-            if verbose >= 4:
-                print 'Frame data: %s' % (''.join('%02X' % np.uint8(c) for c in in_frame))
-            corr_number = frame_id & 0x0F
-            product_number = 0  #counts the products until the end of a correlator frame.  Most basic product counter
-            if len(in_frame[11:])%13:
-                print 'Error: number of product bytes (%i) not a multiple of 13' %  (in_frame[11:])
+        if raw:
+            data = raw_corr_data
+        else:
+            rm = self.rm
+            data = raw_corr_data[rm[..., 0], rm[..., 1], rm[..., 2]]
+            i, j = np.tril_indices_from(data[0], -1)
+            data[:, j, i] = data[:, i, j].conj()  # fill the upper triangle with the conjugate of the lower
 
-            num_products = len(in_frame[11:])/13 # Total number of products in the frame (for all channels)
-            if num_products % Nant:
-                print 'Error: number of products (%i)  not a multiple of the number of antennas (%i)' % (num_products, Nant)
-            num_channels_per_correlator = num_products//Nant*2
-            if verbose >=2:
-                print 'Frame header information:  corr#=%i, mult#=%i, num_channels in this corr=%i, Word length=0x%X words, timestamp=0x%X ' % ( corr_number, mult_id, num_channels_per_correlator, word_length, timestamp )
-                #pass
-            for word in in_frame[11:].reshape(num_products,13):
-                (flags, r1, r2, i1, i2) = struct.unpack_from('>BhLhL',word)
-                product = ((r1 << 32) | r2 ) + 1.0j * ((i1 << 32) | i2)
-                corr_data[self.corr2sorted[corr_number,mult_id,product_number,0], self.corr2sorted[corr_number,mult_id,product_number,1]] = product
-                product_number += 1
-            #raw_data = np.array(raw_data)
+        return data
 
+    def pp(self, data):
+        for i in data.shape[0]:
+            for j in data.shape[1]:
+                pass
 
-
+    def raw_corr_map(self):
+        """
+        map(corr, cmac, prod) = (bin, i, j)
+        """
+        N = self.Nch
+        Ncmac = (N+1) # Numbe rof CMACs (before interleaving)
+        Ncorr = self.Ncorr
+        Nbins = self.FREQ_CHANNELS_MAX / Ncorr # Number of bins processed by each correlator
+        Nprods = N/2*Nbins # total number of products in a cmac (before interleaving)
+        raw_map = np.zeros((Ncorr, Ncmac, Nprods, 3), int) -1
+        interleaved_raw_map = np.empty((Ncorr, Ncmac*2, Nprods/2, 3), int)
 
 
-            # Process the frame data Need to use Mult_ID to sort out what is what.
-            # include in data flags etc?
+        # Compute the corelator output map as if we computed all the products for eacb bin in N/2 clocks.
+        cmac = np.arange(Ncmac)
+        x = np.zeros(Ncmac)
+        y = np.zeros(Ncmac)
+        b = np.zeros(Ncmac)
 
-            #Format data from frame
+        for corr in range(Ncorr):
+            for bin_number in range(Nbins):
+                for clock in range(N/2):
+                    prod = N/2*bin_number + clock
 
-            # Make sure there is an empty vector on the first storage so we can concatenate to it the new data
+                    b[:] = corr + bin_number * Ncorr
 
-            #if mult_id in data:
-            #    print 'Warning: correlator data is received multiple times from the same multiplier'
+                    x[0] = y[0] = N/2 - 1 - clock # 1st autocorrelator, 7x7, 6x6  ... 0x0
+                    x[1] = y[1] = N - 1 - clock #+ (1 if clock % 2 else -1) # 2nd autocorrelator 15x15 .. 8x8
 
-            #data[mult_id]=raw_data
+                    x[2:] = (cmac[0:N-1] + N - clock) % N
+                    x[2:clock+2] = np.arange(clock)
+                    y[2:] = cmac[0:N-1] + 1
+                    y[2:2+clock] = N-clock+np.arange(clock)
 
-            #if mult_id not in data:
-            #    data[mult_id]=raw_data
-            #else:
-            #    data[mult_id]=np.hstack((data[mult_id],raw_data));
-        #if raw:
-        #    return data
-        #else:
-        return corr_data
+                    raw_map[corr, :, prod] = np.array([b, x, y]).T  #(b, x , y)
+
+        # Since we need to compute the products in N/4 clocks (there are 4 clocks per bin), we use two CMAC in parallel.
+        # The CMACs are interleaved. We update the map to repreent this.
+        interleaved_raw_map[:, 0::2] = raw_map[:, :, 0::2]
+        interleaved_raw_map[:, 1::2] = raw_map[:, :, 1::2]
+        return interleaved_raw_map
+
+    def imap(self, shape):
+        """ Return an array of shape `shape` where each element is a 3-element tuple containing the index on that element.
+        """
+        N1, N2, N3 = shape
+        im = np.zeros((N1,N2,N3, 3), int) + 65535
+        [b,i,j] = np.meshgrid(range(N1), range(N2), range(N3), indexing='ij')
+        im[...,0], im[..., 1], im[..., 2] = b, i, j
+        return im
+
+    def reverse_map(self, m):
+        (N1, N2, N3) = m.reshape(-1, 3).max(axis=0) + 1  # Find the maximum indices if each dimension
+        rm = np.empty((N1, N2, N3, 3), int)
+        im = self.imap(m.shape[:-1])
+        rm[m[..., 0], m[..., 1], m[..., 2]] = im
+        rm[m[..., 0], m[..., 2], m[..., 1]] = im  # also populate j,i with same values
+        return rm
+
+
 
     def define_sort_array(self):
         '''
         Create Array of indicies that goes from corr_number, mult_id, and product_number to K and frequency
         '''
-        Nant = self.NUMBER_OF_ANTENNAS_TO_CORRELATE
+        Nant = self.Nch
         corr2sorted = np.empty((Nant,Nant+1,512, 2 ), dtype=int) #corr_number, mult_id, product_number to K, freq
         mult_ids = np.arange(Nant+1)
         corr_numbers = np.arange(Nant)

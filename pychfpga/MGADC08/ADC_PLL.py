@@ -60,9 +60,9 @@ class ADC_PLL_base(object):
             raise Exception('Output frequency is too low')
 
         if verbose:
-            self.logger.info('%.32r: --------------------- ADC PLL ------------------------------------' % self.adc_board)
-            self.logger.info('%.32r:  PLL Reference frequency         %7.3f MHz' % (self.adc_board, fref))
-            self.logger.info('%.32r:  Target ADC reference frequency: %7.3f MHz' % (self.adc_board, fout))
+            self.logger.debug('%.32r: --------------------- ADC PLL ------------------------------------' % self.adc_board)
+            self.logger.debug('%.32r:  PLL Reference frequency         %7.3f MHz' % (self.adc_board, fref))
+            self.logger.debug('%.32r:  Target ADC reference frequency: %7.3f MHz' % (self.adc_board, fout))
 
         # REGISTER 5
         LD_pin_mode = 1  # 0=LOW, 1=Lock Detect, 2=Low, 3= High
@@ -120,24 +120,24 @@ class ADC_PLL_base(object):
             raise Exception('Integer division factor is out of range (it_div=%i, range is 23-65535)' % int_div)
 
         if verbose:
-            self.logger.info('%.32r:  Reference divide-by-2 enabled: %s' % (self.adc_board, bool(rdiv2)))
-            self.logger.info('%.32r:  PFB frequency: %.0f MHz' % (self.adc_board, fref/(1+rdiv2)))
-            self.logger.info('%.32r:  Integer multiplication factor: %i' % (self.adc_board, int_div))
-            self.logger.info('%.32r:  Fractional multiplication factor/modulus: %i/%i' % (self.adc_board, frac_div, modulus))
-            self.logger.info('%.32r:  Total multiplication factor: %i' % (self.adc_board, int_div + float(frac_div) / modulus))
-            self.logger.info('%.32r:  Feedback includes output dividor: %s' %  (self.adc_board, not FB_select))
-            self.logger.info('%.32r:  VCO Frequency: %.3f MHz (%.0f MHz min, %.0f MHz max)' % (self.adc_board, fvco, fmin, fmax))
-            self.logger.info('%.32r:  Output division factor: %i' % (self.adc_board, fdiv))
-            self.logger.info('%.32r:  Programmed output frequency: %.3f' % (self.adc_board, float(fvco) / fdiv))
+            self.logger.debug('%.32r:  Reference divide-by-2 enabled: %s' % (self.adc_board, bool(rdiv2)))
+            self.logger.debug('%.32r:  PFB frequency: %.0f MHz' % (self.adc_board, fref/(1+rdiv2)))
+            self.logger.debug('%.32r:  Integer multiplication factor: %i' % (self.adc_board, int_div))
+            self.logger.debug('%.32r:  Fractional multiplication factor/modulus: %i/%i' % (self.adc_board, frac_div, modulus))
+            self.logger.debug('%.32r:  Total multiplication factor: %i' % (self.adc_board, int_div + float(frac_div) / modulus))
+            self.logger.debug('%.32r:  Feedback includes output dividor: %s' %  (self.adc_board, not FB_select))
+            self.logger.debug('%.32r:  VCO Frequency: %.3f MHz (%.0f MHz min, %.0f MHz max)' % (self.adc_board, fvco, fmin, fmax))
+            self.logger.debug('%.32r:  Output division factor: %i' % (self.adc_board, fdiv))
+            self.logger.debug('%.32r:  Programmed output frequency: %.3f' % (self.adc_board, float(fvco) / fdiv))
 
         # Override variable names if any is specified in the function call
         for (varname, value) in args.items():
             if varname in locals():
                 if verbose:
-                    self.logger.info('%.32r: Setting %s = %i' % (self.adc_board, varname, value))
+                    self.logger.debug('%.32r: Setting %s = %i' % (self.adc_board, varname, value))
                 exec('%s=%i' % (varname, value))
             else:
-                self.logger.info('%.32r: "%s" is not a PLL variable' % (self.adc_board, varname))
+                self.logger.debug('%.32r: "%s" is not a PLL variable' % (self.adc_board, varname))
 
         PLL_reg5 = np.uint32((LD_pin_mode << 22) + (0x3 << 19) + 5)
         PLL_reg4 = np.uint32((FB_select << 23) + (RF_div << 20) + (band_sel_div << 12) + (vco_power_down << 11) + (mute_until_lock_detect << 10) + (AUX_sel << 9) + (AUX_enable << 8) + (AUX_power << 6) + (RF_enable << 5) + (RF_power << 3)+4)
@@ -159,7 +159,7 @@ class ADC_PLL_base(object):
 
             time.sleep(0.050)
             if self.is_locked():
-                self.logger.info('%.32r: ADC PLL is locked in trial #%i' % (self.adc_board, trial + 1))
+                self.logger.debug('%.32r: ADC PLL is locked in trial #%i' % (self.adc_board, trial + 1))
                 break
             elif trial > 5:
                 raise RuntimeError('ADC PLL cannot be locked')

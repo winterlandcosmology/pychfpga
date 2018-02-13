@@ -26,12 +26,13 @@ class SHUFFLE_BIN_SEL_base(Module_base):
     # Control bitfields
     RESET                       = BitField(CONTROL, 0, 7, doc="Reset the CH_DIST. Clears FIFO.")
     BYPASS                      = BitField(CONTROL, 0, 6, doc="When high, routes input lane 'x' directly to the output, where x in the index of this bin selector.")
-    NUMBER_OF_FRAME_FLAGS_WORDS_PER_FRAME = BitField(CONTROL, 0, 4, width=2, doc="Number of frame flags words in each incoming frame")
+    NUMBER_OF_DATA_FLAGS_WORDS_PER_BIN = BitField(CONTROL, 0, 4, width=2, doc="Number of data flags words in each incoming bin and frame")
     FIRST_LANE                  = BitField(CONTROL, 0, 0, width=4, doc="Index of the first lane to be sent out")
     # HEADER_CAPTURE_DATA_SEL     = BitField(CONTROL, 0, 5, doc=" Select whether we capture Stream ID or timestamps.")
 
     STREAM_ID                   = BitField(CONTROL, 2, 4, width=12, doc="Stream ID to be used for tagging the output frames")
-    NUMBER_OF_BINS_PER_FRAME    = BitField(CONTROL, 3, 0, width=11, doc="Number of bins extected in each incoming frame")
+    NUMBER_OF_FRAME_FLAGS_WORDS_PER_FRAME = BitField(CONTROL, 2, 0, width=3, doc="Number of frame flags words in each incoming frame")
+    NUMBER_OF_BINS_PER_FRAME    = BitField(CONTROL, 3, 0, width=8, doc="Number of bins expected in each incoming frame")
     FIFO_OVERFLOW_RESET         = BitField(CONTROL, 4, 7, doc="When high, resets the FIFO OVERFLOW flag.")
     NUMBER_OF_WORDS_PER_BIN     = BitField(CONTROL, 4, 0, width=7, doc="Number of words expected in each bin of the incoming frames. In 4-bit mode, 1 Word = 4 analog channels")
     NUMBER_OF_FRAMES_PER_PACKET = BitField(CONTROL, 5, 5, width=3, doc="Number of expected frames per packet. ")

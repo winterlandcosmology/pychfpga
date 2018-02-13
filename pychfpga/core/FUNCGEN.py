@@ -37,28 +37,33 @@ class FUNCGEN_base(Module_base):
     FN_BUFFER = 1
     FN_NOISE = 2
     FN_WORD_CTR = 3
+    FN_FRAME8 = 4
+    FN_FRAME4 = 5
     BUFFER_SIZE = 2048  # bytes
     FRAME_SIZE = 2048 # bytes
 
+    # The following define the source of the data
     DATA_SOURCE_NAMES = {
         'adc':                   FN_ADC,  # Sends the ADC data
         'noise':                 FN_NOISE,  # Uniform white noise generator
         'word_ctr_buffer_flags': FN_WORD_CTR,  # 32-bit Frame/word counter, with ADC overflow from bit 0 of buffer bytes
         'buffer':                FN_BUFFER,  # Sends the data stored in the buffer
         'funcgen':               FN_BUFFER,  # Sends the data stored in the buffer (for backwards compatibility)
+        'frame8':                FN_FRAME8,  # Sends the frame number in every 8-bit sample
+        'frame4':                FN_FRAME4,  # Sends the frame number if the upper 4 bits of each samples. The lower bits are zero.
         }
 
     FUNCTION_NAMES = {  # key : (function number, buffer generator fn)
 
-        # The following are
+        # The following define the patterns we can program in the waveform buffer
         'arb':            (0, lambda data, N=BUFFER_SIZE: data),  # Arbitrary waveform stored in buffer
         'a':              (1, lambda a, N=BUFFER_SIZE: np.tile(np.uint8(a), N)),  # All bytes are Byte A
         'b':              (2, lambda b, N=BUFFER_SIZE: np.tile(np.uint8(b), N)),  # All bytes are Byte B
         'ab':             (3, lambda a, b, N=BUFFER_SIZE: np.tile(np.array([a, b], np.uint8), N / 2)),  # Bytes alternate between A and B.
-        'ramp':           (4, lambda N=BUFFER_SIZE: np.arange(N, dtype=np.uint8)),  # Successive bytes generate a repeating ramp from 0 to 255.
-        'real_ramp':      (5, lambda N=BUFFER_SIZE: (np.arange(N / 2) << 8).astype('>u2').view(np.uint8)),  # Generates the ramp: 0,0,0,1,0,2,0,3,0... If the data is read as (8+8)-bit complex value pairs, we obtain (0,0j), (1+0j)... (255+0j)
-        '4bit_ramp':      (6, lambda N=BUFFER_SIZE: np.arange(N, dtype=np.uint8) << 4),  # Generates the ramp 0x00, 0x10, 0x20, ... 0xF0.
-        '4bit_real_ramp': (7, lambda N=BUFFER_SIZE: (np.arange(N / 2) << 12).astype('>u2').view(np.uint8)),  # Generates the ramp: 0x00, 0x00, 0x10, 0x00, 0x20, 0x00 ... 0xF0, 0x00
+        'ramp':           (4, lambda N=BUFFER_SIZE, **kwargs: np.arange(N, dtype=np.uint8)),  # Successive bytes generate a repeating ramp from 0 to 255.
+        'real_ramp':      (5, lambda N=BUFFER_SIZE, **kwargs: (np.arange(N / 2) << 8).astype('>u2').view(np.uint8)),  # Generates the ramp: 0,0,0,1,0,2,0,3,0... If the data is read as (8+8)-bit complex value pairs, we obtain (0,0j), (1+0j)... (255+0j)
+        '4bit_ramp':      (6, lambda N=BUFFER_SIZE, **kwargs: np.arange(N, dtype=np.uint8) << 4),  # Generates the ramp 0x00, 0x10, 0x20, ... 0xF0.
+        '4bit_real_ramp': (7, lambda N=BUFFER_SIZE, **kwargs: (np.arange(N / 2) << 12).astype('>u2').view(np.uint8)),  # Generates the ramp: 0x00, 0x00, 0x10, 0x00, 0x20, 0x00 ... 0xF0, 0x00
          # '4bit_split_ramp': (0, FN_BUFFER, ),  # Generates 0x0000, 0x0010, 0x0020, .. 0x00F0, 0x1000, 0x1010 ...
         'sin':            (8, lambda freq=1, N=BUFFER_SIZE: (np.sin(np.arange(N)*2*np.pi/N*freq) * 127).astype(np.uint8)),  # Generates the ramp: 0x00, 0x00, 0x10, 0x00, 0x20, 0x00 ... 0xF0, 0x00
         }

@@ -6,7 +6,7 @@ concurrently on all its items.
 import collections
 import logging
 import itertools
-import numpy as np
+#import numpy as np
 
 import async
 
@@ -259,6 +259,7 @@ class Ccoll(object):
                     setattr(obj, name, value)
 
     def __array__(self, dtype=None):
+        import numpy as np
         if dtype is None:
             dtype = type(self._dict.itervalues().next())
         return np.array(self._dict.values(), dtype=dtype)

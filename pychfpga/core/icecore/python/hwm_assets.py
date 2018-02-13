@@ -138,7 +138,7 @@ class IceCrate(hardware_map.HWMResource, handler.HandlerObject):
                 bp_serial = tr['backplane-serial']
                 slot = int(tr['backplane-slot'])
 
-                logger.info("IceBoard %s is slot %s in backplane %s" % (
+                logger.debug("IceBoard %s is slot %s in backplane %s" % (
                     mb_serial, slot, bp_serial))
 
                 # If this isn't our serial number, these aren't our boards.
@@ -159,7 +159,7 @@ class IceCrate(hardware_map.HWMResource, handler.HandlerObject):
                     # Otherwise, just don't continue.
                     return
 
-                logger.info("Discovered IceBoard serial %s in slot %s of "
+                logger.debug("Discovered IceBoard serial %s in slot %s of "
                             "backplane %s" % (mb_serial, slot, bp_serial))
 
                 ib = self.slot[slot]
@@ -234,7 +234,7 @@ class IceCrateHandler(handler.Handler):
         return sorted(active_iceboards)[0][1]
 
     def __repr__(self):
-        return '%s(SN%s)' % (self.__class__.__name__, self.serial)
+        return '%s(%s)' % (self.__class__.__name__, self.get_id())
 
     def get_id(self):
         return 'No backplane'
@@ -261,6 +261,7 @@ class IceBoard(hardware_map.HWMResource, handler.HandlerObject):
         'polymorphic_identity': "IceBoard",
         'polymorphic_on': '_cls'
     }
+
 
     handler_name = 'IceBoardHandler'  # Fixed, default handler
     __ipmi_part_number__ = 'MGK7MB'
@@ -314,6 +315,23 @@ class IceBoard(hardware_map.HWMResource, handler.HandlerObject):
 class IceBoardHandler(handler.Handler, tuber.TuberObject):
     """ Provide the basic code needed to operate the Iceboard (i.e. Tuber-
     provided code and a few Python wrappers)
+
+    `IceBoardHandler` can be created as a standard Python object initialized with a number of
+    parameters which set corresponding attributes (see below). If a `parent_getter` function is
+    provided, no other parameter is needed, and the value of the attributes will will be fetched
+    dynamically from the parent object. Note that any explicitely specified parameter overrides a
+    parent parameter.
+
+    Parameters:
+        parent_getter (func): Function that returns the dynamically return the parent object from which the following parameters will be fetched. Is `None` if there is no parent.
+        hostname (str): hostname or IP address of the ICEBoard ARM processor (mandatory)
+        serial (str): Serial number of the board. Can be provided by the ARM.
+        part_number (str): Part number of the IceBoard. Can be obtained from the ARM.
+        crate (IceCrateHandler): = object that handle the backplane on which the board is connected. `None` if the board is not connected to a backplane.
+        slot (int): Slot number in which the board is installed ona backplane. None if there is no backplane.
+        mezzanine (dict): Map {mezzanine_number: Mezzanine Handler, ...} describing the installed mezzanines. Can be obtained from the ARM.
+        tuber_objname (str): name of the set of software functions that will be provided by the ARM processor through the Tuber interface.
+
     """
     # Make this class (and any subclass) register with IceBoard
     __handler_for__ = IceBoard
@@ -324,8 +342,19 @@ class IceBoardHandler(handler.Handler, tuber.TuberObject):
     part_number = HandlerParentAttribute(lambda ib: ib.__ipmi_part_number__)
     crate = HandlerParentAttribute(lambda ib: ib.crate.handler if ib.crate else None)
     slot = HandlerParentAttribute(lambda ib: ib.slot)
-    mezzanine = HandlerParentAttribute(lambda ib: {slot: mezz.handler if mezz else None for (slot, mezz) in ib.mezzanine.items()}, {})
-    tuber_objname = HandlerParentAttribute(lambda ib: ib.__class__.__name__, 'IceBoard')
+    mezzanine = HandlerParentAttribute(lambda ib: {slot: mezz.handler if mezz else None for (slot, mezz) in ib.mezzanine.items()})
+    tuber_objname = HandlerParentAttribute(lambda ib: ib.__class__.__name__)
+
+
+    def __init__(self, hostname=None, serial=None, part_number=None, crate=None, slot=None, mezzanine={}, tuber_objname='IceBoard', **kwargs):
+        super(IceBoardHandler, self).__init__(**kwargs)  # pass on the remaining kwargs
+        self.hostname = hostname
+        self.serial = serial
+        self.part_number = part_number
+        self.crate = crate
+        self.slot = slot
+        self.mezzanine = mezzanine
+        self.tuber_objname = tuber_objname
 
 
     def __repr__(self):
@@ -335,19 +364,30 @@ class IceBoardHandler(handler.Handler, tuber.TuberObject):
         alphanumeric characters only).
         """
 
-        if self.crate and self.slot:
-            return "%s(C%s.S%02i)" % (self.__class__.__name__,
-                                      self.crate.serial, self.slot)
-        if self.serial:
-            return "%s(SN%s)" % (self.__class__.__name__,  self.serial)
-        if self.hostname:
-            return "%s(%s)" % (self.__class__.__name__,  self.hostname)
-        return "%s(?)" % (self.__class__.__name__)
+        return "%s(%s)" % (self.__class__.__name__,  self.get_id())
+
+        # if self.crate and self.slot:
+        #     return "%s(C%s.S%02i)" % (self.__class__.__name__,
+        #                               self.crate.serial, self.slot)
+        # if self.serial:
+        #     return "%s(SN%s)" % (self.__class__.__name__,  self.serial)
+        # if self.hostname:
+        #     return "%s(%s)" % (self.__class__.__name__,  self.hostname)
+        # return "%s(?)" % (self.__class__.__name__)
 
     def get_id(self):
         """ Return a string that identifies uniquely the motherboard board. Comprises the model number and the serial number.
         """
-        return '%s_SN%s' % (self.part_number, self.serial)
+        if self.crate and self.slot:
+            return "C%s.S%02i" % (self.crate.serial, self.slot)
+        elif self.serial:
+            return "SN%s" % (self.serial)
+        elif self.hostname:
+            return "%s" % (self.hostname)
+        else:
+            return "?"
+
+        # return '%s_SN%s' % (self.part_number, self.serial)
 
     def set_fpga_bitstream(self, buf):
         '''

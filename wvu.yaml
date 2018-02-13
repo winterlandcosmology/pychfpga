@@ -1,0 +1,103 @@
+corr_name: "wvu16"
+compute_gain: 0
+
+acq:
+    # Aquisitions off this path.
+    base_path: "/data/0/untransposed/"
+    curfile: "/data/0/untransposed/ch_master.cur"
+
+    livefile: "/data/0/untransposed/live.h5"
+
+    # Number of frames before starting a new file.
+    # 1024 is optimal for the transpose downstream.
+    frames_per_file: 1024
+
+    # Number of frames to store in the livedata.
+    # Old frames get overwritten.
+    frames_per_livefile: 256
+
+    # Number of frame buffers to keep in memory.
+    n_frame_buf: 12
+
+    # The max range of frames which can be filled by the
+    # GPU nodes. Used to deal with the fact the timing between
+    # nodes can be different due to buffering.
+    producer_max_range: 3
+
+    fpga_count_max: 4294967295
+    enable_gain_switching: 0
+
+fpga:
+    subarray: 1
+    samp_freq: 800.       # MHz
+    fft_shift     : 1367        # 0b10101010111->1367 (~4bit noise to ~3bit noise) 2^5 - 1 -> old, might be ideal.
+    fpga_array_params:
+        iceboards: [10.10.10.52]
+        prog: 1
+        open: 1
+        group_frames: 2     # how many frames per packet sent to gpu
+        samp_freq: 800.     # MHz
+        bitfile : /home/kbandura/firmware/chFPGA_MGK7MB_Rev2.bit
+        #syslog_log_level: 'debug'
+        mode: shuffle16
+        sync_method: 'local_soft_trigger'
+        # sync_method: 'distributed_time'
+        #  sync_method: 'local_soft_trigger'
+        sync_source: 'bp_trig'
+        sync_master : null # Serial number of the board that provides the sync for the all the boards in fpga crate
+        #sync_master_time_source: 'bp_time' # Not used if there is no sync board
+    adc_delay_params: # parameters passed to set_adc_delays()
+        source : 'default'
+        compute_delays : 1
+        save_delays : True
+        check_sync_delays : 0
+        check_adc_delays : 0
+        verbose : 1
+        retry : 5
+    
+    sync_method: 'local_soft_trigger'  # board does itself.
+    master_sync_board : '0008' # Serial number of the board that provides the sync for the all the boards in fpga crate
+    mode: shuffle16
+
+    ni :
+        enable : 0 # Enable the pwm signal for noise injection gating
+        board : '0026' # Board that controls the pwm signal for noise injection
+        offset : 0 # Offset, in fpga frames, of the pwm signal for noise injection
+        high_time : 32768 # High time, in fpga frames, of the pwm signal for noise injection
+        period : 65536 # Period, in fpga frames, of the pwm signal for noise injection
+
+    ni_26m :
+        enable : 0 # Enable the pwm signal for 26m noise injection gating
+        board : '0068' # Board that controls the pwm signal for 26m noise injection
+        offset : 0  # Offset, in fpga frames, of the pwm signal for 26m noise injection
+        high_time : 4194304 # High time, in fpga frames, of the pwm signal for 26m noise injection
+        period : 8388608 # Period, in fpga frames, of the pwm signal for 26m noise injection
+
+
+gpu:
+    # The starting port to listen on for GPU connections.
+    base_listen_port: 41001
+
+    # The total number of GPU systems (nodes).
+    n_gpus: 1
+
+    # The number of nodes we expect to be working
+    # Should never be lower than the number of possibly
+    # working nodes at this point.
+    # This value will be dynamically set at some point.
+    n_expected_gpus: 1
+
+    # The number of FPGA (FFT'd) samples in a frame.
+    gpu_intergration_period: 4194304
+
+gpu_array:
+    gpu_nodes: [127.0.0.1]  # gamma
+
+# Number of frequency bins.
+n_freq: 1024
+
+# Number of receiver elements/inputs.
+n_input: 16
+
+power_supply_array:
+    power_supplies: [10.10.10.220]

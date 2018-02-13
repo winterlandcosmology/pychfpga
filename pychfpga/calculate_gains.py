@@ -19,6 +19,7 @@ import logging
 import argparse
 import time
 import pickle
+import os
 
 from pychfpga.core import chFPGA_controller
 #from pychfpga.core import chFPGA_receiver
@@ -192,17 +193,32 @@ def calc_gains(g):
     return glin, glog.data
 
 
-def calculate_gains(c, port):
+def calculate_gains(c, gain_folder='/home/chime/ch_acq/gains'):
+    '''Calculate digital gains for all the inputs of an iceboard c
+    '''
+    slot_0based = c.slot-1
+    crate = c.crate.crate_number
+    print 'Calculating digital gains for crate %02i slot %02i (FCC%02i%02i)' % (crate, slot_0based, crate, slot_0based)
+    # Get current state. Assumes all inputs have the same state
+    data_source = c.get_data_source()[0]
+    adc_mode = c.get_adc_mode()
+    fft_bypass = c.get_fft_bypass()[0]
+    fft_shift = c.get_fft_shift()[0]
+    scaler_bypass = c.get_scaler_bypass()[0]
+    local_data_port_number = c.get_local_data_port_number()
+    # Change state to adc data acq and FFT enabled
     c.set_data_source('adc')
     c.set_adc_mode('data')
     c.set_fft_bypass(0)
-    c.set_fft_shift(1367) #Not sure how to make this a constant
+    c.set_fft_shift(1367) 
     c.set_scaler_bypass(0)
+    port = 42500 # Picked randomly. Hack
+    c.set_local_data_port_number(port)
     #c.set_send_flags()
     c.set_offset_binary_encoding()
     default_log2_gain = 22
-    c.set_gain((1,default_log2_gain))
-    c.set_local_data_port_number(int(port))
+    c.set_gains((1,default_log2_gain))
+    #c.set_local_data_port_number(int(port))
     c.start_data_capture(burst_period_in_seconds=0.001)
     c.sync()
     channels = range(16)
@@ -212,7 +228,7 @@ def calculate_gains(c, port):
     print "configured for sending data to port {0}".format(port)
     rmss = []
     for i in range(18):
-        data = get_frames(port)
+        data = get_frames(str(port))
         # only do for channel 0 for now
         outrms = data[:,:,:].std(axis=0)
         outrms[outrms < 0.8] = 0.8
@@ -232,9 +248,9 @@ def calculate_gains(c, port):
         gain = []
         for channel in channels:
             gain.append([channel,[glin[channel].tolist(), glog[channel]]])
-        c.set_gain(gain)
+        c.set_gains(gain)
         time.sleep(1)
-    out1 = open('gains_noisy_slot{0}.pkl'.format(c.slot), 'wb')
+    out1 = open(os.path.join(gain_folder, 'gains_noisy_FCC%02i%02i.pkl' % (crate, slot_0based)), 'wb')
     pickle.dump(gain, out1)
     out1.close()
     Calc = GainCalc()
@@ -244,13 +260,20 @@ def calculate_gains(c, port):
         glin_final = Calc.run()
         gain[channel][1][0] = glin_final.tolist()
         flags.append(Calc.mask)
-    c.set_gain(gain)
+    c.set_gains(gain)
     c.freq_flags = flags
-    output = open('/home/chime/ch_acq/gains_slot'+str(c.slot)+'.pkl','wb')
+    output = open(os.path.join(gain_folder, 'gains_FCC%02i%02i.pkl' % (crate, slot_0based)),'wb')
     pickle.dump(gain, output)
     output.close()
     print "Scaler Gain set and saved"
     c.stop_data_capture()
+    # restore iceboard state
+    c.set_data_source(data_source)
+    c.set_adc_mode(adc_mode)
+    c.set_fft_bypass(fft_bypass)
+    c.set_fft_shift(fft_shift) 
+    c.set_scaler_bypass(scaler_bypass)
+    c.set_local_data_port_number(local_data_port_number)
 
 
 if __name__ == '__main__':

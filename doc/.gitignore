@@ -2,3 +2,4 @@
 /xml
 *.tmp
 *.~vsd
+/build/

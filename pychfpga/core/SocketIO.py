@@ -63,9 +63,9 @@ class DataSocket_base(object):
 
         # if self.port_number in __main__.__opened_sockets__:
         #     self.sock = __main__.__opened_sockets__[self.port_number]
-        #     self.logger.info('%r: reusing existing socket %i' % (self, self.port_number))
+        #     self.logger.debug('%r: reusing existing socket %i' % (self, self.port_number))
         # else:
-        self.logger.info('%r: Creating new socket %s:%i' % (self, self.host_ip, self.port_number))
+        self.logger.debug('%r: Creating new socket %s:%i' % (self, self.host_ip, self.port_number))
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.host_ip, self.port_number))
 
@@ -81,8 +81,8 @@ class DataSocket_base(object):
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
 
         self.logger.debug('%r: Using host address %s' % (self, self.host_ip))
-        self.logger.info('%r: Opened data UDP Socket' % self)
-        self.logger.info('%r:     Data port:    listening on %s:%i ' % (self, self.host_ip, self.port_number))
+        self.logger.debug('%r: Opened data UDP Socket' % self)
+        self.logger.debug('%r:     Data port:    listening on %s:%i ' % (self, self.host_ip, self.port_number))
 
     def __repr__(self):
         return 'RecvSocketIO(%s)' % self.ip_address
@@ -91,9 +91,9 @@ class DataSocket_base(object):
         """Closes the communication socket"""
         if self.port_number not in __main__.__opened_sockets__:
             self.sock.close()
-            self.logger.info('%r: Closed UDP data socket' % self)
+            self.logger.debug('%r: Closed UDP data socket' % self)
         else:
-            self.logger.info('%r: Closed UDP link, socket left open for future use' % self)
+            self.logger.debug('%r: Closed UDP link, socket left open for future use' % self)
 
     def flush(self):
         """Flushes the socket receive buffer."""

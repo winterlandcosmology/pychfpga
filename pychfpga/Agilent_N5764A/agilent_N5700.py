@@ -67,20 +67,31 @@ class agilent_N5700(GPIB.GPIB):
         meas['current'] = current
         meas['voltage'] = voltage
         meas['power'] = power
+        meas['status'] = self.get_state()
+        return meas
 
+    def get_state(self):
+        """ Return the power supply operational state of the power supply.
+
+        Returns:
+
+            'OK': power supply is turned on and operates normally
+            'OFF': power supply is turned off
+            'ILIMIT': power supply is in current limit mode
+            'FAULT': A fault has occured
+        """
         failmode = int(self.query_float('STAT:QUES:COND?'))
         if failmode != 0:
-            meas['status'] = 'FAULT'
+            state = 'FAULT'
         else:
-            OpState = int(self.query_float('STATus:OPERation:CONDition?'))
-            if bool((OpState & (1 << 8)) >> 8):  # Voltage regulating
-                meas['status'] = 'OK'
-            elif bool((OpState & (1 << 10)) >> 10):  # Current limiting
-                meas['status'] = 'ILIMIT'
+            op_state = int(self.query_float('STATus:OPERation:CONDition?'))
+            if bool((op_state & (1 << 8)) >> 8):  # Voltage regulating
+                state = 'OK'
+            elif bool((op_state & (1 << 10)) >> 10):  # Current limiting
+                state = 'ILIMIT'
             else:
-                meas['status'] = 'OFF'
-
-        return meas
+                state = 'OFF'
+        return state
 
     def measure(self):
         print 'Please use status function instead'
@@ -111,8 +122,10 @@ class agilent_N5700(GPIB.GPIB):
             self.waituntilready()
             # self.command('*WAI')
 
-        outstate = self.query_float('OUTP:STAT?')
-        return {'PowerEnabled': bool(outstate)}
+        return {'PowerEnabled': self.get_output_state()}
+
+    def get_output_state(self):
+        return bool(self.query_float('OUTP:STAT?'))
 
     def control_voltage(self, voltage=None, readonly=True):
         """

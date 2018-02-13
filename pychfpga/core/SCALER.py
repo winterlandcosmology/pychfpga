@@ -80,7 +80,8 @@ class SCALER_base(Module_base):
         # self.set_fixed_gain(1)
         self.set_gain_table(1)
         self.SATURATE_ON_MINUS_7 = 1
-
+        self.STATS_CAPTURE = 1
+        self.STATS_FRAME_COUNT = int(800e6 / 2048 * 30)
 
     # def set_fixed_gain(self, complex_gain):
     #     """
@@ -106,7 +107,8 @@ class SCALER_base(Module_base):
         """
         Sets the scaler's complex gain table for the specified bank.
 
-        If ``bank`` is None, the currently inactive bank is used.
+        If ``bank`` is None or is -1, the currently inactive bank is used.
+        The method does not set the active bank.
         """
         total_bins = self.fpga.NUMBER_OF_FREQUENCY_BINS
         if isinstance(gain_list, (int, float, complex)):

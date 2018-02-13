@@ -41,40 +41,50 @@ class HandlerObject(object):
     handler) to a 'volatile' parent object and forwards attribute accesses to
     it.
 
-    When a handler needs to be accessed on a parent object instance,
-    HandlerObject looks for an already existing one in its handler instance
-    registry using the unique parent instance key provided by the 'handler_id'
-    property which is provided by the parent class.
+    A handler instance is accessed through the property `handler`.
 
-    If no handler is found, HandlerObject looks into its handler class
-    registry to see if there is a handler class that matches the handler name
-    provided by the 'handler_name' attribute. If a matching handler class is
-    found, a new handler instance is created and registered. Otherwise, an
-    error is raised.
+    When the `handler` property is accessed on a parent object instance,
+    `HandlerObject` looks for an already existing handler instance in its *handler instance
+    registry* using the key provided by the 'handler_id'
+    property, which is provided by the parent class.
 
-    The user defines a handler by subclassing the Handler class. The Handler
-    class (or to be precise, its meta-class)  will automatically register the
-    handler class to the specified parent object class.
+    If no handler instance is found for that key, `HandlerObject` will create a
+    new handler instance. To do so, it looks into the `_handler_class_registry`
+    dictionary (a class attribute) to select a handler class based on the
+    'handler_name' instance attribute. If a matching handler class is found, a
+    new handler instance is created and registered. Otherwise, an error is
+    raised.
 
-    The 'handler' property always refers to the handler instance if it exist
-    or can be created.
+    The user can manually define the `_handler_class_registry` in the parent
+    class to list the handler class(es) that are to be used . However, the
+    `Handler` class (or to be precise, its meta-class)  can automatically
+    register the handler class to the specified parent object class if a parent
+    class is specified (see `Handler`).
 
-    HandlerObject defines __getattr__ and __dir__ to give the parent object
+    In addition to providing persistent handler instance access, `HandlerObject`
+    also extends the namespace of the parent object with that of the handler.
+
+    To do this, `HandlerObject` defines __getattr__ and __dir__ to give the parent object
     access to all of the handler's attributes. Setting an attribute always
     sets it in the parent object, so use obj.handler.x=value instead of
     obj.x=value to set the attribute x in the handler.
 
-    To have a handler, the parent object only need to inherit from this class
-    and optionally define 'handler_id' and 'handler_name' to uniquely identify
-    the parent instance and which of the registered handler is to be used with
-    this parent instance.
+    To have a handler, the parent object needs to inherit from this class
+    and provide:
+        - 'handler_id' property that return a key that uniquely identify the
+          handler instance. If not specified, the default 'handler_id' assumes
+          the parent is a SQLAlchemy ORM object and will use the session ID and its primary keys as
+          a unique instance id (which exist only once the object has been added
+          to the database).
 
-    If not specified, the default 'handler_id' assumes the parent is a
-    SQLAlchemy ORM object and will use its primary keys as a unique instance
-    id (which exist only once the object has been added to the database).
+        - `_handler_class_registry` class attribute which lists all the classes that can be used
+          to create handler instances. The Handler class will automatically
+          populate this dictionary.
 
-    'handler_name' defaults to None, meaning that this object does not use a
-    handler.
+        - `handler_name` class or instance attribute to select which handler
+          class to use in the `_handler_class_registry`. This can be dynamically
+          changed. `handler_name` defaults to None, meaning that this object
+          does not use a handler.
     """
 
     # Class attributes
@@ -118,7 +128,7 @@ class HandlerObject(object):
 
             # If the key exists in the handler registry, retreive it
             if handler_key in self._handler_instance_registry:
-                logger.info("%.32r: Reusing handler for handler key (%s, %s)" %
+                logger.debug("%.32r: Reusing handler for handler key (%s, %s)" %
                             (self, handler_id, handler_name))
                 self._handler = self._handler_instance_registry[handler_key]
                 return self._handler
@@ -126,7 +136,7 @@ class HandlerObject(object):
             # If not, let's create and register a new handler
             if handler_name in self._handler_class_registry:
                 handler_class = self._handler_class_registry[handler_name]
-                logger.info("%.32r: Handler key %s does not exist. Creating %s" %
+                logger.debug("%.32r: Handler key %s does not exist. Creating %s" %
                             (self, handler_id, handler_name))
                 self._handler = handler_class(parent_getter=self.self_getter())
                 type(self)._handler_instance_registry[handler_key] = self._handler
@@ -209,7 +219,7 @@ class HandlerMeta(type):
 
         # Register the handler class to the HWM object
         if base and name:
-            logger.info("%s: Registering to parent object '%s' as '%s'"
+            logger.debug("%s: Registering to parent object '%s' as '%s'"
                         % (cls.__name__, base.__name__, name))
             if '_handler_class_registry' not in base.__dict__:
                 base._handler_class_registry = {}  # Create a class-local class registry
@@ -217,24 +227,51 @@ class HandlerMeta(type):
                 base._handler_instance_registry = {}  # Create a class-local instance registry
             base._handler_class_registry[name] = cls  # Add the class
         else:
-            logger.info("%s: Was not registered" % (cls.__name__))
+            logger.debug("%s: Was not registered" % (cls.__name__))
 
 
 class HandlerParentAttribute(object):
-    """ Non-data descriptor that provides access to parent attributes but is
-    overridable by local attributes. """
-    def __init__(self, getter, local_default=None):
+    """
+    Data descriptor that provides read-only access to a parent attributes if the
+    `parent` is not Null, but otherwise acts as a standard local read/write
+    attribute.
+
+    If there is a valid parent, writes will be done to he local storage but will have no effect.
+
+    Attributes:
+        getter (func): function that receives the parent instance and returns the desired object from it.
+
+    Local values are read and written from the `_values` dict, which is indexed
+    with the container instances to allow each instance to hold different
+    values.
+
+    Writes are always done to the local data. read are done from the local data
+    if there is no parent, or from the parent if there is a valid one.
+    """
+    def __init__(self, getter):
         self._getter = getter
-        self._default = local_default
+        self._values = {}  # dict storing the set values for every target instance
 
     def __get__(self, obj, objtype=None):
         if not obj:  #  Do not generate errors if we access this as a class attribute so we can test its presence with getattr.
             return self
         parent = obj.parent
-        try:  # Elevate AttributeError to RuntimeError, otherwise weird
-            return self._getter(parent) if parent else self._default
-        except AttributeError:  # Re-raise, but preserve traceback info
-            raise RuntimeError, sys.exc_info()[1], sys.exc_info()[2]
+        if parent:
+            try:  # Elevate AttributeError to RuntimeError, otherwise weird
+                return self._getter(parent) if parent else self._values[obj]
+            except (AttributeError):  # Re-raise, but preserve traceback info
+                raise RuntimeError, sys.exc_info()[1], sys.exc_info()[2]
+        else:
+            try:
+                return self._values[obj]
+            except KeyError:
+                raise AttributeError("`%s` object has no such attribute" % (obj.__class__.__name__))
+
+    def __set__(self, obj, value):
+        if not obj:
+            raise AttributeError('Cannot set attribute on a class')
+        self._values[obj] = value
+
 
 class Handler(object):
     """ Basic generic handler base class. All handlers should be derived from this
@@ -246,9 +283,9 @@ class Handler(object):
     Define all attributes that can be initialized with keywords arguments in
     the class so they won't be passed on to other subclasses.
     """
-    __metaclass__ = HandlerMeta  # Allows automatic registration
-    __handler_for__ = None  # Do not register this handler
-    __handler_name__ = None
+    __metaclass__ = HandlerMeta  # Allows automatic registration with the parent class
+    __handler_for__ = None  # Do not register this handler by default
+    __handler_name__ = None # Name under which this class is registered with the parent class
 
     @classmethod
     def get_handler_name(cls):
@@ -259,15 +296,14 @@ class Handler(object):
         keyword paramaters are used to set the Handler attributes with the
         same name.
         """
-        # Pass attributes that are not used here to other subclasses (not necessarily 'object', depending on the order of subclasses)
-        super(Handler, self).__init__(**{k:v for k,v in kwargs.items() if not hasattr(type(self), k)})
+        # Pass attributes that are not used here to other subclasses
+        # (which is not necessarily 'object', depending on the order of subclasses)
+        # super(Handler, self).__init__(**{k:v for k,v in kwargs.items() if k not in self._parent_attributes})
+        super(Handler, self).__init__(**kwargs)
         self.logger = logging.getLogger(__name__)
         self.logger.debug("%s: Creating handler with parameters %s" %
                           (self.__class__.__name__, kwargs))
         self._parent_getter = parent_getter
-        for k, v in kwargs.items():
-            if hasattr(type(self), k):
-                setattr(self, k, v)
 
     @property
     def parent(self):

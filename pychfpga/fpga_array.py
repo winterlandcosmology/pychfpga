@@ -3,6 +3,7 @@
 chime_array.py module. Defines the objects that represent and handles
 operations one the whole array of CHIME ICE hardware.
 """
+from __future__ import absolute_import
 import argparse
 import logging
 import time
@@ -10,12 +11,15 @@ import __main__
 import os
 import sys
 import socket  # for gethostbyname()
-from collections import OrderedDict, Sequence, Mapping
+from collections import OrderedDict
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 import re
 import datetime
+import functools
+import zlib
+import base64
 
 from tornado.netutil import Resolver
 from tornado.ioloop import IOLoop
@@ -35,7 +39,7 @@ if getattr(__main__, '__reload__', False):
 # Automatically update the search path for absolute imports of pychfpga and its subpackages. We use
 # absolute imports because 1) if both relative and absolute imports are made, then  modules ar
 # eloade dmultiple times and SQLAlchemy complains. 2) wa cannot access pychfpga subpackages if we
-# run this module as a script because Python refuses to consider the script folder asa package.
+# run this module as a script because Python refuses to consider the script folder as a package.
 try:
     import pychfpga
 except ImportError:
@@ -47,16 +51,17 @@ except ImportError:
 from pychfpga.core.icecore import Ccoll
 from pychfpga.core.icecore import HardwareMap, HWMResource
 from pychfpga.core.icecore import mdns_discover
-from pychfpga.core.icecore import async, async_return
+from pychfpga.core.icecore import async, async_return, async_sleep, async_moment
 
 from pychfpga.core.icecore import IceBoardPlus
 from pychfpga.core.icecore_ext import IceCrateExt
 from pychfpga.MGADC08 import MGADC08  # Import to make sure this Mezzanine is registered  so it can be discovered
+from pychfpga.core.metrics import Metrics
 from pychfpga.core.chFPGA_controller import chFPGA_controller
 from pychfpga.Agilent_N5764A import AgilentN5764AHandler
 from pychfpga.gpu_node import GpuNodeHandler
-
-# import logging.handlers
+from pychfpga.namespace import NameSpace, merge_dict
+from pychfpga.conf import load_yaml_config# import logging.handlers
 
 
 from pychfpga.core.icecore.session import load_session as load_yaml
@@ -66,9 +71,6 @@ from pychfpga.core.icecore.session import load_session as load_yaml
 Resolver.configure('tornado.netutil.ThreadedResolver', num_threads=20)
 
 #####################################
-
-class NameSpace(object):
-    pass
 
 
 class FPGABitstream(object):
@@ -95,6 +97,8 @@ class FPGABitstream(object):
     def _load(self):
         with open(self.filename, 'rb') as file_:
             self.bitstream = file_.read()
+        self.crc32 = zlib.crc32(self.bitstream) & 0xFFFFFFFF  # compute CRC32 of the data
+        self.base64 = base64.b64encode(self.bitstream)
 
 # Default ADC delays
 ADC_DELAYS_MGK7MB_REV2_MGAC08_REV2 = {
@@ -120,30 +124,17 @@ ADC_DELAYS_MGK7MB_REV2_MGAC08_REV2 = {
 
 ADC_DELAY_TABLE = ADC_DELAYS_MGK7MB_REV2_MGAC08_REV2 #ADC_DELAYS_REV2_SN0001 ## select the table corresponding to the FMC serial number
 
-# def get_argparse_action(default=None):
-#     class Store(argparse.Action):
-#         def __init__(self, option_strings, dest, nargs=None, **kwargs):
-#             # if nargs is not None:
-#             #     raise ValueError("nargs not allowed")
-#             print 'Create Action:', option_strings, dest, nargs, kwargs
-#             super(Store, self).__init__(option_strings, dest, **kwargs)
-#         def __call__(self, parser, namespace, values, option_string=None):
-#             print('Call Action: %r %r %r' % (namespace, values, option_string))
-#             print vars(self)
-#             if not hasattr(namespace,'fpga_array'):
-#                 setattr(namespace, 'fpga_array', {})
-#             n = getattr(namespace, 'fpga_array')
-#             n[self.dest] = values
-#     return Store
-
-
 class FPGAArray(object):
 
     def __init__(self,
 
                  hwm=None,
-                 iceboards=[], icecrates=[], mezzanines=[], hw_description_string=[], exclude_iceboards=[],
-                 subarrays=[], ping=True,
+                 iceboards=[], icecrates=[], mezzanines=[], exclude_iceboards=[],
+                 crate_map={},
+                 ignore_missing_boards = False,
+
+                 subarrays=None,
+		 ping=True,
                  mdns_timeout=2,
                  no_mezz=False,
 
@@ -151,162 +142,299 @@ class FPGAArray(object):
                  prog=None,
                  open=None,
                  if_ip=None,
+                 udp_retries=3,
 
                  # sampling_frequency=800e6,
                  # reference_frequency=10e6,
                  # data_width=4,
 
-                 sync_method=None,
-                 sync_source=None,
+                 sync_method='distributed_time',
+                 sync_source='bp_trig',
                  sync_master=None,
                  sync_master_time_source=None,
 
                  mode=None,
                  frames_per_packet=2,
+
                  stderr_log_level=None,
                  syslog_log_level=None,
-                 udp_retries=3,
+
+                 ioloop=None,
 
                  **kwargs
                 ):
-
         """ Create a hardware map describing CHIME hardware and optionally
         initialize the hardware.
 
+        Parameters:
+
+            None: Hardware map creation
+            hwm (str, list or HardwareMap): Describe the contents of the hardware
+                map database, which lists the IceBoards, IceCrates and Mezzanines.
+                that are present in the system and their relationship. The hardware
+                map creation depending on the type of the `hwm` parameter:
+
+                *str* or *list of str*: A string or list of strings that describes the hardware to be
+                    added to the hardware map in the format::
+
+                        " [{Iceboard_descriptors} {Icecrate_descriptors} {mezzanine_descriptors}] "
+
+                    where:
+                       Iceboard descriptors: "[MGK7]MB serial serial ..." or "hostname" or "ip_address"
+                       icecrate descriptors: "[MGK7]BP16 serial[:crate_number] serial[:crate_number]...",
+
+                    Autodiscovery is used as needed to complete the hardware map
+                    (see notes below). See `parse_hw_string` for a description of
+                    the syntax
+
+                    Example:
+
+                    "MGK7BP16 025 026" or abbreviated form "BP16 25 26" Selects
+                        all iceboards on crates SN025 and SN026 with default crate
+                        numbers 0 and 1 respectively.
+
+                    "MGK7MB 0125 0330" or "MB 0125 0330", "MB 125 330", "MB
+                        10.10.10.225 10.10.10.111" or "MB iceboard0125.local
+                        iceboard0330.local" all select the Iceboards specified by
+                        serial/hostname/IP address.
+
+                    .. note:
+                        If an IceBoard is specified by IP address (e.g. '10.10.10.7'),
+                        then the board can be added directly in the hardware map. This
+                        does *not* rely on the system mDNS client or the Python
+                        ``pybonjour`` package.
+
+                        If an IceBoard is specified by its mDNS hostname (e.g.
+                        'iceboard0007.local'), the operating system will automatically
+                        resolve the IP address using mDNS, assuming that a mDNS client
+                        (Bonjour on Windows or Mac, avahi on Linux) is running on this
+                        computer. The ``pybonjour`` Python package is *not* needed.
+
+                        In both cases, the crate, slot and serial number information will
+                        be automatically obtained directly through the IceBoard's ARM
+                        processor if that information not already present in the hardware
+                        map.
+
+                        If an IceBoard is specified by its serial number (e.g. '0007', or
+                        just a numeric 7 as a convenient shortcut), the board will use the
+                        ``pybonjour`` package to actively query mDNS and find boards that
+                        match the serial number.
 
 
-        Parameters
-        ----------
+                    .. note:
+                        Selecting boards by IceCrate serial number *always*
+                        require the ``pybonjour`` package and the system mDNS
+                        client to automatically probe the network and discover the
+                        specified Iceboards that advertised themseles along with
+                        their associated crate number.
 
 
-        Hardware map creation
-        ----------------------
+                *list of dict*: list of dicts that describe the hardware map elements to create.
 
-        hwm: Fully formed hardware map, either as a HardwareMap database object or as a list of dicts that describe how to create each object.
-           The database contains IceBoards, IceCrates
-           and Mezzanines.
-
-           The hardware map elements that fail the ``ping``
-           and ``subarray`` criteria are removed from the provided hardware
-           map, and objects specified by the ``iceboards`` and ``icecrates``
-           parameters below are added to it.
-
-        hw_description_string: A string that describes the hardware to be added to the hardware map,
-           as an shorter alternative to the explicit map provided with the ``hwm`` parameter.
-           Autodiscovery is used as needed to complete the hrdware map. The list is in the format [model
-           [serial_or_hostname]]
+                *HardwareMap*: Fully formed hardware map, provided directly as a
+                    HardwareMap database object. If a fully-formed hardware map is
+                    provided, it will additionally be vetted by removing the
+                    Iceboards that fail the `ping` test and do not meet the
+                    ``subarray`` criteria.
 
 
-        iceboards : List of strings corresponding to the serial number, the IP
-            address or the mDNS name of the iceboards to be added to the
-            hardward map.
+            crate_map (dict): Maps crate numbers to (model, serial)
 
-            If an IceBoard is specified by IP address (e.g. '10.10.10.7'),
-            then the board can be added directly in the hardware map. This
-            does *not* rely on the system mDNS client or the Python
-            ``pybonjour`` package.
+            iceboards (list of str) : Iceboard to add to the hardware map,
+                specified by IP address, hostname, or serial number. Equivalent to
+                adding `hwm` string "MGK7MB iceboard[0] iceboard[1] ...".iceboard
 
-            If an IceBoard is specified by its mDNS name (e.g.
-            'iceboard0007.local'), the operating system will automatically
-            resolve the IP address using mDNS, assuming that a mDNS client
-            (Bonjour on Windows or Mac, avahi on Linux) is running on this
-            computer. The ``pybonjour`` Python package is not needed.
+            exclude_iceboards (list of str) : Serial numbers of Iceboards to be
+                excluded in case of autodiscovered boards. Can be useful to specify a
+                crate but exclude a few boards.
 
-            In both cases, the crate, slot and serial number information will
-            be automatically obtained directly through the IceBoard's ARM
-            processor if that information not already present in the hardware
-            map.
+            icecrates (list of str): Adds all the iceboards from the crates that have the
+                serial numbers specified in the provided list of strings.
 
-            If an IceBoard is specified by its serial number (e.g. '0007', or
-            just a numeric 7 as a convenient shortcut), the board will use the
-            ``pybonjour`` package to actively query mDNS and find boards that
-            match the serial number.
+                Examples:
+                    ``icecrates='003'`` or ``icecrates=['003']`` will discover and select all boards from crate SN003
+                    ``icecrates=['003', '004']`` will select boards from crates SN003 and SN004.
+                    ``icecrates=[]`` will select all boards on the network
 
-        exclude_iceboards : Excludes the iceboards specified by serial number only.
+            None: Hardware map filtering
 
-        icecrates : Adds all the iceboards from the crates that have the
-            serial numbers specified in the provided list of strings.
+            subarrays : List of integers describing the subarrays to include in
+                the default IceBoard set. If None, all
+                Iceboards in the hardware map will be selected. Affects only the
+                boards specified in the hardware map specified with the ``hwm`` parameter.
 
-            This option *always* the ``pybonjour`` package and the system mDNS
-            client to automatically probe the network and discover the
-            specified Iceboards that advertised themseles along with their
-            associated crate number.
+            ping : If ``ping=1``, The connection to Iceboards is checked
+                by sending a dummy Tuber (http) request to their ARM processors. If a
+                YAML-specified iceboards fails, it is simply removed from the
+                ``hwm`` hardware map, but an exception is raised if a board listed
+                explicitely fails. If ``ping`` is false, the presence of boards is not
+                checked.
 
-            Examples:
-                ``icecrates='003'`` or ``icecrates=['003']`` will discover and select all boards from crate SN003
-                ``icecrates=['003', '004']`` will select boards from crates SN003 and SN004.
-                ``icecrates=[]`` will select all boards on the network
+            None: Configuration & initialization
 
-        Hardware map filtering
-        ----------------------
+            bitfile : String. Filename of the bitfile used to to program the FPGAs
 
-        subarrays : List of integers describing the subarrays to include in
-            the default IceBoard set. If not specified or an empty list, all
-            Iceboards in the hardware map will be selected. Affects only the
-            boards specified in the hardware map specified with the ``hwm`` parameter.
+            prog : If ``prog=1``, the FPGAs in the selected Iceboards will be
+                configured only if they are not already configured with the same
+                firmware. If ``prog=2``, they will always be reconfigured. If
+                ``prog`` is 0, None or is not specified, the FPGAs are never configured.
 
-        ping : If ``ping=1``, The connection to Iceboards is checked
-            by sending a dummy Tuber request to their ARM processor. If a
-            YAML-specified iceboards fails, it is simply removed from the
-            ``hwm`` hardware map, but an exception is raised if a board listed
-            explicitely fails. If ``ping`` is false, the presence of boards is not
-            checked.
+            open : If ``open=1``, establish communication with the boards and
+               initialize the firmware and software. If ``open`` is None or not
+               specified, the software and firmwar eis not initialized.
 
-        Configuration & initialization
-        ------------------------------
+            if_ip : string corresponding to the IP address of adapter through
+                which the connection to the FPGA will be established. If not
+                specified, the system will assume that the FPGA is reached trough
+                the same interface that reaches the ARM processor.
 
-        bitfile : String. Filename of the bitfile used to to program the FPGAs
+            None: Logging
 
-        prog : If ``prog=1``, the FPGAs in the selected Iceboards will be
-            configured only if they are not already configured with the same
-            firmware. If ``prog=2``, they will always be reconfigured. If
-            ``prog`` is 0, None or is not specified, the FPGAs are never configured.
+            If logging is not set up by the top level application, you can
+            optionally specify the folowing arguments to create syslog and stderr
+            handlers to help interactive operations. If a handler already exists,
+            its log level is simply updated to prevent duplication of handlers.
+            Log levels can be strings or numerical log levels.
 
-        open : If ``open=1``, establish communication with the boards and
-           initialize the firmware and software. If ``open`` is None or not
-           specified, the software and firmwar eis not initialized.
+            syslog_log_level: sets up a SYSLOG handler
 
-        if_ip : string corresponding to the IP address of adapter through
-            which the connection to the FPGA will be established. If not
-            specified, the system will assume that the FPGA is reached trough
-            the same interface that reaches the ARM processor.
-
-        Logging
-        -------
-
-        If logging is not set up by the top level application, you can
-        optionally specify the folowing arguments to create syslog and stderr
-        handlers to help interactive operations. If a handler already exists,
-        its log level is simply updated to prevent duplication of handlers.
-        Log levels can be strings or numerical log levels.
-
-        syslog_log_level: sets up a SYSLOG handler
-
-        stderr_log_level: sets up a handler that prints on stderr
+            stderr_log_level: sets up a handler that prints on stderr
         """
+        init = functools.partial(
+             self.init.async,
+             hwm=hwm,
+             iceboards=iceboards,
+             icecrates=icecrates,
+             mezzanines=mezzanines,
+             exclude_iceboards=exclude_iceboards,
+             crate_map=crate_map,
+             ignore_missing_boards = ignore_missing_boards,
+             subarrays=subarrays, ping=ping,
+             mdns_timeout=mdns_timeout,
+             no_mezz=no_mezz,
+             bitfile=bitfile,
+             prog=prog,
+             open=open,
+             if_ip=if_ip,
+             sync_method=sync_method,
+             sync_source=sync_source,
+             sync_master=sync_master,
+             sync_master_time_source=sync_master_time_source,
+             mode=mode,
+             frames_per_packet=frames_per_packet,
+             stderr_log_level=stderr_log_level,
+             syslog_log_level=syslog_log_level,
+             udp_retries=udp_retries,
+             **kwargs)
 
 
+        if not ioloop:
+            # Create our own IOLoop so we don't interfere with ipython's own ioloop.
+            old_ioloop = IOLoop.current()
+            ioloop = IOLoop()
+            ioloop.make_current()
+            ioloop.run_sync(init)
+            old_ioloop.make_current()
+        else:
+            self._init = init
+            #old_ioloop = IOLoop.current()
+            #ioloop.make_current()
+            #future = init()
+            #ioloop.add_future(future)
+            #while not future.done():
+            #   print('waiting', future, future.done())
+            #   time.sleep(.3)
+            #   pass
+            #old_ioloop.make_current()
+
+        # else:
+        #     old_ioloop = None
+            # old_ioloop = IOLoop.current
+            # IOLoop.set_current(ioloop)
+
+    @async
+    def run(self):
+       yield self._init()
+
+    @async
+    def init(self,
+
+             hwm=None,
+             iceboards=[], icecrates=[], mezzanines=[], exclude_iceboards=[],
+             crate_map={},
+             ignore_missing_boards = False,
+
+             subarrays=None, ping=True,
+             mdns_timeout=2,
+             no_mezz=False,
+
+             bitfile=None,
+             prog=None,
+             open=None,
+             if_ip=None,
+
+
+             sync_method=None,
+             sync_source=None,
+             sync_master=None,
+             sync_master_time_source=None,
+
+             mode=None,
+             frames_per_packet=2,
+             stderr_log_level=None,
+             syslog_log_level=None,
+             udp_retries=3,
+
+             #ioloop=None,
+
+             **kwargs
+            ):
+
+        """
+        Co-routine implementation of fpga_array initialization
+        """
         self.ib = []  # make sure repr() has always something
         self.ic = []
+        self.sync_timestamp = None
 
-        # Make sure the SQL
+        ###########################################
+        # setup pychfpga.fpga_array logging
+        ###########################################
+        self.logger = logging.getLogger(__name__)
+        #print('fpga_array loger name is %s' % __name__)
+        #print('logger name=%s, level=%s, handlers=%r' % (self.logger.name, self.logger.level, self.logger.handlers))
+        #self.logger.warning('This is a warning')
+        #ch = logging.StreamHandler(sys.stdout)
+        #self.logger.addHandler(ch)
+        #self.logger.warning('why dont you log')
+
+        ###########################################
+        # setup sqlalchemy logging
+        ###########################################
+        # Make sure the SQL engine logs only warnings
         sql_log_level = logging.WARNING
         sql_logger = logging.getLogger('sqlalchemy.engine.base.Engine')
         sql_logger.setLevel(sql_log_level)
 
-        self.logger = logging.getLogger()
-
+        ###########################################
+        # setup pychfpga package logging
+        ###########################################
+        # This sets the logging that comes out from *all* the modules within *pychfpga* package
+        # (e.g. pychfpga.core.chfpga_controller.chFPGA_controller(), pychfpga.fpga_array.FPGAArray(), etc.)
+        # We are careful not to set the root logger, which might have its own
+        parent_logger_name = __name__.rsplit('.', 1)[0] if '.' in __name__ else ''
+        parent_logger = logging.getLogger(parent_logger_name)
         # Setup logging. If a handler already exists, its log level is simply updated
-        for (handler_type, log_level) in ((logging.StreamHandler, stderr_log_level), (logging.handlers.SysLogHandler, syslog_log_level)):
-            if log_level:
-                log_handlers = [h for h in self.logger.handlers if isinstance(h, handler_type)]
-                if log_handlers:
-                    log_handler = log_handlers[0]
-                else:
-                    log_handler = handler_type()
-                    self.logger.addHandler(log_handler)
-                log_handler.setLevel(log_level.upper() if isinstance(log_level, str) else log_level)
-                self.logger.setLevel(min(self.logger.level, log_handler.level))  # make sure all messages from this handler are passed by the root handler
+        #for (handler_type, log_level) in ((logging.StreamHandler, stderr_log_level), (logging.handlers.SysLogHandler, syslog_log_level)):
+        #    if log_level:
+        #        log_handlers = [h for h in parent_logger.handlers if isinstance(h, handler_type)]
+        #        if log_handlers: # if a handler of that type already exist, just use it
+        #            log_handler = log_handlers[0]
+        #        else:  # otherwise create a new one
+        #            log_handler = handler_type()
+        #            parent_logger.addHandler(log_handler)
+        #        log_handler.setLevel(log_level.upper() if isinstance(log_level, str) else log_level)
+        #        parent_logger.setLevel(min(parent_logger.level, log_handler.level))  # make sure all messages from this handler are passed to the parent handler
 
 
 
@@ -324,7 +452,6 @@ class FPGAArray(object):
             'if_ip = %s' % if_ip,
             'iceboards = %s' % iceboards,
             'icecrates = %s' % icecrates,
-            'hw_description_string = %s' % hw_description_string,
             'subarrays = %s' % subarrays,
             'ping = %s' % ping,
             'mdns_timeout = %s' % mdns_timeout,
@@ -341,160 +468,248 @@ class FPGAArray(object):
         __main__._host_interface_ip_addr = if_ip
 
         # Fix up a few parameters for convenience
+
+        # Make sure iceboards is a list
         if isinstance(iceboards, (str, int)):
             iceboards = [iceboards]
-        iceboards = [self._to_integer(x) for x in iceboards]
+        if isinstance(icecrates, (str, int)):
+            icecrates = [icecrates]
+        # iceboards = [self._to_integer(x) for x in iceboards]
 
-        # # make sure icecrates is a list
-        # self.icecrate_map = OrderedDict()
-        # if icecrates and '*' not in icecrates:
-        #     if isinstance(icecrates, (str, int)):
-        #         icecrates = [icecrates]
-
-        #     default_crate_model = 'MGK7BP16'
-        #     print icecrates
-        #     for ic_id in icecrates:
-        #         (model, sn, cn) = self._parse_crate_id(ic_id)
-        #         if model is None:
-        #             model = default_crate_model
-        #         else:
-        #             default_crate_model = model
-        #         self.icecrate_map[(model, sn)] = cn
+        ###########################################
+        # hw_string procesing
+        ###########################################
 
 
-        hw_description_table = parse_hw_description_string(iceboards, hardware_type='iceboards', default_model='MGK7MB')
-        parse_hw_description_string(icecrates, hw_description_table, hardware_type='icecrates', default_model='MGK7BP16')
-        parse_hw_description_string(mezzanines, hw_description_table, hardware_type='mezzanines', default_model='MGADC08')
-        parse_hw_description_string(hw_description_string, hw_description_table)
+        # Build the hardware description string from various sources
+        hw_string = ''   # start with an empty string
 
-        print 'hw description table = ', hw_description_table
+        # Add `hwm`, if it is a string or a list of strings
+        if isinstance(hwm, str):
+            hw_string  += hwm + ' '
+            hwm = None
+        elif isinstance(hwm, list) and all(isinstance(elem, str) for elem in hwm):
+            hw_string  += ' '.join(hwm) + ' '
+            hwm = None
 
-        iceboards = [e if isinstance(e,str) else e[1] for e in hw_description_table.get('iceboards',[])]
-        icecrates = ['%s_SN%s%s' % (model, sn, (':%i' % cn) if cn is not None else '') for (model, sn, cn) in hw_description_table.get('icecrates',[])]
-        self.icecrate_map = OrderedDict(((model, sn), cn) for (model, sn, cn) in hw_description_table.get('icecrates',[]))
-        # If no crate number is specified at all, just create crate numbers based on the order in which the crates were specified
-        if all([cn is None for cn in self.icecrate_map.values()]):
-            for i, (model, sn) in enumerate(self.icecrate_map.keys()):
-                self.icecrate_map[(model, sn)] = i
-        print 'iceboards = ', iceboards
-        print 'icecrates = ', icecrates
+        # Add `iceboards'
+        if iceboards:
+            hw_string += 'MGK7MB '+ ' '.join(iceboards) + ' '
 
+        # Add `icecrates`
+        if icecrates:
+            hw_string += 'MGK7BP16 '+ ' '.join(icecrates) + ' '
 
-        # icecrates = icecrate_map.keys()
+        # Parse the hwm string into a hardware table. The hardware table is
+        # not the hardware map, but represents the entries that we want to add
+        # to the hardware map later.
+        remap_table = {'crates' :
+            {(crate_number,): ('icecrates', (model, serial, crate_number))
+             for crate_number, (model, serial) in crate_map.items()}}
+        hw_table = parse_hw_string(hw_string, remap_table)
+        self.logger.debug('hw table = %s' %  hw_table)
 
-        # if isinstance(icecrates, list):
-        #     icecrates = [self._to_integer(x) for x in icecrates]
-        #     icecrate_map = range(len(icecrates))
+        # Check if there were 'crate' entries that were not remapped to icececrate entries
+        if hw_table.crates:
+            self.logger.warn('The following hardware map crate entries could not be resolved into backplane model/serial: %s' % hw_table.crates)
 
-        # elif isinstance(icecrates, dict):
-        #     icecrates = [self._to_integer(x) for x in icecrates.values()]
-        #     # icecrate_map = {
-        print 'icecrate map=', self.icecrate_map
-        print 'hardware map=', hwm
+        # Create a *reverse* crate map ({(model,serial):number} instead of {number:(model,serial)})
+        # that will be used later with set_crate_numbers() to assign crate numbers to crates if
+        # those were not already expressed explicitely in the hw_string (e.g. if the crate is
+        # specified by serial number or was auto-detected from a specified iceboard)
+        if crate_map:  # If we already explicitely provided a crate map, use it.
+            crate_number_map = {(model, serial): crate_number for crate_number, (model, serial) in crate_map.items()}
+        else: # if not, try to build one from the info that was provided in the hw description string
+            # If some crate numbers are specified or if there are crate wildcards, just use the
+            # crate numbers that user specified
+            if any (crate_number is not None or serial is '*' for (model, serial, crate_number) in hw_table.icecrates):
+                crate_number_map = {(model, serial) : crate_number
+                    for (model, serial, crate_number) in hw_table.icecrates
+                    if crate_number is not None and serial != '*'}
+            # If no crate number was specified at all and there are no wildcards, assign crate
+            # numbers in the order they were specified in the hw description string (first crate =
+            # crate 0, second crate is crate 1 etc)
+            else:
+                crate_number_map = {(model, serial) : i
+                    for i, (model, serial, crate_number) in enumerate(hw_table.icecrates)}
+        self.logger.debug('icecrate map=%s' % crate_number_map)
+
+        # We've got our crate numbers. Remove them from the icecrate list so we pass only the (model,
+        # serial) to the mdns discovery function.
+        hw_table.icecrates = [(model, serial) for (model, serial, crate_number) in hw_table.icecrates]
+
+        ######################################
+        # Hardware map processing
+        ######################################
+        # If a pre-formed hardware map is provided in the form of a
+        # hardwareMap object or a list of strings, filter the map for non-
+        # responding boards or boards that do not belong to the target
+        # subarray.
+
+        #self.logger.debug('hardware map=%s' % hwm)
+
         # If no hardware map is provided, create an empty one
         if not hwm:
             self.hwm = HardwareMap()  # Create empty hardware map
-
         # If the hwm parameter is a list of  dicts, create the hardware map by instantiating the
         # object of the type contained in the ``class`` element and passing it the remaining
         # elements as keyword arguments
         elif isinstance(hwm, list):
-            print 'Creating Hardware Map from list'
+            self.logger.debug('Creating Hardware Map from list')
             self.hwm = HardwareMap()  # Create empty hardware map
             for obj in hwm:
-                class_name = obj.pop('class') # remove the class name from the dict. The rest wil be used as instantiation parameters
+                params = dict(obj) # make a copy
+                #print(params)
+                class_name = params.pop('class') # remove the class name from the dict. The rest wil be used as instantiation parameters
                 class_ = HWMResource._decl_class_registry[class_name] # look up all the classes from the class registry created with the Base object
-                self.hwm.add(class_(**obj))
-            self.hwm.flush()
+                if issubclass(class_, IceBoardPlus):
+                    crate_number = params.pop('crate_number', None)
+                    #self.logger.debug('%r: Crate %r is in %r' % (self, crate_number, params))
+                    if crate_number is not None:
+                        crate = self.hwm.query(IceCrateExt).filter(IceCrateExt.crate_number==crate_number).one()
+                        #self.logger.debug('%r: Assigning crate %r to board %r' % (self, crate, params))
+                        params['crate'] = crate
+                    else:
+                        raise RuntimeError('%r: In the hwm, crate must be an integer referring to a crate number. It will be converted to a crate object reference' % self)
+                self.hwm.add(class_(**params))
+                self.hwm.flush()
         # Otherwise use the hardware map as is, hoping it is a HardwareMap object
         else:
             self.hwm = hwm
 
         # If subarrays are specified, remove boards that are not in those subarrays
-        if subarrays:
+        if subarrays is not None:
+ 	    print('Subarrays are: %r' % subarrays)
             ib_not_in_subarray = self.hwm.query(IceBoardPlus).filter(~IceBoardPlus.subarray.in_(subarrays))
             for ib in list(ib_not_in_subarray):  # make sure the list does not change during the loop
-                print ("%r (subarray '%s') is not in the target subarray list %s. It is removed from the YAML hardware map."  # That comment should be if verbose=1
+                self.logger.debug("%r (subarray '%s') is not in the target subarray list %s. It is removed from the YAML hardware map."  # That comment should be if verbose=1
                                    % (ib, ib.subarray, subarrays))
                 self.hwm.delete(ib)
             self.hwm.flush()
 
-        # Remove boards that do not respond to tuber pings
-        ping_timeout = 1
+        # If ping=1, remove boards that do not respond to tuber pings
+        ping_timeout = 3
+        missing_boards = []
         if ping:
-            self.logger.info('%.32r: Pinging IceBoards specified in YAML file' % (self))
+            self.logger.info('%r: Pinging IceBoards specified in YAML file' % (self))
             ib_to_ping = self.hwm.query(IceBoardPlus).as_dict()  # use as_dict so ib_to_ping does not change as we delete boards from the hwm
             if ib_to_ping:
-                ping_results = ib_to_ping.ping(timeout=ping_timeout)  # asynchronous parallel call to all boards
-                self.logger.debug('%.32r: Ping results are %s' % (self, ping_results))
+                ping_results = yield [ib.ping.async(timeout=ping_timeout) for ib in ib_to_ping]  # asynchronous parallel call to all boards
+                #self.logger.debug('%r: Ping results are %s' % (self, ping_results))
                 for i, ping_successful in enumerate(ping_results):
                     ib = ib_to_ping[i]
                     if ping_successful:
                         ib.hostname = socket.gethostbyname(ib.hostname)
-                        pass
                     else:
-                        print ("%r could not be found at '%s'. It is removed from YAML hardware map."
-                                           % (ib, ib.tuber_uri))
-                        self.logger.debug('%.32r: Deleting %r from the YAML hardware map' % (self, ib))
+                        missing_boards.append('%s (SN%s, (%s,%s))' % (
+                            ib.hostname,
+                            ib.serial or '????',
+                            ib.crate.crate_number if ib.crate else '?',
+                            ib.slot-1 if ib.slot else '?'))
+                        self.logger.debug('%r: Deleting %r from the YAML hardware map' % (self, ib))
                         self.hwm.delete(ib)
                 self.hwm.flush()
+            if missing_boards:
+                message ="%r: Could not ping the following boards: %s" % (self, ', '.join(missing_boards))
+                if ignore_missing_boards:
+                    self.logger.warning(message)
+                else:
+                    raise RuntimeError(message)
 
 
-        # Add iceboards that are explicitely listed with IP addresses or hostname (we'll discover the boards by serial number later)
-        if iceboards:
-            for hostname in [ib for ib in iceboards if '.' in str(ib)]:
+        #######################################################
+        # Adding iceboards with explicit hostnames/IP addresses
+        #######################################################
+        # Extract iceboards that are explicitely listed with IP addresses or hostname instead of
+        # serial numbers. We can talk to these boards, which means we can figure out everything we
+        # need from these boards (serial, crate, slot  etc) right away without requiring us to do
+        # mDNS query, which is the last resort (because not all systems might have mDNS support).
+
+        added_ib = []
+        for (model, hostname) in list(hw_table.iceboards): # make a copy: we modify in-place
+            if model is None or '.' in str(hostname): # if it is actually a hostname. Might be an int serial
+                hw_table.iceboards.remove((model, hostname))
                 # ip_addr = socket.gethostbyname(hostname)  # convert hostname to IP address for faster Tuber access
-                ip_addr = hostname
-                ib = IceBoardPlus(hostname=ip_addr)
-                self.hwm.add(ib)
+                new_ib = IceBoardPlus(hostname=hostname)
+                self.hwm.add(new_ib)
                 self.hwm.flush()
-                # Explicitely listed boards must exist on the network
-                if ping:
-                    if ib.ping(timeout=ping_timeout):
-                        ib.hostname = socket.gethostbyname(ib.hostname)
-                    else:
-                        raise RuntimeError("%r could not be found at '%s'"
-                                           % (ib, ib.tuber_uri))
+                added_ib.append(new_ib)
+        # Explicitely listed boards must exist on the network
+        if ping:
+            # ping all boards concurrently
+            ping_results = yield {ib: ib.ping.async() for ib in added_ib}
+            # If some boards failed, raise an exception
+            if not all(ping_results.values()):
+                raise RuntimeError("%r: The following Iceboards could not be pigned: '%s'" % (
+                    self,
+                    ', '.join('%r (%s)' % (ib, ib.tuber_uri)
+                              for ib, ping_result in ping_results.items() if not ping_result)))
+            # resolve hostnames into IP addresses
+            # this is not concurrent, unfortunately... this is why we checked ping first, otherwise it blocks for a long time
+            t0 = time.time()
+            for ib, ping_result in ping_results.items():
+                if ping_result:
+                    ib.hostname = socket.gethostbyname(ib.hostname)
+            if any(ping_results.values()):
+                self.hwm.flush()
+            self.logger.info('%r: resolving IP addresses took %s seconds' % (self, time.time() - t0))
 
+        ########################################################
+        # Establish Tuber communication (ARM only)
+        ########################################################
+        # All the boards in the hardware map should have a hostname now.
+        # Let's initialize ARM/Tuber
+        # communication becore we start using Tuber methods. We want to cache the Tuber methods
+        # asynchnously now instead of letting Tuber do it asynchrunously on the first Tuber command
+        # it gets.
+        self.logger.info('%r: Establishing ARM/Tuber communication' % (self))
+        ibs = self.hwm.query(IceBoardPlus)
+        t0 = time.time()
+        yield [ib._tuber_get_meta.async() for ib in ibs]
+        self.logger.info('%r: ARM conneciton established. It took %s seconds' % (self, time.time() - t0))
 
+        ########################################################
+        # Resolve missing serial/crate/slot info through the ARM
+        ########################################################
         # Complete serial, crate and slot information on IceBoard that miss
-        # that information. All boards in the hardware map at this point have
-        # a valid hostname, so this information is obtained through the ARM
+        # that information by talking directly to the ARM
         # (i.e without using mDNS and pybonjour).
-        ib_without_serial = self.hwm.query(IceBoardPlus).filter(IceBoardPlus.serial==None)
+        ib_without_serial = self.hwm.query(IceBoardPlus).filter(IceBoardPlus.serial == None)
         if ib_without_serial.count():
-            self.logger.info('%.32r: Auto-Discovering serial number for IceBoards %s' % (self, ib.hostname))
-            ib_without_serial.discover_serial()
-            self.logger.debug('%.32r: Done Auto-Discovering serial number for IceBoards %s' % (self, ib.hostname))
+            t0 = time.time()
+            self.logger.info('%r: Auto-Discovering serial number for IceBoards %s' %
+                (self, ', '.join(ib_without_serial.hostname)))
+            # concurrently resolve serials
+            futures = [ib.discover_serial.async() for ib in ib_without_serial] # Tuber method
+            self.logger.info('%r: Got all discover_serial futures after %f seconds' % (self, time.time() - t0))
+            yield futures # [ib.discover_serial.async() for ib in ib_without_serial]
+            self.logger.info('%r: Finished Auto-Discovering serial number for IceBoards. Took %f seconds.' % (self, time.time() - t0))
+
+        self.logger.info('%r: Auto-Discovering slot numbers of IceBoards')
+        t0 = time.time()
+        yield [ib.discover_slot.async() for ib in self.hwm.query(IceBoardPlus)]
+        self.logger.info('%r: Finished Auto-Discovering slot numbers for IceBoards. Took %f seconds.' % (self, time.time() - t0))
 
         ib_without_crate = self.hwm.query(IceBoardPlus).filter(or_(IceBoardPlus.crate==None, IceBoardPlus.slot==None))
         if ib_without_crate.count():
-            self.logger.info('%.32r: Auto-Discovering crate information for IceBoards %s' % (self, ib.hostname))
-            ib_without_crate.discover_crate()
+            t0 = time.time()
+            self.logger.info('%r: Auto-Discovering crate information for IceBoards %s' %
+                (self, ', '.join(ib_without_crate.hostname)))
+            yield [ib.discover_crate.async() for ib in ib_without_crate]
+            self.logger.info('%r: Finished Auto-Discovering crate serial numbers. Took %f seconds.' % (self, time.time() - t0))
 
-        # If requested, discover additional boards and crates on the network using mDNS and add those to the hardware map
-        iceboards_to_discover = [ib for ib in iceboards if '.' not in str(ib)]
-        if '*' in str(iceboards_to_discover):
-            iceboards_to_discover = '*'
+        ###########################################################################
+        # mDNS discovery of boards and crates specified by model/serial number only
+        ###########################################################################
 
-
-        if '*' in str(icecrates):
-            icecrates_to_discover = '*'
-        elif self.icecrate_map:
-            # convert to the format [ (model1, [serial, serial ...]), (model1, [serial, serial ...]), ...]
-            icecrates_to_discover = [(model, [serial]) for model, serial in self.icecrate_map.keys()]
-        else:
-            icecrates_to_discover = None
-        if icecrates_to_discover or iceboards_to_discover:
-            print 'Discovering IceBoards %s and IceCrates %s...' % (iceboards_to_discover, icecrates_to_discover)
+        if hw_table.iceboards or hw_table.icecrates :
+            self.logger.info('Discovering IceBoards %s and IceCrates %s...' % (hw_table.iceboards, hw_table.icecrates))
             self.print_flush()
             mdns_discover(self.hwm,
-                          icecrates=icecrates_to_discover,
-                          iceboards=iceboards_to_discover,
+                          icecrates=hw_table.icecrates,
+                          iceboards=hw_table.iceboards,
                           timeout=mdns_timeout)
-            if not self.hwm.query(IceBoardPlus).count():
-                self.hwm.add(IceBoardPlus('iceboard.local'))
-                self.hwm.flush()
+
         # Remove iceboards to be excluded (by serial number)
         if exclude_iceboards:
             for ib in self.hwm.query(IceBoardPlus):
@@ -508,52 +723,64 @@ class FPGAArray(object):
 
         # Hardware map is complete
 
-        # Query all iceboards and icecrates
+        #################################
+        # Create self.ib and self.ic
+        #################################
+
+        # Query the hardware map for all iceboards and icecrates
         ib = self.hwm.query(IceBoardPlus).outerjoin(IceCrateExt).order_by(IceCrateExt.serial, IceBoardPlus.slot)  # use outerjoin in case there is no crate
         ic = self.hwm.query(IceCrateExt).order_by(IceCrateExt.crate_number)
 
-
+        # Courtesy warning
         if not ic.count():
-            self.logger.warn('No Iceboards matching the selection criteria were found')
-            print 'There are no IceCrates in the hardware map!'
+            self.logger.warn('There are no IceCrates in the hardware map!')
 
-        # Set the interface over which the FPGA UDP communication will be done
-        if if_ip:
-            ib.interface_ip_addr = if_ip
-
-        # print 'The following IceBoards are in the hardware map:'
-        # for i in ib:
-        #     crate_name = '%s SN%s' % (i.crate.part_number, i.crate.serial) if i.crate else 'No crate'
-        #     print 'Crate %s, slot %2s: Iceboard SN%s at %s (ping =%s)' % (crate_name, i.slot, i.serial, i.hostname, i.ping())
-
-        # Augment the arg Namespace with conveniently proprocessed elements
+        # Store as Ccoll collections to allow easy parallel operations
         self.ib = Ccoll(ib)
         self.ic = Ccoll.unique((c for c in ib.crate if c) if self.ib else [])
 
-        # Assing crate numbers
-        for ic in self.ic:
-            model = ic.part_number
-            try:
-                sn = int(ic.serial)
-            except (ValueError, TypeError):
-                sn = ic.serial
-            if (model, sn) in self.icecrate_map:
-                ic.crate_number = self.icecrate_map[(model, sn)]
-                self.hwm.flush()
-                print('Assigining crate number %i to crate %s (%s,%s)' % (ic.crate_number, ic.get_string_id(), model, sn))
-            else:
-                print('Cannot find a crate number for crate %s' % ic.get_string_id())
+        #################################
+        # Set the crate numbers
+        #################################
+        # ... using whatever map we could determine from the parameters
 
-        # chFPGA_controller.register_fpga_bitstream(fpga_bitstream)
+        self.set_crate_numbers(crate_number_map, strict=False)
+
+        #################################
+        # Check if all the hardware we wanted is present
+        #################################
+        # Check for missing crates
+        current_crates = [(c.part_number, self._to_integer(c.serial)) for c in ic]
+        #print current_crates
+        missing_crates = [(model, serial) for (model, serial) in hw_table.icecrates
+                          if (model, self._to_integer(serial)) not in current_crates]
+        #print missing_crates
+        if missing_crates:
+            raise RuntimeError('%r: The following crates are missing: %s' %
+                (self, ', '.join('%s SN%s' % (model, serial) for (model, serial) in missing_crates)))
+        # Check for missing boards
+        missing_slots = { (ic.part_number, ic.serial, ic.crate_number): set(range(1, ic.NUMBER_OF_SLOTS + 1)) - set(ic.slot) for ic in self.ic}
+        if any(missing_slots.values()):
+            message = '%s: The following slots are missing:\n%s' % (
+                self,
+                '\n'.join('    Crate #%s (%s SN%s): slots %s' % (number, model, serial, ', '.join(str(s) for s in slots))
+                for (model, serial, number), slots in missing_slots.items() if slots))
+            if not ignore_missing_boards:
+                raise RuntimeError(message)
+            else:
+                self.logger.warning(message)
+        #################################
+        # Discover Mezzanines
+        #################################
 
         if self.ib:
-            ib.check_tuber_version()  # Check if the board is running a compatible ARM firmware
+            [ib.check_tuber_version() for ib in self.ib]  # Check if the board is running a compatible ARM firmware
 
             # Auto-discover mezzanines and add them to the hardware map.
             if not no_mezz:
-                print 'Discovering Mezzanines...'
+                self.logger.info('Discovering Mezzanines...')
                 self.print_flush()  # make sure we see the previous prints right away so we have a better feeling of what is happening
-                self.ib.discover_mezzanines()
+                yield [ib.discover_mezzanines.async() for ib in self.ib]
                 self.hwm.flush()
                 self.ib.set_cache()
 
@@ -565,60 +792,68 @@ class FPGAArray(object):
         self.print_iceboard_table(lambda ib: '%s\n%s' % (get_mezz_name(ib,1), get_mezz_name(ib,2)), row_labels=['Mezz1\nMezz2'], add_serial=True)
         self.print_flush()
 
+        #################################
+        # Program the FPGAs
+        #################################
+
+
         # Tell the IceBoard to run chFPGA firmware, program the FPGA, and establish communication with it
         if self.ib:
-            ib.set_handler(chFPGA_controller)
-            ib.set_cache() # we have a new handler, so update its cached ORM object values
+            self.ib.set_handler(chFPGA_controller)
+            self.ib.set_cache() # we have a new handler, so update its cached ORM object values
             # ib.set_handler(IceBoardPlusHandler, fpga_bitstream)
 
             # Configure the FPGA with the bitstream associated with the handler
             if prog:
-                print 'Configuring FPGAs...'
+                self.logger.info('Configuring FPGAs...')
                 # Associate the bitstream with the target Handler
-                self.fpga_bitstream = FPGABitstream(bitfile)
-                ib.register_fpga_bitstream(self.fpga_bitstream)
-                ib.set_fpga_bitstream(force= (prog > 1))
-                print 'Done configuring FPGAs'
+                self.fpga_bitstream = FPGABitstream(bitfile, auto_reload=False)
+                self.logger.info('Loaded bitfile: %s' % bitfile)
+                str(self.fpga_bitstream)
+                self.ib.register_fpga_bitstream(self.fpga_bitstream)
+                yield [ib.set_fpga_bitstream.async(force= (prog > 1)) for ib in self.ib]
+                self.logger.info('Done configuring FPGAs')
 
-
-        # print
-        # print 'Updated hardware map, with mezzanine info:'
-
-
-        # for i in self.ib:
-        #     mezz_name = ['%s SN%s' % (m.__ipmi_part_number__, m.serial) if m else 'None' for m in [i.mezzanine.get(1, None), i.mezzanine.get(2, None)]]
-        #     crate_name = '%s SN%s' % (i.crate.part_number, i.crate.serial) if i.crate else 'No crate'
-        #     print 'Crate %s, slot %2s: Iceboard SN%s at %s (ping =%s), Mezz1=%s, Mezz2=%s' % (crate_name, i.slot, i.serial, i.hostname, i.ping(), mezz_name[0], mezz_name[1])
         self.print_flush()
 
-        # if self.ic:
-        #     self.print_iceboard_table(grid=False, add_serial=True)
+        #################################
+        # Initialize
+        #################################
 
 
-        print
-        # print 'open=',open
         if self.ib and open is not None and open > 0:
-            print 'Initializing firmware (calling ib.open())'
-            self.ib.open(adc_delay_table=ADC_DELAY_TABLE,
+            # Set the interface over which the FPGA UDP communication will be done
+            # Not needed in normal uses: we now get the interface automatically by examining info from the socket connected to the ARM
+            if if_ip:
+                self.ib.interface_ip_addr = if_ip
+
+            self.logger.info('Initializing firmware (calling ib.open())')
+            yield [ib.open.async(adc_delay_table=ADC_DELAY_TABLE,
                          udp_retries=udp_retries,
                          init=open,
                          **kwargs
                          # sampling_frequency=sampling_frequency,
                          # reference_frequency=reference_frequency,
-                         )
+                         ) for ib in self.ib]
 
+            self.logger.info('%r: Setting SYNC method' % self)
             if sync_method or sync_source:
                 self.set_sync_method(method=sync_method, source=sync_source, master=sync_master, master_time_source=sync_master_time_source)
+            self.logger.info('%r: Setting operational mode to %s' % (self, mode))
             if mode:
                 self.set_operational_mode(mode=mode, frames_per_packet=frames_per_packet)
 
-            print 'Initializing Backplane firmware'
+            self.logger.info('%r: Initializing Backplane firmware' % self)
             if self.ic:
                 self.ic.init()
 
         self.print_flush()
 
-        print 'Done creating %r' % self
+        #################################
+        # Completed
+        #################################
+
+        self.logger.info('%r: Done creating %r' % (self, self))
 
     @staticmethod
     def _to_integer(x):
@@ -737,6 +972,48 @@ class FPGAArray(object):
             string +='   Crate SN%s, slot %2i: Iceboard SN%s at %s (ping =%s), Mezz1=%s, Mezz2=%s\n' % (i.crate.serial if i.crate else None, i.slot, i.serial, i.hostname, i.ping(), mezz[0], mezz[1])
         return string
 
+
+    def set_crate_numbers(self, crate_number_map, strict=True):
+        """ Set the crate number of each crate based on the provided crate number map.
+
+        Silently overrides any existing crate numbers.
+
+        Arguments:
+            crate_number_map (dict): A { (model, serial): number} dict that maps a crate ID tuple to a crate number.
+            strict (bool): if True, will raise an exception if not all crates can be assigned a crate number
+
+        Notes:
+            Crate numbers are needed to identify hardware element by simple tuples (e.g. (crate_number,
+            slot_numer, lane_number)) and are also used to infer which is a master and slave crate when
+            crates are interconnected in pairs.
+        """
+
+        self.logger.info('%r: setting crate numbers for crates %r' % (self, self.ic))
+
+        for ic in self.ic:
+            model = ic.part_number
+            sn = ic.serial
+            try:
+                int_sn = int(ic.serial)
+            except (ValueError, TypeError):
+                int_sn = None
+
+            new_crate_number = (crate_number_map.get((model, sn), None) or
+                               crate_number_map.get((model, int_sn), None))
+
+            #if not isinstance(new_crate_number, int):
+            #    raise ValueError('%r: crate number %r is not an interger' % (self, new_crate_number))
+
+            if new_crate_number is not None:
+                ic.crate_number = int(new_crate_number)
+                self.hwm.flush()
+                self.logger.info('Assigining crate number %r to crate %s' % (new_crate_number, ic.get_string_id()))
+            elif strict:
+                raise RuntimeError('Cannot find a crate number for crate %s' % ic.get_string_id())
+            else:
+                self.logger.warning('set_crate_number: Cannot find a crate number for crate %s' % ic.get_string_id())
+
+
     def set_operational_mode(self, mode, frames_per_packet=1, chan8_channel_map=range(8)):
         """
         NOTE: Having called get_ber() before initializing the shuffle will lead to errors!
@@ -764,6 +1041,7 @@ class FPGAArray(object):
         # enable_gpu_link : Enables the GPU link transmission
 
         """
+        self.logger.info('%r: Setting operational mode to %s' % (self, mode))
         # To make sure that the data acquisition and transmission will be done at the same rate, refuse to operate if there
         # are more than one IceBoard in the array and the boards are not all
         # set to operate on the backplane clock.
@@ -779,6 +1057,8 @@ class FPGAArray(object):
             self.init_shuffle(mode='chan8', frames_per_packet=frames_per_packet, chan8_channel_map=np.hstack((chan8_channel_map, [16]*8)))
 
         elif mode in ['shuffle256', 'shuffle512', 'shuffle16']:
+            if not all(self.ib.CROSSBAR2) or not all(self.ib.CROSSBAR3):
+                raise RuntimeError('All IceBoards must have their CROSSBAR2 and CROSSBAR 3 implemented')
             self.ib.BP_SHUFFLE.set_tx_power(13)
             self.ib.CROSSBAR3.SOF_WINDOW_STOP = 100
             self.ib.CROSSBAR3.TIMEOUT_PERIOD = 0
@@ -787,6 +1067,11 @@ class FPGAArray(object):
             self.ib.BP_SHUFFLE.reset_stats()
             self.ib.CROSSBAR2.reset_stats()
             self.ib.CROSSBAR3.reset_stats()
+        elif mode =='corr16':
+            if not all(self.ib.CORR):
+                raise RuntimeError('All IceBoards must have a firmware correlator engine')
+            self.ib.init_crossbars(mode, frames_per_packet=1)
+
         else:
             raise ValueError('Unknown operational mode')
 
@@ -952,15 +1237,23 @@ class FPGAArray(object):
                 if time.time() - t0 > delay+1:
                     raise RuntimeError('Timout while waiting for the IRIG-B-based SYNC to complete')
         elif self.sync_method == 'distributed_time':
+            # Estimate how much time it takes to set the trigger time
             dt = self.ib[0].get_irigb_time()
-            print 'Triggering SYNC in %i seconds at %s' % (delay,  dt.isoformat())
+            t0 = time.time()
+            self.ib.set_irigb_trigger_time(dt, delay=300) # set the trigger far enough in time it should not happen before we reprogram another delay
+            setting_time = (time.time() - t0)
+            self.logger.info('It takes %f seconds to set the trigger time' % setting_time)
+            setting_time = round(2*setting_time + delay)
+            # Now set the trigger time using that delay
+            dt = self.ib[0].get_irigb_time()
+            self.logger.info('Triggering SYNC in %i seconds at %s' % (setting_time,  dt.isoformat()))
             self.print_flush()
             t0 = time.time()
-            self.ib.set_irigb_trigger_time(dt, delay=delay)
+            self.ib.set_irigb_trigger_time(dt, delay=setting_time)
             self.logger.info('It took %f seconds to set the trigger time' % (time.time() - t0))
             t0 = time.time()
             while any(self.ib.is_irigb_before_trigger_time()):
-                if time.time() - t0 > delay+1:
+                if time.time() - t0 > setting_time + 1:
                     raise RuntimeError('Timout while waiting for the IRIG-B-based SYNC to complete')
         elif self.sync_method == 'local_soft_trigger':
             self.ib.sync()
@@ -973,6 +1266,17 @@ class FPGAArray(object):
             if bad_ib:
                 raise RuntimeError('The following IceBoards did not SYNC properly: %s' % (','.join(repr(ib) for ib in bad_ib)))
 
+        ts = self.ib.get_irigb_time(trig=False, format = 'raw')
+        if len(set(t.nano for t in ts)) != 1:
+            self.logger.warning('%r: The timestamp is not the same for all boards after sync. Times are:n%s' %
+                (self,                  '\n'.join('%r:%i' % (ib, ts[i].nano) for i,ib in enumerate(self.ib))))
+        self.sync_timestamp = ts[0]
+        for ib in self.ib:
+            for ant in ib.ANT:
+                ant.SCALER.OVERFLOW_RESET = 1
+                ant.SCALER.OVERFLOW_RESET = 0
+
+    @async
     def set_channelizers(self, adc_mode=None, adcdaq_mode=None,
                          data_source=None, function=None, a=1, b=0,
                          fft_bypass=None, fft_shift=None,
@@ -984,11 +1288,13 @@ class FPGAArray(object):
 
             See IceBoard's set_channelizer(...) for details.
         """
-
-        self.ib.set_channelizer(adc_mode=adc_mode, adcdaq_mode=adcdaq_mode,
+        for ib in self.ib:
+            ib.set_channelizer(adc_mode=adc_mode, adcdaq_mode=adcdaq_mode,
                         data_source=data_source, function=function, a=a, b=b,
                         fft_bypass=fft_bypass, fft_shift=fft_shift,
-                        scaler_bypass=scaler_bypass, gain=gain, postscaler=postscaler, offset_binary_encoding=offset_binary_encoding)
+                        scaler_bypass=scaler_bypass, gain=gain, postscaler=postscaler,
+                        offset_binary_encoding=offset_binary_encoding)
+            yield async_moment
         if sync:
             self.sync()
 
@@ -1010,28 +1316,124 @@ class FPGAArray(object):
     # def get_current_gain_bank(self):
     #     return [ib.get_current_gain_bank() for ib in self.ib]
 
-    def set_synchronized_gain_switching_mode(self, enable):
-        """ Enable or disable synchronized gain switching for all boards of the array. """
-        self.ib.set_synchronized_gain_switching(enable=enable)
-
-    def set_next_gain_bank(self, bank):
-        """ Sets the next gain bank to use on all channelizers of the array.
-
-        The switch will be done imeediately or not, depending on the gain switching mode (see
-        set_synchronized_gain_switching_mode())
+    def get_iceboard_from_id(self, id):
+        """ return the iceboard corresponding to the specified id.
         """
-        self.ib.set_next_gain_bank(bank=bank)
+        crate, slot = id[0], id[1] + 1
+        return self.ic.get(crate_number=crate).slot[slot]
 
-
-    def set_gain_switch_frame_number(self, frame):
+#    def init_gains(self):
+#        """ Should be deprecated. Use load_gains() instead.
+#        """
+#        for ib in self.ib:
+#            try:
+#                g_array = pickle.load(open('/home/chime/ch_acq/gains_'+str(ib.GPIO.FPGA_SERIAL_NUMBER)+'.pkl', 'rb'))
+#            except:
+#                g_array = pickle.load(open('/home/chime/ch_acq/gains.pkl', 'rb'))
+#                print 'Could not find gain settings for %r, sn %i. Using default gain settings.' % (ib, ib.get_fpga_serial_number())
+#            print 'Setting gains on IceBoard SN%s' % ib.serial
+#            ib.set_gain(g_array)
+    @async
+    def load_gains(self, bank=0, gain_folder='/home/chime/ch_acq/gains'):
+        """ Loads the gains from the gain files associated with every board of the array and return
+        the gain map in the format {channel_id:gain}
         """
-        Sets the frame number at which the new gain bank (set by set_next_gain_bank()) will be used.
 
-        Is used only if synchronized gain switching mode is enabled(see
-        set_synchronized_gain_switching_mode())
+        # get the default gains, just in case we need them
+
+        try:
+            default_gains_filename = os.path.join(gain_folder, 'default_gains.pkl')  # filename of the default gains
+            default_gains = pickle.load(open(default_gains_filename, 'rb'))
+        except IOError:
+            default_gains = None
+
+        array_gains = {}
+        for ib in self.ib:
+            ch_id = ib.get_id()
+            crate, slot_0based = ch_id[0], ch_id[1]
+            self.logger.info('%r: Reading digital gains for crate %02i slot %02i (FCC%02i%02i)' % (self, crate, slot_0based, crate, slot_0based))
+            board_gains = ib.load_gains(folder=gain_folder) or default_gains
+            yield async_moment
+
+            if not board_gains:
+                self.logger.warn('%r: Neither board-specific gain file not default gain file was found for crate %02i slot %02i (FCC%02i%02i)' % (self, crate, slot_0based, crate, slot_0based))
+
+            if board_gains is None:
+                array_gains[ch_id] = None
+            else:
+                array_gains[ch_id] = board_gains
+        async_return(array_gains)
+
+    @async
+    def set_gains(self, gains, bank=-1,  when='now'):
+        """ Set the gains on the boards in the array.
+
+        Arguments:
+            'gains': dictionary of gains specified as {board_id: gain_spec, ...}.
+                     `board_id` uniquely identifies a board and is a tuple either in the format (crate, slot) or (board_id).
+                     `gain_spec` is passed to the set_gain() method and is in the format (linear_gain, log_gain). `linear_gain` is a complex scalar or a 1024-element complex vector. log_gain is the post_scaler factor, and is a integer.
+
+            `bank`: gain bank in which the gains are written. If `bank`=-1 or is None, gains are
+                    written in the inactive bank (which can be activated later using set_gain_bank()).
+
+            `when`: if `when` is 'now' or a negative integer, the target gains
+                    are made active immediately.
+
+                    If `when` is None, the gains are not activated.
+
+                    If `when` is an integer, the gains will be activated starting on
+                    the target timestamp specified by `when`.
+
 
         """
-        self.ib.set_gain_switch_frame_number(frame=frame)
+        for ch_id, gain in gains.items():
+            crate, slot_0based = ch_id[0], ch_id[1]
+            self.logger.info('%r: Setting digital gains for crate %02i slot %02i (FCC%02i%02i)' % (self, crate, slot_0based, crate, slot_0based))
+            ib = self.get_iceboard_from_id(ch_id)
+            ib.set_gains(gain=gain, bank=bank)
+            yield async_moment
+
+        if when is not None:
+            self.switch_gains(bank=bank, when=when)
+
+    def get_next_gain_bank(self):
+        """
+        Return the next gain bank number to be used (i.e. the currently unused bank number).
+
+        The bank number is the currently inactive bank of the first channel of the first board of
+        the array.
+
+        It is the responsability of the user to make sure that no gain switch will occur once this
+        method is called.
+        """
+        self.ib[0].get_next_gain_bank()[0]
+
+    def switch_gains(self, bank=-1, when='now'):
+        self.ib.switch_gains(bank=bank, when=when)
+
+
+    # def set_synchronized_gain_switching_mode(self, enable):
+    #     """ Enable or disable synchronized gain switching for all boards of the array. """
+    #     self.ib.set_synchronized_gain_switching(enable=enable)
+
+    # def set_next_gain_bank(self, bank):
+    #     """ Sets the next gain bank to use on all channelizers of the array.
+
+    #     The switch will be done imeediately or not, depending on the gain switching mode (see
+    #     set_synchronized_gain_switching_mode())
+    #     """
+    #     self.ib.set_next_gain_bank(bank=bank)
+
+
+    # def set_gain_switch_frame_number(self, frame):
+    #     """
+    #     Sets the frame number at which the new gain bank (set by set_next_gain_bank()) will be used.
+
+    #     Is used only if synchronized gain switching mode is enabled(see
+    #     set_synchronized_gain_switching_mode())
+
+    #     """
+    #     self.ib.set_gain_switch_frame_number(frame=frame)
 
 
 
@@ -1053,11 +1455,13 @@ class FPGAArray(object):
         #     raise RuntimeError('All boards must be in the same crate. The provided set of Iceboards have the following crates: %r' % crate_set)
         # crate = crate_set.pop()
 
-        self.logger.info('%.32r: Configuring crate-wide data shuffling with frames_per_packet=%i' % (self, frames_per_packet))
+        self.logger.info('%r: Configuring crate-wide data shuffling with frames_per_packet=%i' % (self, frames_per_packet))
 
+        #####################
         # Set-up transmitters
+        #####################
         for i, ib in enumerate(self.ib):
-            self.logger.info('%.32r: **** Initializing transmitters for IceBoard %r (SN%s) ****' % (ib.crate, ib, ib.serial))
+            self.logger.info('%r: **** Initializing transmitters for IceBoard %r (SN%s) ****' % (self, ib, ib.serial))
             ib.set_corr_reset(0)
 
             tx_list.append((ib.slot, 0))  # Register Bypass lane (lane 0) as a transmitter in this slot
@@ -1072,7 +1476,9 @@ class FPGAArray(object):
             # ib.init_crossbars(dsmap, frames_per_packet=frames_per_packet, cb1_lanes=cb1_lanes, cb1_bins=cb1_bins, cb1_bypass=cb1_bypass, cb2_lanes=cb2_lanes, cb2_bins=cb2_bins, cb2_bypass=cb2_bypass, remap=remap, bp_bypass=bp_bypass)
             ib.init_crossbars(mode, dsmap=dsmap, frames_per_packet=frames_per_packet, chan8_channel_map=chan8_channel_map)
 
-        # set-up receivers
+        #####################
+        # Set-up receivers
+        #####################
         for i, ib in enumerate(self.ib):
             # Disable all receivers for which there are no transmitters
             for j, gtx in enumerate(ib.BP_SHUFFLE.gtx[0:ib.BP_SHUFFLE.NUMBER_OF_PCB_LINKS]):
@@ -1088,9 +1494,14 @@ class FPGAArray(object):
                     gtx.USER_GTRXRESET = 1
                     # gtx.USER_RESET = 1
 
-            # ib.CROSSBAR2.SOF_WINDOW_STOP = 25
-            ib.BP_SHUFFLE.reset_rx_equalizers()
-            ib.REFCLK.local_sync() # needed
+        # reset DFE at low power, then increase power
+        self.ib.BP_SHUFFLE.set_tx_power(5)
+        self.ib.BP_SHUFFLE.reset_rx_equalizers()
+        #time.sleep(0.3)
+        #self.ib.BP_SHUFFLE.set_tx_power(7)
+        #self.ib.BP_SHUFFLE.set_tx_power(10)
+        self.ib.BP_SHUFFLE.set_tx_power(13)
+        self.ib.BP_SHUFFLE.reset_stats()
 
         # Print links
         for ib in self.ib:
@@ -1100,14 +1511,15 @@ class FPGAArray(object):
                 rx = (ib.slot, i)
                 tx = ib.crate.get_matching_tx(rx)
                 if tx in tx_list:
-                    self.logger.info('%.32r: In %r,  %s is receiving from %s' % (self, ib.crate, rx, tx))
+                    pass
+                    #self.logger.debug('%r: In %r,  %s is receiving from %s' % (self, ib.crate, rx, tx))
                 else:
-                    self.logger.info('%.32r: In %r, %s has no corresponding transmitter' % (self, ib.crate, rx))
+                    self.logger.debug('%r: In %r, %s has no corresponding transmitter' % (self, ib.crate, rx))
 
 
         # sync boards
         #soft_sync(c, sync_board)
-        self.logger.info('%.32r: Shuffling initialization completed. Syncing boards' % self)
+        self.logger.info('%r: Shuffling initialization completed. Syncing boards' % self)
         self.sync(delay=2)
 
     def get_chan_identity_map(self):
@@ -1138,6 +1550,21 @@ class FPGAArray(object):
                     buf = (buf[0::2] << 4) + buf[1::2]
                     ch_out[(ic.crate_number, slot, ch)] = buf.tolist()
         return ch_out
+
+    @async
+    def reset_corr(self, delay=0.1):
+        self.ib.set_corr_reset(1)
+        yield async_sleep(0.1)
+        self.ib.set_corr_reset(0)
+
+
+    @async
+    def get_fpga_config(self, basic=False):
+        """ Concurrently gets the configuration info for each FPGA """
+        configs = yield {ib.get_id():ib.get_config.async(basic=basic) for ib in self.ib}
+        async_return(configs)
+
+
 
     def get_frequency_map(self):
         """ Returns a map describing the content (crate, slot, channel, bin) of every packet at the output of the corner turn engine.
@@ -1237,39 +1664,6 @@ class FPGAArray(object):
         else:
             print 'SYNC Test has PASSED!'
 
-    def init_gains(self):
-        """ Should be deprecated. Use load_gains() instead.
-        """
-        import pickle
-        for cc in self.ib:
-            try:
-                g_array = pickle.load(open('/home/chime/ch_acq/gains_'+str(cc.GPIO.FPGA_SERIAL_NUMBER)+'.pkl', 'rb'))
-            except:
-                g_array = pickle.load(open('/home/chime/ch_acq/gains.pkl', 'rb'))
-                print 'Could not find gain settings for %r, sn %i. Using default gain settings.' % (cc, cc.get_fpga_serial_number())
-            print 'Setting gains on IceBoard SN%s' % cc.serial
-            cc.set_gain(g_array)
-
-    def load_gains(self, bank=0, gain_folder='/home/chime/ch_acq/gains'):
-        gains = {}
-        for ib in self.ib:
-            slot = ib.slot
-            crate = ib.crate.crate_number
-            filename = os.path.join(gain_folder, 'gains_C%sS%02i.pkl' % (crate, slot))
-            try:
-                g_array = pickle.load(open(filename, 'rb'))
-                self.logger.info('Setting gains on IceBoard SN%s, crate %s, slot %i' % (ib.serial, crate, slot))
-                ib.set_gain(g_array, bank=bank)  # *** should this be bank=all_bank
-            except IOError:
-                filename = os.path.join(gain_folder, 'gains.pkl')  # filename of the default gains
-                try:
-                    g_array = pickle.load(open(filename, 'rb'))
-                    self.logger.warn('Gain file not found for IceBoard SN%s, crate %s, slot %i. Using default gains' % (ib.serial, crate, slot))
-                    ib.set_gain(g_array, bank=bank)  # *** should this be bank=all_bank
-                except IOError:
-                    self.logger.warn('Neither board-specific gain file not default gain file was found for IceBoard SN%s, crate %s, slot %i. Gains are *NOT* set' % (ib.serial, crate, slot))
-            gains[(crate, slot)] = ib.get_gain(bank=bank)
-        return gains
 
     def soft_sync(self, sync_board):
         """ Synchronize all boards"""
@@ -1641,8 +2035,8 @@ class FPGAArray(object):
             cnt = dest_gtx.ERR_CTR
             err = (float(cnt) * 16) / (period * 10e9)
             err_max = (float(cnt) * 16 + 1) / (period * 10e9)
-            if print_:
-                    print '%r BER = %1.1e (%i errors, BER<%1.1e)' % (link[0], err, cnt, err_max)
+
+            print '%r BER = %1.1e (%i errors, BER<%1.1e)' % (link[0], err, cnt, err_max)
             self.print_flush()
             async_return(err)
 
@@ -1998,7 +2392,6 @@ class FPGAArray(object):
         func=data, dict, key is iceboard object
         """
 
-
         if not len(self.ib):
             print '[ There are no IceBoards in the hardware map ]'
             return
@@ -2071,11 +2464,60 @@ class FPGAArray(object):
     def get_monitoring_info(self):
         return self.ib.index_by(lambda ib:ib.get_id()).get_status()
 
-    def print_iceboard_info(self):
+    @async
+    def get_metrics(self):
+        """ Get the monitoring information on the backplanes, boards and firmware status across the array.
 
-        info = self.ib.get_status()
-        keys = '\n'.join(info[0].keys())
-        data = {ib:('\n'.join(info[i].values())) for i, ib in enumerate(self.ib)}
+        Includes:
+            - Backplane metrics, as measured from one board in each crate
+            - Iceboard hardware metrics (voltages, temperatures), which also includes mezzanines voltage/current.
+            - Backplane receiver/transmitter status with packet statistics for both the PCB and QSFP links.
+
+        Returns:
+            A :cls:`Metrics` object.
+        """
+        metrics = Metrics()
+
+        # IceCrate metrics
+        self.logger.info('%r: Getting IceBoard backplane hardware metrics (over ARM link)' % self)
+        for ic in self.ic:
+            slot, ib = ic.slot.items()[0]
+            metrics += yield ib.get_backplane_metrics.async()
+
+        # IceBoard metrics
+        self.logger.info('%r: Getting IceBoard temperature & power supply metrics (over ARM link)' % self)
+        m = yield [ib.get_metrics.async() for ib in self.ib]
+        metrics += m
+        self.logger.info('%r: Got %i IceBoard temperature & power supply metrics' % (self, len(m)))
+        metrics += yield [ib.get_fpga_udp_metrics.async() for ib in self.ib]
+
+        self.logger.info('%r: Getting corner-turn links metrics (over FPGA UDP link)' % self)
+        metrics += yield [ib.get_bp_shuffle_metrics.async() for ib in self.ib]
+        self.logger.info('%r: Getting corner-turn crossbars metrics (over FPGA UDP link)' % self)
+        metrics += yield [ib.get_crossbar_metrics.async() for ib in self.ib]
+        self.logger.info('%r: Getting channelizer metrics (over FPGA UDP link)' % self)
+        metrics += yield [ib.get_channelizer_metrics.async() for ib in self.ib]
+        self.logger.info('%r: Finished gathering FPGA/backplane metrics' % self)
+
+        # Backplane GTX
+        # Errors, signal level
+
+        # Command errors
+
+        # Shuffle status
+
+        async_return(metrics)
+
+
+
+    def print_iceboard_info(self):
+        """ Gather metrics from the iceboards and print them in a nicely formatted table """
+        if not self.ib:
+            print('There are no IceBoards in the array')
+            return
+        info_metrics = self.ib.get_status()
+        keys = '\n'.join(info_metrics[0][0].keys())
+        data = {ib:('\n'.join(info_metrics[i][0].values())) for i, ib in enumerate(self.ib)}
         self.print_iceboard_table(data, row_labels=keys)
 
     def set_tx_power(self, pmin=6, pmax=13, pre=3):
@@ -2098,7 +2540,30 @@ class FPGAArray(object):
 
     def print_rx_err_map(self, icecrates=None, reset_stats=0, delay=-5, tx_power=None,
                          tx_precursor=None, tx_postcursor=None, lpm = None, dfe_reset=False, stop_on_errors=2, verbose=1):
+        """
+        Initialize and test the corner turn engine operation.
 
+        Parameters:
+            icecrates (IceCrate Ccoll): List of icecrates on which the test is done. If `None`, all icecrates are initialized/tested.
+
+            reset_stats (bool): Reset the statistics counters. Default is false.
+
+            delay (int):
+
+            tx_power (int). transmit power to be set on the GTX. Ranges from 0-15. If ``None``, TX power levels ar enot changed.
+
+            tx_precursor=None,
+
+            tx_postcursor=None
+
+            lpm (bool): If true, enables Low Power Mode in the GTX. Requires a dfe_reset.
+
+            dfe_reset (bool): If true, resets the Dynamix Feedback Equalizer to allow it to find a new equalization solution. Is needed when power levels or operaiton mode are changed
+
+            stop_on_errors=2,
+
+            verbose=1
+        """
         if icecrates is None:
             icecrates = self.ic
 
@@ -2243,47 +2708,83 @@ class FPGAArray(object):
             ps.power_cycle(delay=4)
 
 
+    @async
     def set_adc_delays(self, **kwargs):
         """
         Set ADC delays for all Mezzanines on all IceBoards of the array. Calls set_adc_delays() on each IceBoard instance with the specified paramaters.
         """
 
         for ib in self.ib:
-            self.logger.info("%.32r: Setting ADC delays" % (self))
-            ib.set_adc_delays(**kwargs)
+            if ib.is_open():
+                self.logger.info("%r: Setting ADC delays" % (self))
+                ib.set_adc_delays(**kwargs)
+                yield async_moment
+	    else:
+                self.logger.warning("%r: Communication with FPGA is not initialized. Cannot set ADC delays" % (self))
 
 
 ICE_PATTERNS = [
-        { 'regex': '(MGK7)?BP1',                  'type': 'icecrates',  'model': 'MGK7BP1' },  # Sets the curent model and type to the One-slot backplane; matches MGK7BP1, BP1
-        { 'regex': '(MGK7)?BP16',                 'type': 'icecrates',  'model': 'MGK7BP16' },  # Sets the curent model and type to the 16-slot backplane; matches MGK7BP16, BP16
-        { 'regex': '(MGK7)?MB',                   'type': 'iceboards',  'model': 'MGK7MB'  },  # Sets the curent model and type to the ICEBoard (motherboard); matches MGK7MB, MB
-        { 'regex': '(MG)?ADC08',                  'type': 'mezzanines', 'model': 'MGADC08' },  # Sets the curent model and type to the CHIME Mezzanine;  matches MGADC08, ADC08
-        { 'regex': '29821-0000-(\d{4})',          'type': 'mezzanines', 'model': 'MGADC08', 'serial': 0 },  # Stores a MGADC08 mezzanine item based on serial number extracted from the Digico barcodes (29821-000-ssss, where ssss=serial number)
-        { 'regex': '35896-0000-(\d{4})',          'type': 'mezzanines', 'model': 'MGADC08', 'serial': 0 },  # Stores a MGADC08 mezzanine item based on serial number extracted from the Digico barcodes
-        { 'regex': '(?:|SN)?(\d+)(?:\s*:(\d*))?', 'type': None,         'model': None,      'serial': 0, 'number': 1 },  # Stores an item with the current model and specified serial number and optional item number (crate number).  Matches 232, 0232, SN232, SN0232, 232:1. Serial number can be prefixed by SN.
-        { 'regex': '(\d+.\d+.\d+.\d+)',           'type': 'iceboards',  'addr': 0},  # Stores a motherboard item based on its IP address only
-        { 'regex': '(\w+.local)',                 'type': 'iceboards',  'addr': 0},  # Stores a motherboard item based on its local hostname only
-        { 'regex': '\*',                          'type': None,         'serial': '*'},  # Stores a an item that selects all units of the current model
+        { 'regex': '(MGK7)?BP1',           'cur_state': None,  'next_state': 'ic',  'entry': ('MGK7BP1', None, None),  'store_in': None        },  # Sets the curent model and type to the One-slot backplane; matches MGK7BP1, BP1
+        { 'regex': '(MGK7)?BP16',          'cur_state': None,  'next_state': 'ic',  'entry': ('MGK7BP16', None, None), 'store_in': None        },  # Sets the curent model and type to the 16-slot backplane; matches MGK7BP16, BP16
+        { 'regex': '(?:|SN)?(\d+)',        'cur_state': 'ic',  'next_state': 'ic',  'entry': (None, 0, None),          'store_in': 'icecrates' },  # Stores an item with the current model and specified serial number and optional item number (crate number).  Matches 232, 0232, SN232, SN0232, 232:1. Serial number can be prefixed by SN.
+        { 'regex': '(?:|SN)?(\d+):(\d*)',  'cur_state': 'ic',  'next_state': 'ic',  'entry': (None, 0, 1),             'store_in': 'icecrates' },  # Stores an item with the current model and specified serial number and optional item number (crate number).  Matches 232, 0232, SN232, SN0232, 232:1. Serial number can be prefixed by SN.
+        { 'regex': '\*',                   'cur_state': 'ic',  'next_state': None,  'entry': (None, '*', None),        'store_in': 'icecrates' },  # Stores a an item that selects all units of the current model
+
+        { 'regex': '(\d+\.\d+\.\d+\.\d+)', 'cur_state': None,  'next_state': None,  'entry': (None, 0),                'store_in': 'iceboards' },  # Stores a motherboard item based on its IP address only
+        { 'regex': '(\w+\.local)',         'cur_state': None,  'next_state': None,  'entry': (None, 0),                'store_in': 'iceboards' },  # Stores a motherboard item based on its local hostname only
+        { 'regex': '(MGK7)?MB',            'cur_state': None,  'next_state': 'ib',  'entry': ('MGK7MB', None),         'store_in': None        },  # Sets the curent model and type to the ICEBoard (motherboard); matches MGK7MB, MB
+        { 'regex': '(?:|SN)?(\d+)',        'cur_state': 'ib',  'next_state': 'ib',  'entry': (None, 0),                'store_in': 'iceboards' },  # Stores an item with the current model and specified serial number and optional item number (crate number).  Matches 232, 0232, SN232, SN0232, 232:1. Serial number can be prefixed by SN.
+        { 'regex': '\*',                   'cur_state': 'ib',  'next_state': None,  'entry': (None, '*'),              'store_in': 'iceboards' },  # Stores a an item that selects all units of the current model
+
+        { 'regex': '(MG)?ADC08',           'cur_state': None,  'next_state': 'adc', 'entry': ('MGADC08', None),        'store_in': None        },  # Sets the curent model and type to the CHIME Mezzanine;  matches MGADC08, ADC08
+        { 'regex': '29821-0000-(\d{4})',   'cur_state': None,  'next_state': None,  'entry': ('MGADC08', 0),           'store_in': 'mezzanines'},  # Stores a MGADC08 mezzanine item based on serial number extracted from the Digico barcodes (29821-000-ssss, where ssss=serial number)
+        { 'regex': '35896-0000-(\d{4})',   'cur_state': None,  'next_state': None,  'entry': ('MGADC08', 0),           'store_in': 'mezzanines'},  # Stores a MGADC08 mezzanine item based on serial number extracted from the Digico barcodes
+        { 'regex': '(?:|SN)?(\d+)',        'cur_state': 'adc', 'next_state': 'adc', 'entry': (None, 0),                'store_in': 'mezzanines'},  # Stores an item with the current model and specified serial number and optional item number (crate number).  Matches 232, 0232, SN232, SN0232, 232:1. Serial number can be prefixed by SN.
+
+        { 'regex': 'crate',                'cur_state': None,  'next_state': 'cr', 'entry': (None,),                    'store_in': None        },  #
+        { 'regex': '(\d+)',                'cur_state': 'cr',  'next_state': 'cr', 'entry': (0,),                        'store_in': 'crates' },
         ]
 
-def parse_hw_description_string(hw_description_string, hw_description_table=None, dut_id_patterns=ICE_PATTERNS, hardware_type=None, default_model=None):
-    """ Parses a string describing ICE hardware elements (motherboards, crates and mezzanines) and returns a dictionary describing each component.
-    Each item is described by a model followed by one or, more serial numbers. A crate number can optionally be specified for crates by following the serial number by ':nnnn'.
-    Serial numbers are converted to integers if possible; otherwise, they are stored as a string.
+def parse_hw_string(hw_string, remap_table={}, dut_id_patterns=ICE_PATTERNS):
+    """ Parses a string describing ICE hardware elements (motherboards, crates and mezzanines)
+
+    Arguments:
+        hw_string (str): string describing the model, serial number/hostname and optionally the sequence number of the desired
+           hardware elements
+
+        remap_table (dict): used to remap entries into other entries. Used to implement aliases, and
+            map crate numbers into actual model/serial/crate number entries, in the format::
+
+                { type : { entry:(target_type, target_entry), ...} ...}
+
+        dut_id_patterns (list of dict): Describe patterns to match, the type of hardware they match, and the data they provide.
+
+            regex: the regular expression to match, with optional capture groups.
+
+            cur_state (str): The state to which the match apply. ``None`` means it applies to any state.
+
+            next_state (str): The state to move into if there is a match
+
+            entry (tuple): Entry to make or update, as a (model, serial) or (model, serial, number) tuple.  For each
+                of the values in the tuple:
+
+                - None: means the value is unchanged
+                - *int*: get the regex capture group specified by the *int*
+                - *str*: Set the field to *str*
+
+            store_in: the type of hardware in which to store the entry if there is a match
+
+
+    Returns:
+        A NameSpace object describing a the specified hardware elements for each hardware type listed in `dut_id_patterns`::
+
+        .icecrates =  [ (model, serial, crate_number) ...],
+        .iceboards =  [ (model, serial) | (None, ip_address) | (None, hostname)]
+        .mezzanines: [ (model, serial) ...]
+
+        Serial numbers are converted to integers if possible; otherwise, they are stored as a string.
 
     Underscore characters are converted to blanks before parsing.
-
-    if ``hardware_type`` is specified, only that type of hardware will be accpeted.
-    dut_id_patterns describe the regular expression used to identify each elements of the hardware description string.
-    'regex' describes the regular expression.
-    'type', 'model', 'serial', 'number' and 'addr' describe various fields. If any of these field is an integer index, it it replaced with the regex capture group with this index.
-
-    Return a dict with the following structure:
-        {
-        icecrates: [ (model, serial, crate_number) ...],
-        iceboards: [ (model, serial) | ip_address | hostname ...]
-        mezzanines: [ (model, serial) ...]
-        }
 
     Examples:
         'MGK7BP16_SN018:3' => ('MGK7BP16', 18, 3)
@@ -2291,29 +2792,38 @@ def parse_hw_description_string(hw_description_string, hw_description_table=None
         '18:3' => (None, 18, 3)
         '18' => (None, 18, None)
     """
-    # Extract the crate number
+    logger = logging.getLogger(__name__)
+    # If hw_string is a list of string, combine them in one single string
+    if isinstance(hw_string, (list, tuple)):
+        hw_string = ' '.join(str(s) for s in hw_string)
 
-    if hw_description_table is None:
-        hw_description_table = {}
-    print "Hardware description table is", hw_description_table
-    # If hw_description_string is a list of string, combine them in one single string
-    # print 'parsing:', hw_description_string
-    if isinstance(hw_description_string, (list, tuple)):
-        hw_description_string = ' '.join(str(s) for s in hw_description_string)
 
-    # If no target hw_descirption table is provided, create a new one
-    if hw_description_table is None:
-        hw_description_table = dict()
+    # Create a new hw table with all possible hardware categories
+    hw_table = NameSpace()
+    for t in {d['store_in'] for d in dut_id_patterns if d['store_in'] is not None}:
+        hw_table[t] = [] # crate type with empty list if the type does not exist
 
-    print 'parsing:', hw_description_string
 
-    current_type = hardware_type
-    current_model = default_model
+    # Split the string in ' '- or '_'-separated elements
+    elements = str(hw_string).replace('_', ' ').strip().split(' ')
 
-    elements = str(hw_description_string).replace('_', ' ').split(' ')
+    # Special case: if the hw_string is just '*', we register all units of every known model with
+    # '*' as the serial number (second) field
+    if len(elements) == 1 and elements[0] == '*':
+        for p in dut_id_patterns:
+            type_, entry = p['store_in'], p['entry']
+            wild_entry = entry[0:1] + ('*',) + entry[2:]
+            if wild_entry not in hw_table[type_]:
+                hw_table[type_].append(wild_entry)
+        return hw_table
+
+    def to_int(s):
+        return (int(s) if isinstance(s, str) and s.isdigit() else s)
+
     pos = 0
     err = None
-    model_has_serial = False
+    current_entry = {} # stores the value for each state
+    state = None
     for el in elements:
         pos += len(el) + 1
         if not el:  # if whitespace
@@ -2321,284 +2831,61 @@ def parse_hw_description_string(hw_description_string, hw_description_table=None
         # print 'checking', el
         matches = 0
         for p in dut_id_patterns:
-            m = re.match('^' + p['regex'] + '$', el, re.I)
-            # print p['regex'], m
-            if m:   # if there is a match
-                matches += 1
-                groups = m.groups()
-                type_, addr, model, serial, number = [(groups[p[tag]] if isinstance(p[tag], int) else p[tag]) if tag in p else None for tag in ('type', 'addr', 'model','serial','number')]
-                if addr is not None:  # overrides entry
-                    if type_ not in hw_description_table:
-                        hw_description_table[type_] = []
-                    hw_description_table[type_].append(addr)
-                    current_model = default_model
-                    current_type = hardware_type
-                    continue
-                if model is not None:
-                    if hardware_type and type_ != hardware_type:
-                        err = 'Invalid hardware type'
-                        break
-                    current_model = model
-                    current_type = type_
-                    print 'new tmodel:type is', model, type_
-                    model_has_serial = False
-                if serial is not None:
-                    model_has_serial = True
-                    if current_model is None or current_type is None:
-                        err = 'A model must be specified before a serial number is specified'
-                        break
-                    serial = int(serial) if serial.isdigit() else serial
-                    number = int(number) if number is not None else None
-                    # print 'match : type="%r", %s'% (current_type, type_ == 'icecrates')
-                    if current_type == 'icecrates':
-                        dut_id = (current_model, serial, number)
-                        print 'adding icecrate', dut_id
-                    else:
-                        if number is not None:
-                            err = 'A :n hardware instance number can only be applied to crates'
-                            break
-                        dut_id = (current_model, serial)
-                    if current_type not in hw_description_table:
-                        hw_description_table[current_type] = []
-                    hw_description_table[current_type].append(dut_id)
+            regex, cur_state, next_state, entry, store_in = p['regex'], p['cur_state'], p['next_state'], p['entry'], p['store_in']
+            if not (cur_state is None or state == cur_state):
+                continue
+            m = re.match('^' + regex + '$', el, re.I)
+            if not m:   # if there is no match
+                continue
+            matches += 1
+            # print 'match %i: ' % matches, regex, el
+            groups = m.groups()  # capture groups, in a list
+
+            # Update the current entry with the entries that are not None
+            # Always convert to integer if possible
+            new_entry = [(to_int(groups[e] if isinstance(e, int) else e))
+                         if cur_state is None or e is not None or i>=len(current_entry[state])
+                         else current_entry[state][i] for i,e in enumerate(entry)]
+
+            # Store if instructed
+            if store_in:
+                hw_table[store_in].append(tuple(new_entry))
+            elif next_state:
+                current_entry[next_state] = new_entry
+            state = next_state
+
         if err:
             break
         if not matches:
-             err = 'Element did not find a match'
-             break
+            err = "Could not find a match for element '%s' of the hardware description string" % el
+            break
         if matches > 1:
-             err = 'element found multiple matches'
-             break
+            err = 'element found multiple matches'
+            break
     if err:
         print 'Error:', err
-        print hw_description_string
+        print hw_string
         print ' '*(pos-2)+'^'
         raise ValueError(err)
-    #print 'hw_description_table:', hw_description_table
-    return hw_description_table
+    # Remap
+    #print 'remapping with ', remap_table
+    for type, entries in list(hw_table.items()):
+        #print type, entries
+        if type in remap_table:
+            for entry in list(entries):
+                #print entry
+                if entry in remap_table[type]:
+                    target_type, target_entry = remap_table[type][entry]
+                    hw_table[target_type].append(target_entry)
+                    hw_table[type].remove(entry)
+
+    logger.debug('hw_table: %s' % hw_table)
+    return hw_table
 
 
 
-def parse_args_as_dict(parser, *args, **kwargs):
-    """ Parses arguments like argparse.parse_args(...), with the following differences:
-           - The results are returned as a dictionary instead of a namespace.
-           - Arguments that have the value ``None`` are not included (they are presumed not to have been specified in the command line)
-           - If an argument is part of a group that has the ``sub_dict`` attribute, all the argument values of this group are stored in a subdictionary named by that attribute.
-    """
-
-    # Create a dictionary that maps command line arguments to their group name.
-    group_map = {action.dest: getattr(group, 'sub_dict', '')
-              for group in parser._action_groups
-                 for action in group._group_actions}
-
-    args = parser.parse_args(*args, **kwargs)
-
-    args_dict={}
-    for k, v in vars(args).items():
-        if v is not None:
-            sub_dict = group_map[k]
-            if sub_dict:  # if a sub dict was specified
-                if sub_dict not in args_dict:  # a sub dict if it does not exist
-                    args_dict[sub_dict] = {}
-                args_dict[sub_dict][k] = v
-            else:
-                args_dict[k] = v
-    return args_dict
-
-
-def merge_dict(src, dest):
-    """ Merge a hierarchy of dictionnaries.
-    - Only a dict can be merged with a dict
-    - Dicts are merged as follow:
-        - If the destination item does not exist is it created from the source
-        - If both the source and destination item is a dict then those are merged
-        - If only one of the source or destination is a dict there is an error
-
-    """
-    def is_list(x):
-        return isinstance(dest, Sequence)
-    def is_dict(x):
-        return isinstance(dest, Mapping)
-
-    logger = logging.getLogger('')
-
-    if is_dict(src) or is_dict(dest):
-        # print ' --- merge ', src, 'to', dest
-        src = src or {}
-        dest = dest or {}
-        if is_dict(src) and is_dict(dest):
-            for k, v in src.iteritems():
-                if k in dest:
-                    dest[k] = merge_dict(v, dest[k])
-                else:
-                    dest[k] = v
-        else:
-            raise TypeError('Only a mapping can be merged with another mapping')
-    elif is_list(src) or is_list(dest):
-        if not is_list(src):
-            src = [src]
-        if not is_list(dest):
-            dest = [dest]
-        dest.extend(src)
-    else:
-        logger.warning('%.32s: Overriding  %s with %s' % ('merge_dict', dest, src))
-        dest = src
-    return dest
-
-def load_yaml_config(object_names):
-    """
-    Loads a YAML file,
-    object_names: String or list of strings describing the name of a YAML files and objects to
-       load. Name of objects are specified by preceding them with a semicolon.
-       Object hierarchy is separated by '.'. An object starting with '.'
-       starts at the same root note as the previous object.
-
-    Returns a dictionary
-
-    Example:
-        load_yaml_config('file1.yaml')
-
-        load_yaml_config('file1.yaml:object1 object2')
-
-        load_yaml_config('file1.yaml:object1.subitem1 .subitem2)
-
-    """
-        # -------------------------------
-    # Load YAML file
-    # -------------------------------
-    # The YAML file may contain any configuration data that will be
-    # accessible by the user, which includes hardware maps that will be
-    # extracted below
-
-
-    if not object_names:
-        return {}
-
-    # If the objects are passed as a list of strings, combine those in a single string
-    if not isinstance(object_names, str):
-        object_names = ' '.join(object_names)  # Combine all strings into a single string
-
-    config = {}
-    logger = logging.getLogger('')
-    if object_names:
-        yaml_args = object_names.split(':')
-        yaml_filename = yaml_args[0]
-        print yaml_filename
-        if len(yaml_args) == 1:
-            yaml_objects = ['']
-        elif len(yaml_args) == 2:
-            yaml_objects = yaml_args[1].split()
-        else:
-            raise ValueError('Only one filename can be specified')
-
-        logger.info('Loading YAML file %s' % (yaml_filename))
-        print 'Loading YAML file %s' % yaml_filename
-        with open(yaml_filename, 'rb') as yamlfile:
-            yaml = load_yaml(yamlfile)
-    else:
-            yaml = None
-            yaml_objects = []
-
-    # self.hwm = None
-    current_root_node = yaml
-
-    for yaml_object_path in yaml_objects:
-        yaml_path_items = yaml_object_path.split('.')
-        if yaml_path_items[0]:  # If the path does not start with '.', restart from top
-            current_root_node = yaml
-        current_node = current_root_node
-        for path_item in yaml_path_items:
-            if path_item:
-                if path_item in current_node:
-                    current_root_node = current_node
-                    current_node = current_node.get(path_item)
-                else:
-                    raise RuntimeError("Unknown object '%s'" % yaml_object_path)
-        logger.info('Loading YAML elements from object %s' % (yaml_object_path))
-        print 'Loading YAML elements from object %s' % yaml_object_path
-
-        # if isinstance(node, Session):
-        #     self.hwm = self.yaml
-        if not isinstance(current_node, dict):
-            raise RuntimeError("Target element '%s' must be a dictionary" % yaml_object_path)
-        # print 'merging', current_node, 'with', config
-        config = merge_dict(current_node, config)
-        # # Copy each item of the dictionary into the final dictionary. If an item is a dict and already, merge the fields. Similarly, extend lists.
-        # for (k, v) in current_node.items():
-        #     if k in config:
-        #         arg = config[k]
-        #         if isinstance(arg, list) and isinstance(v, list):
-        #             arg.extend(v)
-        #             # print 'Extended %s=%s' % (k, arg)
-        #         elif isinstance(arg, list):
-        #             arg.append(v)
-        #             # print 'Appended %s=%s' % (k, arg)
-        #         else:
-        #             # print 'Overwriting argument %s=%s to %s=%s' % (k, arg, k, v)
-        #             setattr(config, k, v)
-        #     else:
-        #         # print 'Creating %s=%s' % (k, v)
-        #         config[k] = v
-    return config
-
-def validate_config(config, schema_file):
-    print 'Loading Schema YAML file %s' % schema_file
-    with open(schema_file, 'rb') as yamlfile:
-        schema = load_yaml(yamlfile)
-
-    def validate(config, schema):
-        for key, info in schema.items():
-            type_ = info['type']
-            if key not in config:
-                config[key] = get(schema, 'default', {})
-            value = config[key]
-            if isinstance(info, dict) and 'type' not in info:
-                validate(config[key], schema[key])
-                continue
-            try:
-                if type_ == 'integer':
-                    assert isinstance(value, int) and not ((hasattr(info,'min') and value < info['min']) or (hasattr(info,'max') and value > info['max']))
-                elif type_ == 'float':
-                    assert isinstance(value, float) and not ((hasattr(info,'min') and value < info['min']) or (hasattr(info,'max') and value > info['max']))
-                elif type_ == 'string':
-                    assert isinstance(value, str)
-                elif type_ == 'ip_addr':
-                    socket.inet_aton(value)
-                elif type_ == 'int_list':
-                    assert isinstance(value, list) and all(isinstance(x, int) for x in value)
-            except (AssertionError, socket.error):
-                raise ValueError("Value for %s=%s failed the criteria %s" % (key, value, info) )
-
-    validate(config, schema)
 
 log_levels = {'info': logging.INFO, 'debug': logging.DEBUG, 'warn': logging.WARNING, 'error': logging.ERROR}
-
-def add_logging_arguments(parser):
-    parser.add_argument('-t', '--log_target', action='store', type=str, default='syslog', help="Logging target ('stream', 'syslog' or a filename)")
-    parser.add_argument('-l', '--log_level', action='store', type=str, choices=log_levels, default='debug', help='Logging level')
-    parser.add_argument('--sql_log_level', action='store', type=str, choices=log_levels, default='warn', help='SQLAlchemy Logging level')
-    parser.add_argument('--stderr_log_level', action='store', type=str, choices=log_levels, default='warn', help='stderr (console) Logging level')
-
-def add_fpga_array_arguments(parser):
-    parser.add_argument('--if_ip',           type=str, help='IP address of adapter through which the connection to the FPGA will be established. This is used solely for direct UDP communications with the FPGA. If not specified, the system will use the same interface that communicates with the ARM processor.')
-    parser.add_argument('-i', '--iceboards', type=str, nargs='*', help="Space-separated list of iceboards, which can be specified byip address (e.g. 10.10.10.7), hostname (e.g. iceboard0007.local) if a mDNS client is running locally, or by serial number (e.g. 0007 or simply 7) in which case active mDNS discovery will be done")
-    parser.add_argument('-c', '--icecrates', type=str, nargs='*', help="Space-separated list of icecrate serial numbers.  Discover and adds all boards in the specified serial number")
-    parser.add_argument('--subarrays',       type=int, nargs='*', help='Keep in the hardware map only the boards that are in the specified subarrays. This applies only to iceboards that are specified in a YAML file.')
-    parser.add_argument('-x', '--exclude_iceboards', type=str, nargs='*', help="Space-separated list of iceboards serials to exclude ")
-    parser.add_argument('--ping',            type=int, help="1: Check if Tuber is responding. 0: Check but ignore. ")
-    parser.add_argument('--mdns_timeout',    type=float, help="Time to wait for mDNS discovery replies")
-    parser.add_argument('--no_mezz',         action='store_true', help='Do not attempt to auto-detect the mezzanines')
-    parser.add_argument('--prog',            type=int, nargs='?', const=1, help='Programs the FPGA if not already programmed. --prog or --prog 1 programs the FPGA if the firmware is not already programmed.  --prog 2 forces the FPGA programming even if the firmware is already programmed')
-    parser.add_argument('-b', '--bitfile',   type=str, help='Filename of the bitfile used to to program the FPGAs')
-    parser.add_argument('-o', '--open',      type=int, nargs='?', const=1, help='Opens communication with the FPGAs, create the Python objects representing the firmware, and initialize the firmware. --open 0 skips the firmware initialization phase')
-    parser.add_argument('--sync_method',     type=str, default='distributed_time', help="Sets the global syncing method ('distributed_time', 'centralized_time_trigger', 'centralized_soft_trigger', 'local_soft_trigger')")
-    parser.add_argument('--sync_source',     type=str, default='bp_trig', help="Sets the global syncing source ('bp_gpio_int', 'bp_time', 'bp_trig')")
-    parser.add_argument('--sync_master',     type=str, default=None, help="Serial number of the IceBoard that generates the time or trig signal")
-    parser.add_argument('--sync_master_time_source', type=str, default=None, help="Source of the time signal used by the master board to generate the time or trigger signal ('bp_gpio_int', 'bp_time', 'bp_trig')")
-    parser.add_argument('-m', '--mode',     type=str, default=None, help="Operational mode ('shuffle16', 'shuffle256', 'shuffle512'). If not specified, set_operational_mode() is not called.")
-    parser.add_argument('-f', '--frames_per_packet', '--fpp',     type=int, default=2, help="Number of frames per packeet. Default=2.")
-    parser.add_argument('-u', '--udp_retries',     type=int, default=3, help="Number of times UDP packet transmission to the FPGA will be retried.")
-    parser.add_argument('hw_description_string', type=str, nargs='*', help="target hardware")  # allows free-style hardware description string
 
 def setup_logging(log_target='syslog', log_level='debug', sql_log_level='warn', stderr_log_level='warn'):
     # Make sure SQLAlchemy does not log too much
@@ -2612,35 +2899,108 @@ def setup_logging(log_target='syslog', log_level='debug', sql_log_level='warn', 
         log_handler = logging.handlers.SysLogHandler()
     else:
         log_handler = logging.FileHandler(log_target)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(name)s:  %(message)s')
 
     logger = logging.getLogger('')
     logger.handlers = []  # Clear all existing handlers
     logger.setLevel(logging.DEBUG)  # pass all messages to the handlers which will filter what they want
 
     log_handler.setLevel(log_levels[log_level])
+    log_handler.setFormatter(formatter)
     logger.addHandler(log_handler)
 
     stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
     stream_handler.setLevel(log_levels[stderr_log_level])
     logger.addHandler(stream_handler)
     return logger
 
+
+def add_logging_arguments(parser):
+    parser.add_argument('-t', '--log_target', action='store', type=str, default='syslog', help="Logging target ('stream', 'syslog' or a filename)")
+    parser.add_argument('-l', '--log_level', action='store', type=str, choices=log_levels, default='debug', help='Logging level')
+    parser.add_argument('--sql_log_level', action='store', type=str, choices=log_levels, default='warn', help='SQLAlchemy Logging level')
+    parser.add_argument('--stderr_log_level', action='store', type=str, choices=log_levels, default='warn', help='stderr (console) Logging level')
+
+def add_fpga_array_arguments(parser):
+    parser.add_argument('--if_ip',           type=str, help='IP address of adapter through which the connection to the FPGA will be established. This is used solely for direct UDP communications with the FPGA. If not specified, the system will use the same interface that communicates with the ARM processor.')
+    parser.add_argument('-i', '--iceboards', type=str, nargs='*', help="Space-separated list of iceboards, which can be specified byip address (e.g. 10.10.10.7), hostname (e.g. iceboard0007.local) if a mDNS client is running locally, or by serial number (e.g. 0007 or simply 7) in which case active mDNS discovery will be done")
+    parser.add_argument('-c', '--icecrates', type=str, nargs='*', help="Space-separated list of icecrate serial numbers.  Discover and adds all boards in the specified serial number")
+    parser.add_argument('--subarrays',       type=int, nargs='*', help='Keep in the hardware map only the boards that are in the specified subarrays. This applies only to iceboards that are specified in a YAML file.')
+    parser.add_argument('-x', '--exclude_iceboards', type=str, nargs='*', help="Space-separated list of iceboards serials to exclude ")
+    parser.add_argument('--ignore_missing_boards', action='store_true', help='Do not fail if boards are not found')
+    parser.add_argument('--no_mezz',         action='store_true', help='Do not attempt to auto-detect the mezzanines')
+    parser.add_argument('--ping',            type=int, help="1: Check if Tuber is responding. 0: Check but ignore. ")
+    parser.add_argument('--mdns_timeout',    type=float, help="Time to wait for mDNS discovery replies")
+    parser.add_argument('--prog',            type=int, nargs='?', const=1, help='Programs the FPGA if not already programmed. --prog or --prog 1 programs the FPGA if the firmware is not already programmed.  --prog 2 forces the FPGA programming even if the firmware is already programmed')
+    parser.add_argument('-b', '--bitfile',   type=str, help='Filename of the bitfile used to to program the FPGAs')
+    parser.add_argument('-o', '--open',      type=int, nargs='?', const=1, help='Opens communication with the FPGAs, create the Python objects representing the firmware, and initialize the firmware. --open 0 skips the firmware initialization phase')
+    parser.add_argument('--sync_method',     type=str, help="Sets the global syncing method ('distributed_time', 'centralized_time_trigger', 'centralized_soft_trigger', 'local_soft_trigger')")
+    parser.add_argument('--sync_source',     type=str, help="Sets the global syncing source ('bp_gpio_int', 'bp_time', 'bp_trig')")
+    parser.add_argument('--sync_master',     type=str, help="Serial number of the IceBoard that generates the time or trig signal")
+    parser.add_argument('--sync_master_time_source', type=str, help="Source of the time signal used by the master board to generate the time or trigger signal ('bp_gpio_int', 'bp_time', 'bp_trig')")
+    parser.add_argument('-m', '--mode',      type=str, help="Operational mode ('shuffle16', 'shuffle256', 'shuffle512'). If not specified, set_operational_mode() is not called.")
+    parser.add_argument('-f', '--frames_per_packet', '--fpp',     type=int, help="Number of frames per packeet. Default=2.")
+    parser.add_argument('-u', '--udp_retries', type=int, help="Number of times UDP packet transmission to the FPGA will be retried.")
+    parser.add_argument('hwm',               type=str, nargs='*', default=argparse.SUPPRESS, help="target hardware")  # allows free-style hardware description string
+
+    defaults = dict(
+        sync_method='distributed_time',
+        sync_source='bp_trig',
+        sync_master=None,
+        sync_master_time_source=None,
+        mode=None,
+        frames_per_packet=2,
+        udp_retries=3)
+    return defaults
+
+def parse_args_as_dict(parser, *args, **kwargs):
+    """
+    Parses arguments like argparse.parse_args(...), with the following differences:
+
+       - The results are returned as a dictionary instead of a argparse namespace.
+       - If an argument is part of a group that has the ``sub_dict`` attribute, all the argument
+         values of this group are stored in a subdictionary named by that attribute.
+    """
+
+    # Create a dictionary that maps command line arguments to their group name.
+    group_map = {action.dest: getattr(group, 'sub_dict', '')
+              for group in parser._action_groups
+                 for action in group._group_actions}
+
+    args = parser.parse_args(*args, **kwargs)
+
+    args_dict = {}
+    for k, v in vars(args).items():
+        # if v is not None:
+        sub_dict = group_map[k]
+        if sub_dict:  # if a sub dict was specified
+            args_dict.setdefault(sub_dict, {})[k] = v
+        else:
+            args_dict[k] = v
+    return args_dict
+
+
+
 def GPUArray(gpu_nodes=[]):
         # Create GPU node array
         if gpu_nodes:
-            print gpu_nodes
+            #print gpu_nodes
             return Ccoll(GpuNodeHandler(hostname=hostname) for hostname in gpu_nodes)
         else:
             return Ccoll([])
 
     # Create Power Supply array
 def PSArray(power_supplies=[]):
-        if power_supplies:
+        if not power_supplies:
+            return Ccoll([])
+        if isinstance(power_supplies, list):
             ps = Ccoll(AgilentN5764AHandler(hostname=hostname) for hostname in power_supplies)
             ps.open()
             return ps
         else:
-            return Ccoll([])
+            raise TypeError('Wrong type to PSArray')
+
 
 def create_fpga_array(args=None):
     """
@@ -2773,46 +3133,54 @@ def create_fpga_array(args=None):
 
     # Add logging-related command-line parameters
     logging_group = parser.add_argument_group('logging parameters', 'Specify how and where the logging is done')
-    logging_group.sub_dict = 'logging'  # group all arguments in this group in a sub dictionary with this name
+    logging_group.sub_dict = 'cli_logging'  # group all arguments in this group in a sub dictionary with this name
     add_logging_arguments(logging_group)
 
 
     # Add FPGA Array-related command-line parameters
     fpga_group = parser.add_argument_group('FPGA Array parameters', 'Allows interactive creation of a hardware map and initialization of all its components')
-    fpga_group.sub_dict = 'fpga_array_params'  # group all arguments in this group in a sub dictionary with this name
-    add_fpga_array_arguments(fpga_group)
+    fpga_group.sub_dict = 'cli_fpga_array'  # group all arguments in this group in a sub dictionary with this name
+    fpga_defaults = add_fpga_array_arguments(fpga_group)
 
     gpu_group = parser.add_argument_group('GPU Array parameters', 'Allows interactive creation of GPU nodes')
-    gpu_group.sub_dict = 'gpu_array'  # group all arguments in this group in a sub dictionary with this name
+    gpu_group.sub_dict = 'cli_gpu_array'  # group all arguments in this group in a sub dictionary with this name
     gpu_group.add_argument('-n', '--gpu_nodes', type=str, nargs='+',  help='List of IP address or hostnames of the GPU node objects to be created.')
 
     ps_group = parser.add_argument_group('Power Supply Array parameters', 'Allows interactive creation of Power Supply objects')
-    ps_group.sub_dict = 'power_supply_array'  # group all arguments in this group in a sub dictionary with this name
+    ps_group.sub_dict = 'cli_power_supply_array'  # group all arguments in this group in a sub dictionary with this name
     ps_group.add_argument('-p', '--power_supplies', type=str, nargs='+', help='List of IP address or hostnames of the power supply objects (Agilent_N5764A) to be created.')
 
     # Add generic command-line parameters
     parser.add_argument('-y', '--yaml',  type=str, nargs='+',   help='YAML configuration file name, optionally followed by object names in that file.')
 
-
     args = parse_args_as_dict(parser)  # Parse command-line arguments as a dict, with arguments groups stored in separate sub dictionaries
     # args.test = parse_dut_id(args.target)
-
+    #print('args=', args)
     # -------------------------------
     # Load configuration file
     # -------------------------------
     config = load_yaml_config(args.pop('yaml', None))  # Load YAML config
-    config = merge_dict(args, config)     # Add command line arguments to config
+    #config = merge_dict(config, args)     # Add command line arguments to config
     # config['test'] = parse_dut_id(' '.join(config['target']))
 
-    logger = setup_logging(**config.get('logging', {}))
-    fpga_array_params = config.get('fpga', {}).get('fpga_array_params', {}) or config.get('fpga_array_params', {})
+    logger = setup_logging(**args.get('cli_logging', {}))
+
+    # FPGA array
+    config_fpga_array_params = config.get('fpga', {}).get('fpga_array_params', {}) or config.get('fpga_array_params', {})
+    cli_fpga_array_params = {k: v for k, v in args['cli_fpga_array'].items() if v is not None}
+    #Sprint('merging \n\n%r\n\n with \n\n%r' % (config_fpga_array_params, cli_fpga_array_params))
+    fpga_array_params = merge_dict(config_fpga_array_params, cli_fpga_array_params)
     fpga_array = FPGAArray(**fpga_array_params)  # Create FPGA array
-    gpu_array = GPUArray(**config.get('gpu_array', {}))     # Create FPGA array
-    ps_array = PSArray(**config.get('power_supply_array', {}))     # Create FPGA array
+
+    # GPU array
+    gpu_array = GPUArray(**config.get('cli_gpu_array', {}))     # Create FPGA array
+
+    # Power supply array
+    # ps_array_params = merge_dict(config.get('power_supply_array', {}), args['cli_power_supply_array'])
+    ps_array_params = args['cli_power_supply_array']
+    ps_array = PSArray(**ps_array_params)     # Create FPGA array
 
     return config, fpga_array, gpu_array, ps_array
-
-
 
 if __name__ == '__main__':
     (config, ca, nodes, ps) = create_fpga_array()

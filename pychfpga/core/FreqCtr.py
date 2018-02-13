@@ -21,6 +21,8 @@ class FreqCtr_base(Module_base):
     Implements the Frequency Counter Interface.
     """
 
+    _SYSTEM_CLOCK_FREQUENCY = 200e6  # in Hz
+
     # Frequency counter port definitions
     PORTS = {
     'ADC_CLK0': 0,
@@ -82,16 +84,6 @@ class FreqCtr_base(Module_base):
         super(self.__class__, self).__init__(fpga_instance, base_address)
         self._lock() # prevent further property creation to avoid creating attrubutes by mistake
 
-#    def read(self, addr, type=np.uint8):
-#        """ Reads from the register of the frequency counter"""
-#        fpga = self.fpga
-#        data = fpga.Read(fpga.SYSTEM_PORT, fpga.SYSTEM_FREQ_CTR_MODULE, addr, type)
-#        return data
-#
-#    def write(self, addr, data):
-#        """ Writes to the register of the frequency counter"""
-#        fpga = self.fpga
-#        fpga.Write(fpga.SYSTEM_PORT, fpga.SYSTEM_FREQ_CTR_MODULE, addr, data)
 
     def init(self):
         """
@@ -101,14 +93,23 @@ class FreqCtr_base(Module_base):
 
 
     def read_frequency(self, port, gate_time=0.01):
-        """ Reads the frequency (in Hz) of the specified frequency counter input port
+        """ Read the frequency (in Hz) of the specified frequency counter input port.
+
+        Arguments:
+            port (str or int): port name or port number from which to measure the frequency. See  `PORTS` table.
+
+            gate_time (float): Time (in seconds) during which the frequency of the selected source
+               will be measured. Affects the measurement time and the resolution. Maximum is limited
+               by the gating counter width (32 bits) to 21.47 seconds (2^32/200 MHz).
+
+        Returns:
+            (float): Frequency of the selected source (port) in Hz.
+
+        Note:
+            The frequency resolution is given by resolution = 2/`gate_time`
         """
-        ref_freq = self.fpga._SYSTEM_CLOCK_FREQUENCY
-        #gate_ctr = np.array([ref_freq*gate_time], np.dtype('>u4'))
-        #gate_ctr.dtype = np.uint8
+        ref_freq = self._SYSTEM_CLOCK_FREQUENCY
         gate_ctr = int(ref_freq*gate_time)
-        #print gate_ctr
-        #self.write(0x00, gate_ctr)
         self.GATE_COUNT = gate_ctr
 
         if type(port) is str:
@@ -116,8 +117,6 @@ class FreqCtr_base(Module_base):
         self.SOURCE = port # Sets the signal source to be measured
         self.START = 0 # Clears the counter
         self.START = 1 # starts the frequncy counter
-        #self.write(0x04, (port << 4) + 0x00) # Reset frequency counter
-        #self.write(0x04, (port << 4) + 0x01) # Start frequency counter
         while not self.DONE:
             pass
         freq = self.FREQ_COUNT

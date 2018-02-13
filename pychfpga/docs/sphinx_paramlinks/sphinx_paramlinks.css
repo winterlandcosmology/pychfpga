@@ -1,0 +1,53 @@
+/* Hide the <P> character that provide a link to the parameter /*
+a.paramlink {
+	visibility: hidden;
+}
+
+
+/***********************************
+ Read-The-Docs Theme overrides
+************************************/
+div.wy-nav-content {
+	max-width: none;
+}
+
+/* Make the tables denser vertically */
+.wy-table-responsive table.docutils td {
+	white-space: normal;
+	padding: 1px 2px;
+	vertical-align: baseline;
+}
+
+/* Make the valid xrefs show in blue */
+.rst-content a code.xref {
+    font-weight: bold;
+    color: #0b27c0;
+}
+
+
+/* Make the <P> symbol re-appear when we hover over the parameter line.
+Depending on the length of the table, the parameter is in a li or td element. */
+li:hover > a.paramlink, td:hover > a.paramlink {
+   visibility: visible;
+}
+
+a.headerlink {
+    visibility: hidden;
+}
+
+dl.method > dt {
+	/*background:	darksalmon;*/
+    background-color: #b4b3e7;
+    /*border: 1px solid #ccc;*/
+}
+
+code.xref.paramlink {
+	font-size: initial;
+	font-weight: unset;
+	/* color: initial; */
+	font-size: 90%;
+	font-family: unset;
+	font-style: italic;
+	padding: 0px;
+	background: transparent; /* .notes code sets a background*/
+}

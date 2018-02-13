@@ -178,8 +178,8 @@ class dataWriter(object):
         self.n_file = 0
         self.N_TIME_PER_FILE = 64
         self.time_name = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
-        self.base_dir = '/data/archive/'+ self.time_name + '_pathfinder_rawadc/'
-        self.live_base_dir = '/mnt/agogo/livedata/'
+        self.base_dir = './'+ self.time_name + '_pathfinder_rawadc/'
+        self.live_base_dir = './'
         try:
             os.mkdir(self.base_dir)
         except:
@@ -211,10 +211,11 @@ class dataWriter(object):
             #self.live_h5file.close()
 
 if __name__ == "__main__":
-    HOST = "10.10.10.2"
-    PORTS = [41101, 41102, 41103, 41104, 41105, 41106, 41107, 41108, 41109,
-               41110, 41111, 41112, 41113, 41114, 41115, 41116]
+    HOST = "10.10.10.25"
+    #PORTS = [41101, 41102, 41103, 41104, 41105, 41106, 41107, 41108, 41109,
+    #           41110, 41111, 41112, 41113, 41114, 41115, 41116]
     # [41102, 41103, 41106, 41114, 41116]
+    PORTS = [41101]
     data_queues = []
     out_queues = []
     servers = []
