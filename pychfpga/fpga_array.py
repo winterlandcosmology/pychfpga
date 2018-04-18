@@ -570,7 +570,8 @@ class FPGAArray(object):
                         #self.logger.debug('%r: Assigning crate %r to board %r' % (self, crate, params))
                         params['crate'] = crate
                     else:
-                        raise RuntimeError('%r: In the hwm, crate must be an integer referring to a crate number. It will be converted to a crate object reference' % self)
+                        params['crate'] = None
+                        #raise RuntimeError('%r: In the hwm, crate must be an integer referring to a crate number. It will be converted to a crate object reference' % self)
                 self.hwm.add(class_(**params))
                 self.hwm.flush()
         # Otherwise use the hardware map as is, hoping it is a HardwareMap object

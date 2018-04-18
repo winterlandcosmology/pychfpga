@@ -234,14 +234,21 @@ class ChimeMaster(object):
 
         # First create the client to the servers, and start the server if it is not already started
         self.power_supply_servers = {}
-        server_nodes = ps_config.servers or {}
+        if ps_config is None:
+	    server_nodes =  {}
+	else:
+	    server_nodes = ps_config.servers or {}
+
         for server_name, server_params in server_nodes.items():
             ps = PowerSupplyAsyncRESTClient(hostname=server_params.hostname, port=server_params.port) # we pass the whole server config to the client in case it needs th create and/or start the server
             yield ps.start(server_params)
             self.power_supply_servers[server_name] = ps
 
         # figure out which servers controls the power supply units we want to use in this experiment
-        units = ps_config.power_on.units or []  # units used by ch_master
+        if ps_config is None:
+	    units = []
+	else:
+	    units = ps_config.power_on.units or []  # units used by ch_master
         ps_names = set(units)
         self.power_supply_units = {}
         for server_name, server in self.power_supply_servers.items():
