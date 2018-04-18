@@ -837,11 +837,13 @@ class FPGAArray(object):
                          # reference_frequency=reference_frequency,
                          ) for ib in self.ib]
 
-            self.logger.info('%r: Setting SYNC method' % self)
+
             if sync_method or sync_source:
+                self.logger.info('%r: Setting SYNC method to %s' % (self, sync_method))
                 self.set_sync_method(method=sync_method, source=sync_source, master=sync_master, master_time_source=sync_master_time_source)
-            self.logger.info('%r: Setting operational mode to %s' % (self, mode))
+
             if mode:
+                self.logger.info('%r: Setting operational mode to %s' % (self, mode))
                 self.set_operational_mode(mode=mode, frames_per_packet=frames_per_packet)
 
             self.logger.info('%r: Initializing Backplane firmware' % self)
@@ -1267,11 +1269,14 @@ class FPGAArray(object):
             if bad_ib:
                 raise RuntimeError('The following IceBoards did not SYNC properly: %s' % (','.join(repr(ib) for ib in bad_ib)))
 
-        ts = self.ib.get_irigb_time(trig=False, format = 'raw')
-        if len(set(t.nano for t in ts)) != 1:
-            self.logger.warning('%r: The timestamp is not the same for all boards after sync. Times are:n%s' %
-                (self,                  '\n'.join('%r:%i' % (ib, ts[i].nano) for i,ib in enumerate(self.ib))))
-        self.sync_timestamp = ts[0]
+        if self.sync_method != 'local_soft_trigger':
+            ts = self.ib.get_irigb_time(trig=False, format = 'raw')
+
+            if len(set(t.nano for t in ts)) != 1:
+                self.logger.warning('%r: The timestamp is not the same for all boards after sync. Times are:n%s' %
+                    (self,                  '\n'.join('%r:%i' % (ib, ts[i].nano) for i,ib in enumerate(self.ib))))
+            self.sync_timestamp = ts[0]
+
         for ib in self.ib:
             for ant in ib.ANT:
                 ant.SCALER.OVERFLOW_RESET = 1
@@ -1483,7 +1488,7 @@ class FPGAArray(object):
         for i, ib in enumerate(self.ib):
             # Disable all receivers for which there are no transmitters
             for j, gtx in enumerate(ib.BP_SHUFFLE.gtx[0:ib.BP_SHUFFLE.NUMBER_OF_PCB_LINKS]):
-                if ib.slot is None:
+                if ib.slot < 1:
                     continue
                 rx = (ib.slot, j+1)
                 tx = ib.crate.get_matching_tx(rx)
@@ -1507,7 +1512,7 @@ class FPGAArray(object):
         # Print links
         for ib in self.ib:
             for i in range(ib.NUMBER_OF_CROSSBAR_OUTPUTS):
-                if ib.slot is None:
+                if ib.slot < 1:
                     continue
                 rx = (ib.slot, i)
                 tx = ib.crate.get_matching_tx(rx)

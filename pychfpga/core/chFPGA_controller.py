@@ -2380,6 +2380,8 @@ class chFPGA_controller(IceBoardExtHandler):
             cb3_bypass = True
             cb3_output_words_per_bin = cb2_input_words_per_bin
             cb3_output_bins = cb2_input_bins
+            cb3_output_frame_flags_words_per_frame = 1 #have something
+	    cb3_output_data_flags_words_per_bin = 1  #have something
 
         elif mode == 'shuffle256':
             if not self.slot:
