@@ -2665,9 +2665,13 @@ class chFPGA_controller(IceBoardExtHandler):
         # Put everything in reset
         self.set_ant_reset(1)
         self.set_corr_reset(1)
-
-        slot_number = self.slot - 1 if self.slot is not None else 0
-        #-------------------------
+ 
+        #slot_number = self.slot - 1 if self.slot is not None else 0
+        if self.slot > 0:
+	    slot_number = self.slot - 1
+	else:
+	    slot_number = 0
+	#-------------------------
         # Configure CROSSBAR 1
         #-------------------------
         # Select the bins so slot 0 receives bins 0-63, slot 1 has 64-127 ... slot 15 has 960-1023
