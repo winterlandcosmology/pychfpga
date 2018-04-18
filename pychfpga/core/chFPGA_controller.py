@@ -1856,7 +1856,10 @@ class chFPGA_controller(IceBoardExtHandler):
 
         """
         slot_0based = self.slot - 1
-        crate = self.crate.crate_number
+        if self.crate:
+	    crate = self.crate.crate_number
+        else:
+            crate = 0
         try:
             gain_filename = os.path.join(folder, 'gains_FCC%02i%02i.pkl' % (crate, slot_0based))
             gains = pickle.load(open(gain_filename, 'rb'))
