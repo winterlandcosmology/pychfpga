@@ -111,7 +111,10 @@ class PROBER_base(Module_base):
         """ Initialize the data capture module"""
         # self.config_capture(1, 100) # Capture 1 frame every 100 frames
         channel = self.instance_number
-        slot = (self.fpga.slot or 1) - 1   # 0-based, 0 if no slot
+        if self.fpga.slot < 1:
+            slot = 0
+        else:
+            slot = (self.fpga.slot or 1) - 1   # 0-based, 0 if no slot
         crate = self.fpga.crate.crate_number or 0 if self.fpga.crate else 0 # 0 if there is no backplane/crate, or the crate does not have an assigned crate number.
         self.logger.debug('PROBER crate=%r, slot=%r, channel=%r' % (crate, slot, channel))
         self.PROBE_ID = 0xA0 + self.instance_number  # For backwards compatibility

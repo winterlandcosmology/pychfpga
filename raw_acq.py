@@ -724,7 +724,7 @@ class RawAcqReceiver(object):
                     discard = True
                 if slot_number_from_port != slot_number:
                     self.slot_number_mismatch_count += 1
-                    discard = True
+                    #discard = True
 
                 if discard:
                     self.log.warning('%r:Crate/slot/channel mismatch: (%i, %i, %i) from port, (%i, %i, %i) from streamID' %
