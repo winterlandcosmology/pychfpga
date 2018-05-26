@@ -20,7 +20,7 @@ import re
 
 import flag_raw
 
-from pychfpga import NameSpace, Metrics, load_yaml_config
+from pychfpga import NameSpace, Metrics, load_yaml_config, mkdir
 from pychfpga import OrderedSetLifoQueue, OrderedSetFifoQueue
 from rest import AsyncRESTClient, AsyncRESTServer
 from rest import coroutine, coroutine_return, endpoint, run_client
@@ -29,7 +29,7 @@ from ch_util.ephemeris import datetime_to_unix, timestr_to_datetime
 from ch_util import tools, layout
 
 from version import __version__
-from containers import mkdir, FlagCorrInputArchive, FlagRawWriter, ControlFlag
+from containers import FlagCorrInputArchive, FlagRawWriter, ControlFlag
 
 LOG_FILE = os.environ.get('FLAGINPUT_LOG_FILE',
            os.path.join(os.path.dirname(os.path.realpath(__file__)), 'broker.log'))

@@ -47,6 +47,16 @@ def convert_camel_case(name):
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
 
+def mkdir(directory):
+    """ Make a directory if it does not already exist.
+    """
+    try:
+        os.makedirs(directory)
+    except OSError:
+        if not os.path.isdir(directory):
+            raise
+
+
 def rlock(func):
     """Decorator that acquires a re-entrant lock stored in self before
     running the function it wraps and releases the lock on completion.
@@ -170,6 +180,9 @@ class Hdf5Writer(object):
             self.writer = h5py.File(output_file, 'w', libver='latest')
 
             # Add attributes
+            self.attrs['acquisition_name'] = os.path.dirname(os.path.basename(output_file))
+
+            # Create attributes
             for key, value in self.attrs.iteritems():
                 self.writer.attrs[key] = value
 
@@ -422,15 +435,27 @@ class Hdf5Writer(object):
         if not self.attrs:
             self.attrs['type'] = str(type(self))
             self.attrs['git_version_tag'] = subprocess.check_output(["git", "-C", os.path.dirname(__file__), "describe", "--always"]).strip()
+            self.attrs['collection_server'] = subprocess.check_output(["hostname"]).strip()
+            self.attrs['system_user'] = subprocess.check_output(["id", "-u", "-n"]).strip()
 
         # Save input attributes
         for key, value in kwargs.iteritems():
             self.attrs[key] = value
 
 
-    def dump(self, output_file, timestamp=None):
+    def dump(self, output_file, timestamp=None, datasets=None):
         """ Dump a single timestamp to a separate HDF5 file.
         """
+
+        if datasets is not None:
+            datasets = [dset for dset in datasets if dset in self.datasets]
+        else:
+            datasets = self.datasets
+
+        axes = []
+        for name in datasets:
+            axes += self._dataset_spec[name]['axes']
+        axes = [ax for ax in set(axes) if ax != self._grow_ax]
 
         if timestamp is None:
             with self._rlock:
@@ -444,12 +469,11 @@ class Hdf5Writer(object):
 
             # Copy index map
             index_map = fdump.create_group('index_map')
-            for name, val in self.index_map.iteritems():
-                if name != self._grow_ax:
-                    index_map.create_dataset(name, data=val)
+            for name in axes:
+                index_map.create_dataset(name, data=self.index_map[name])
 
             # Copy datasets for this timesample
-            for name in self.datasets:
+            for name in datasets:
                 data = self.read(timestamp, name)
                 if np.isscalar(data):
                     fdump.attrs[name] = data
@@ -546,7 +570,7 @@ class Hdf5Writer(object):
 
     def __getitem__(self, key):
 
-        if isinstance(key, basestring):
+        if isinstance(key, basestring) or (isinstance(key, int) and (key < 1e9)):
 
             idd = self.search.get(key, None)
 
