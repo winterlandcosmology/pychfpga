@@ -127,7 +127,7 @@ class Hdf5Writer(object):
 
     __metaclass__ = ABCMeta
 
-    _uniq_id = abstract_attribute()
+    _uniq_id = None
     _grow_ax = abstract_attribute()
 
     _axes = abstract_attribute()
@@ -180,7 +180,7 @@ class Hdf5Writer(object):
             self.writer = h5py.File(output_file, 'w', libver='latest')
 
             # Add attributes
-            self.attrs['acquisition_name'] = os.path.dirname(os.path.basename(output_file))
+            self.attrs['acquisition_name'] = os.path.basename(os.path.dirname(output_file))
 
             # Create attributes
             for key, value in self.attrs.iteritems():
@@ -226,11 +226,16 @@ class Hdf5Writer(object):
             # Update searchable axes
             rr = len(self.reader)
 
-            for kk, key in enumerate(self.writer[self._uniq_id][:]):
-                self.search[key] = (rr, kk)
+            if self._uniq_id is not None:
+                for kk, key in enumerate(self.writer[self._uniq_id][:]):
+                    self.search[key] = (rr, kk)
 
             # Set growing axis
             tmp = self._index_map[self._grow_ax][:]
+            index_field = self._axes[self._grow_ax].get('index_field', None)
+            if index_field is not None:
+                tmp = tmp[index_field]
+
             self.grow['axis'] += list(tmp)
             self.grow['index'] += zip(np.repeat(rr, tmp.size), np.arange(tmp.size, dtype=np.int))
 
@@ -326,12 +331,16 @@ class Hdf5Writer(object):
 
             for key, value in kwargs.iteritems():
                 if key in self.datasets:
-                    self.writer[key][self.ind] = value
+                    slc = self._index_grow_axis(key, self.ind)
+                    print key, slc, self.writer[key].shape, value.shape
+                    self.writer[key][slc] = value
 
             # Update searchable axes
             rr = self.writer_index
-            uniq_id = self.writer[self._uniq_id][self.ind]
-            self.search[uniq_id] = (rr, self.ind)
+
+            if self._uniq_id is not None:
+                uniq_id = self.writer[self._uniq_id][self.ind]
+                self.search[uniq_id] = (rr, self.ind)
 
             # Update grow axis
             self.grow['axis'].append(smp)
@@ -398,13 +407,17 @@ class Hdf5Writer(object):
         else:
             index = self[key]
 
-        return self.reader[index[0]][dataset][index[1]]
+        slc = self._index_grow_axis(dataset, index[1])
+
+        return self.reader[index[0]][dataset][slc]
 
 
     @rlock
     def read_all(self, dataset):
 
-        return np.concatenate(tuple([rd[dataset][:] for rd in self.reader]), axis=0)
+        ax = list(self.writer[dataset].attrs['axis']).index(self._grow_ax)
+
+        return np.concatenate(tuple([rd[dataset][:] for rd in self.reader]), axis=ax)
 
 
     @rlock
@@ -466,6 +479,9 @@ class Hdf5Writer(object):
             # Copy attributes
             for key, value in self.attrs.iteritems():
                 fdump.attrs[key] = value
+
+            # Add timestamp to attributes
+            fdump.attrs[self._grow_ax] = timestamp
 
             # Copy index map
             index_map = fdump.create_group('index_map')
@@ -588,6 +604,15 @@ class Hdf5Writer(object):
 
         return (item in self.search)
 
+    def _index_grow_axis(self, dataset, ind):
+
+        axes = list(self.writer[dataset].attrs['axis'])
+        print dataset, axes
+        slc = [slice(None)] * len(axes)
+        if self._grow_ax in axes:
+            slc[axes.index(self._grow_ax)] = ind
+
+        return tuple(slc)
 
     @property
     def _index_map(self):
@@ -711,11 +736,16 @@ class Hdf5Archive(Hdf5Writer):
                 reader = h5py.File(af, 'r', libver='latest')
 
                 # Update searchable axis
-                for kk, key in enumerate(reader[self._uniq_id][:]):
-                    self.search[key] = (rr, kk)
+                if self._uniq_id is not None:
+                    for kk, key in enumerate(reader[self._uniq_id][:]):
+                        self.search[key] = (rr, kk)
 
                 # Update growing axis
                 tmp = reader['index_map'][self._grow_ax][:]
+                index_field = self._axes[self._grow_ax].get('index_field', None)
+                if index_field is not None:
+                    tmp = tmp[index_field]
+
                 self.grow['axis'] += list(tmp)
                 self.grow['index'] += zip(np.repeat(rr, tmp.size), np.arange(tmp.size, dtype=np.int))
 
