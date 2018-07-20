@@ -311,6 +311,7 @@ class chFPGA_receiver(object):
         """
         #self.sock.flush_data_socket() # This cause conflict with the background socket operations
         self.frame_receiver.flush(1)
+        #self.frame_queue.task_done()
         while (not self.frame_queue.empty()) or (not self.frame_queue_corr.empty()):
             print 'data_queue_empty=%s, corr_queue_empty=%s' % (self.frame_queue.empty(),self.frame_queue_corr.empty())
             time.sleep(0.1)

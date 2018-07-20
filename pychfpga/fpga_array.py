@@ -136,6 +136,7 @@ class FPGAArray(object):
                  subarrays=None,
 		 ping=True,
                  mdns_timeout=2,
+                 ping_timeout = 3,
                  no_mezz=False,
 
                  bitfile=None,
@@ -366,6 +367,7 @@ class FPGAArray(object):
 
              subarrays=None, ping=True,
              mdns_timeout=2,
+             ping_timeout = 3,
              no_mezz=False,
 
              bitfile=None,
@@ -588,7 +590,6 @@ class FPGAArray(object):
             self.hwm.flush()
 
         # If ping=1, remove boards that do not respond to tuber pings
-        ping_timeout = 3
         missing_boards = []
         if ping:
             self.logger.info('%r: Pinging IceBoards specified in YAML file' % (self))
@@ -637,7 +638,7 @@ class FPGAArray(object):
         # Explicitely listed boards must exist on the network
         if ping:
             # ping all boards concurrently
-            ping_results = yield {ib: ib.ping.async() for ib in added_ib}
+            ping_results = yield {ib: ib.ping.async(timeout=ping_timeout) for ib in added_ib}
             # If some boards failed, raise an exception
             if not all(ping_results.values()):
                 raise RuntimeError("%r: The following Iceboards could not be pigned: '%s'" % (
@@ -1059,7 +1060,22 @@ class FPGAArray(object):
         elif mode in ['shuffle256', 'shuffle512', 'shuffle16']:
             if not all(self.ib.CROSSBAR2) or not all(self.ib.CROSSBAR3):
                 raise RuntimeError('All IceBoards must have their CROSSBAR2 and CROSSBAR 3 implemented')
-            self.ib.BP_SHUFFLE.set_tx_power(13)
+            """self.ib.BP_SHUFFLE.set_tx_power(3)
+            time.sleep(0.1)
+            self.ib.BP_SHUFFLE.reset_rx_equalizers()
+            time.sleep(0.1)
+            self.ib.BP_SHUFFLE.set_tx_power(5)
+            time.sleep(0.1)
+            self.ib.BP_SHUFFLE.set_tx_power(7)
+            time.sleep(0.1)
+            self.ib.BP_SHUFFLE.set_tx_power(10)
+            time.sleep(0.1)
+            #self.ib.BP_SHUFFLE.reset_rx_equalizers()
+            #time.sleep(0.1)
+            self.ib.BP_SHUFFLE.set_tx_power(13)"""
+
+            self.ib.CROSSBAR3.SOF_WINDOW_STOP = 75
+            self.ib.CROSSBAR3.TIMEOUT_PERIOD = 0
             self.ib.CROSSBAR3.SOF_WINDOW_STOP = 100
             self.ib.CROSSBAR3.TIMEOUT_PERIOD = 0
             self.ib.BP_SHUFFLE.reset_rx_equalizers()
@@ -1495,12 +1511,18 @@ class FPGAArray(object):
                     # gtx.USER_RESET = 1
 
         # reset DFE at low power, then increase power
-        self.ib.BP_SHUFFLE.set_tx_power(5)
+        self.ib.BP_SHUFFLE.set_tx_power(3)
+        time.sleep(0.3)
         self.ib.BP_SHUFFLE.reset_rx_equalizers()
         #time.sleep(0.3)
-        #self.ib.BP_SHUFFLE.set_tx_power(7)
-        #self.ib.BP_SHUFFLE.set_tx_power(10)
-        self.ib.BP_SHUFFLE.set_tx_power(13)
+
+        for i in range(4,14):    
+    
+            self.ib.BP_SHUFFLE.set_tx_power(i)
+            time.sleep(0.3)
+            self.ib.BP_SHUFFLE.reset_rx_equalizers()
+            time.sleep(0.3)
+
         self.ib.BP_SHUFFLE.reset_stats()
 
         # Print links
@@ -1965,7 +1987,6 @@ class FPGAArray(object):
         # link_list.sort(key=lambda (lt, (sc, ss, sl), (dc, ds, dl)): ss * 16 + ds)
         return link_map
 
-
     @async
     def get_ber(self, link_list=None, period=0.1, tx_power=None, print_=True):
 
@@ -1975,15 +1996,15 @@ class FPGAArray(object):
             # First, make sure we can get errors by setting the wrong RX PRBS Sequence
             if source_gtx is None or dest_gtx is None:
                 continue
-            if link[0] == 'BP_QSFP':
-                source_gtx.TXDIFFCTRL = 12
-            if tx_power is not None:
-                source_gtx.TXDIFFCTRL = tx_power
 
             source_gtx.TXPRBSSEL = 4
-            dest_gtx.RXPRBSCNTRESET = 1
             dest_gtx.RXPRBSSEL = 3
+            dest_gtx.RXPRBSCNTRESET = 1
+        
+            dest_gtx.RXPRBSCNTRESET = 1
+            time.sleep(0.0005)
             dest_gtx.RXPRBSCNTRESET = 0
+
             t0 = time.time()
             while True:
                 if dest_gtx.ERR_CTR:
@@ -1991,57 +2012,45 @@ class FPGAArray(object):
                 if time.time() - t0 > 1:
                     raise SystemError('Cannot detect errors even with the wrong sequence! Are the links connected as expected?')
             dest_gtx.RXPRBSSEL = 4
-            dest_gtx.RXDFELPMRESET = 1
-            time.sleep(0.00005)
-            dest_gtx.RXDFELPMRESET = 0
+
+            dest_gtx.RXPRBSCNTRESET = 1
+            time.sleep(0.0005)
+            dest_gtx.RXPRBSCNTRESET = 0
 
         # Perform BER test on a single list, to be run in parallel below
         @async
         def one_link_ber(link):
             (link_type, (sc, ss, sl), (dc, ds, dl)), (source_gtx, dest_gtx) = link
 
-            if tx_power is not None:
-                source_gtx.TXDIFFCTRL = tx_power
-
             source_gtx.TXPRBSSEL = 4
             if print_:
                 print 'Measuring BER for link %s' % (link[0],),
                 print source_gtx.TXDIFFCTRL
-            # dest_gtx.RXPRBSCNTRESET=1
-            # dest_gtx.RXPRBSCNTRESET=0
-            # dest_gtx.RXPRBSCNTRESET=1
-            # dest_gtx.RXPRBSCNTRESET=0
-            # t0=time.time()
-            # while time.time()-t0 < 13:
-            #    print  dest_gtx.ERR_CTR, 'from', dest_gtx
-            #    #dest_gtx.RXPRBSCNTRESET=1
-            #    #dest_gtx.RXPRBSCNTRESET=0
-            #    time.sleep(0.5)
-            #    #if not dest_gtx.ERR_CTR:
-            #    #    print 'locked',
-            #    #    break
-            #dest_gtx.RXPRBSCNTRESET=1
-            dest_gtx.RXDFELPMRESET = 1
-            time.sleep(0.00005)
-            dest_gtx.RXDFELPMRESET = 0
-            time.sleep(0.00005)
+            
             dest_gtx.RXPRBSCNTRESET = 1
-            dest_gtx.RXDFELPMRESET = 1
-            time.sleep(0.00005)
-            dest_gtx.RXDFELPMRESET = 0
-            time.sleep(0.00005)
+            time.sleep(0.0005)
             dest_gtx.RXPRBSCNTRESET = 0
+
             yield gen.sleep(period)
             cnt = dest_gtx.ERR_CTR
             err = (float(cnt) * 16) / (period * 10e9)
             err_max = (float(cnt) * 16 + 1) / (period * 10e9)
-
-            print '%r BER = %1.1e (%i errors, BER<%1.1e)' % (link[0], err, cnt, err_max)
-            self.print_flush()
+            
+            if print_:
+                print '%r BER = %1.1e (%i errors, BER<%1.1e)' % (link[0], err, cnt, err_max)
+                self.print_flush()
             async_return(err)
 
         # Run BER test on each link in parallel
         ber_table = yield {link: one_link_ber.async((link, gtxes)) for link, gtxes in links.items()}
+
+        for link, (source_gtx, dest_gtx) in links.items():
+            # First, make sure we can get errors by setting the wrong RX PRBS Sequence
+            if source_gtx is None or dest_gtx is None:
+                continue
+            source_gtx.TXPRBSSEL = 0
+            dest_gtx.RXPRBSSEL = 0
+            
         async_return(ber_table)
 
     def get_ber_vs_power(self, links, max_power, period=0.1):
@@ -2539,7 +2548,7 @@ class FPGAArray(object):
                     gg.TXDIFFCTRL = pmax
 
     def print_rx_err_map(self, icecrates=None, reset_stats=0, delay=-5, tx_power=None,
-                         tx_precursor=None, tx_postcursor=None, lpm = None, dfe_reset=False, stop_on_errors=2, verbose=1):
+                         tx_precursor=None, tx_postcursor=None, lpm = None, dfe_reset=False, stop_on_errors=2, verbose=1, stop_on_error_count=250):
         """
         Initialize and test the corner turn engine operation.
 
@@ -2548,7 +2557,7 @@ class FPGAArray(object):
 
             reset_stats (bool): Reset the statistics counters. Default is false.
 
-            delay (int):
+            delay (int):  (negative delay means that it will delay once only at abs(delay), i.e good for passing commands in )
 
             tx_power (int). transmit power to be set on the GTX. Ranges from 0-15. If ``None``, TX power levels ar enot changed.
 
@@ -2561,6 +2570,8 @@ class FPGAArray(object):
             dfe_reset (bool): If true, resets the Dynamix Feedback Equalizer to allow it to find a new equalization solution. Is needed when power levels or operaiton mode are changed
 
             stop_on_errors=2,
+
+            stop_on_error_count=250: will stop if the error counter gets too high (saturates at 255). Useful so that you can find out how long it takes to saturate the counter
 
             verbose=1
         """
@@ -2631,7 +2642,7 @@ class FPGAArray(object):
                         'so far' if not has_errors[i] else '')
                     if verbose:
                         self.print_table(err_map, row_labels=row_labels, col_labels=col_labels, corner_label=corner_label)
-                if (stop_on_errors == 1 and any(has_errors)) or (stop_on_errors > 1 and all(has_errors)):
+                if (stop_on_errors == 1 and any(has_errors)) or (stop_on_errors > 1 and all(has_errors)) or delay<0 or worst_err >= stop_on_error_count:
                     break
         except KeyboardInterrupt:
             pass
@@ -2703,6 +2714,17 @@ class FPGAArray(object):
         Update the ARM SD card firmware and power cycle all the power supplies. The image must be compressed with bzip2.
         """
         self.ib._update_arm_firmware(image_filename, delay=120)
+        if self.ps and power_cycle:
+            ps.unlock()
+            ps.power_cycle(delay=4)
+    
+    def _update_arm_firmware2(self, image_filename, power_cycle=True):
+        """
+        Update the ARM SD card firmware and power cycle all the power supplies. The image must be compressed with bzip2.
+        Different from _update_arm_firmware in the sense that it will copy busybox to the tmp folder then use that to perform
+        the bzcat. This means we can be cheeky and switch all the cards in the rack quickly and make a new set.
+        """
+        self.ib._update_arm_firmware2(image_filename, delay=120)
         if self.ps and power_cycle:
             ps.unlock()
             ps.power_cycle(delay=4)
