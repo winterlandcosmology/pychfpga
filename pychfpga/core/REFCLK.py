@@ -305,7 +305,8 @@ class REFCLK_base(Module_base):
                 print 'Sync delay %2i:' % (sync_delay),
                 for i, ch in enumerate(channels):
                     bitstring = bytearray((waveforms[sync_delay][i].astype(np.int8) + ord('0')).tostring() + (' '*(adc_data_clock_period-32)))  # pad in case there the clock period is longer than 32
-                    if rising_edges[sync_delay, i] is not np.NaN:
+#                    if rising_edges[sync_delay, i] is not np.NaN:
+                    if ~np.isNaN(rising_edges[sync_delay, i]): # add by rd 171207 for Adam Gilbert - to fix the ramp test fail on SN 0394
                         edge_pos = int(rising_edges[sync_delay, i])
                         if bitstring[edge_pos] == ord('1'):
                             bitstring[edge_pos] = '!' #  we converted the string to bytearray so we could do assignments like this
