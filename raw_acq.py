@@ -175,36 +175,43 @@ class GainEstimator(object):
         self.number_of_ports = number_of_ports
         self.number_of_frames = number_of_frames
 
+    @coroutine
     def estimateGains(self):
         ''' Assume setup to send spectrum data.  average a number of
             frames together, and get estimate of new gain settings.'''
         # gain_estimates = []
+        base_data_port = 42500 # JM: ASSUME THIS NUMBER IS FIXED
         frame_number = 0
         spectrum = np.zeros((self.number_of_ports, self.number_of_frames, 16, 1024), dtype=np.complex)  # port (board), timestanp, channel, bin
         while frame_number < self.number_of_frames:
-            timestamps, ports, all_data = self.read_data_func()
-            data_unpacked = (np.array(all_data).astype(np.int8) ^ np.int8(128)) >> 4
+            timestamps, ports, all_data = yield self.read_data_func()
+            print(type(ports))
+            data_arr = np.array([all_data[port_info['port']] for port_info in ports])
+            data_unpacked = (data_arr.astype(np.int8) ^ np.int8(128)) >> 4
             spectrum[:,frame_number,:,:] = data_unpacked[:,:,::2] + 1.0j*data_unpacked[:,:,1::2]
             frame_number += 1
 
-        for i, port in enumerate(ports):
-            if self.previousGain:
-                gain_calc = GainCalc(self.previousGain[i])
-                first_run = False
+        if self.previousGain is None:
+            self.previousGain = {}
+            first_run = True
+        else:
+            first_run = False
+
+        for i, port_info in enumerate(ports):
+            port = port_info['port']
+            crate = (port-base_data_port)//100
+            slot_0based = ((port-base_data_port) % 100)-1 # zero-based
+            if first_run:
+                gain_calc = GainCalc()                
             else:
-                gain_calc = GainCalc()
-                self.previousGain = []
-                first_run = True
+                gain_calc = GainCalc(self.previousGain[(crate, slot_0based)])
             gain = gain_calc.noisy_gain_estimate(spectrum[i])
             for j in range(16):
                 gain_calc.update(gain[j][1][0])
                 glin_update = gain_calc.run()
                 gain[j][1][0] = glin_update.tolist()
-            if first_run:
-                self.previousGain.append(gain)
-            else:
-                self.previousGain[i] = gain
-        return self.previousGain
+            self.previousGain[(crate, slot_0based)] = gain
+        coroutine_return(self.previousGain)
 
 
 
@@ -887,13 +894,13 @@ class RawAcqReceiver(object):
         #             self.all_data[j][chan, :] = adc_data
         #             self.n_ant_rec = 1
         #Should use the returned port.  cheating here.
-        if self.start_capture:
+        if self.capture_start:
             raise RuntimeError('Data set capture is already in progress')
-        self.start_capture = True
-        while not self.start_capture:
+        self.capture_start = True
+        while not self.capture_start:
             yield moment
 
-        coroutine_return(self.all_ts, self.ports, self.all_data)
+        coroutine_return((self.all_ts, self.ports, self.all_data))
 
 
     def is_running(self):
@@ -1070,20 +1077,20 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
 
 
     @coroutine
-    @endpoint
+    @endpoint('get-packets')
     def get_packets(self, handler):
         self.log.info('%.32r: received get_packets command' % self)
         ts, ports, data = yield self.receiver.get_data()
         print(ts)
         print(ports)
         print(data)
-        coroutine_return(ts=ts.tolist(), ports=ports, data=data.tolist())
+        coroutine_return(ts=ts.items(), ports=ports, data=data.items())
 
     @coroutine
-    @endpoint
+    @endpoint('estimate-gains')
     def estimate_gains(self, handler):
-        if self.gain_estimator:
-            gains = self.gain_estimator.estimateGains()
+        if self.receiver.gain_estimator:
+            gains = yield self.receiver.gain_estimator.estimateGains()
             coroutine_return(gains=gains)
         else:
             raise RuntimeError('Gain estimator is not created (most probably because the server is not started)')
@@ -1190,7 +1197,7 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
 
     @coroutine
     def estimate_gains(self):
-        coroutine_return((yield self.post('estimate_gains')))   # estimate-gains?
+        coroutine_return((yield self.post('estimate-gains')))
 
 
 

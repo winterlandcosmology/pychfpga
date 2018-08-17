@@ -892,6 +892,62 @@ class ChimeMaster(object):
         self.log.info("finished initializing FPGAs")
 
     @coroutine
+    def compute_gains_raw_acq(self, N_iterations=18, gain_folder='/home/chime/ch_acq/gains'):
+        '''
+        Calculate gains using raw_acq server
+        '''
+        self.log.info("Obtain the current state of all boards")
+        # This assumes that all boards have the same config as board 0
+        data_source = self.fpgas.ib[0].get_data_source()[0]
+        adc_mode = self.fpgas.ib[0].get_adc_mode()
+        fft_bypass = self.fpgas.ib[0].get_fft_bypass()[0]
+        fft_shift = self.fpgas.ib[0].get_fft_shift()[0]
+        scaler_bypass = self.fpgas.ib[0].get_scaler_bypass()[0]
+
+        self.log.info("Configure all boards to capture ADC data and enable FFT")
+        self.fpgas.ib.set_data_source('adc')
+        self.fpgas.ib.set_adc_mode('data')
+        self.fpgas.ib.set_fft_bypass(0)
+        self.fpgas.ib.set_fft_shift(1367) 
+        self.fpgas.ib.set_scaler_bypass(0)
+        self.fpgas.ib.set_offset_binary_encoding() #DO WE NEED THIS
+        default_log2_gain = 22
+        self.fpgas.ib.set_gains((1,default_log2_gain))
+        #self.fpgas.ib.start_data_capture(burst_period_in_seconds=0.001)
+        self.fpgas.ib.sync() # IS IT OK TO SYNC HERE?
+
+        self.log.info("Starting gain calculation")
+        for i in range(N_iterations):
+            self.log.info("Iteration %i" %(N_iterations))
+
+            # Calculate gains for each node. Then set gains for each board in the node
+            for node_name, node in self.raw_acq.items():
+                node_gain = node.estimate_gains() # Node gain s a dictionary. The keys are tuples (crate, slot_0based)
+                for j, ib in enumerate(self.raw_acq_ibs[node_name]):
+                    ch_id = ib.get_id() # ch_id is a tuple (crate, slot_0based)
+                    ib.set_gain(node_gain[ch_id])
+        
+        self.log.info("Finished gain calculation. Saving digital gains")
+        # Save gains
+        for node_name, node in self.raw_acq.items():
+            for ib in self.raw_acq_ibs[node_name]:
+                slot_0based = c.slot-1
+                crate = c.crate.crate_number
+                self.log.info('Saving gains for crate %02i slot %02i (FCC%02i%02i)' % (crate, slot_0based, crate, slot_0based))
+                ib_gain = ib.get_gains()
+                output = open(os.path.join(gain_folder, 'gains_FCC%02i%02i.pkl' % (crate, slot_0based)),'wb')
+                pickle.dump(gain, output)
+                output.close()
+
+        self.log.info("Restoring the initial state of all boards")
+        self.fpgas.ib.set_data_source(data_source)
+        self.fpgas.ib.set_adc_mode(adc_mode)
+        self.fpgas.ib.set_fft_bypass(fft_bypass)
+        self.fpgas.ib.set_fft_shift(fft_shift) 
+        self.fpgas.ib.set_scaler_bypass(scaler_bypass)
+        self.fpgas.ib.set_local_data_port_number(local_data_port_number)
+
+    @coroutine
     def update_channelizers(self, **params):
 
         # Log the new parameters
