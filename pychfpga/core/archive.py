@@ -47,6 +47,16 @@ def convert_camel_case(name):
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
 
+def mkdir(directory):
+    """ Make a directory if it does not already exist.
+    """
+    try:
+        os.makedirs(directory)
+    except OSError:
+        if not os.path.isdir(directory):
+            raise
+
+
 def rlock(func):
     """Decorator that acquires a re-entrant lock stored in self before
     running the function it wraps and releases the lock on completion.
@@ -180,7 +190,6 @@ class Hdf5Writer(object):
             # Add attributes
             self.attrs['acquisition_name'] = os.path.basename(os.path.dirname(output_file))
 
-            # Add attributes
             for key, value in self.attrs.iteritems():
                 self.writer.attrs[key] = value
 
@@ -438,7 +447,9 @@ class Hdf5Writer(object):
     @rlock
     def read_all(self, dataset):
 
-        return np.concatenate(tuple([rd[dataset][:] for rd in self.reader]), axis=0)
+        ax = list(self.writer[dataset].attrs['axis']).index(self._grow_ax)
+
+        return np.concatenate(tuple([rd[dataset][:] for rd in self.reader]), axis=ax)
 
 
     @rlock
@@ -704,7 +715,7 @@ class Hdf5Writer(object):
 
     def __getitem__(self, key):
 
-        if isinstance(key, basestring):
+        if isinstance(key, basestring) or (isinstance(key, int) and (key < 1e9)):
 
             idd = self.search.get(key, None)
 

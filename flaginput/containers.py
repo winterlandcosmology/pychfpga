@@ -15,16 +15,6 @@ from version import __version__
 DEFAULTS = NameSpace(load_yaml_config(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                    'defaults.yaml') + ':flaginput'))
 
-def mkdir(directory):
-    """ Make a directory if it does not already exist.
-    """
-    try:
-        os.makedirs(directory)
-    except OSError:
-        if not os.path.isdir(directory):
-            raise
-
-
 class FlagCorrInputArchive(Hdf5Archive):
     """ Interface to an Hdf5Archive containing correlator input flags.
     """
