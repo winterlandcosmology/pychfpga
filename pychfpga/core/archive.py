@@ -47,16 +47,6 @@ def convert_camel_case(name):
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
 
-def mkdir(directory):
-    """ Make a directory if it does not already exist.
-    """
-    try:
-        os.makedirs(directory)
-    except OSError:
-        if not os.path.isdir(directory):
-            raise
-
-
 def rlock(func):
     """Decorator that acquires a re-entrant lock stored in self before
     running the function it wraps and releases the lock on completion.
@@ -715,7 +705,7 @@ class Hdf5Writer(object):
 
     def __getitem__(self, key):
 
-        if isinstance(key, basestring) or (isinstance(key, int) and (key < 1e9)):
+        if isinstance(key, basestring):
 
             idd = self.search.get(key, None)
 
