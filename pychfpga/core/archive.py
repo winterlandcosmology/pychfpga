@@ -542,9 +542,16 @@ class Hdf5Writer(object):
             self.attrs[key] = value
 
 
-    def dump(self, output_file, timestamp=None, datasets=None):
+    def dump(self, output_file, uniq_id=None, timestamp=None, datasets=None):
         """ Dump a single timestamp to a separate HDF5 file.
         """
+
+        if uniq_id is not None:
+            timestamp = self.grow_axis(uniq_id)
+
+        if timestamp is None:
+            with self._rlock:
+                timestamp = self.grow['axis'][-1]
 
         if datasets is not None:
             datasets = [dset for dset in datasets if dset in self.datasets]
@@ -555,10 +562,6 @@ class Hdf5Writer(object):
         for name in datasets:
             axes += self._dataset_spec[name]['axes']
         axes = [ax for ax in set(axes) if ax != self._grow_ax]
-
-        if timestamp is None:
-            with self._rlock:
-                timestamp = self.grow['axis'][-1]
 
         with h5py.File(output_file, 'w', libver='latest') as fdump:
 
