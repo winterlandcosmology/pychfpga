@@ -437,9 +437,7 @@ class Hdf5Writer(object):
     @rlock
     def read_all(self, dataset):
 
-        ax = list(self.writer[dataset].attrs['axis']).index(self._grow_ax)
-
-        return np.concatenate(tuple([rd[dataset][:] for rd in self.reader]), axis=ax)
+        return np.concatenate(tuple([rd[dataset][:] for rd in self.reader]), axis=0)
 
 
     @rlock
