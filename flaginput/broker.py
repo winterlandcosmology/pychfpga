@@ -729,8 +729,8 @@ class FlagCorrInput(object):
             for ff in all_files:
                 self.file_queue.put(ff, block=False)
 
-            # Update the time
-            self.search_time = time.time()
+                # Update the time
+                self.search_time = os.path.getmtime(ff)
 
 
     def process_raw_adc_files(self):
@@ -1715,6 +1715,22 @@ class FlagCorrInputAsyncRESTServer(AsyncRESTServer):
             coroutine_return( "FlagCorrInput server is not started" )
 
     @coroutine
+    @endpoint('reset-control-flag')
+    def reset_control_flag(self, handler, source):
+        self.log.info('%r: Received request to reset %s control flag.' % (self, source))
+
+        source = json.loads(source)
+
+        if self.flg and source in self.flg.control:
+
+            self.flg.control[source].reset()
+
+            coroutine_return( "Reset %s control flag." % source )
+
+        else:
+            coroutine_return( "FlagCorrInput server is not started" )
+
+    @coroutine
     @endpoint('past-correlator-input-flags')
     def past_correlator_input_flags(self, handler, timestamp):
         self.log.info('%r: Received request for past correlator input flags.' % self)
@@ -1963,6 +1979,11 @@ class FlagCorrInputAsyncRESTClient(AsyncRESTClient):
     def get_summary(self):
         res = yield self.get('summary')
         self.print_result(res)
+
+    @coroutine
+    def reset_control_flag(self, source):
+        res = yield self.post('reset-control-flag', source)
+        coroutine_return(res)
 
     @coroutine
     def get_past_correlator_input_flags(self, timestamp):

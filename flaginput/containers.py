@@ -365,6 +365,11 @@ class ControlFlag(object):
         if now_good.size > 0:
             self._flag[now_good] = True
 
+    def reset(self):
+
+        self._flag = None
+        self._count = None
+
     @property
     def flag(self):
         return self._flag
