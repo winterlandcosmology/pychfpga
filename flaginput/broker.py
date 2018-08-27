@@ -946,7 +946,10 @@ class FlagCorrInput(object):
                 payload = self.create_payload(update_id, this_time + self.config.sync_delay, new_combined_flag)
 
                 for client in self.consumers:
-                    client.update_bad_inputs(**payload)
+                    try:
+                        client.update_bad_inputs(**payload)
+                    except Exception as exc:
+                        self.log.error("Failed sending bad inputs to %r: %s" % (client, exc))
 
                 # Save current time if the combined flags changed
                 self.update_time['combined'] = this_time
