@@ -1484,8 +1484,7 @@ class FlagCorrInputAsyncRESTServer(AsyncRESTServer):
         """
         self.log.info('%r: Received start command' % self)
         if self.flg:
-            self.log.info('%r: FlagCorrInput server already running.  Restarting with new config.' % self)
-            self.shutdown()
+            coroutine_return('FlagCorrInput server already running.  Use the stop endpoint.')
 
         # Save configuration file
         # Save configuration parameters
