@@ -1,5 +1,5 @@
 flaginput:
-    sources: ['layout', 'manual', 'power', 'rms', 'rfi', 'raw']
+    sources: ['layout', 'manual', 'power', 'rms', 'raw']
     combine: ['layout', 'manual', 'power', 'rms', 'raw']
     correlator: 'chime'
     output_dir: '/data/flaginput'
@@ -24,7 +24,7 @@ flaginput:
             - {hostname: 'hk-west', port: 5000, bulkheads: ['A', 'B']}
             - {hostname: 'hk-east', port: 5000, bulkheads: ['C', 'D']}
     rms:
-        cadence: 60.0
+        cadence: 30.0
         clients:
             - {hostname: 'carillon', port: 54322}
         lower_limit: 4.0
@@ -37,7 +37,7 @@ flaginput:
         max_rate: 2.0
         trial_period: 1.0
     rfi:
-        cadence: 5.0
+        cadence: 60.0
         clients:
             - {hostname: 'carillon', port: 7342}
         threshold: 20.0
