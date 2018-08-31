@@ -1836,6 +1836,30 @@ class FlagCorrInputAsyncRESTServer(AsyncRESTServer):
             coroutine_return( "FlagCorrInput server is not started" )
 
     @coroutine
+    @endpoint('send-last-update')
+    def send_last_update(self, handler):
+        self.log.info('%r: Received request to POST last update to consumers.' % self)
+
+        if self.flg:
+            update_id = self.flg.update_id['combined']
+            timestamp_returned, arr = self.flg.get_flag(update_id, dataset='flag')
+
+            if timestamp_returned is not None:
+
+                payload = self.flg.create_payload(update_id, timestamp_returned, arr)
+
+                msg = yield {client.url('update_bad_inputs'): client.update_bad_inputs(**payload)
+                             for client in self.flg.consumers}
+
+                coroutine_return( msg )
+
+            else:
+                coroutine_return( "No flags available." )
+
+        else:
+            coroutine_return( "FlagCorrInput server is not started" )
+
+    @coroutine
     @endpoint('past-update')
     def past_update(self, handler, tag):
         self.log.info('%r: Received request for past tag: %s' % (self, tag))
@@ -2010,6 +2034,11 @@ class FlagCorrInputAsyncRESTClient(AsyncRESTClient):
     @coroutine
     def get_last_update(self):
         res = yield self.get('last-update')
+        coroutine_return(res)
+
+    @coroutine
+    def send_last_update(self):
+        res = yield self.get('send-last-update')
         coroutine_return(res)
 
     @coroutine
