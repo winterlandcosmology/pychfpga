@@ -1846,12 +1846,12 @@ class FlagCorrInputAsyncRESTServer(AsyncRESTServer):
 
             if timestamp_returned is not None:
 
-                payload = self.flg.create_payload(update_id, timestamp_returned, arr)
+                payload = self.flg.create_payload(update_id, time.time() + self.flg.config.sync_delay, arr)
 
-                msg = yield {client.url('update_bad_inputs'): client.update_bad_inputs(**payload)
-                             for client in self.flg.consumers}
+                for client in self.flg.consumers:
+                    client.update_bad_inputs(**payload)
 
-                coroutine_return( msg )
+                coroutine_return( payload )
 
             else:
                 coroutine_return( "No flags available." )
