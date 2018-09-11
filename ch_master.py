@@ -906,7 +906,7 @@ class ChimeMaster(object):
             requested_dsrc = 'buffer'
 
         dsrc = self.fpgas.ib[0].get_data_source()[0]
-        sync = (dsrc != requested_dsrc)
+        sync = True # (dsrc != requested_dsrc)
 
         self.log.info('Requested data source: %s | Current data source: %s | SYNC: %s' %
                       (requested_dsrc, dsrc, sync))
