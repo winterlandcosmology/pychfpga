@@ -1,4 +1,4 @@
-""" Basic handler for chFPGA firmware.
+""" Handler for the IceBoard's FPGA core UDP communication and hardware management firmware.
 """
 
 import logging
@@ -32,19 +32,22 @@ from lib import gpio
 
 
 class IceBoardExtHandler(IceBoardPlusHandler):
-    """ Provides basic access to the basic CHIME-specific FPGA firmware features and to the IceBoard
-    hardware resources through the FPGA.
+    """ Provides basic access to the core FPGA firmware to support direct UDP
+    communication with the FPGA and access to IceBoard hardware ressources via the FPGA.
 
     This class provides:
 
     - UDP/IP/Ethernet-based direct Memory Map Interface (MMI) to the FPGA using its Ethernet port. Note
       that this accesses an address space that is separate from the one accessed throughthe ARM SPI interface.
       Methods to initialize the Ethernt networking parameters through the ARM SPI interface are provided.
+
     - Alternate access to the IceBoard and Backplane hardware through the FPGA I2C interface through
       the `hw` object. Access to the hardware is normally done through the high-level ARM-provided
       methods, but these methods are useful for development and debugging. The exception is the the
       IceCrate handler which uses the FPGA to access backplane resources.
+
     - Overriden mezzanine identification methods that support non-IPMI McGill ADC mezzanine boards.
+
     - IRIG-B subsystem operation (through the ARM SPI interface)
 
     `IceBoardExtHandler` can be created as a standard Python object initialized with a number of
@@ -314,7 +317,7 @@ class IceBoardExtHandler(IceBoardPlusHandler):
         # link by reading the UDP MMI cookie (not the SPI one) and check if
         # the cookie correspond to the chFPGA firmware.
         # -------------------------------------------------------------------------
-        self.clear_fpga_udp_errors(force=True, no_reset=True) # Try to prevent initial error on first command
+        yield self.clear_fpga_udp_errors.async(force=True) # Reset the UDP stack and command sequence number to prevent initial error on first command
         self.logger.debug("%r: Attempting to communicate with the FPGA over direct Ethernet link" % self)
         try:
             cookie = yield self.get_fpga_firmware_cookie.async(resync=True)  # Read the firmware version cookie from the GPIO subsystem (this is provided by the FPGA core firmware which is always present on all versions of the FPGA)
@@ -436,24 +439,43 @@ class IceBoardExtHandler(IceBoardPlusHandler):
 
 
     @async
-    def clear_fpga_udp_errors(self, force=False, no_reset=False):
-        if force or self.mmi.error_counter > 40:
-            self.logger.info('%r: clearing FPGA UDP errors' % self)
-            if not no_reset:
+    def clear_fpga_udp_errors(self, force=False, max_trials=3):
+        """ Attempts to clear the FPGA UDP communication errors.
+
+        Parameters:
+
+            force (bool): If True, the UDP stack is reset whether of not the
+                current number of communicatoin errors exceed the threshold or
+                not.
+
+        """
+        trial = 0
+        while True:
+            if force or self.mmi.error_counter > 40:
+                trial += 1
+                self.logger.info('%r: Resetting FPGA UDP stack (trial #%i/%i)' % (self, trial, max_trials))
                 yield self.reset_sfp()
+                yield async_sleep(0.1)
                 yield self.reset_fpga_udp_stack.async()
-            try:
-                self.mmi.flush()
-                self.mmi.read(0, length=1, retry=-1, resync=1)
-                self.mmi.read(0, length=1, resync=1)
-                self.mmi.flush()
-                (cmd, rply) = self.core_gpio.get_command_count()
-                self.mmi.send_counter = cmd
-                self.mmi.recv_counter = rply
-            except IOError:
-                pass
-            self.mmi.error_counter = 0
-            self.logger.info('%r: Finished clearing FPGA UDP errors. Hoping it works now...' % self)
+                yield async_sleep(0.1)
+                self.logger.info('%r: Trying to read from FPGA UDP stack' % self)
+                try:
+                    self.mmi.flush()
+                    self.mmi.read(0, length=1, retry=-1, resync=1)
+                    self.mmi.read(0, length=1, resync=1)
+                    self.mmi.flush()
+                    (cmd, rply) = self.core_gpio.get_command_count()
+                    self.mmi.send_counter = cmd
+                    self.mmi.recv_counter = rply
+                    self.mmi.error_counter = 0
+                    self.logger.info('%r: Finished clearing FPGA UDP errors.' % self)
+                    return
+                except IOError:
+                    if trial > max_trials:
+                        raise IOError('%r: cannot communicate with FPGA port after %i FPGA UDP stack resets' % (self, trials))
+                    else:
+                        self.logger.info('%r: Still obtaining FPGA UDP errors after %i FPGA UDP stack reset. Retrying...' % (self, trial))
+                    pass
 
     @async
     def check_command_count(self, reset=False):
@@ -1127,7 +1149,7 @@ class I2CInterface(object):
         Returns:
 
             A string which include the parent object id.
- 
+
         """
         return "%s(%r)" % (self.__class__.__name__, self.parent)
 
@@ -1146,7 +1168,7 @@ class I2CInterface(object):
             bus_names (str, int, or list of str or int): Name or number of the
                 I2C bus to enable on the I2C switch. Multiple buses can be
                 enabled at one time.
-            
+
             args, kwargs: passed to the bus select function
 
         Exceptions:
@@ -1183,7 +1205,7 @@ class I2CInterface(object):
         Parameters:
             See `I2C.write_read`
 
-        Returns:    
+        Returns:
             See `I2C.write_read`
 
         Exceptions:
