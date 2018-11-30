@@ -859,7 +859,48 @@ class FPGAArray(object):
             if if_ip:
                 self.ib.interface_ip_addr = if_ip
 
-            self.logger.info('%r: Initializing firmware (calling ib.open())' % self)
+
+            ########################
+            # Initialize core FPGA firmware (establish FPGA UDP communications)
+            ########################
+            self.logger.info('%r: Initializing core FPGA firmware, including FPGA UDP communications (calling ib.open_core())' % self)
+            @async
+            def open_core(ib, max_trials=3):
+                """ Try to open the FPGA core firmware (including UDP
+                communications) and reprogram the FPGA and retry a numer of
+                times if this fails.
+
+                Parameters:
+
+                    ib: IceBoard handler
+
+                    max_trials (int): Maximun allowed number of reprogramming and retrials before raising an error.
+
+                Exceptions:
+
+                    IOError: Raised if the iceboard's open_core still raaises an IOError after the maximum number of trials.
+
+                """
+                trial = 1
+                while True:
+                    try:
+                        yield ib.open_core.async()
+                        return
+                    except IOError as e:
+                        self.logger.error('%r: Error while initializing core firmware on trial %i/%i. Error is: \n%r' % (self, trial, max_trials, e))
+                        if trial >= max_trials:
+                            raise IOError('%r: Unable to initializing FPGA core firmware after %i trial. Giving up.' % (self, i))
+                        else:
+                            trial += 1
+                            self.logger.error('%r: Reprogramming FPGA and trying again.' % (self))
+                            yield ib.set_fpga_bitstream.async(force=True)
+            yield [open_core.async(ib) for ib in self.ib]
+
+            ########################
+            # Initialize application specific FPGA firmware
+            ########################
+
+            self.logger.info('%r: Initializing FPGA firmware (calling ib.open())' % self)
             yield [ib.open.async(adc_delay_table=ADC_DELAY_TABLE,
                                  udp_retries=udp_retries,
                                  init=open,
@@ -868,13 +909,23 @@ class FPGAArray(object):
                                  # reference_frequency=reference_frequency,
                                  ) for ib in self.ib]
 
+            ########################
+            # Initializing SYNC method
+            ########################
             if sync_method or sync_source:
                 self.logger.info('%r: Setting SYNC method' % self)
                 self.set_sync_method(method=sync_method, source=sync_source, master=sync_master, master_time_source=sync_master_time_source)
 
+            ########################
+            # Initializing operational mode
+            ########################
             if mode:
                 self.logger.info('%r: Setting operational mode to %s' % (self, mode))
                 self.set_operational_mode(mode=mode, frames_per_packet=frames_per_packet, tx_power=tx_power)
+
+            ########################
+            # Initializing backplane hardware communication firmware
+            ########################
 
             self.logger.info('%r: Initializing Backplane firmware' % self)
             if self.ic:
