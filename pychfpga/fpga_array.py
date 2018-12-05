@@ -672,7 +672,7 @@ class FPGAArray(object):
                 # resolve hostnames into IP addresses
                 # this is not concurrent, unfortunately... this is why we checked ping first, otherwise it blocks for a long time
 
-                self.logger.info('%r: Resolving IP addresses of Iceboards that passed the ping test' % (self, time.time() - t0))
+                self.logger.info('%r: Resolving IP addresses of Iceboards that passed the ping test' % (self))
                 t0 = time.time()
                 for ib, ping_result in ping_results.items():
                     if ping_result:
@@ -863,7 +863,6 @@ class FPGAArray(object):
             ########################
             # Initialize core FPGA firmware (establish FPGA UDP communications)
             ########################
-            self.logger.info('%r: Initializing core FPGA firmware, including FPGA UDP communications (calling ib.open_core())' % self)
             @async
             def open_core(ib, max_trials=3):
                 """ Try to open the FPGA core firmware (including UDP
@@ -884,12 +883,13 @@ class FPGAArray(object):
                 trial = 1
                 while True:
                     try:
+                        self.logger.info('%r: Initializing core FPGA firmware, including FPGA UDP communications (calling ib.open_core()). Trial %i/%i.' % (self, trial, max_trials))
                         yield ib.open_core.async()
                         return
                     except IOError as e:
                         self.logger.error('%r: Error while initializing core firmware on trial %i/%i. Error is: \n%r' % (self, trial, max_trials, e))
                         if trial >= max_trials:
-                            raise IOError('%r: Unable to initializing FPGA core firmware after %i trial. Giving up.' % (self, i))
+                            raise IOError('%r: Unable to initializing FPGA core firmware after %i trials. Giving up.' % (self, trial))
                         else:
                             trial += 1
                             self.logger.error('%r: Reprogramming FPGA and trying again.' % (self))

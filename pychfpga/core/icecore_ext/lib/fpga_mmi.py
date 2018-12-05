@@ -267,7 +267,7 @@ class FpgaMmi:
         old_timeout = self.get_timeout()
         if retry is None:
             retry = self.udp_retries
-        retries = 0
+        trial = 1
         while True:
             try:
                 error = ''
@@ -299,12 +299,12 @@ class FpgaMmi:
 
             self.error_counter += 1
 
-            if retries > retry:
-                self.logger.error('%r: %s Raising exception after %i unsuccessful trials' % (self, error, retries))
+            if trial >= retry:
+                self.logger.error('%r: %s Raising exception after %i unsuccessful trials' % (self, error, trial))
                 raise IOError('%r: %s' % (self, error))
             else:
-                self.logger.warning('%r: %s This is trial %i/%i. Trying again' % (self, error, retries, retry))
-            retries += 1
+                self.logger.warning('%r: %s This is trial %i/%i. Trying again' % (self, error, trial, retry))
+            trial += 1
         # We now have our data for this chunk
         self.set_timeout(old_timeout)
         return data[1:]
