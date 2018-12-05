@@ -218,7 +218,7 @@ class IceBoardExtHandler(IceBoardPlusHandler):
     #     self._fpga_spi_poke(addr, value)
 
     @async
-    def open_core(self, udp_retries=10):
+    def open_core(self, udp_retries=5):
         """
         Establishes the connection with the hardware and firmware on the
         IceBoard and create all appropriate handling classes.
@@ -317,14 +317,16 @@ class IceBoardExtHandler(IceBoardPlusHandler):
         # link by reading the UDP MMI cookie (not the SPI one) and check if
         # the cookie correspond to the chFPGA firmware.
         # -------------------------------------------------------------------------
-        yield self.clear_fpga_udp_errors.async(force=True) # Reset the UDP stack and command sequence number to prevent initial error on first command
-        self.logger.debug("%r: Attempting to communicate with the FPGA over direct Ethernet link" % self)
         try:
+            self.logger.info("%r: Clearing FPGAs UDP communication stack" % self)
+            yield self.clear_fpga_udp_errors.async(force=True) # Reset the UDP stack and command sequence number to prevent initial error on first command
+            self.logger.info("%r: Attempting to communicate with the FPGA over direct Ethernet link" % self)
             cookie = yield self.get_fpga_firmware_cookie.async(resync=True)  # Read the firmware version cookie from the GPIO subsystem (this is provided by the FPGA core firmware which is always present on all versions of the FPGA)
         except IOError as e:
-            error_message = "%r: Unable to communicate with the FPGA at address %s:%i due to the following exception: %s" % (self, self.fpga_ip_addr, self.fpga_port_number, repr(e))
-            self.close()
+            error_message = "%r: Unable to communicate with the FPGA at address %s:%i due to the following exception:\n%s" % (self, self.fpga_ip_addr, self.fpga_port_number, repr(e))
             self.logger.error(error_message)
+            self.mmi.close()
+            self.close()
             raise
 
         if cookie != self._CHFPGA_COOKIE:
@@ -357,8 +359,9 @@ class IceBoardExtHandler(IceBoardPlusHandler):
         if self._is_core_open:
             self.mmi.close()
             # Make the AutoOpen data descriptior visible again
-            del self.mmi, self.core_i2c, self.core_gpio, self.i2c
-            self._is_core_open = False
+            del self.mmi
+            del self.core_i2c, self.core_gpio, self.i2c
+        self._is_core_open = False
 
     def is_core_open(self):
         # return self.iceboard_pk in type(self)._active_instances
@@ -449,10 +452,9 @@ class IceBoardExtHandler(IceBoardPlusHandler):
                 not.
 
         """
-        trial = 0
+        trial = 1
         while True:
             if force or self.mmi.error_counter > 40:
-                trial += 1
                 self.logger.info('%r: Resetting FPGA UDP stack (trial #%i/%i)' % (self, trial, max_trials))
                 yield self.reset_sfp()
                 yield async_sleep(0.1)
@@ -471,11 +473,11 @@ class IceBoardExtHandler(IceBoardPlusHandler):
                     self.logger.info('%r: Finished clearing FPGA UDP errors.' % self)
                     return
                 except IOError:
-                    if trial > max_trials:
-                        raise IOError('%r: cannot communicate with FPGA port after %i FPGA UDP stack resets' % (self, trials))
+                    if trial >= max_trials:
+                        raise IOError('%r: cannot communicate with FPGA port after %i FPGA UDP stack resets' % (self, trial))
                     else:
                         self.logger.info('%r: Still obtaining FPGA UDP errors after %i FPGA UDP stack reset. Retrying...' % (self, trial))
-                    pass
+                    trial += 1
 
     @async
     def check_command_count(self, reset=False):
