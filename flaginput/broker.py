@@ -1046,7 +1046,7 @@ class FlagCorrInput(object):
         if self.h5_flag:
 
             all_flags = self.h5_flag.read_all('flag')
-            all_times = self.h5_flag.read_all('index_map/time')[0:all_flags.size]
+            all_times = self.h5_flag.read_all('index_map/update_time')[0:all_flags.size]
 
             weight = np.diff(all_times)
             weight *= tools.invert_no_zero(np.sum(weight))
@@ -1186,7 +1186,7 @@ class FlagCorrInput(object):
             lookback = self.config.historical_status.num_days_lookback
 
             all_flags = self.h5_flag.read_all('flag')
-            all_times = self.h5_flag.read_all('index_map/time')[0:all_flags.size]
+            all_times = self.h5_flag.read_all('index_map/update_time')[0:all_flags.size]
 
             if lookback is None:
                 keep = slice(None)
@@ -1834,7 +1834,7 @@ class FlagCorrInputAsyncRESTServer(AsyncRESTServer):
             timestamp_returned, arr = self.flg.get_flag(timestamp_decoded, dataset='flag')
 
             if timestamp_returned is not None:
-                coroutine_return( {'time': timestamp_returned,
+                coroutine_return( {'update_time': timestamp_returned,
                                    'payload':[[idd, sn, int(flag)] for (idd, sn), flag in zip(self.flg.input, arr)]} )
 
             else:
@@ -1854,7 +1854,7 @@ class FlagCorrInputAsyncRESTServer(AsyncRESTServer):
             timestamp_returned, arr = self.flg.get_flag(timestamp_decoded, dataset='flag')
 
             if timestamp_returned is not None:
-                coroutine_return( {'time': timestamp_returned,
+                coroutine_return( {'update_time': timestamp_returned,
                                    'payload': [inp for inp, good in zip(self.flg.input, arr) if good]} )
 
             else:
@@ -1874,7 +1874,7 @@ class FlagCorrInputAsyncRESTServer(AsyncRESTServer):
             timestamp_returned, arr = self.flg.get_flag(timestamp_decoded, dataset='flag')
 
             if timestamp_returned is not None:
-                coroutine_return( {'time': timestamp_returned,
+                coroutine_return( {'update_time': timestamp_returned,
                                    'payload': [inp for inp, good in zip(self.flg.input, arr) if not good]} )
 
             else:
@@ -1894,7 +1894,7 @@ class FlagCorrInputAsyncRESTServer(AsyncRESTServer):
             timestamp_returned, arr = self.flg.get_flag(timestamp_decoded, dataset='source_flags')
 
             if timestamp_returned is not None:
-                source_flags = {'time': timestamp_returned,
+                source_flags = {'update_time': timestamp_returned,
                                 'payload': {src:[[idd, sn, int(flag)] for (idd, sn), flag in zip(self.flg.input, arr[ii])]
                                                           for ii, src in enumerate(self.flg.sources)}}
                 coroutine_return( source_flags )

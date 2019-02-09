@@ -30,27 +30,27 @@ class FlagCorrInputArchive(Hdf5Archive):
     """
 
     _uniq_id = 'update_id'
-    _grow_ax = 'time'
+    _grow_ax = 'update_time'
 
     _axes = {
-        'time': {'dtype': np.float64},
+        'update_time': {'dtype': np.float64},
         'source': {'dtype': str},
         'input': {'dtype': str},
     }
 
     _dataset_spec = {
         'update_id': {
-            'axes': ['time', ],
+            'axes': ['update_time', ],
             'dtype': h5py.special_dtype(vlen=bytes),
             'metric': False,
         },
         'source_flags': {
-            'axes': ['time', 'source', 'input'],
+            'axes': ['update_time', 'source', 'input'],
             'dtype': np.bool,
             'metric': True,
         },
         'flag': {
-            'axes': ['time', 'input'],
+            'axes': ['update_time', 'input'],
             'dtype': np.bool,
             'metric': True,
         }
@@ -110,18 +110,44 @@ class FlagCorrInputArchive(Hdf5Archive):
         """
 
         # Determine directory
-        this_datetime = kwargs.get('datetime', datetime.datetime.utcfromtimestamp(smp).strftime("%Y%m%dT%H%M%SZ"))
+        acq = kwargs.get('acquisition', None)
+        if acq is not None:
+            output_dir = os.path.join(self.output_dir, '_'.join([acq[0:16],
+                                      self.attrs['instrument_name'], self.output_suffix]))
 
-        output_dir = os.path.join(self.output_dir, '_'.join([this_datetime, self.attrs['instrument_name'], self.output_suffix]))
+            start_time = ephemeris.datetime_to_unix(ephemeris.timestr_to_datetime(acq))
+
+        else:
+            this_datetime = datetime.datetime.utcfromtimestamp(smp)
+            this_datetime_truncated = datetime.datetime(this_datetime.year, this_datetime.month, 1)
+            start_time = ephemeris.datetime_to_unix(this_datetime_truncated)
+
+            output_dir = os.path.join(self.output_dir, '_'.join([this_datetime_truncated.strftime("%Y%m%dT%H%M%SZ"),
+                                      self.attrs['instrument_name'], self.output_suffix]))
+
         mkdir(output_dir)
 
         # Determine filename
-        start_time = datetime_to_unix(datetime.datetime.strptime(this_datetime, "%Y%m%dT%H%M%SZ"))
         seconds_elapsed = smp - start_time
 
         output_file = os.path.join(output_dir, "%08d.h5" % seconds_elapsed)
 
         return output_file
+
+
+    def change_file(self, smp, **kwargs):
+        """ Change the file if the day changes.
+
+        Parameters
+        ----------
+        smp: unix time
+            Time at which the datasets in kwargs were collected.
+        """
+
+        current_date = datetime.datetime.utcfromtimestamp(smp).strftime("%Y%m%d")
+        last_date = datetime.datetime.utcfromtimestamp(self.last_update).strftime("%Y%m%d")
+
+        return current_date != last_date
 
 
 class FlagRawWriter(Hdf5Writer):
