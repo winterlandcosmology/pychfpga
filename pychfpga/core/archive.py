@@ -279,7 +279,8 @@ class Hdf5Writer(object):
     def write(self, smp, **kwargs):
 
         # Check if file does not exist or has reached maximum size
-        if (self.writer is None) or (self.writer.id.get_filesize() >= self._max_file_size) or (self.ind >= self._max_num):
+        if ((self.writer is None) or (self.writer.id.get_filesize() >= self._max_file_size) or
+            (self.ind >= self._max_num) or self.change_file(smp, **kwargs)):
 
             # Determine new filename using an abstracted method
             output_file = self.get_output_file(smp, **kwargs)
@@ -708,20 +709,14 @@ class Hdf5Writer(object):
 
     def __getitem__(self, key):
 
-        if isinstance(key, basestring):
+        idd = self.search.get(key, None)
 
-            idd = self.search.get(key, None)
-
-        elif isinstance(key, (float, int, long)):
+        if (idd is None) and isinstance(key, (float, int, long)):
 
             delta = key - np.array(self.grow['axis'])
             ipos = np.flatnonzero(delta >= 0.0)
 
             idd = None if ipos.size == 0 else self.grow['index'][ipos[np.argmin(delta[ipos])]]
-
-        else:
-
-            idd = None
 
         return idd
 
@@ -760,6 +755,9 @@ class Hdf5Writer(object):
     @abstractmethod
     def get_output_file(self, *args, **kwargs):
         return
+
+    def change_file(self, *args, **kwargs):
+        return False
 
     @property
     @rlock
