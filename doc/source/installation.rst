@@ -326,3 +326,8 @@ Update prometheus
 Log on hk-east as chime
 sudo vim /etc/prometheus/prometheus.yml
 curl -X POST localhost:9090/-/reload
+
+Extract a folder into its own repository
+----------------------------------------
+
+https://help.github.com/articles/splitting-a-subfolder-out-into-a-new-repository/
