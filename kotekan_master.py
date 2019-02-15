@@ -26,6 +26,9 @@ from slack import SlackClient
 # REST Server/Client
 from rest import RunSyncWrapper, run_client
 
+# If a node is desynced for this many watchdog cycles, it will get restarted.
+DESYNC_LIMIT = 2
+
 
 # KotekanMaster Class
 class KotekanMaster(object):
@@ -724,6 +727,14 @@ class KotekanMaster(object):
                     unique_md5sums[md5sum] = 1
                 else:
                     unique_md5sums[md5sum] += 1
+
+                # Inc. desync counter for this node if different from local conf
+                if md5sum != kotekan_master_md5sum:
+                    try:
+                        result[node]['desynced'] = result[node]['desynced'] + 1
+                    except KeyError:
+                        result[node]['desynced'] = 1
+
             self.log.info(unique_md5sums)
             # Track unique_md5sums
             self.unique_md5sums = unique_md5sums
@@ -843,7 +854,8 @@ class KotekanMaster(object):
         """
         restart_list = []
         for node_name, status in node_status.items():
-            if status.get("running") is False:
+            if status.get("running") is False \
+                    or status.get("desynced", 0) >= DESYNC_LIMIT:
                 restart_list.append(node_name)
         if len(restart_list) != 0:
             self.log.info("Watchdog Restart List: %s", restart_list)
@@ -1710,7 +1722,17 @@ class KotekanMasterAsyncRESTServer(AsyncRESTServer):
                             self,
                             no_connection_nodes,
                         )
-                        # Execute restarts for nodes with running==false
+
+                        # Validate Configuration Checksums
+                        self.log.info("%s : WD: Validating Checksums", self)
+                        checksum_validate, desync_status = (
+                            yield self.kotekan_master.validate_checksum()
+                        )
+                        node_status.update(desync_status)
+
+                        self.log.info("{0}".format(checksum_validate))
+                        # Execute restarts for nodes with running==false or too
+                        # high desynced counter
                         self.log.info("%s : WD: Geting Restart List", self)
                         restart_list = (
                             yield self.kotekan_master.restart_kotekan(
@@ -1726,12 +1748,6 @@ class KotekanMasterAsyncRESTServer(AsyncRESTServer):
                             )
                         )
                         yield sleep(10)
-                        # Validate Configuration Checksums
-                        self.log.info("%s : WD: Validating Checksums", self)
-                        checksum_validate = (
-                            yield self.kotekan_master.validate_checksum()
-                        )
-                        self.log.info("{0}".format(checksum_validate))
                         # Log Kotekan Master Statistics
                         self.log.debug(
                             "%s : KotekanMaster Watchdog Stats", self
