@@ -1,0 +1,53 @@
+List of unmerges branches
+
+$ git branch --all --no-merged master
+
+
+  develop : *** keep it separate
+  griffin_dev
+* jfc_dev
+  jfc_udp_error_restart: ** to be merged, keep separate
+  remotes/origin/8_chan:
+  remotes/origin/ML605_DRAO
+  remotes/origin/adc_testing
+  remotes/origin/adcdelay_badspots
+  Merged remotes/origin/ar-dev
+  remotes/origin/archive_digital_gains : *** Seth
+  remotes/origin/bpqc_temp
+  Merged remotes/origin/cal_broker
+  remotes/origin/cal_realtime ** dead end, in calibration and flaginput
+  remotes/origin/crate_timestream_receiver
+  Merged remotes/origin/dec2018_cal
+  remotes/origin/develop
+  remotes/origin/dvw/ch_translate_weather *8 Keep
+  remotes/origin/flag_gain_h5_update ** Seth, keep
+  remotes/origin/ghsyu_dev ** Digico test update - nor merged
+  remotes/origin/git-annex
+  remotes/origin/griffin_dev
+  remotes/origin/hirax
+  remotes/origin/iceboard_dev
+  remotes/origin/icecrate_multi_16ch
+  remotes/origin/icecrate_multi_16ch_chrx_update
+  remotes/origin/jfc_dev
+  remotes/origin/jfc_udp_error_restart
+  remotes/origin/jm_dev
+  remotes/origin/jm_new_pf_fw
+  remotes/origin/juan_dev
+  No remotes/origin/km-dev
+  remotes/origin/kmb_dev
+  remotes/origin/mbqc
+  remotes/origin/neg_erms_check
+  remotes/origin/not-archive
+
+  remotes/origin/parallel_digital_gain   ** WIP, dead end.
+
+
+  remotes/origin/pathfinder
+  remotes/origin/post_acq
+  remotes/origin/qc
+  remotes/origin/recv2-gossec
+  remotes/origin/rn/km
+  remotes/origin/singleBoard
+  remotes/origin/test_pattern_sync ** drop
+  remotes/origin/tpm_ps
+  remotes/origin/transpose_timeing

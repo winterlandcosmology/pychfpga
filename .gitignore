@@ -12,3 +12,6 @@
 out_*/
 /nbproject/
 src/
+
+\.DS_Store
+/ch_acq.egg-info/

@@ -166,6 +166,8 @@ class GPIO_base(Module_base):
         every board will operate on a random offsets. The PWM generator is always reset by SYNC events.
         A system-wide SYNC will therefore make the PWM signal synchronized across all boards.
         """
+        self.logger.info('%r: Setting PWM generator to enable=%i, offset=%i, high_time=%i, period=%i' %
+            (self, enable, offset, high_time, period))
         self.PWM_OFFSET = offset
         self.PWM_HIGH_TIME = high_time - 1 # The actual high time is PWM_HIGH_TIME + 1
         self.PWM_PERIOD = period - 1  # The actual period is PWM_PERIOD + 1

@@ -212,7 +212,7 @@ def calculate_gains(c, gain_folder):   # '/home/suit/Desktop/ICE/ch_acq/gains'
     c.set_data_source('adc')
     c.set_adc_mode('data')
     c.set_fft_bypass(0)
-    c.set_fft_shift(1367) 
+    c.set_fft_shift(1367)
     c.set_scaler_bypass(0)
     #port = 42500 # Picked randomly. Hack
     port = 38000
@@ -278,7 +278,7 @@ def calculate_gains(c, gain_folder):   # '/home/suit/Desktop/ICE/ch_acq/gains'
     c.set_data_source(data_source)
     c.set_adc_mode(adc_mode)
     c.set_fft_bypass(fft_bypass)
-    c.set_fft_shift(fft_shift) 
+    c.set_fft_shift(fft_shift)
     c.set_scaler_bypass(scaler_bypass)
     c.set_local_data_port_number(local_data_port_number)
     print 'Iceboard state restored...'

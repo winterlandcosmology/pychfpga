@@ -12,29 +12,33 @@ IceBoard and its chFPGA firmware.
 """
 
 from __future__ import absolute_import
+
+
+# Python STandard Library packages
 import logging
-import numpy as np
 import time
 import os
-import yaml
 import pickle
 from datetime import datetime
 from collections import OrderedDict
 from functools import wraps
-
-
 import subprocess
 import shlex
-import tornado.gen
 import bz2
 
+# PyPi packages
+import numpy as np
+import yaml
+import tornado.gen
+
+# Local imoprts
 
 from .icecore import async, async_return, async_sleep, async_moment
 from .icecore.session import load_session as load_yaml
 
 from .icecore_ext.iceboard_ext import IceBoardExtHandler
 from .chFPGA_receiver import chFPGA_receiver
-from .metrics import Metrics
+from wtl.metrics import Metrics
 
 from pychfpga.common import util
 
@@ -403,6 +407,7 @@ class chFPGA_controller(IceBoardExtHandler):
                     self.ANT_FMC_IS_PRESENT[ant_number] = True
 
             self.hw.set_led('GP_LED1', 1) # Indicate that the Iceboard is ready
+            self._data_socket = None
 
         except Exception as e:
             self.logger.error('****Exception during open!****** =  %r' % e)
@@ -1038,6 +1043,37 @@ class chFPGA_controller(IceBoardExtHandler):
         self.set_local_data_port_number(self.recv.port_number)
         return self.recv
 
+    def get_data_socket(self, port_number=0):
+        """
+        Return a socket tha is bound to the port that receives the raw/correlator data.
+
+
+        """
+        # Make sure there is a list of opened sockets
+        import __main__
+        import socket
+
+        if not hasattr(__main__, '__opened_sockets__'):
+            opened_sockets = __main__.__opened_sockets__ = {}
+        else:
+            opened_sockets = __main__.__opened_sockets__
+
+        if not self._data_socket:
+
+            # If we want to use a specific local port that was previously reserved, use its socket.
+            if port_number and port_number in opened_sockets:
+                return opened_sockets[port_number]
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.bind((self.interface_ip_addr, port_number))
+            # store the socket in the main module so it will live persistently until the Python session is closed.
+            (actual_ip_addr, actual_port_number) = sock.getsockname()
+            opened_sockets[actual_port_number] = sock
+            self._data_socket = sock
+            self.set_local_data_port_number(actual_port_number)
+
+        return self._data_socket
+
 
     def start_data_capture(self, period=None, frames_per_burst=1,  number_of_bursts=0,
                            channels=None, source='scaler', sync=1, verbose=1,
@@ -1225,57 +1261,6 @@ class chFPGA_controller(IceBoardExtHandler):
     #         else:
     #             self.ANT[ch].INJECT.inject_frame(data)
 
-    def start_corr_capture(self,  integration_period=1.0, capture_period=None, corr_to_use=None, verbose=1):
-        """
-        Instructs chFPGA to starts integrating and capturing the correlator outputs at the specified period. The captures data is sent over the Ethernet interface.
-        The capture period can be optionnaly specified independently from the integration period. If not specified, it is equal to the integration period.
-        This function does not receive the frames from the ethernet port. This has to be done separately.
-
-        corr_to_use -> if not None, is a list specifying which to correlators to use
-
-        History:
-            2012-10-02 JFC: Created
-            2013-03-25 KMB
-        """
-
-        if not self._last_init_time:
-            self._logger.warning('%r: The system is not initialized. This might not work.' % self)
-
-        if capture_period is None:
-            capture_period = integration_period
-
-        capture_period_in_frames = int(capture_period*1.0/self.FRAME_PERIOD)
-        integration_period_in_frames = int(integration_period*1.0/self.FRAME_PERIOD)
-
-        self.set_ant_reset(1)
-        self.set_corr_reset(1)
-        if corr_to_use is None:
-            corrs = self.LIST_OF_IMPLEMENTED_CORRELATORS
-            corrs_not_used = []
-        else:
-            corrs = corr_to_use
-            corrs_not_used = list(set(self.LIST_OF_IMPLEMENTED_CORRELATORS).difference(corr_to_use))
-        for corr_num in corrs:
-            corr = self.CORR[corr_num]
-            self._logger.debug(
-                '%r: Configuring correlator %i to integrate '
-                'over %f seconds (%i frames) '
-                'and transmit data every %f seconds (%i frames)' % (
-                    self,
-                    corr.instance_number,
-                    integration_period,
-                    integration_period_in_frames,
-                    capture_period,
-                    capture_period_in_frames))
-            corr.ACC.RESET = 0
-            corr.ACC.config(integration_period=integration_period_in_frames, capture_period=capture_period_in_frames)
-        for corr_num in corrs_not_used:
-            self._logger.debug('%r: Disabling correlator %i' % (self, corr.instance_number))
-            corr = self.CORR[corr_num]
-            corr.ACC.RESET = 1
-        self.set_corr_reset(0)
-        self.set_ant_reset(0)
-        #self.sync()
 
     def get_version(self):
         """
@@ -2561,6 +2546,32 @@ class chFPGA_controller(IceBoardExtHandler):
 
 
         elif mode == 'shuffle16':
+            """
+            In shuffle16 mode, each of the GPU links output data for 128 bins,
+            each bins containing the data from 16 channels. The data for each
+            channel is a byte, representing the FFT output as a (4+4) bit
+            compler number.
+
+            In this mode:
+
+                chan_bin_sel: each of the 16 chan_bin_sel select data from
+                    lane groups 0-3 (i.e. lanes 0-15). They each select 1/64
+                    of the bine incoming channelizer output. There are a total
+                    of 128 selected bins. There are 4 words per bins (16
+                    channels). The data flags of two consecutive bins are
+                    combine to build a single data flag word.
+
+            The packet format is as follows (assume one frame per packet):
+                - Header: 4 words (16 bytes) for the header
+                - Data block: 128 bins x 16 channels = 2056 bytes
+                - Data flags block: We combine the data flags, so scaler flags
+                  from two consecutive bins are combined into a single 32 bit
+                  word ( one bit per channel for each of the 2 bins). This represents 128*16/32=64 words = 256 bytes
+                - Frame flags: 16 bit FFT overflow + 16 bit ADC overflow flags per frame. This is 1 word = 4 bytes.
+                - Packet flags: 32 bit word (4 bytes)
+                - Total: 2328 bytes
+
+            """
             cb1_bypass = False
             cb1_four_bit = True
             # BS0 grabs data from FIFO 0-1 (lanes 0-7), BS1 from FIFO 2-3
@@ -2575,15 +2586,15 @@ class chFPGA_controller(IceBoardExtHandler):
             cb1_output_words_per_bin = 4
             cb1_output_bins = cb1_bins
             cb1_input_lanes_per_output_lane = 16
-            cb1_output_data_flags_words_per_bin = cb1_bins/2
-
+            cb1_output_data_flags_words_per_bin = (cb1_output_words_per_bin * 4.0) / (32 if cb1_combine_data_flags else 16)  # This is 0.5 if combine_flags
+            cb1_output_frame_flags_words_per_frame = 1
             bp_shuffle_bypass = True
 
             cb2_lane_map = range(16)
             cb2_bypass = True
             cb2_input_words_per_bin = cb1_output_words_per_bin
-            cb2_input_frame_flags_words_per_frame = 1
-            cb2_input_data_flags_words_per_bin = 1
+            cb2_input_data_flags_words_per_bin = cb1_output_data_flags_words_per_bin
+            cb2_input_frame_flags_words_per_frame = cb1_output_frame_flags_words_per_frame
             cb2_input_bins = cb1_bins
             # cb2_lanes = ((0, 1), (2, 3))  #BS0 selects sublanes 0-1, BS1 selects sublanes 2-3
             # cb2_bins = cb1_bins
@@ -2592,7 +2603,8 @@ class chFPGA_controller(IceBoardExtHandler):
             cb2_output_words_per_bin = cb2_input_words_per_bin
             cb2_output_bins = cb2_bins
             cb2_input_lanes_per_output_lane = cb1_input_lanes_per_output_lane
-            cb2_output_data_flags_words_per_bin = cb1_output_data_flags_words_per_bin
+            cb2_output_data_flags_words_per_bin = cb2_input_data_flags_words_per_bin
+            cb2_output_frame_flags_words_per_frame = cb2_input_frame_flags_words_per_frame
 
             crate_number = self.crate.crate_number or 0 if self.crate else 0
             stream_type = 1
@@ -2603,7 +2615,7 @@ class chFPGA_controller(IceBoardExtHandler):
             cb3_output_words_per_bin = cb2_input_words_per_bin
             cb3_output_bins = cb2_input_bins
             cb3_output_data_flags_words_per_bin = cb2_output_data_flags_words_per_bin
-            cb3_output_frame_flags_words_per_frame = cb2_output_data_flags_words_per_bin
+            cb3_output_frame_flags_words_per_frame = cb2_output_frame_flags_words_per_frame
 
         elif mode == 'shuffle256':
             if not self.slot:
@@ -2894,8 +2906,7 @@ class chFPGA_controller(IceBoardExtHandler):
         self.set_ant_reset(1)
         self.set_corr_reset(1)
 
-        #slot_number = self.slot - 1 if self.slot is not None else 0
-        slot_number = self.slot - 1 if self.slot else 0 #SC 03/17/2019 changed for individual iceboard
+        slot_number = self.slot - 1 if self.slot is not None else 0
         #-------------------------
         # Configure CROSSBAR 1
         #-------------------------
@@ -2991,7 +3002,7 @@ class chFPGA_controller(IceBoardExtHandler):
             # bp_data_rate = 156.25e6* 50 * 32/33
             packet_rate = 800e6/2048/frames_per_packet
             ethernet_data_rate = (packet_rate * ethernet_packet_size) * 8
-            self._logger.info('%r: %s Ethernet packet size: %i bytes, %0.1f Gbit/s (%i frames_per_packet, %i bins, %i data words/bin, %i data flags_words/bin, %i frame_flags_words/frame)' % (self, crossbar_name, ethernet_packet_size, ethernet_data_rate / 1e9,  frames_per_packet, bins, data_words_per_bin, data_flags_words_per_bin, frame_flags_words_per_frame))
+            self._logger.info('%r: %s Ethernet packet size: %i bytes, %0.1f Gbit/s (%i frames_per_packet, %i bins, %i data words/bin, %g data flags_words/bin, %i frame_flags_words/frame)' % (self, crossbar_name, ethernet_packet_size, ethernet_data_rate / 1e9,  frames_per_packet, bins, data_words_per_bin, data_flags_words_per_bin, frame_flags_words_per_frame))
             # self._logger.info('%r: %s config: frames_per_packet=%i, cb1_lanes=%s, cb1_bypass=%s, cb1_combine=%s, cb1_bins=%i, cb1_words_per_bin=%i' % (self, frames_per_packet, cb1_lanes, bool(cb1_bypass), bool(cb1_combine_data_flags), cb1_bins, cb1_output_words_per_bin ))
             # self._logger.debug('%r: CROSSBAR1 output packets payload = %i bytes (%i words)' % (self, cb1_payload_size, (cb1_payload_size+3)//4))
 
@@ -3204,8 +3215,8 @@ class chFPGA_controller(IceBoardExtHandler):
         mb_power_sensors = [
             ('MB VCC12V'    , 'VCC12V'    , self.RAIL.MB_VCC12V0   , True),
             ('MB VCC3V3'    , 'VCC3V3'    , self.RAIL.MB_VCC3V3    , True),
-            ('MB VADJ'      , 'VADJ'      , self.RAIL.MB_VADJ      , True),
-            ('MB VCC5V5'    , 'VCC5V5'    , self.RAIL.MB_VCC5V5    , False),
+            ('MB VADJ'      , 'VADJ'      , self.RAIL.MB_VADJ      , False), # VADJ is normally powered from VCC5V0
+            ('MB VCC5V5'    , 'VCC5V5'    , self.RAIL.MB_VCC5V5    , True),
             ('MB VCC1V0'    , 'VCC1V0'    , self.RAIL.MB_VCC1V0    , False),
             ('MB VCC1V0 GTX', 'VCC1V0 GTX', self.RAIL.MB_VCC1V0_GTX, False),
             ('MB VCC1V2'    , 'VCC1V2'    , self.RAIL.MB_VCC1V2    , False),
@@ -3450,6 +3461,70 @@ class chFPGA_controller(IceBoardExtHandler):
         """
         return self.crate.get_id(slot=slot)
 
+    #########################################################################
+    #
+    #   FIRMARE CORRELATOR
+    #
+    #########################################################################
+    def start_corr_capture(self,  integration_period=1.0, capture_period=None, corr_to_use=None, verbose=1):
+        """
+        Instructs chFPGA to starts integrating and capturing the correlator
+        outputs at the specified period. The captures data is sent over the
+        Ethernet interface.
+
+        The capture period can be optionnaly specified independently from the
+        integration period. If not specified, it is equal to the integration
+        period.
+
+        This function does not receive the frames from the ethernet port. This
+        has to be done separately.
+
+        corr_to_use -> if not None, is a list specifying which to correlators to use
+
+        History:
+            2012-10-02 JFC: Created
+            2013-03-25 KMB
+        """
+
+        if not self._last_init_time:
+            self._logger.warning('%r: The system is not initialized. This might not work.' % self)
+
+        if capture_period is None:
+            capture_period = integration_period
+
+        capture_period_in_frames = int(capture_period*1.0/self.FRAME_PERIOD)
+        integration_period_in_frames = int(integration_period*1.0/self.FRAME_PERIOD)
+
+        self.set_ant_reset(1)
+        self.set_corr_reset(1)
+        if corr_to_use is None:
+            corrs = self.LIST_OF_IMPLEMENTED_CORRELATORS
+            corrs_not_used = []
+        else:
+            corrs = corr_to_use
+            corrs_not_used = list(set(self.LIST_OF_IMPLEMENTED_CORRELATORS).difference(corr_to_use))
+        for corr_num in corrs:
+            corr = self.CORR[corr_num]
+            self._logger.debug(
+                '%r: Configuring correlator %i to integrate '
+                'over %f seconds (%i frames) '
+                'and transmit data every %f seconds (%i frames)' % (
+                    self,
+                    corr.instance_number,
+                    integration_period,
+                    integration_period_in_frames,
+                    capture_period,
+                    capture_period_in_frames))
+            corr.ACC.RESET = 0
+            corr.ACC.config(integration_period=integration_period_in_frames, capture_period=capture_period_in_frames)
+        for corr_num in corrs_not_used:
+            self._logger.debug('%r: Disabling correlator %i' % (self, corr.instance_number))
+            corr = self.CORR[corr_num]
+            corr.ACC.RESET = 1
+        self.set_corr_reset(0)
+        self.set_ant_reset(0)
+        #self.sync()
+
     def start_correlator(self, integration_period=16384, autocorr_only=False, correlators=None, bandwidth_limit=0.5e9, verbose=1):
         """
         (Re)starts the correlator with the specified integration time.
@@ -3541,7 +3616,7 @@ class chFPGA_controller(IceBoardExtHandler):
         f = r.read_corr_frames(flush=False, complete_set=True, max_trials=100, verbose = verbose)
         return np.all(p==f), p, f
 
-    def test_correlator(self, test_name='rand_complex', integration_period=8192, trials=100):
+    def test_correlator(self, test_name='rand_complex', integration_period=8192, trials=100, verbose=0):
         if test_name=='rand_complex':
             for data_set_number in xrange(trials):
                 print 'Trial #%i' % data_set_number
@@ -3557,6 +3632,41 @@ class chFPGA_controller(IceBoardExtHandler):
                     else:
                         print 'Cannot make frames match!'
                         return match, data, p, f
+
+
+        elif test_name=='rand_complex_C':
+            for data_set_number in xrange(trials):
+
+                data=(np.floor(np.random.rand(16,1024)*4-2) + 1j*np.floor(np.random.rand(16,1024)*4-2))
+
+                trial = 0
+                while True:
+                    self.set_channelizer_outputs(data)
+
+                    self.start_correlator(integration_period=integration_period, verbose=(0 if trial == 0 else 0))
+
+                    self.sync()
+                    p = self.compute_corr_output(data, integration_period=integration_period)
+                    timestamp,f = ir.read_correlator_frame(verbose=verbose)
+                    f = np.swapaxes(f, 0, 2)
+
+
+                    match = np.all(p==f)
+                    if match:
+                        if data_set_number % 10 == 0 and data_set_number > 0:
+                            print '[{3:s}]: Test #{0:d}/{1:d}; trial {2:d}'.format(data_set_number, trials, trial, datetime.now().strftime("%H:%M:%S.%f"))
+                            print "\t{0:d}".format(timestamp)
+                        break
+                    trial += 1
+                    if trial < 10:
+                        print 'Trial {0:d} frames did not match! Retrying after rewriting the test data again...'.format(trial)
+                        if(verbose):
+                            print "Difference: "
+                            print p - f
+                    else:
+                        print 'Cannot make frames match!'
+                        return match, data, p, f
+
         else:
             raise ValueError('Unknown test name %s' % test_name)
 

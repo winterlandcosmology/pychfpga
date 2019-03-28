@@ -3,30 +3,31 @@
 """
 from __future__ import absolute_import, division, print_function
 
+# Python Standard Library packages
 import os
 import sys
 import argparse
 import logging
 import socket
 import time
-
-import netifaces  # non-standard Python library (pip install netifaces)
-
 import Queue
 import SocketServer
 import threading
-# import logging
-# import os
 import struct
+import datetime
+
+# PyPi packages
+import netifaces  # non-standard Python library (pip install netifaces)
 import numpy as np
 import h5py
-import datetime
 import tornado
 import psutil
 
-import log
-from rest import AsyncRESTServer, endpoint, AsyncRESTClient, coroutine, coroutine_return, IOLoop, RunSyncWrapper, moment
-from pychfpga import NameSpace, Metrics
+# External private packages
+from wtl import log
+from wtl.rest import AsyncRESTServer, endpoint, AsyncRESTClient, coroutine, coroutine_return, IOLoop, RunSyncWrapper, moment
+from wtl.namespace import NameSpace
+from wtl.metrics import Metrics
 
 
 #Should be in gain.py or something.
@@ -53,26 +54,32 @@ class GainCalc(object):
         self.masked = np.ma.array(np.log(signal), mask=mask)
 
     def convert_gain_format(self):
-        '''
-        Expects array in. returns (glin, glog)
-        '''
+        """ Return the current floating point gain vector into a (integer gain vector, log gain scalar) tuple.
+
+
+
+        """
         #2**14 is max for linear gain
         #ignore dc component
         #check for nans
         #print g
+
+        # identify bad gain values and create an appropriately masked array
         bad_values = (self.g > 2**31) | ~np.isfinite(self.g)
-        g = np.ma.array(self.g,mask=bad_values)
-        glog = (np.ceil(np.log2(np.ma.median(np.abs(g)/2**13,axis=1)))).astype(np.int)
+        g = np.ma.array(self.g, mask=bad_values)
+
+        # COmpute the power of 2 scaling for gains
+        glog = (np.ceil(np.log2(np.ma.median(np.abs(g) / 2**13, axis=1)))).astype(np.int)
         glin = np.zeros(g.shape, dtype=np.float)
         for i, glog_single in enumerate(glog):
-            glin[i] = g[i]/2**glog[i]
+            glin[i] = g[i] / 2**glog[i]
         glog.data[glog.mask == True] = np.ma.median(glog)
         glog.mask[glog.mask] = False
         glin[bad_values] = 2**14
         return glin, glog.data
 
-    def noisy_gain_estimate(self, data ):
-        outrms = data[:,:,:].std(axis=0)
+    def noisy_gain_estimate(self, data):
+        outrms = data[:, :, :].std(axis=0)
         outrms[outrms < 0.8] = 0.8
         #rmss.append(outrms.mean())
         print(outrms.mean(axis=1))
@@ -184,7 +191,7 @@ class GainEstimator(object):
         while frame_number < self.number_of_frames:
             timestamps, ports, all_data = self.read_data_func()
             data_unpacked = (np.array(all_data).astype(np.int8) ^ np.int8(128)) >> 4
-            spectrum[:,frame_number,:,:] = data_unpacked[:,:,::2] + 1.0j*data_unpacked[:,:,1::2]
+            spectrum[:, frame_number, :,:] = data_unpacked[:, :, ::2] + 1.0j * data_unpacked[:, :, 1::2]
             frame_number += 1
 
         for i, port in enumerate(ports):
@@ -225,7 +232,7 @@ class hdf5TimestreamData(object):
             h.write('locked\n')
 
         self.log.info('%r: Opening raw data HDF5 file %s' % (self, self.filename))
-        self.f = h5py.File(self.filename, 'w', libver='latest')
+        self.f = h5py.File(self.filename, 'w', libver='earliest')
         self.f.attrs["git_version_tag"] = "0.1"
         self.f.attrs["system_user"] = "root"
         self.f.attrs["collection_server"] = "hostname"
@@ -372,31 +379,46 @@ class RawAcqUDPReceiver(SocketServer.UDPServer):
         to a hdf5 file.
         '''
         def handle(self):
-
-            self.server.packet_counter += 1
-            data, socket = self.request
-            port = self.server.server_address[1]
-            (probe_id, stream_id, ts_high, ts_low) = self.server.unpack_header(data[:9])
-            chan = probe_id & 0x0F
-            timestamp = (ts_high << 32) + ts_low
-            flags = stream_id & 0xF
-            stream_id = (stream_id >> 4) & 0xFFF
-            adc_data = np.fromstring(data[9:2057], dtype=np.int8)
-            #print( "Data received on port {0}, channel#{1}, std(data)={2}".format(port, chan, adc_data.std()) )
-            #print("0x%03x"% stream_id,end='')
             try:
-                self.server.data_queue.put((timestamp, port, chan, stream_id, flags, adc_data), True, 0.8)
-                self.server.queued_packets += 1# print(".", end='')
-            except Queue.Full:
-                # print("o", end='')
-                self.server.queue_overflows += 1
-                pass
+                t0 = time.time()
+                self.server.delay_between_calls = t0 - self.server.last_call_time
+                self.server.last_call_time = t0
+                self.server.packet_counter += 1
+                data, socket = self.request
+                port = self.server.server_address[1]
+                (probe_id, stream_id, ts_high, ts_low) = self.server.unpack_header(data[:9])
+                chan = probe_id & 0x0F
+                timestamp = (ts_high << 32) + ts_low
+                flags = stream_id & 0xF
+                stream_id = (stream_id >> 4) & 0xFFF
+                adc_data = np.frombuffer(data[9:2057], dtype=np.int8)
+                #print( "Data received on port {0}, channel#{1}, std(data)={2}".format(port, chan, adc_data.std()) )
+                #print("0x%03x"% stream_id,end='')
+                try:
+                    self.server.data_queue.put((timestamp, port, chan, stream_id, flags, adc_data), True, 0.8)
+                    self.server.queued_packets += 1# print(".", end='')
+                except Queue.Full:
+                    # print("o", end='')
+                    self.server.queue_overflows += 1
+                self.server.processing_time = time.time() - t0
+            except Exception as e: # Added to track memory leaks
+                print('Exception in receiver: %r' % e)
+
     def __init__(self, server_address, data_queue):
+        self.dt = np.dtype([
+            ('probe_id', 'u1', 1),
+            ('stream_id', '<u2', 1),
+            ('ts_low', '<u2', 1),
+            ('ts_high', '<u4', 1),
+            ('data', 'i1', 2048)])
         self.data_queue = data_queue
         self.queue_overflows = 0
         self.queued_packets = 0
         self.packet_counter = 0
         self.unpack_header = struct.Struct('>BHHL').unpack_from  # Precompile unpack string for performance
+        self.delay_between_calls = 0
+        self.processing_time = 0
+        self.last_call_time = time.time()
         SocketServer.UDPServer.__init__(self, server_address, self.UDPHandler)  # cannot use super(...): this is an old-style class
 
 class RawAcqReceiver(object):
@@ -442,8 +464,8 @@ class RawAcqReceiver(object):
     def start(self, name='RawAcq', ports=[], jump_thresholds = []):
         """ Start a raw data receiver for each specified port.
 
-        For each re port we monitor, create a data queue and atart a multithreaded UDP receiver that
-        will write data to that queue.
+        For each port we monitor, create a data queue and start a
+        multithreaded UDP receiver that will write data to that queue.
 
         Parameters:
             name (str): Name of the receiver array, used for logging
@@ -516,6 +538,7 @@ class RawAcqReceiver(object):
         self.mean = {}
         self.jumps = {}
         self.maxdiff = {}
+        self.expected_ramp = np.arange(-128, 2048 - 128, dtype=np.int8)
         self.chan_number_mismatch_count = 0
         self.crate_number_mismatch_count = 0
         self.slot_number_mismatch_count = 0
@@ -574,7 +597,7 @@ class RawAcqReceiver(object):
             self.all_data[receiver_port[port]] = np.zeros((self.N_CHANNELS, 2048), dtype=np.int8)  # pre-allocate data (channels x bins) for all ports,  for a single timestamp
             self.all_ts[receiver_port[port]] = np.zeros((self.N_CHANNELS), dtype=np.int32) # pre-allocate timestamps storage for the current data for all ports (should all be the same)
 
-        self.gain_estimator = GainEstimator(self.get_data, len(self.ports))
+        self.gain_estimator = GainEstimator(read_data_func=self.get_data, number_of_ports=len(self.ports))
 
 
         self.run = True
@@ -703,12 +726,13 @@ class RawAcqReceiver(object):
                     continue
                 #print('.')
 
+                # continue  # JFC debug mem leak
                 base_data_port = 42500
                 if port < base_data_port:
                     crate_number_from_port = None
                     slot_number_from_port = None
-                crate_number_from_port = (port-base_data_port)//100
-                slot_number_from_port = ((port-base_data_port) % 100)-1 # zero-based
+                crate_number_from_port = (port - base_data_port) // 100
+                slot_number_from_port = ((port - base_data_port) % 100) - 1 # zero-based
 
                 stream_id &= 0xFFF
                 chan_number = stream_id & 0xF
@@ -769,30 +793,37 @@ class RawAcqReceiver(object):
                         self.capture_start = False
 
                 # Store some stats
-                chan_id =(crate_number, slot_number, chan)
+                chan_id = (crate_number, slot_number, chan)
                 self.rms_cache[chan_id] = np.std(adc_data)
                 self.rms[chan_id] = np.std(adc_data)
                 self.min[chan_id] = np.min(adc_data)
                 self.max[chan_id] = np.max(adc_data)
                 self.mean[chan_id] = np.mean(adc_data)
                 self.maxdiff[chan_id] = np.max(np.abs(np.diff(adc_data)))
-                expected_ramp = np.arange(-128,2048-128, dtype=np.int8)
-         	#if (adc_data != expected_ramp).any() and crate_number==0 and slot_number==0:
-		#	print('%r: Ramp mismatch. Expected %s, got %s' % (self, expected_ramp[:8], adc_data[:8]))
-                self.ramp_error_count[chan_id] = self.ramp_error_count.get(chan_id, 0) + np.sum(adc_data != expected_ramp)
-                for bit in range(8):
-                    mask = 1 << bit
-                    chan_bit_id = (crate_number, slot_number, chan, bit)
-                    self.ramp_bit_error_count[chan_bit_id] = self.ramp_bit_error_count.get(chan_bit_id, 0) + np.count_nonzero((adc_data ^ expected_ramp) & mask)
-                for threshold in self.jump_thresholds:
-                    jump_id = (crate_number, slot_number, chan, threshold)
-                    self.jumps[jump_id] = self.jumps.get(jump_id, 0) + np.sum(np.abs(np.diff(adc_data)) > threshold)
-                # print('jumps thresholds=', self.jump_thresholds)
+                if True:  # JFC debug mem leak
+                    #if (adc_data != self.expected_ramp).any() and crate_number==0 and slot_number==0:
+                    # print('%r: Ramp mismatch. Expected %s, got %s' % (self, self.expected_ramp[:8], adc_data[:8]))
+                    self.ramp_error_count[chan_id] = (
+                        self.ramp_error_count.get(chan_id, 0) +
+                        np.sum(adc_data != self.expected_ramp))
+                    for bit in range(8):
+                        mask = 1 << bit
+                        chan_bit_id = (crate_number, slot_number, chan, bit)
+                        self.ramp_bit_error_count[chan_bit_id] = (
+                            self.ramp_bit_error_count.get(chan_bit_id, 0) +
+                            np.count_nonzero((adc_data ^ self.expected_ramp) & mask))
+                    for threshold in self.jump_thresholds:
+                        jump_id = (crate_number, slot_number, chan, threshold)
+                        self.jumps[jump_id] = (
+                            self.jumps.get(jump_id, 0) +
+                            np.sum(np.abs(np.diff(adc_data)) > threshold))
+                    # print('jumps thresholds=', self.jump_thresholds)
 
     def print_stats(self):
-        #print()
-        for i,r in enumerate(self.receivers):
-            self.log.debug('Recv %i, pkts=%i, queued= %i, overflows=%i, qsize=%i' % (i, r.packet_counter, r.queued_packets, r.queue_overflows, self.data_queue.qsize()))
+        for i, r in enumerate(self.receivers):
+            self.log.debug('Recv %i, pkts=%i, queued= %i, overflows=%i, qsize=%i' %
+                           (i, r.packet_counter, r.queued_packets,
+                            r.queue_overflows, self.data_queue.qsize()))
         print
 
     def startHdf5Disk(self, base_dir, base_filename, capture_duration=60, elements_per_file=2048*64):
@@ -993,6 +1024,8 @@ class RawAcqReceiver(object):
                 metrics.add('raw_acq_received_packets', value=r.packet_counter, receiver=i)
                 metrics.add('raw_acq_queued_packets', value=r.queued_packets, receiver=i)
                 metrics.add('raw_acq_overflow_packets', value=r.queue_overflows, receiver=i)
+                metrics.add('raw_acq_packet_receiver_delay_between_calls', value=r.delay_between_calls, receiver=i)
+                metrics.add('raw_acq_packets_receiver_processing_time', value=r.processing_time, receiver=i)
 
 
             metrics.add('raw_acq_run_time', value=0 if self.start_time is None else time.time() - self.start_time)

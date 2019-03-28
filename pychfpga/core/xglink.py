@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 from Module import Module_base, BitField
 from .icecore import async, async_return, async_sleep, async_moment
-from metrics import Metrics
+from wtl.metrics import Metrics
 
 # Types of memory-mapped registers
 CONTROL = BitField.CONTROL

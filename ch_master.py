@@ -7,7 +7,6 @@ Module that provide the classes used to run the top-level ChimeMaster object use
 """
 
 from __future__ import absolute_import, division, print_function
-
 # __package__ = __package__ or ''
 # if __name__ == '__main__':
 #     __name__ = 'ch_master'
@@ -15,7 +14,7 @@ from __future__ import absolute_import, division, print_function
 # else:
 #     is_script = False
 
-
+# Python Standard Library packages
 import collections
 import getpass
 import numpy
@@ -30,27 +29,35 @@ import functools
 import Queue
 import pickle
 import datetime
-import numpy as np
+
+# PyPI packages
 import psutil
-
-
 import tornado
 import tornado.tcpclient
 import tornado.web
 import tornado.locks
 from tornado.escape import native_str
+import numpy as np
 
-from pychfpga import FPGAArray, NameSpace, merge_dict, load_yaml_config, Metrics
-import log
 
-from rest import RESTClient, AsyncRESTServer, AsyncRESTClient, HTTPError # generic REST servers and clients
-from rest import endpoint, coroutine, coroutine_return, sleep, moment
-from rest import RunSyncWrapper, IOLoop, run_client
+# External private packages
 
+from wtl import log
+from wtl.rest import RESTClient, AsyncRESTServer, AsyncRESTClient, HTTPError # generic REST servers and clients
+from wtl.rest import endpoint, coroutine, coroutine_return, sleep, moment
+from wtl.rest import RunSyncWrapper, IOLoop, run_client
+from wtl.namespace import NameSpace, merge_dict
+from wtl.config import load_yaml_config
+from wtl.metrics import Metrics
+
+
+# Local imports
+from _version import __version__
+from pychfpga import FPGAArray
 # Remote servers handled by ChimeMaster
 from ps import PowerSupplyAsyncRESTClient
-from kotekan import KotekanAsyncRESTClient
-from chrx import ChrxAsyncRESTClient
+# from kotekan import KotekanAsyncRESTClient
+# from chrx import ChrxAsyncRESTClient
 from raw_acq import RawAcqAsyncRESTClient
 
 
@@ -297,20 +304,20 @@ class ChimeMaster(object):
     # CHRX management methods
     #####################################
 
-    @coroutine
-    def create_chrx_clients(self):
-        """ Create CHRX REST clients, which communicate with the CHRX remote processes that receive
-        the data processed from the GPUs.
+    # @coroutine
+    # def create_chrx_clients(self):
+    #     """ Create CHRX REST clients, which communicate with the CHRX remote processes that receive
+    #     the data processed from the GPUs.
 
-        TODO:
-            - Make parallel if needed
-        """
-        self.chrx = {}
-        nodes = self.config.chrx.nodes or {} # return {} if None (no YAML entries)
-        for node_name, node_params in nodes.items():
-            conf = node_params.copy()
-            conf.update(self.config.chrx.common_config)
-            self.chrx[node_name] = ChrxAsyncRESTClient(name=node_name, **conf)  # will use only the parameters it needs for now (host, port etc)
+    #     TODO:
+    #         - Make parallel if needed
+    #     """
+    #     self.chrx = {}
+    #     nodes = self.config.chrx.nodes or {} # return {} if None (no YAML entries)
+    #     for node_name, node_params in nodes.items():
+    #         conf = node_params.copy()
+    #         conf.update(self.config.chrx.common_config)
+    #         self.chrx[node_name] = ChrxAsyncRESTClient(name=node_name, **conf)  # will use only the parameters it needs for now (host, port etc)
 
     # def make_chrx_headers(self):
     #     # Add some acquisition information to the header, for kicks.
@@ -336,78 +343,78 @@ class ChimeMaster(object):
     #     return headers
 
 
-    @coroutine
-    def start_chrx_clients(self):
-        """ Start all CHRX remote process in parallel """
-        @coroutine
-        def start_chrx_client(chrx):
-            crate_sn = self.fpga.ic[0].get_string_id() # Hack. Works with pathfinder only. Have to rewrite for full CHIME.
-            fpga_hk_fields = { "core_temp": "deg C" } # To be rewritten with new chrx
-            headers = {
-                'acquisition_name': self.run_name,
-                'acquisition_type': 'corr',
-                'archive_version': ARCHIVE_VERSION,
-                'collection_server': socket.gethostname(),
-                'instrument_name': self.config.corr_name,
-                'git_version_tag': get_git_version(),
-                'system_user': getpass.getuser(),
-                'notes': self.config.get('notes','(no notes)'),
-            }
-            # headers = self.make_chrx_headers()
-            self.log.info("starting CHRX %s..." % chrx.name)
-            # Start the chrx remote process with additional updated configuration parameters
-            yield chrx.start(
-                acq_base_dir= self.run_folder,
-                crate_sn=crate_sn,
-                fpga_hk_fields=fpga_hk_fields,
-                headers=headers)
-            self.log.info("finished starting CHRX %s" % chrx.name)
+    # @coroutine
+    # def start_chrx_clients(self):
+    #     """ Start all CHRX remote process in parallel """
+    #     @coroutine
+    #     def start_chrx_client(chrx):
+    #         crate_sn = self.fpga.ic[0].get_string_id() # Hack. Works with pathfinder only. Have to rewrite for full CHIME.
+    #         fpga_hk_fields = { "core_temp": "deg C" } # To be rewritten with new chrx
+    #         headers = {
+    #             'acquisition_name': self.run_name,
+    #             'acquisition_type': 'corr',
+    #             'archive_version': ARCHIVE_VERSION,
+    #             'collection_server': socket.gethostname(),
+    #             'instrument_name': self.config.corr_name,
+    #             'git_version_tag': get_git_version(),
+    #             'system_user': getpass.getuser(),
+    #             'notes': self.config.get('notes','(no notes)'),
+    #         }
+    #         # headers = self.make_chrx_headers()
+    #         self.log.info("starting CHRX %s..." % chrx.name)
+    #         # Start the chrx remote process with additional updated configuration parameters
+    #         yield chrx.start(
+    #             acq_base_dir= self.run_folder,
+    #             crate_sn=crate_sn,
+    #             fpga_hk_fields=fpga_hk_fields,
+    #             headers=headers)
+    #         self.log.info("finished starting CHRX %s" % chrx.name)
 
-        yield [start_chrx_client(chrx) for chrx in self.chrx.values()]
+    #     yield [start_chrx_client(chrx) for chrx in self.chrx.values()]
 
-    @coroutine
-    def stop_chrx_clients(self):
-        yield [chrx.stop() for chrx in self.chrx.values()]
+    # @coroutine
+    # def stop_chrx_clients(self):
+    #     yield [chrx.stop() for chrx in self.chrx.values()]
 
 
-    @coroutine
-    def pass_gains_to_chrx(self, gain_map):
-        """ *** To be rewritten *** """
-        @coroutine
-        def update_gains(chrx):
-            chan_map = [12, 13, 14, 15,  8, 9, 10, 11,  4,  5,  6,  7, 0, 1, 2, 3]
-            slot_map    = [ 5,  1,  4,  0, 13, 9, 12,  8, 15, 11, 14, 10, 7, 3, 6, 2]
-            for (crate, slot, chan), gains in gain_map.items():
-                remapped_slot = slot_map[slot-1]
-                remapped_chan = chan_map[chan]
-                # for val in slot_gain:
-                converted_gains = convert_types(gains)
-                input_number = remapped_slot * 16 + remapped_chan
-                yield chrx.send_config(input_number, converted_gains)  # pass_fpga_gain(inp, v)
-        # update all gains in parallel
-        yield [update_gains(chrx) for chrx in self.chrx.values()]
+    # @coroutine
+    # def pass_gains_to_chrx(self, gain_map):
+    #     """ *** To be rewritten *** """
+    #     @coroutine
+    #     def update_gains(chrx):
+    #         chan_map = [12, 13, 14, 15,  8, 9, 10, 11,  4,  5,  6,  7, 0, 1, 2, 3]
+    #         slot_map    = [ 5,  1,  4,  0, 13, 9, 12,  8, 15, 11, 14, 10, 7, 3, 6, 2]
+    #         for (crate, slot, chan), gains in gain_map.items():
+    #             remapped_slot = slot_map[slot-1]
+    #             remapped_chan = chan_map[chan]
+    #             # for val in slot_gain:
+    #             converted_gains = convert_types(gains)
+    #             input_number = remapped_slot * 16 + remapped_chan
+    #             yield chrx.send_config(input_number, converted_gains)  # pass_fpga_gain(inp, v)
+    #     # update all gains in parallel
+    #     yield [update_gains(chrx) for chrx in self.chrx.values()]
 
     #####################################
     # KOTEKAN management methods
     #####################################
 
-    @coroutine
-    def create_kotekan_clients(self):
-        # Create Kotekan REST clients
-        self.kotekan = {}
-        nodes = self.config.kotekan.nodes or {}
-        for node_name, node_params in nodes.items():
-            #config = self.config.kotekan.common_config.copy()
-            #config.update(node_params)
-            self.kotekan[node_name] = KotekanAsyncRESTClient(name=node_name, **node_params)
+    # @coroutine
+    # def create_kotekan_clients(self):
+    #     # Create Kotekan REST clients
+    #     self.kotekan = {}
+    #     nodes = self.config.kotekan.nodes or {}
+    #     for node_name, node_params in nodes.items():
+    #         #config = self.config.kotekan.common_config.copy()
+    #         #config.update(node_params)
+    #         self.kotekan[node_name] = KotekanAsyncRESTClient(name=node_name, **node_params)
 
-    @coroutine
-    def start_kotekan_servers(self):
-        """
-        Start Kotekan serers with the proper config.
-        """
-        conf = self.config.kotekan
-        yield [node.start(config=merge_dict(conf.common_config, conf.nodes[node_name]).as_dict()) for node_name, node in self.kotekan.items()]
+    # @coroutine
+    # def start_kotekan_servers(self):
+    #     """
+    #     Start Kotekan serers with the proper config.
+    #     """
+    #     conf = self.config.kotekan
+    #     yield [node.start(config=merge_dict(conf.common_config, conf.nodes[node_name]).as_dict()) for node_name, node in self.kotekan.items()]
 
 
     #####################################
@@ -734,9 +741,9 @@ class ChimeMaster(object):
 
         # Create objects to communicates to the remote processes needed to run the array
         yield self.create_power_supply_clients()
-        yield self.create_chrx_clients()  # CHRX nodes receive data processed by the GPU nodes
-        yield self.create_kotekan_clients()  # Kotekan processes run on the GPU nodes; they receive the data from the FPGAs over dedicated point-to-point FPGA-GPU 10G Ethernet links, perform the correlation on the data, and forward the processed data to the CHRX nodes
-        yield self.start_kotekan_servers()
+        # yield self.create_chrx_clients()  # CHRX nodes receive data processed by the GPU nodes
+        # yield self.create_kotekan_clients()  # Kotekan processes run on the GPU nodes; they receive the data from the FPGAs over dedicated point-to-point FPGA-GPU 10G Ethernet links, perform the correlation on the data, and forward the processed data to the CHRX nodes
+        # yield self.start_kotekan_servers()
         yield self.create_raw_acq_clients()  # Raw acq clients receive raw ADC data sent by the FPGA over the control network
 
 
@@ -831,7 +838,9 @@ class ChimeMaster(object):
         ca.ib.set_corr_reset(0)
 
         # Compute gains if requested
-        yield ca.compute_gains.async(**conf.fpga.compute_gains)
+        gain_folder = os.path.expanduser(conf.fpga.gain_folder)
+
+        yield ca.compute_gains.async(gain_folder=gain_folder, **conf.fpga.compute_gains)
 
         # Set-up channelizers to process data normally
         self.log.info("Setting-up channelizers")
@@ -842,7 +851,7 @@ class ChimeMaster(object):
             self.log.info("Loading initial SCALER gains in bank #0")
             # ca.set_synchronized_gain_switching_mode(enable=0)  # Disable synchronized gain switching
             # ca.set_next_gain_bank(bank=0)  # immediately select bank zero to load initial gains
-            gains = yield ca.load_gains.async() # load gains from gain files
+            gains = yield ca.load_gains.async(gain_folder=gain_folder) # load gains from gain files
             ca.set_gains.async(gains, bank=0, when='now') # Upload to bank 0 and immediately activate gain bank
         # for bankset in ca.ib.get_current_gain_bank():
         #     log.info('Using gain banks %s' % (', '.join([str(i) for i in bankset])))
@@ -1043,7 +1052,7 @@ class ChimeMaster(object):
         self.fpgas.switch_gains(bank=next_bank, when=next_gain_switch_frame_number)
 
         # Tell chrx which gains are coming and when
-        yield self.pass_gains_to_chrx(next_gain_switch_frame_number, gain_map)
+        # yield self.pass_gains_to_chrx(next_gain_switch_frame_number, gain_map)
 
 
     def status(self):
@@ -1061,8 +1070,8 @@ class ChimeMaster(object):
             self.state = 'stopping'
             self.log.info("stopping acquisition")
             self.iceboard_cb.stop()
-            if self.chrx:
-                yield self.stop_chrx_clients()
+            # if self.chrx:
+            #     yield self.stop_chrx_clients()
             log.stop_logging(self.logging_handlers) # remove the handlers that were created by setup_logging()
             reap_cached_sockets()
             self.start_time = None
@@ -1074,7 +1083,33 @@ class ChimeMaster(object):
         return self.fpgas.get_frequency_map()
 
     def get_channelizer_output(self):
-        return self.fpgas.get_chan_output()
+
+        # Query each FPGA for its current buffer
+        fpga_buffer = self.fpgas.get_chan_output()
+
+        # Convert the input identifier and buffer
+        # to a format that can be easily interpreted
+        out_buffer = collections.OrderedDict()
+
+        # Loop over correlator inputs
+        for corr_loc, buff in fpga_buffer.items():
+
+            # Create the input serial number using the format
+            # specified in the config file
+            crate, slot, chan = corr_loc
+            args_sn = {'corr_sn': self.config.corr_sn,
+                       'crate': crate,
+                       'slot': slot,
+                       'slot_zero_based': slot - 1,
+                       'chan': chan,
+                       'input': self.config.input_number_map[chan]}
+            input_sn = self.config.input_sn % args_sn
+
+            # Undo scaling and offset encoding.  Converts the buffer
+            # from uint8 to float ranging from -8 to 7.
+            out_buffer[input_sn] = [float((bf >> 4) - 8) for bf in buff]
+
+        return out_buffer
 
     def reset_fpga_stats(self):
         self.fpgas.reset_fpga_stats()
@@ -1189,17 +1224,21 @@ class ChimeMasterAsyncRESTServer(AsyncRESTServer):
         self.chime_master = ChimeMasterClass()
         self.future = None
         #self.add_periodic_callback(self.print_iceboard_info_callback, period=60000)
-        self.metrics_queue = Queue.Queue(1000)
+        #self.metrics_queue = Queue.Queue(1000)
         self.metrics = Metrics()
         self.last_metrics_client = None
         #self.add_periodic_callback(self._get_metrics, 3000)
         #self.start_time = None
-        self._get_metrics() # continuously run get_metrics loop
-
+        self.process= psutil.Process(os.getpid())
+        self.log.info('%r: Python kernel PROCESS ID is %s' % (self, self.process))
+        # Start metric gathering loops
+        self._tick_line()
+        self._get_system_metrics()  #
+        self._get_arm_metrics()  #
+        self._get_fpga_metrics()  #
         # Create a cached gps time
         self._gps_time = {}
         self._gps_lock = tornado.locks.Lock()
-
     @coroutine
     def shutdown(self):
         print('Shutting down CHIME Master')
@@ -1271,7 +1310,7 @@ class ChimeMasterAsyncRESTServer(AsyncRESTServer):
     @coroutine
     @endpoint('methods')
     def methods(self, handler):
-        coroutine_return(results=self.get_endpoint_info())
+        coroutine_return(self.get_endpoint_info())
 
     @coroutine
     @endpoint('status')
@@ -1320,7 +1359,7 @@ class ChimeMasterAsyncRESTServer(AsyncRESTServer):
     @endpoint('kotekan-start')
     def kotekan_start(self, handler, **config):
         results = yield [k.start(**config) for k in self.kotekan_clients]
-        coroutine_return(results=results)
+        coroutine_return(results)
 
     @coroutine
     @endpoint('get-frame-time')
@@ -1393,12 +1432,12 @@ class ChimeMasterAsyncRESTServer(AsyncRESTServer):
     @coroutine
     @endpoint('get-frequency-map')
     def get_frequency_map(self, handler):
-        coroutine_return(results=sanitize_for_json(self.chime_master.get_frequency_map()))
+        coroutine_return(sanitize_for_json(self.chime_master.get_frequency_map()))
 
     @coroutine
     @endpoint('get-channelizer-output')
     def get_channelizer_output(self, handler):
-        coroutine_return(results=sanitize_for_json(self.chime_master.get_channelizer_output()))
+        coroutine_return(sanitize_for_json(self.chime_master.get_channelizer_output()))
 
     @coroutine
     @endpoint('reset-fpga-stats')
@@ -1460,58 +1499,90 @@ class ChimeMasterAsyncRESTServer(AsyncRESTServer):
             handler.write(dict(error='FPGA array is not created yet'))
             return
         r = getattr(self.chime_master.fpgas, args['method_name'])(**args)
-        coroutine_return(results=sanitize_for_json(r))
+        coroutine_return(sanitize_for_json(r))
 
     @coroutine
-    def _get_metrics(self):
-        """ get the metrics from the FPGAs and put them in the queue
+    def _tick_line(self):
+        """ Regularly prints a line. Used to debug coroutine call timing.
+        """
+        tick_number = 0
+        while True:
+            print('--(%i)-------------------------------------------------------------------------------------------------' % tick_number)
+            tick_number += 1
+            yield sleep(1)
+
+    @coroutine
+    def _get_system_metrics(self):
+        """ Continuously gather system metrics.
         """
         while True:
-            t0 = time.time()
-            self.log.info('%r: Starting to gather a new set of ch_master metrics' % (self, ))
-            self.log.info('%r: Getting server metrics (memory & CPU usage, run time etc.' % (self,))
-            metrics = self.metrics  # Metrics()
+            self.log.info('%r: Starting to gather a new set of system metrics' % (self, ))
 
+            # Get memory-related metrics
             mem = psutil.virtual_memory()
+            self.metrics.add('ch_master_node_mem_total', value=mem.total)
+            self.metrics.add('ch_master_node_mem_available', value=mem.available)
+            self.metrics.add('ch_master_node_mem_percent', value=mem.percent)
+            self.metrics.add('ch_master_node_mem_used', value=mem.used)
+            self.metrics.add('ch_master_node_mem_free', value=mem.free)
+            proc_mem = self.process.memory_info().rss
+            self.log.info('%r: Python kernel mem usage is %i bytes' % (self, proc_mem))
+            self.metrics.add('ch_master_node_process_mem_used', value=proc_mem)  # in bytes
 
-            metrics.add('ch_master_node_mem_total', value=mem.total)
-            metrics.add('ch_master_node_mem_available', value=mem.available)
-            metrics.add('ch_master_node_mem_percent', value=mem.percent)
-            metrics.add('ch_master_node_mem_used', value=mem.used)
-            metrics.add('ch_master_node_mem_free', value=mem.free)
-
+            # Get CPU-related metrics
             cpu = psutil.cpu_times()
+            self.metrics.add('ch_master_node_cpu_percent', value=psutil.cpu_percent())
+            self.metrics.add('ch_master_node_cpu_user', value=cpu.user)
+            self.metrics.add('ch_master_node_cpu_system', value=cpu.system)
+            self.metrics.add('ch_master_node_cpu_idle', value=cpu.idle)
 
-            metrics.add('ch_master_node_cpu_percent', value=psutil.cpu_percent())
-            metrics.add('ch_master_node_cpu_user', value=cpu.user)
-            metrics.add('ch_master_node_cpu_system', value=cpu.system)
-            metrics.add('ch_master_node_cpu_idle', value=cpu.idle)
-
+            # Get ch_master related metrics
             if self.chime_master.start_time is None:
                 run_time = 0
             else:
                 run_time = time.time() - self.chime_master.start_time
+            self.metrics.add('ch_master_run_time', value=run_time)
 
-            metrics.add('ch_master_run_time', value=run_time)
+            yield sleep(10)
 
+    @coroutine
+    def _get_arm_metrics(self):
+        """ Continuously gather metrics from the ARM processor on the ICEBoards.
+        """
+        self.log.info('%r: Starting ARM metrics gathering loop' % (self, ))
+        while True:
+            t0 = time.time()
+            self.log.info('%r: Starting to gather a new set of ARM metrics' % (self, ))
+            # print('************ Getting ARM Metrics!')
+            try:
+                if self.chime_master and self.chime_master.fpgas:
+                    yield self.chime_master.fpgas.get_arm_metrics.async(self.metrics)
+                    self.log.info('%r: Successfully got ARM metrics' % self)
+            except Exception as e:
+                self.log.warning('%r: Error getting ARM metrics. error is: %r\n%s' % (self, e, traceback.format_exc()))
+
+            self.log.info('%r: Finished gathering ARM metrics.  It took %.1f seconds to gather those. We now have %i metrics.' % (self, time.time() - t0, len(self.metrics)))
+            # print('%r: Finished gathering ARM metrics.  It took %.1f seconds to gather those. We now have %i metrics.' % (self, time.time() - t0, len(self.metrics)))
+            yield sleep(10)
+
+    @coroutine
+    def _get_fpga_metrics(self):
+        """ Continuously gather metrics from the FPGAs in the ICEBoards.
+        """
+        while True:
+            t0 = time.time()
+            self.log.info('%r: Starting to gather a new set of FPGA metrics' % (self, ))
 
             if self.chime_master and self.chime_master.state == 'on' and self.chime_master.fpgas:
                 try:
                     self.log.info('%r: Scraping metrics from FPGAs' % (self))
-                    metrics += yield self.chime_master.fpgas.get_metrics.async(reset=self.chime_master.config.fpga.reset_stats)
-                    self.log.info('%r: Got a set of %i FPGA metrics' % (self, len(metrics)))
+                    yield self.chime_master.fpgas.get_fpga_metrics.async(self.metrics, reset=self.chime_master.config.fpga.reset_stats)
                 except Exception as e:
-                    self.log.warning('%r: error getting FPGA metrics. error is: %r\n%s' % (self, e, traceback.format_exc()))
-                    pass
+                    self.log.warning('%r: Error getting FPGA metrics. error is: %r\n%s' % (self, e, traceback.format_exc()))
             else:
-                self.log.info('%r: Not ready to scrape Metrics from FPGA' % (self))
+                self.log.info('%r: We got a metrics requests but we are not yet ready to scrape metrics from the FPGAs. Ignoring.' % (self))
 
-            #if self.metrics_queue.full():
-            #    self.log.warning('%r: Queue is full. Popping a set of metrics before putting a new one' % (self))
-            #    self.metrics_queue.get()
-            #self.metrics_queue.put((metrics))
-            self.log.info('%r: We now have  %i metrics. It took %.1f seconds to gather this set of ch_master metrics' % (self, len(self.metrics), time.time()-t0))
-
+            self.log.info('%r: Finished gathering FPGA metrics.  It took %.1f seconds to gather those. We now have %i pending metrics.' % (self, time.time()-t0, len(self.metrics)))
             yield sleep(10)
 
     @coroutine
@@ -1524,7 +1595,9 @@ class ChimeMasterAsyncRESTServer(AsyncRESTServer):
             client_ip = handler.request.remote_ip
             self.log.info('%r: Received metrics request from %s' % (self, client_ip))
             if self.last_metrics_client and client_ip != self.last_metrics_client:
-                self.log.warn('%r: A new clients at %s is pulling metrics from this server. Previous client was %s' % (self, client_ip, self.last_metrics_client))
+                self.log.warn('%r: A new client at %s is pulling metrics from '
+                              'this server. Previous client was %s' %
+                              (self, client_ip, self.last_metrics_client))
             self.last_metrics_client = client_ip
             # for i in range(number_of_sets):
             #metrics.add(self.metrics_queue.get() for _ in range(number_of_sets))
@@ -1553,12 +1626,15 @@ class ChimeMasterAsyncRESTServer(AsyncRESTServer):
             handler.set_header('Content-Type', 'text/plain')
             handler.set_header('Content-Encoding', 'gzip')
             handler.write(self.metrics.pop().get_gzip())
-            self.log.info('%r: Returning %i FPGA metrics (compression ratio %.0f%%)' % (self, number_of_metrics, self.metrics.last_compression_ratio * 100))
+            self.log.info('%r: Returning %i FPGA metrics (compression ratio %.0f%%)' %
+                (self, number_of_metrics, self.metrics.last_compression_ratio * 100))
 
             # handler.write(self.metrics.pop().get_gzip())
-            self.log.info('%r: Metrics request took %.3f seconds to execute' % (self, time.time()-t0))
+            self.log.info('%r: Metrics request took %.3f seconds to execute' %
+                (self, time.time()-t0))
         except Exception as e:
-            self.log.error('%r: Exception in get-monitoring-data. Error is: %r' % (self, e))
+            self.log.error('%r: Exception in get-monitoring-data. Error is: %r' %
+                (self, e))
             raise
 
     @coroutine
@@ -1758,9 +1834,11 @@ class ChimeMasterAsyncRESTClient(AsyncRESTClient):
                     self.log.info('%r: start process is completed' % self)
                     coroutine_return(status['start_result'])
             except RuntimeError as e:
-                print('*** %r Client get_status got an exception %r\n\n Ignoring.' % (self, e))
-                status=dict(state='HTTP error')
-                raise RuntimeError
+                print('*** %r Client get_status got an exception:%r\n.' % (self, e))
+                if 'timeout' not in e.message.lower():
+                    status = dict(state='HTTP error')
+                    raise e
+                print("This is apparently a timout. We'll ignore it...\n")
             self.log.info('%r: Waiting for the START process to complete. Current state is: %s' % (self, status['state']))
             yield sleep(1)
 
