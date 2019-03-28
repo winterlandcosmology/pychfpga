@@ -1,12 +1,11 @@
-from __future__ import absolute_import
-
 #!/usr/bin/python
-
 """
 chime_array.py module. Defines the objects that represent and handles
 operations one the whole array of CHIME ICE hardware.
 """
+from __future__ import absolute_import
 
+# Python Standard Library packages
 import argparse
 import logging
 import time
@@ -15,8 +14,6 @@ import os
 import sys
 import socket  # for gethostbyname()
 from collections import OrderedDict
-import numpy as np
-import matplotlib.pyplot as plt
 import pickle
 import re
 import datetime
@@ -24,13 +21,16 @@ import functools
 import zlib
 import base64
 
+# PyPi packages
+import numpy as np
+import matplotlib.pyplot as plt
 from tornado.netutil import Resolver
 from tornado.ioloop import IOLoop
 from tornado import gen
 from tornado.gen import with_timeout, TimeoutError
-
-# from sqlalchemy import orm
 from sqlalchemy import or_
+
+
 
 # For development: delete all fpga modules so fresh ones will be reloaded
 if getattr(__main__, '__reload__', False):
@@ -39,10 +39,14 @@ if getattr(__main__, '__reload__', False):
         if n.startswith('pychfpga'):
             del sys.modules[n]
 
-# Automatically update the search path for absolute imports of pychfpga and its subpackages. We use
-# absolute imports because 1) if both relative and absolute imports are made, then  modules ar
-# eloade dmultiple times and SQLAlchemy complains. 2) wa cannot access pychfpga subpackages if we
-# run this module as a script because Python refuses to consider the script folder as a package.
+# Local imports
+
+# Automatically update the search path for absolute imports of pychfpga and
+# its subpackages. We use absolute imports because 1) if both relative and
+# absolute imports are made, then  modules are loaded multiple times and
+# SQLAlchemy complains. 2) wa cannot access pychfpga subpackages if we run
+# this module as a script because Python refuses to consider the script folder
+# as a package.
 try:
     import pychfpga
 except ImportError:
@@ -59,12 +63,12 @@ from pychfpga.core.icecore import async, async_return, async_sleep, async_moment
 from pychfpga.core.icecore import IceBoardPlus
 from pychfpga.core.icecore_ext import IceCrateExt
 from pychfpga.MGADC08 import MGADC08  # Import to make sure this Mezzanine is registered  so it can be discovered
-from pychfpga.core.metrics import Metrics
 from pychfpga.core.chFPGA_controller import chFPGA_controller
 from pychfpga.Agilent_N5764A import AgilentN5764AHandler
 from pychfpga.gpu_node import GpuNodeHandler
-from pychfpga.namespace import NameSpace, merge_dict
-from pychfpga.conf import load_yaml_config# import logging.handlers
+from pychfpga import Metrics
+from pychfpga import NameSpace, merge_dict
+from pychfpga import load_yaml_config# import logging.handlers
 
 from pychfpga.core.icecore.session import load_session as load_yaml
 
@@ -154,7 +158,7 @@ class FPGAArray(object):
                  sync_source='bp_trig',
                  sync_master=None,
                  sync_master_time_source=None,
-                 max_sync_time_difference=20,
+                 max_sync_time_difference=100,
 
                  mode=None,
                  frames_per_packet=2,
@@ -280,7 +284,7 @@ class FPGAArray(object):
 
             None: Configuration & initialization
 
-            bitfile : String. Filename of the bitfile used to program the FPGAs
+            bitfile : String. Filename of the bitfile used to to program the FPGAs
 
             prog : If ``prog=1``, the FPGAs in the selected Iceboards will be
                 configured only if they are not already configured with the same
@@ -413,7 +417,7 @@ class FPGAArray(object):
         self.max_sync_time_difference = max_sync_time_difference
         self.tx_power = tx_power
         self.mode = mode
- 
+
         ###########################################
         # setup pychfpga.fpga_array logging
         ###########################################
@@ -679,9 +683,9 @@ class FPGAArray(object):
                                   for ib, ping_result in ping_results.items() if not ping_result)))
                 # resolve hostnames into IP addresses
                 # this is not concurrent, unfortunately... this is why we checked ping first, otherwise it blocks for a long time
+
+                self.logger.info('%r: Resolving IP addresses of Iceboards that passed the ping test' % self)
                 t0 = time.time()
-                self.logger.info('%r: Resolving IP addresses of Iceboards that passed the ping test' % (self))
-                
                 for ib, ping_result in ping_results.items():
                     if ping_result:
                         ib.hostname = socket.gethostbyname(ib.hostname)
@@ -745,6 +749,7 @@ class FPGAArray(object):
             self.logger.info('%r:     IceBoards to find: %s' % (self, hw_table.iceboards))
             self.logger.info('%r:     IceCrates to find: %s' % (self, hw_table.icecrates))
             self.print_flush()
+            # Perform mDNS discovery. This is done on a separate ioloop, which locks up the current loop for a while
             mdns_discover(self.hwm,
                           icecrates=hw_table.icecrates,
                           iceboards=hw_table.iceboards,
@@ -813,30 +818,38 @@ class FPGAArray(object):
         #################################
         # Discover Mezzanines
         #################################
-
+        # Check if the board is running a compatible ARM firmware. This will
+        # trigger the first communication to the ARM, causinng Tuber to fetch
+        # the method & property directory from each board.
+        self.logger.info('Checking ARM firmware version...')
         if self.ib:
-            [ib.check_tuber_version() for ib in self.ib]  # Check if the board is running a compatible ARM firmware
+            yield [ib.check_tuber_version.async() for ib in self.ib]
 
-            # Auto-discover mezzanines and add them to the hardware map.
-            if not no_mezz:
-                self.logger.info('Discovering Mezzanines...')
-                self.print_flush()  # make sure we see the previous prints right away so we have a better feeling of what is happening
-                yield [ib.discover_mezzanines.async() for ib in self.ib]
-                self.hwm.flush()
-                self.ib.set_cache()
+        #################################
+        # Discover Mezzanines
+        #################################
+        # Auto-discover mezzanines and add them to the hardware map.
+        if self.ib and not no_mezz:
+            self.logger.info('Discovering Mezzanines...')
+            self.print_flush()  # make sure we see the previous prints right away so we have a better feeling of what is happening
+            yield [ib.discover_mezzanines.async() for ib in self.ib]
+            self.hwm.flush()
+            self.ib.set_cache()
 
         def get_mezz_name(ib, mezz_number):
             m = ib.mezzanine.get(mezz_number, None)
             # return '%s_SN%s' % (m.__ipmi_part_number__, m.serial) if m else '-'
             return 'SN%s' % (m.serial) if m else '-'
 
+        #################################
+        # Print the IceBoard table
+        #################################
         self.print_iceboard_table(lambda ib: '%s\n%s' % (get_mezz_name(ib,1), get_mezz_name(ib,2)), row_labels=['Mezz1\nMezz2'], add_serial=True)
         self.print_flush()
 
         #################################
         # Program the FPGAs
         #################################
-
 
         # Tell the IceBoard to run chFPGA firmware, program the FPGA, and establish communication with it
         if self.ib:
@@ -1067,7 +1080,8 @@ class FPGAArray(object):
                              mode,
                              frames_per_packet=1,
                              chan8_channel_map=range(8),
-                             tx_power=None
+                             tx_power=None,
+                             integration_period=16384
                              ):
         """ Set the operational mode of the array.
 
@@ -1093,6 +1107,9 @@ class FPGAArray(object):
                   data is sent through the IceBoard QSFP+ ports. The pairing of crates
                   is based on the crate number: Crate N and N+1 form a pair, whereas N
                   is a even number.
+
+            integration_period (int): (for ``corr16`` mode only): Sets the
+                integration period (in frames) of the firmware correlator.
 
 
         Notes:
@@ -1121,7 +1138,7 @@ class FPGAArray(object):
         if mode == 'raw_time':
             self.ib.set_fft_bypass(True)
             self.ib.set_scaler_bypass(True)
-            self.init_shuffle(mode='chan8', frames_per_packet=frames_per_packet, chan8_channel_map=np.hstack((chan8_channel_map, [16]*8)), tx_power=tx_power)
+            self.init_corner_turn(mode='chan8', frames_per_packet=frames_per_packet, chan8_channel_map=np.hstack((chan8_channel_map, [16]*8)), tx_power=tx_power)
 
         elif mode in ['shuffle256', 'shuffle512', 'shuffle16']:
             if not all(self.ib.CROSSBAR2) or not all(self.ib.CROSSBAR3):
@@ -1130,7 +1147,7 @@ class FPGAArray(object):
             self.ib.CROSSBAR3.SOF_WINDOW_STOP = 110
             self.ib.CROSSBAR3.TIMEOUT_PERIOD = 0
             self.ib.BP_SHUFFLE.reset_rx_equalizers()
-            self.init_shuffle(mode=mode, frames_per_packet=frames_per_packet, tx_power=tx_power)
+            self.init_corner_turn(mode=mode, frames_per_packet=frames_per_packet, tx_power=tx_power)
             self.ib.BP_SHUFFLE.reset_stats()
             self.ib.CROSSBAR2.reset_stats()
             self.ib.CROSSBAR3.reset_stats()
@@ -1138,16 +1155,18 @@ class FPGAArray(object):
             if not all(self.ib.CORR):
                 raise RuntimeError('All IceBoards must have a firmware correlator engine')
             self.ib.init_crossbars(mode, frames_per_packet=1)
-
+            self.ib.set_offset_binary_encoding(False)  # The firmware correlator engine expects 1's complement encoding
+            self.ib.start_correlator(integration_period=integration_period)
         else:
             raise ValueError('Unknown operational mode')
 
-    def init_shuffle(self,
+    def init_corner_turn(self,
                      mode,
                      dsmap=range(16),
                      frames_per_packet=1,
                      chan8_channel_map=range(16),
                      tx_power=None,
+                     sync=True
                      ):
         """ Setup the crossbars and data shuffling in every board of the array.
 
@@ -1256,8 +1275,9 @@ class FPGAArray(object):
 
         # sync boards
         #soft_sync(c, sync_board)
-        self.logger.info('%r: Shuffling initialization completed. Syncing boards' % self)
-        self.sync(delay=2)
+        self.logger.info('%r: Shuffling initialization completed.' % self)
+        if sync:
+            self.sync()
 
     def set_tx_power(self, default_power=(5, 10), lane_group=None, exceptions=[], index=0):
         """ Set the power level of the corner-turn engine GTX transmitters.
@@ -1457,11 +1477,25 @@ class FPGAArray(object):
         else:
             raise ValueError("Unknown syncing method '%s'" % method)
 
-    def sync(self, delay=2, check=True):
+    def sync(self, delay=2-0.006556800, check=True, align_to_seconds=True):
         """ Generate a SYNC event across the whole array based on the syncing method set by ``set_sync_method()``.
 
-        If ``check`` is True, the method will read the SYNC counters on every
-        board to confirm that the SYNC really happened everywhere.
+        Parameters:
+
+        delay (float): Sets in how much time in the future after the current
+            time the sync time  will happen. The system will determine and the
+            time it takes to issue the command across the array. If
+            ``align_to_seconds`` is True, the delay is applied after the
+            current time + propagation time is rounded to the second, allowing
+            a find tuning of the trigger time down to 10 nanosecond
+            increments.
+
+        check (bool): If True, the method will read the SYNC
+            counters on every board to confirm that the SYNC really happened
+            everywhere.
+
+        align_to_seconds (bool): if True, the trigger time **before** the
+            ``delay`` is applied is rounded to the closest integer second.
         """
 
         if check:
@@ -1483,15 +1517,18 @@ class FPGAArray(object):
             t0 = time.time()
             self.ib.set_irigb_trigger_time(dt, delay=300) # set the trigger far enough in time it should not happen before we reprogram another delay
             setting_time = (time.time() - t0)
-            self.logger.info('It takes %f seconds to set the trigger time' % setting_time)
-            setting_time = round(2*setting_time + delay)
+            self.logger.info('%r: It takes %f seconds to set the trigger time across the array' % (self, setting_time))
+            setting_time = round(2*setting_time) + delay
             # Now set the trigger time using that delay
             dt = self.ib[0].get_irigb_time()
-            self.logger.info('Triggering SYNC in %i seconds at %s' % (setting_time,  dt.isoformat()))
+            if align_to_seconds:
+                self.logger.info('%r: Rounding trigger time to the second' % self)
+                dt = dt.replace(microsecond=0)
+            self.logger.info('%r: Triggering SYNC %f seconds after %s' % (self, setting_time,  dt.isoformat()))
             self.print_flush()
             t0 = time.time()
-            self.ib.set_irigb_trigger_time(dt, delay=setting_time)
-            self.logger.info('It took %f seconds to set the trigger time' % (time.time() - t0))
+            self.sync_start_time = sync_time = self.ib.set_irigb_trigger_time(dt, delay=setting_time)
+            self.logger.info('%r: It took %f seconds to set the final trigger time' % (self, time.time() - t0))
             t0 = time.time()
             while any(self.ib.is_irigb_before_trigger_time()):
                 if time.time() - t0 > setting_time + 1:
@@ -1507,15 +1544,21 @@ class FPGAArray(object):
             if bad_ib:
                 raise RuntimeError('The following IceBoards did not SYNC properly: %s' % (','.join(repr(ib) for ib in bad_ib)))
 
-        ts = self.ib.get_irigb_time(trig=False, format='raw')
-        delta_ts = max(ts.nano) - min(ts.nano)
-        self.logger.info('%r: The sync time for all boards are:%s' %
-            (self, '\n'.join('%r:%i' % (ib.handler, ts[i].nano) for i,ib in enumerate(self.ib))))
-        self.logger.info('%r: The maximum sync time difference is %i ns' % (self, delta_ts) )
-        if delta_ts > self.max_sync_time_difference:
-            raise RuntimeError('The sync time difference of %i exceeds the maximum limit of %i' % (delta_ts, self.max_sync_time_difference))
-        self.sync_timestamps = ts
+        self.sync_timestamps = ts = self.ib.get_irigb_time(trig=False, format='raw')
         self.sync_timestamp = ts[0]
+
+        delta_ts = max(ts.nano) - min(ts.nano)
+        self.logger.info('%r: The IRIG-B time for Frame 0 on all boards is:\n%s' %
+            (self, '\n'.join('%r: %s (%i ns since epoch, %i ns after sync)' % (
+                ib.handler,
+                ts[i].isoformat(),
+                ts[i].nano,
+                ts[i].nano - sync_time[i].nano)
+            for i ,ib in enumerate(self.ib))))
+        self.logger.info('%r: The maximum Frame 0 time difference is %i ns' % (self, delta_ts) )
+        if delta_ts > self.max_sync_time_difference:
+            raise RuntimeError('The Frame 0 time difference of %i exceeds the maximum limit of %i' % (delta_ts, self.max_sync_time_difference))
+
         for ib in self.ib:
             for ant in ib.ANT:
                 ant.SCALER.OVERFLOW_RESET = 1
@@ -1543,7 +1586,7 @@ class FPGAArray(object):
         if sync:
             self.sync()
 
-    def set_noise_injection(self, board, enable=False, offset=0, high_time=8388608, period=16777216, local_sync=True):
+    def set_noise_injection(self, board, enable=False, offset=0, high_time=8388608, period=16777216, local_sync=True, output='bp_sma'):
         """ Configure noise injection gating signal.
 
         ``board`` is either the serial number (as a string) of the target board, or is the target IceBoard object.
@@ -1551,21 +1594,41 @@ class FPGAArray(object):
         A sync event is necessary to restart the counters so the gating signal will be generated properly.
 
         """
-        if isinstance(board, str):
-            board = self.ib.get(serial=board)
+        board = self.get_iceboard(board)
 
         if enable:
-            board.set_user_output_source('pwm')
+            board.set_user_output_source('pwm', output=output)
+
         board.set_pwm(enable=enable, offset=offset, high_time=high_time, period=period, local_sync=local_sync)
 
     # def get_current_gain_bank(self):
     #     return [ib.get_current_gain_bank() for ib in self.ib]
 
-    def get_iceboard_from_id(self, id):
-        """ return the iceboard corresponding to the specified id.
+    def get_iceboard(self, board):
+        """ Return the ICEBoard specified by tuple or serial number.
+
+        If board is already an IceBoard object, it should be returned.
         """
-        crate, slot = id[0], id[1] + 1
-        return self.ic.get(crate_number=crate).slot[slot]
+        if not self.ib:
+            raise RuntimeError('There are no Iceboard to select in the list')
+        elif isinstance(board, type(self.ib[0])):
+            return board
+        elif isinstance(board, str):
+            if board in self.ib.serial:
+                return self.ib.get(serial=board)
+            else:
+                raise RuntimeError('%r: Invalid Board serial number %s. Valid serial numbers are %s' %
+                    (self, board, ','.join("'%s'" % ib.serial for ib in self.ib)))
+        elif isinstance(board, (tuple, list)):
+            crate, slot = board
+            return self.ic.get(crate_number=crate).slot[slot + 1]
+        else:
+            raise AttributeError('%r: Invalid Iceboard specification %s' % (self, board))
+
+    def get_iceboard_from_id(self, id):
+        """ return the iceboard corresponding to the specified (crate,slot) tuple. ``slot`` is zero-based.
+        """
+        return self.get_iceboard(id)
 
 #    def init_gains(self):
 #        """ Should be deprecated. Use load_gains() instead.
@@ -1580,12 +1643,37 @@ class FPGAArray(object):
 #            ib.set_gain(g_array)
     @async
     def load_gains(self, bank=0, gain_folder='/home/chime/ch_acq/gains'):
-        """ Loads the gains from the gain files associated with every board of the array and return
-        the gain map in the format {channel_id:gain}
+        """ Returns the gains from the gain files associated with every board of the array.
+
+        If a gain file is not found for a specific board, the default gains
+        found in the file 'default_gains.pkl' will be used for that board.
+
+        If a gain file nor a default gains file are found, the gain data for
+        that board will be `None` and a warning will be logged.
+
+        Parameters:
+
+            bank (int): Unused
+
+            gain_folder (str): FOnder in which the gain files are located.
+
+        Returns:
+
+            The gain map in the format ``{board_id: gains}``, where
+            ``board_id`` is a two-element tuple uniquely identifying the board
+            (taken from the board's get_id()), and ``gains`` is a dict
+            containing the digital gains to be applied to the channels on that
+            board (from the board's load_gains(...))
+
+        Note:
+
+            This method does not set the digital gains in the FPGAs; it only
+            loads them from the files. See `set_gains` to set the gains using
+            the dict returned by this method.
         """
 
-        # get the default gains, just in case we need them
 
+        # get the default gains, just in case we need them
         try:
             default_gains_filename = os.path.join(gain_folder, 'default_gains.pkl')  # filename of the default gains
             default_gains = pickle.load(open(default_gains_filename, 'rb'))
@@ -1594,9 +1682,9 @@ class FPGAArray(object):
 
         array_gains = {}
         for ib in self.ib:
-            ch_id = ib.get_id()
-            crate, slot_0based = ch_id[0], ch_id[1]
-            self.logger.info('%r: Reading digital gains for crate %02i slot %02i (FCC%02i%02i)' % (self, crate, slot_0based, crate, slot_0based))
+            board_id = crate, slot_0based = ib.get_id()
+            self.logger.info('%r: Reading digital gains for crate %02i slot %02i (FCC%02i%02i) from folder %s' %
+                             (self, crate, slot_0based, crate, slot_0based, gain_folder))
             board_gains = ib.load_gains(folder=gain_folder) or default_gains
             yield async_moment
 
@@ -1604,16 +1692,16 @@ class FPGAArray(object):
                 self.logger.warn('%r: Neither board-specific gain file not default gain file was found for crate %02i slot %02i (FCC%02i%02i)' % (self, crate, slot_0based, crate, slot_0based))
 
             if board_gains is None:
-                array_gains[ch_id] = None
+                array_gains[board_id] = None
             else:
-                array_gains[ch_id] = board_gains
+                array_gains[board_id] = board_gains
         async_return(array_gains)
 
     @async
     def set_gains(self, gains, bank=-1,  when='now'):
         """ Set the gains on the boards in the array.
 
-        Arguments:
+        Parameters:
             'gains': dictionary of gains specified as {board_id: gain_spec, ...}.
                      `board_id` uniquely identifies a board and is a tuple either in the format (crate, slot) or (board_id).
                      `gain_spec` is passed to the set_gain() method and is in the format (linear_gain, log_gain). `linear_gain` is a complex scalar or a 1024-element complex vector. log_gain is the post_scaler factor, and is a integer.
@@ -1642,7 +1730,7 @@ class FPGAArray(object):
             self.switch_gains(bank=bank, when=when)
 
     @async
-    def compute_gains(self, enable=True, slots=None, noise_injection=None):
+    def compute_gains(self, enable=True, slots=None, noise_injection=None, gain_folder='/home/chime/ch_acq/gains'):
         """ Compute the gains of the SCALER module so that the conversion of the FFT output
         to (4+4) bit complex values stays within range for the current signal conditions.
 
@@ -1674,17 +1762,22 @@ class FPGAArray(object):
             ch_id = ib.get_id()
             crate, slot_0based = ch_id[0], ch_id[1]
             if (slots is None) or slots[crate][slot_0based]:
-                yield calculate_gains.calculate_gains.async(ib)
+                yield calculate_gains.calculate_gains.async(ib, gain_folder=gain_folder)
 
     def get_next_gain_bank(self):
         """
-        Return the next gain bank number to be used (i.e. the currently unused bank number).
+        Return the next gain bank number to be used (i.e. the currently unused
+        bank number of channel 0 of the first board of the array).
 
-        The bank number is the currently inactive bank of the first channel of the first board of
-        the array.
 
         It is the responsability of the user to make sure that no gain switch will occur once this
-        method is called.
+        method is called. .
+
+        Returns:
+            The bank number of the currently inactive bank of the first channel of the first board of
+            the array (not the inactive bank for every channel of every boards).
+
+
         """
         self.ib[0].get_next_gain_bank()[0]
 
@@ -1742,8 +1835,6 @@ class FPGAArray(object):
             for slot, ib in ic.slot.items():
                 for ch, ant in enumerate(ib.ANT):
                     buf = ant.FUNCGEN.get_buffer()
-                    buf >>= 4
-                    buf = (buf[0::2] << 4) + buf[1::2]
                     ch_out[(ic.crate_number, slot, ch)] = buf.tolist()
         return ch_out
 
@@ -2541,10 +2632,10 @@ class FPGAArray(object):
                 col_data = []
                 errs = []
                 # Gather status from the backplane PCB and QSFP links
-                for link_group in range(2):
+                for lane_group in ib.BP_SHUFFLE.lane_group_names:
                     if reset_stats:
                         ib.BP_SHUFFLE.reset_stats()
-                    errs.append(ib.BP_SHUFFLE.get_bp_rx_status(link_group))
+                    errs.append(ib.BP_SHUFFLE.get_bp_rx_status(lane_group))
 
                 # Gather status from the crossbars
                 for cb in [ib.CROSSBAR2, ib.CROSSBAR3]:
@@ -2562,7 +2653,9 @@ class FPGAArray(object):
                     elif verbose == 1:
                         col_data.extend(('-', 'ERR')[bool(e)] for e in err)
                     else:
-                        col_data.extend(('\n'.join(['%s=%s' % (k,v) for (k,v) in e.items()]) or '-') for e in err)
+                        col_data.extend(
+                            ('\n'.join(['%s=%s' % (k, v) for (k, v) in e.items()]) or '-')
+                            for e in err)
                 info[slot] = col_data
             print 'Crate %s Crossbar and Shuffle status' % crate.get_string_id()
 
@@ -2764,18 +2857,16 @@ class FPGAArray(object):
         return self.ib.index_by(lambda ib:ib.get_id()).get_status()
 
     @async
-    def get_metrics(self, reset=True):
-        """ Get the monitoring information on the backplanes, boards and firmware status across the array.
+    def get_arm_metrics(self, metrics):
+        """ Get the monitoring information on the backplanes & boards that are accessible from the ARM.
 
         Includes:
             - Backplane metrics, as measured from one board in each crate
             - Iceboard hardware metrics (voltages, temperatures), which also includes mezzanines voltage/current.
-            - Backplane receiver/transmitter status with packet statistics for both the PCB and QSFP links.
 
         Returns:
             A :cls:`Metrics` object.
         """
-        metrics = Metrics()
 
         # IceCrate metrics
         self.logger.info('%r: Getting IceBoard backplane hardware metrics (over ARM link)' % self)
@@ -2789,6 +2880,17 @@ class FPGAArray(object):
         metrics += m
         self.logger.info('%r: Got %i IceBoard temperature & power supply metrics' % (self, len(m)))
         metrics += yield [ib.get_fpga_udp_metrics.async() for ib in self.ib]
+
+    @async
+    def get_fpga_metrics(self, metrics, reset=True):
+        """ Get the monitoring information on the FPGA firmware status across the array.
+
+        Includes:
+            - Backplane receiver/transmitter status with packet statistics for both the PCB and QSFP links.
+
+        Returns:
+            A :cls:`Metrics` object.
+        """
 
         # Shuffle status
         self.logger.info('%r: Getting corner-turn links metrics (over FPGA UDP link)' % self)
@@ -2810,10 +2912,12 @@ class FPGAArray(object):
                 fn, ts = yield ib.capture_frame_time.async(format='raw')
                 if not i:
                     fn0, ts0 = (fn, ts)
-                metrics.add('fpga_time_delta', ts.nano - ts0.nano, slot=i)
-                metrics.add('fpga_frame_number_delta', fn - fn0, slot=i)
-                metrics.add('fpga_time_error', ts.nano - (self.sync_timestamps[i].nano + fn*2560), slot=i)
-                metrics.add('fpga_sync_time_delta', self.sync_timestamps[i].nano - self.sync_timestamps[0].nano, slot=i)
+                crate, slot = ib.get_id()
+                slot = ib.slot - 1
+                metrics.add('fpga_time_delta', ts.nano - ts0.nano, crate=crate, slot=slot)
+                metrics.add('fpga_frame_number_delta', fn - fn0, crate=crate, slot=slot)
+                metrics.add('fpga_time_error', ts.nano - (self.sync_timestamps[i].nano + fn*2560), crate=crate, slot=slot)
+                metrics.add('fpga_sync_time_delta', self.sync_timestamps[i].nano - self.sync_timestamps[0].nano, crate=crate, slot=slot)
             except RuntimeError:
                 self.logger.error('%r: Timeout while capturing frame time' % ib)
 
@@ -2900,7 +3004,7 @@ class FPGAArray(object):
                     worst_err = 0
                     worst_det = 1
                     for slot, ib in ic.slot.items():
-                        errs, det = ib.BP_SHUFFLE.get_rx_lane_monitor(['ERROR_CTR', 'FRAME_DETECT'], link_group=0)
+                        errs, det = ib.BP_SHUFFLE.get_rx_lane_monitor(['ERROR_CTR', 'FRAME_DETECT'], lane_group='pcb')
                         worst_err = max(worst_err, max(errs))
                         worst_det = min(worst_det, min(det))
 
@@ -3442,6 +3546,7 @@ def create_fpga_array(args=None):
     ps_group = parser.add_argument_group('Power Supply Array parameters', 'Allows interactive creation of Power Supply objects')
     ps_group.sub_dict = 'cli_power_supply_array'  # group all arguments in this group in a sub dictionary with this name
     ps_group.add_argument('-p', '--power_supplies', type=str, nargs='+', help='List of IP address or hostnames of the power supply objects (Agilent_N5764A) to be created.')
+    ps_group.add_argument('--power', type=str, help='Set the state of the power supplies: ON, OFF or CYCLE')
 
     # Add generic command-line parameters
     parser.add_argument('-y', '--yaml',  type=str, nargs='+',   help='YAML configuration file name, optionally followed by object names in that file.')
@@ -3458,7 +3563,30 @@ def create_fpga_array(args=None):
 
     logger = setup_logging(**args.get('cli_logging', {}))
 
+
+    #######################################
+    # Power supply array
+    #######################################
+    # ps_array_params = merge_dict(config.get('power_supply_array', {}), args['cli_power_supply_array'])
+    ps_array_params = args['cli_power_supply_array']
+    power = ps_array_params.pop('power')
+    ps_array = PSArray(**ps_array_params)  # Create Power supply array
+    if power is not None:
+        if power.lower() == 'on':
+            ps_array.unlock()
+            ps_array.power_on()
+        elif power.lower() == 'off':
+            ps_array.unlock()
+            ps_array.power_off()
+        elif power.lower() == 'cycle':
+            ps_array.unlock()
+            ps_array.power_cycle()
+        else:
+            raise AttributeError("Invalid power supply state '%s'" % power)
+
+    #######################################
     # FPGA array
+    #######################################
     config_fpga_array_params = config.get('fpga', {}).get('fpga_array_params', {}) or config.get('fpga_array_params', {})
     cli_fpga_array_params = {k: v for k, v in args['cli_fpga_array'].items() if v is not None}
     #Sprint('merging \n\n%r\n\n with \n\n%r' % (config_fpga_array_params, cli_fpga_array_params))
@@ -3468,10 +3596,6 @@ def create_fpga_array(args=None):
     # GPU array
     gpu_array = GPUArray(**config.get('cli_gpu_array', {}))     # Create FPGA array
 
-    # Power supply array
-    # ps_array_params = merge_dict(config.get('power_supply_array', {}), args['cli_power_supply_array'])
-    ps_array_params = args['cli_power_supply_array']
-    ps_array = PSArray(**ps_array_params)     # Create FPGA array
 
     return config, fpga_array, gpu_array, ps_array
 

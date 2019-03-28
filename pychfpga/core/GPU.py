@@ -17,7 +17,11 @@ import xglink
 class GPU_base(xglink.XGLinkCore):
     """ Instantiates a container for all the GPU link ressources 
 
-    Thhis class implements a XGLinkCore (ensemble of QPLLs and GTXes and
+    This class provides access to the memory-mapped registers and
+    the high-level methods needed to operate the XGE_ARRAY.VHD module,
+    which implements a array on transmit-only 10G Ethernet links.
+    
+    It implements a XGLinkCore (ensemble of QPLLs and GTXes and
     date encoding/synchonization) and adds 10G Ethernet packet framing
     (SOF, EOF) and checksum (CRC32). It provides an additional set of
     registers to the XGLinkCore.
@@ -33,6 +37,8 @@ class GPU_base(xglink.XGLinkCore):
     # 10GE Link control and status registers
     RESET               = BitField(CONTROL, 4+0, 0, doc='Resets the MAC and the GTX core.')
     TEST_ENABLE         = BitField(CONTROL, 4+0, 1, doc='When 1, enables trsnamission of test packets over the link.')
+    DEST_ADDR_MODE      = BitField(CONTROL, 4+0, 3, doc='When 1, the destination address is set by TEST_PACKET_LENGTH and the MSB of TEST_PACKET_PERIOD')
+    OVERFLOW_RESET       = BitField(CONTROL, 4+0, 2, doc='When 1, The overflow bits are reset.')
     TEST_PACKET_LENGTH  = BitField(CONTROL, 4+2, 0, width=16, doc='test packet length in units of 32bit words')
     TEST_PACKET_PERIOD  = BitField(CONTROL, 4+4, 0, width=16, doc='period in 244.14MHz clocks')
     WORD_CTR            = BitField(STATUS, 2+0, 0, width=8, doc='Last 8 bits of the counter used to produce the test test pattern.')

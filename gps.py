@@ -4,22 +4,21 @@ REST Server and clients for the CHIME receiver hut GPS units Spectrum Instrument
 accessed through the StarTech NETRS232 serial-to-ethernet adapters.
 
 """
-
+# Python Stabdard Library
 import sys
 import time
 import datetime
 import calendar
 import Queue
 
-# import tornado
-
-# from pychfpga.Agilent_N5764A import AgilentN5764AHandler
-from pychfpga import Metrics, NameSpace, load_yaml_config
-from rest import AsyncRESTClient, AsyncRESTServer, endpoint
-from rest import coroutine, coroutine_return, sleep, IOLoop
-from rest import RunSyncWrapper, SocketContext, run_client  # generic REST servers and clients
-
-import log  # logging helper functions
+# External private packages
+from wtl import log
+from wtl.rest import AsyncRESTServer, AsyncRESTClient # generic REST servers and clients
+from wtl.rest import endpoint, coroutine, coroutine_return, sleep
+from wtl.rest import RunSyncWrapper, IOLoop, run_client, SocketContext
+from wtl.namespace import NameSpace
+from wtl.config import load_yaml_config
+from wtl.metrics import Metrics
 
 class SpectrumInstrumentsTM4D(SocketContext):
     """
@@ -50,27 +49,29 @@ class SpectrumInstrumentsTM4D(SocketContext):
             '59': self.get_geometric_quality_and_almanac_status,
             '60': self.get_mux1_output_source,
             '61': self.get_timing_status,
-            '62': None, # Event Time Tag
-            '63': None, # POP/ETT Status
+            '62': None,  # Event Time Tag
+            '63': None,  # POP/ETT Status
             '64': self.get_oscillator_tuning_mode,
             '65': self.get_alarm_status,
-            '66': None, # Reserved, #66,T28F2A.OBJ,NEWEPPSD10A.HEX   ,312102035321F,28F2,031816
+            '66': None,  # Reserved, #66,T28F2A.OBJ,NEWEPPSD10A.HEX   ,312102035321F,28F2,031816
             '68': self.get_mux2_output_source,
             '69': self.get_tracking_channel_status,
-            '70': None, # Serial time message format
-            '71': None, # Serial time code format
-            '72': None, # Reserved
-            '73': None, # ETT Parameters
-            '74': None, # POP Parameters
+            '70': None,  # Serial time message format
+            '71': None,  # Serial time code format
+            '72': None,  # Reserved
+            '73': None,  # ETT Parameters
+            '74': None,  # POP Parameters
             '75': self.get_speed_and_heading,
             '76': self.get_nmea_info,
-            '74': None, # Phase lock status, old units (see #80)
+            '74': None,  # Phase lock status, old units (see #80)
             '78': self.get_user_options,
             '79': self.get_coast_timer,
             '80': self.get_phase_lock_status,
             '81': self.get_leap_seconds,
-            '82': None, # Undocumented, #82,0,1,8,8,F,F
-            '84': None, # Undocumented, #84,1,0,5,3,2,1,F
+            '82': None,  # Undocumented, #82,0,1,8,8,F,F
+            '84': None,  # Undocumented, #84,1,0,5,3,2,1,F
+            '85': None,  # Undocumented, '#85,0058
+            '86': None,  # Undocumented #86,99.99,99.99,00.41,99.99,00.41
             }
 
     ###################################
@@ -133,8 +134,8 @@ class SpectrumInstrumentsTM4D(SocketContext):
 
 
     def enable_ntp_output(self, enable):
-          self.command('04',3123,3,1,3 if enable else 2,1,0,2,0,3,9,7,6,5,3) # secret command from Tom Versaput 
-    
+          self.command('04',3123,3,1,3 if enable else 2,1,0,2,0,3,9,7,6,5,3) # secret command from Tom Versaput
+
     def set_mask_angle(self, angle_code):
         """ Sets mask angle of the GPS.
 
@@ -574,8 +575,8 @@ class SpectrumInstrumentsTM4D(SocketContext):
                    2: LOW/GPSPPS/GPSPPS
                    4: GPSPPS/GPSPPS/GPSPPS
         """
-        aa_enabled, pps_source, _, _, _, _ = self.query('78', reply)
-        aa_enabled, pps_source = (bool(aa_enabled), int(pps_source))
+        r = self.query('78', reply)
+        aa_enabled, pps_source = (bool(r[0]), int(r[1]))
         self.add_metric(metrics, 'gps_antenna_alarm_detection_enabled', value=aa_enabled)
         self.add_metric(metrics, 'gps_pps_source', value=pps_source)
         return aa_enabled, pps_source
@@ -686,17 +687,43 @@ class SpectrumInstrumentsTM4D(SocketContext):
         #print('Parsed %i metrics' % len(metrics.metrics))
         return metrics
 
-    def configure_gps(self,  lat=49.320683333333335, lon=-119.62329666666666, alt=562.0):
+    def configure_gps(self, location='DRAO', lat=None, lon=None, alt=None):
         """
         Configure the GPS for standard CHIME operations.
 
         The GPS is put in 'static' mode, where it tries only to get time information and not the
         position infromation. This requires less satellites and presumably provides for a more
         stable time signal. In this mode a static position is given to the GPS so it will know what
-        satellites to search for. The default position is the center of the CHIME array at DRAO,
-        Penticton, BC, Canada.
+        satellites to search for.
+
+        The default locations can be passed by name in the `location` parameter, or if `location` is `None`,
+
+
+        Valid location strings are:
+
+            'DRAO': The default position is the center of the CHIME array at
+                DRAO, Penticton, BC, Canada.
+
+            'McGill': The location of the GPS antenna at the McGill Rutherford building, Montreal, Canada
 
         """
+        if bool(location) == bool(lat is not None or lon is not None or alt is not None):
+            raise ValueError("You must specify either the location name, or specify the 'lat', 'lon' and 'alt'")
+
+        if location is None:
+            if lat is None or lon is None or alt is None:
+                raise ValueError(" You must specify `lat', 'lon' and 'alt'")
+        elif location == 'DRAO':
+            lat = 49.320683333333335
+            lon = -119.62329666666666
+            alt = 562.0
+        elif location == 'McGill':
+            lat = 45.507100
+            lon = -73.579128
+            alt = 92.5
+        else:
+            raise ValueError("Invalid location `%s`. Valid locations are 'DRAO' or 'McGill'")
+
         with self.socket(flush=True):
             self.set_polling_mode()
             self.enable_ntp_output(False)  #Not needed, causes the unit to do extra processing and affects latency

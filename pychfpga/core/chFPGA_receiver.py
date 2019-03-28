@@ -494,64 +494,6 @@ class chFPGA_receiver(object):
             for j in data.shape[1]:
                 pass
 
-    def raw_corr_map(self):
-        """
-        map(corr, cmac, prod) = (bin, i, j)
-        """
-        N = self.Nch
-        Ncmac = (N+1) # Numbe rof CMACs (before interleaving)
-        Ncorr = self.Ncorr
-        Nbins = self.FREQ_CHANNELS_MAX / Ncorr # Number of bins processed by each correlator
-        Nprods = N/2*Nbins # total number of products in a cmac (before interleaving)
-        raw_map = np.zeros((Ncorr, Ncmac, Nprods, 3), int) -1
-        interleaved_raw_map = np.empty((Ncorr, Ncmac*2, Nprods/2, 3), int)
-
-
-        # Compute the corelator output map as if we computed all the products for eacb bin in N/2 clocks.
-        cmac = np.arange(Ncmac)
-        x = np.zeros(Ncmac)
-        y = np.zeros(Ncmac)
-        b = np.zeros(Ncmac)
-
-        for corr in range(Ncorr):
-            for bin_number in range(Nbins):
-                for clock in range(N/2):
-                    prod = N/2*bin_number + clock
-
-                    b[:] = corr + bin_number * Ncorr
-
-                    x[0] = y[0] = N/2 - 1 - clock # 1st autocorrelator, 7x7, 6x6  ... 0x0
-                    x[1] = y[1] = N - 1 - clock #+ (1 if clock % 2 else -1) # 2nd autocorrelator 15x15 .. 8x8
-
-                    x[2:] = (cmac[0:N-1] + N - clock) % N
-                    x[2:clock+2] = np.arange(clock)
-                    y[2:] = cmac[0:N-1] + 1
-                    y[2:2+clock] = N-clock+np.arange(clock)
-
-                    raw_map[corr, :, prod] = np.array([b, x, y]).T  #(b, x , y)
-
-        # Since we need to compute the products in N/4 clocks (there are 4 clocks per bin), we use two CMAC in parallel.
-        # The CMACs are interleaved. We update the map to repreent this.
-        interleaved_raw_map[:, 0::2] = raw_map[:, :, 0::2]
-        interleaved_raw_map[:, 1::2] = raw_map[:, :, 1::2]
-        return interleaved_raw_map
-
-    def imap(self, shape):
-        """ Return an array of shape `shape` where each element is a 3-element tuple containing the index on that element.
-        """
-        N1, N2, N3 = shape
-        im = np.zeros((N1,N2,N3, 3), int) + 65535
-        [b,i,j] = np.meshgrid(range(N1), range(N2), range(N3), indexing='ij')
-        im[...,0], im[..., 1], im[..., 2] = b, i, j
-        return im
-
-    def reverse_map(self, m):
-        (N1, N2, N3) = m.reshape(-1, 3).max(axis=0) + 1  # Find the maximum indices if each dimension
-        rm = np.empty((N1, N2, N3, 3), int)
-        im = self.imap(m.shape[:-1])
-        rm[m[..., 0], m[..., 1], m[..., 2]] = im
-        rm[m[..., 0], m[..., 2], m[..., 1]] = im  # also populate j,i with same values
-        return rm
 
 
 

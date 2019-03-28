@@ -1,4 +1,4 @@
-import numpy as np
+# Python Standard Library
 import struct
 import time
 import logging
@@ -7,15 +7,18 @@ import shlex
 import os
 import socket
 import json
+
+
+# PyPi packages
+import numpy as np
 import requests
-
-#import core.icecore.icebox
-
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy import UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.orm.collections import attribute_mapped_collection
 
+
+# Local imports
 from pychfpga.core.icecore import hardware_map
 from pychfpga.core.icecore import handler
 from pychfpga.core.icecore import session

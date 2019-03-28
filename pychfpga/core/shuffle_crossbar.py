@@ -16,7 +16,7 @@ from collections import OrderedDict
 
 import numpy as np
 
-from metrics import Metrics
+from wtl.metrics import Metrics
 from Module import Module_base, BitField
 from .icecore import async, async_return, async_sleep, async_moment
 

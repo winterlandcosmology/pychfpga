@@ -4,29 +4,31 @@ REST Server and clients for the CHIME receiver hut power supplies.
 
 """
 
+# Python Standard Library packages
 import sys
 import argparse
 import time
 
-# import tornado
+# PyPi packages
 
-# from pychfpga.Agilent_N5764A import AgilentN5764AHandler
-from pychfpga import Metrics, NameSpace, load_yaml_config
-from rest import AsyncRESTClient, AsyncRESTServer, endpoint, coroutine, coroutine_return, sleep, IOLoop, RunSyncWrapper, SocketContext, run_client  # generic REST servers and clients
-import log  # logging helper functions
+# External private packages
+from wtl import log
+from wtl.rest import AsyncRESTServer, AsyncRESTClient # generic REST servers and clients
+from wtl.rest import endpoint, coroutine, coroutine_return, sleep
+from wtl.rest import RunSyncWrapper, IOLoop, run_client, SocketContext
+from wtl.namespace import NameSpace
+from wtl.config import load_yaml_config
+from wtl.metrics import Metrics
 
 class AgilentN5700(SocketContext):
     """
     A class to communicate with an Agilent N5700- or N8700-type power supply
     """
-
-
     SUPPORTED_PS = {
         # model : (name, IDN substring, Vmax, Imax)
         'N5764A': ('Agilent Power Supply', 'Agilent Technologies,N5764A', 21, 79.8 ),
         'N8731' : ('Agilent Power Supply', 'Agilent Technologies,N8731A', 8, 400)
     }
-
 
     def __init__(self,  hostname, port=5025, timeout=0.5, verbose=1):
 
