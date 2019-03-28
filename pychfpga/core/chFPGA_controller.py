@@ -2906,7 +2906,8 @@ class chFPGA_controller(IceBoardExtHandler):
         self.set_ant_reset(1)
         self.set_corr_reset(1)
 
-        slot_number = self.slot - 1 if self.slot is not None else 0
+        #slot_number = self.slot - 1 if self.slot is not None else 0
+        slot_number = self.slot - 1 if self.slot else 0 #SC 03/17/2019 changed for individual iceboard
         #-------------------------
         # Configure CROSSBAR 1
         #-------------------------
