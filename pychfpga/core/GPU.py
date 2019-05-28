@@ -15,12 +15,12 @@ import xglink
 
 
 class GPU_base(xglink.XGLinkCore):
-    """ Instantiates a container for all the GPU link ressources 
+    """ Instantiates a container for all the GPU link ressources
 
     This class provides access to the memory-mapped registers and
     the high-level methods needed to operate the XGE_ARRAY.VHD module,
     which implements a array on transmit-only 10G Ethernet links.
-    
+
     It implements a XGLinkCore (ensemble of QPLLs and GTXes and
     date encoding/synchonization) and adds 10G Ethernet packet framing
     (SOF, EOF) and checksum (CRC32). It provides an additional set of
@@ -54,6 +54,22 @@ class GPU_base(xglink.XGLinkCore):
     def set_enable(self, state):
         #  self.LINK_ENABLE = state
         pass
+
+    def reset(self):
+        """ Resets the UDP/MAC stack, the SGMII interface and the GTX """
+        self.RESET = 1
+        self.RESET = 0
+
+    def get_lane_numbers(self):
+        """ Returns a list of logical lane numbers for the GPU links.
+
+        There is no distinction between the two QSFP connectors.
+
+        Returns:
+
+            List of integers.
+        """
+        return range(len(self.gtx))
 
     def status(self):
         """ Displays the status of the GPU GTX hardware"""

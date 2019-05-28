@@ -14,4 +14,4 @@ out_*/
 src/
 
 \.DS_Store
-/ch_acq.egg-info/
+/pychfpga.egg-info/

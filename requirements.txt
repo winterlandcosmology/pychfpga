@@ -9,6 +9,9 @@ wtl.log @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.log.git
 wtl.rest @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.rest.git
 wtl.config @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.config.git
 
+# CoMeT
+comet @ git+ssh://git@github.com/chime-experiment/comet.git
+
 # PyPi packages
 numpy==1.15.2
 psutil==5.4.7

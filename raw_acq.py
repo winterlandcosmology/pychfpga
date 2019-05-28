@@ -6,8 +6,6 @@ from __future__ import absolute_import, division, print_function
 # Python Standard Library packages
 import os
 import sys
-import argparse
-import logging
 import socket
 import time
 import Queue
@@ -24,197 +22,14 @@ import tornado
 import psutil
 
 # External private packages
+from comet import Manager, CometError
 from wtl import log
-from wtl.rest import AsyncRESTServer, endpoint, AsyncRESTClient, coroutine, coroutine_return, IOLoop, RunSyncWrapper, moment
+from wtl.rest import AsyncRESTServer, endpoint, AsyncRESTClient, coroutine, coroutine_return, IOLoop, RunSyncWrapper, moment, run_client
 from wtl.namespace import NameSpace
 from wtl.metrics import Metrics
 
-
-#Should be in gain.py or something.
-class GainCalc(object):
-    def __init__(self, gain=None, zero=False):
-        self.zero = zero
-        self.mask = None
-        self.idealRMS = 1.5 * np.sqrt(2)
-        self.default_log2_gain = 22
-        if gain:
-            self.g = np.zeros((16,1024))
-            for i in range(16):
-                inb = np.array(gain[i][1][0])*2**(gain[i][1][1])
-                self.g[i,:] = inb
-        else:
-           self.g = None
-
-
-    def update(self, signal):
-        self.signal = np.array(signal)
-        mask = np.ma.make_mask_none((len(signal),))
-        #The first bin is always bad for some reason
-        mask[0] = True
-        self.masked = np.ma.array(np.log(signal), mask=mask)
-
-    def convert_gain_format(self):
-        """ Return the current floating point gain vector into a (integer gain vector, log gain scalar) tuple.
-
-
-
-        """
-        #2**14 is max for linear gain
-        #ignore dc component
-        #check for nans
-        #print g
-
-        # identify bad gain values and create an appropriately masked array
-        bad_values = (self.g > 2**31) | ~np.isfinite(self.g)
-        g = np.ma.array(self.g, mask=bad_values)
-
-        # COmpute the power of 2 scaling for gains
-        glog = (np.ceil(np.log2(np.ma.median(np.abs(g) / 2**13, axis=1)))).astype(np.int)
-        glin = np.zeros(g.shape, dtype=np.float)
-        for i, glog_single in enumerate(glog):
-            glin[i] = g[i] / 2**glog[i]
-        glog.data[glog.mask == True] = np.ma.median(glog)
-        glog.mask[glog.mask] = False
-        glin[bad_values] = 2**14
-        return glin, glog.data
-
-    def noisy_gain_estimate(self, data):
-        outrms = data[:, :, :].std(axis=0)
-        outrms[outrms < 0.8] = 0.8
-        #rmss.append(outrms.mean())
-        print(outrms.mean(axis=1))
-        if self.g is not None:
-            #not sure about format of previous gain yet...
-            #needs to be a post of current gain setting I think...
-            #glin, glog = self.convert_gain_format(previous_gain):
-            glin, glog = self.convert_gain_format()
-            # Not sure what g should be here.
-            #g = self.idealRMS*2**(self.default_log2_gain)/outrms
-            for j, glog1 in enumerate(glog):
-                self.g[j] = self.idealRMS * glin[j] * (2**(glog[j]))/outrms[j] #idealRMS*glin*(2**(glog-4))/outrms
-                self.g[j] = (20.0 * self.g[j] + 80.0 * glin[j] * (2**(glog[j])))/100.0
-        else:
-            #Assumes was set to something simple (glin=1), glog is something.
-            self.g = self.idealRMS*2**(self.default_log2_gain)/outrms#idealRMS*2**(default_log2_gain-4)/outrms
-        self.glin, self.glog = self.convert_gain_format()
-        print(self.glog)
-        bad_gains = self.glin > 2**14
-        self.glin[bad_gains] = 2**14
-        self.glin = self.glin.astype(np.int).astype(np.float)
-        gain = []
-        for channel in range(16):
-            gain.append([channel,[self.glin[channel].tolist(), self.glog[channel]]])
-        return gain
-
-    def fourier_filter(self, signal, num_components):
-        '''
-        Filters signal with top-hat in fourier space.  Padded with itself on either     side to improve edge behavior.
-        Should extend to other windows.
-        not assured to maintain signal size
-        '''
-        signal = np.array(signal)
-        signal_length = signal.size
-        f_signal = np.fft.fft(np.r_[signal[signal_length/2:0:-1],signal,signal[-1:-signal_length/2:-1]])
-        f_signal[num_components:-num_components] = 0
-        filtered = np.fft.ifft(f_signal)[signal_length/2:-signal_length/2+1]
-        filtered = (filtered.real).astype(np.int).astype(np.float)
-        return filtered
-
-    def flag_rfi(self, in_arr, fit, threshold):
-        '''
-        Identifies RFI in the signal spectrum by finding larger than expected jumps in the signal.
-        Returns array of flags for each bin
-        '''
-        rfmask = abs(in_arr) < abs(fit/threshold)
-        in_arr.mask = rfmask|in_arr.mask
-
-    def poly_filter(self, signal, threshold, degree):
-        '''
-        Filters signal using a polynomial fit. Ignores RFI in calculating the polynomial.
-        '''
-        x = np.ma.array(np.arange(len(signal)), mask=signal.mask)
-        fit = np.polyfit(np.ma.compressed(x), np.ma.compressed(signal), degree)
-        #fit = np.polyfit(flagged, x, degree)
-        fitarr = np.poly1d(fit)(np.arange(len(signal)))
-        self.flag_rfi(signal, fitarr, threshold)
-        return fitarr
-
-    def iterative_poly_filter(self, signal):
-        mask = np.ma.make_mask_none((len(signal),))
-        #The first bin is always bad for some reason
-        mask[0] = True
-        degree = 1
-        threshold = 1.2
-        masked = np.ma.array(np.log(signal), mask=mask)
-        while threshold > 1.01:
-            fitarr = self.poly_filter(masked, threshold, degree)
-            threshold = 1 + (threshold - 1)*0.8
-            if degree < 15:
-                degree += 2
-        filtered = np.exp(fitarr)
-        filtered = (filtered.real).astype(np.int).astype(np.float)
-        return filtered, masked.mask
-
-    def run(self, filtertype='hybrid', num_components = 50):
-        if filtertype == 'fourier':
-            output = self.fourier_filter(self.signal, num_components)
-        elif filtertype == 'poly' or filtertype == 'hybrid':
-            output, mask = self.iterative_poly_filter(self.signal)
-            self.mask = mask
-            if filtertype == 'hybrid':
-                in_arr = self.signal.copy()
-                in_arr[mask] = output[mask]
-                output = self.fourier_filter(in_arr, num_components)
-            if self.zero:
-                output[mask] = 0
-            else:
-                output[mask] = self.signal[mask]
-        else:
-            raise ValueError
-        output = (output.real).astype(np.int).astype(np.float)
-        return output
-
-class GainEstimator(object):
-
-    def __init__(self, read_data_func, number_of_ports, number_of_frames=2):
-        self.previousGain = None
-        self.read_data_func = read_data_func  # function to call to get packets
-        self.number_of_ports = number_of_ports
-        self.number_of_frames = number_of_frames
-
-    def estimateGains(self):
-        ''' Assume setup to send spectrum data.  average a number of
-            frames together, and get estimate of new gain settings.'''
-        # gain_estimates = []
-        frame_number = 0
-        spectrum = np.zeros((self.number_of_ports, self.number_of_frames, 16, 1024), dtype=np.complex)  # port (board), timestanp, channel, bin
-        while frame_number < self.number_of_frames:
-            timestamps, ports, all_data = self.read_data_func()
-            data_unpacked = (np.array(all_data).astype(np.int8) ^ np.int8(128)) >> 4
-            spectrum[:, frame_number, :,:] = data_unpacked[:, :, ::2] + 1.0j * data_unpacked[:, :, 1::2]
-            frame_number += 1
-
-        for i, port in enumerate(ports):
-            if self.previousGain:
-                gain_calc = GainCalc(self.previousGain[i])
-                first_run = False
-            else:
-                gain_calc = GainCalc()
-                self.previousGain = []
-                first_run = True
-            gain = gain_calc.noisy_gain_estimate(spectrum[i])
-            for j in range(16):
-                gain_calc.update(gain[j][1][0])
-                glin_update = gain_calc.run()
-                gain[j][1][0] = glin_update.tolist()
-            if first_run:
-                self.previousGain.append(gain)
-            else:
-                self.previousGain[i] = gain
-        return self.previousGain
-
-
-
+# Local imports
+from pychfpga import get_git_version
 
 class hdf5TimestreamData(object):
     """ Object representing a HDF5 file containing raw data
@@ -309,69 +124,6 @@ class hdf5TimestreamData(object):
             self.log.error('%r: Unable to rename HDF5 lock file from %s to %s' % (self, self.lock_filename, self.filename))
 
 
-# class dataWriter(object):
-#     """
-#     """
-#     def __init__(self, data_queue, base_dir, base_filename, elements_per_file=2048*64):
-#         self.log = logging.getLogger(__name__).getChild(self.__class__.__name__)
-#         if not isinstance(data_queue, (list, tuple)):
-#             self.data_queue = [data_queue]
-#         else:
-#             self.data_queue = data_queue
-#         self.elements_per_file = elements_per_file
-#         time_str = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
-#         self.hdf5_base_dir = os.path.join(os.path.expanduser(base_dir),'%s_%s/' % (time_str, base_filename))
-#         #self.live_base_dir = '/mnt/agogo/livedata/'
-#         try:
-#             os.makedirs(self.hdf5_base_dir)
-#         except:
-#             self.log.warning("%.32r: couldn't make directory '%s'. Using current directory." % (self, self.hdf5_base_dir))
-#             self.hdf5_base_dir = './'
-
-#         self.hdf5_file_number = 0
-#         self.start_new_hdf5_file()
-#         self.hdf5_run = True
-
-
-#     def start_new_hdf5_file(self):
-#         filename = "{0:06d}.h5".format(self.hdf5_file_number)
-#         filename =  os.path.join(self.hdf5_base_dir, filename)
-#         self.log.info('%r: started logging in file %s' % (self, filename))
-#         self.hdf5_file = hdf5TimestreamData(filename)  # start a new empty file
-
-
-#     def hdf5_write(self, timestamp, port, chan, stream_id, flags, adc_data):
-#         """
-#         Aggregate a number of data sets and write them into the current HDF5 file, then start a new
-#         file. Runs forever until self.hdf5_run is False.
-#         """
-#         while True:
-#             n_elements = 0
-#             while n_elements < self.elements_per_file:
-#                 if not self.hdf5_run:
-#                     if self.hdf5_file:
-#                         self.hdf5_file.close()
-#                         self.hdf5_file = None
-#                         return
-#                 for j, out_q in enumerate(self.data_queues):
-#                     if not out_q.empty():
-#                         # print('writing data')
-#                         self.hdf5_file.write(timestamp, port, chan, stream_id, flags, adc_data)
-#                         n_elements += 1
-#             self.close()
-#             self.hdf5_file_number += 1
-#             self.start_new_hdf5_file()
-
-#     def stop(self):
-#         """ Stop the `write` process."""
-#         self.hdf5_run = False
-
-#     def close(self):
-#         if self.hdf5_file:
-#             self.hdf5_file.close()
-#             self.hdf5_file = None
-
-
 class RawAcqUDPReceiver(SocketServer.UDPServer):
     class UDPHandler(SocketServer.BaseRequestHandler):
         '''
@@ -446,7 +198,6 @@ class RawAcqReceiver(object):
         self.datawriter = None
         self.receivers = []
         self.data_queue = None
-        self.gain_estimator = None
         self.ioloop_last_time = None
         self.ioloop_max_response_time = None
         self.ioloop_min_response_time = None
@@ -597,9 +348,6 @@ class RawAcqReceiver(object):
             self.all_data[receiver_port[port]] = np.zeros((self.N_CHANNELS, 2048), dtype=np.int8)  # pre-allocate data (channels x bins) for all ports,  for a single timestamp
             self.all_ts[receiver_port[port]] = np.zeros((self.N_CHANNELS), dtype=np.int32) # pre-allocate timestamps storage for the current data for all ports (should all be the same)
 
-        self.gain_estimator = GainEstimator(read_data_func=self.get_data, number_of_ports=len(self.ports))
-
-
         self.run = True
         self.data_processing_thread = threading.Thread(target=self.process_data)
         self.data_processing_thread.setDaemon(True)
@@ -705,9 +453,8 @@ class RawAcqReceiver(object):
             receiver.server_close()
             receiver.socket.close()  # free the socket so we can restart the receiver later
             print("shutdown servers")
-            self.data_queue.clear()
+            self.data_queue.queue.clear()
             self.start_time = None
-        self.gain_estimator = None
         self.start_time = None
 
     def process_data(self):
@@ -836,7 +583,7 @@ class RawAcqReceiver(object):
         # self.data_writer_thread.setDaemon(True)
         # self.data_writer_thread.start()
         if capture_duration:
-            capture_duration += 60,  # stop HDF5 capture 1 min after the desired time in case ch_master does not do it.
+            capture_duration += 0,  # stop HDF5 capture 1 min after the desired time in case ch_master does not do it.
             self.log.info('%.32r: HDF5 data writer will be stopped in %f seconds' % (self, capture_duration))
             IOLoop.current().call_later(capture_duration, self.stopHdf5Disk)
 
@@ -1057,7 +804,7 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
         - Setup logging.
     """
 
-    DEFAULT_PORT = 33221
+    DEFAULT_PORT = 54322
 
     def __init__(self, address='', port=DEFAULT_PORT, logging_params={}):
         self.receiver = RawAcqReceiver()
@@ -1065,6 +812,8 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
         self.add_periodic_callback(self.receiver.print_stats, 3000)
         self.add_periodic_callback(self.receiver.ping_sources, 3000) # ping the raw_acq data sources periodically to ensure the switches tables always know how to route the packets to here
         self.add_periodic_callback(self.receiver.check_ioloop_response_time, 300)
+        self.startup_time = datetime.datetime.utcnow()
+        self.GIT_VERSION = get_git_version()
 
 
     @coroutine
@@ -1076,7 +825,38 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
     def start(self, handler, **config):
         self.log.info('%.32r: Received start command with %r' % (self, config))
         if self.receiver.is_running():
-            raise RuntimeError('Server is already started')
+            self.log.info('%.32r: Receiveer is already running. Stopping it and restarting a new one' % (self))
+            yield self.receiver.stop()
+            # raise RuntimeError('Server is already started')
+
+        # Register config with comet broker
+        try:
+            comet_config = config.pop('comet_broker')
+            enable_comet = comet_config['enabled']
+        except KeyError:
+            msg = "Missing config value 'comet_broker/enabled'."
+            self.log.error(msg)
+            raise RuntimeError('Cannot start comet broker: %s' % (msg))
+        if enable_comet:
+            try:
+                comet_host = comet_config['host']
+                comet_port = comet_config['port']
+            except KeyError as exc:
+                msg = "Failure registering initial config with comet broker: 'comet_broker/{}' " \
+                      "not defined in config.".format(exc[0])
+                self.log.error(msg)
+                raise RuntimeError('Cannot start comet broker: %s' % (msg))
+            comet = Manager(comet_host, comet_port)
+            try:
+                comet.register_start(self.startup_time, self.GIT_VERSION)
+                comet.register_config(config.copy())
+            except CometError as exc:
+                msg = 'Comet failed registering raw_acq start and initial config. The Comet client returned the following error: {}'.format(exc)
+                self.log.error(msg)
+                raise RuntimeError('Cannot start comet broker: %s' % (msg))
+        else:
+            self.log.warning("Config registration DISABLED. This is only OK for testing.")
+
         result = yield self.receiver.start(**config)
         self.log.info('%.32r: UDP receiver started. Returned %r' % (self, result))
         coroutine_return(result)
@@ -1101,6 +881,11 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
         self.receiver.stopHdf5Disk()
         coroutine_return("stopped hdf5 writing to disk.")
 
+    @coroutine
+    @endpoint('status')
+    def status(self, handler):
+        coroutine_return(dict(started=self.receiver.is_running() if self.receiver else False))
+
 
     @coroutine
     @endpoint
@@ -1111,15 +896,6 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
         print(ports)
         print(data)
         coroutine_return(ts=ts.tolist(), ports=ports, data=data.tolist())
-
-    @coroutine
-    @endpoint
-    def estimate_gains(self, handler):
-        if self.gain_estimator:
-            gains = self.gain_estimator.estimateGains()
-            coroutine_return(gains=gains)
-        else:
-            raise RuntimeError('Gain estimator is not created (most probably because the server is not started)')
 
     @coroutine
     @endpoint('get-rms')
@@ -1170,11 +946,18 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
         kwargs: All remaining aruments will be stored as configuration data.
     """
 
-    def __init__(self, name='RawAcq', hostname='localhost', port=RawAcqAsyncRESTServer.DEFAULT_PORT, base_dir = '~/data', base_filename= None, **config):
+    def __init__(self,
+                 name='RawAcq',
+                 hostname='localhost',
+                 port=RawAcqAsyncRESTServer.DEFAULT_PORT,
+                 base_dir = '~/data',
+                 base_filename= None,
+                 create_server = True,
+                 **config):
         super(RawAcqAsyncRESTClient, self).__init__(
             hostname=hostname,
             port=port,
-            server_class=RawAcqAsyncRESTServer,
+            server_class=RawAcqAsyncRESTServer if create_server else None,
             heartbeat_string='Rc')
 
         self.name = name
@@ -1193,6 +976,11 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
             self.log.error("Can't ping raw_acq server at %s:%i" % (self.hostname, self.port))
             coroutine_return(False)
         coroutine_return(True) # coroutine_return raises an exception: we don't want it in the try block
+
+    @coroutine
+    def status(self):
+        result = yield self.get('status')
+        coroutine_return(result)
 
     @coroutine
     def start(self, **config):
@@ -1227,51 +1015,78 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
 
 
 
-def parse_cmdline_args(argv):
-    parser = argparse.ArgumentParser(description="Raw_acq: ADC Raw data acquisition server", epilog="""
-        """)
-    parser.add_argument('args', type=str, choices=['client', 'server'], default='',  help='"server" or "client" ')
-    parser.add_argument('-p', '--port', default=33221, type=int, help="Server port")
-    parser.add_argument('-n', '--host', default='localhost', type=str, help="Server hostname")
-    return parser.parse_args(argv)
+def main():
+    """ Command-line interface to operate the RawAcq server.
+
+    ./raw_acq.py [config] [command {args}] [--host hostname] [--port port_number] [--no-run | --run] [--no-start]
+
+    where:
+        *config* : configuration in the format [[*filename*]:][*path_to_config_object*]
+        *command* : the name of a ChimeMaster client method.
+        --host: hostname of the server. Overrides the hostname found in the config. Default is 'localhost'.
+        --port: port number of the server. Overrides the port number found in the config.  Default is 54322.
+        --run: run the client/server until Ctrl-C is pressed. Default when no command is provided.
+        --no-run: Do not run the client/server even if no comman dis provided.
+        --no_start: do not attempt to initialize the server even if a configuration is provided.
+
+    The `raw_acq` command is invoked from the command line with::
+
+        ./raw_acq.py arguments...  # linux only
+        python raw_acq.py arguments
+
+    Or from an ipython interactive session::
+
+        run -i raw_acq arguments
+
+    Operations done:
+
+        1. Create client:
+
+            - Always starts a client that connects to server at address specified in config or as
+              overriden by --host and --port.
+
+        2. Create server if none already exists:
+
+            - If there is no server, a server is created at localhost on the port specified in the
+              config or as overriden by --port, unless -no-server is specified
+
+        3. Initialize server with config file if requested:
+
+            - If no config is present, or if --no-start option is specified, the server is not started
+            - If there is a config file, the 'start' command is sent along with the specified
+              config. If the server is already started with a different config, an error will be
+              raised.
+
+        4. Execute command or run server:
+
+            - If a command and arguments are specified, the corresponding client methods commands
+              are invoked. Those generally pass on the command to the corresponding server endpoint.
+            - If no command is specified and a local server was started, the client (and locally
+              started server if any) are run continually until stopped by Ctrl-C. Bypassed if --no-
+              run is specified
+
+    Examples:
+
+    Create and initialize and run a new local server or initialize an existing server::
+
+        ./raw_acq.py jfc.erh
+
+    Create an non-initialized server
+
+        ./raw_acq.py  # starts server on localhost:54322
+        ./raw_acq.py config --no-start # starts server at address specified in config
+
+    Send a command to server:
+
+        ./raw_acq stop # send stop command to server on localhost:54322
+        ./raw_acq jfc.erh power_off # power off supplies used by server running at theaddress specified in the jfc.erh config
+    """
+    # Setup logging
+    log.setup_basic_logging('INFO')
+
+    client, server = run_client(sys.argv[1:], RawAcqAsyncRESTServer, RawAcqAsyncRESTClient, object_name ='RawAcq', server_config_path='raw_acq.servers')
+    return client, server
 
 if __name__ == '__main__':
-    """
-    Command-line interface to the raw_acq engine.
-        raw_acq server --port 33221 # starts the server on localhost.
-        raw_acq client --port 33221 --host localhost # starts a client in variable 'rc' to operate the server at localhost:33221
+    client, server = main()
 
-    Default port is 33221 if not specified.
-    """
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG) # pass all messages to the handlers
-    logger.handlers = []  # clear all existing handlers
-    # formatter = logging.Formatter(self.LOG_FORMAT, self.LOG_DATE_FORMAT)
-
-    def add_handler(h, log_level):
-        # h.setFormatter(formatter)
-        level = log_level if isinstance(log_level, int) else log_level.upper()
-        h.setLevel(level)
-        logger.addHandler(h)
-
-    add_handler(logging.StreamHandler(sys.stderr), 'warning')
-    add_handler(logging.handlers.SysLogHandler(), 'debug')
-
-
-    ioloop = IOLoop()
-    ioloop.make_current()
-    args = parse_cmdline_args(sys.argv[1:])
-
-    # print(args)
-    first_arg = args.args.lower()
-    if first_arg == 'server':
-        rs = RawAcqAsyncRESTServer(port=args.port)
-        print("Raw Acq REST Server started. Waiting for REST commands.")
-        ioloop.start()
-        print("\nI'm done. Bye!")
-    elif first_arg == 'client':
-        rc = RunSyncWrapper(RawAcqAsyncRESTClient(
-            name='UserRawAcqClient0',
-            hostname=args.host,
-            port=args.port))
-        print('Use rc.run_sync(method_name, args...) to call and run asynchronous (coroutine) client methods in a ioloop. Alternativeny, one can use rc.sync_method_name(args, ...).')

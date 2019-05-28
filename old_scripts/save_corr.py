@@ -11,7 +11,8 @@ import socket
 import struct
 
 board_sn_to_ip = {'0343':'10.10.10.243', '0338':'10.10.10.244', '0336':'10.10.10.245',
-                  '0270':'10.0.2.17', '0233':'10.0.2.65', '0315':'10.0.2.13', '0224':'10.0.2.93'}
+                  '0270':'10.0.2.17', '0233':'10.0.2.65', '0315':'10.0.2.13', '0224':'10.0.2.93',
+                  '0243':'10.0.2.10', '0212':'10.0.2.40', '0196':'10.0.2.18', '0198':'10.0.2.64'}
                       
 sma_to_adc = [12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3]
 
@@ -33,9 +34,15 @@ def save_frames(Nframe_pairs=10, cadence=1.00, setup='interhut', filename='/home
     elif setup == 'mcgill_bp':
         channels = {'0338': [0], '0336': [0]}
 
+    elif setup == 'wrh_cyl_ab_south':
+        channels = {'0243': [2], '0212': [2]}       # Crate 0, Slot 9, Input 14 and Crate 2, Slot 7, Input 14
+
+    elif setup == 'wrh_cyl_ab_center':
+        channels = {'0196': [15], '0198': [12]}     # Crate 1, Slot 1, Input 3 and Crate 3, Slot 15, Input 0
+
     elif setup == 'interhut':
-        #channels = {'0270': [2], '0233': [2]}       # Crate 1, Slot 0, Input 14 and Crate 4, Slot 0, Input 14
-        channels = {'0315': [14], '0224': [14]}      # Crate 0, Slot 12, Input 2 and Crate 5, Slot 12, Input 2
+        #channels = {'0270': [2], '0233': [2]}      # Crate 1, Slot 0, Input 14 and Crate 4, Slot 0, Input 14
+        channels = {'0315': [14], '0224': [14]}     # Crate 0, Slot 12, Input 2 and Crate 5, Slot 12, Input 2
 
     else:
         ValueError("Do not recognize setup %s" % setup)
@@ -51,7 +58,7 @@ def save_frames(Nframe_pairs=10, cadence=1.00, setup='interhut', filename='/home
     
     for iceboard in ca.ib:
         print iceboard.serial
-        if clk[iceboard.serial]:
+        if (iceboard.serial in clk) and clk[iceboard.serial]:
             print iceboard.serial
             print "Setting mezzanine clock for %s" % iceboard.serial
             for name, mezz in iceboard.mezzanine.iteritems():
@@ -119,7 +126,7 @@ def save_frames(Nframe_pairs=10, cadence=1.00, setup='interhut', filename='/home
     print 'DONE'
 
 
-def save_corr(Nframe_pairs=1000, cadence=0.01, setup='interhut', navg=100, filename='/home/chime/ch_acq/corr_pair_test.npz'):
+def save_corr(Nframe_pairs=1000, cadence=0.01, setup='interhut', navg=100, filename='/home/chime/ch_acq/corr_pair_test.npz', save_auto=False):
     #create array
     print 'CREATING FPGA ARRAY'
 
@@ -138,9 +145,15 @@ def save_corr(Nframe_pairs=1000, cadence=0.01, setup='interhut', navg=100, filen
     elif setup == 'mcgill_bp':
         channels = {'0338': [0], '0336': [0]}
 
+    elif setup == 'wrh_cyl_ab_south':
+        channels = {'0243': [2], '0212': [2]}       # Crate 0, Slot 9, Input 14 and Crate 2, Slot 7, Input 14
+
+    elif setup == 'wrh_cyl_ab_center':
+        channels = {'0196': [15], '0198': [12]}     # Crate 1, Slot 1, Input 3 and Crate 3, Slot 15, Input 0
+
     elif setup == 'interhut':
-        #channels = {'0270': [2], '0233': [2]}       # Crate 1, Slot 0, Input 14 and Crate 4, Slot 0, Input 14
-        channels = {'0315': [14], '0224': [14]}      # Crate 0, Slot 12, Input 2 and Crate 5, Slot 12, Input 2
+        #channels = {'0270': [2], '0233': [2]}      # Crate 1, Slot 0, Input 14 and Crate 4, Slot 0, Input 14
+        channels = {'0315': [14], '0224': [14]}     # Crate 0, Slot 12, Input 2 and Crate 5, Slot 12, Input 2
 
     else:
         ValueError("Do not recognize setup %s" % setup)
@@ -154,7 +167,7 @@ def save_corr(Nframe_pairs=1000, cadence=0.01, setup='interhut', navg=100, filen
     
     for iceboard in ca.ib:
         print iceboard.serial
-        if clk[iceboard.serial]:
+        if (iceboard.serial in clk) and clk[iceboard.serial]:
             print "Setting mezzanine clock for %s" % iceboard.serial
             for name, mezz in iceboard.mezzanine.iteritems():
                 mezz.set_refclk_source('sma')
@@ -199,6 +212,12 @@ def save_corr(Nframe_pairs=1000, cadence=0.01, setup='interhut', navg=100, filen
     data = {'corr': np.zeros((nsamples, 2048), dtype=np.complex64),
             'timestamp': np.zeros(nsamples, dtype=np.uint64)}
 
+    if save_auto:
+        data['auto1'] = np.zeros((nsamples, 2048), dtype=np.complex64)
+        data['auto2'] = np.zeros((nsamples, 2048), dtype=np.complex64)
+
+    dsets = [key for key in sorted(data.keys()) if key != 'timestamp']
+
     count = 0
     for pair in range(Nframe_pairs):
 
@@ -213,9 +232,16 @@ def save_corr(Nframe_pairs=1000, cadence=0.01, setup='interhut', navg=100, filen
             # Saving frames                        
             if not (count % navg):
                 data['timestamp'][index] = d[0][1][0]
-            
+
+            if save_auto:
+                data['auto1'][index] += (np.sum(np.fft.fft(d[0][0], axis=-1) * 
+                                         np.conj(np.fft.fft(d[0][0], axis=-1)), axis=0))
+
+                data['auto2'][index] += (np.sum(np.fft.fft(d[1][0], axis=-1) * 
+                                         np.conj(np.fft.fft(d[1][0], axis=-1)), axis=0))
+
             data['corr'][index] += (np.sum(np.fft.fft(d[0][0], axis=-1) * 
-                                   np.conj(np.fft.fft(d[1][0], axis=-1)), axis=0))
+                                    np.conj(np.fft.fft(d[1][0], axis=-1)), axis=0))
             count += 1
             
             print 'SAVED FRAME PAIR {0}'.format(pair)
@@ -224,7 +250,8 @@ def save_corr(Nframe_pairs=1000, cadence=0.01, setup='interhut', navg=100, filen
             print 'timestamp for {0}: {1}'.format(ib_id[1], d[1][1][0])            
             raise('THE TIMESTAMP FOR THE TWO BOARDS ARE DIFFERENT')
             
-    data['corr'] /= float(2 * navg)
+    for key in dsets:
+        data[key] /= float(2 * navg)
             
     print 'SAVING DATA TO {0}'.format(filename)
     np.savez(filename, **data)
@@ -296,29 +323,29 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--setup', help='Describes a setup to read data out.', type=str, default='mcgill_dist_board')
     parser.add_argument('-p', '--prefix', help='Prefix inserted to the start of the filename, used to distinguish different measurements.', 
                                         type=str, default='frame_pairs')
-    parser.add_argument('-d', '--dir', help='Directory name in /home/chime/RxHutTiming', type=str, default='old_dist_amp')
+    parser.add_argument('-d', '--dir', help='Directory name.', type=str, default='/data/fast_cadence_raw_acq')
+    parser.add_argument('--subdir', help='Sub-directory within dir.', type=str, default='test')
+    parser.add_argument('--auto',  help='Save auto-correlations in addition to cross-correlations.', action='store_true')
 
     args = parser.parse_args()
 
     for itt in range(args.iter):
 
         if args.iter == 1:
-
-            filename = os.path.join('/home/chime/RxHutTiming', args.dir, '%s_nframe_%d_cadence_%dmsec_%s.npz' % (args.prefix, args.nframe, 
-                                                                                            int(np.round(1000 * args.time)), args.setup))
-            print filename
-
+            filename = os.path.join(args.dir, args.subdir, '%s_nframe_%d_cadence_%dmsec_%s.npz' %
+                                    (args.prefix, args.nframe, int(np.round(1000 * args.time)), args.setup))
         else:
-
             print "ITERATION %d of %d" % (itt+1, args.iter)
 
-            filename = os.path.join('/home/chime/RxHutTiming', args.dir, '%s_nframe_%d_cadence_%dmsec_%s_iter%d.npz' % (args.prefix, args.nframe, 
-                                                                                            int(np.round(1000 * args.time)), args.setup, itt))
+            filename = os.path.join(args.dir, args.subdir, '%s_nframe_%d_cadence_%dmsec_%s_iter%d.npz' %
+                                    (args.prefix, args.nframe, int(np.round(1000 * args.time)), args.setup, itt))
 
+        print filename
 
         try:
             if args.avg > 1:
-                save_corr(Nframe_pairs=args.nframe, navg=args.avg, cadence=args.time, setup=args.setup, filename=filename)
+                save_corr(Nframe_pairs=args.nframe, navg=args.avg, cadence=args.time, setup=args.setup, filename=filename,
+                          save_auto=args.auto)
                 
             else:
                 save_frames(Nframe_pairs=args.nframe, cadence=args.time, setup=args.setup, filename=filename)

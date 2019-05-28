@@ -25,6 +25,8 @@ from functools import wraps
 import subprocess
 import shlex
 import bz2
+import socket
+import __main__
 
 # PyPi packages
 import numpy as np
@@ -634,6 +636,10 @@ class chFPGA_controller(IceBoardExtHandler):
         if create_receiver:
             self.get_data_receiver()
 
+    def get_channels(self):
+        """ Return a list of available channel numbers """
+        return self.ANT.keys()
+
     @async
     def get_config(self, basic=False):
         """
@@ -1050,27 +1056,23 @@ class chFPGA_controller(IceBoardExtHandler):
 
         """
         # Make sure there is a list of opened sockets
-        import __main__
-        import socket
 
-        if not hasattr(__main__, '__opened_sockets__'):
-            opened_sockets = __main__.__opened_sockets__ = {}
-        else:
-            opened_sockets = __main__.__opened_sockets__
 
         if not self._data_socket:
 
+            opened_sockets = __main__.__dict__.setdefault('__opened_sockets__', {})
+
             # If we want to use a specific local port that was previously reserved, use its socket.
             if port_number and port_number in opened_sockets:
-                return opened_sockets[port_number]
-
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.bind((self.interface_ip_addr, port_number))
-            # store the socket in the main module so it will live persistently until the Python session is closed.
-            (actual_ip_addr, actual_port_number) = sock.getsockname()
-            opened_sockets[actual_port_number] = sock
-            self._data_socket = sock
-            self.set_local_data_port_number(actual_port_number)
+                self._data_socket = opened_sockets[port_number]
+            else:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.bind((self.interface_ip_addr, port_number))
+                # store the socket in the main module so it will live persistently until the Python session is closed.
+                (actual_ip_addr, actual_port_number) = sock.getsockname()
+                opened_sockets[actual_port_number] = sock
+                self._data_socket = sock
+                self.set_local_data_port_number(actual_port_number)
 
         return self._data_socket
 
@@ -3029,7 +3031,12 @@ class chFPGA_controller(IceBoardExtHandler):
         self.set_corr_reset(0)
         self.set_ant_reset(0)
 
+    def reset_gpu_links(self):
+        """ Resets the GPU links.
 
+        All links are reset. There is no way to reset an individual QSFP or individual link.
+        """
+        self.GPU.reset()
 
 
     def get_shuffle_status(self, cb1_bin_sel_overflow_reset=False):
@@ -3296,7 +3303,7 @@ class chFPGA_controller(IceBoardExtHandler):
         try:
             # yield self.check_command_count.async(reset=True)
             yield self.clear_fpga_udp_errors.async()
-            for i, ant  in self.ANT.items():
+            for i, ant in self.ANT.items():
                 metrics.add('fpga_fft_overflow_count', value=ant.FFT.OVERFLOW_COUNT, chan=i)
                 metrics.add('fpga_scaler_overflow_count', value=ant.SCALER.STATS_SCALER_OVERFLOWS, chan=i)
                 metrics.add('fpga_adc_overflow_count', value=ant.SCALER.STATS_ADC_OVERFLOWS, chan=i)

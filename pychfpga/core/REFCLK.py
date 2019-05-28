@@ -313,6 +313,8 @@ class REFCLK_base(Module_base):
                         else:
                             bitstring[edge_pos] = '?'
                         jump_flag = '>' if sync_delay in centers[i] else '-' if sync_delay<31 and jumps[sync_delay,i] else ' ';
+                    else:
+                        jump_flag = '?'
                     print 'CH%02i %3.0f %s: %s ' % (ch, rising_edges[sync_delay, i], jump_flag, bitstring),
                 print
             print '   ADC boards average sync delays:', adc_board_average_sync_delays

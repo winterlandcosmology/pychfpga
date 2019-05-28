@@ -194,12 +194,11 @@ def calc_gains(g):
     return glin, glog.data
 
 @async
-#def calculate_gains(c, gain_folder='/home/chime/ch_acq/gains'):
-def calculate_gains(c, gain_folder):   # '/home/suit/Desktop/ICE/ch_acq/gains'
+def calculate_gains(c, gain_folder='/home/chime/ch_acq/gains'):
     '''Calculate digital gains for all the inputs of an iceboard c
     '''
-    slot_0based = c.slot-1
-    crate = c.crate.crate_number or 0 if c.crate else 0 #SC 03/17/2019 for individual iceboard
+    slot_0based = c.slot - 1 if c.slot else 0
+    crate = c.crate.crate_number if c.crate and c.crate.crate_number is not None else 0
     print 'Calculating digital gains for crate %02i slot %02i (FCC%02i%02i)' % (crate, slot_0based, crate, slot_0based)
     # Get current state. Assumes all inputs have the same state
     data_source = c.get_data_source()[0]
@@ -214,8 +213,7 @@ def calculate_gains(c, gain_folder):   # '/home/suit/Desktop/ICE/ch_acq/gains'
     c.set_fft_bypass(0)
     c.set_fft_shift(1367)
     c.set_scaler_bypass(0)
-    #port = 42500 # Picked randomly. Hack
-    port = 38000
+    port = 42500 # Picked randomly. Hack
     c.set_local_data_port_number(port)
     #c.set_send_flags()
     c.set_offset_binary_encoding()
@@ -231,7 +229,6 @@ def calculate_gains(c, gain_folder):   # '/home/suit/Desktop/ICE/ch_acq/gains'
     print "configured for sending data to port {0}".format(port)
     rmss = []
     for i in range(18):
-        print "Acquiring data loop"+str(i)
         data = get_frames(str(port))
         # only do for channel 0 for now
         outrms = data[:,:,:].std(axis=0)
@@ -239,7 +236,7 @@ def calculate_gains(c, gain_folder):   # '/home/suit/Desktop/ICE/ch_acq/gains'
         rmss.append(outrms.mean())
         print outrms.mean(axis=1)
         if i == 0:
-            g = idealRMS*2**(default_log2_gain)/outrms #idealRMS*2**(default_log2_gain-4)/outrms
+            g = idealRMS*2**(default_log2_gain)/outrms#idealRMS*2**(default_log2_gain-4)/outrms
         else:
             for j, glog1 in enumerate(glog):
                 g[j] = idealRMS * glin[j] * (2**(glog[j]))/outrms[j] #idealRMS*glin*(2**(glog-4))/outrms
@@ -260,30 +257,26 @@ def calculate_gains(c, gain_folder):   # '/home/suit/Desktop/ICE/ch_acq/gains'
     Calc = GainCalc()
     flags = []
     for channel in channels:
-        print "Updating gains..."
         Calc.update(gain[channel][1][0])
         glin_final = Calc.run()
         gain[channel][1][0] = glin_final.tolist()
         flags.append(Calc.mask)
         yield async_moment
-    print "Setting new gains..."
     c.set_gains(gain)
     c.freq_flags = flags
     output = open(os.path.join(gain_folder, 'gains_FCC%02i%02i.pkl' % (crate, slot_0based)),'wb')
-    gainfile='gains_FCC%02i%02i.pkl' % (crate, slot_0based)
     pickle.dump(gain, output)
     output.close()
     print "Scaler Gain set and saved"
     c.stop_data_capture()
+    # restore iceboard state
     c.set_data_source(data_source)
     c.set_adc_mode(adc_mode)
     c.set_fft_bypass(fft_bypass)
     c.set_fft_shift(fft_shift)
     c.set_scaler_bypass(scaler_bypass)
     c.set_local_data_port_number(local_data_port_number)
-    print 'Iceboard state restored...'
-    print 'gainfile', gainfile
-    #return gainfile
+
 
 if __name__ == '__main__':
 
@@ -315,7 +308,7 @@ if __name__ == '__main__':
     logger.info('calculate_gains.py: Calulates gains for ideal 4-bit noise contribution')
     logger.info('Kevin Bandura')
     logger.info('------------------------')
-    logger.info('This module is called with the following parameters:' )
+    logger.info('This module is called with the follwing parameters:' )
     for (key,value) in args.__dict__.items():
         logger.info('   %s = %s' % (key, repr(value)))
     # logger.info('Using Sampling frequency of %0.3f MHz' % args.sampling_frequency)

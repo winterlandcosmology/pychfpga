@@ -1,4 +1,15 @@
-List of unmerges branches
+Conventions:
+
+repo name
+package name
+branch naming
+  /
+  delete branches
+
+
+
+List of unmerged branches
+--------------------------
 
 $ git branch --all --no-merged master
 
@@ -51,3 +62,111 @@ $ git branch --all --no-merged master
   remotes/origin/test_pattern_sync ** drop
   remotes/origin/tpm_ps
   remotes/origin/transpose_timeing
+
+
+Splitting method:
+
+git filter-branch --index-filter 'git rm --cached -qr --ignore-unmatch -- . && git reset -q $GIT_COMMIT -- apps/AAA libs/XXX' --prune-empty -- --all
+
+
+
+cd repo_a
+git filter-branch --index-filter 'git rm --cached -r dir8, dir2 || true' -- --all
+git remote rm origin
+git remote add origin git@github.com:YourOrg/repo_a.git
+git push origin --all
+
+
+Splitting out pychfpga/core/metrics.py
+
+cd split_folder
+rm -rf ch_acq
+cp -r ../ch-acq .
+git filter-branch --index-filter 'git rm --cached  --ignore-unmatch -r pychfpga/core/metrics.py' --prune-empty -- --all
+(takes 2 min)
+**8 Does not work, removes everything
+
+github version (https://gist.github.com/ssp/1663093)
+
+git filter-branch --prune-empty --subdirectory-filter pychfpga/core -- --all
+(takes 30 sec)
+
+git clone..
+
+git filter-branch -f --prune-empty --index-filter 'git rm --cached --ignore-unmatch $(git ls-files | grep -v "metrics.py")'
+(about 60 s, not quiet...)
+
+
+Packaging info
+--------------
+
+https://python-packaging.readthedocs.io/en/latest/minimal.html
+
+We don't necesarily create a subpackage folder for single module packages.
+
+
+Namespace package style:
+------------------------
+
+- Native Python 3.3 namespace do not require anything. We aim 2.7 and 3.x, so we can't use them.
+
+- pkgutil-style namespace packages are recommended,and are compatible with both Python 2 and 3::
+    wtl/__init__.py => __path__ = __import__('pkgutil').extend_path(__path__, __name__)
+
+- pkg_resources-style namespace packages are common but are **no longer recommended**::
+    wtl/__init__.py => __path__ = __import__('pkg_resources').declare_namespace(__name__)
+
+
+
+Version number
+--------------
+
+https://packaging.python.org/guides/single-sourcing-package-version/
+https://stackoverflow.com/questions/458550/standard-way-to-embed-version-into-python-package
+
+It seems ik to import __version__ from a module within the package, as long as that import does not cause the import of dependencies that are listed in install_requires.
+
+This is the case with metrics.py, which uses standard libraries only. WOuld not work with something that uses, let's say, namespace. In which case we could put the version in a standalone _version.py file.
+
+Git/Bitbucket dependencies
+--------------------------
+
+https://stackoverflow.com/questions/38335377/install-python-package-from-private-bitbucket-repo
+
+
+
+Supported formats (from https://pip.pypa.io/en/stable/reference/pip_install/)::
+
+  Here are the supported forms:
+
+  [-e] git://git.example.com/MyProject#egg=MyProject
+  [-e] git+http://git.example.com/MyProject#egg=MyProject
+  [-e] git+https://git.example.com/MyProject#egg=MyProject
+  [-e] git+ssh://git.example.com/MyProject#egg=MyProject
+  [-e] git+git://git.example.com/MyProject#egg=MyProject
+  [-e] git+file:///home/user/projects/MyProject#egg=MyProject
+  -e git+git@git.example.com:MyProject#egg=MyProject
+
+  Passing branch names, a commit hash or a tag name is possible like so:
+
+  [-e] git://git.example.com/MyProject.git@master#egg=MyProject
+  [-e] git://git.example.com/MyProject.git@v1.0#egg=MyProject
+  [-e] git://git.example.com/MyProject.git@da39a3ee5e6b4b0d3255bfef95601890afd80709#egg=MyProject
+
+
+Bitbucket remote repo formats (from https://confluence.atlassian.com/bitbucket/change-the-remote-url-to-your-repository-794212774.html)
+
+  git@bitbucket.org:<account_name>/<repo_name>.git
+
+  or
+
+  ssh://git@bitbucket.org/<account_name>/<repo_name>.git
+
+So we can do:
+
+pip install git+git@bitbucket.org:winterlandcosmology/wtl.metrics.git
+  Invalid requirement: 'git+git@bitbucket.org:winterlandcosmology/wtl.metrics.git'
+  It looks like a path. File 'git+git@bitbucket.org:winterlandcosmology/wtl.metrics.git' does not exist.
+
+  pip install git+git@bitbucket.org/winterlandcosmology/wtl.metrics.git
+

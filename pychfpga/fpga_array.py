@@ -30,8 +30,6 @@ from tornado import gen
 from tornado.gen import with_timeout, TimeoutError
 from sqlalchemy import or_
 
-
-
 # For development: delete all fpga modules so fresh ones will be reloaded
 if getattr(__main__, '__reload__', False):
     print 'Clearing all pychfpga modules...'
@@ -65,13 +63,12 @@ from pychfpga.core.icecore_ext import IceCrateExt
 from pychfpga.MGADC08 import MGADC08  # Import to make sure this Mezzanine is registered  so it can be discovered
 from pychfpga.core.chFPGA_controller import chFPGA_controller
 from pychfpga.Agilent_N5764A import AgilentN5764AHandler
-from pychfpga.gpu_node import GpuNodeHandler
+# from pychfpga.gpu_node import GpuNodeHandler
 from pychfpga import Metrics
 from pychfpga import NameSpace, merge_dict
 from pychfpga import load_yaml_config# import logging.handlers
 
 from pychfpga.core.icecore.session import load_session as load_yaml
-
 
 # Configure Tornado objects
 Resolver.configure('tornado.netutil.ThreadedResolver', num_threads=20)
@@ -460,12 +457,12 @@ class FPGAArray(object):
 
 
         if bitfile is None:
-            chimearray_path = os.path.dirname(__file__)
-            chimearray_path += '/' if chimearray_path else ''
-            #bitfile = ( chimearray_path +
+            fpga_array_path = os.path.dirname(__file__)
+            fpga_array_path += '/' if fpga_array_path else ''
+            #bitfile = ( fpga_array_path +
             #    '../../chfpga/xilinx_projects/SIFPGA_MGK7MB/SIFPGA_MGK7MB.runs/impl_1/SIFPGA_MGK7MB.bit')  # DOLCEK - Firmware correlator
-            bitfile = ( chimearray_path +
-                '../../chfpga/xilinx_projects/CHFPGA_MGK7MB_REV2/CHFPGA_MGK7MB_REV2.runs/impl_Rev2/chFPGA_MGK7MB_Rev2.bit') # ORIGINAL - recent one used for CHIME / does not include the firmware correlator
+            bitfile = ( fpga_array_path +
+                'fpga_bitstreams/chFPGA_MGK7MB_Rev2.bit') # ORIGINAL - recent one used for CHIME / does not include the firmware correlator
             #bitfile = '/home/suit/Desktop/bitfiles/chFPGA_MGK7MB_Rev2 (16 CH,0 FFT,8 GPU,0 CORR).bit'  # When using this bit files, we encountered this error: IOError: chFPGA('MGK7BP1_SN001', 0).FpgaMmi(10.10.3.240): chFPGA('MGK7BP1_SN001', 0).FpgaMmi(10.10.3.240): Timeout during FPGA command.
 
 
@@ -512,10 +509,10 @@ class FPGAArray(object):
         hw_string = ''   # start with an empty string
 
         # Add `hwm`, if it is a string or a list of strings
-        if isinstance(hwm, str):
+        if isinstance(hwm, basestring):
             hw_string  += hwm + ' '
             hwm = None
-        elif isinstance(hwm, list) and all(isinstance(elem, str) for elem in hwm):
+        elif isinstance(hwm, list) and all(isinstance(elem, basestring) for elem in hwm):
             hw_string  += ' '.join(hwm) + ' '
             hwm = None
 
@@ -880,7 +877,48 @@ class FPGAArray(object):
             if if_ip:
                 self.ib.interface_ip_addr = if_ip
 
-            self.logger.info('%r: Initializing firmware (calling ib.open())' % self)
+
+            ########################
+            # Initialize core FPGA firmware (establish FPGA UDP communications)
+            ########################
+            @async
+            def open_core(ib, max_trials=3):
+                """ Try to open the FPGA core firmware (including UDP
+                communications) and reprogram the FPGA and retry a numer of
+                times if this fails.
+
+                Parameters:
+
+                    ib: IceBoard handler
+
+                    max_trials (int): Maximun allowed number of reprogramming and retrials before raising an error.
+
+                Exceptions:
+
+                    IOError: Raised if the iceboard's open_core still raaises an IOError after the maximum number of trials.
+
+                """
+                trial = 1
+                while True:
+                    try:
+                        self.logger.info('%r: Initializing core FPGA firmware, including FPGA UDP communications (calling ib.open_core()). Trial %i/%i.' % (self, trial, max_trials))
+                        yield ib.open_core.async()
+                        return
+                    except IOError as e:
+                        self.logger.error('%r: Error while initializing core firmware on trial %i/%i. Error is: \n%r' % (self, trial, max_trials, e))
+                        if trial >= max_trials:
+                            raise IOError('%r: Unable to initializing FPGA core firmware after %i trials. Giving up.' % (self, trial))
+                        else:
+                            trial += 1
+                            self.logger.error('%r: Reprogramming FPGA and trying again.' % (self))
+                            yield ib.set_fpga_bitstream.async(force=True)
+            yield [open_core.async(ib) for ib in self.ib]
+
+            ########################
+            # Initialize application specific FPGA firmware
+            ########################
+
+            self.logger.info('%r: Initializing FPGA firmware (calling ib.open())' % self)
             yield [ib.open.async(adc_delay_table=ADC_DELAY_TABLE,
                                  udp_retries=udp_retries,
                                  init=open,
@@ -889,13 +927,23 @@ class FPGAArray(object):
                                  # reference_frequency=reference_frequency,
                                  ) for ib in self.ib]
 
+            ########################
+            # Initializing SYNC method
+            ########################
             if sync_method or sync_source:
                 self.logger.info('%r: Setting SYNC method' % self)
                 self.set_sync_method(method=sync_method, source=sync_source, master=sync_master, master_time_source=sync_master_time_source)
 
+            ########################
+            # Initializing operational mode
+            ########################
             if mode:
                 self.logger.info('%r: Setting operational mode to %s' % (self, mode))
                 self.set_operational_mode(mode=mode, frames_per_packet=frames_per_packet, tx_power=tx_power)
+
+            ########################
+            # Initializing backplane hardware communication firmware
+            ########################
 
             self.logger.info('%r: Initializing Backplane firmware' % self)
             if self.ic:
@@ -1225,52 +1273,53 @@ class FPGAArray(object):
                               dsmap=dsmap,
                               frames_per_packet=frames_per_packet,
                               chan8_channel_map=chan8_channel_map)
+        if ib.crate:
 
-        #####################
-        # Set-up receivers
-        #####################
-        for i, ib in enumerate(self.ib):
-            # Disable all receivers for which there are no transmitters
-            for j, gtx in enumerate(ib.BP_SHUFFLE.gtx[0:ib.BP_SHUFFLE.NUMBER_OF_PCB_LINKS]):
-                if ib.slot is None:
-                    continue
-                rx = (ib.slot, j+1)
-                tx = ib.crate.get_matching_tx(rx)
+	        #####################
+	        # Set-up receivers
+	        #####################
+	        for i, ib in enumerate(self.ib):
+	            # Disable all receivers for which there are no transmitters
+	            for j, gtx in enumerate(ib.BP_SHUFFLE.gtx[0:ib.BP_SHUFFLE.NUMBER_OF_PCB_LINKS]):
+	                if ib.slot is None:
+	                    continue
+	                rx = (ib.slot, j+1)
+	                tx = ib.crate.get_matching_tx(rx)
 
-                # disable receivers that have no corresponding transmitters
-                if tx in tx_list:
-                    gtx.USER_GTRXRESET = 0
-                else:
-                    gtx.USER_GTRXRESET = 1
-                    # gtx.USER_RESET = 1
+	                # disable receivers that have no corresponding transmitters
+	                if tx in tx_list:
+	                    gtx.USER_GTRXRESET = 0
+	                else:
+	                    gtx.USER_GTRXRESET = 1
+	                    # gtx.USER_RESET = 1
 
-        # reset DFE at low power, then increase power
-        for index in (0, 1):
-            for tx_group in tx_power['corner_turn']:
-                lane_group = tx_group['lane_group']
-                default = tx_group['default']
-                exceptions = tx_group.get('exceptions', [])
-                self.logger.info('%r: TX power parameters are: %r (default=%r, exceptions=%r)' % (self, tx_group, default, exceptions))
-                self.set_tx_power(lane_group=lane_group, default_power=default, exceptions=exceptions, index=index)
-            if index == 0:
-                time.sleep(0.3)
-                for ib in self.ib:
-                    self.ib.BP_SHUFFLE.reset_rx_equalizers()
+	        # reset DFE at low power, then increase power
+	        for index in (0, 1):
+	            for tx_group in tx_power['corner_turn']:
+	                lane_group = tx_group['lane_group']
+	                default = tx_group['default']
+	                exceptions = tx_group.get('exceptions', [])
+	                self.logger.info('%r: TX power parameters are: %r (default=%r, exceptions=%r)' % (self, tx_group, default, exceptions))
+	                self.set_tx_power(lane_group=lane_group, default_power=default, exceptions=exceptions, index=index)
+	            if index == 0:
+	                time.sleep(0.3)
+	                for ib in self.ib:
+	                    self.ib.BP_SHUFFLE.reset_rx_equalizers()
 
-        self.ib.BP_SHUFFLE.reset_stats()
+	        self.ib.BP_SHUFFLE.reset_stats()
 
-        # Print links
-        for ib in self.ib:
-            for i in range(ib.NUMBER_OF_CROSSBAR_OUTPUTS):
-                if ib.slot is None:
-                    continue
-                rx = (ib.slot, i)
-                tx = ib.crate.get_matching_tx(rx)
-                if tx in tx_list:
-                    pass
-                    #self.logger.debug('%r: In %r,  %s is receiving from %s' % (self, ib.crate, rx, tx))
-                else:
-                    self.logger.debug('%r: In %r, %s has no corresponding transmitter' % (self, ib.crate.handler, rx))
+	        # Print links
+	        for ib in self.ib:
+	            for i in range(ib.NUMBER_OF_CROSSBAR_OUTPUTS):
+	                if ib.slot is None:
+	                    continue
+	                rx = (ib.slot, i)
+	                tx = ib.crate.get_matching_tx(rx)
+	                if tx in tx_list:
+	                    pass
+	                    #self.logger.debug('%r: In %r,  %s is receiving from %s' % (self, ib.crate, rx, tx))
+	                else:
+	                    self.logger.debug('%r: In %r, %s has no corresponding transmitter' % (self, ib.crate.handler, rx))
 
 
         # sync boards
@@ -1544,20 +1593,21 @@ class FPGAArray(object):
             if bad_ib:
                 raise RuntimeError('The following IceBoards did not SYNC properly: %s' % (','.join(repr(ib) for ib in bad_ib)))
 
-        self.sync_timestamps = ts = self.ib.get_irigb_time(trig=False, format='raw')
-        self.sync_timestamp = ts[0]
+        if self.sync_method == 'centralized_time_trigger' or self.sync_method == 'distributed_time':
+            self.sync_timestamps = ts = self.ib.get_irigb_time(trig=False, format='raw')
+            self.sync_timestamp = ts[0]
 
-        delta_ts = max(ts.nano) - min(ts.nano)
-        self.logger.info('%r: The IRIG-B time for Frame 0 on all boards is:\n%s' %
-            (self, '\n'.join('%r: %s (%i ns since epoch, %i ns after sync)' % (
-                ib.handler,
-                ts[i].isoformat(),
-                ts[i].nano,
-                ts[i].nano - sync_time[i].nano)
-            for i ,ib in enumerate(self.ib))))
-        self.logger.info('%r: The maximum Frame 0 time difference is %i ns' % (self, delta_ts) )
-        if delta_ts > self.max_sync_time_difference:
-            raise RuntimeError('The Frame 0 time difference of %i exceeds the maximum limit of %i' % (delta_ts, self.max_sync_time_difference))
+            delta_ts = max(ts.nano) - min(ts.nano)
+            self.logger.info('%r: The IRIG-B time for Frame 0 on all boards is:\n%s' %
+                (self, '\n'.join('%r: %s (%i ns since epoch, %i ns after sync)' % (
+                    ib.handler,
+                    ts[i].isoformat(),
+                    ts[i].nano,
+                    ts[i].nano - sync_time[i].nano)
+                for i ,ib in enumerate(self.ib))))
+            self.logger.info('%r: The maximum Frame 0 time difference is %i ns' % (self, delta_ts) )
+            if delta_ts > self.max_sync_time_difference:
+                raise RuntimeError('The Frame 0 time difference of %i exceeds the maximum limit of %i' % (delta_ts, self.max_sync_time_difference))
 
         for ib in self.ib:
             for ant in ib.ANT:
@@ -1630,6 +1680,91 @@ class FPGAArray(object):
         """
         return self.get_iceboard(id)
 
+    def get_iceboards(self, board_ids=None, lane_type=None):
+        """ Return the iceboard object(s) corresponding to the board ID tuples or dict specified in `ib` , including wildcards.
+
+        Parameters:
+
+            board_ids (list of tuple): List of (crate_number, slot_number) tuple describing the an iceboard. A value of None
+                is equivalent to a '*' wildcard. Missing tuple entries are considered to be None.
+
+            lane_type (str): type of lane  that can be specified in the spec:
+                ('channel', 'gpu', 'bp_pcb', 'bp_qsfp'). If 'None', lane
+                numbers are not decoded nor returned.
+
+        Returns:
+            if `lane_type` is None: list of iceboard objects
+            otherwise: a dict of {iceboard_object:set_of_lanes, ...}
+
+        Notes:
+
+            A board id can be specified as follows:
+                - ('*',) or ('*', '*') # All boards in the array
+                - (0,) or (0, None) or (0, '*') # All boards in crate 0
+                - {crate=0} or {crate=0, slot=None} or {crate=0, slot='*'} # The same
+                - (0, 3, 2) # crate 0, slot 3, lane/channel 2
+        """
+        if board_ids is None:
+            return self.ib
+
+        iceboards = {} # List of matching iceboards and corresponding lane/channels
+        for board_id in board_ids:
+            # First extract the crate/slot/lane from the identifier
+            crate_number = None
+            slot_number = None
+            lane_number = None
+            # If the spec is a tuple"
+            if isinstance(board_id, (tuple, list)):
+                crate_number = board_id[0] if len(board_id) >= 1 else None
+                slot_number = board_id[1] if len(board_id) >= 2 else None
+                lane_number = board_id[2] if len(board_id) >= 3 else None
+            elif isinstance(board_id, dict):
+                for k, v in board_id.items():
+                    k = k.lower()
+                    if k == 'crate':
+                        crate_number = v
+                    elif k == 'slot':
+                        slot_number = v
+                    elif k in ('lane', 'chan', 'channel'):
+                        lane_number = v
+                    else:
+                        raise RuntimeError("Unknown element '%s' in iceboard selection item %s" % (k, ib))
+            else:
+                raise ValueError('Unknown iceboard selection format %s', ib)
+
+            # Convert the wildcard '*' into None
+            crate_number = None if crate_number == '*' else crate_number
+            slot_number = None if slot_number == '*' else slot_number
+            lane_number = None if lane_number == '*' else lane_number
+
+            #print('get_iceboard: looking for ', crate_number, slot_number)
+            for ib in self.ib:
+                crate, slot = ib.get_id()
+                #print('   checking', ib_id)
+                if (crate_number is None or crate_number == crate) and (slot_number is None or slot_number == slot):
+                    lanes = iceboards.setdefault(ib, set()) # get the iceboard's lanes. Create an entry with an emply list if it does not exist
+                    if lane_type is not None:
+                        if lane_type in ('channel', 'chan'):
+                            valid_lanes = ib.get_channels()
+                        elif lane_type in ('gpu', 'mb_qsfp'):
+                            valid_lanes = ib.GPU.get_lane_numbers()
+                        elif lane_type == 'bp_pcb':
+                            valid_lanes = ib.BP.get_lane_numbers('pcb')
+                        elif lane_type == 'bp_qsfp':
+                            valid_lanes = ib.BP.get_lane_numbers('qsfp')
+                        else:
+                            raise AttributeError('Unknown lane type %s' % lane_type)
+                        if lane_number is None:
+                            lanes.update(valid_lanes)
+                        elif lane_number not in valid_lanes:
+                            raise ValueError('Invalid lane number %s for lane type %s. Valid values are %s' % (lane_number, lane_type, valid_lanes))
+                        else:
+                            lanes.add(lane_number)
+        if lane_type is None:
+            return iceboards.keys()
+        else:
+            return iceboards
+
 #    def init_gains(self):
 #        """ Should be deprecated. Use load_gains() instead.
 #        """
@@ -1683,8 +1818,8 @@ class FPGAArray(object):
         array_gains = {}
         for ib in self.ib:
             board_id = crate, slot_0based = ib.get_id()
-            self.logger.info('%r: Reading digital gains for crate %02i slot %02i (FCC%02i%02i) from folder %s' %
-                             (self, crate, slot_0based, crate, slot_0based, gain_folder))
+            self.logger.info('%r: Reading digital gains for (crate,slot)=%r' %
+                             (self, board_id))
             board_gains = ib.load_gains(folder=gain_folder) or default_gains
             yield async_moment
 
@@ -1760,8 +1895,8 @@ class FPGAArray(object):
         self.logger.info("Computing SCALAR gains.")
         for ib in self.ib:
             ch_id = ib.get_id()
-            crate, slot_0based = ch_id[0], ch_id[1]
-            if (slots is None) or slots[crate][slot_0based]:
+            # crate, slot_0based = ch_id[0], ch_id[1]
+            if (slots is None) or slots[ch_id[0]][ch_id[1]]:
                 yield calculate_gains.calculate_gains.async(ib, gain_folder=gain_folder)
 
     def get_next_gain_bank(self):
@@ -1844,6 +1979,32 @@ class FPGAArray(object):
         yield async_sleep(0.1)
         self.ib.set_corr_reset(0)
 
+    @async
+    def reset_gpu_links(self, board_ids=None):
+        """ Reset the GPU links for the boards specified in `board_ids`
+
+        Parameters:
+
+            board_ids (list of tuple/dict): List of board descriptors in the
+                form of (crate_number) or (crate_number, slot_number) tuples
+                or {crate:crate_number} / {crate:crate_number,
+                slot:slot_number} dicts. Crate and slot number can be  '*' or
+                Null to match every instance.
+
+        Returns:
+
+            List of board_ids that were actually resetted.
+
+        Notes:
+
+            - It is not possible to selectively reset just one QSFP or a specicfic lane of a QSFP. All lanes for both QSFPs are reset.
+
+        """
+        ibs = self.get_iceboards(board_ids)
+        for ib in ibs:
+            ib.reset_gpu_links()
+            yield async_moment
+        async_return([ib.get_id() for ib in ibs])
 
     @async
     def get_fpga_config(self, basic=False):
@@ -3379,15 +3540,15 @@ def parse_args_as_dict(parser, *args, **kwargs):
 
 
 
-def GPUArray(gpu_nodes=[]):
-        # Create GPU node array
-        if gpu_nodes:
-            #print gpu_nodes
-            return Ccoll(GpuNodeHandler(hostname=hostname) for hostname in gpu_nodes)
-        else:
-            return Ccoll([])
+# def GPUArray(gpu_nodes=[]):
+#         # Create GPU node array
+#         if gpu_nodes:
+#             #print gpu_nodes
+#             return Ccoll(GpuNodeHandler(hostname=hostname) for hostname in gpu_nodes)
+#         else:
+#             return Ccoll([])
 
-    # Create Power Supply array
+# Create Power Supply array
 def PSArray(power_supplies=[]):
         if not power_supplies:
             return Ccoll([])
@@ -3539,9 +3700,9 @@ def create_fpga_array(args=None):
     fpga_group.sub_dict = 'cli_fpga_array'  # group all arguments in this group in a sub dictionary with this name
     fpga_defaults = add_fpga_array_arguments(fpga_group)
 
-    gpu_group = parser.add_argument_group('GPU Array parameters', 'Allows interactive creation of GPU nodes')
-    gpu_group.sub_dict = 'cli_gpu_array'  # group all arguments in this group in a sub dictionary with this name
-    gpu_group.add_argument('-n', '--gpu_nodes', type=str, nargs='+',  help='List of IP address or hostnames of the GPU node objects to be created.')
+    # gpu_group = parser.add_argument_group('GPU Array parameters', 'Allows interactive creation of GPU nodes')
+    # gpu_group.sub_dict = 'cli_gpu_array'  # group all arguments in this group in a sub dictionary with this name
+    # gpu_group.add_argument('-n', '--gpu_nodes', type=str, nargs='+',  help='List of IP address or hostnames of the GPU node objects to be created.')
 
     ps_group = parser.add_argument_group('Power Supply Array parameters', 'Allows interactive creation of Power Supply objects')
     ps_group.sub_dict = 'cli_power_supply_array'  # group all arguments in this group in a sub dictionary with this name
