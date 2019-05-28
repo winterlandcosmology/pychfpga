@@ -8,3 +8,6 @@ from wtl.config import load_yaml_config
 from _version import __version__, get_git_version
 from core.icecore import Ccoll
 from fpga_array import FPGAArray
+
+# local module access (to be deprecated)
+from core import chFPGA_controller, chFPGA_receiver
