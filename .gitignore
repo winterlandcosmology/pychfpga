@@ -11,7 +11,7 @@
 *.7z
 out_*/
 /nbproject/
-src/
-
+/src/
+/venv/
 \.DS_Store
 /pychfpga.egg-info/

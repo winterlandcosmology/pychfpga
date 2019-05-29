@@ -22,11 +22,14 @@ import tornado
 import psutil
 
 # External private packages
-from comet import Manager, CometError
 from wtl import log
 from wtl.rest import AsyncRESTServer, endpoint, AsyncRESTClient, coroutine, coroutine_return, IOLoop, RunSyncWrapper, moment, run_client
 from wtl.namespace import NameSpace
 from wtl.metrics import Metrics
+try:
+    import comet
+except ImportError:
+    comet = None
 
 # Local imports
 from pychfpga import get_git_version
@@ -825,19 +828,24 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
     def start(self, handler, **config):
         self.log.info('%.32r: Received start command with %r' % (self, config))
         if self.receiver.is_running():
-            self.log.info('%.32r: Receiveer is already running. Stopping it and restarting a new one' % (self))
+            self.log.info('%.32r: Receiver is already running. Stopping it and restarting a new one' % (self))
             yield self.receiver.stop()
             # raise RuntimeError('Server is already started')
 
         # Register config with comet broker
+        comet_config = config.pop('comet_broker', {})
         try:
-            comet_config = config.pop('comet_broker')
             enable_comet = comet_config['enabled']
         except KeyError:
             msg = "Missing config value 'comet_broker/enabled'."
             self.log.error(msg)
             raise RuntimeError('Cannot start comet broker: %s' % (msg))
         if enable_comet:
+            if comet is None:
+                msg = "Failure importing comet for configuration tracking.  Please install the " \
+                      "comet package or set 'comet_broker/enabled' to False in config."
+                self.log.error(msg)
+                coroutine_return(msg)
             try:
                 comet_host = comet_config['host']
                 comet_port = comet_config['port']
@@ -846,12 +854,13 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
                       "not defined in config.".format(exc[0])
                 self.log.error(msg)
                 raise RuntimeError('Cannot start comet broker: %s' % (msg))
-            comet = Manager(comet_host, comet_port)
+            comet_manager = comet.Manager(comet_host, comet_port)
             try:
-                comet.register_start(self.startup_time, self.GIT_VERSION)
-                comet.register_config(config.copy())
-            except CometError as exc:
-                msg = 'Comet failed registering raw_acq start and initial config. The Comet client returned the following error: {}'.format(exc)
+                comet_manager.register_start(self.startup_time, self.GIT_VERSION)
+                comet_manager.register_config(config.copy())
+            except comet.CometError as exc:
+                msg = "Comet failed registering raw_acq start and initial config. " \
+                      "The Comet client returned the following error: {}".format(exc)
                 self.log.error(msg)
                 raise RuntimeError('Cannot start comet broker: %s' % (msg))
         else:

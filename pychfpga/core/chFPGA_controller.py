@@ -1880,8 +1880,7 @@ class chFPGA_controller(IceBoardExtHandler):
         try:
             gain_filename = os.path.join(folder, 'gains_FCC%02i%02i.pkl' % (crate, slot_0based))
             gains = pickle.load(open(gain_filename, 'rb'))
-            # self.logger.info('Setting gains on IceBoard SN%s, crate %s, slot %i' % (ib.serial, crate, slot))
-            # ib.set_gain(g_array, bank=bank)  # *** should this be bank=all_bank
+            self.logger.info('FCC%02i%02i: loaded gains from file %s' % (crate, slot_0based, gain_filename))
         except IOError:
             self.logger.warn('Gain file not found for for crate %02i slot %02i (FCC%02i%02i)' % (crate, slot_0based, crate, slot_0based))
             gains = None
