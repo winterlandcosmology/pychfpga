@@ -198,9 +198,9 @@ class GPIO_base(Module_base):
         'debug2': 11,  # (debug2, currently crossbar0.lane_monitor)
         'user_bit0': 12,  # (user_bit(0))
         'user_bit1': 13,  # (user_bit(1))
-        'debug3': 14,  # (chan_lane_monitor(2)(to_integer(unsigned(user_bit))))
-        'fmc_refclk': 15  # Refclk from Mezz selected by user_bits(0:1)  (fmc_refclk(to_integer(unsigned(user_bit)))
-        }  # Backplane TRIG signal
+        'fmc_refclk': 14,  # Refclk from Mezz selected by user_bits(0:1)  (fmc_refclk(to_integer(unsigned(user_bit)))
+        'input': 15  # Do not drive the output, use the connector as an input
+        }
 
     USER_OUTPUTS = {
         0: 'USER_MUX_SOURCE0',
@@ -213,7 +213,6 @@ class GPIO_base(Module_base):
         3: 'USER_MUX_SOURCE3',
         'bp_gpio_int': 'USER_MUX_SOURCE3'
         }
-
 
     def set_user_output_source(self, source='', output=None):
         """

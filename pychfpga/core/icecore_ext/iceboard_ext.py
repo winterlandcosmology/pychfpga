@@ -921,7 +921,10 @@ class IceBoardExtHandler(IceBoardPlusHandler):
         ('bp_trig', 0),
         ('bp_time',  1),
         ('irigb_gen',  2),
-        ('bp_gpio_int',  3)
+        ('bp_gpio_int',  3),
+        ('sma_a', 4),
+        ('sma_b', 5),
+        ('bp_sma', 6)
         ])
 
     @async
@@ -929,8 +932,11 @@ class IceBoardExtHandler(IceBoardPlusHandler):
         """ Set the source of the IRIG-B signal."""
         if source not in self._IRIGB_SOURCE_TABLE:
             raise ValueError('Invalid IRIG-B source name. Valid names are %s' % ', '.join(self._IRIGB_SOURCE_TABLE.keys()))
+        src = self._IRIGB_SOURCE_TABLE[source]
         w2 = yield self.fpga_mmi_read.async(self._IRIGB_SAMPLE2_ADDR)
-        self.fpga_mmi_write(self._IRIGB_SAMPLE2_ADDR, (w2 & 0x3FFFFFFF) | (self._IRIGB_SOURCE_TABLE[source] << 30))
+        self.fpga_mmi_write(self._IRIGB_SAMPLE2_ADDR, (w2 & 0x3FFFFFFF) | ((src & 0b011) << 30))
+        w2 = yield self.fpga_mmi_read.async(self._IRIGB_TARGET0_ADDR)
+        self.fpga_mmi_write(self._IRIGB_TARGET0_ADDR, (w2 & 0x7FFFFFFF) | ((src >> 2) << 31))
 
     @async
     def get_irigb_source(self):
@@ -1176,9 +1182,11 @@ class IceBoardExtHandler(IceBoardPlusHandler):
 
         self.logger.debug('%r: Setting IRIGB target time with y=%i, d=%i, h=%i, m=%i, s=%i, ss=%i' % (self, y, d, h, m, s, ss))
 
-        t0 = (y << 0)
+        t0 = (yield self.fpga_mmi_read.async(self._IRIGB_TARGET0_ADDR)) & 0xFFFFFF00
+        t0 |= (y << 0)
         t1 = (d << 20) | (h << 14) | (m << 7) | (s << 0)
         t2 = (1 << 31) | (ss << 0)
+
 
         yield self.fpga_mmi_write.async(self._IRIGB_TARGET0_ADDR, t0)
         yield self.fpga_mmi_write.async(self._IRIGB_TARGET1_ADDR, t1)
