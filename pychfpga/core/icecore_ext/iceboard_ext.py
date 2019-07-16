@@ -258,7 +258,7 @@ class IceBoardExtHandler(IceBoardPlusHandler):
         # for this (like obtaining another IP from the DHCP server)
         if not self.fpga_ip_addr:
             ip_packed = socket.inet_aton(self._get_arm_ip())  #
-            ip_packed = ip_packed[:2] + chr(3) + ip_packed[3]
+            ip_packed = ip_packed[:2] + chr(45) + ip_packed[3]
             self.fpga_ip_addr = socket.inet_ntoa(ip_packed)
 
         # Compute the local port number if requested (self.local_port_number is None) and if possible (there is a slot and crate number)
