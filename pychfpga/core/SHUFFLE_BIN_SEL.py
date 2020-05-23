@@ -128,7 +128,7 @@ class SHUFFLE_BIN_SEL_base(Module_base):
         bin_map = np.unpackbits(mask[::-1])[::-1]
         return np.where(bin_map)[0]
 
-    def map(self, input_data):
+    def map(self, input_data, header=False):
         """ Return a bin selector frequency map, which describes the structure and contents of the
         bin selector output stream.
         """
@@ -140,25 +140,38 @@ class SHUFFLE_BIN_SEL_base(Module_base):
         ch_per_bin = self.NUMBER_OF_WORDS_PER_BIN * 4  # fixme - only 4-bit mode
         bs_out = OrderedDict()
         bins = self.get_selected_bins()
+
+        # Prepare the header info that does not change as a function of lane
+        # to minimize FPGA access
+        if header:
+            static_header=dict(
+                cookie=0xcf,
+                protocol_version=1,
+                header_length=4,
+                stream_id=None,  # to be populated
+                four_bits=self.FOUR_BITS,
+                use_offset_binary=self.USE_OFFSET_BINARY,
+                send_flags=self.SEND_FLAGS,
+                bypass=self.BYPASS,
+                frames_per_packet=self.NUMBER_OF_FRAMES_PER_PACKET,
+                bins_per_frame=self.NUMBER_OF_OUTPUT_BINS_PER_FRAME,
+                words_per_bin=self.NUMBER_OF_OUTPUT_WORDS_PER_BIN,
+                ancillary=None,
+                timestamp=0,
+                )
+            static_stream_id = (self.STREAM_ID << 4) | self.instance_number * self.NUMBER_OF_OUTPUTS
+        else:
+            header = None
+
         for sublane in range(self.NUMBER_OF_OUTPUTS):
             channels = range(N * sublane + self.FIRST_LANE, N * sublane + self.LAST_LANE + 1)
             d = [input_data[ch]['data'][ch_per_bin * bin_number: ch_per_bin * (bin_number + 1)] for bin_number in bins for ch in channels]
+            if header:
+                header = static_header.copy()
+                header['stream_id'] = static_stream_id + sublane
+
             bs_out[sublane] = dict(
-                header=dict(
-                    cookie =0xcf,
-                    protocol_version=1,
-                    header_length=4,
-                    stream_id=(self.STREAM_ID << 4) | (self.instance_number*self.NUMBER_OF_OUTPUTS + sublane),
-                    four_bits=self.FOUR_BITS,
-                    use_offset_binary=self.USE_OFFSET_BINARY,
-                    send_flags=self.SEND_FLAGS,
-                    bypass=self.BYPASS,
-                    frames_per_packet=self.NUMBER_OF_FRAMES_PER_PACKET,
-                    bins_per_frame=self.NUMBER_OF_OUTPUT_BINS_PER_FRAME,
-                    words_per_bin=self.NUMBER_OF_OUTPUT_WORDS_PER_BIN,
-                    ancillary=None,
-                    timestamp=0,
-                    ),
+                header=header,
                 data=[i for di in d for i in di], # flatten the list of lists,
                 data_flags=None,
                 frame_flags=None,

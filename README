@@ -1,0 +1,154 @@
+pychfpga: ICEBoard & FPGA-based correlator control
+==================================================
+
+
+
+Prerequisites for installation and manual operations
+----------------------------------------------------
+
+Before you start, you need:
+
+- A bitbucket account (https://bitbucket.org)
+- A `ssh` key loaded in `ssh_agent` that allows you to access your bitbucket account::
+
+	    eval `ssh-agent -s`
+	    ssh-add path_to_bitbucket_key
+
+- Permissions to the pychfpga and dependent repositories in bitbucket. Ask McGill administrator.
+- git LFS (git >1.8.2 includes LFS by default)
+- Python 2.7 (Python 3 **not** supported)
+- pip 18.1 (2018-10-05) or later (to support the PEP 508 dependency specs)
+- mdns/avahi/bonjour development libraries should be installed to allow the python package pybonjour to install::
+
+	sudo apt install  libavahi-compat-libdnssd1  # on Ubuntu
+
+To operate a board, You also need the following:
+
+- One or multiple Iceboards, in a crate or on the benchtop
+- A generic IceBoard SD card installed in each board (the card contains the ARM linux system). The SD card image that works with the current release is in ``./pychfpga/arm_firmware`.
+- A SFP+ to RJ45 adapter connected in the SFP+ cage of each IceBoard
+- Power supply to power the board(s) or crate(s)
+- Proper cooling (fans) on the FPGA and some airflow over the ADCs mezzanines
+- A 1G Ethernet switch or router (NOT a 10/100 device!) to which the IceBboard will be connected, and which connects directly or routes to your control computer
+- Two Ethernet cables per IceBoard to connect the FPGA and ARM to the switch
+- A control computer (Windows or Linux, Mac not tested) connected on the same subnet as the IceBoard(s)
+- All the switches/router between the IceBoard(s) and control computer must have Jumbo frame enabled if you are expecting to gather raw ADC, FFT or correlator data over the 1G Ethernet link (ot the QSFP+).
+- The computer firewall must allow the UDP packets from the FPGA to be accepted
+- The IceBoard/computer subnet shall have:
+
+   - A net mask of at least 255.255.252.0 (/22) or larger (e.g. 255.255.0.0) to include the FPGA addresses of *.*.3.*.
+   - A DHCP server configured to provide IP addresses that are not in the range *.*.3.* (e.g DHCP provides addresses in 192.168.0.*).
+
+- If multiple boards are to be used in a synchronized fashion, an external 10 MHz clock and IRIG-B source (often from a GPS receiver) must be fed to each board via SMA connectors or through the crate's backplane.
+
+
+
+
+
+
+Obtaining and installing pychfpga
+---------------------------------
+
+Get the ``pychfpga`` repository::
+
+	$ git lfs clone git@bitbucket.org:winterlandcosmology/pychfpga.git  # add the ``-b`` option to specify a branch
+
+Create a clean python environment and install the `pychfpga` package all its dependencies::
+
+	$ virtualenv my_env  # create new virtual environment named "my_env". You can clear an existing environment with "virtualenv --clear my_env"
+	$ source my_env/bin/activate  # activate the new environment
+	$ pip install -e ./pychfpga  # install in-place
+
+If you plan manual interactive sessions (which is useful for debugging first installations), install ipython:
+
+	$ pip install ipython
+
+
+
+Configuring the hardware
+------------------------
+
+- Install the SD card in the ICE Board
+- Set-up the appropriate reference clock source (jumper)
+- Conect the clock and IRIG-B. WATCH OUT FOR THE LEVELS OF ANY EXTERNAL SIGNALS.
+- Connect the power supply
+- Power up the board. The 2 PLL LEDs at the bottom of the front panel shall turn on immediately to indicate there is a clock. After about 25 seconds, the upper leds will blink then stay on to show that the ARM has acquired an IP address and had finished booting.
+
+
+Connections
+-----------
+
+Two Ethernet cables need to be connected between the IceBoard and the 1G Ethernet switch or router that connects to your control PC:
+
+   - One cable connects to the ARM Ethernet port on the dual RJ-45 connectors. That port works at any speed.
+   - One cable connects to the FPGA Ethernet port through the SFP+ cage using a SFP-to-RJ45 1G Adapter.  That port operates supports **only** 1G Ethernet.
+
+
+
+Manual operation (using fpga_array)
+-----------------------------------
+
+`fpga_array` creates an object that represents any number of ICEBoards and ICECrates and allows their initialization. Once started, it returns control to you. (See `fpga_master` for a full stand-alone automated server).
+
+Manual operations are done through ipython. First start ipython in the proper folder and python environment:
+
+	source my_env/bin/activate  # activate the python environment
+	cd pychfpga
+	ipython
+
+Power-up the boards. We are now ready to initialize your board(s). Here are a few specific examples depending on your setup (from a single board to a full 128-board array)
+
+Assuming you have a single IceBoard with IP address 1.2.3.4 and want to use an external correlator that will process the data from the two QSFP+ links (mode `shuffle16`):
+
+
+	run -i fpga_array 1.2.3.4 --prog --open --sync_method local_soft_trigger --mode shuffle16
+
+If you have avahi/bonjour server (a MDNS server) running on your computer, you can specify the board through its model and serial number, and the MDNS protocol will resolve the IP address of the board. In the following example, we start the IceBoard MGK7MB serial 0123 with the stand-alone firmware correlator (mode `corr16`) that will stream integrated data over the 1G Ethernet SFP+ link:
+
+	run -i fpga_array mb 123 --prog --open --sync_method local_soft_trigger --mode corr16
+
+With avahi/bonjour present, you can also select an ensemble of boards by crate model and serial number. Here we select all boards on . Here we intialize 2 crates that are based on the 16-slot backplane model MGK7BP16, and with the serial numbers 12 and 13. These crates will be given the crate number 0 and 1, respectively. We have 512 analog inputs we pass through the FPGA's corner-turn engine and send to an external correlator farm (mode shuffle512). All the boards in the arrayare synchronized together through IRIG-B:
+
+	run -i fpga_array bp16 12:0 13:1 --prog --open --sync_method distributed_time --mode shuffle512
+
+
+Server-based operation
+======================
+
+`fpga_master` is a stand-alone server that initializes and operates the IceBoards based on a configuration file, and provides a web server that can receive REST commands over HTTP and can publish monitoring metrics that can be scraped by Prometheus and displayed by Grafana (all free programs).
+
+`raw_acq` is another stand-alone server that is run in parallel with `fpga_master` to receive, analyze and store the raw ADC, FFT or *firmware* correlator data that is captured periodically and sent by the IceBoards over the FPGA SFP+ 1G Ethernet link. This server does *not* process the real-time post-corner-turn-but-not-correlated data coming out of the IceBoard's QSFP+ links; those are meant to go directly to high-performance correlator nodes.
+
+
+Prerequisites
+-------------
+
+- If you expect to receive raw ADC, FFT or correlator packets from the IceBoard (using `raw_acq.py`, for example), you need to enable jumbo frames and increase buffer size. The following commands do that for the current session. You might want to make those changes permanent (not shown here)::
+
+	sudo ifconfig eth0 mtu 9000 # replace "eth0" with your interface name
+    sudo sysctl -w net.core.rmem_max=26214400
+    sudo sysctl -w net.core.rmem_default=26214400
+
+
+- Install Prometheus and Grafana if you want to view the system status graphs published by `fpga_master`. The appropriate Prometheus config file and grafana panels need to be installed.
+
+- You need a YAML configuration file for the servers.
+
+Operation
+---------
+
+First, make sure you are in the pychfpga folder and in the right python environment::
+
+	source my_env/bin/activate  # activate the python environment
+	cd pychfpga
+
+`raw_acq` starts a web server can receive raw data  from the ICeBoards (ADC, FFT, firmware correlator) and store those to disk, and also publishes metrics for Prometheus. To start the raw_acq server::
+
+	./raw_acq path_to_config_file:jfc.drao
+
+where `jfc.drao` is the section in the configuration file that contains a raw_acq definition.
+
+To start the fpga_master server::
+
+	./fpga_master path_to_config_file:jfc.drao
+

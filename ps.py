@@ -521,17 +521,18 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
         Returns:
             dict, with the following contents:
 
-                - is_started (bool): true when the server is initialized
-                - ps_names (list): list of str describing the names of all the supplies handled by
-                    the current running configuration.
-                - name1 (dict): Dict that describes the status of the powert supply unit named
-                    ``name1``, as returned by the :meth:`AgilentN5700.status()` method. In the format:
+            - is_started (bool): true when the server is initialized
+            - ps_names (list): list of str describing the names of all the supplies handled by
+                the current running configuration.
+            - name1 (dict): Dict that describes the status of the powert supply unit named
+                ``name1``, as returned by the :meth:`AgilentN5700.status()` method. In the format:
 
-                    - current (float): output current, in Amps
-                    - power (float): output power, in Watts
-                    - voltage (float):output voltage, in Volts
-                    - status (str): 'OK', 'OFF', 'ILIM' or 'FAULT'
-                - name2 ...
+                - current (float): output current, in Amps
+                - power (float): output power, in Watts
+                - voltage (float):output voltage, in Volts
+                - status (str): 'OK', 'OFF', 'ILIM' or 'FAULT'
+
+            - name2 ...
         """
         # ps_names = self._parse_names(ps_names)
         # self.log.info('%.32r: Received status request for %r' % (self, ps_names))

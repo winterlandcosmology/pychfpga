@@ -496,17 +496,19 @@ class ChimeMaster(object):
                      weight=0.2,
                      initial_gains=[ ('*', [1.0, 22])]):
         """
+        Starts the background iteratove process of computing the optimal digital gains on the FPGA to acheive the target RMS.
+
         Parameters:
 
             targets: list of tuples (or dict) describing the (crate, board,
                 channel) (or {crate:c, board:b, channel:ch}) whose gains needs
-                to be recomputed. Missing elements, `None` or `"*"` is treated
+                to be recomputed. Missing elements, `None` or  ``"*"`` is treated
                 as a wildcard.
 
             capture_rate (int): Sets how fast the data is to be temporarily
                 transmitted and captured for the selected channel. This sets
                 the number of frames between captures, which is a power of 2
-                set by `Nframes=2**(capture_rate+1)`. Independently of this,
+                set by ``Nframes=2**(capture_rate+1)``. Independently of this,
                 the rate cannot be slower than the promary capture rate set at
                 FPGA initialization.
 
@@ -526,14 +528,14 @@ class ChimeMaster(object):
             number_of_gain_update_iterations: Number of incremental gain
                 updates that will be performed before the final gain solution.
 
-            weight (float). NUmber between 0 and 1. INdicates the weigh of the
+            weight (float). NUmber between 0 and 1. Indicates the weigh of the
                 new data in theevolving gain solution.
 
             initial_gains (list):  list of [(target, (glin, glog)),...] describing the initial
                 gains to be used to start computing new gains.
 
 
-            Examples:
+        Examples:
 
             chan_id = [(0,1), (1,3,4)] or [{crate:0, slot:1}, {crate:1, slot:3, channel:4}] # Select all channels of board in crate 0 slot 1, and channel 4 of crate 1 slot 3.
             chan_id = None # Selects all boards and channels in the array
@@ -714,12 +716,12 @@ class ChimeMaster(object):
 
             targets: list of tuples (or dict) describing the (crate, board,
                 channel) (or {crate:c, board:b, channel:ch}) whose gains needs
-                to be recomputed. Missing elements, `None` or `"*"` are treated
+                to be recomputed. Missing elements, `None` or ``"*"`` are treated
                 as a wildcard.  List will be iterated over and the channels matching
                 each element of the list will have their gains computed in parallel.
                 If not provided, then will default to  a list of the crates.
 
-            ** accepts all other parameters for `compute_gains` **
+            **accepts all other parameters for `compute_gains`**
 
         """
 
@@ -1287,8 +1289,18 @@ class ChimeMaster(object):
         coroutine_return({})
 
 
-    def get_frequency_map(self):
-        return self.fpgas.get_frequency_map()
+    def get_frequency_map(self, format):
+        if format == 's:b': # stream_id:bins
+            fmap = {self.fpgas.corner_turn_stream_ids[lane_id]:bins
+                for lane_id, bins in self.fpgas.corner_turn_frequency_bins.items()}
+        elif format == 'l:b': #lane_tuple: bins
+            fmap = self.fpgas.corner_turn_frequency_bins
+        elif format == 'l:s': #lane_tuple: stream_id
+            fmap = self.fpgas.corner_turn_stream_ids
+        elif format in ('l:cscb', 'l:cc', 'l:cb','l:bb'):
+            fmap = self.fpgas. get_frequency_map(format=format)
+
+        return fmap
 
     def get_channelizer_output(self):
 
@@ -1671,10 +1683,10 @@ class ChimeMasterAsyncRESTServer(AsyncRESTServer):
 
             targets (list of tuple/dict): List of tuples describing the
                 (crate, slot, channels) for which gains shall be recomputed.
-                Missing tuple elements, "*" and None are considered to be a
+                Missing tuple elements, ``"*"`` and `None` are considered to be a
                 wildcard.
 
-            ** accepts all other parameters for `ChimeMaster.compute_gains` **
+            **accepts all other parameters for `ChimeMaster.compute_gains`**
 
         Example::
 
@@ -1697,10 +1709,10 @@ class ChimeMasterAsyncRESTServer(AsyncRESTServer):
 
             targets (list of tuple/dict): List of tuples describing the
                 (crate, slot, channels) for which gains shall be recomputed.
-                Missing tuple elements, "*" and None are considered to be a
+                Missing tuple elements, ``"*"`` and None are considered to be a
                 wildcard.
 
-            ** accepts all other parameters for `ChimeMaster.compute_gains` **
+            **accepts all other parameters for `ChimeMaster.compute_gains`**
 
         Example::
 
@@ -1722,10 +1734,10 @@ class ChimeMasterAsyncRESTServer(AsyncRESTServer):
 
             targets (list of tuple/dict): List of tuples describing the
                 (crate, slot, channels) for which gains shall be set.
-                Missing tuple elements, "*" and None are considered to be a
+                Missing tuple elements, ``"*"`` and None are considered to be a
                 wildcard.
 
-            ** accepts all other parameters for `ChimeMaster.compute_gains` **
+            **accepts all other parameters for `ChimeMaster.compute_gains`**
 
         Example::
 
@@ -1748,12 +1760,12 @@ class ChimeMasterAsyncRESTServer(AsyncRESTServer):
 
             targets: list of tuples (or dict) describing the (crate, board,
                 channel) (or {crate:c, board:b, channel:ch}) whose gains needs
-                to be recomputed. Missing elements, `None` or `"*"` are treated
+                to be recomputed. Missing elements, `None` or ``"*"`` are treated
                 as a wildcard.  List will be iterated over and the channels matching
                 each element of the list will have their gains computed in parallel.
                 If not provided, then will default to  a list of the crates.
 
-            ** accepts all other parameters for `ChimeMaster.compute_gains` **
+            **accepts all other parameters for `ChimeMaster.compute_gains`**
 
         Example::
 
@@ -1851,8 +1863,8 @@ class ChimeMasterAsyncRESTServer(AsyncRESTServer):
 
     @coroutine
     @endpoint('get-frequency-map')
-    def get_frequency_map(self, handler):
-        coroutine_return(sanitize_for_json(self.chime_master.get_frequency_map()))
+    def get_frequency_map(self, handler,format='s:b'):
+        coroutine_return(sanitize_for_json(self.chime_master.get_frequency_map(format=format)))
 
     @coroutine
     @endpoint('get-channelizer-output')

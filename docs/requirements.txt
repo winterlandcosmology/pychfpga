@@ -1,0 +1,12 @@
+# Requirements as per PEP508 standard
+# This file is used by setup.py to create the dependency list
+# but can be used manually as well with ``pip install -r requirements.txt``
+
+# Private packages
+wtl.sphinx-paramlinks @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.sphinx-paramlinks.git
+
+# PyPi packages
+sphinx==1.8.5
+sphinx_rtd_theme
+
+

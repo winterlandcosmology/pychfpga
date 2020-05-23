@@ -96,7 +96,7 @@ class chFPGA_controller(IceBoardExtHandler):
 
     `chFPGA_controller` inherits from the following classes:
 
-    .. image:: ../images/chfpga_controller_class_inheritance_diagram.svg
+    .. image:: ./images/chfpga_controller_class_inheritance_diagram.svg
        :width: 80%
 
     - `IceBoardExtHandler`  provides the basic Ethernet/UDP-based Memory-mapped Interface (MMI) to
@@ -2684,12 +2684,25 @@ class chFPGA_controller(IceBoardExtHandler):
 
     def init_crossbars(self,
                        mode=None,
-                       dsmap=range(16),
                        frames_per_packet=2,
-                       cb1_lanes=16, cb1_bins=64, cb1_bypass=False, cb1_combine_data_flags=0,
-                       cb2_lanes=None, cb2_bins=1, cb2_bypass=False,
-                       bp_shuffle_bypass=1, crate_shuffle_bypass=1,
-                       remap=True, chan8_channel_map=range(16),
+                       bin_map = None,
+
+                       cb1_lanes=16,
+                       cb1_bins=64,
+                       dsmap=range(16),
+                       cb1_bypass=False,
+                       cb1_combine_data_flags=0,
+
+                       bp_shuffle_bypass=1,
+
+                       cb2_lanes=None,
+                       cb2_bins=1,
+                       cb2_bypass=False,
+
+                       crate_shuffle_bypass=1,
+
+                       remap=True,
+                       chan8_channel_map=range(16),
                        send_flags=True):
         """ Initializes the Corner Turn engine in the specified operation mode.
 
@@ -2703,32 +2716,52 @@ class chFPGA_controller(IceBoardExtHandler):
                 the crossbars and shuffle enginecan be set manually with the other provided
                 parameters. The valid modes are:
 
-                    'chan8': Corner-turn engine is mostly bypassed and raw 8-bit data from 8
-                        channelizers is sent directly to the 8 CT-Engine outputs.
+                    - 'chan8': Corner-turn engine is mostly bypassed and raw
+                      8-bit data from 8 channelizers is sent directly to the 8
+                      CT-Engine outputs.
 
-                    'chan4': Corner-turn engine is mostly bypassed and raw 8-bit data from 16
-                        channelizers is sent directly to the 8 CT-Engine outputs.
+                    - 'chan4': Corner-turn engine is mostly bypassed and raw
+                      8-bit data from 16 channelizers is sent directly to the
+                      8 CT-Engine outputs.
 
-                    'shuffle16': A corner-turn operation is applied only within the 16 channelizer
-                        outputs of this board.
+                    - 'shuffle16': A corner-turn operation is applied only
+                      within the 16 channelizer outputs of this board.
 
-                    'shuffle256': The corner-turn operation is applies between 16 channelizers within
-                        a board and between the 16 boards within a crate using the backplane PCB links.
+                    - 'shuffle256': The corner-turn operation is applies
+                      between 16 channelizers within a board and between the
+                      16 boards within a crate using the backplane PCB links.
 
-                    shuffle512: The corner-turn operation is applies between 16 channelizers within
-                        a board, between the 16 boards within a crate using the backplane PCB links,
-                        and between 2 crates using the backplane QSFP links.
+                    - 'shuffle512': The corner-turn operation is applies
+                      between 16 channelizers within a board, between the 16
+                      boards within a crate using the backplane PCB links, and
+                      between 2 crates using the backplane QSFP links.
 
-            dsmap (list) : Defaults to range(16).
+                    - 'corr16': The corner-turn engine is configured to feed
+                      the internal firmware correlator (only if the firmware
+                      was compiled with it).
+
 
             frames_per_packet (int): Number of frames to be packaged in a packet. Defaults to 2. Is
                 limited by the amount of memory used by the FPGA to store data and flags.
 
-            cb1_lanes (int): Number of input lanes considered in the CROSSBAR1. Defaults to 16. Used only if `mode`=`None`.
+            bin_map (dict): Describes the bin indices to be assigned to the
+                outputs of each crossbar.
 
-            cb1_bins (int): Number of frequency bins to be included in CROSSBAR1. defaults to 64. Used only if `mode`=`None`.
+            cb1_lanes (int): Number of input lanes considered in the
+                CROSSBAR1. Defaults to 16. Used only if `mode`=`None`.
 
-            cb1_bypass (bool): If True, CROSSBAR1 will be bypassed. Used only if `mode`=`None`.
+            cb1_bins (int): Number of frequency bins to be included in the first
+                crossbar. Defaults to 64. Used only if `mode`=`None`.
+
+
+            dsmap (list) : Destination slot for each of the bin selectors of
+               the first crossbar. Defaults to range(16). Used only in modes
+               that use the backplane PCB links (``shuffle256``,
+               ``shuffle512``).
+
+
+            cb1_bypass (bool): If True, the first crossbar will be bypassed.
+                Used only if `mode`=`None`.
 
             cb1_combine_data_flags (bool): if True, the data flags at the output of CROSSBAR1 will
                 be packed in 32-bit words. Defaults to False, where each data word is associated
@@ -2743,7 +2776,10 @@ class chFPGA_controller(IceBoardExtHandler):
                 selectros will combine data from all 16 input lanes.
 
 
-            cb2_bins (int): Number of bins to be included in the CROSSBAR2 bin selectors.
+            cb2_bins (int): Number of bins to be included in the bin selectors
+                of the second crossbar.
+
+
 
             cb2_bypass (bool): If True the 2nd stage cirner-turn operation (CROSSBAR2) will be
                 bypassed. Defaults to `False`
@@ -2762,11 +2798,68 @@ class chFPGA_controller(IceBoardExtHandler):
                 crate the corresponding board.If True, the 8 output lanes of CROSSBAR2 go directly
                 to the 8 input lanes of CROSSBAR3.
 
+
+
             remap (bool). Defaults to True
 
             chan8_channel_map (list) : channel remapping to be used in `chan8` mode. Defaults to the identity map (range(16))
 
             send_flags (bool): If False, the Scaler and Frame flags will not be sent.
+
+        Returns:
+
+            list of the stream ids at each output lane of the corner turn engine
+
+        Note:
+            bin_map is a dict in the format
+
+                {'cb1':cb1_bin_indices, 'cb2':cb2_bin_indices, 'cb3':cb3_bin_indices}
+
+            where
+
+            -   cb1_bin_indices (list of list): List of bin indices that will be
+                selected for each bin selector (output lane) of the first
+                crossbar.
+
+                There are 16 bin selectors in the first crossbar.
+                `cb1_bin_indices` should therefore consist of 16 lists, even
+                in modes where only the first 8 bin selectors are used. The
+                list is in the order of the destination slot. The list will be
+                reordered to account for the backplane connectivity in the
+                modes where those links are used..
+
+                If `None`, the default bin selection is used: bins are
+                interleaved between each bin selector. `shuffle16` and `corr16` select 128
+                bins per bin selector (only the first 8 bin selector will be
+                used);and `shuffle256`/`shuffle512` select 64 bins.
+
+                The Bin selectors require 4 clocks to process a selected bin.
+                A bin pair (even,odd) is processed on each clock. This means
+                that if a bin from a bin pair is selected, no bin can be
+                selected from the following 3 bin pairs.
+
+            -  cb2_bin_indices (list of list): List of bin indices that will be
+                selected for each bin selector of the second
+                crossbar.
+
+                There are 2 bin selectors in the second crossbar.
+
+                If `None`, the default assignments are used. In `shuffle256`,
+                all 64 incoming  bins are selected (from half the input lanes,
+                to be reassembled by the following crossbar). In `shuffle512`,
+                the bins are interleaved between the 2 bin_selectors, with the
+                even bins sent to the even crate number. `cb2_bin_indices` is
+                not used in other modes.
+
+            -   cb3_bin_indices (list of list): List of bin indices that will be
+                selected for each bin selector of the third (and final)
+                crossbar.
+
+                There are 8 bin selectors in the third crossbar.
+
+                If `None`, the default assignments are used.  In `shuffle512`,
+                the bins are interleaved between the 8 bin_selectors.
+                `cb3_bin_indices` is not used in other modes.
 
         """
 
@@ -2777,6 +2870,19 @@ class chFPGA_controller(IceBoardExtHandler):
         number_of_cb1_bin_sel = 16
         number_of_cb2_bin_sel = 2
         number_of_cb3_bin_sel = 8
+
+        if bin_map is None:
+            bin_map = {}
+        cb1_bin_indices = bin_map.get('cb1', None)
+        cb2_bin_indices = bin_map.get('cb2', None)
+        cb3_bin_indices = bin_map.get('cb3', None)
+
+        if not (cb1_bin_indices is  None or len(cb1_bin_indices)==number_of_cb1_bin_sel):
+            raise ValueError('1st crossbar bin map should have %i lists of bins. Ir currently has %i' % ( number_of_cb1_bin_sel, len(cb1_bin_indices)))
+        if not (cb2_bin_indices is  None or len(cb2_bin_indices)==number_of_cb2_bin_sel):
+            raise ValueError('2nd crossbar bin map should have %i lists of bins. Ir currently has %i' % ( number_of_cb2_bin_sel, len(cb2_bin_indices)))
+        if not (cb3_bin_indices is  None or len(cb3_bin_indices)==number_of_cb3_bin_sel):
+            raise ValueError('3rd crossbar bin map should have %i lists of bins. Ir currently has %i' % ( number_of_cb3_bin_sel, len(cb3_bin_indices)))
 
         def get_dest_slot_for_src_lane(src_lane):
             tx = (self.slot, src_lane)  # unique transmitter id (slot, lane)
@@ -2804,26 +2910,73 @@ class chFPGA_controller(IceBoardExtHandler):
         cb2_timeout_period = None
         cb2_sof_window_stop = None
         if mode == 'chan8':  # get raw data from the channelizer (all 32-bit sent as is). Only 8 lanes are available to the GPU.
+            #############################
+            # 1st Crossbar
+            #############################
+            # In bypass mode. Bin sel 0-15 get every word out of channelizers 0-15
             cb1_bypass = True
             cb1_four_bit = False
             cb1_combine_data_flags = 0
+
+            #################################
+            # Backplane PCB (intra-crate) shuffle
+            #################################
             bp_shuffle_bypass = True
+
+            #############################
+            # 2nd Crossbar
+            #############################
+            # Bypassed. Lanes are reordered to select which of the 8 channelizers we want to forward.
             cb2_lane_map = chan8_channel_map # Here we could select which 8 inputs we want to stream to the GPU
             cb2_bypass = True
+
+            #################################
+            # Backplane QSFP (crate) shuffle
+            #################################
             crate_shuffle_bypass = True
+
+            #############################
+            # 3rd Crossbar
+            #############################
+            # Bypassed. No channel reordering.
             cb3_lane_map = range(8)
             cb3_bypass = True
             crate_number = self.crate.crate_number if self.crate else 0
             stream_type = 0
 
         elif mode == 'chan4': # get the high nibble of every bytes from two lanes in a single word. Allows Get (4+4) bit data from all channelizers
+            #############################
+            # 1st Crossbar
+            #############################
+            # In bypass mode. Bin sel 0 selects 4+4 bit data for all bins of
+            # channelizer 0 and 1, etc.  Bin selectors cover all 16
+            # channelizers. Bin selectors 8-15 has the same info as bin sel
+            # 0-7.
             cb1_bypass = True
             cb1_four_bit = True
             cb1_combine_data_flags = 0
+
+            #################################
+            # Backplane PCB (intra-crate) shuffle
+            #################################
             bp_shuffle_bypass = True
+
+            #############################
+            # 2nd Crossbar
+            #############################
+            # Bypassed. No channel reordering. Data from input lanes 8-15 is redundant and is not forwarded.
             cb2_lane_map = range(16) # All information
             cb2_bypass = True
+
+            #################################
+            # Backplane QSFP (crate) shuffle
+            #################################
             crate_shuffle_bypass = True
+
+            #############################
+            # 3rd Crossbar
+            #############################
+            # Bypassed. No channel reordering.
             cb3_lane_map = range(8)
             cb3_bypass = True
             crate_number = self.crate.crate_number if self.crate else 0
@@ -2837,43 +2990,70 @@ class chFPGA_controller(IceBoardExtHandler):
             channel is a byte, representing the FFT output as a (4+4) bit
             compler number.
 
-            In this mode:
+            In this mode, each of the 16 bin selector select data from lane
+            groups 0-3 (i.e. lanes 0-15). They each select 128 bins, i.e. 1/64
+            of the 1024 bins incoming from the channelizer. The first 8 bin
+            selectors contain all the data; the last 8 will not be passed by
+            the following crossbar.
 
-                chan_bin_sel: each of the 16 chan_bin_sel select data from
-                    lane groups 0-3 (i.e. lanes 0-15). They each select 1/64
-                    of the bine incoming channelizer output. There are a total
-                    of 128 selected bins. There are 4 words per bins (16
-                    channels). The data flags of two consecutive bins are
-                    combine to build a single data flag word.
+            There are 4 words per bins (16 channels). The data flags of two
+            consecutive bins are combined to build a single data flag word.
 
             The packet format is as follows (assume one frame per packet):
                 - Header: 4 words (16 bytes) for the header
                 - Data block: 128 bins x 16 channels = 2056 bytes
                 - Data flags block: We combine the data flags, so scaler flags
                   from two consecutive bins are combined into a single 32 bit
-                  word ( one bit per channel for each of the 2 bins). This represents 128*16/32=64 words = 256 bytes
-                - Frame flags: 16 bit FFT overflow + 16 bit ADC overflow flags per frame. This is 1 word = 4 bytes.
+                  word ( one bit per channel for each of the 2 bins). This
+                  represents 128*16/32=64 words = 256 bytes
+                - Frame flags: 16 bit FFT overflow + 16 bit ADC overflow flags
+                  per frame. This is 1 word = 4 bytes.
                 - Packet flags: 32 bit word (4 bytes)
                 - Total: 2328 bytes
 
             """
+
+            #############################
+            # 1st Crossbar
+            #############################
+            # Selects data from all channelizers, and spread the bins betweeen
+            # the first 8 bin selectors so the data can go through the
+            # following bypassed crossbars.
             cb1_bypass = False
             cb1_four_bit = True
             # BS0 grabs data from FIFO 0-1 (lanes 0-7), BS1 from FIFO 2-3
             # (lanes 8-15), repeat... We capture 2 words per bin in 2 clocks,
             # bins are separated by 2 clocks, so we have time to empty the
             # FIFO
+            # set the first and last inlut lane group
             cb1_lanes = [(0, 3)] * number_of_cb1_bin_sel
-            cb1_bins = 128
-            cb1_bin_spacing = 1024/cb1_bins  # = 8
+            # Set the bins selected by each bin selector
+            if cb1_bin_indices:
+                cb1_bin_select_map = cb1_bin_indices
+                cb1_bins = len(cb1_bin_indices[0])
+            else:  # Use default
+                cb1_bins = 128
+                cb1_bin_spacing = 1024 / cb1_bins  # = 8 bins, or 4 clocks
+                cb1_bin_select_map = [
+                    np.arange(cb1_bins) * cb1_bin_spacing + (i % cb1_bin_spacing)
+                    for i in range(number_of_cb1_bin_sel)]
             cb1_combine_data_flags = 1
-            cb1_bin_select_map = [np.arange(cb1_bins)*cb1_bin_spacing+(i % cb1_bin_spacing) for i in range(number_of_cb1_bin_sel)]
             cb1_output_words_per_bin = 4
             cb1_output_bins = cb1_bins
             cb1_input_lanes_per_output_lane = 16
             cb1_output_data_flags_words_per_bin = (cb1_output_words_per_bin * 4.0) / (32 if cb1_combine_data_flags else 16)  # This is 0.5 if combine_flags
             cb1_output_frame_flags_words_per_frame = 1
+
+
+            #################################
+            # Backplane PCB (intra-crate) shuffle
+            #################################
             bp_shuffle_bypass = True
+
+            #############################
+            # 2nd Crossbar
+            #############################
+            # Bypassed. No channel reordering.
 
             cb2_lane_map = range(16)
             cb2_bypass = True
@@ -2881,10 +3061,10 @@ class chFPGA_controller(IceBoardExtHandler):
             cb2_input_data_flags_words_per_bin = cb1_output_data_flags_words_per_bin
             cb2_input_frame_flags_words_per_frame = cb1_output_frame_flags_words_per_frame
             cb2_input_bins = cb1_bins
-            # cb2_lanes = ((0, 1), (2, 3))  #BS0 selects sublanes 0-1, BS1 selects sublanes 2-3
-            # cb2_bins = cb1_bins
-            # cb2_bin_spacing = 1
-            # cb2_bin_select_map = [np.arange(cb2_bins)*cb2_bin_spacing for i in range(number_of_cb2_bin_sel)]
+            # cb2_lanes : Not applicable because of bypass
+            # cb2_bins : Not applicable because of bypass
+            # cb2_bin_spacing : Not applicable because of bypass
+            # cb2_bin_select_map : Not applicable because of bypass
             cb2_output_words_per_bin = cb2_input_words_per_bin
             cb2_output_bins = cb2_bins
             cb2_input_lanes_per_output_lane = cb1_input_lanes_per_output_lane
@@ -2894,7 +3074,17 @@ class chFPGA_controller(IceBoardExtHandler):
             crate_number = self.crate.crate_number or 0 if self.crate else 0
             stream_type = 1
 
+            #################################
+            # Backplane QSFP (crate) shuffle
+            #################################
             crate_shuffle_bypass = True
+
+
+            #############################
+            # 3rd Crossbar
+            #############################
+            # Bypassed. No channel reordering.
+
             cb3_lane_map = range(8)
             cb3_bypass = True
             cb3_output_words_per_bin = cb2_input_words_per_bin
@@ -2906,20 +3096,46 @@ class chFPGA_controller(IceBoardExtHandler):
             if not self.slot:
                 raise RuntimeError('The slot number is unknown. Cannot route the appropriate bins to the target boards in the same crate')
 
+            #############################
+            # 1st Crossbar
+            #############################
+            # Selects data from all channelizers, and spread the bins betweeen
+            # all 16 bin selectors to spread the data across 16 boards in a crate.
             cb1_bypass = False
             cb1_four_bit = True
             cb1_combine_data_flags = 0
             cb1_lanes = [(0, 3)] * number_of_cb1_bin_sel
-            cb1_bins = 64
-            cb1_bin_spacing = 1024/cb1_bins
-            cb1_bin_select_map = [np.arange(cb1_bins)*cb1_bin_spacing+i for i in range(number_of_cb1_bin_sel)]
-            cb1_bin_select_map = [cb1_bin_select_map[dsmap[get_dest_slot_for_src_lane(i)-1]] for i in range(16)]  # reorder cb1_bin_select_map so slot 0 gets cb1_bin_select_map[0], slot 1 gets cb1_bin_select_map[1] etc.
-            cb1_output_words_per_bin = 16/4
+            # Select the bins to be assigned to each bin selector output.
+            # Here, we assume that the  list is in the order of the
+            # destination slot.
+            if cb1_bin_indices:
+                cb1_bin_select_map = cb1_bin_indices
+                cb1_bins = len(cb1_bin_indices[0])
+            else:
+                cb1_bins = 64
+                cb1_bin_spacing = 1024 / cb1_bins
+                cb1_bin_select_map = [
+                    np.arange(cb1_bins) * cb1_bin_spacing + i
+                    for i in range(number_of_cb1_bin_sel)]
+            # Reorder cb1_bin_select_map with the knowledge of the backplane
+            # PCB links connectivity so slot 0 gets cb1_bin_select_map[0],
+            # slot 1 gets cb1_bin_select_map[1] etc.
+            cb1_bin_select_map = [
+                cb1_bin_select_map[dsmap[get_dest_slot_for_src_lane(i) - 1]]
+                for i in range(16)]
+            cb1_output_words_per_bin = 16 / 4
             cb1_output_bins = cb1_bins
 
-            # Backplane shuffle
+            #################################
+            # Backplane PCB (intra-crate) shuffle
+            #################################
             bp_shuffle_bypass = False
 
+
+            #############################
+            # 2nd Crossbar
+            #############################
+            #
             # CB2 has 2 BIN_SEL
             # Each BS captures data from 16 input lanes and has 4 outputs.
             # Each output covers gathers data from 4 input lanes (sublanes 0-3).
@@ -2972,19 +3188,49 @@ class chFPGA_controller(IceBoardExtHandler):
             cb2_lanes = ((0, 1), (2, 3))  #BS0 selects sublanes 0-1, i.e. its 4 outputs gather data from lanes 0-1, 4-5, 8-9, and 12-13, BS1 selects sublanes 2-3 (lanes 2-3, 6-7, 10-12 and 14-15 )
             cb2_combine_data_flags = True # hardwired to True in crossbar 2
             cb2_input_lanes_per_output_lane = cb2_lanes[0][1] - cb2_lanes[0][0] + 1 # 2 input lanes per output
-            cb2_bins = 64
-            cb2_bin_spacing = 1
-            cb2_bin_select_map = [np.arange(cb2_bins)*cb2_bin_spacing for i in range(number_of_cb2_bin_sel)]
-            cb2_output_words_per_bin = cb2_input_words_per_bin * cb2_input_lanes_per_output_lane / cb2_bin_spacing # x2 since we combine data from 2 lanes and select all bine
-            cb2_output_data_flags_words_per_bin = cb2_input_data_flags_words_per_bin * cb2_input_lanes_per_output_lane / (2 if cb2_combine_data_flags else 1)
-            cb2_output_frame_flags_words_per_frame = cb2_input_frame_flags_words_per_frame * cb2_input_lanes_per_output_lane
-            cb2_output_bins = cb2_bins / cb2_bin_spacing
+
+            # Select the bins to be assigned to each bin selector output.
+            if cb2_bin_indices:
+                cb2_bins = len(cb2_bin_indices[0])
+                cb2_bin_select_map = cb2_bin_indices
+            else:
+                # Default: we select all 64 incoming bins, but from half the input lanes
+                cb2_bins = 64
+                cb2_bin_spacing = 1
+                cb2_bin_select_map = [ np.arange(cb2_bins) * cb2_bin_spacing
+                    for i in range(number_of_cb2_bin_sel)]
+
+
+            cb2_output_words_per_bin = cb2_input_words_per_bin * cb2_input_lanes_per_output_lane
+
+            cb2_output_data_flags_words_per_bin = (
+                cb2_input_data_flags_words_per_bin * cb2_input_lanes_per_output_lane
+                / (2 if cb2_combine_data_flags else 1))
+
+            cb2_output_frame_flags_words_per_frame = (
+                cb2_input_frame_flags_words_per_frame * cb2_input_lanes_per_output_lane)
+
+            cb2_output_bins = cb2_bins
             crate_number = (self.crate.crate_number or 0) if self.crate else 0
             stream_type = 2
-            # QSFP SHUFFLE
+
+            #################################
+            # Backplane QSFP (crate) shuffle
+            #################################
             crate_shuffle_bypass = True
 
-            cb3_lane_map = [0, 4, 1, 5, 2, 6, 3, 7]  # Reorder to get data from lanes 0-1, 2-3, 4-5 ...
+            #############################
+            # 3rd Crossbar
+            #############################
+            # Crossbar 2 partially combined the channels in a way that
+            # Crossbar 3 can finish the job, i.e. channels are spread over its
+            # 8 input links.
+
+            # Remap input lanes so data is selected in proper channel order In
+            # shuffle256, input lanes 0-3 are from BS2 input anes 0-1, 4-5,
+            # 8-9, and 12-13, and input lanes 4=7 are from lanes 2-3, 6-7,
+            # 10-12 and 14-15.
+            cb3_lane_map = [0, 4, 1, 5, 2, 6, 3, 7]
             cb3_bypass = False
             cb3_input_words_per_bin = cb2_output_words_per_bin
             cb3_input_data_flags_words_per_bin = cb2_output_data_flags_words_per_bin
@@ -2993,31 +3239,67 @@ class chFPGA_controller(IceBoardExtHandler):
             cb3_lanes = [(0, 7)] * number_of_cb3_bin_sel
             cb3_input_lanes_per_output_lane = cb3_lanes[0][1] - cb3_lanes[0][0] + 1 # 8 input lanes per bin sel output
             cb3_combine_data_flags = False # hardwired to False in crossbar 3
-            cb3_bins = 8  # We merge data from 8 full bandwidth input lanes, so we select 1/8th of the bins on each output lane
-            cb3_bin_spacing = 8  # use maximum possible number so we minimize FIFO usage
-            cb3_bin_select_map = [np.arange(cb3_bins)*cb3_bin_spacing+i for i in range(number_of_cb3_bin_sel)]
+
+            # Select the bins to be assigned to each bin selector output.
+            if cb3_bin_indices:
+                cb3_bins = len(cb3_bin_indices[0])
+                cb3_bin_select_map = cb3_bin_indices
+            else:
+                # Default: we select 1/8th of the incoming bins from all the input lanes
+                cb3_bins = 8  # We merge data from 8 full bandwidth input lanes, so we select 1/8th of the bins on each output lane
+                cb3_bin_spacing = 8  # use maximum possible number so we minimize FIFO usage
+                cb3_bin_select_map = [
+                    np.arange(cb3_bins) * cb3_bin_spacing + i
+                    for i in range(number_of_cb3_bin_sel)]
+
+
             cb3_output_words_per_bin = cb3_input_words_per_bin * 8
             cb3_output_bins = cb3_bins
-            cb3_output_data_flags_words_per_bin = cb3_input_data_flags_words_per_bin * cb3_input_lanes_per_output_lane / (2 if cb3_combine_data_flags else 1)
-            cb3_output_frame_flags_words_per_frame = cb3_input_frame_flags_words_per_frame * cb3_input_lanes_per_output_lane
+            cb3_output_data_flags_words_per_bin = (
+                cb3_input_data_flags_words_per_bin * cb3_input_lanes_per_output_lane
+                / (2 if cb3_combine_data_flags else 1))
+            cb3_output_frame_flags_words_per_frame = (
+                cb3_input_frame_flags_words_per_frame * cb3_input_lanes_per_output_lane)
 
         elif mode == 'shuffle512':
             if not self.slot:
                 raise RuntimeError('The slot number is unknown. Cannot route the appropriate bins to the target boards in the same crate')
 
+            #############################
+            # 1st Crossbar
+            #############################
+            # Selects data from all channelizers, and spread the bins betweeen
+            # all 16 bin selectors to spread the data across 16 boards in a crate.
             cb1_bypass = False
             cb1_four_bit = True
             cb1_combine_data_flags = 0
             cb1_lanes = [(0, 3)] * number_of_cb1_bin_sel  # get data from channel group 0 - 3. Each channel group combines data from 4 chanelizers (in 4 bit mode)
-            cb1_bins = 64
-            cb1_bin_spacing = 1024/cb1_bins
-            cb1_bin_select_map = [np.arange(cb1_bins)*cb1_bin_spacing+i for i in range(number_of_cb1_bin_sel)]
-            cb1_bin_select_map = [cb1_bin_select_map[dsmap[get_dest_slot_for_src_lane(i)-1]] for i in range(16)]  # reorder cb1_bin_select_map so slot 0 gets cb1_bin_select_map[0], slot 1 gets cb1_bin_select_map[1] etc.
+            # Select the bins to be assigned to each bin selector output.
+            # Here, we assume that the  list is in the order of the
+            # destination slot.
+            if cb1_bin_indices:
+                cb1_bin_select_map = cb1_bin_indices
+                cb1_bins = len(cb1_bin_indices[0])
+            else:
+                cb1_bins = 64
+                cb1_bin_spacing = 1024 / cb1_bins
+                cb1_bin_select_map = [
+                    np.arange(cb1_bins) * cb1_bin_spacing + i
+                    for i in range(number_of_cb1_bin_sel)]
+            # Reorder cb1_bin_select_map with the knowledge of the backplane
+            # PCB links connectivity so slot 0 gets cb1_bin_select_map[0],
+            # slot 1 gets cb1_bin_select_map[1] etc.
+            cb1_bin_select_map = [
+                cb1_bin_select_map[dsmap[get_dest_slot_for_src_lane(i) - 1]]
+                for i in range(16)]
 
             # Output packet geometry
-            cb1_output_words_per_bin = 16/4
+            cb1_output_words_per_bin = 16 / 4
             cb1_output_bins = cb1_bins
 
+            #################################
+            # Backplane PCB (intra-crate) shuffle
+            #################################
             bp_shuffle_bypass = False
 
             # In this config, we do not bypass the crate_shuffle. Half the bins are sent out, and we receive bins that are the same as those of the direct lanes.
@@ -3054,8 +3336,9 @@ class chFPGA_controller(IceBoardExtHandler):
             #    CB3 Output Lane 7: BS1.3: 4 bins (7,15...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
 
 
-            # CROSSBAR 2
-            # ----------
+            #############################
+            # 2nd Crossbar
+            #############################
 
             # CB2 ALIGN
             # cb2_timeout_period = 0
@@ -3078,28 +3361,41 @@ class chFPGA_controller(IceBoardExtHandler):
             # CB@ BIN_SEL
             cb2_lanes = [(0, 3), (0, 3)] # Every output of both bin sels get data from all the 4 sublanes they get.
             cb2_input_lanes_per_output_lane = cb2_lanes[0][1] - cb2_lanes[0][0] + 1 # 4 input lanes per output
-            cb2_bins = cb1_output_bins / number_of_cb2_bin_sel # 64/2 = 32
-            cb2_bin_spacing = number_of_cb2_bin_sel # 2
-            cb2_bin_select_map = [np.arange(cb2_bins) * cb2_bin_spacing + (i ^ (crate_number & 1)) for i in range(number_of_cb2_bin_sel)]
+            # Select the bins to be assigned to each bin selector output.
+            if cb2_bin_indices:
+                cb2_bin_select_map = cb2_bin_indices
+                cb2_bins = len(cb2_bin_indices[0])
+            else:
+                # Default: we select half the bins (from all input lanes)
+                cb2_bins = cb1_output_bins / number_of_cb2_bin_sel # 64/2 = 32
+                cb2_bin_spacing = number_of_cb2_bin_sel # 2
+                cb2_bin_select_map = [
+                    np.arange(cb2_bins) * cb2_bin_spacing + (i ^ (crate_number & 1))
+                    for i in range(number_of_cb2_bin_sel)]
             cb2_combine_data_flags = True # hardwired to True in crossbar 2
 
             # Output packet geometry
 
             cb2_output_words_per_bin = cb2_input_words_per_bin * cb2_input_lanes_per_output_lane
             cb2_output_bins = cb2_bins
-            cb2_output_data_flags_words_per_bin = cb2_input_data_flags_words_per_bin * cb2_input_lanes_per_output_lane / (2 if cb2_combine_data_flags else 1)
-            cb2_output_frame_flags_words_per_frame = cb2_input_frame_flags_words_per_frame * cb2_input_lanes_per_output_lane
+            cb2_output_data_flags_words_per_bin = (
+                cb2_input_data_flags_words_per_bin * cb2_input_lanes_per_output_lane /
+                (2 if cb2_combine_data_flags else 1))
+            cb2_output_frame_flags_words_per_frame = (
+                cb2_input_frame_flags_words_per_frame * cb2_input_lanes_per_output_lane)
             # print("cb2_output frame flags words=%i, input frame flags words=%i, input_lanes=%i" % (cb2_output_frame_flags_words_per_frame,cb2_input_frame_flags_words_per_frame, cb2_input_lanes_per_output_lane))
 
 
-            # QSFP SHUFFLE
-            # ------------
-
+            #################################
+            # Backplane QSFP (crate) shuffle
+            #################################
             crate_shuffle_bypass = False
             # crate_shuffle_bypass = True #***debug
 
-            # CROSSBAR 3
-            # ----------
+            #############################
+            # 3rd Crossbar
+            #############################
+            # Crossbar gathers the data from the 2 crates.
 
             # Input packet geometry
             cb3_input_words_per_bin = cb2_output_words_per_bin
@@ -3108,23 +3404,53 @@ class chFPGA_controller(IceBoardExtHandler):
             cb3_input_bins = cb2_output_bins
 
             # Configuration
-            cb3_lane_map = [4,5,6,7,0,1,2,3] if (crate_number & 1) else [0,1,2,3,4,5,6,7] #JM: modified this line to have consistent input ordering between pairs of crates. Before this change this line was just range(8)
+
+            # Input lane remapping to keep the channel number consistent
+            # whether we are on an odd or even crate number.
+            #
+            # For the even crate, input lane 0-3 contains the local even bins
+            # for the low channels, and lane 4-7 get the even bins from the
+            # other crate (high channels). For the odd crate, input lane  0-3
+            # are the odd bins from the local high channels, and lanes 3-7 are
+            # the odd bins from the other crate low channels.
+            #
+            # JM: modified this line to have consistent input ordering between
+            # pairs of crates. Before this change this line was just range(8)
+            cb3_lane_map = [4, 5, 6, 7, 0, 1, 2, 3] if (crate_number & 1) \
+                           else [0, 1, 2, 3, 4, 5, 6, 7]
             cb3_bypass = False
             cb3_lanes = [(0, 7)] * number_of_cb3_bin_sel
             cb3_input_lanes_per_output_lane = cb3_lanes[0][1] - cb3_lanes[0][0] + 1 # 8 input lanes per bin sel output
-            cb3_bins = cb2_output_bins / number_of_cb3_bin_sel # 32/8 = 4
-            cb3_bin_spacing = number_of_cb3_bin_sel # = 8
-            cb3_bin_select_map = [np.arange(cb3_bins)*cb3_bin_spacing+i for i in range(number_of_cb3_bin_sel)]
+
+            # Select the bins to be assigned to each bin selector output.
+            if cb3_bin_indices:
+                cb3_bins = len(cb3_bin_indices[0])
+                cb3_bin_select_map = cb3_bin_indices
+            else:
+                # Default: we select 1/8th of the incoming bins from all the input lanes
+                cb3_bins = cb2_output_bins / number_of_cb3_bin_sel # 32/8 = 4
+                cb3_bin_spacing = number_of_cb3_bin_sel # = 8
+                cb3_bin_select_map = [
+                    np.arange(cb3_bins) * cb3_bin_spacing + i
+                    for i in range(number_of_cb3_bin_sel)]
             cb3_combine_data_flags = False # hardwired to False in crossbar 3
 
             # Output packet geometry
             cb3_output_words_per_bin = cb3_input_words_per_bin * cb3_input_lanes_per_output_lane
             cb3_output_bins = cb3_bins
-            cb3_output_data_flags_words_per_bin = cb3_input_data_flags_words_per_bin * cb3_input_lanes_per_output_lane / (2 if cb3_combine_data_flags else 1)
-            cb3_output_frame_flags_words_per_frame = cb3_input_frame_flags_words_per_frame * cb3_input_lanes_per_output_lane
+            cb3_output_data_flags_words_per_bin = (
+                cb3_input_data_flags_words_per_bin * cb3_input_lanes_per_output_lane
+                / (2 if cb3_combine_data_flags else 1))
+            cb3_output_frame_flags_words_per_frame = (
+                cb3_input_frame_flags_words_per_frame * cb3_input_lanes_per_output_lane )
 
 
         elif mode == 'corr16':
+            #############################
+            # 1st Crossbar
+            #############################
+            # Reorders the data from the 16 local channelizers
+
             number_of_cb1_bin_sel = 8
             cb1_bypass = False
             cb1_four_bit = True
@@ -3133,12 +3459,35 @@ class chFPGA_controller(IceBoardExtHandler):
             # bins are separated by 2 clocks, so we have time to empty the
             # FIFO
             cb1_lanes = [(0, 3)] * number_of_cb1_bin_sel
-            cb1_bins = 128
-            cb1_bin_spacing = 1024/cb1_bins  # = 8
             cb1_combine_data_flags = 1
-            cb1_bin_select_map = [np.arange(cb1_bins)*cb1_bin_spacing+(i % cb1_bin_spacing) for i in range(number_of_cb1_bin_sel)]
+            # Select the bins to be assigned to each bin selector output.
+            if cb1_bin_indices:
+                cb1_bin_select_map = cb1_bin_indices
+                cb1_bins = len(cb1_bin_indices[0])
+            else:
+                cb1_bins = 128
+                cb1_bin_spacing = 1024 / cb1_bins  # = 8 = 4 clocks
+                cb1_bin_select_map = [
+                    np.arange(cb1_bins) * cb1_bin_spacing + (i % cb1_bin_spacing)
+                    for i in range(number_of_cb1_bin_sel)]
             cb1_output_words_per_bin = 4
             cb1_output_bins = cb1_bins
+
+            #################################
+            # Backplane PCB (intra-crate) shuffle
+            #################################
+            # Not implemented in the firmware correlator
+
+            #################################
+            # Backplane QSFP (crate) shuffle
+            #################################
+            # Not implemented in the firmware correlator
+
+
+            #############################
+            # 2nd and 3rd Crossbar
+            #############################
+            # Not implemented in the firmware correlator
             cb2_bypass = True
             cb3_bypass = True
             cb3_output_bins = cb1_bins
@@ -3153,9 +3502,20 @@ class chFPGA_controller(IceBoardExtHandler):
             cb1_four_bit = True
 
             # cb1_bypass = False
-            cb1_bin_spacing = 1024/cb1_bins
-            cb1_bin_select_map = [(np.arange(cb1_bins)*cb1_bin_spacing+i) % 1024 for i in range(number_of_cb1_bin_sel)]
 
+            # Select the bins to be assigned to each bin selector output.
+            if cb1_bin_indices:
+                cb1_bin_select_map = cb1_bin_indices
+            else:
+                cb1_bin_spacing = 1024 / cb1_bins
+                cb1_bin_select_map = [
+                    (np.arange(cb1_bins) * cb1_bin_spacing + i) % 1024
+                    for i in range(number_of_cb1_bin_sel)]
+
+
+            #################################
+            # Backplane QSFP (crate) shuffle
+            #################################
             crate_shuffle_bypass=1
 
             crate_number = self.crate.crate_number if self.crate else 0
@@ -3169,12 +3529,31 @@ class chFPGA_controller(IceBoardExtHandler):
 
             cb2_input_frame_flags_words_per_frame = 1
             cb2_input_data_flags_words_per_bin = 1
+            # Select the bins to be assigned to each bin selector output.
+            if cb2_bin_indices:
+                cb2_bins = len(cb2_bin_indices[0])
+                cb2_bin_select_map = cb2_bin_indices
+            else:
+                # Default: we select all 64 incoming bins, but from half the input lanes
+                cb2_bins = cb2_input_bins
+                cb2_bin_spacing = 1
+                cb2_bin_select_map = [ np.arange(cb2_bins) * cb2_bin_spacing
+                    for i in range(number_of_cb2_bin_sel)]
 
+            #################################
+            # Backplane QSFP (crate) shuffle
+            #################################
+            # Not supported in this mode
+            crate_shuffle_bypass = True
 
+            #############################
+            # 3rd Crossbar
+            #############################
+            # Not supported in this mode
             cb3_bypass = True
             cb3_lane_map = range(8)
 
-            cb1_output_words_per_bin = cb1_lanes[0][1]-cb1_lanes[0][0]+1
+            cb1_output_words_per_bin = cb1_lanes[0][1] - cb1_lanes[0][0] + 1
             cb1_output_bins = cb1_bins
 
         else:
@@ -3198,13 +3577,15 @@ class chFPGA_controller(IceBoardExtHandler):
         # Configure CROSSBAR 1
         #-------------------------
         # Select the bins so slot 0 receives bins 0-63, slot 1 has 64-127 ... slot 15 has 960-1023
+
+        stream_id = [((stream_type << 12) | (crate_number << 8) | (slot_number << 4) | lane) for lane in range(cb1.NUMBER_OF_CROSSBAR_OUTPUTS)]
         for (cb1_output_lane, bs) in enumerate(cb1):
             bs.BYPASS = cb1_bypass
+            bs.STREAM_ID = stream_id[cb1_output_lane] >> 4 # lane is already hardwared in the last 4 bits
             bs.COMBINE_DATA_FLAGS = cb1_combine_data_flags
             bs.SEND_FLAGS = send_flags
             bs.GROUP_FRAMES = frames_per_packet
             # print(stream_type, crate_number, slot_number)
-            bs.STREAM_ID = (stream_type << 8) | (crate_number << 4) | slot_number
             bs.FOUR_BITS = cb1_four_bit
             bs.FIRST_FIFO_NUMBER = cb1_lanes[cb1_output_lane][0]
             bs.LAST_FIFO_NUMBER = cb1_lanes[cb1_output_lane][1]
@@ -3225,16 +3606,20 @@ class chFPGA_controller(IceBoardExtHandler):
         #-------------------------
         # Configure CROSSBAR 2
         #-------------------------
-        if self.CROSSBAR2:
-            self.CROSSBAR2.set_lane_map(cb2_lane_map)
+        if cb2:
+            if cb2_bypass:  # if we bypass, just remap the stream ids from the previous crossbar
+                stream_id = [stream_id[i] for i in cb2_lane_map]
+            else: # otherwise, the bin selector overr
+                stream_id = [((stream_type << 12) | (crate_number << 8) | (slot_number << 4) | lane) for lane in range(cb2.NUMBER_OF_CROSSBAR_OUTPUTS)]
+            cb2.set_lane_map(cb2_lane_map)
             if cb2_timeout_period is not None:
-                self.CROSSBAR2.TIMEOUT_PERIOD = cb2_timeout_period
+                cb2.TIMEOUT_PERIOD = cb2_timeout_period
             if cb2_sof_window_stop is not None:
-                self.CROSSBAR2.SOF_WINDOW_STOP = cb2_sof_window_stop
+                cb2.SOF_WINDOW_STOP = cb2_sof_window_stop
             for (cb2_bin_sel, bs) in enumerate(cb2):
                 bs.BYPASS = bool(cb2_bypass)
                 if not cb2_bypass:
-                    bs.STREAM_ID = (stream_type << 8) | (crate_number << 4) | slot_number
+                    bs.STREAM_ID = stream_id[cb2_bin_sel * cb2.NUMBER_OF_OUTPUTS_PER_BIN_SEL] >> 4
                     bs.SEND_FLAGS = send_flags
                     bs.NUMBER_OF_FRAMES_PER_PACKET = frames_per_packet
                     bs.NUMBER_OF_BINS_PER_FRAME = cb2_input_bins
@@ -3251,12 +3636,16 @@ class chFPGA_controller(IceBoardExtHandler):
         #-------------------------
         # Configure CROSSBAR 3
         #-------------------------
-        if self.CROSSBAR3:
-            self.CROSSBAR3.set_lane_map(cb3_lane_map)
+        if cb3:
+            cb3.set_lane_map(cb3_lane_map)
+            if cb3_bypass:  # if we bypass, just remap the stream ids from the previous crossbar
+                stream_id = [stream_id[i] for i in cb3_lane_map]
+            else: # otherwise, the bin selector overr
+                stream_id = [((stream_type << 12) | (crate_number << 8) | (slot_number << 4) | lane) for lane in range(cb3.NUMBER_OF_CROSSBAR_OUTPUTS)]
             for (cb3_bin_sel, bs) in enumerate(cb3):
                 bs.BYPASS = bool(cb3_bypass)
                 if not cb3_bypass:
-                    bs.STREAM_ID = (stream_type << 8) | (crate_number << 4) | slot_number  # The stream ID at the output of CB2 will be 0xSL (S=slot-1, L=lane)
+                    bs.STREAM_ID = stream_id[cb3_bin_sel * cb3.NUMBER_OF_OUTPUTS_PER_BIN_SEL] >> 4
                     bs.SEND_FLAGS = send_flags
                     bs.NUMBER_OF_FRAMES_PER_PACKET = frames_per_packet
                     bs.NUMBER_OF_DATA_FLAGS_WORDS_PER_BIN = cb3_input_data_flags_words_per_bin
@@ -3320,6 +3709,8 @@ class chFPGA_controller(IceBoardExtHandler):
 
         self.set_corr_reset(0)
         self.set_ant_reset(0)
+        return stream_id
+
 
     def reset_gpu_links(self):
         """ Resets the GPU links.
@@ -3721,7 +4112,7 @@ class chFPGA_controller(IceBoardExtHandler):
     def __repr__(self):
         return "chFPGA%s" % (self.get_id(),) # watch out, get_id() returns a tuple...
 
-    def get_id(self, lane=None, default_crate=None, default_slot=None):
+    def get_id(self, lane=None, default_crate=None, default_slot=None, numeric_only=False):
         """ Returns a (crate, slot) tuple representing a unique IceBoard ID,
         using numeric values whenever possible. A `lane` field can be
         optionally appended.
@@ -3730,54 +4121,77 @@ class chFPGA_controller(IceBoardExtHandler):
 
             lane (int): caller-provided lane number to be appended to the returned tuple. Used to create channel or lane ID tuples.
 
-            default_crate: Default values to return in the crate field if there is
-                no crate or no crate_number. If None, either the crate number or crate string id is used.
+            default_crate: Default values to return in the crate field if
+                there is no crate, or there is a crate but there is no
+                crate_number. If None, either the crate number or crate string
+                id is used.
 
-            default slot: Default values to return in the slot field if there is no slot number.
+            default slot: Default values to return in the slot field if there
+                is no slot number.
+
+            numeric_only (bool): If true, an exception will be raised if there
+                is no valid crate number and slot number. `default_crate` and
+                `default_crate` are ignored.
 
         Returns:
             A (crate_id, slot_or_board_id) tuple, where:
 
              - crate_id is:
-                - ``numeric_crate_number`` (int) if the crate number is known
-                - ``crate_model_serial_string`` (str) model and serial number string if the crate is known but not the crate number
-                - `None` if there is no crate
+                - ``numeric_crate_number`` (int) if there is a crate and the crate number is known
+                - ``default_crate`` if there is no crate, or there is a crate but no crate_number  and default_crate is not None
+                - ``crate_model_serial_string`` (str) model and serial number string if there is a crate but there is neither a crate number or default_crate
+                - `None` if there is no crate and default_crate is None
 
              - slot_or_board_id
-                - ``zero_based_slot_number`` (int) zero-based slot number if the slot number is known (i.e. self.slot is not 0 or None).
-                - ``None`` if the slot number is not known and crate_id is not None.
-                - ``board_model_serial_string`` (str) if the slot number and there is no crate/backplane.
+                - ``zero_based_slot_number`` (int) zero-based slot number if there is no valid slot number (i.e. self.slot is not 0 or None), whether or not there is a crate.
+                - `default_slot` if there is no valid slot number and  default_slot is not None
+                - ``board_model_serial_string`` (str) if there is no crate nor slot number and default_slot is None.
+                - ``None`` if there is a crate but no slot number and default_slot is None.
         Notes:
             - A board is always represented by a 2-element tuple. A crate is always represented by a one-element tuple, and a channel/lane is a 3-element tuple.
             - The user is responsible for handling all possible types of crate (int, str, None) or slot (int, str) tuple elements
             - crate can be None, but slot can never be None: it will be replaced by the string ID of the board so the tuple always refer to a specific board.
             - If the crate provides a numeric slot number, the user must rely on external information to infer which board serial number correspond to the specified ID
             - If the crate provides a numetic crate number, the user must rely on external information to infer which crate serial number correspond to thespecified ID
-            - the id must be unique, even if we have multiple stand-alone boards (i.e. no (None, None) tuple
+            - the id must be unique, even if we have multiple stand-alone boards. There should at least a non-None crate or slot field (i.e. no (None, None) tuple)
         Examples:
 
             Board in a crate/backplane:
             (2, 3): board on 4th slot of backplane with crate number 2
-            (2, None): board on crate number 2 without slot information
-            ('MGK7BP16_SN023', 3): board on 4th slot of backplane without crate number
-            ('MGK7BP1_SN001', None): self.slot is 0 or None on a backplane without crate number (e.g. unconfigured single-slot test backplane)
+            (2, 0): board on crate number 2 without slot number, and default_slot=0
+            (2, None): board on crate number 2 without slot information, and default_slot=None
+            ('MGK7BP16_SN023', 3): board on 4th slot of backplane without crate number and default_crate=None
+            (0, 3): board on 4th slot of backplane without crate number and default_crate=0
+            ('MGK7BP1_SN001', None): board on crate without crate_number,  without default_crate, without slot number, without default_slot (e.g. unconfigured single-slot test backplane)
 
             Stand-alone board (no backplane/crate):
+            (0, 0): No backplane, crate number nor slot_number, with default_crate=0 and default_slot=0
             (None, 3): No backplane, but the board slot number was manually set to  self.slot=4 (not a typical case)
-            (None, 'MGK7MB_SN0372'): No crate nor slot information (self.crate==None and self.slot==None)
+            (None, 'MGK7MB_SN0372'): No crate nor slot information, and no default_crate nor default_slot
 
         """
-        if self.crate: # if there is a crate/backplane
-            crate_number = self.crate.crate_number
-            crate = crate_number if crate_number is not None else default_crate if default_crate is not None else self.crate.get_string_id()
 
-            # If there is no slot info (self.slot==0 or None), we can set slot field to None because the crate field is defined and makes the tuple unique
-            slot = self.slot - 1 if self.slot else default_slot
-        else:
-            crate = default_crate
+        if self.crate: # if there is a crate/backplane, do not allow empty crate field but allow empty slot.
+            crate_number = self.crate.crate_number
+            if crate_number is None: # if there is no valid crate number
+                if numeric_only:
+                    raise RuntimeError('The crate %s does not have a valid crate number' % self.crate)
+                crate_number = default_crate if default_crate is not None else self.crate.get_string_id()
+
+            if self.slot: # if there is a valid slot (not 0 or None)
+                slot = self.slot - 1
+            else:
+                if numeric_only:
+                    raise RuntimeError('The crate %s does not have a valid slot number' % self.crate)
+                slot = default_slot
+
+        else: # if there is no crate, allow empty crate but not an empty slot
+            if numeric_only:
+                raise RuntimeError('There is no crate nor numeric crate number')
+            crate_number = default_crate
             # If there is no backplane AND no slot info (None or 0), we need to use the board model/serial in the slot field to make the tuple unique.
             slot = self.slot - 1 if self.slot else default_slot if default_slot is not None else self.get_string_id()
-        return (crate, slot) if lane is None else (crate, slot, lane)
+        return (crate_number, slot) if lane is None else (crate_number, slot, lane)
         # if not self.crate
         #     crate or self.slot is None:
         #     return (self.get_string_id(), ) if lane is None else (self.get_string_id(), lane)
@@ -3982,12 +4396,14 @@ class chFPGA_controller(IceBoardExtHandler):
 
     def compute_corr_output(self, data, integration_period=16384):
         """
-        Compute the expected correlator output given the channelizer output :paramref:`databb`.
+        Compute the expected correlator output given the channelizer output `data`.
 
         Parameters:
-            databb (float): some value
+
             data (ndarray): data[channel, bin] = complex
+
         Returns:
+
             array(bins, i, j) = complex
         """
         corr = data.T[:,None,:]* data.T[:,:,None].conj()*integration_period
@@ -3997,13 +4413,11 @@ class chFPGA_controller(IceBoardExtHandler):
         return corr
 
     def test_correlator_output(self, data, integration_period=32768, verbose=0):
-        """ Set the channelizer outputs to :paramref:`data` and check the correlator output.
+        """ Set the channelizer outputs to `data` and check the correlator output.
 
-        :param int data: super!
 
         Parameters:
-            dataaa (float): some value
-            datax (ndarray): Data that should appear at the channelizer
+            data (ndarray): Data that should appear at the channelizer
                 output, indexed as data[channel, bin] = complex_value. channel
                 ranges from 0 to 15, bin from 0 to 1023. The complex value has the
                 ranged of a signed (4+4) bit, meaning that the real and imaginary

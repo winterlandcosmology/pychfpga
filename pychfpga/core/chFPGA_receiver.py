@@ -9,8 +9,9 @@ Implements the classes that read the data streams coming from chFPGA.
 History:
     2012-07-19 JFC: Created
     2012-10-17 JFC: Modified behavior of receiver for:
-        a) If send_every_frame=False, discard the first block of frames after flush() avoid sending partial frame blocks
-        b) if the Queue is full, automatically pop an element before pushing a new one. Old data will be automatically flushed over time.
+
+    a) If send_every_frame=False, discard the first block of frames after flush() avoid sending partial frame blocks
+    b) if the Queue is full, automatically pop an element before pushing a new one. Old data will be automatically flushed over time.
 """
 
 

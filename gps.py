@@ -489,6 +489,7 @@ class SpectrumInstrumentsTM4D(SocketContext):
 
         Returns:
             (statellite_status_map ,  receiver_status) tuple where:
+
                 satellite_status_map = {satellite_prn: {constellation_status: x, tracking_status: y, signal_quality:v, ephemeris_status: z},...}
                 satellite_prn (int): satellite id
                 constellation_status (int): constellation status ( 0/1 = not included/included in current constellation)
@@ -496,6 +497,7 @@ class SpectrumInstrumentsTM4D(SocketContext):
                 signal_quality (int): tracking status in numeric format: -2: searching, -1: acquisition/reaquisition, 0-9: signal quality
                 ephemeris_status (int): 0/1 not collected/collected
                 receiver_status (int):
+
                     2 = search the sky
                     3 = Almanac collect
                     4 = Ephemeris collect
@@ -574,9 +576,12 @@ class SpectrumInstrumentsTM4D(SocketContext):
         """Return the current antenna alarm elable status and the PPS source
 
         Returns:
-            (antenna_alarm_enable,pps_source) tuple:
+
+            (antenna_alarm_enable, pps_source) tuple:
+
                 antenna_alarm_enable (bool): antenna alarm is enabled
                 pps_source (int): PPS source unitl Time valid/Initial phase lock/Beyond lock
+
                    0: LOW/GPSPPS/FILPPS
                    1: LOW/LOW/FILPPS
                    2: LOW/GPSPPS/GPSPPS

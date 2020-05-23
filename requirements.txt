@@ -8,7 +8,7 @@ wtl.metrics @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.metrics.git
 wtl.log @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.log.git
 wtl.rest @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.rest.git
 wtl.config @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.config.git
-wtl.archive @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.h5-archive.git@v1.0.3
+wtl.h5-archive @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.h5-archive.git@v1.0.3
 
 # PyPi packages
 numpy==1.15.2

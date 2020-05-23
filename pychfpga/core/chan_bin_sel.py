@@ -174,7 +174,7 @@ class ChanBinSel(Module_base):
         self.logger.debug('   FIFO OVERFLOW: %i' % self.FIFO_OVERFLOW)
 
 
-    def map(self, input_data):
+    def map(self, input_data, header=False):
         """ Reorders the data based on the configurationof the bin selector.
         input data: {channel_number: [data, ...]}
         output_data: [data, data]
@@ -183,11 +183,8 @@ class ChanBinSel(Module_base):
         if self.BYPASS:
             raise RuntimeError('%.32s: CHAN_BIN_SEL cannot yet provide maps in BYPASS mode')
 
-        channels = range(self.FIRST_FIFO_NUMBER * 4, self.LAST_FIFO_NUMBER * 4 + 3 + 1)
-        bins = self.get_selected_bins()
-        output_data = [input_data[ch][bin_number]  for bin_number in bins for ch in channels]
-        output_dict = dict(
-            header=dict(
+        if header:
+            header = dict(
                 cookie=0xcf,
                 protocol_version=1,
                 header_length=4,
@@ -201,7 +198,15 @@ class ChanBinSel(Module_base):
                 words_per_bin=len(channels)/4 if self.FOUR_BITS else len(channels)/2,
                 ancillary=None,
                 timestamp=0,
-                ),
+                )
+        else:
+            header = None
+
+        channels = range(self.FIRST_FIFO_NUMBER * 4, self.LAST_FIFO_NUMBER * 4 + 3 + 1)
+        bins = self.get_selected_bins()
+        output_data = [input_data[ch][bin_number]  for bin_number in bins for ch in channels]
+        output_dict = dict(
+            header=header,
             data=output_data,
             data_flags=None,
             frame_flags=None,

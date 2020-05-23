@@ -71,6 +71,15 @@ class GPU_base(xglink.XGLinkCore):
         """
         return range(len(self.gtx))
 
+    def get_lane_ids(self):
+        """ Return a list of all lane IDs in the form of [(crate_number, slot_number, lane_number), ...].
+
+        Returns:
+            List of all lane IDs in the form of [(crate_number, slot_number, lane_number), ...]
+        """
+
+        return [self.fpga.get_id(lane) for lane in self.get_lane_numbers()]
+
     def status(self):
         """ Displays the status of the GPU GTX hardware"""
         # for gtx in self.GTX_COMMON:

@@ -652,7 +652,7 @@ class IceBoardExtHandler(IceBoardPlusHandler):
 
         This method sets the FPGA's listening addresses while assuming that the FPGA's is in
         addressing mode "00" (the default addressing mode),  which means that the channel 0
-        IP/PORT/MAC will be set through the ARM-FPGA SPI registers [#f1]_.
+        IP/PORT/MAC will be set through the ARM-FPGA SPI registers [Note1].
 
         Parameters:
 
@@ -701,10 +701,9 @@ class IceBoardExtHandler(IceBoardPlusHandler):
         UDP Channel 1 is generally used to send back data to the host computer. See
         `set_data_target_address` for a decription of that channel.
 
-        ----------
 
 
-        _[#f1] '00' is the default FPGA addressing mode. Other modes are designed to allow setting
+        [Note1] '00' is the default FPGA addressing mode. Other modes are designed to allow setting
         the FPGA networking address without the help of the ARM processor and are not used. The
         addressing mode is changed by causing a rising edge on the GPIO registers TARGET_LOAD while
         TARGET_FPGA_SERIAL_NUMBER matches the serial number of the FPGA. This is a feature meant to
@@ -740,7 +739,7 @@ class IceBoardExtHandler(IceBoardPlusHandler):
     def set_local_data_port_number(self, port):
         """
         Sets the port number to which the FPGA is sending the data for UDP channel 1. Use
-        `set_data_target_address' instead.
+        `set_data_target_address` instead.
 
         Parameters:
 
