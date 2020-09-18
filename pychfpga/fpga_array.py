@@ -1449,8 +1449,8 @@ class FPGAArray(object):
         if len(self.ib) > 1:  #self.ic.NUMBER_OF_SLOTS
             clock_sources = self.ib.index_by(repr).get_clock_source()
             target_clock_source = 'CLOCK_SOURCE_BP'
-            if set(clock_sources.values()) != set([target_clock_source]):
-                raise RuntimeError('The following IceBoards are not configured to use the backplane clock: %s' % (', '.join(repr(ib) for (ib, cs) in clock_sources.items() if cs != target_clock_source)))
+            #if set(clock_sources.values()) != set([target_clock_source]):
+            #    raise RuntimeError('The following IceBoards are not configured to use the backplane clock: %s' % (', '.join(repr(ib) for (ib, cs) in clock_sources.items() if cs != target_clock_source)))
 
         if mode == 'raw_time':
             self.ib.set_fft_bypass(True)
@@ -2050,8 +2050,8 @@ class FPGAArray(object):
                 self.corner_turn_stream_ids[ib.get_id(lane)] = stream_id
 
         # Check if stream IDs are unique
-        if len(self.corner_turn_stream_ids) != len(set(self.corner_turn_stream_ids.values())):
-            raise self.logger.warn('%r: Stream IDs are not unique across the array')
+        #if len(self.corner_turn_stream_ids) != len(set(self.corner_turn_stream_ids.values())):
+        #    raise self.logger.warn('%r: Stream IDs are not unique across the array')
 
         if ib.crate:
 
@@ -2102,10 +2102,10 @@ class FPGAArray(object):
                         self.logger.debug('%r: In %r, %s has no corresponding transmitter' % (self, ib.crate.handler, rx))
 
         # Get the exhaustive frequency map that is implemented by the current corner
-        freq_map = self.get_frequency_map(format='l:bb')
+        #freq_map = self.get_frequency_map(format='l:bb')
         # Retain only one bin number  for each bin
-        self.corner_turn_frequency_bins = {lane_id: sorted(set(data['data']))
-            for lane_id, data in freq_map.iteritems()}
+        #self.corner_turn_frequency_bins = {lane_id: sorted(set(data['data']))
+        #    for lane_id, data in freq_map.iteritems()}
 
         # sync boards
         #soft_sync(c, sync_board)
@@ -2968,7 +2968,7 @@ class FPGAArray(object):
         This map is obtained by passing the channelizer identity map through the shuffle map.
         """
 
-        return self.get_shuffle_output(self.get_chan_identity_map(format=format))
+        return self.get_chan_identity_map(format=format) #self.get_shuffle_output(self.get_chan_identity_map(format=format))
 
     def get_chan_identity_map(self, format='cslb'):
         """ Return an identity map that describes the origin of each of the 1024 samples contained in the channelizer output packets.
