@@ -2312,12 +2312,12 @@ class FPGAArray(object):
                 raise ValueError('In the local soft trigger mode, a master_time_source should NOT be specified')
             self.ib.set_sync_source('local')
             self.ib.sync()
-        elif method == 'external':
+        elif method == 'external_pps':
             source = source or 'sma_a' # if no source is specified
             if master:
-                raise ValueError('In the local soft trigger mode, a master board should NOT specified')
+                raise ValueError('In the external distributed_pps trigger mode, a master board should NOT specified')
             if master_time_source:
-                raise ValueError('In the local soft trigger mode, a master_time_source should NOT be specified')
+                raise ValueError('In the external distributed_pps trigger mode, a master_time_source should NOT be specified')
             self.ib.set_sync_source(source)
         else:
             raise ValueError("Unknown syncing method '%s'" % method)
@@ -2385,7 +2385,7 @@ class FPGAArray(object):
                             raise RuntimeError('Timout while waiting for the IRIG-B-based SYNC to complete')
                 elif self.sync_method == 'local_soft_trigger':
                     self.ib.sync()
-                elif self.sync_method == 'external':
+                elif self.sync_method == 'external_pps':
                     # Wait until one of the board sees a trig. We assume all of them will have trigerred by the time that is checked later.
                     t0 = time.time()
                     while all([ib.REFCLK.SYNC_CTR == sync_ctr_before[i] for i, ib in enumerate(self.ib)]):
