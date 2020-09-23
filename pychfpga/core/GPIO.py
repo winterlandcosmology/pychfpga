@@ -208,10 +208,13 @@ class GPIO_base(Module_base):
 
         1: 'USER_MUX_SOURCE1',
         'sma_b_fpga_led2': 'USER_MUX_SOURCE1',
+        'sma_b': 'USER_MUX_SOURCE1',
+        'led2': 'USER_MUX_SOURCE1',
 
         2: 'USER_MUX_SOURCE2',
         'bp_sma_fpga_led1': 'USER_MUX_SOURCE2',
         'bp_sma': 'USER_MUX_SOURCE2',
+        'led1': 'USER_MUX_SOURCE2',
 
         3: 'USER_MUX_SOURCE3',
         'bp_gpio_int': 'USER_MUX_SOURCE3'

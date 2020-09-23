@@ -2515,6 +2515,9 @@ class chFPGA_controller(IceBoardExtHandler):
         if source not in self.REFCLK.SYNC_SOURCE_TABLE:
             raise ValueError('Invalid SYNC source name. Valid names are %s' % ', '.join(self.REFCLK.SYNC_SOURCE_TABLE))
         self.REFCLK.set_sync_source(source)
+        # If an user SMA is used, configure it as an input
+        if source in self.GPIO.USER_OUTPUTS:
+            self.set_user_output_source(output=source, source='input')
 
     def get_sync_source(self):
         """ Return the current source used to trigger SYNC events

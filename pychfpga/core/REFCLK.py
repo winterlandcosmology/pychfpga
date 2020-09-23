@@ -77,12 +77,14 @@ class REFCLK_base(Module_base):
             self.REFCLK_SEL = 1  # Use internally generated REFCLK
 
     SYNC_SOURCE_TABLE = {
-        'local': 0,
-        'refclk': 1,
-        'bp_trig': 2,
-        'irigb': 3,
-        'bp_time': 4,
-        'bp_gpio_int': 5}
+        'local': 0,  # No external trigger, software only
+        'refclk': 1,  # Refclk pulse width
+        'bp_trig': 2,  # Backplane trig line
+        'irigb': 3,  # Output of the IRIG-B timestamp comparator
+        'bp_time': 4,  # Backplane time signal
+        'bp_gpio_int': 5,  # backplane GPIO interrupt line
+        'sma_a': 6,  # IceBoard SMA_A
+        'sma_b': 7}  # Iceboard SMA B
 
     def set_sync_source(self, source):
         """ Set the source of the SYNC signal."""
