@@ -17,6 +17,8 @@ from collections import OrderedDict
 import pickle
 import re
 import datetime
+#from calendar import timegm
+#import time
 import functools
 import zlib
 import base64
@@ -2268,7 +2270,7 @@ class FPGAArray(object):
             if master_time_source:
                 raise ValueError('In the local soft trigger mode, a master_time_source should NOT be specified')
             self.ib.set_sync_source('local')
-            self.ib.sync()
+            #self.ib.sync()
         elif method == 'external_pps':
             source = source or 'sma_a'  #If source not specified
             self.ib.set_sync_source('local')
@@ -2347,10 +2349,19 @@ class FPGAArray(object):
                     while all([ib.REFCLK.SYNC_CTR == sync_ctr_before[i] for i, ib in enumerate(self.ib)]):
                         if time.time() - t0 > 5 + 1:
                             raise RuntimeError('Timout while waiting for the external sync signal')
-                    t_got = time.time()
-                    self.sync_timestamp = np.floor(t_got)
+                    t_now = datetime.datetime.now()
+                    t_nt = time.time()
                     #Set back to local so don't sync again not on purpose!
                     self.ib.set_sync_source('local')
+                    t_now = t_now.replace(microsecond=0)
+                    ts = self.ib[0]._IrigTimestamp(t_now)
+                    #timestamp = timegm((ts.y + 2000, 1, ts.d, ts.h, ts.m, ts.s))
+                    #tt = time.gmtime(timestamp)
+                    ts.time_struct = [t_now.year, t_now.month, t_now.day, t_now.hour,
+                                        t_now.minute, t_now.second, 0.0]
+                    ts.time = np.floor(t_nt)
+                    self.sync_timestamp = ts
+
 
                 else:
                     raise ValueError("Unknown syncing method '%s'" % self.sync_method)
