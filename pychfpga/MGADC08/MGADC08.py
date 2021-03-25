@@ -21,7 +21,7 @@ from datetime import datetime
 # Local packages
 
 from ..core.icecore.hw.ipmi_fru import FRU, Board, Product, MultiDict
-from ..core.icecore_ext import FMCMezzanine, register_class
+from ..core.icecore_ext import FMCMezzanine
 from ..core.chFPGA_controller import chFPGA_controller
 
 # mezzanine-specific modules
@@ -31,12 +31,12 @@ from . import ADC_PLL
 from . import AmbTemp
 from . import MGT_PLL
 
-@register_class()
+
 class FMCMezzanine_MGADC08(FMCMezzanine):
     """ Implements the object that exposes the MGADC08 FMC ADC board hardware ressources"""
 
     part_number = "MGADC08"
-    __ipmi_part_number__ = 'MGADC08'  # Must match part number in IPMI data. Used for auto-discovery.
+    _ipmi_part_numbers = ['MGADC08']  # Must match part number in IPMI data. Used for auto-discovery.
 
 
     # SPI port numbers specific to this board
@@ -252,7 +252,7 @@ class FMCMezzanine_MGADC08(FMCMezzanine):
             self.logger.error('%r: Attempting to initialize a mezzanine that is not physically present. Aborting.' % self)
             raise RuntimeError('Cannot initialize an mezzanine that is not present')
 
-        # if self.iceboard._get_mezzanine_type(self.mezzanine) != self.__ipmi_part_number__:
+        # if self.iceboard._get_mezzanine_type(self.mezzanine) != self._ipmi_part_numbers:
         #     self.logger.error('%r: Attempting to initialize a mezzanine that is of the wrong type. Aborting.' % self)
         #     raise RuntimeError('Cannot initialize an mezzanine of the wrong type')
 

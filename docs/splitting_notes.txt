@@ -281,7 +281,89 @@ some commits in other branches are missing.
 
   # Create the repo on bitbucket
   git remote remove origin
-git remote add origin git@bitbucket.org:chime/kotekan_master.git
+	git remote add origin git@bitbucket.org:chime/kotekan_master.git
   # clone it so it is no longer a bare repo, then work with it
+
+
+2020-03-08
+
+Extracting xreport from pychfpga
+
+The old way:
+
+git clone --mirror git@bitbucket.org:winterlandcosmology/pychfpga.git xreport
+cd xreport
+
+Figure out the names to filter
+
+git filter-branch -f --prune-empty --index-filter 'git rm -q --cached --ignore-unmatch $(git ls-files | grep -vE "pychfpga/core/icecore/python/tests*") | tr "\n" "\0" | xargs -0 -L1 -I "$" echo \""$"\"' -- --all
+
+git filter-branch --prune-empty --subdirectory-filter pychfpga/core/icecore/python/tests -- --all
+for tag in `git tag --no-merged`; do git tag -d  $tag ; done
+git filter-branch -f --prune-empty --tag-name-filter cat -- --all
+git reflog expire --all --expire=now
+git gc --prune=now --aggressive
+du -sh .  # folder went from 130M to 716k
+
+#check remaining files
+git ls-tree -r -t -l --full-name HEAD | sort -n -k 4
+# we have some outliers. Delete them manually
+git filter-branch -f --prune-empty --index-filter 'git rm -q --cached --ignore-unmatch docs/*' -- --all
+
+# re-check
+git filter-branch -f --prune-empty --index-filter 'git rm -q --cached --ignore-unmatch docs/*' -- --all
+# Recompress
+git filter-branch -f --prune-empty --tag-name-filter cat -- --all
+git reflog expire --all --expire=now
+git gc --prune=now --aggressive
+du -sh .  # folder went from 716k to 420K
+
+
+Trying git-filter-repo, which is recommendd by git itself when invoking filter-branch
+
+Check for
+    git >= 2.22.0 at a minimum; some features require git >= 2.24.0 or later
+    python3 >= 3.5
+
+Create venv, install and activate
+  	python3 -m venv filter-repo-venv
+  	pip install git-filter-repo
+	source ./filter-repo-venv/bin/activate
+	git-filter-repo --version  # confirm it is found in the path
+
+Clone repo
+	git clone --mirror git@bitbucket.org:winterlandcosmology/pychfpga.git xreport2
+	du -sh . # 130M
+
+Extracting
+	git-filter-repo --subdirectory-filter pychfpga/core/icecore/python/tests
+		Parsed 3246 commits
+		New history written in 0.31 seconds; now repacking/cleaning...
+		Repacking your repo and cleaning out old unneeded objects
+		Enumerating objects: 177, done.
+		Counting objects: 100% (177/177), done.
+		Delta compression using up to 4 threads
+		Compressing objects: 100% (75/75), done.
+		Writing objects: 100% (177/177), done.
+		Building bitmaps: 100% (41/41), done.
+		Total 177 (delta 106), reused 125 (delta 98)
+		Completely finished after 0.53 seconds.
+	du -sh . # 864K, not bad
+	# git gc has no effect
+	# git reflog expire --all --expire=now & git gc has no effect
+	# compared the files with previous method: same files, refs to folders without files are gone.
+	# tags are all there, might be the diifference
+	# branches are all there
+	# let's remove tags
+		for tag in `git tag --no-merged`; do git tag -d  $tag ; done
+		gir reflog...
+		git gc ...
+		du ... # no change
+	# That is good enough
+	# Create repo on bitbucket: wtl.xreport
+  	git remote remove origin
+	git remote add origin git@bitbucket.org:winterlandcosmology/wtl.xreport.git
+	git push origin --all
+	# This is still a bare repo. Clone the repo to get the files and checkout a branch
 
 

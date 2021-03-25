@@ -15,12 +15,12 @@ pipelines:
           - DOC_REPO_URL='git@bitbucket.org:winterlandcosmology/'$DOC_REPO'.git'
           - DOC_SPHINX_ROOT_FOLDER='docs'
           - DOC_BUILD_FOLDER='build'
-          - DOC_PUBLISH_FOLDER='wtl/pychfpga/'$BITBUCKET_BRANCH
+          - DOC_PUBLISH_FOLDER='pychfpga/'$BITBUCKET_BRANCH
           # - pip install -r requirements.txt
           - pip install -e . # git+ssh://git@bitbucket.org/winterlandcosmology/wtl-sphinx-paramlinks.git#egg=wtl_sphinx_paramlinks
-          - pip install -r $DOC_REPO/requirements.txt
-          - echo 'Building for '$BITBUCKET_REPO_SLUG/$BITBUCKET_BRANCH
           - cd $DOC_SPHINX_ROOT_FOLDER
+          - pip install -r requirements.txt
+          - echo 'Building for '$BITBUCKET_REPO_SLUG/$BITBUCKET_BRANCH
           - make html
           - cd $DOC_BUILD_FOLDER
           - git clone $DOC_REPO_URL

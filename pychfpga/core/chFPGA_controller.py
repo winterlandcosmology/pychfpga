@@ -37,7 +37,7 @@ from wtl.metrics import Metrics
 
 # from .icecore.session import load_session as load_yaml
 # from .icecore import load_yaml  # Py3: non-database version
-from .icecore_ext.iceboard_ext import IceBoardExt, async_to_sync, register_class
+from .icecore_ext.iceboard_ext import IceBoardExt, async_to_sync
 
 from .chFPGA_receiver import chFPGA_receiver
 # from pychfpga.common import util  # Py3: does not seem to be used
@@ -72,7 +72,6 @@ class chFPGA_config(object):
         return '\n'.join(['%s = %s' % (key, repr(value)) for (key, value) in sorted(vars(self).items())])
 
 
-@register_class()
 class chFPGA_controller(IceBoardExt):
     """
     Creates an object that connects to an IceBoard motherboard and its chFPGA firmware and provides
@@ -167,9 +166,9 @@ class chFPGA_controller(IceBoardExt):
             self,
             hostname=None,
             serial=None,
-            crate=None,
             subarray=None,
-            slot=None):
+            slot=None,
+            fpga_ip_addr=None):
         """
         Creates an empty IceBoard/chFPGA handler object, but do not interact with the board yet.
 
@@ -201,10 +200,10 @@ class chFPGA_controller(IceBoardExt):
         super().__init__(
             hostname=hostname,
             serial=serial,
-            crate=crate,
             slot=slot,
             subarray=subarray,
-            local_port_number=None  # 0: always select randomly,  `None`:use crate/slot if available else randomly
+            fpga_ip_addr=fpga_ip_addr,
+            local_control_port_number=None  # 0: always select randomly,  `None`:use crate/slot if available else randomly
             )
 
         # Initialize basic instance attributes, but don;t do anything that involve talking to the IceBoard.
@@ -246,13 +245,13 @@ class chFPGA_controller(IceBoardExt):
                 the `init` parameter is 1.
         """
 
-        await super(chFPGA_controller, self).open()  # Open UDP communication link
+        await super().open()  # Open UDP communication link
 
         self.logger.debug('%r: Instantiating chFPGA firmware handlers objects' % (self))
 
         # If init<0, we do not perform any communication with the FPGA, so we don't read the firmware configuration
         if init < 0:
-            self._logger.warn('%r: Upon user request (init < 0), communication with the FPGA are inhibited. '
+            self._logger.warning('%r: Upon user request (init < 0), communication with the FPGA are inhibited. '
                               'Initialization sequence stops here. Use this for debug only.' % self)
             return
         self._logger.info('%r:    ---> Hello! This is chFPGA! <---' % self)
@@ -716,10 +715,10 @@ class chFPGA_controller(IceBoardExt):
         config.system_platform_id = self.PLATFORM_ID
         config.system_interface_ip_address = self.interface_ip_addr
         config.system_fpga_ip_address = self.fpga_ip_addr
-        config.system_fpga_port_number = self.fpga_port_number
-        config.system_local_command_port_number = self.local_port_number
+        config.system_fpga_port_number = self.fpga_control_port_number
+        config.system_local_command_port_number = self.local_control_port_number
         config.system_local_data_port_number = await self.get_local_data_port_number_async()
-        config.system_local_corr_port_number = self.local_port_number + self.GPIO.CORR_IP_PORT_OFFSET
+        config.system_local_corr_port_number = self.local_control_port_number + self.GPIO.CORR_IP_PORT_OFFSET
 
         config.number_of_antennas = self.NUMBER_OF_ANTENNAS
         config.system_list_of_antennas_with_channelizers = self.LIST_OF_ANTENNAS_WITH_FFT
@@ -2279,7 +2278,7 @@ class chFPGA_controller(IceBoardExt):
             self.logger.info('%r: Loaded gains for board %s from file %s' % (self, gain_filename))
             # ib.set_gain(g_array, bank=bank)  # *** should this be bank=all_bank
         except IOError:
-            self.logger.warn("Gain file '%s' not found for (crate,slot)= %r" % (gain_filename, self.get_id()))
+            self.logger.warning("Gain file '%s' not found for (crate,slot)= %r" % (gain_filename, self.get_id()))
             gains = None
 
         # # Fill any missing channel info with None
@@ -2312,7 +2311,7 @@ class chFPGA_controller(IceBoardExt):
             # self.logger.info('Setting gains on IceBoard SN%s, crate %s, slot %i' % (ib.serial, crate, slot))
             # ib.set_gain(g_array, bank=bank)  # *** should this be bank=all_bank
         except IOError:
-            self.logger.warn("Gain file '%s' could not be saved for (crate,slot)=%r " % (gain_filename, self.get_id()))
+            self.logger.warning("Gain file '%s' could not be saved for (crate,slot)=%r " % (gain_filename, self.get_id()))
 
     def set_gains(
             self,
@@ -2745,6 +2744,26 @@ class chFPGA_controller(IceBoardExt):
         if local_sync:
             self.sync()
 
+    def get_pwm(self):
+        """ Return the state of the PWM generator
+
+        Returns:
+
+            A tuple containing the offset, high time, period and reset state.
+        """
+
+        return self.GPIO.get_pwm()
+
+    def get_user_bits(self):
+        """ Return the state of the user-programmable bits that can be routed to any of the user outputs.
+
+        Returns:
+
+            A tuple containing the status of (user_bit0, user_bit1).
+        """
+
+        return self.GPIO.get_user_bits()
+
     def set_adc_mask(self, mask=0xFF, channels=None):
         """ Set the mask that is applied on the ADC data on the specified channel.
 
@@ -2838,6 +2857,7 @@ class chFPGA_controller(IceBoardExt):
             float(n) / (t1 - t0),
             errors,
             float(errors) / float(trials) * 100))
+
 
     def get_temperatures(self):
         """ Return the core temperature of the fpga and the ADC chips.
@@ -3093,10 +3113,10 @@ class chFPGA_controller(IceBoardExt):
             dest_slot = self.crate.get_matching_rx(tx)[0]
             return dest_slot
 
-        def get_src_slot_for_dest_lane(dest_lane):
-            rx = (self.slot, dest_lane)
-            src_slot = self.crate.get_matching_tx(rx)[0]
-            return src_slot
+        # def get_src_slot_for_dest_lane(dest_lane):
+        #     rx = (self.slot, dest_lane)
+        #     src_slot = self.crate.get_matching_tx(rx)[0]
+        #     return src_slot
 
         if frames_per_packet < 1 or frames_per_packet > 4:
             raise ValueError('Number of frames per packet must be between 1 and 4')
@@ -4226,7 +4246,7 @@ class chFPGA_controller(IceBoardExt):
             return self.hostname
 
     def __repr__(self):
-        return "chFPGA%s" % (self.get_id(),)  # watch out, get_id() returns a tuple...
+        return f"chFPGA{self.get_id()}"
 
     def get_id(self, lane=None, default_crate=None, default_slot=None, numeric_only=False):
         """ Returns a (crate, slot) tuple representing a unique IceBoard ID,

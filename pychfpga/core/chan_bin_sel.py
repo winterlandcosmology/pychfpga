@@ -106,11 +106,10 @@ class ChanBinSel(Module_base):
             mask[j // 8] |= (1 << (j % 8))
         # verbose = False
         # if verbose: print (bins_to_enable)
-        self.logger.debug('%r: CROSSBAR0.BIN_SEL[%i] Configuring to capture %i frequency bins: %s...' % (
-            self.fpga,
-            self.instance_number,
-            len(bins_to_enable),
-            repr(bins_to_enable[:10])))
+        self.logger.debug(
+            f'{self!r}: CROSSBAR0.BIN_SEL[{self.instance_number}] '
+            f'Configuring to capture {len(bins_to_enable)} frequency bins: {bins_to_enable[:10]!r}...')
+
         # self.logger.debug('Mask pattern is: %s' % ( ' '.join('%02X'% byte for byte in mask)))
         self.NUMBER_OF_SELECTED_WORDS = len(bins_to_enable)
 
@@ -136,10 +135,10 @@ class ChanBinSel(Module_base):
 
     def status(self):
         """Displays the status of CH_DIST."""
-        self.logger.debug('--- CROSSBAR.CH_DIST[%i] STATUS' % (self.instance_number))
-        self.logger.debug('   RESET: %i' % self.RESET)
-        self.logger.debug('   FIFO EMPTY: %i' % self.FIFO_EMPTY)
-        self.logger.debug('   FIFO OVERFLOW: %i' % self.FIFO_OVERFLOW)
+        self.logger.debug(f'--- CROSSBAR.CH_DIST[{self.instance_number}] STATUS')
+        self.logger.debug(f'   RESET: {self.RESET}')
+        self.logger.debug(f'   FIFO EMPTY: {self.FIFO_EMPTY}')
+        self.logger.debug(f'   FIFO OVERFLOW: {self.FIFO_OVERFLOW}')
 
     def map(self, input_data, header=False):
         """ Reorders the data based on the configuration of the bin selector.
@@ -154,7 +153,7 @@ class ChanBinSel(Module_base):
         """
 
         if self.BYPASS:
-            raise RuntimeError('%.32s: CHAN_BIN_SEL cannot yet provide maps in BYPASS mode')
+            raise RuntimeError(f'{self!r}: CHAN_BIN_SEL cannot yet provide maps in BYPASS mode')
 
         channels = list(range(self.FIRST_FIFO_NUMBER * 4, self.LAST_FIFO_NUMBER * 4 + 3 + 1))
         bins = self.get_selected_bins()

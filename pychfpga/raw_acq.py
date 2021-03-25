@@ -35,7 +35,7 @@ except ImportError:
     comet = None
 
 # Local imports
-from ._version import get_git_version
+from . import __version__
 from .core import CORR
 
 
@@ -93,6 +93,7 @@ class RawAcqReceiver(object):
             data_folder=None,
             run_folder=None,
             start_thread=True,
+            fft_offset_encoding=True,
             metrics_refresh_time=1,
             adc_rms_refresh_count=60,
             corr_firmware_integration_period=0,  #used to compute timestamps
@@ -245,7 +246,8 @@ class RawAcqReceiver(object):
             self,
             stream_ids=stream_ids,
             metrics_refresh_time=metrics_refresh_time,
-            adc_rms_refresh_count=adc_rms_refresh_count
+            adc_rms_refresh_count=adc_rms_refresh_count,
+            fft_offset_encoding=fft_offset_encoding
             )
 
         self.corr_packet_processor = CorrPacketProcessor(
@@ -521,7 +523,7 @@ class RawAcqReceiver(object):
             self.buf and its structured references: captured packets, in random order
 
         """
-        print('Processin %i packets' % self.n)
+        # print('Processing %i packets' % self.n)
 
         # Just return if there are no packets to process
         if not self.n:
@@ -644,7 +646,6 @@ class RawAcqReceiver(object):
     def is_running(self):
         return bool(self.sockets)
 
-
     async def check_ioloop_response_time_async(self):
         t = time.time()
         if self.ioloop_last_time is not None:
@@ -676,12 +677,25 @@ class RawAcqReceiver(object):
 
 
 class RawPacketProcessor(object):
-    """ Reads the raw data in a socket-like interface"""
+    """ Reads and process the raw ADC of FFT data packets.
 
-    DATA_SIZE = 2048 # number of bytes of data
-    RAW_PACKET_LENGTH = 10 + DATA_SIZE  # header length + data length
+    The data is captured and sent over the Gbit Ethernet link by the FPGA
+    channelizer's PROBER module. Two types of packets are processed here,
+    based on their first byte (cookie). Other packet types are ignored.
 
-    def __init__(self, raw_acq_receiver, stream_ids, metrics_refresh_time=10, adc_rms_refresh_count=100):
+
+    Cookie 0xA0 (PROBER source 0):  is expected to be the FUNCGEN output, typically the raw ADC
+        timestream data, which is always in 2's complement.
+
+    Cookie 0xA1 (PROBER source 1) is expected to be FFT data from the SCALER output, typically from the ADC
+        data passed through the FFT and SCALER (none of which are bypassed).
+        The encoding is defined by `fft_offset_encoding`.
+    """
+
+    DATA_SIZE = 2048  # number of bytes of data in packets
+    RAW_PACKET_LENGTH = 10 + DATA_SIZE  # total packet size, header + data
+
+    def __init__(self, raw_acq_receiver, stream_ids, metrics_refresh_time=10, adc_rms_refresh_count=100, fft_offset_encoding=True):
         self.log = log.get_logger(self)
         self.recv = raw_acq_receiver
 
@@ -742,9 +756,7 @@ class RawPacketProcessor(object):
 
         self.processed_packets = 0
 
-
         self.lock = threading.RLock()  # Locks access to data while the receiver thread is populating it
-
 
         self.adc_processed_packets = 0
         self.adc_max_processing_time = 0
@@ -762,15 +774,11 @@ class RawPacketProcessor(object):
         self.adc_total_hdf5_processing_time = 0
         self.adc_rms_max_processing_time = 0
 
-
-
-
         # Channel-indexed arrays
         self.stream_id = np.array(stream_ids, dtype=np.uint16) # Stream ID associated with each channel
         self.adc_frames = np.zeros(self.NCHAN, dtype=np.uint32) # Number of packet received for each channel
 
         self.fixed_port_numbers = False # If True, checks if the crate/slot matches the port number. Assumes that the port numbers have been assigned using a predetermined scheme.
-
 
         # ADC Metrics
         self.start_time = time.time()
@@ -814,6 +822,7 @@ class RawPacketProcessor(object):
 
 
         # FFT processing
+        self.fft_offset_encoding_mask = -128 if fft_offset_encoding else 0  # xor'ed with the FFT data to convert into 2's complement
         self.fft_lock = threading.RLock()  # Locks access to data while the receiver thread is populating it
         self.fft_rms_started = np.zeros(self.NCHAN, dtype=bool)
         self.fft_rms_done = np.zeros(self.NCHAN, dtype=np.int8)
@@ -1310,8 +1319,8 @@ class RawPacketProcessor(object):
                 # Square of values from -8 to 7 fit in an int8, but not the sum of two. So we add the squares re and im values separately into the int32 buffer
                 # todo: check if there is a more efficient way to do this
                 # c = ((self.buf_data[buf_ix, ::2]^-128)>>4).astype(complex)+ 1j*((self.buf_data[buf_ix, 1::2]^-128)>>4).astype(complex)
-                self.fft_rms_current[ix] = ((self.buf_data[bix, ::2] ^ -128) >> 4) ** 2
-                self.fft_rms_current[ix] += ((self.buf_data[bix, 1::2] ^ -128) >> 4) ** 2
+                self.fft_rms_current[ix] = ((self.buf_data[bix, ::2] ^ self.fft_offset_encoding_mask) >> 4) ** 2
+                self.fft_rms_current[ix] += ((self.buf_data[bix, 1::2] ^ self.fft_offset_encoding_mask) >> 4) ** 2
                 self.fft_overflow[ix, ::2] += (self.buf_data[bix, ::4] & 0b0100) != 0
                 self.fft_overflow[ix, 1::2] += (self.buf_data[bix, ::4] & 0b0010) != 0
 
@@ -2379,7 +2388,6 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
         self.add_periodic_callback(self.receiver.ping_sources_async, 20000) # ping the raw_acq data sources periodically to ensure the switches tables always know how to route the packets to here
         self.add_periodic_callback(self.receiver.check_ioloop_response_time_async, 3000)
         self.startup_time = datetime.datetime.utcnow()
-        self.GIT_VERSION = get_git_version()
 
 
 
@@ -2419,7 +2427,7 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
                 raise RuntimeError('Cannot start comet broker: %s' % (msg))
             comet_manager = comet.Manager(comet_host, comet_port)
             try:
-                comet_manager.register_start(self.startup_time, self.GIT_VERSION)
+                comet_manager.register_start(self.startup_time, __version__)
                 comet_manager.register_config(config.copy())
             except comet.CometError as exc:
                 msg = "Comet failed registering raw_acq start and initial config. " \
@@ -2460,7 +2468,7 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
 
     @endpoint('status')
     async def status(self):
-        self.log.warning('%r: getting status request' % self)
+        self.log.info('%r: getting status request' % self)
         return dict(started=self.receiver.is_running() if self.receiver else False)
 
     @endpoint('get-packets')

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
-REST Server and clients for the CHIME receiver hut GPS units Spectrum Instruments TM-4D, which are
-accessed through the StarTech NETRS232 serial-to-ethernet adapters.
+REST Server and clients to operate and monitor Spectrum Instruments TM-4D GPS units.
+The units are accessed through a serial-to-ethernet adapter (e.g. the StarTech NETRS232).
 
 """
 # Python Standard Library
@@ -28,7 +28,7 @@ except ImportError:
     comet = None
 
 # Local imports
-from ._version import get_git_version
+from . import __version__
 
 class SpectrumInstrumentsTM4D(SocketContext):
     """
@@ -37,9 +37,13 @@ class SpectrumInstrumentsTM4D(SocketContext):
 
     def __init__(self,  hostname, port=1001, timeout=0.5, verbose=1):
 
-        super(SpectrumInstrumentsTM4D, self).__init__(hostname=hostname, port=port, timeout=timeout, close_socket=False)  # keep socket open because reconnecting causes data loss
+        super().__init__(
+            hostname=hostname,
+            port=port,
+            timeout=timeout,
+            close_socket=False)  # keep socket open because reconnecting causes data loss
         self.log = log.get_logger(self)
-        self.log.info( "Initializing direct LAN Connection at %s:%i" % (hostname, port))
+        self.log.info(f"Initializing direct LAN Connection at {hostname}:{port}")
         self.verbose = verbose
         self.log.debug('Initializing instrument')
         self.polling_mode = None
@@ -95,29 +99,31 @@ class SpectrumInstrumentsTM4D(SocketContext):
         """
         flush = kwargs.get('flush', False)
         with self.socket(flush=flush):
-            cmd = '#%s\r\n' % ','.join(str(s) for s in args)
+            cmd = f"#{','.join(str(s) for s in args)}\r\n"
             if self.verbose:
-                print('Sending command: %s' % (cmd))
+                print(f'Sending command: {cmd}')
             self.send(cmd)
+
     def query(self, command, reply=None, flush=False):
         """
         Sends a command to the instrument and returns the reply string without the terminator or trailing spaces.
         """
         if reply is None:
             with self.socket(flush=flush):
-                self.send('#13,%s\r\n' % command)
+                self.send(f'#13,{command}\r\n')
                 try:
                     reply = ''
                     while True:
                         s = self.recv(16384)
-                        print('received %r (%s)' % (s, '\r\n' in s))
+                        has_crlf = '\r\n' in s
+                        print(f"Received {s!r} (CRLF={has_crlf})")
                         reply += s
                         if '\r\n' in reply:
                             break
                 except IOError:
-                    raise IOError('%r: timout while waiting for reply for command %s' % (self, command))
+                    raise IOError(f'{self!r}: timeout while waiting for reply for command {command}')
         args = reply.rstrip().split(',') # remove trailing spaces or CR or LF
-        assert args[0] == '#' + command, 'Reply is not for command %s' % command
+        assert args[0] == '#' + command, f'Reply is not for command {command}'
         return args[1:]
 
     def add_metric(self, metrics, metric_name, value, type='gauge', **labels):
@@ -128,9 +134,9 @@ class SpectrumInstrumentsTM4D(SocketContext):
                 utc_time = self.last_gps_time - self.gps_leap_seconds
                 local_time = time.time()
                 if utc_time - local_time > 1:
-                    self.log.warning('%r: GPS time for metric %s is in advance from system time by %f seconds.' % (self, metric_name, utc_time-local_time))
+                    self.log.warning(f'{self!r}: GPS time for metric {metric_name} is in advance from system time by {utc_time-local_time} seconds.')
             else:
-                self.log.warning('%r: No GPS time has been rceived yet. Using system time for the metric %s' % (self, metric_name))
+                self.log.warning(f'{self!r}: No GPS time has been received yet. Using system time for the metric {metric_name}')
                 utc_time = time.time()
             metrics.add(metric_name, value=value, type=type, time=utc_time * 1000, **labels)
         else:
@@ -144,7 +150,7 @@ class SpectrumInstrumentsTM4D(SocketContext):
 
 
     def enable_ntp_output(self, enable):
-          self.command('04',3123,3,1,3 if enable else 2,1,0,2,0,3,9,7,6,5,3) # secret command from Tom Versaput
+          self.command('04', 3123, 3, 1, 3 if enable else 2, 1, 0, 2, 0, 3, 9, 7, 6, 5, 3) # secret command from Tom Versaput
 
     def set_mask_angle(self, angle_code):
         """ Sets mask angle of the GPS.
@@ -152,8 +158,8 @@ class SpectrumInstrumentsTM4D(SocketContext):
         Parameters:
             angle_code (int): 0=5 deg, 1=15 deg, 2=20 deg
         """
-        if angle_code not in [0,1,2]:
-            raise ValueError('%r: mask angle argument is 0 (5 deg), 1 (15 deg) or 2 (20 deg)' % self)
+        if angle_code not in [0, 1, 2]:
+            raise ValueError(f'{self!r}: mask angle argument is 0 (5 deg), 1 (15 deg) or 2 (20 deg)')
 
         self.command('05', angle_code)
 
@@ -165,9 +171,9 @@ class SpectrumInstrumentsTM4D(SocketContext):
                 in absolute time while positive values cause them to occur earlier.
         """
         if not  -999999 <= bias <= 999999:
-            raise ValueError('%r: bias must be between -999999 and 99999 ns' % self)
+            raise ValueError(f'{self!r}: bias must be between -999999 and 99999 ns')
 
-        self.command('06', '%+06i' % bias)
+        self.command('06', f'{bias:+06d}')
 
     def set_timing_mode(self, mode):
         """ Sets the timing mode of the GPS.
@@ -176,7 +182,9 @@ class SpectrumInstrumentsTM4D(SocketContext):
             mode (int): 0=Dynamic, 1=Static, 3=Auto survey
         """
         if mode not in [0, 1, 3]:
-            raise ValueError('%r: timing modeargument is 0 (Dynamic), 1 (Static) or 3 (Survey)' % self)
+            raise ValueError(
+                f'{self!r}: timing mode argument must be '
+                f'0 (Dynamic), 1 (Static) or 3 (Survey)')
 
         self.command('07', mode)
 
@@ -212,9 +220,9 @@ class SpectrumInstrumentsTM4D(SocketContext):
                 8: for OFF (newer TM-4's only)
         """
         if not 0 <= mux1 <= 8:
-            raise ValueError('%r: Mux1 selector value must be between 0 and 8' % self)
+            raise ValueError(f'{self!r}: Mux1 selector value must be between 0 and 8')
         if not 0 <= mux2 <= 8:
-            raise ValueError('%r: Mux2 selector value must be between 0 and 8' % self)
+            raise ValueError(f'{self!r}: Mux2 selector value must be between 0 and 8')
 
         self.command('09', mux1)
         self.command('14', mux2)
@@ -226,7 +234,10 @@ class SpectrumInstrumentsTM4D(SocketContext):
             mode (int): 0= output all messages, 1=Output events and acknowledges only.
         """
         if mode not in [0,1]:
-            raise ValueError('%r: broadcast mode must be  0 (all messages) or 1 (events or acknowledge only)' % self)
+            raise ValueError(
+                f'{self!r}: broadcast mode must be  '
+                f'0 (all messages) or '
+                f'1 (events or acknowledge only)')
 
         self.command('12', mode)
 
@@ -239,19 +250,33 @@ class SpectrumInstrumentsTM4D(SocketContext):
                 1= NASA-36
                 2= IRIG-B007/B127 (BCD year and SBS)
         """
-        if mode not in [0,1]:
-            raise ValueError('%r: broadcast mode must be  0 (all messages) or 1 (events or acknowledge only)' % self)
-
-        self.command('12', mode)
+        if format not in [0, 1, 2]:
+            raise ValueError(
+                f'{self!r}: broadcast mode must be '
+                f'0= IRIG-B002/B122 (no year), '
+                f'1= NASA-36, '
+                f'2= IRIG-B007/B127 (BCD year and SBS)'
+                )
+        self.command('16', format)
 
     def set_polling_mode(self, mode=1):
         """ Sets the polling mode.
 
         Parameters:
-            mode (int): 0=automatic broadcast, 1=polling with acknowledge, 2=polling without acknowledge.
+            mode (int):
+
+                0=automatic broadcast,
+
+                1=polling with acknowledge,
+
+                2=polling without acknowledge.
         """
         if mode not in [0,1,2]:
-            raise ValueError('%r:polling mode must be 0=automatic broadcast, 1=polling with acknowledge, 2=polling without acknowledge' % self)
+            raise ValueError(
+                f'{self!r}: Polling mode must be '
+                f'0=automatic broadcast, '
+                f'1=polling with acknowledge, '
+                f'2=polling without acknowledge')
 
         self.command('17', mode)
 
@@ -286,10 +311,20 @@ class SpectrumInstrumentsTM4D(SocketContext):
         """ Sets the source of the Pulse-Per-Second (PPS) signal.
 
         Parameters:
-            source (int): 0=LOW at power-on/GPSPPS on Time Valid/FILPPS on lock, 1= LOW at power-on/FILPPS on lock, 2= LOW on power-up/GPSPPS on valid time and Lock, 3=GPSPPS always
+            source (int):
+
+                0 = LOW at power-on/GPSPPS on Time Valid/FILPPS on lock,
+                1 = LOW at power-on/FILPPS on lock,
+                2 = LOW on power-up/GPSPPS on valid time and Lock,
+                3 = GPSPPS always
         """
         if source not in [0, 1, 2, 3]:
-            raise ValueError('%r: PPS source 0=LOW at power-on/GPSPPS on Time Valid/FILPPS on lock, 1= LOW at power-on/FILPPS on lock, 2= LOW on power-up/GPSPPS on valid time and Lock, 3=GPSPPS always' % self)
+            raise ValueError(
+                f'{self!r}: PPS source '
+                f'0=LOW at power-on/GPSPPS on Time Valid/FILPPS on lock, '
+                f'1=LOW at power-on/FILPPS on lock, '
+                f'2=LOW on power-up/GPSPPS on valid time and Lock, '
+                f'3=GPSPPS always')
 
         self.command('24', source)
 
@@ -301,7 +336,7 @@ class SpectrumInstrumentsTM4D(SocketContext):
 
         """
         if fmt not in [0, 1]:
-            raise ValueError('%r: format can be 0=GPS or 1=UTC' % self)
+            raise ValueError(f'{self!r}: format can be 0=GPS or 1=UTC')
         self.command('26', fmt)
 
 
@@ -312,10 +347,10 @@ class SpectrumInstrumentsTM4D(SocketContext):
         """
         cmd = reply.rstrip().split(',')[0] # remove trailing spaces or CR or LF
         if not cmd.startswith('#'):
-            raise IOError('%r: Invalid reply format %s' % (self, reply))
+            raise IOError(f'{self!r}: Invalid reply format {reply}')
         cmd = cmd[1:]
         if cmd not in self.get_methods:
-            raise IOError('%r: Unknown reply code %s' % (self, reply))
+            raise IOError(f'{self!r}: Unknown reply code {reply}')
         else:
             return self.get_methods[cmd]
 
@@ -692,7 +727,7 @@ class SpectrumInstrumentsTM4D(SocketContext):
                     try:
                         get_method(metrics=metrics)
                     except IOError:
-                        self.log.warning('%r: Could not get reply for command %s' % (self, command))
+                        self.log.warning(f'{self!r}: Could not get reply for command {command}')
         return metrics
 
     def get_broadcast_metrics(self):
@@ -727,7 +762,7 @@ class SpectrumInstrumentsTM4D(SocketContext):
                         break
                     reply = self.buffer[:pos+2]
                     self.buffer = self.buffer[pos+2:]
-                    self.log.debug('Got broadcast string %r' % reply)
+                    self.log.debug(f'Got broadcast string {reply!r}')
                     get_method = self.get_method_for(reply)
                     if get_method:
                         get_method(reply=reply, metrics=metrics)
@@ -770,7 +805,7 @@ class SpectrumInstrumentsTM4D(SocketContext):
             lon = -73.579128
             alt = 92.5
         else:
-            raise ValueError("Invalid location `%s`. Valid locations are 'DRAO' or 'McGill'")
+            raise ValueError(f"Invalid location '{location}'. Valid locations are 'DRAO' or 'McGill'")
 
         with self.socket(flush=True):
             self.set_polling_mode()
@@ -794,7 +829,7 @@ class GPSAsyncRESTServer(AsyncRESTServer):
     DEFAULT_PORT = 54325
 
     def __init__(self,  address='', port=DEFAULT_PORT, logging_params={}):
-        """ power_supplies list of dict with entries 'type', 'name', and 'address'
+        """ Create a GPS Metrics server.
         """
         self.gps = {}
         super().__init__(address=address, port=port, heartbeat_string='Gs')
@@ -802,30 +837,22 @@ class GPSAsyncRESTServer(AsyncRESTServer):
         self.metrics = Metrics(latest_only=True)
         self.add_periodic_callback(self._get_metrics, 1000, stop_on_errors=False)
         self.startup_time = datetime.datetime.utcnow()
-        self.GIT_VERSION = get_git_version()
 
 
 
     async def _get_metrics(self):
         """ get the metrics from the GPS units and put them in the queue
         """
-        #metrics = Metrics()
         for gps_name, gps in self.gps.items():
-            self.log.info('%.32r: Getting metrics for GPS %s' % (self, gps_name))
+            self.log.info(f'{self!r}: Getting metrics for GPS {gps_name}')
             try:
                 m = gps.get_broadcast_metrics()
-                #metrics = Metrics()
                 self.metrics.add(m, gps_name=gps_name)
-                self.log.info('Got %i metrics' % len(m.metrics))
-                #if len(metrics.metrics):
-                #    if self.metrics_queue.full():
-                #        self.metrics_queue.get()
-                #    self.metrics_queue.put(metrics)
+                self.log.info(f'Got {len(m.metrics)} metrics')
             except IOError as e:
-                self.log.warning('%r: Error while trying to access metric from %s\nThe error is:\n%r' % (self, gps_name, e))
+                self.log.warning(f'{self!r}: Error while trying to access metric from {gps_name}\nThe error is:\n{e!r}')
                 # raise
-
-        self.log.info('Queue has %i metrics blocks' % len(self.metrics))  # _queue.qsize())
+        self.log.info(f'Queue has {len(self.metrics)} metrics blocks')
 
     ##################
     # Server commands
@@ -837,9 +864,9 @@ class GPSAsyncRESTServer(AsyncRESTServer):
         """ Start the GPS server with provided config
         """
         print('Starting GPS server')
-        self.log.info('%r: Received start command' % self)
+        self.log.info(f'{self!r}: Received start command')
         if self.gps:
-            raise RuntimeError('%.32r: GPS server is already started' % self)
+            raise RuntimeError(f'{self!r}: GPS server is already started')
 
         # Register config with comet broker
         try:
@@ -858,17 +885,16 @@ class GPSAsyncRESTServer(AsyncRESTServer):
                 comet_host = config['comet_broker']['host']
                 comet_port = config['comet_broker']['port']
             except KeyError as exc:
-                msg = "Failure registering initial config with comet broker: 'comet_broker/{}' " \
-                      "not defined in config.".format(exc[0])
+                msg = f"Failure registering initial config with comet broker: 'comet_broker/{exc[0]}' " \
+                      f"not defined in config."
                 self.log.error(msg)
                 return msg
             comet_manager = comet.Manager(comet_host, comet_port)
             try:
-                comet_manager.register_start(self.startup_time, self.GIT_VERSION)
+                comet_manager.register_start(self.startup_time, __version__)
                 comet_manager.register_config(config)
             except comet.CometError as exc:
-                msg = 'Comet failed registering GPS server start and initial config: {}'\
-                    .format(exc)
+                msg = f'Comet failed registering GPS server start and initial config: {exc}'
                 self.log.error(msg)
                 return msg
         else:
@@ -877,7 +903,7 @@ class GPSAsyncRESTServer(AsyncRESTServer):
         self.config = NameSpace(config)
         units = self.config.units or {}
         for name, params in units.items():
-            self.log.debug('%r: Creating GPS handler %s' % (self, name))
+            self.log.debug(f'{self!r}: Creating GPS handler {name}')
             gps = SpectrumInstrumentsTM4D(**params)
             self.gps[name] = gps
             print(f'Creating gps {gps}')
@@ -886,7 +912,7 @@ class GPSAsyncRESTServer(AsyncRESTServer):
     @endpoint('stop')
     async def stop(self):
         if not self.gps:
-            self.log.warning('%.32r: GPS server is not started' % self)
+            self.log.warning(f'{self!r}: GPS server is not started')
         else:
             self.gps = {}
         return 'GPS server stopped'
@@ -895,40 +921,19 @@ class GPSAsyncRESTServer(AsyncRESTServer):
     async def test(self, x=1):
         y = x + 1
         return y
-    #
-    # @endpoint('status')
-    # async def status(self, handler):
-    #     # ps_names = self._parse_names(ps_names)
-    #     # self.log.info('%.32r: Received status request for %r' % (self, ps_names))
-    #     stati = dict(is_started=bool(self.power_supplies),
-    #                  ps_names=self.power_supplies.keys())
-    #     for ps_name, ps in self.power_supplies.items():
-    #         stati[ps_name] = ps.status()
-    #         self.log.info('%.32r: Status of %s is %s' % (self, ps_name, stati[ps_name]))
-    #     return(stati)
-
-
 
     @endpoint('list-names')
     async def listNames(self):
-        self.log.info('%.32r: Received list names request' % self)
+        self.log.info(f'{self!r}: Received list names request')
         return list(self.gps.keys())
-
-
-
 
     @endpoint('get-monitoring-data')
     async def monitoringMetrics(self):
-        self.log.info('%.32r: Received monitoring metrics request' % self)
-        #metrics = self.metrics # Metrics()
-        #self.metrics.metrics={}
-        #for i in range(self.metrics_queue.qsize()):
-        #    m = self.metrics_queue.get()
-        #    metrics.add(m)
-        self.log.info('%r: sending %i metrics' % (self, len(self.metrics.metrics)))
-        # handler.set_header('Content-Type', 'text/plain')
-        # handler.write(str(self.metrics.pop()))
+        self.log.info(f'{self!r}: Received monitoring metrics request')
+        self.log.info(f'{self!r}: sending {len(self.metrics.metrics)} metrics')
         return aiohttp.web.Response(text=str(self.metrics.pop()))
+
+
 #########################################
 # GPS REST client
 #########################################
@@ -937,7 +942,7 @@ class GPSAsyncRESTClient(AsyncRESTClient):
     """
     Implements an asynchronous client that exposes the functions of the specified remote RawAcq server.
 
-    This client is used by ch_master to start, configue and operate all the RawAcq servers in the array.
+    This client is used by ch_master to start, configure and operate all the RawAcq servers in the array.
 
     The client is implemented using a Tornado AsyncHTTPClient. It exposes the RawAcq server methods
     (i.e REST endpoints) as local methods. The local methods are Tornado coroutines so requests to
@@ -978,13 +983,12 @@ class GPSAsyncRESTClient(AsyncRESTClient):
 
         """
         #print('start!')
-        self.log.info('%s: Starting remote GPS server at %s:%i with config: %r' % (self, self.hostname, self.port, config))
+        self.log.info(f'{self!r}: Starting remote GPS server at {self.hostname}:{self.port} with config: {config!r}')
 
         if isinstance(config, str):
             config = load_yaml_config(config)
         result = await self.post('start', **config)
         return 'GPS server started'
-
 
     async def stop(self):
         result = await self.get('stop')
@@ -994,23 +998,9 @@ class GPSAsyncRESTClient(AsyncRESTClient):
         result = await self.post('test', **args)
         return result
 
-    #
-    # async def status(self):
-    #     result = await self.get('status')
-    #     return(result)
-
-
-
     async def list_names(self):
         result = await self.get('list-names')
         return result
-
-
-    #
-    # async def get_metrics(self):
-    #     result = await self.get('get-metrics')
-    #     return(Metrics(result))
-
 
 
 def main():

@@ -211,7 +211,7 @@ class IceBoardBase(tuber.TuberObject):
 
     @tworoutine.tworoutine
     async def resolve(self):
-        await (~self._tuber_get_meta)()  # tilde  returns the async version
+        await self._tuber_get_meta_async()
 
 class FMCMezzanineBase():
     """Basic FMC Mezzanine object.

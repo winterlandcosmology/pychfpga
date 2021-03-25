@@ -53,11 +53,11 @@ Obtaining and installing pychfpga
 
 Get the ``pychfpga`` repository::
 
-	$ git lfs clone git@bitbucket.org:winterlandcosmology/pychfpga.git  # add the ``-b`` option to specify a branch
+	$ git clone git@bitbucket.org:winterlandcosmology/pychfpga.git  # add the ``-b`` option to specify a branch
 
 Create a clean python environment and install the `pychfpga` package all its dependencies::
 
-	$ virtualenv my_env  # create new virtual environment named "my_env". You can clear an existing environment with "virtualenv --clear my_env"
+	$ python3 -m venv my_env  # create new virtual environment named "my_env". You can clear an existing environment with "virtualenv --clear my_env"
 	$ source my_env/bin/activate  # activate the new environment
 	$ pip install -e ./pychfpga  # install in-place
 
@@ -67,12 +67,13 @@ If you plan manual interactive sessions (which is useful for debugging first ins
 
 
 
+
 Configuring the hardware
 ------------------------
 
 - Install the SD card in the ICE Board
 - Set-up the appropriate reference clock source (jumper)
-- Conect the clock and IRIG-B. WATCH OUT FOR THE LEVELS OF ANY EXTERNAL SIGNALS.
+- If required, connect the clock and IRIG-B. WATCH OUT FOR THE LEVELS OF ANY EXTERNAL SIGNALS.
 - Connect the power supply
 - Power up the board. The 2 PLL LEDs at the bottom of the front panel shall turn on immediately to indicate there is a clock. After about 25 seconds, the upper leds will blink then stay on to show that the ARM has acquired an IP address and had finished booting.
 
@@ -134,7 +135,7 @@ Prerequisites
 
 - Install Prometheus and Grafana if you want to view the system status graphs published by `fpga_master`. The appropriate Prometheus config file and grafana panels need to be installed.
 
-- You need a YAML configuration file for the servers.
+- You need a YAML configuration file that instructs fpga_master what board(s) to include and how to set them up.
 
 Operation
 ---------
@@ -146,11 +147,11 @@ First, make sure you are in the pychfpga folder and in the right python environm
 
 `raw_acq` starts a web server can receive raw data  from the ICeBoards (ADC, FFT, firmware correlator) and store those to disk, and also publishes metrics for Prometheus. To start the raw_acq server::
 
-	./raw_acq path_to_config_file:jfc.drao
+	./raw_acq.py
 
 where `jfc.drao` is the section in the configuration file that contains a raw_acq definition.
 
 To start the fpga_master server::
 
-	./fpga_master path_to_config_file:jfc.drao
+	./fpga_master.py path_to_config_file:jfc.drao
 

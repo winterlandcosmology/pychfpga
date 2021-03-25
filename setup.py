@@ -1,19 +1,10 @@
 from setuptools import setup, find_packages
 from os import path
 
+import versioneer
 
 
 here = path.abspath(path.dirname(__file__))
-
-# Get the version number without loading dependencies (i.e. `from pychfpga
-# import _version` would execute __init__.py)
-with open(path.join(here, 'pychfpga', '_version.py')) as f:
-    for line in f:
-        if line.startswith('__version__'):
-            exec(line)
-            break
-    else:
-      raise RuntimeError('Cannot find version number')
 
 # Load the requirements from requirements.txt while removing the environment marks
 with open(path.join(here, 'requirements.txt')) as f:
@@ -26,7 +17,9 @@ with open("README", "r", encoding='utf-8') as f:
 # Install the python packages.
 setup(
       name="pychfpga",
-      version=__version__,
+      version=versioneer.get_version(),
+      cmdclass=versioneer.get_cmdclass(),
+      # cmdclass = {'build_ext': build_ext},
       description=('Control and monitors a array of ICEBoard '
                    'running the chfpga (X-Engine + corner-turn) '
                    'or sifpga (F-Engine + 16-channel X-Engine) FPGA firmware'),
@@ -47,11 +40,10 @@ setup(
       include_package_data=True,
       entry_points={
           "console_scripts": [
-              "fpga_master=pychfpga:fpga_master.main",
-              "chime_gps=pychfpga:gps.main",
-              "chime_raw_acq=pychfpga.raw_acq.main",
-              "chime_rx_ps=pychfpga:ps.main",
+              "fpga_master=pychfpga.fpga_master:main",
+              "chime_gps=pychfpga.gps:main",
+              "chime_raw_acq=pychfpga.raw_acq:main",
+              "chime_rx_ps=pychfpga.ps:main",
           ]
       },
-      # cmdclass = {'build_ext': build_ext},
      )

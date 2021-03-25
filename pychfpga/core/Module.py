@@ -81,6 +81,7 @@ class BitField(object):
         self.lsb_addr = addr - bit // 8  # rightmost byte address
         self.msb_addr = addr - (bit + width - 1) // 8  # leftmost byte address
         self.number_of_bytes = self.lsb_addr - self.msb_addr + 1
+        self.name = 'Unknown'
 
     def __set__(self, obj, value):
         self.write(obj, value)
@@ -91,10 +92,18 @@ class BitField(object):
         else:
             return self.read(obj)
 
+    def __set_name__(self, obj, name):
+        """ Set the name of the attribute to which this descriptor is assigned to.
+
+        This is called automatically when the owner class is created (Python 3.6)
+        """
+        self.name = name
+
     def write(self, obj, value):
         # obj.write_bitfield(self, value)
         if (value >= 2 ** self.width) or value < 0:
-            raise Exception('Bad value %r for memory-mapped property %s' % (value, self.get_name(obj)))
+            raise Exception(f'Bad value {value} for memory-mapped property {self.name}. '
+                            f'Valid range is between 0 and {2**self.width-1}')
 
         if self.page == self.DRP:
             old_data = obj.read_drp(self._addr)  # read 16-bit value
@@ -143,33 +152,6 @@ class BitField(object):
 
         # Extract the desired bits
         return (int(value) >> self.bit) & ((1 << self.width)-1)
-
-    def get_name(self, obj):
-        """
-        Return the name of the current bitfield by searching the parent object
-        attributes for ``self``
-
-        Parameters:
-
-            obj: instance of the class that contains the bitfield
-
-        Returns:
-
-            Name (str) of the attribute that matches this bitfield.
-
-        Notes:
-
-            This is a slow but convenient function that is meant to be used to
-            clarify error messages. It is not meant to be used for
-            time-sensitive operations.
-        """
-        matching_names = [name for name, value in vars(obj).items() if value is self]
-        if len(matching_names) == 1:
-            return matching_names[0]
-        elif not len(matching_names):
-            raise RuntimeError('Could not find the name of the bitfield %r in %r'  % (self, obj))
-        else:
-            raise RuntimeError('Object %r has multiple bitfields matching %r'  % (obj, self))
 
 class Module_base(object):
     """ Implements basic interfaces to a module. It is intended to be inherited by a subclass that specializes to specific modules"""

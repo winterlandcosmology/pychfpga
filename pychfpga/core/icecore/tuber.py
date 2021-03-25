@@ -1,28 +1,84 @@
-'''
+"""
 Tuber object interface
 
 
-2020-11-04 JFC: Proposed changes, to be discussed:
+JFC: November 2020
 
-    Make tuber_objname an attribute
-'''
+Experimental re-haul, deployed on CHIME on Nov 2020 (8 crates/ 128 boards).
+
+This updated module can be seen as a PEP-like proposal for future Tuber standardization.
+
+Changes:
+    - Use next_asyncio to allow  loop.run_until_complete() to  operate in already existing loops. Now we can truly run an async function even if it was called from a sync one.
+    - tie ClientSessions to the current loop, and make sure we use the right one. In an interactive context, we often use multiple loops, and running a query in a loop while the session is in another loop just crashes.
+
+    - methods, not just properties are populated as instance attributes (as opposed to class attributes), to ensure we could connect to IceBoards with different firmware.
+    - Methods and properties are applied to the instance all at once when tuber_get_meta is called. This is a small delay compared to the metadata access time. Having a gradually-populated instance makes the timing of the instance less predictable
+    - __dir__ is now trivial. Does not try to rebuild the attribute list, which is hard to do correctly. We just ensure we call tuber_get_meta is the instnces  attributes have not been set
+    - __getattr__ is also now trivial. Also just ensures _tuber_get_meta() is called as needed. Added infinite recursion protections to protect against subclass errors.
+    - Moved Tuber towards an fundamentally async module, with sync support for compatibility, instead of the way around.
+    - the instance is populated with async tuber methods. prefix and suffix can be added to the names. (e.g. Suffix _async is useful and recommended for mixed sync/async code)
+    - instance can be populated with additional wrapped methods that can be called synchronously
+    - almost completely eliminated usage of tworoutines. We created small run_async() and sync_wrap() functions to support running async code in a sync function. This allows explicit use of async functions. Eliminates the non-intuitive tworoutine syntax.
+    - All web operations now live in TuberObject, not spread between COntext and TuberObject.
+    - Context is an awaitable, i.e. we can get a list of result for each previous calls with ``results = await ctx``.
+    - This being said, we don't use Context anymore. TuberObject is self-contained. Context makes use of TuberObject. TuberObject is a specialization that CHIME does not use.
+    - Likewise, TuberCategory is another specialization not used by CHIME. It has not been updated to use the new TuberObject.
+
+    - removed simplejson: slower than json in Python 3. We use  ujson for encoding, which is even faster.
+    - We added a json cache. Not useful for small requests, so it is not used
+      by default. For large requests with lots of data (i.e. sending 12 MBytes
+      bitstreams in base64), the memory usage for large arrays is N*4/3
+      bitstream size, where N is the size of the array. For CHIME (128 boards) , this means
+      that 2 Gbytes of memory is used just for the bitstreams.
+    - The json cache is enable by a context manager, which sets as contextvars.ContextVar() that is seen only by the current and downstream awaits, and not by other instance calls that may occur while the current call is in progress.
+    - See https://artem.krylysov.com/blog/2015/09/29/benchmark-python-json-libraries/
+
+    - better atexit cleanup
+    - patch current interpreter loop to allow ipython tab completion. Need to do this better. Why is the on-the-fly patch not working?
+    - PEP-0257 recommends triple-double-quotes for docstrings
+
+    icecore changes:
+
+        - Separted base hardware classes from SQLAlchemy/Hardware map objects. CHIME uses static maps that do not require database functionalities. System configuration is handled and stored centrally in databases at the experiment level.
+        - pychfpga implement hardware maps as python lists; SQUAlchemy is no
+          longer used. List comprehensions make simpler queries in our
+          application.
+        - chFPGA application-specific functions do not rely on
+          the ARM; it is memory-mapped and dumb, so there is a lot of smarts
+          and state in the Python objects.  We eliminated the complex
+          handler work-around that was needed to prevent SQLAlchemy from
+          randomly and continuously corrupting these stateful objects.
+        - Moved all additional features added in my version of icecore back into my application.
+
+      2020-11-04 JFC: Proposed changes, to be discussed, and todo:
+
+    - Make tuber_objname an attribute
+    - use ujson for decoding, not just encoding. drop json.
+    - Add timeouts
+    - I could provide my own caching ujson-based encoder/decoder objects if we don't want caching as a base feature. Shuld be added as class attributes overriden by subclasses.
+    - Need to check  Context with legacy apps. TuberCategory needs to be debugged or removed if not a core feature.
+
+
+
+"""
 # Standard library packages
-import socket
-import urllib
 import asyncio
 import atexit
 import textwrap
-import warnings
+import contextvars
+
 
 # PyPi packages
 import aiohttp
 import nest_asyncio
+import json
+import ujson
 
 # local packages
 from . import tworoutine
 
-# Simplejson is now mandatory (it's faster enough to insist)
-import simplejson
+
 
 __all__ = [
     "TuberError", "TuberRemoteError",
@@ -33,8 +89,10 @@ __all__ = [
 class TuberError(Exception):
     pass
 
+
 class TuberStateError(TuberError):
     pass
+
 
 class TuberNetworkError(TuberError):
     pass
@@ -51,7 +109,7 @@ class TuberResult:
         return iter(self.__dict__.values())
 
     def __repr__(self):
-        'Return a nicely formatted representation string'
+        """Return a nicely formatted representation string"""
         return 'TuberResult({0})'.format(
             ','.join('{0}={1!r}'.format(name, val)
                      for name, val in self.__dict__.items()))
@@ -79,8 +137,41 @@ def valid_dynamic_attr(name):
     return True
 
 
-class Context(tworoutine.tworoutine):
-    '''A context container for TuberCalls. Permits calls to be aggregated.
+def run_async(awaitable):
+    """
+    Run the current loop until the awaitable is completed.
+
+    Is used to run a coroutine (async function) from a sync function, while
+    allowing all already-scheduled tasks to continue to run in the background.
+
+    The coroutine is run in the current event loop, which is retrieved (or
+    created) with get_event_loop(). Native asyncio does *NOT* allow to call
+    ``run_until_complete`` when a loop is already running. We use `nest_asyncio`
+    to patch asyncio in order to allow this.
+    """
+    # loop = asyncio.get_event_loop()  # get the current loop, running or not
+    # nest_asyncio.apply(loop)  # make sure we can run in an already running loop
+    # loop.set_debug(True)
+    # print(f'Runnings async function {awaitable} in loop {loop} ID={id(loop)}')
+    try:
+        nest_asyncio.apply()  # make sure we can run in an already running loop
+        return asyncio.run(awaitable)
+        # return loop.run_until_complete(awaitable)
+    except Exception as e:
+        print(f'run_async got an excepttion: {e}')
+        raise
+def sync_wrap(fn):
+    """
+    Wraps an async coroutine function into a function that can be run synchronously (without the await statement).
+
+    This assumes there is a event loop.
+    """
+    def sync_fn(*args, **kwargs):
+        return run_async(fn(*args, **kwargs))
+    return sync_fn
+
+class Context():
+    """A context container for TuberCalls. Permits calls to be aggregated.
 
     Using this interface, you can write code like:
 
@@ -127,30 +218,31 @@ class Context(tworoutine.tworoutine):
     Adjust the `connect_timeout` and `request_timeout` attributes of the ctx
     object to change the connect and request timeouts. The default value
     (1800 seconds) allows calls to the board to be quite slow.
-    '''
+    """
 
     def __init__(self, obj, **ctx_kwargs):
         self.calls = []
-        self.connect_timeout = 1800
-        self.request_timeout = 1800
         self.obj = obj
         self.ctx_kwargs = ctx_kwargs
 
+    # Synchronous context protocol
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.calls:
-            self()
+        run_async(self._execute_calls())
 
+    # Asynchronous context protocol
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        '''Ensure the context is flushed.'''
+        """Ensure the context is flushed."""
+        await self._execute_calls()
 
-        if self.calls:
-            await self.__acall__()
+    def __await__(self):
+        """ Make the context object awaitable such that ``await ctx`` flushes the call stack"""
+        return self._execute_calls().__await__()
 
     def _add_call(self, **request):
 
@@ -165,8 +257,8 @@ class Context(tworoutine.tworoutine):
 
         return future
 
-    async def __acall__(self):
-        '''Break off a set of calls and return them for execution.'''
+    async def _execute_calls(self):
+        """Break off a set of calls and return them for execution."""
 
         calls = []
         futures = []
@@ -176,35 +268,27 @@ class Context(tworoutine.tworoutine):
             calls.append(c)
             futures.append(f)
 
-        if calls:
-            # Create a HTTP request to complete the call. This is a coroutine,
-            # so we queue the call and then suspend execution (via 'yield')
-            # until it's complete.
-            session = self.obj.get_client_session()
-            # print(f'URI={self.obj.tuber_uri}, arg = {calls}')
-            try:
-                async with session.post(self.obj.tuber_uri, json=calls) as resp:
-                    json_out = await resp.json(
-                            loads=simplejson.JSONDecoder(object_hook=TuberResult).decode,
-                            content_type=None)
-                    # print(f'result: {json_out}')
-            except aiohttp.ClientConnectorError as e:
-                print('Network error')
-                raise TuberNetworkError(e)
+        if not calls:
+            return None
 
-            # Resolve futures
-            results = []
-            for (f, r) in zip(futures, json_out):
-                if hasattr(r, 'error') and r.error:
-                    f.set_exception(TuberRemoteError(r.error.message))
-                else:
-                    results.append(r.result)
-                    f.set_result(r.result)
+        json_out = await self.obj._tuber_request_async(calls)
+        # Resolve futures
+        results = []
+        for (f, r) in zip(futures, json_out):
+            if getattr(r, 'error', None):
+                f.set_exception(TuberRemoteError(r.error.message))
+            else:
+                results.append(r.result)
+                f.set_result(r.result)
 
-            # Return a list of results
-            return results
+        # Return a list of results
+        return results
 
     def __getattr__(self, name):
+        """
+        Return a function that, when called,  will add the name and arguments
+        passed to is into the list of pending calls.
+        """
 
         # Refuse to __getattr__ a couple of special names used elsewhere.
         if not valid_dynamic_attr(name):
@@ -228,7 +312,7 @@ class Context(tworoutine.tworoutine):
 
 
 class TuberCategory:
-    '''Pull Tuber functions into ORM objects based on categories.
+    """Pull Tuber functions into ORM objects based on categories.
 
     Here's an example. If "ib" is an IceBoard object, and you have the
     ordinary IceBoard function set_mezzanine_power(), you can run the
@@ -270,7 +354,7 @@ class TuberCategory:
     call. The response includes:
 
         "categories": [ "IceBoard", "Mezzanine" ]'
-    '''
+    """
 
     def __init__(self, category, getobject, **arg_mappers):
         self.category = category
@@ -287,13 +371,13 @@ class TuberCategory:
         cls.tuber_context = tuber_context
 
         def __getattr__(self, name):
-            '''This is a fall-through replacement for __getattr__.
+            """This is a fall-through replacement for __getattr__.
 
             We assume we're capturing a function call that's missing
             arguments. We fill in these arguments and dispatch the call.
 
             See `TuberObject.__getattr__` for details.
-            '''
+            """
 
             # Refuse to __getattr__ a couple of special names used elsewhere.
             if not valid_dynamic_attr(name):
@@ -324,13 +408,13 @@ class TuberCategory:
         cls.__getattr__ = __getattr__
 
         def __dir__(self):
-            '''Retrieve a list of class properties/methods that are relevant.
+            """Retrieve a list of class properties/methods that are relevant.
 
             We try to grab the original list of attributes from the ORM,
             and then augment it with any Tuber functions in our category.
 
             See `TuberObject.__dir__` for more details.
-            '''
+            """
 
             d = set(dir(self.__class__))
             d.update(dir(super(self.__class__, self)))
@@ -352,57 +436,117 @@ class TuberCategory:
 
         return cls
 
-@atexit.register
-@tworoutine.tworoutine
-async def close_client_sessions():
-    """ Close all client sessions
-    """
-    await asyncio.gather(*[c.close() for c in TuberObject._client_sessions.values()])
 
 class TuberObject:
-    '''A base class for TuberObjects.
+    """A base class allowing access to properties and methods provided by a remote IceBoard from an instance of this class.
 
     This is a great way of using Python to correspond with network resources
     over a HTTP tunnel. It hides most of the gory details and makes your
     networked resource look and behave like a local Python object.
 
-    To use it, you should subclass this TuberObject.
-    '''
+    To use it, you should subclass this TuberObject, and customize it
+    overriding appropriate configuration class properties in addition to
+    `tuber_objname` and `tuber_uri`.
+    """
 
+    # User defined class attributes. Can be overriden by subclasses.
+    # Parametrize the TCP connection limits.
+    _tuber_client_connections_total = 0  # total number of simultaneous TCP connections (0 = no limit)
+    _tuber_client_connections_per_host = 4  # total number of simultaneous TCP connections per host (None = no limit)
+    _tuber_connection_timeout = 1.8
+    _tuber_request_timeout = 1.8
+
+    # Customize remote method names
+    _tuber_wrapped_method_names = None
+    _tuber_async_method_names = ('tuber_', '_async')
+    # tuber_objname: Set as a property
+
+
+    # Internal class attributes
     # Cache for the methods and properties offered by the ARM processor
     _tuber_meta = {}
     _tuber_meta_properties = {}
     _tuber_meta_methods = {}
-    _tuber_meta_async_method_names = {}
+    _tuber_meta_method_functions = {}  # pre-processed functions
+    _tuber_client_sessions = {} # Client session objects in use by each event loop.
+    _tuber_use_json_cache = contextvars.ContextVar('_tuber_use_json_cache', default=False)  # exist only in the context of a specific async call and its own async calls.  Other methods running concurrently on the same instance won't see it.
+    _tuber_json_cache = {}
 
-    # Client session objects in use by each event loop.
-    _client_sessions = {}
-
-    # Parametrize the TCP connection limits. Can be overriden by subclasses.
-    _client_connections_total = 0  # total number of simultaneous TCP connections (0 = no limit)
-    _client_connections_per_host = 4  # total number of simultaneous TCP connections per host (None = no limit)
-    _tuber_async_method_prefix = 'tuber'  # no _
-    _tuber_async_method_suffix = 'async'  # no _
-
+    # Required defaults shadowed by instance attributes
     _tuber_getattr_in_progress = False
+    _tuber_instance_attributes_populated = False
+
+
+    @property
+    def __doc__(self):
+        """Construct DocStrings using metadata from the underlying resource."""
+        (meta, _, _) = self._tuber_get_meta()
+        return f"{meta.name}:\t{meta.summary}\n\n{meta.explanation}"
+
+    def __dir__(self):
+        """Ensures that the remote properties and methods are loaded in this
+        instance before returning the the list of the instance attributes.
+        Used for tab-completion.
+        """
+        if self.tuber_uri not in self._tuber_meta:
+            self._tuber_get_meta()
+        return super().__dir__()
+
+    def __getattr__(self, name):
+        """Look up a yet-unknown attribute after ensuring that the instance is
+        populated with the remote properties and methods.
+
+        We set ``self._tuber_getattr_in_progress`` while the `__getattr__` is in progress to be extra sure we
+        avoid infinite recursion in case some attribute access fails during this process.
+
+        This method is not called if the attribute exist, so there is no performance impact once the tuber objects are populated.
+
+        To minimize the performance impact when the parent class is checking for an unknown attribute,
+        we raise an AttributeError immediately if the attributes are already populated by checking
+        if ``self._tuber_instance_attributes_populated`` is True, which is quick.
+
+        Note that raising AttributeError allows Python to continue its attribute
+        search in further downstream objects in the MRO.
+        """
+        try:
+            if self._tuber_instance_attributes_populated or self._tuber_getattr_in_progress:
+                raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+            else:
+                self._tuber_getattr_in_progress = True
+                self._tuber_get_meta()
+                return getattr(self, name) # this __getattr__ won't be called again if the attribute has been added.
+        finally:
+            self._tuber_getattr_in_progress = False
 
     def tuber_context(self):
+        """Context in which tuber calls are grouped and deferred until the context is awaited or exited"""
         return Context(self)
+
+    def tuber_use_json_cache(self):
+        """Context in which tuber json encodings are cached. Use for large requests only"""
+        class JSONCacheContext:
+            def __init__(self, obj):
+                self.obj = obj
+            def __enter__(self):
+                self.obj._tuber_use_json_cache.set(True)
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                self.obj._tuber_use_json_cache.set(False)
+        return JSONCacheContext(self)
 
     @property
     def tuber_uri(self):
-        '''Retrieve the URI associated with this TuberResource.'''
+        """Retrieve the URI associated with this TuberResource."""
         raise NotImplementedError("Subclass needs to define tuber_uri!")
     # tuber_uri = "http://10.10.10.244/tuber"
 
     @property
     def tuber_objname(self):
-        '''Retrieve the Tuber Object associated with this TuberResource.'''
+        """Retrieve the Tuber Object associated with this TuberResource."""
         return self.__class__.__name__
 
     # Configure the max clients to be 4 per TuberObject (IceBoard).
 
-    def get_client_session(self):
+    def _tuber_get_client_session(self):
         """
         Return a client session that was created in the currently running
         ioloop. If none exist, one is created.
@@ -410,63 +554,110 @@ class TuberObject:
         Sessions can be shared between multiple instances of TuberObject.
 
         The client session objects are tied to the event loop that was current
-        when the session client is created. Using it in another ioloop causes
+        when the session client is created. Using it in another loop causes
         problems.
         """
         loop = asyncio.get_event_loop()
-        if loop in self._client_sessions:
-            return self._client_sessions[loop]
+        if loop in self._tuber_client_sessions:
+            return self._tuber_client_sessions[loop]
         else:
-            print(f'Running in new loop {id(loop)}. Creating new session with {self._client_connections_total} and {self._client_connections_per_host}')
+            print(f'Running in new loop {id(loop)}. Creating new session')
             connector = aiohttp.TCPConnector(
-                limit=self._client_connections_total,
-                limit_per_host=self._client_connections_per_host)
+                limit=self._tuber_client_connections_total,
+                limit_per_host=self._tuber_client_connections_per_host,
+                )
             session = aiohttp.ClientSession(
-                json_serialize=simplejson.dumps,
-                connector=connector)
-            self._client_sessions[loop] = session
+                # json_serialize=simplejson.dumps,
+                connector=connector,
+                # timeout=aiohttp.ClientTimeout(connect=self._tuber_connection_timeout,
+                #                               sock_read=self._tuber_request_timeout)
+                )
+            self._tuber_client_sessions[loop] = session
             return session
 
-    # tuber_objname = "IceBoard"
+    @classmethod
+    async def _tuber_close_client_sessions_async(cls):
+        """
+        Close all client sessions
+        """
+        await asyncio.gather(*[c.close() for c in cls._tuber_client_sessions.values()])
+
+    @classmethod
+    def _tuber_json_encode(cls, data):
+        """ JSONn encoder, with cache support.
+
+        We use ujson here, which is definitively faster than json (which in turn is now faster than simplejson in Python 3)
+
+        Cache is used when context variable ``self._tuber_use_json_cache`` is set to ``True`` in any upstream function in the call / await chain
+        """
+        if not cls._tuber_use_json_cache.get():
+            return ujson.dumps(data, reject_bytes=False)
+        else:
+            def build_key(x):
+                """makes a  hashable key out of x by converting lists and dicts into non-mutable objects"""
+                return frozenset((k, build_key(v)) for k, v in x.items()) if isinstance(x, dict) else tuple(build_key(v) for v in x) if isinstance(x, list) else x
+            key = build_key(data)
+            if key in cls._tuber_json_cache:
+                print(f"Reusing cached JSON encoding.")
+                encoded_data = cls._tuber_json_cache[key]
+            else:
+                encoded_data = cls._tuber_json_cache[key] = ujson.dumps(data, reject_bytes=False)
+            return encoded_data
+
+    @classmethod
+    def _tuber_json_decode(cls, data):
+        """ JSON decoder.
+
+        For small requests, standard json with ``objcet_hook=TuberResult`` is
+        faster than ujson followed with recursive dict conversion of the result into
+        TuberResults.
+        """
+        return json.JSONDecoder(object_hook=TuberResult).decode(data)
+
+    async def _tuber_request_async(self, requests):
+        """Execute a series of remote requests.
+
+        Parameters:
+
+            requests (list of dict): list of requests, where each request is a dictionary. The list is modified in-place to add the object type.
+
+        Returns:
+
+            Results for each request as a list of `TuberResults` objects, with the attributes:
+                .result: result of the command
+                .error: present only if there is an error.
+        """
+        if not requests:
+            return []
+
+        # Add and/or check object names
+        for r in requests:
+            objname = r.setdefault('object', self.tuber_objname)
+            assert objname == self.tuber_objname, \
+                f'Got call to object {objname} from an instance connected to object {self.tuber_objname}'
 
 
-    @property
-    def __doc__(self):
-        '''Construct DocStrings using metadata from the underlying resource.'''
+        # Create a HTTP request to complete the call. This is a coroutine,
+        # so we queue the call and then suspend execution (via 'yield')
+        # until it's complete.
+        session = self._tuber_get_client_session()
+        # print(f'URI={self.tuber_uri}, arg = {calls}')
 
-        (meta, _, _) = self._tuber_get_meta()
+        try:
+            # async with session.post(self.tuber_uri, json=requests) as resp:
+            async with session.post(self.tuber_uri, data=self._tuber_json_encode(requests)) as resp:
+                results = await resp.json(
+                        loads=self._tuber_json_decode,
+                        content_type=None)
+        except aiohttp.ClientConnectorError as e:
+            print('Network error')
+            raise TuberNetworkError(e)
 
-        return f"{meta.name}:\t{meta.summary}\n\n{meta.explanation}"
+        return results
 
-    def __dir__(self):
-        '''Provide a list of what's here. (Used for tab-completion.)
-
-        This function calls the `_tuber_get_meta()` method to get a list of
-        methods and properties stored on the board. If an error occurs in
-        communicating with the board, then this function returns an empty list,
-        and future calls to `_tuber_get_meta()` do not attempt to access the
-        board.  Use the `set_tuber_inspect(True)` module-level function to
-        re-enable communication with the board.
-        '''
-        if self.tuber_uri not in self._tuber_meta:
-            self._tuber_get_meta()
-        return super().__dir__()
-
-    #     # print('DIR called')
-    #     attrs = dir(super(self.__class__, self))
-    #     try:
-    #         (meta, _, _) = self._tuber_get_meta()
-    #     except Exception as e:
-    #         print(f'Exception {e}')
-    #         raise
-    #     # print(f'dir={attrs}, {meta.properties}')
-    #     # print('DIR comleted')
-    #     return sorted(attrs + meta.properties + meta.methods + list(self._tuber_meta_async_method_names[self.tuber_uri].keys()))
-    #     # return attrs
-
-    @tworoutine.tworoutine
-    async def _tuber_get_meta(self):
-        '''Retrieve metadata associated with the remote network resource.
+    async def _tuber_get_meta_async(self):
+        """Retrieve metadata associated with the remote network resource and
+        make sure the current class instance is populated with them.
 
         This data isn't strictly needed to construct "blind" JSON-RPC calls,
         except for user-friendliness:
@@ -478,243 +669,89 @@ class TuberObject:
         up properties and values (with tab-completion and docstrings)
         on-the-fly as they're needed.
 
-        If tuber inspection has been disabled (either automatically when
-        an error was encountered while calling this function in an attempt
-        at tab-completion, or manually by calling `set_tuber_inspect(False)`),
-        then this function returns empty lists.
-        '''
+        """
         print(f'{self!r} Fetching Tuber metadata')
+        uri = self.tuber_uri
 
-        if self.tuber_uri in self._tuber_meta:
-            return (self._tuber_meta[self.tuber_uri],
-                    self._tuber_meta_properties[self.tuber_uri],
-                    self._tuber_meta_methods[self.tuber_uri])
-
-
-        async with self.tuber_context() as ctx:
-            # Just specify the object type, which returns the meta info.
-            ctx._add_call()
-            meta = await ctx.__acall__()
-            meta = meta[0]
-
-            # Query info on all properties
-            for p in meta.properties:
-                ctx._add_call(property=p)
-            prop_list = await ctx.__acall__()
-
-            for m in meta.methods:
-                ctx._add_call(property=m)
-            meth_list = await ctx.__acall__()
-            # import traceback
-            # try:
-            #     gla
-            # except Exception as err:
-
-            #     print(traceback.print_tb(err.__traceback__))
-
+        # if we don't already have the meta info from the board at this specific URI, fetch it
+        if uri not in self._tuber_meta:
+            meta = (await self._tuber_request_async([dict()]))[0].result
+            prop_list = [r.result for r in await self._tuber_request_async([dict(property=p) for p in meta.properties])]
+            meth_list = [r.result for r in await self._tuber_request_async([dict(property=p) for p in meta.methods])]
             props = dict(zip(meta.properties, prop_list))
             methods = dict(zip(meta.methods, meth_list))
+            functions = {}
+            for name, info in methods.items():
+                if self._tuber_async_method_names:
+                    new_name = self._tuber_expand_name(name, *self._tuber_async_method_names)
+                    fn = self._get_async_method(name, info)
+                    functions[new_name] = fn
+                if self._tuber_wrapped_method_names:
+                    new_name = self._tuber_expand_name(name, *self._tuber_wrapped_method_names)
+                    wrapped_fn = sync_wrap(self._get_async_method(name, info))
+                    functions[name] = wrapped_fn
+            self._tuber_meta_properties[uri] = props
+            self._tuber_meta_methods[uri] = methods
+            self._tuber_meta[uri] = meta
+            self._tuber_meta_method_functions[uri] = functions
 
+        # Instrument the current instance with the properties and methods if required
+        if not self._tuber_instance_attributes_populated:
+            # Add properties to class instance
+            for name, value in self._tuber_meta_properties[uri].items():
+                setattr(self, name, value)
+            # Add methods to class instance
+            for name, fn in self._tuber_meta_method_functions[uri].items():
+                setattr(self, name, fn.__get__(self))
+            self._tuber_instance_attributes_populated = True
 
-        def to_async_name(name):
-            if name.startswith('_'):
-                return '_%s_%s_%s' % (self._tuber_async_method_prefix, name[1:], self._tuber_async_method_suffix)
-            else:
-                return '%s_%s_%s' % (self._tuber_async_method_prefix, name, self._tuber_async_method_suffix)
+        return (self._tuber_meta[uri],
+                self._tuber_meta_properties[uri],
+                self._tuber_meta_methods[uri])
 
+    _tuber_get_meta = sync_wrap(_tuber_get_meta_async)
 
-        self._tuber_meta_properties[self.tuber_uri] = props
-        self._tuber_meta_methods[self.tuber_uri] = methods
-        self._tuber_meta[self.tuber_uri] = meta
-        # Add properties to class attributes
-        for name, value in props.items():
-            # Store as class attribute
-            print(f'Adding property {name} to {self}')
-            setattr(TuberObject, name, value)
-
-        # Add sync and async methods to class attributes
-        for name, info in methods.items():
-            async_name = to_async_name(name)
-
-            # meth = tworoutine.tworoutine(self._get_async_method(name, info))
-            # print(f'Adding method {name} to {self.__class__}')
-            # setattr(TuberObject, name, meth)
-
-            async_meth = self._get_async_method(name, info)
-            print(f'Adding method {async_name} to {self.__class__}')
-            setattr(TuberObject, async_name, async_meth)
+    @staticmethod
+    def _tuber_expand_name(name, prefix='', suffix=''):
+        if name.startswith('_'):
+            return f'_{prefix}{name[1:]}{suffix}'
+        else:
+            return f'{prefix}{name}{suffix}'
 
     @staticmethod
     def _get_async_method(name, method_info):
         """
         """
         async def invoke(self, *args, **kwargs):
-            async with self.tuber_context() as ctx:
-                result = getattr(ctx, name)(*args, **kwargs)
-            return result.result()
-        invoke.__doc__ = textwrap.dedent('''
+            (result, ) = await self._tuber_request_async([dict(method=name, args=args, kwargs=kwargs)])
+            if getattr(result, 'error', None):
+                raise TuberRemoteError(result.error.message)
+            return result.result
+
+        args_short = ', '.join(a.name for a in method_info.args)
+        args_long = '\n'.join(f"    {arg.name + ':':<16} {arg.description}"
+                              for arg in method_info.args)
+        explanation =' \n'.join(textwrap.wrap(method_info.explanation))
+        invoke.__doc__ = textwrap.dedent(
+            f"""
             {name}({args_short})
 
             {args_long}
 
-            {explanation}''').format(
-                name=name,
-                args_short=', '.join([a.name for a in method_info.args]),
-                args_long='\n'.join([
-                    "    {:<16} {}".format(
-                        arg.name + ":",
-                        arg.description
-                    ) for arg in method_info.args]),
-                explanation='\n'.join(textwrap.wrap(method_info.explanation))
+            {explanation}"""
             )
         return invoke
 
-
-    def __getattr__(self, name):
-        '''Remote function call magic.
-
-        This function is called to get attributes (e.g. class variables and
-        functions) that don't exist on "self". Since we build up a cache of
-        descriptors for things we've seen before, we don't need to avoid
-        round-trips to the board for metadata in the following code.
-
-        This function is only called for attributes that aren't yet bound
-        to the instance (e.g. in the class definition or set using `setattr`).
-        Thus, when an attribute is requested that has not yet been bound,
-        it is first filtered through the `valid_dynamic_attr()` function
-        to determine whether it is likely that the attribute is one that
-        comes from the board.  If not, an AttributeError is raised; this
-        is important to avoid making tuber calls to the board for attributes
-        that are not bound by construction, such as attributes that
-        sqlalchemy or ipython checks for to determine how it should interact
-        with a given object.  If the input name is not first checked with
-        `valid_dynamic_attr()`, it is possible to trigger nasty recursion
-        depth errors by trying to access an attribute that does not
-        exist on the board.
-        '''
-
-    #     # Refuse to __getattr__ a couple of special names used elsewhere.
-    #     if not valid_dynamic_attr(name):
-    #         raise AttributeError(f"'{name}' is not a valid method or property!")
-    #     print('--------------------------------------------------------')
-    #     print(f'getattr:{name}, loop={asyncio.get_event_loop()} ID={id(asyncio.get_event_loop())}')
-    #     print('--------------------------------------------------------')
-    #     # Make sure this request corresponds to something in the underlying
-    #     # TuberObject.
-        # print(f'Tuber.getattr {name}')
-
-        # We set self._tuber_getattr_in_progress during the getattr process to
-        # avoid infinite recursion in case anything we call (e.g. repr(self)
-        # etc) accesses an unknown attribute.
-        try:
-            if self._tuber_getattr_in_progress or self.tuber_uri in self._tuber_meta:
-                # return getattr(super(), name)
-                raise AttributeError("'%s' object has no attribute '%s'" % (self.__class__.__name__, name))
-                # if self._tuber_getattr_in_progress:
-                #     raise RuntimeError(f'Tuber: trying to get attribute {name} while lookup for {self._tuber_getattr_in_progress} is in progress')
-            else:
-                self._tuber_getattr_in_progress = True
-                self._tuber_get_meta()
-                return getattr(self, name)
-        finally:
-            self._tuber_getattr_in_progress = False
-
-        # raise AttributeError()
-        # return super().__getattr__(name)
-
-    #     async_names = self._tuber_meta_async_method_names[self.tuber_uri]
-
-    #     # try:
-    #     #     (meta, metap, metam) = (
-    #     #         m[self.tuber_uri],
-    #     #         mp[self.tuber_uri],
-    #     #         mm[self.tuber_uri]
-    #     #     )
-    #     #     # (meta, metap, metam) = (
-    #     #     #     self._tuber_meta[self.tuber_uri],
-    #     #     #     self._tuber_meta_properties[self.tuber_uri],
-    #     #     #     self._tuber_meta_methods[self.tuber_uri]
-    #     #     # )
-    #     # except KeyError as e:
-    #     #     raise TuberStateError(e, "Attempt to retrieve metadata on TuberObject that doesn't have it yet! Did you forget to call resolve()?")
-    #     # valid_names = meta.methods.keys() + meta.properties.keys() + ['async_' + n for n in meta.methods.keys()]
-    #     # if name not in valid_names:
-    #     #     raise AttributeError(f"'{name}' is not a valid method or property!")
-
-    #     def create_docstring(method_info):
-    #         return textwrap.dedent('''
-    #             {name}({args_short})
-
-    #             {args_long}
-
-    #             {explanation}''').format(
-    #                 name=name,
-    #                 args_short=', '.join([a.name for a in method_info.args]),
-    #                 args_long='\n'.join([
-    #                     "    {:<16} {}".format(
-    #                         arg.name + ":",
-    #                         arg.description
-    #                     ) for arg in method_info.args]),
-    #                 explanation='\n'.join(textwrap.wrap(method_info.explanation))
-    #             )
+atexit.register(sync_wrap(TuberObject._tuber_close_client_sessions_async))
 
 
 
-    #     # if name not in meta.methods and name not in meta.properties:
-    #     #     raise AttributeError(f"'{name}' is not a valid method or property!")
-
-    #     if name in meta.properties:
-    #         # Store as a instance attribute
-    #         setattr(self, name, metap[name])
-    #         return getattr(self, name)
-
-    #     elif name in meta.methods:
-    #         # Generate a callable prototype
-    #         @tworoutine.tworoutine
-    #         async def invoke(self, *args, **kwargs):
-    #             async with self.tuber_context() as ctx:
-    #                 result = getattr(ctx, name)(*args, **kwargs)
-    #             return result.result()
-
-    #         invoke.__acall__.__doc__ = create_docstring(metam[name])
-    #         # Associate as a class method.
-    #         setattr(self.__class__, name, invoke)
-
-    #     elif name in async_names:
-    #         sync_name = async_names[name]
-    #         async def invoke(self, *args, **kwargs):
-    #             async with self.tuber_context() as ctx:
-    #                 result = getattr(ctx, sync_name)(*args, **kwargs)
-    #             return result.result()
-    #         invoke.__doc__ = create_docstring(metam[sync_name])
-    #         # Also add a pure async version of the method with the `async_` prefix
-    #         setattr(self.__class__, name, invoke)
-    #         return getattr(self, name)
-    #     else:
-    #         raise AttributeError(f"'{name}' is not a valid method or property!")
-
-    # @tworoutine.tworoutine
-    # async def sleep(self,t=5):
-    #         await asyncio.sleep(t)
-
-    # async def test(self):
-    #     loop = asyncio.get_event_loop()
-    #     nest_asyncio.apply(loop)
-    #     print(f'Running in loop {id(loop)}')
-
-    #     async def dot():
-    #         while True:
-    #             print('.',end='', flush=True)
-    #             await asyncio.sleep(1)
-    #     # loop.call_soon(dot())
-    #     asyncio.create_task(dot())
-    #     print('Calling sleep as coroutine')
-    #     await self.sleep.cr()
-    #     print('Calling sleep as synchronous function')
-    #     self.sleep(5)
-
-# patch the current interpreter loop
-loop = asyncio.get_event_loop()
-print(f'Enabling nested loop on interpreter event loop ID {id(loop)}')
-nest_asyncio.apply(loop)
-# vim: sts=4 ts=4 sw=4 tw=78 smarttab expandtab
+# Enable nested run_until_complete() on current ipython loop. If we don't do
+# this now, ipython, enabling this later causes ipython to crash when we
+# tab-complete. Maybe it's because the event loops that is created when
+# requesting tab completion is not re-entrant and there are already tasks on
+# on this loop when we call our first run_async(), which then patches the
+# event loop to be reentrant.
+print(f'Enabling nested event loop on current loop ID {id(asyncio.get_event_loop())}')
+nest_asyncio.apply()
+# # vim: sts=4 ts=4 sw=4 tw=78 smarttab expandtab

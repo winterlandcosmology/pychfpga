@@ -18,9 +18,10 @@ from wtl.metrics import Metrics
 
 # Local packages
 
-from ..icecore.hardware_assets import IceBoardBase, FMCMezzanineBase
+from ..icecore.hardware_assets import IceBoardBase
+from ..icecore.hardware_assets import FMCMezzanineBase
 from ..icecore.tuber import TuberError, TuberNetworkError, TuberRemoteError
-from .hardware_map import register_class, get_class_by_part_number, get_unique_class_instance, get_all_classes
+from .hardware_map import HardwareMap
 from .icecrate_ext import IceCrate
 from .ccoll import Ccoll
 
@@ -36,40 +37,36 @@ from .lib import qsfp
 from .lib import gpio
 
 
-# class HWMResource(object):
-#     """
-#     Base class for Hardware Mapper resources to share.
-#     """
-#     hwm = HardwareMap()
+def run_async(awaitable):
+    """
+    Run the current loop until the awaitable is resolved.
 
-#     def hwm(self):
-#         '''Retrieve the :class:`HardwareMap` that stores this object.'''
-#         return self.hwm
+    Is used to run an async function from a sync function, assuming there is a valid current event loop .
+
+    We use nest_asyncio to allow run_until_complete() call to operate even if the current loop is already running. Native asyncio does not allow that.
+    """
+    nest_asyncio.apply()  # make sure we can run in an already running loop
+    return asyncio.run(awaitable)
+
 
 def async_to_sync(fn):
     """
-    Wraps an async coroutine function into a function that can be run synchronously (without the await statement).
+    Wraps an async coroutine function into a function that can be called synchronously (without the await statement).
 
     This assumes there is a event loop.
     """
     def sync_fn(*args, **kwargs):
-        loop = asyncio.get_event_loop() # get the current loop, running or not
-        nest_asyncio.apply(loop)  # make sure we can run in an already running loop
-        return loop.run_until_complete(fn(*args, **kwargs))
+        return run_async(fn(*args, **kwargs))
     return sync_fn
 
 
-
-@register_class()
-class FMCMezzanine(FMCMezzanineBase):
+class FMCMezzanine(FMCMezzanineBase, HardwareMap):
     """
     Provides the basic methods needed to operate a mezzanine.
     """
-    _class_registry = {}  # {part_number:class}
-    _instance_registry = {}  # {(model,serial):instance}
 
     part_number = None
-    __ipmi_part_number__ = None  # Must match part number in IPMI data
+    _ipmi_part_numbers = None  # Must match part number in IPMI data
 
 
     def __init__(self, serial=None, mezzanine=None, iceboard=None):
@@ -77,10 +74,10 @@ class FMCMezzanine(FMCMezzanineBase):
         self.serial = serial
         self.mezzanine = mezzanine  # mezzanine slot number on IceBoard
         self.iceboard = iceboard  # carrier IceBoard object
-        self._instance_registry[(self.part_number, serial)] = self
 
     def get_id(self):
-        """ Return a string that identifies uniquely the mezzanine board. Comprises the model number and the serial number.
+        """ Return a string that identifies uniquely the mezzanine board.
+        Comprises the model number and the serial number.
         """
         return '%s_SN%s' % (self.part_number, self.serial)
 
@@ -99,15 +96,21 @@ class FMCMezzanine(FMCMezzanineBase):
     def is_mezzanine_present(self):
         return self.iceboard.is_mezzanine_present(self.mezzanine)
 
-@register_class()
-class IceBoard(IceBoardBase):
+class IceBoard(IceBoardBase, HardwareMap):
     """ Provide the basic code needed to operate the Iceboard (i.e. Tuber-
     provided code and a few Python wrappers)
+
+    Adds:
+        - Slot, crate and mezzanine self discovery through backplane hardware
+         lines and IPMI info stored in non-volatile memory chips on the
+         backplane, motherboard and mezzanines (no mDNS required)
+        - Hardware map management
+
 
     `IceBoardHandler` can be created as a standard Python object initialized with a number of
     parameters which set corresponding attributes (see below). If a `parent_getter` function is
     provided, no other parameter is needed, and the value of the attributes will will be fetched
-    dynamically from the parent object. Note that any explicitely specified parameter overrides a
+    dynamically from the parent object. Note that any explicitly specified parameter overrides a
     parent parameter.
 
     Parameters:
@@ -117,43 +120,215 @@ class IceBoard(IceBoardBase):
     _instance_registry = {}  # {(model,serial):instance}
 
     part_number = 'MGK7MB'
-    __ipmi_part_number__ = 'MGK7MB'
-    tuber_objname = 'IceBoard'  # use the generic Iceboard support functions.
+    _ipmi_part_numbers = ['MGK7MB']
+    tuber_objname = 'IceBoard'  # use the generic support functions provided by the IceBoard's ARM processor.
+
+    NUMBER_OF_FMC_SLOTS = 2
+
+    # subarray = None  # Arbitrary string used to group and select subsets of Iceboard"
 
 
-    subarray = None  # Arbitrary string used to group and select subsets of Iceboard"
+    def __init__(self, hostname=None, serial=None, slot=None, subarray=None, **kwargs):
+        """ Create or update an IceBoard object.
+
+        If the hardware map features of the object are to be used, use
+        IceBoard.get_unique_instance(...) to create an IceBoard object (or
+        reuse one that matches the serial or hostname, with the possibility of
+        updating the class type and other Iceboard parameters)
 
 
-    def __init__(self, hostname=None, serial=None, crate=None, slot=None, subarray=None, **kwargs):
-        self.logger = logging.getLogger(__name__)
-        super().__init__(hostname=hostname, serial=serial, **kwargs)  # pass on the remaining kwargs
-        self.crate = crate
+        Parameters:
+
+            hostname (str): passed to Tuber. If `hostname` is None, methods
+                provided by the IceBoard ARM processor (over Tuber) cannot be
+                used on this instance. If `hostname` is 'None' but the
+                instance has a serial number, then the board hostname can
+                potentially be resolved using mDNS discovery.
+
+            serial (str or int): Serial number of the board, in the exact
+                fromat it is found on the IPMI info of the board. For
+                convenience, if `serial` is an integer, it is converted into a
+                properly formatted string serial.
+
+            slot (int): slot number on a crate, or virtual slot number for
+                crate-less standalone boards. Ranges from 1 to NUMBER_OF_SLOTS
+                in the particular icecrate. A value of  0 or None (i.e.
+                bool(slot) == False)  indicates that there is no slot
+                information.
+
+            subarray: Arbitrary value that is used to group boards in logical
+                categories.
+
+
+        Notes:
+
+        __init__() only sets the IceBoard key parameters and manages the
+        hardware map. IceBoard objects (and their subclasses) are created and
+        destroyed freely  during the process of hardware map creation.
+        __init__() therefore shall not initiate communication with the
+        hardware or do complex set-up; this is done by init(), which will be
+        called when the hardware map is completed and stable.
+
+        """
+        if not serial and not hostname:
+            raise ValueError('Must specify either a serial number or hostname for IceBoard')
+
+        if isinstance(serial, int):  # make sure serial is a string
+            serial = f'{serial:04d}' # IceBoard serials have 4 digits
+
+        super().__init__(hostname=hostname, serial=serial, **kwargs)  # pass on the remaining kwargs. crate and mezzanine are cleared.
+
         self.slot = slot
         self.subarray = subarray
-        self.mezzanine = {}
-        self._instance_registry[(self.part_number, serial)] = self
-        self._cached_repr = None  # important to afaid infinite recursions through repr()
+
+        self.crate = None
+        self._cached_repr = None  # important to avoid infinite recursions through repr(). Clear on updates to account for the new parameters.
+        self.logger = logging.getLogger(__name__)
+
+        print(f"Created {self.__class__.__name__}(hostname={hostname}, serial={serial}, slot={slot}, subarray={subarray}), crate={self.crate}")
 
     def __repr__(self):
         """ Provides a concise string representation of this Iceboard that is
         informative enough to be used for logs.
-        This string is typically used in syslog tags (32 characters max,
-        alphanumeric characters only).
         """
 
         if self._cached_repr:
             return self._cached_repr
         else:
-            self._cached_repr = "%s(%s)" % (self.__class__.__name__,  self.get_id())
+            self._cached_repr = f"{self.__class__.__name__}({self.get_string_id()})"
             return self._cached_repr
-        # if self.crate and self.slot:
-        #     return "%s(C%s.S%02i)" % (self.__class__.__name__,
-        #                               self.crate.serial, self.slot)
-        # if self.serial:
-        #     return "%s(SN%s)" % (self.__class__.__name__,  self.serial)
-        # if self.hostname:
-        #     return "%s(%s)" % (self.__class__.__name__,  self.hostname)
-        # return "%s(?)" % (self.__class__.__name__)
+
+    def get_string_id(self):
+        """ Return a string that identifies uniquely the IceBord in the most convenient representation.
+
+        Preference order:
+
+            - (0,3)  # crate 0 , 4th slot (tuples always use zero-based indices)
+            - (MGK7BP16_SN025, 3)  # Same, but without crate number info
+            - MGK7MB_SN0234 # no crate info at all (even with virtual slot)
+            - 10.10.10.244 # motherboard serial number not discovered
+            - id=140529531550992 # nothing, last resort
+
+        """
+        if self.crate and self.crate.crate_number is not None and self.slot:
+            return f"({self.crate.crate_number},{self.slot-1})"
+        if self.crate and self.crate.part_number and self.crate.serial and self.slot:
+            return f"({self.crate.part_number}_SN{self.crate.serial},{self.slot-1})"
+        elif self.serial:
+            return f"{self.part_number}_SN{self.serial}"
+        elif self.hostname:
+            return self.hostname
+        else:
+            return f"id={id(self)}"
+
+
+    @classmethod
+    def get_unique_instance(cls, new_class=None, serial=None, hostname=None, slot=None, subarray=None, crate_number=None, **kwargs):
+        """
+        Creates a new IceCrate instance if one with matching hostname or
+        serial number does not exist, otherwise return an existing one
+        augmented with the new serial or hostname information.
+
+        Existing instances are those who match either the specified hostname
+        or part_number/serial number. If no board is found, a new instance of
+        class `new_class` is created. Otherwise, the existing instance is
+        updated with the parameters  that are not `None`.
+
+
+        All creation and update operations maintain the integrity of the
+        references between IceBoards, IceCrates and Mezzanines.
+
+        Use this method to create IceBoards objects instead of instantiating
+        them directly from the target class in order to maintain the hardware
+        map integrity.
+
+        Parameters:
+
+            new_class (IceBoard or subclass): class desired for the returned instance. If None, the class of an existing object is not changed, and a new object is created with the class `cls`
+
+            serial (str): serial number of the IceBoard to look for, and to assign to a new instance or existing matching instance.
+
+            hostname (str): hostname of the IceBoard to look for, and to assign to a new instance or existing matching instance.
+
+            slot (int): slot number in which the board is located in a crate
+                or backplane, or virtual slot number if the board is not in a
+                crate. Is assigned to the new or existing matching Iceboard.
+
+                If the slot number is changed, the associated IceCrate slot mapping is updated.
+
+            subarray: Arbitrary value used to group Iceboards in logical arrays. Is assigned to new instance or existing matching instance.
+
+            crate_number: For convenience, if `crate_number` is specified, the
+                new or existing board is associated with the IceCrate instance
+                that matches the specified crate number, or one is created
+                with that crate number to hold the desired crate number value.
+        """
+        print(f"In et_unique_instance")
+
+        matching_crates = [
+            c for c in cls._instance_registry
+            if (hostname is not None and c.hostname == hostname)
+            or ((new_class or cls).part_number and serial and c.part_number == (new_class or cls).part_number and c.serial == serial)]
+
+        print(f"Matches: {matching_crates}")
+        if not len(matching_crates):  # no matching crate, create one
+            print(f"Creating Iceboard")
+            ib = (new_class or cls)(serial=serial, hostname=hostname, slot=slot, subarray=subarray, **kwargs)
+            print(f"Updating Iceboard with crate_number={crate_number}")
+            return ib.update_instance(crate_number=crate_number)
+        elif len(matching_crates) == 1: # one match, update existing one
+            return matching_crates[0].update_instance(new_class=new_class, serial=serial, hostname=hostname, slot=slot, subarray=subarray, crate_number=crate_number, **kwargs)
+        else:
+            raise RuntimeError('Multiple IceBoards with same keys (should never happen)')
+
+    def update_instance(self, new_class=None, serial=None, hostname=None, slot=None, subarray=None, crate_number=None, crate=None, **kwargs):
+        """
+        Update the class, serial or hostname info of specified IceCrate
+        subclass instance. If the class needs to be changed, a new class
+        instance is created and the IceBoard references are updated to the new class.
+
+        Paremeters:
+
+        """
+        serial = serial or self.serial
+        hostname = hostname or self.hostname
+        slot = slot if slot is not None else self.slot
+        subarray = subarray if subarray is not None else self.subarray
+        crate_number = crate_number if crate_number is not None else self.crate.crate_number if self.crate else None
+
+        if new_class and self.__class__ is not new_class:
+            other = new_class(serial=serial, hostname=hostname, slot=slot, subarray=subarray, **kwargs)
+            print(f"Updating newly created instance...")
+            other.update_instance(crate_number=crate_number, crate=self.crate) # update crate and backrefs
+            # Update Mezzanine references to the new instance
+            for fmc, mezz in self.mezzanine.items():
+                other.mezzanine[fmc] = mezz
+                mezz.iceboard = other
+            self.delete_instance()
+            return other
+        else:  # otherwise update serial and hostname
+            if kwargs:
+                raise NotImplementedError(f'Cannot update existing {self.__class__.__name__} instance with additional keyword arguments {kwargs}')
+            self.hostname = hostname
+            self.serial = serial
+            self.subarray = subarray
+            # remove previous crate backref if it exists
+            if self.crate and self.slot:
+                self.crate.slot.pop(self.slot, None)
+            # Assign new slot
+            self.slot = slot
+            # eattach crate by crate number if specified
+            print(f"Updating with with crate_number={crate_number}...")
+            if crate_number is not None:
+                self.crate = IceCrate.get_unique_instance(crate_number=crate_number)
+            elif crate:
+                self.crate = crate
+            # Create new crate backref
+            if self.crate and self.slot:
+                self.crate.slot[self.slot] = self
+
+            self._cached_repr = None  # Clear on updates to account for the new parameters.
+            return self
 
 
     def set_cache(self):
@@ -165,21 +340,6 @@ class IceBoard(IceBoardBase):
         self._cached_repr = None
 
 
-    def get_id(self):
-        """ Return a string that identifies uniquely the motherboard board.
-        Comprises the model number and the serial number.
-        """
-        if self.crate and self.slot:
-            return "C%s.S%02i" % (self.crate.serial, self.slot)
-        elif self.serial:
-            return "SN%s" % (self.serial)
-        elif self.hostname:
-            return "%s" % (self.hostname)
-        else:
-            return "?"
-
-        # return '%s_SN%s' % (self.part_number, self.serial)
-
     async def ping_async(self, timeout=0.1):
         """
         Returns a boolean indicating whether a tuber object is available at
@@ -188,99 +348,12 @@ class IceBoard(IceBoardBase):
         print(f'{self!r} Ping_async()')
         self.logger.info('%r: Pinging %s' % (self, self.tuber_uri))
         try:
-            await self._tuber_get_meta.__acall__()
+            await self._tuber_get_meta_async()
             await self._tuber_sleep_async(0)
             return True
         except TuberError as e:
             self.logger.debug('%.32r: Tuber Ping returned an error. Board is considered to be absent. Error is \n%r' % (self, e))
             return False
-        #     async.async_return(False)
-        # except ValueError:
-        #     logger.debug('%.32r: Tuber Ping returned a HTTP response with invalid JSON data. Board is considered to be absent.' % (self))
-        #     async.async_return(False)
-        # except Exception as e:
-        #     logger.error('%r: unhandled exception in ping: %s: %r' %(self,type(e), e ))
-        #     async.async_return(False)
-        # try:
-        #     async.async_return(not response.error)
-        # except KeyError:
-        #     logger.debug('%.32r: Tuber Ping returned valid JSON reply ("%r") but does not have the required error field. Board is considered to be absent.' % (self, response))
-        #     async.async_return(False)
-
-
-@register_class()
-class IceBoardPlus(IceBoard):
-    """ Extension to the basic Python Iceboard object .
-
-    Adds:
-
-        - Slot, crate and mezzanine self discovery
-        - Access to the memory-mapped registers in the FPGA's firmware using the ARM-FPGA SPI link
-            through the `fpga_spi_mmi_read_async()` and `fpga_spi_mmi_write_async()` methods.
-
-
-    `IceBoardPlusHandler` can be created as a standard Python object initialized with a number of
-    parameters which set corresponding attributes (see below). If a `parent_getter` function is
-    provided, the value of these attributes will instead be fetched
-    dynamically from the parent object. Note that any explicitely specified parameter overrides a
-    parent parameter.
-
-    Parameters:
-        parent_getter (func): Function that returns the dynamically return the parent object from which the following parameters will be fetched. Is `None` if there is no parent.
-        hostname (str): hostname or IP address of the ICEBoard ARM processor (mandatory)
-        serial (str): Serial number of the board. Can be provided by the ARM.
-        part_number (str): Part number of the IceBoard. Can be obtained from the ARM.
-        crate (IceCrateHandler): = object that handle the backplane on which the board is connected. `None` if the board is not connected to a backplane.
-        slot (int): Slot number in which the board is installed ona backplane. None if there is no backplane.
-        mezzanine (dict): Map {mezzanine_number: Mezzanine Handler, ...} describing the installed mezzanines. Can be obtained from the ARM.
-        tuber_objname (str): name of the set of software functions that will be provided by the ARM processor through the Tuber interface.
-
-
-
-    .. Any object provided by this this handler can be accessed at any
-    .. hierarchical level. However, objects that are probided by Tuber have these
-    .. restrictions:
-    ..
-    ..    - attributes and methods whise name begin with '_' are not accessible
-    ..    - modification to the object attributes must be done by a setter
-    ..      function provided by the object.
-    ..    - methods or attribute access can only return string or numeric values,
-    ..      or lists or dictionnary thereof
-
-
-    Notes:
-        - The SPI MMI interface is currently provided by peek/poke methods accessed through Tuber.
-          However, if one day the ARM supports it, a faster access could potentially be provided by
-          overriding the fpga_spi_mmi_read_async/write methods to send the commands to a dedicated ARM port
-          and thus bypass Tuber's HTTP/JSON overhead. Since the SPI link is relatively slow anyway, this might not be useful until a faster ARM-FPGA link is in place (such as the unused PCIe link).
-
-        - This handler does *not* define a MMI interface that uses the FPGA's
-          ethernet port directly through the SFP+ connector. Such functionnality is to be provided by a
-          subclass of this class if the firmware supports it.
-    """
-
-    handler_name = None  # Firmware-specific
-
-
-    # Core FPGA firmware registers (delete when moved to the ARM)
-    FPGA_CORE_FIRMWARE_COOKIE_ADDR        = 4 * 0
-    FPGA_APPLICATION_FIRMWARE_COOKIE_ADDR = 4 * 1
-    FPGA_APPLICATION_FLAGS_ADDR           = 4 * 2
-    FPGA_FIRMWARE_CRC32_ADDR              = 4 * 3
-    FPGA_FIRMWARE_TIMESTAMP_ADDR          = 4 * 4
-    FPGA_SERIAL_NUMBER_LSW_ADDR           = 4 * 5
-    FPGA_SERIAL_NUMBER_MSW_ADDR           = 4 * 6
-
-    NUMBER_OF_FMC_SLOTS = 2
-
-    # _bitstream_register contains a list of bitstreams that are associated
-    # with this object. Format: tag: bitstream_object
-    _bitstream_register = {}
-
-    _backplane_initialized = False  # Indicate if we have initialized the backplane access yet
-    _cached_repr = None
-
-
 
     ###################################
     # Auto discovery methods
@@ -290,20 +363,20 @@ class IceBoardPlus(IceBoard):
         """
         Discover the serial number of this IceBoard from its IPMI data, and update the hardware map accordingly if `update=True`
         """
-        self.logger.info('%r: discovering the serial number of board at %s' % (self, self.tuber_uri))
+        self.logger.info(f'{self!r}: discovering the serial number of board at {self.tuber_uri}')
         try:
             actual_serial = str((await self.tuber_get_motherboard_serial_async()))
         except Exception as e:  #  Deal with uninitialized boards
-            self.logger.warn('%r: Error while attempring to read the board serial number. The exception is %r' % (self, e))
+            self.logger.warning('%r: Error while attempring to read the board serial number. The exception is %r' % (self, e))
             actual_serial = None
-        self.logger.info('%r: got the serial number of board at %s to be %s' % (self, self.tuber_uri, actual_serial))
+        self.logger.info(f'{self!r}: got the serial number of board at {self.tuber_uri} to be {actual_serial}')
         await asyncio.sleep(0)
         if update:
             if not actual_serial:
-                self.logger.warn('%r: Could not read the board serial number from IPMI storage or serial number is null. Serial number is not updated.' % (self))
+                self.logger.warning('%r: Could not read the board serial number from IPMI storage or serial number is null. Serial number is not updated.' % (self))
             elif self.serial and actual_serial != self.serial:
-                self.logger.warn('%r: The discovered serial number differs from the current (hardware map) one. Updating to the discovered value.' % (self))
-            self.serial = actual_serial
+                self.logger.warning('%r: The discovered serial number differs from the current (hardware map) one. Updating to the discovered value.' % (self))
+            self.update_instance(serial=actual_serial)
         self.logger.info('%r: finished discovering the serial number of board at %s' % (self, self.tuber_uri))
         return(self.serial)
 
@@ -312,10 +385,10 @@ class IceBoardPlus(IceBoard):
         actual_slot = await self.tuber_get_backplane_slot_async()
         if update:
             if not actual_slot:
-                self.logger.warn('%r: The board is not connected to a backplane. Slot number is not updated.' % (self))
+                self.logger.warning('%r: The board is not connected to a backplane. Slot number is not updated.' % (self))
             elif self.slot and actual_slot != self.slot:
-                self.logger.warn('%r: The discovered slot (%s) number differs from the current (hardware map) one (%s). Updating to the discovered slot.' % (self, actual_slot, self.slot))
-            self.slot = actual_slot
+                self.logger.warning('%r: The discovered slot (%s) number differs from the current (hardware map) one (%s). Updating to the discovered slot.' % (self, actual_slot, self.slot))
+            self.update_instance(slot=actual_slot)
         return(self.slot)
 
     async def discover_mezzanines_async(self, update=True):
@@ -351,7 +424,7 @@ class IceBoardPlus(IceBoard):
             # This is useful to recognize legacy EEPROM data format
             ipmi = None
             if eeprom_data is not None:
-               for cls in get_all_classes(FMCMezzanine):
+                for cls in FMCMezzanine.get_all_classes():
                     if hasattr(cls, 'decode_eeprom'):
                         ipmi = cls.decode_eeprom(eeprom_data)
                         if ipmi:
@@ -377,10 +450,10 @@ class IceBoardPlus(IceBoard):
 
             # Look through the Mezzanine classes to see if one matches the model number found in the EEPROM
             # for mapper in class_mapper(FMCMezzanine).self_and_descendants:
-            #         if mapper.class_.__ipmi_part_number__ == part_number:
+            #         if mapper.class_._ipmi_part_numbers == part_number:
             #             mezz_class[m] = mapper.class_
             #             break
-            mezz_class[m] = get_class_by_part_number(FMCMezzanine, part_number)
+            mezz_class[m] = FMCMezzanine.get_class_by_ipmi_part_number(part_number)
 
             if update:
                 # if not self.hwm:
@@ -427,32 +500,198 @@ class IceBoardPlus(IceBoard):
         explicitely specified for this IceBoard in the YAML hardware maps.
         """
 
-        icecrate_class = {}
+        icecrate_class = None
         part_number = None
         serial = None
+        slot_number = None
         if (await self.is_backplane_present_async()):
             ipmi = await self._tuber_get_backplane_ipmi_async()  # Tuber call
             part_number = ipmi.product.part_number
             serial = ipmi.product.serial_number
+            icecrate_class = self.get_class_by_ipmi_part_number(base_class_name='IceCrate', part_number=part_number)
             slot_number = await self.tuber_get_backplane_slot_async()
             self.logger.debug(
-                '%r: discover_crate(): '
-                'Detected Backplane Model: %s Serial %s'
-                % (self, part_number, serial)
-                )
+                f'{self!r}: discover_crate(): Detected Backplane '
+                f'Model {part_number} Serial {serial}')
 
-        crate_class = get_class_by_part_number(IceCrate, part_number)
-
-        if not crate_class:
+        if not icecrate_class:
             self.logger.warning(
-                "%r: discover_crate(): There is no known backplane object with "
-                "part number '%r'" % (self, part_number))
+                f"{self!r}: discover_crate(): There is no known backplane object "
+                f"with part number '{part_number}'")
 
-        if update:
-            self.slot = slot_number
-            self.crate = get_unique_class_instance(crate_class, serial)
-            self.crate.slot[slot_number] = self
-        return(icecrate_class)
+        if icecrate_class and update:
+            crate_number = self.crate.crate_number if self.crate else None
+            crate = IceCrate.get_unique_instance(new_class=icecrate_class, serial=serial, crate_number=crate_number)
+            self.update_instance(crate=crate) # update crate info and repr
+            print(f"{self} now has crate {self.crate}")
+            # if slot_number:
+            #     self.crate.slot[slot_number] = self
+
+        return icecrate_class
+
+    # ------------------------------------
+    # FPGA SPI Memory-mapped interface
+    # ------------------------------------
+
+    # *** JFC: Those methods can be updated one day to use the direct (non-
+    #     Tuber) links to the FPGA (on separate socket, forwarded to the FPGA
+    #     through SPI or PCIe). Otherwise we fallback to the slower tuber MMI
+    #     interface.
+    async def fpga_spi_mmi_read_async(self, addr):
+        """ Read a single 32-bit word from the FPGA at the specified byte
+        address. This uses the fastest interface available (currently the ARM-
+        FPGA SPI link)
+
+        Value is returned as an unsigned integer.
+        """
+        word = await self._tuber_fpga_spi_peek_async(addr)
+        return(word & 0xFFFFFFFF)
+
+    async def fpga_spi_mmi_write_async(self, addr, value):
+        """ Write a single 32-bit word to the FPGA at specified byte address.
+        This uses the fastest interface available (currently the ARM-FPGA SPI
+        link)
+        """
+        await self._tuber_fpga_spi_poke_async(addr, value)
+
+
+
+    # Mezzanine management
+
+    async def _mezzanine_eeprom_read_async(self, mezzanine):
+        """ Returns the contents of the specified mezzanine's EEPROM.
+        """
+        data = await self._tuber_mezzanine_eeprom_read_base64_async(mezzanine)
+        return base64.decodebytes(data.encode())
+
+
+    # Backplane/crate-related methods
+
+    # *** JFC: method rename
+    async def _write_motherboard_spi_eeprom_base64(self, *args, **kwargs):
+        result = await self._tuber_motherboard_eeprom_write_base64_async(*args, **kwargs)
+        return(result)
+
+    # def get_motherboard_serial(self):
+    #     """ Read the motherboard serial number from the IPMI data. """
+    #     ipmi = self._get_motherboard_ipmi()
+    #     return str(ipmi.board.serial_number)
+
+    # *** JFC: We now have the equivalent ARM method. Will delete this when we
+    #     confirm it behaves the same.
+
+    async def is_backplane_present_async(self):
+        return await self.tuber_is_backplane_present_async()
+
+    async def get_slot_number(self):
+        """ Reads the GPIO to determine in which slot number this IceBoard is
+        connected.
+
+        """
+        if await self.is_backplane_present_async():  # Is this test necessary?
+            return await self.tuber_get_backplane_slot_async()
+        else:
+            return None
+
+    async def get_iceboard_clock_source_async(self):
+        return await self.tuber_get_clock_source_async()
+
+    get_iceboard_clock_source_sync = async_to_sync(get_iceboard_clock_source_async)
+
+    def get_motherboard_temperature(self, sensor):
+        """ Synchronous wrapper to return motherboard temperature sensor value.
+        """
+        return run_async(self.tuber_get_motherboard_temperature_async(sensor))
+
+
+########################################################################################################
+########################################################################################################
+########################################################################################################
+########################################################################################################
+########################################################################################################
+#
+# dP                    888888ba                                   dP  888888ba  dP
+# 88                    88    `8b                                  88  88    `8b 88
+# 88 .d8888b. .d8888b. a88aaaa8P' .d8888b. .d8888b. 88d888b. .d888b88 a88aaaa8P' 88 dP    dP .d8888b.
+# 88 88'  `"" 88ooood8  88   `8b. 88'  `88 88'  `88 88'  `88 88'  `88  88        88 88    88 Y8ooooo.
+# 88 88.  ... 88.  ...  88    .88 88.  .88 88.  .88 88       88.  .88  88        88 88.  .88       88
+# dP `88888P' `88888P'  88888888P `88888P' `88888P8 dP       `88888P8  dP        dP `88888P' `88888P'
+#
+########################################################################################################
+########################################################################################################
+########################################################################################################
+########################################################################################################
+########################################################################################################
+
+class IceBoardPlus(IceBoard):
+    """ Extension to the basic Python Iceboard object .
+
+    Adds:
+
+        - Access to the memory-mapped registers in the FPGA's firmware using the ARM-FPGA SPI link
+            through the `fpga_spi_mmi_read_async()` and `fpga_spi_mmi_write_async()` methods.
+
+
+    `IceBoardPlusHandler` can be created as a standard Python object initialized with a number of
+    parameters which set corresponding attributes (see below). If a `parent_getter` function is
+    provided, the value of these attributes will instead be fetched
+    dynamically from the parent object. Note that any explicitely specified parameter overrides a
+    parent parameter.
+
+    Parameters:
+        parent_getter (func): Function that returns the dynamically return the parent object from which the following parameters will be fetched. Is `None` if there is no parent.
+        hostname (str): hostname or IP address of the ICEBoard ARM processor (mandatory)
+        serial (str): Serial number of the board. Can be provided by the ARM.
+        part_number (str): Part number of the IceBoard. Can be obtained from the ARM.
+        crate (IceCrateHandler): = object that handle the backplane on which the board is connected. `None` if the board is not connected to a backplane.
+        slot (int): Slot number in which the board is installed ona backplane. None if there is no backplane.
+        mezzanine (dict): Map {mezzanine_number: Mezzanine Handler, ...} describing the installed mezzanines. Can be obtained from the ARM.
+        tuber_objname (str): name of the set of software functions that will be provided by the ARM processor through the Tuber interface.
+
+
+
+    .. Any object provided by this this handler can be accessed at any
+    .. hierarchical level. However, objects that are probided by Tuber have these
+    .. restrictions:
+    ..
+    ..    - attributes and methods whise name begin with '_' are not accessible
+    ..    - modification to the object attributes must be done by a setter
+    ..      function provided by the object.
+    ..    - methods or attribute access can only return string or numeric values,
+    ..      or lists or dictionnary thereof
+
+
+    Notes:
+        - The SPI MMI interface is currently provided by peek/poke methods accessed through Tuber.
+          However, if one day the ARM supports it, a faster access could potentially be provided by
+          overriding the fpga_spi_mmi_read_async/write methods to send the commands to a dedicated ARM port
+          and thus bypass Tuber's HTTP/JSON overhead. Since the SPI link is relatively slow anyway, this might not be useful until a faster ARM-FPGA link is in place (such as the unused PCIe link).
+
+        - This handler does *not* define a MMI interface that uses the FPGA's
+          ethernet port directly through the SFP+ connector. Such functionnality is to be provided by a
+          subclass of this class if the firmware supports it.
+    """
+
+
+
+    # Core FPGA firmware registers (delete when moved to the ARM)
+    FPGA_CORE_FIRMWARE_COOKIE_ADDR        = 4 * 0
+    FPGA_APPLICATION_FIRMWARE_COOKIE_ADDR = 4 * 1
+    FPGA_APPLICATION_FLAGS_ADDR           = 4 * 2
+    FPGA_FIRMWARE_CRC32_ADDR              = 4 * 3
+    FPGA_FIRMWARE_TIMESTAMP_ADDR          = 4 * 4
+    FPGA_SERIAL_NUMBER_LSW_ADDR           = 4 * 5
+    FPGA_SERIAL_NUMBER_MSW_ADDR           = 4 * 6
+
+
+    # _bitstream_register contains a list of bitstreams that are associated
+    # with this object. Format: tag: bitstream_object
+    _bitstream_register = {}
+
+    _backplane_initialized = False  # Indicate if we have initialized the backplane access yet
+    _cached_repr = None
+
+
 
 
     # ----------------------------
@@ -508,14 +747,12 @@ class IceBoardPlus(IceBoard):
         # bitstream buffer in a string.
         if buf is None:
             buf = self.get_fpga_bitstream(tag)
-        #else:
-        #    buf = str(buf)
 
         if hasattr(buf, 'crc32'):
             crc32 = buf.crc32
         else:
-            crc32 =  zlib.crc32(str(buf))  # compute CRC32 of the data if it not already precomputed in the 'buf' object
-        crc32 &=  0xFFFFFFFF
+            crc32 = zlib.crc32(str(buf))  # compute CRC32 of the data if it not already precomputed in the 'buf' object
+        crc32 &= 0xFFFFFFFF
         # buf = buf.bytes()
 
         self.logger.info('%r: getting is_programmed' % self)
@@ -527,7 +764,7 @@ class IceBoardPlus(IceBoard):
         t2 = time.time()
         if not is_fpga_programmed or force \
            or (force is not None and (fpga_bitstream_crc != crc32)):
-            self.logger.info('%r: Configuring FPGA' % self)
+            self.logger.info(f'{self!r}: Configuring FPGA')
             if hasattr(buf, 'base64'):
                 b64_bytes = buf.base64
             elif hasattr(buf, 'bytes'):
@@ -539,15 +776,21 @@ class IceBoardPlus(IceBoard):
 
             # self._set_fpga_bitstream_base64(b64_bytes)
             t3 = time.time()
-            await self._tuber_set_fpga_bitstream_base64_async(b64_bytes)
+
+            # Configure FPGA with the target bitstream. Use
+            # tuber_use_json_cache() context to allow reuse the json encoding
+            # of the command between instances to save time, but especially
+            # memory on large arrays
+            with self.tuber_use_json_cache():
+                await self._tuber_set_fpga_bitstream_base64_async(b64_bytes)
             await self.set_fpga_bitstream_crc_async(crc32)
             t4 = time.time()
-            self.logger.info('%r: Done configuring FPGA. It took %.3fs (%.3fs, %.3fs, %.3fs, %.3fs)' % (self, t4-t0, t1-t0, t2-t1, t3-t2, t4-t3))
+            self.logger.info(f'{self!r}: Done configuring FPGA. '
+                f'It took {t4-t0:.3f}s ({t1-t0:.3f}s, {t2-t1:.3f}s, {t3-t2:.3f}s, {t4-t3:.3f}s)')
         else:
             t4 = time.time()
             self.logger.info(
-                '%r: FPGA is already configured. Skipping configuration. Took %.3fs' % (self, t4 - t0)
-                )
+                f'{self!r}: FPGA is already configured. Skipping configuration. Took {t4 - t0:.3f}s')
 
     def get_fpga_bitstream(self, tag=None):
         """ Return the bitstream associated with this handler for the supplied
@@ -595,82 +838,6 @@ class IceBoardPlus(IceBoard):
     #     """
     #     raise NotImplementedError()
 
-
-    # ------------------------------------
-    # FPGA SPI Memory-mapped interface
-    # ------------------------------------
-
-    # *** JFC: Those methods can be updated one day to use the direct (non-
-    #     Tuber) links to the FPGA (on separate socket, forwarded to the FPGA
-    #     through SPI or PCIe). Otherwise we fallback to the slower tuber MMI
-    #     interface.
-    async def fpga_spi_mmi_read_async(self, addr):
-        """ Read a single 32-bit word from the FPGA at the specified byte
-        address. This uses the fastest interface available (currently the ARM-
-        FPGA SPI link)
-
-        Value is returned as an unsigned integer.
-        """
-        word = await self._tuber_fpga_spi_peek_async(addr)
-        return(word & 0xFFFFFFFF)
-
-    async def fpga_spi_mmi_write_async(self, addr, value):
-        """ Write a single 32-bit word to the FPGA at specified byte address.
-        This uses the fastest interface available (currently the ARM-FPGA SPI
-        link)
-        """
-        await self._tuber_fpga_spi_poke_async(addr, value)
-
-
-    # # --------------------------------------------------------------------------
-    # # ARM Core methods (Should be implemented by the ARM and removed from here)
-    # # --------------------------------------------------------------------------
-    # # *** JFC:  Suggested method renaming
-    # def _write_motherboard_spi_eeprom_ipmi(self, *args, **kwargs):
-    #     return self._eeprom_write_ipmi(*args, **kwargs)
-    # # *** JFC: Proposed renaming
-    # def _write_backplane_eeprom_ipmi(self, *args, **kwargs):
-    #     return self._backplane_eeprom_write_ipmi(*args, **kwargs)
-
-
-    # Mezzanine management
-
-    async def _mezzanine_eeprom_read_async(self, mezzanine):
-        """ Returns the contents of the specified mezzanine's EEPROM.
-        """
-        data = await self._tuber_mezzanine_eeprom_read_base64_async(mezzanine)
-        return base64.decodebytes(data.encode())
-
-    # *** JFC: method rename
-    async def _write_motherboard_spi_eeprom_base64(self, *args, **kwargs):
-        result = await self._tuber_motherboard_eeprom_write_base64_async(*args, **kwargs)
-        return(result)
-
-    # def get_motherboard_serial(self):
-    #     """ Read the motherboard serial number from the IPMI data. """
-    #     ipmi = self._get_motherboard_ipmi()
-    #     return str(ipmi.board.serial_number)
-
-    # *** JFC: We now have the equivalent ARM method. Will delete this when we
-    #     confirm it behaves the same.
-
-    async def is_backplane_present_async(self):
-        return await self.tuber_is_backplane_present_async()
-
-    async def get_slot_number(self):
-        """ Reads the GPIO to determine in which slot number this IceBoard is
-        connected.
-
-        """
-        if await self.is_backplane_present_async():  # Is this test necessary?
-            return await self.tuber_get_backplane_slot_async()
-        else:
-            return None
-
-    async def get_iceboard_clock_source_async(self):
-        return await self.tuber_get_clock_source_async()
-
-    get_iceboard_clock_source_sync = async_to_sync(get_iceboard_clock_source_async)
 
 
     # Bitstream management
@@ -723,7 +890,7 @@ class IceBoardPlus(IceBoard):
         required_tuber_methods = [ # Use the unmangled name as published by the ARM
             'is_fpga_programmed']#, '_mezzanine_eeprom_read_base64']
 
-        (meta, props, tuber_methods) = await self._tuber_get_meta.__acall__()  # get the meta info
+        (meta, props, tuber_methods) = await self._tuber_get_meta_async()  # get the meta info
         if not tuber_methods:
             raise RuntimeError("%r: The ARM does not publish any methods under the object name '%s'. Was the right Tuber object name used for this ARM firmware?" % (self, self.tuber_objname))
 
@@ -731,7 +898,7 @@ class IceBoardPlus(IceBoard):
             if method not in tuber_methods:
                 raise RuntimeError("%r: The current version of the ARM firmware does not provide the method '%s' that is needed for this application" % (self, method))
 
-        return(True)
+        return True
 
     def print_tuber_methods(self):
         """ Print all the methods and properties provided by the Iceboard's
@@ -752,19 +919,25 @@ class IceBoardPlus(IceBoard):
                 values = '= %s' % prop_properties
             print('%-30s: %s' % (prop_name, values))
 
-##############################################################################
-##############################################################################
-##############################################################################
-##############################################################################
-##############################################################################
-#                        IceBoardPlus
-##############################################################################
-##############################################################################
-##############################################################################
-##############################################################################
-##############################################################################
+########################################################################################################
+########################################################################################################
+########################################################################################################
+########################################################################################################
+########################################################################################################
+#
+# dP                    888888ba                                   dP  88888888b            dP
+# 88                    88    `8b                                  88  88                   88
+# 88 .d8888b. .d8888b. a88aaaa8P' .d8888b. .d8888b. 88d888b. .d888b88 a88aaaa    dP.  .dP d8888P
+# 88 88'  `"" 88ooood8  88   `8b. 88'  `88 88'  `88 88'  `88 88'  `88  88         `8bd8'    88
+# 88 88.  ... 88.  ...  88    .88 88.  .88 88.  .88 88       88.  .88  88         .d88b.    88
+# dP `88888P' `88888P'  88888888P `88888P' `88888P8 dP       `88888P8  88888888P dP'  `dP   dP
+#
+########################################################################################################
+########################################################################################################
+########################################################################################################
+########################################################################################################
+########################################################################################################
 
-@register_class()
 class IceBoardExt(IceBoardPlus):
     """ Extends the basic IceBoard class by providing additional SPI MMI -based firmware features, direct UDP MMI
     with the FPGA,  and methods to access to IceBoard hardware directly via the FPGA.
@@ -825,7 +998,7 @@ class IceBoardExt(IceBoardPlus):
             generates the FPGA address (A,B,C,D) based on the ARM IP address
             (a,b,c,d).
 
-        fpga_port_number (int): FPGA's listening port number for commands. Defaults to 41000. If None,
+        fpga_control_port_number (int): FPGA's listening port number for commands. Defaults to 41000. If None,
             the local port number is used.
 
         local_port_number (int): UDP port number to use to receive command
@@ -916,29 +1089,33 @@ class IceBoardExt(IceBoardPlus):
             #     This normally overrites the attribute, so this will not be called again.
             return getattr(obj, self._attribute_name)  # Get target object
 
-    mmi = AutoOpen('mmi', 'open_core')
-    i2c = AutoOpen('i2c', 'open_core')
-    core_gpio = AutoOpen('core_gpio', 'open_core')
-    core_i2c = AutoOpen('core_i2c', 'open_core')
-    hw = AutoOpen('hw', 'open_hw')
+    # mmi = AutoOpen('mmi', 'open_core')
+    # i2c = AutoOpen('i2c', 'open_core')
+    # core_gpio = AutoOpen('core_gpio', 'open_core')
+    # core_i2c = AutoOpen('core_i2c', 'open_core')
+    # hw = AutoOpen('hw', 'open_hw')
     # bp        = AutoOpen('open_bp', 'bp')
+
+    mmi = None
+    i2c = None
+    core_gpio = None
+    core_i2c = None
+    hw = None
 
     def __init__(
             self,
-            # Parameters that can be provided by the parent object
+
             hostname=None,
             serial=None,
-            crate=None,
             slot=None,
             subarray=None,
 
-            # Parameters that are always local
             fpga_ip_addr=None,
             fpga_ip_addr_fn=lambda a, b, c, d: (a, b, 3, d),
-            udp_retries=10,
-            fpga_port_number=None,
-            local_port_number=None,
-            interface_ip_addr=None
+            fpga_control_port_number=None,
+            local_control_port_number=None,
+            interface_ip_addr=None,
+            udp_retries=10
             ):
         """
         Creates an Iceboard that is accessed through the networking parameters
@@ -950,18 +1127,17 @@ class IceBoardExt(IceBoardPlus):
         super().__init__(
             hostname=hostname,
             serial=serial,
-            crate=crate,
             slot=slot,
             subarray=subarray)
-        self.logger = logging.getLogger(__name__)
+        # self.logger = logging.getLogger(__name__)
 
         # Store object-specific local paramaters
 
         self.fpga_ip_addr = fpga_ip_addr
         self.fpga_ip_addr_fn = fpga_ip_addr_fn
         self.udp_retries = udp_retries
-        self.fpga_port_number = fpga_port_number
-        self.local_port_number = local_port_number
+        self.fpga_control_port_number = fpga_control_port_number
+        self.local_control_port_number = local_control_port_number
         self.interface_ip_addr = interface_ip_addr
 
         # Initialize local variables
@@ -972,6 +1148,14 @@ class IceBoardExt(IceBoardPlus):
         # self._is_bp_open = None
         self._is_open = None
 
+    def update_instance(self, new_class=None, fpga_ip_addr=None, **kwargs):
+        fpga_ip_addr = fpga_ip_addr or self.fpga_ip_addr
+        if new_class and new_class is not self.__class__:
+            return super().update_instance(new_class=new_class, fpga_ip_addr=fpga_ip_addr, **kwargs)
+        else:
+            super().update_instance(**kwargs)
+            self.fpga_ip_addr = fpga_ip_addr
+            return self
     # ------------------------------------------------------------------
     # CHIME-specific MMI interface
     # ------------------------------------------------------------------
@@ -1076,19 +1260,19 @@ class IceBoardExt(IceBoardPlus):
             # ip_packed = ip_packed[:2] + chr(3) + ip_packed[3]
             self.fpga_ip_addr = socket.inet_ntoa(ip_packed)
 
-        # Compute the local port number if requested (self.local_port_number
+        # Compute the local port number if requested (self.local_control_port_number
         # is None) and if possible (there is a slot and crate number)
-        if self.local_port_number is None:
+        if self.local_control_port_number is None:
             if not self.slot or not self.crate or self.crate.crate_number is None:
-                self.local_port_number = 0
+                self.local_control_port_number = 0
                 self.logger.debug(
                     '%r: Cannot use slot/crate_number-based UDP port number '
                     'for UDP control channel. There is no slot or crate_number'
                     ' info. Using OS-assigned random port' % self)
             else:
-                self.local_port_number = self._FPGA_CONTROL_BASE_PORT + 16*self.crate.crate_number + (self.slot-1)
+                self.local_control_port_number = self._FPGA_CONTROL_BASE_PORT + 16*self.crate.crate_number + (self.slot-1)
                 # self.logger.info('%r: Replies will be sent to %s:%i'
-                #                  % (self, self.interface_ip_addr, self.local_port_number))
+                #                  % (self, self.interface_ip_addr, self.local_control_port_number))
 
         # -------------------------------------------------------------------------
         # Open the UDP MMI interface
@@ -1098,30 +1282,30 @@ class IceBoardExt(IceBoardPlus):
             '%r: Opening FPGA MMI with FPGA=(%s:%s),  local=(%s:%s)' % (
                 self,
                 self.fpga_ip_addr,
-                self.fpga_port_number,
+                self.fpga_control_port_number,
                 self.interface_ip_addr,
-                self.local_port_number))
+                self.local_control_port_number))
 
         self.mmi = fpga_mmi.FpgaMmi(
             fpga_ip_addr=self.fpga_ip_addr,
-            fpga_port_number=self.fpga_port_number,  # none or 0: use local port number
+            fpga_port_number=self.fpga_control_port_number,  # none or 0: use local port number
             interface_ip_addr=self.interface_ip_addr,
-            local_port_number=self.local_port_number,  # 0 = randomly assigned by os
+            local_port_number=self.local_control_port_number,  # 0 = randomly assigned by os
             udp_retries=self.udp_retries,
             parent=self)
 
         self.mmi.open()
-        self.local_port_number = self.mmi.local_port_number
-        self.fpga_port_number = self.mmi.fpga_port_number
+        self.local_control_port_number = self.mmi.local_port_number
+        self.fpga_control_port_number = self.mmi.fpga_port_number
 
         # Select the fpga port number
-        # if not self.fpga_port_number:
-        #    self.fpga_port_number = self.local_port_number
+        # if not self.fpga_control_port_number:
+        #    self.fpga_control_port_number = self.local_control_port_number
 
         # Set-up the FPGA networking parameters using the ARM-SPI link to the FPGA
         self.fpga_mac_addr = await self.set_fpga_control_networking_parameters_async(
             fpga_ip_addr=self.fpga_ip_addr,
-            fpga_port_number=self.fpga_port_number)
+            fpga_port_number=self.fpga_control_port_number)
 
         # -------------------------------------------------------------------------
         # Open FPGA's GPIO module interface
@@ -1151,7 +1335,7 @@ class IceBoardExt(IceBoardPlus):
                 "due to the following exception: %s" % (
                     self,
                     self.fpga_ip_addr,
-                    self.fpga_port_number,
+                    self.fpga_control_port_number,
                     repr(e)))
             self.close()
             self.logger.error(error_message)
@@ -1161,14 +1345,14 @@ class IceBoardExt(IceBoardPlus):
             error_message = (
                 '%r: The firmware at %s:%i is not chFPGA. The magic cookie '
                 'returned by the FPGA is 0x%02X, whereas we expected 0x%02X' % (
-                    self, self.fpga_ip_addr, self.fpga_port_number, cookie, self._CHFPGA_COOKIE))
+                    self, self.fpga_ip_addr, self.fpga_control_port_number, cookie, self._CHFPGA_COOKIE))
             self.logger.error(error_message)
             self.close()
             raise RuntimeError(error_message)
 
         self.logger.debug(
             "%r: Established a UDP/Ethernet connection with the FPGA at %s:%i"
-            % (self, self.fpga_ip_addr, self.fpga_port_number))
+            % (self, self.fpga_ip_addr, self.fpga_control_port_number))
 
         # -------------------------------------------------------------------------
         # Open FPGA's I2C interfaces
@@ -1486,7 +1670,7 @@ class IceBoardExt(IceBoardPlus):
             mac_packed = bytes([int(s, 16) for s in fpga_mac_addr.split(':')])
 
         # self.fpga_mac_addr = fpga_mac_addr
-        # self.fpga_port_number = fpga_port_number
+        # self.fpga_control_port_number = fpga_port_number
         # self.fpga_ip_addr = fpga_ip_addr
 
         # Set the FPGA Networking parameters over the ARM-FPGA SPI interface
@@ -1878,7 +2062,7 @@ class IceBoardExt(IceBoardPlus):
             # t1 = time.time()
             # while not (await self.fpga_spi_mmi_read_async(self._IRIGB_TARGET1_ADDR)) & (1 << 29):
             #                     # check refclk_sample_done
-            #     self.logger.warn('%r: Time capture was not immediately ready - this is unexpected' % self)
+            #     self.logger.warning('%r: Time capture was not immediately ready - this is unexpected' % self)
             #            # Debug. should not happen since capture should be much faster
             #            # than the time it takes to read the done flag
             #     # TImeout if it takes too long. The time should be ready within a few 10 MHz cycles.

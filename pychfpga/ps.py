@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 """
-REST Server and clients for the CHIME receiver hut power supplies.
+REST Server and clients for the Agilent N5700-series power supplies.
 
 """
 
 # Python Standard Library packages
-import sys
-import argparse
-import time
 import aiohttp
+import argparse
+import asyncio
+import sys
+import time
 
 # PyPi packages
 
@@ -32,9 +33,9 @@ class AgilentN5700(SocketContext):
 
     def __init__(self,  hostname, port=5025, timeout=0.5, verbose=1):
 
-        super(AgilentN5700, self).__init__(hostname=hostname, port=port, timeout=timeout, close_socket=True)
+        super().__init__(hostname=hostname, port=port, timeout=timeout, close_socket=True)
         self.log = log.get_logger(self)
-        print("Initializing direct LAN Connection at %s:%i" % (hostname, port))
+        print(f"Initializing direct LAN Connection at {hostname}:{port}")
         self.locked = True
         self.verbose = verbose
         self.instrument_name = None
@@ -46,9 +47,9 @@ class AgilentN5700(SocketContext):
 
     def __repr__(self):
         if self.instrument_model:
-            return '%s %s @%s:%i' % (self.instrument_name, self.instrument_model, self.ip_addr, self.ip_port)
+            return f'{self.instrument_name} {self.instrument_model} @{self.ip_addr}:{self.ip_port}'
         else:
-            return 'Unknown Instrument @%s:%i' % (self.ip_addr, self.ip_port)
+            return f'Unknown Instrument @{self.ip_addr}:{self.ip_port}'
 
     ###################################
     # Basic read/write commands
@@ -74,7 +75,7 @@ class AgilentN5700(SocketContext):
             try:
                 reply_string = self.recv(16384)
             except IOError:
-                raise IOError('%r: timout while waiting for reply for command %s' % (self, command))
+                raise IOError(f'{self!r}: timeout while waiting for reply for command {command}')
             return reply_string.rstrip() # remove trailing spaces or CR or LF
 
     def _check_instrument_type(self):
@@ -87,21 +88,20 @@ class AgilentN5700(SocketContext):
         with self.socket(flush=True):
             self.send('*IDN?\n')
             id_string = self.recv(timeout=min(1, self.timeout))
-            self.log.debug('Instrument Identification string: %s' % id_string)
+            self.log.debug(f'Instrument Identification string: {id_string}')
             for (instrument_code, (instrument_name, instrument_id_string, vmax, imax)) in self.SUPPORTED_PS.items():
                 #print('checking if %s is in %s' % (instrument_id_string, id_string))
                 if instrument_id_string in id_string:
-                    self.log.debug('Connected to: %s' % instrument_name)
-                    self.send('STATus:OPERation:ENABle %i\n' % 0x0500)  # We wish to know is in constant current or constant voltage mode
+                    self.log.debug(f'Connected to: {instrument_name}')
+                    self.send(f'STATus:OPERation:ENABle {0x0500}\n' )
                     self.instrument_model = instrument_code
                     self.instrument_name = instrument_name
                     self.instrument_vmax = vmax
                     self.instrument_imax = imax
-                    #print('after:', self.instrument_model, self.instrument_name)
                     break
 
             if self.instrument_model is None:
-                self.log.warning('%r: Instrument %s is not supported' % (self, id_string))
+                self.log.warning(f'{self!r}: Instrument {id_string} is not supported')
                 raise RuntimeError('The identification command did not return the expected instrument ID string')
 
     def open(self):
@@ -126,7 +126,9 @@ class AgilentN5700(SocketContext):
 
     def _check_lock(self):
         if self.locked:
-            raise RuntimeError('Instrument is locked: cannot change its state. Call unlock() to allow changes to the instrument state')
+            raise RuntimeError(
+                'Instrument is locked: cannot change its state. Call unlock() '
+                ' to allow changes to the instrument state')
 
 
     def set_output(self, state=None):
@@ -149,7 +151,7 @@ class AgilentN5700(SocketContext):
         else:
             raise ValueError('Unknown desired output power state')
         with self.socket(flush=True):
-            self.command('OUTP:STAT %s' % state, flush=True)
+            self.command(f'OUTP:STAT {state}', flush=True)
             self.waituntilready()
             # self.command('*WAI')
 
@@ -161,8 +163,8 @@ class AgilentN5700(SocketContext):
 
     def set_power_on_state(self, state):
         if state.upper() not in ('RST','AUTO'):
-            raise ValueError('%r: Power on state is either RST or AUTO' % self)
-        self.command('OUTPut:PON:STATe %s' % state)
+            raise ValueError(f'{self!r}: Power on state is either RST or AUTO')
+        self.command(f'OUTPut:PON:STATe {state}')
 
     def get_power_on_state(self):
         return self.query('OUTPut:PON:STATe?')
@@ -184,7 +186,6 @@ class AgilentN5700(SocketContext):
             self.set_output(state=False)
             time.sleep(delay)
             self.set_output(state=True)
-
 
     def get_state(self):
         """ Return the power supply operational state of the power supply.
@@ -243,7 +244,7 @@ class AgilentN5700(SocketContext):
         if voltage > self.instrument_vmax or voltage < 0:
             raise ValueError('Invalid voltage - must be in range [0..21] - no action performed')
         with self.socket():
-            self.command('VOLT %s' % voltage)
+            self.command(f'VOLT {voltage}')
             # self.command('*WAI')
             self.waituntilready()
 
@@ -267,7 +268,7 @@ class AgilentN5700(SocketContext):
         if current > self.instrument_imax or current < 0:
             raise ValueError('Invalid current limit - must be in range [0..76] - no action performed')
         with self.socket():
-            self.command('CURR %s' % current)
+            self.command(f'CURR {current}')
             # self.command('*WAI')
             self.waituntilready()
 
@@ -288,7 +289,6 @@ class AgilentN5700(SocketContext):
             problem = self.protection()[0]
             return problem
 
-
     def set_protection(self, uvl=None, ovp=None, ocp=None,ilim=None, clear=None):
         """
         Adjusts power supply protection settings
@@ -303,15 +303,15 @@ class AgilentN5700(SocketContext):
                 self.waituntilready()
 
             if uvl != None:
-                self.command('VOLT:LIM:LOW %s' % uvl)
+                self.command(f'VOLT:LIM:LOW {uvl}')
             if ovp != None:
-                self.command('VOLT:PROT %s' % ovp)
+                self.command(f'VOLT:PROT {ovp}')
             if ocp != None:
-                self.command('CURR:PROT:STAT %s' % ocp)
+                self.command(f'CURR:PROT:STAT {ocp}')
                 #Note that OCP is not the current limit, only behaviour on current limit (can be 0 or 1)
                 #With OCP active current switches to triggered current (by default and not changed by this program so far 0A)
             if ilim != None:
-                self.command('CURR %s' % ilim)
+                self.command(f'CURR {ilim}')
 
     def get_protection(self, history=False):
 
@@ -416,7 +416,7 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
         self.power_supplies = {}
         # self.name = name
         # self.ps_port = 5025
-        super(PowerSupplyAsyncRESTServer, self).__init__(address=address, port=port, heartbeat_string='Ps')
+        super().__init__(address=address, port=port, heartbeat_string='Ps')
 
     def _parse_names(self, ps_names):
         # print('*********************_parse_names',ps_names)
@@ -427,7 +427,7 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
         ps_names = [name.strip() for name in ps_names]
         # Expand aliases
 
-        self.log.warning('%r, %r' %(ps_names, self.config.aliases))
+        self.log.warning(f'{ps_names!r}, {self.config.aliases!r}')
         for ps_name in list(ps_names):  # make a copy, we modify the list
             if ps_name in self.config.aliases:
                 ps_names.remove(ps_name)
@@ -436,14 +436,14 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
             ps_names = self.power_supplies.keys()
         unknown_supplies = [name for name in ps_names if name not in self.power_supplies]
         if unknown_supplies:
-           raise RuntimeError("%.32r: Unknown power supply names %s" % (self, unknown_supplies))
+           raise RuntimeError(f"{self!r}: Unknown power supply names {unknown_supplies}")
         return ps_names
 
 
     async def _get_metrics(self):
         """ Return a Metrics object containing power supply monitoring data
         """
-        self.log.info('%.32r: Received monitoring metrics request' % self)
+        self.log.info(f'{self!r}: Received monitoring metrics request')
         metrics = Metrics()
         for ps_name, ps in self.power_supplies.items():
             try:
@@ -474,7 +474,7 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
         Units that are already powered on are marked immediately as ready.
         """
         if self.power_supplies:
-            raise RuntimeError('%.32r: Power Supply server is already started' % self)
+            raise RuntimeError(f'{self!r}: Power Supply server is already started')
         self.config = NameSpace(config)
         self.power_supplies = {}
         self.power_up_delay = {}
@@ -503,7 +503,7 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
     async def stop(self):
         """ ``GET endpoint: /stop`` Uninlitializes the server and keep it running so it can be started with a new configuration."""
         if not self.power_supplies():
-            self.log.warning('%.32r: Power Supply server is not started' % self)
+            self.log.warning(f'{self!r}: Power Supply server is not started')
         else:
             for ps_name, ps in self.power_supplies.items():
                 ps.close()
@@ -536,7 +536,7 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
                      ps_names=list(self.power_supplies.keys()))
         for ps_name, ps in self.power_supplies.items():
             stati[ps_name] = ps.status()
-            self.log.info('%.32r: Status of %s is %s' % (self, ps_name, stati[ps_name]))
+            self.log.info(f'{self!r}: Status of {ps_name} is {stati[ps_name]}')
         return stati
 
 
@@ -562,7 +562,7 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
         Returns:
             list of str: names of the supplies, as defined in the configuration
         """
-        self.log.info('%.32r: Received list names request' % self)
+        self.log.info(f'{self!r}: Received list names request')
         return list(self.power_supplies.keys())
 
     @endpoint('power-on')
@@ -580,25 +580,25 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
             str: Message indicating the result of the operation
         """
         ps_names = self._parse_names(ps_names)
-        self.log.info('%.32r: Received power on command for %r' % (self, ps_names))
+        self.log.info(f'{self!r}: Received power on command for {ps_names}')
 
         for ps_name in ps_names:
             ps = self.power_supplies[ps_name]
             # status = ps.status()  # todo: make async
             # if status['status'] == 'OK':
             if ps.is_enabled():
-                self.log.info("%.32r: Power supply '%s' is already ON" % (self, ps_name))
+                self.log.info(f"{self!r}: Power supply '{ps_name}' is already ON")
             else:
-                self.log.info("%.32r: Turning ON power supply '%s'" % (self, ps_name))
+                self.log.info(f"{self!r}: Turning ON power supply '{ps_name}'")
                 ps.unlock()
                 ps.power_on() # todo: make async
                 ps.lock()
                 self.is_ready[ps_name] = False
                 self._set_is_ready_later(ps_name)
-                self.log.info("%.32r: %s is powered ON" % (self, ps_name))
+                self.log.info(f"{self!r}: {ps_name} is powered ON")
 
                 # await asyncio.sleep(self.config.power_on.delay) # make this asynchronous so all the delay happen in parallel
-        return "%s are powered ON" % (ps_names)
+        return f"{ps_names} are powered ON"
 
     @endpoint('power-off')
     async def power_off(self, ps_names=None):
@@ -616,19 +616,19 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
             str: Message indicating the result of the operation
         """
         ps_names = self._parse_names(ps_names)
-        self.log.info('%.32r: Received power off command for %r' % (self, ps_names))
+        self.log.info(f'{self!r}: Received power off command for {ps_names!r}')
 
         for ps_name in ps_names:
             ps = self.power_supplies[ps_name]
             self.is_ready[ps_name] = False
             if not ps.is_enabled():
-                self.log.warning("Power ouput already disabled for {}".format(ps_name))
+                self.log.warning(f"{self!r}: Power ouput already disabled for {ps_name}")
             else:
                 ps.unlock()
                 ps.power_off()
                 ps.lock()
-                self.log.info("%.32r: %s is powered OFF" % (self, ps_name))
-        return '%s are powered OFF' % ps_names
+                self.log.info(f"{self!r}: {ps_name} is powered OFF")
+        return f'{ps_names} are powered OFF'
 
 
     @endpoint('is-enabled')
@@ -651,7 +651,7 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
 
     @endpoint('get-monitoring-data')
     async def monitoringMetrics(self):
-        self.log.info('%.32r: Received monitoring metrics request' % self)
+        self.log.info(f'{self!r}: Received monitoring metrics request')
         metrics = await self._get_metrics()
         return aiohttp.web.Response(text=str(metrics))
 
@@ -688,22 +688,11 @@ class PowerSupplyAsyncRESTClient(AsyncRESTClient):
     DEFAULT_PORT = PowerSupplyAsyncRESTServer.DEFAULT_PORT
 
     def __init__(self, hostname='localhost', port=DEFAULT_PORT):
-         super(PowerSupplyAsyncRESTClient, self).__init__(
+         super().__init__(
             hostname=hostname,
             port=port,
             server_class=PowerSupplyAsyncRESTServer,
             heartbeat_string='Pc')
-
-
-    # async # def ping(self):
-    #     try:
-    #         await self.get('status')
-    #         self.log.info("Successfully pinged power_supply server at %s:%i" % (self.hostname, self.port))
-    #     except Exception as e:
-    #         self.log.debug(repr(e))
-    #         self.log.error("Can't ping power_supply server at %s:%i" % (self.hostname, self.port))
-    #         return alse)
-    #     return rue) # return raises an exception: we don't want it in the try block
 
     async def start(self, **config):
         """ If the PowerSupply remote server is not started, start it with the specified configuration
@@ -716,7 +705,7 @@ class PowerSupplyAsyncRESTClient(AsyncRESTClient):
                 it is converted to a dict befoe being passed to the server.
 
         """
-        self.log.info('%s: Starting remote PowerSupply server at %s:%i' % (self, self.hostname, self.port))
+        self.log.info(f'{self!r}: Starting remote PowerSupply server at {self.hostname}:{self.port}')
 
         if isinstance(config, str):
             config = load_yaml_config(config)
@@ -728,12 +717,12 @@ class PowerSupplyAsyncRESTClient(AsyncRESTClient):
 
 
         if not server_info.is_started:
-            self.log.info('%.32r: Server not started. Starting it with the provided configuration' % self)
+            self.log.info(f'{self!r}: Server not started. Starting it with the provided configuration')
             start_results = await self.post('start', **config)  # start the server if not already started
         else:
-            self.log.info('%.32r: Server is already started' % self)
+            self.log.info(f'{self!r}: Server is already started')
             if set(server_info.ps_names) != set(ps_names):
-                self.log.warning('%.32r: The server does not support the same supplies as the current config (%s instead of %s)' % (self, server_info.ps_names, ps_names))
+                self.log.warning(f'{self!r}: The server does not support the same supplies as the current config ({server_info.ps_names} instead of {ps_names})')
             start_results = 'Already started'
 
         # result = await self.post('start', **config)

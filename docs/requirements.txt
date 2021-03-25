@@ -6,7 +6,7 @@
 wtl.sphinx-paramlinks @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.sphinx-paramlinks.git
 
 # PyPi packages
-sphinx==1.8.5
+sphinx
 sphinx_rtd_theme
 
 

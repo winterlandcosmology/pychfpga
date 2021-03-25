@@ -5,7 +5,7 @@ import logging
 import time
 
 from .ccoll import Ccoll
-from .hardware_map import register_class
+from .hardware_map import HardwareMap
 from ..icecore.hardware_assets import IceCrateBase
 
 # from ..icecore import session
@@ -30,8 +30,7 @@ class MasterIceboardObject(object):
         obj = getattr(self._crate.master_iceboard, self._iceboard_object_name)
         return getattr(obj, name)
 
-@register_class()
-class IceCrate(IceCrateBase):
+class IceCrate(IceCrateBase, HardwareMap):
     """
     Provide the basic methods to operate the IceCrate.
     """
@@ -39,7 +38,7 @@ class IceCrate(IceCrateBase):
     _instance_registry = {}  # {(model,serial):instance}
 
     part_number = None
-    __ipmi_part_number__ = None  # Must match part number in IPMI data
+    _ipmi_part_numbers = None  # Must match part number in IPMI data
     crate_number = None
 
     NUMBER_OF_SLOTS = 0
@@ -64,19 +63,76 @@ class IceCrate(IceCrateBase):
         infinite recursion loop as Tuber tries to access the master_iceboard
         object that may not already exist.
         """
-        super().__init__(**kwargs)
+        if self.serial and not self.part_number:
+            raise RuntimeError('Cannot create a generic IceCrate with a serial number')
+        if isinstance(serial, int): # make sure serial is a string
+            serial = f'{serial:03d}'
 
-        self.slot = {}  # (slot_number:iceboar_object) mapping
-        self.serial = serial  # str
+        super().__init__(serial=serial, **kwargs)
         self.crate_number = crate_number
-        self._instance_registry[(self.part_number, serial)] = self
 
         self._logger = logging.getLogger(__name__)
         self._logger.debug('%r: Instantiating IceCrate object' % self)
 
+        print(f"Created {self.__class__.__name__}(serial={serial}, crate_number={crate_number})")
+
     def __repr__(self):
         # return "IceCrate(%s)" % self.get_id()[0]
         return '%s(%s)' % (self.__class__.__name__, self.get_id())
+
+
+
+    @classmethod
+    def get_unique_instance(cls, new_class=None, serial=None, crate_number=None):
+        """
+        Creates a new IceCrate instance if one with matching crate_number or
+        serial number does not exist, otherwise return an existing one
+        augmented with the new serial or crate_number information.
+
+        """
+        matching_crates = [
+            c for c in cls._instance_registry
+            if (crate_number is not None and c.crate_number == crate_number)
+            or ((new_class or cls).part_number and serial and c.part_number == (new_class or cls).part_number and c.serial == serial)
+            ]
+        print(f'Found crates {matching_crates}')
+        if not len(matching_crates):  # no matching crate, create one
+            return (new_class or cls)(serial=serial, crate_number=crate_number)
+        elif len(matching_crates) == 1:  # one match, update existing one
+            return matching_crates[0].update_instance(new_class=new_class, serial=serial, crate_number=crate_number)
+        else:
+            raise RuntimeError('Multiple IceCrates with same keys (should never happen)')
+
+    def update_instance(self, new_class=None,  serial=None, crate_number=None):
+        """
+        Update the class, serial or crate_number info of specified IceCrate
+        subclass instance. If the class needs to be changed, a new class
+        instance is created and the IceBoard references are updated to the new class.
+
+        Parameters:
+
+            new_class
+
+
+        """
+        new_args = dict(
+            serial=serial or self.serial,
+            crate_number=crate_number if crate_number is not None else self.crate_number)
+        if new_class and self.__class__ is not new_class:
+            other = new_class(**new_args)
+            self.delete_instance()
+            other.slot = self.slot  # copy over the slot info
+            # Update all IceBoard crate references to the new instance
+            for ib in self.get_all_instances('IceBoard'):
+                if ib.crate is self:
+                    ib.crate = other
+            return other
+        else:  # otherwise update serial and crate_number
+            if serial and not self.part_number:
+                raise RuntimeError('Cannot assign a serial number to  generic IceCrate')
+            for k, v in new_args.items():
+                setattr(self, k, v)
+            return self
 
     def init(self):
         pass
@@ -161,15 +217,14 @@ class IceCrate(IceCrateBase):
 # class IceCrate_MGK7BP16(IceCrateExt):
 #     handler_name = 'IceCrate_MGK7BP16_Handler'
 #     __mapper_args__ = {'polymorphic_identity': 'IceCrate_MGK7BP16'}
-#     __ipmi_part_number__ = ['MGK7BP16', 'MGK7BP']  # Must match part number in IPMI data
+#     _ipmi_part_numbers = ['MGK7BP16', 'MGK7BP']  # Must match part number in IPMI data
 
 
-@register_class()
 class IceCrate_MGK7BP16(IceCrate):
     """ IceCrate handler that provides access to the backplane through an IceBoard.
     """
     part_number = 'MGK7BP16'
-    __ipmi_part_number__ = ['MGK7BP16', 'MGK7BP']  # Must match part number in IPMI data
+    _ipmi_part_numbers = ['MGK7BP16', 'MGK7BP']  # Must match part number in IPMI data
 
     #####################################
     # Define hardware-specific constants
@@ -1142,15 +1197,15 @@ class IceCrate_MGK7BP16(IceCrate):
 # class IceCrate_MGK7BP1(IceCrateExt):
 #     handler_name = 'IceCrate_MGK7BP1_Handler'
 #     __mapper_args__ = {'polymorphic_identity': 'IceCrate_MGK7BP1'}
-#     __ipmi_part_number__ = ['MGK7BP1']  # Must match part number in IPMI data
+#     _ipmi_part_numbers = ['MGK7BP1']  # Must match part number in IPMI data
 
-@register_class()
+
 class IceCrate_MGK7BP1(IceCrate):
     """
     Provides access to the 1-slot test backplane.
     """
     part_number = 'MGK7BP1'
-    __ipmi_part_number__ = ['MGK7BP1']  # Must match part number in IPMI data
+    _ipmi_part_numbers = ['MGK7BP1']  # Must match part number in IPMI data
 
     #####################################
     # Define hardware-specific constants

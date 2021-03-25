@@ -13,8 +13,7 @@ This package provide IceBoard and IceCrate classes that extends the features off
 from .icecrate_ext import IceCrate
 from .iceboard_ext import IceBoard, IceBoardPlus, IceBoardExt
 from .iceboard_ext import FMCMezzanine
-from .hardware_map import register_class, get_class_by_part_number, get_class_by_name, get_unique_class_instance, get_all_classes, get_all_class_instances, get_all_class_names
 from .fpga_bitstream import FpgaBitstream
-# from .mdns_discovery import mdns_discover
+from .mdns_discovery import mdns_discover
 from .ccoll import Ccoll
 # from .myasync import myasync, async_sleep, async_return, async_moment

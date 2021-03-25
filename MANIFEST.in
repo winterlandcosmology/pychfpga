@@ -1,0 +1,4 @@
+include versioneer.py
+include pychfpga/_version.py
+include pychfpga/fpga_bitstreams/*.bit
+include pychfpga/adc_delay_tables/*.yaml
