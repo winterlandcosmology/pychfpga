@@ -1,0 +1,132 @@
+Test setup components
+=====================
+	- Computer (HP Pavillon, ) with standard AC cord
+	- keyboard
+	- Mouse
+	- Screen with power cable & DVI-DVI cable
+	- USB hub with power brick
+	- Router (Linksys) with power brick
+	- Ethernet switch (Trendnet) with power brick
+	- Ethernet cables
+		- 6x
+	- PLL Dongle (USB, with green connector, home made)
+	- RS232/MEM TEST Dongle (USB, with 3-pin connector on flat cable, home made)
+	- Power bars (2x)
+	- Power Supply (Circuit Specialist) with standard AC cord
+
+	- Agilent multimeter 34410A with standard AC cord
+	- Single slot backplane
+	- Power cable with banana & molex connector
+	- SMA cables (2x)
+	- Multimeter test probes: Red with tip, black with crocodile clip
+	- FPGA fan
+	- SFP+ module
+	- QSFP flat cable
+	- SD card
+	- QC manual binder (blue)
+
+
+Test setup configuration
+========================
+
+
+
+Computer:
+	Description:
+		name: sharktooth
+		OS: Ubuntu 18.04
+		username: sharktooth (has admin power)
+		password: iceqcuser
+	Connections
+		AC cord to power bar
+		keyboard (use back USB)
+		mouse (use back USB)
+		USB Hub (front USB)
+		Ethernet port at the back to ethernet switch
+
+USB Hub:
+	Model: USB 3.0 HUB, black, 4 ports
+	Connections:
+		- power brick to the AC outlet 
+		- USB pigtail to computer (front)
+		- USB port: 
+			- PLL dongle
+			- RS232/MEM TEST Dongle
+			- (unused)
+			- (Unused)
+
+Router:
+	Model: linksys WRT-54G
+	Connections:
+
+		power:
+			- 12V Power brick to power bar 
+		Internet ethernet sockets (RJ45): 
+			- to your intranet, with access to the outside world. Address assigned automatically via DHCP.
+		LAN ethernet sockets (RJ45):
+			1- (unused)
+			2- (Unused)
+			3- Switch
+			4- (Unused)
+Switch:
+	Model: Trendnet TEG-S82G
+	Connections
+		Power:
+			- 5V power brick to the power bar 
+		Ethernet ports (RJ45):
+			1- IceBoard ARM RJ45 (short white cable)
+			2- Router (short white cable)
+			3- IceBoard SFP+ (blue cable)
+			4- Multimeter Ethernet port (Yellow cable)
+			5- Computer (long white cable)
+			6- (unused)
+			7- (unused)
+			8- (unused)
+
+
+Power supply:
+	Model: Circuit Specialist CSI3005SM 30V/5A supply
+	Connections:
+
+		AC power:
+			Connect to power bar
+
+
+
+		DC power:
+			Turn power off
+			Use black/white banana-to-Molex cable to connect supply to the mini backplane.
+			Red is +, black is - (GND)
+
+Multimeter:
+	Model Agilent 34410A
+	Connections
+
+		AC power
+			AC cord to power bar
+		Ethernet
+			To ethernet switch
+		Test probes:
+			Connect  black/red banana probes to the "input" port (upper right). Black wire has a crocodile clip, red has a probe tip.
+
+
+Starting the test:
+==================
+	- Turn on power bars
+	- Power up computer. Log in as sharktooth, password: iceqcuser
+	- Power up Agilent multimeter
+	- Power supply:
+		- Disconnect power supply from mini-backplane (can just disconnect red banana), 
+		- Turn ON power supply
+		- Set power supply to 18V +-0.2V (The Iceboard damage threshold is 21V)
+		- Set current limit to max (coarse current know fully clockwise)
+		- Turn OFF power supply
+		- Reconnect to mini-backplane
+	- Make sure the outputs of the USB port are powered on
+	- Launch Firefox to test network connectivity
+	- To start tests:
+		- Double-click "run_QC.sh" on the desktop, and click "run in terminal". Resize the window at will.
+		- Select "2" to start IceBoard tests
+		- Enter 4-digit serial number of board in the menu prompt.
+		- Enter test number.
+

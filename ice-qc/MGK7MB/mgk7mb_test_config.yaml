@@ -28,8 +28,8 @@ default_serial: null
 
 #For changing prologix address, use ./nfcli --list to find devices
 instruments:
-    dmm:       {labpy_object: 'agilent_dmm', interface: 'lan', ip_addr: '11.11.11.45', gpib_addr: 22} # Agilent 34410A multimeter (we don't use the LAN connection so we can go back in local mode remotely)
-    ps18v:     {labpy_object: 'agilent_N5700', interface: 'lan', ip_addr: '11.11.11.73', gpib_addr: 5}  # Agilent N5764A power supply
+    dmm:       {labpy_object: 'agilent_dmm', interface: 'lan', ip_addr: '10.11.1.79', gpib_addr: 22} # Agilent 34410A multimeter (we don't use the LAN connection so we can go back in local mode remotely)
+#    ps18v:     {labpy_object: 'agilent_N5700', interface: 'lan', ip_addr: '11.11.11.73', gpib_addr: 5}  # Agilent N5764A power supply
 #   ps3v3_2v5: {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '10.11.1.132', gpib_addr: 6}  # Agilent E3648A dual output power supply. 3.3V on output1, 2.5V on output 2
 #   na:        {labpy_object: 'hp8753e',     interface: 'prologix_eth', ip_addr: '10.11.1.132', gpib_addr: 14} # HP8753E Network Analyzer
 
@@ -96,7 +96,7 @@ menu:
 
 motherboard_tests:
     network:
-         instruments: [ps18v] # Subset of instruments we use in the network tests
+         instruments: [] # Subset of instruments we use in the network tests
 
     impedance:
         instruments: [dmm]
@@ -116,14 +116,16 @@ motherboard_tests:
            - ['1.8V (L9)',      {delay: 0.2, zmin: 150}]
 
     powerup:
-        instruments: [ps18v]
+        instruments: [dmm]
+        manual_ps: true
         vlt: 18
         curlmt: 2
-        imax: 1
+        imax: 1.0
         imin: 0.5
 
     pll:
-        instruments: [ps18v]
+        instruments: []
+        manual_ps: true
         vlt: 18
         curlmt: 2
         pll1regs:
@@ -148,13 +150,16 @@ motherboard_tests:
             #- 0x20009DD8
 
     mem_test:
-        instruments: [ps18v]
+        instruments: [dmm]
+        manual_ps: true
         vlt: 18
         curlmt: 5
 
     sensors:
+        manual_ps: true
         vlt: 18
         curlmt: 5
+        restart_avahi: false
 
         current:
             VCC3V3:     {nom: 2.00,  pmargin: 0.30,  amargin: 0}     # 30%
@@ -200,25 +205,35 @@ motherboard_tests:
             VADJ:       {nom: 0.4,   pmargin: 0.00,  amargin: 0.4}     # +-0.4V
 
     ser_test:
+        manual_ps: true
         vlt: 18
         curlmt: 5
         rev: 4
+        restart_avahi: false
 
     i2c_test:
+        manual_ps: true
         vlt: 18
         curlmt: 5
+        restart_avahi: false
 
     clock_test:
+        manual_ps: true
         vlt: 18
         curlmt: 2
+        restart_avahi: false
 
     fpga_test:
+        manual_ps: true
         vlt: 18
         curlmt: 5
+        restart_avahi: false
 
     mezz_test:
+        manual_ps: true
         vlt: 18
         curlmt: 5
+        restart_avahi: false
         fmccurrent:
             VCC3V3:     {nom: 2,     pmargin: 0.00,  amargin: 2}   # +-1A
             VCC12V0:    {nom: 0.1,     pmargin: 0.00,  amargin: 0.1}   # +-100mA
@@ -230,20 +245,26 @@ motherboard_tests:
             VADJ:       {nom: 2.5,   pmargin: 0.05,  amargin: 0}     # 5%
 
     rmp_test:
+        manual_ps: true
         vlt: 18
         curlmt: 5
+        restart_avahi: false
 
     qsfp_test:
+        manual_ps: true
         vlt: 18
         curlmt: 5
+        restart_avahi: false
         manufacturer: "3M Company"
 #        serial: "V10E6005"
         serial: "V20B9886"
 
     gtx_test:
+        manual_ps: true
         vlt: 18
         curlmt: 5
-        tx_power: 9
+        restart_avahi: false
+        tx_power: 12
         bp_limit: 1.e-10
         qsfp_limit: 1.e-10
         gpu_limit: 50

@@ -115,6 +115,7 @@ def interupt_boot(ser):
     response = None
 
     while True:
+      print '.',
       response = ser.readline()
       numOfLines = numOfLines +1
       m = re.search('stop', response)
