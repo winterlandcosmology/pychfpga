@@ -1,4 +1,4 @@
-
+#!/usr/bin/env python
 """ Performs bench tests of the MGADC08 CHIME ADC Mezzanine board.
 """
 import unittest
@@ -55,6 +55,8 @@ class MGADC08BenchTests(unittest.TestCase):
     """
     Perform impedance & power tests on the MGADC08 Mezzanine.
     """
+
+
     def setUp(self):
         """ Prepare the test for execution.
 
@@ -69,9 +71,9 @@ class MGADC08BenchTests(unittest.TestCase):
         self.instr.dmm.display('Ready for','MGADC08 tests')
 
         # Disable power supply outputs
-        self.instr.ps12v.output_enable(0)
-        self.instr.ps3v3_2v5.output_enable(0)
-
+        # self.instr.ps12v.output_enable(0)
+        # self.instr.ps3v3_2v5.output_enable(0)
+        self.adc_ps_output_enable(False)
         # Set-up power supply voltages and current limits
         self.rails = NameSpace()
         for rail_name, rail in cfg.rails.items():
@@ -86,6 +88,13 @@ class MGADC08BenchTests(unittest.TestCase):
             ps.set_current(rail.output, rail.current_limit)
             self.rails[rail_name] = NameSpace(ps=ps, output=rail.output)
         xr.header('Test results')
+
+    def adc_ps_output_enable(self, status):
+        if 'ps12v' in self.instr.keys():
+            self.instr.ps12v.output_enable(status)
+
+        if 'ps3v3_2v5' in self.instr.keys():
+            self.instr.ps3v3_2v5.output_enable(status)
 
 
     def impedance_test(self):
@@ -113,7 +122,7 @@ class MGADC08BenchTests(unittest.TestCase):
         # Useful shortcuts
         cfg = self.cfg.bench_tests.impedance
         dmm = self.instr.dmm  # Multimeter
-        pss = [self.instr.ps12v, self.instr.ps3v3_2v5]  # Both power supplies
+        # pss = [self.instr.ps12v, self.instr.ps3v3_2v5]  # Both power supplies
         test_results = NameSpace()
 
         print '-------------------------------'
@@ -123,8 +132,9 @@ class MGADC08BenchTests(unittest.TestCase):
         print
         print ' Connect the Quick SMA to any of the 10 SMA inputs to provide a ground for the impedance measurements'
 
-        for ps in pss:  # Turn off both power supplies, just to be sure
-            ps.output_enable(0)
+        # for ps in pss:  # Turn off both power supplies, just to be sure
+        #     ps.output_enable(0)
+        self.adc_ps_output_enable(False)
 
         failed_test_points = []
         passed = False
@@ -178,13 +188,14 @@ class MGADC08BenchTests(unittest.TestCase):
         # Useful shortcuts
         cfg = self.cfg.bench_tests.smoke_test
         dmm = self.instr.dmm  # Multimeter
-        pss = [self.instr.ps12v, self.instr.ps3v3_2v5]  # Both power supplies
+        # pss = [self.instr.ps12v, self.instr.ps3v3_2v5]  # Both power supplies
 
 
         test_results = NameSpace()  # container for the test results to be saved in the test report
 
-        for ps in pss:  # Turn off both power supplies, just to be sure
-            ps.output_enable(0)
+        # for ps in pss:  # Turn off both power supplies, just to be sure
+        #     ps.output_enable(0)
+        self.adc_ps_output_enable(False)
 
         passed = False
         try:
@@ -192,8 +203,9 @@ class MGADC08BenchTests(unittest.TestCase):
             print 'Connect the power cable to the MGADC08, connect the SMA cable to one of the front ports for better ground.'
             xr.input("Press ENTER to measure current (Q=Exit):")
 
-            for ps in pss: # Turn on both power supplies
-                ps.output_enable(1)
+            # for ps in pss: # Turn on both power supplies
+            #     ps.output_enable(1)
+            self.adc_ps_output_enable(True)
 
             # Measure currents on the power supplies
             test_results.rails = NameSpace()  # Namespace to store all rail results
@@ -240,8 +252,9 @@ class MGADC08BenchTests(unittest.TestCase):
             assert not len(failed_rails), 'Inadequate voltage or current on %s' % ','.join(failed_rails)
             passed = True
         finally: # Always execute this, whatever happens
-            for ps in pss:  # Turn off both power supplies
-                ps.output_enable(0)
+            # for ps in pss:  # Turn off both power supplies
+            #     ps.output_enable(0)
+            self.adc_ps_output_enable(False)
             test_results.passed = passed
             dmm.display(xr.pass_fail(passed), 'Power-up tests')
             dmm.local()
@@ -263,36 +276,40 @@ class MGADC08CarrierTests():
         cfg = self.cfg.carrier_tests.setup
         self.instr = util.open_instruments(self.cfg.instruments, cfg.instruments)  # open only instruments listed in cfg.instruments
 
-        stat_command = ['ifconfig', 'eno1']
-        x = subprocess.check_output(stat_command)
-        m = re.search('mtu 9000', x)
-        if (m == None ):
-            print "\nNeed to change the ethernet port MTU setting. Please enter password when asked."
-            os.system('sudo ifconfig eno1 mtu 9000')
+        if cfg.check_mtu:
+            stat_command = ['ifconfig', 'eno1']
+            x = subprocess.check_output(stat_command)
+            m = re.search('mtu 9000', x)
+            if (m == None ):
+                print "\nNeed to change the ethernet port MTU setting. Please enter password when asked."
+                os.system('sudo ifconfig eno1 mtu 9000')
 
         print '\n-------------------------------'
         print '  - Make sure the mezzanine is mounted to the iceboard (or connected via the extension cable), and the iceboard is properly set up (see handbook).'
         print "  - The mezzanine mustn't have a power cable connected to it."
-        
-        if(self.instr.ps18v.status()['status'] != 'OK' or self.instr.ps18v.status()['power'] == 0.0):
-            input_yes_no('\nAre you ready to apply power to the board? [Y(es) / Q(uit)]: ')
-    
-            try:
-                self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
-                self.instr.ps18v.clear() #Clearing any previous protection
-                self.instr.ps18v.control_voltage(voltage=cfg.vlt, readonly=False) #Setting voltage to 18V, power still off
-                self.instr.ps18v.set_current_limit(current=cfg.curlmt, ocp=True) #Setting current limit and turning on ocp feature
-                self.instr.ps18v.output(state=True, readonly=False)
-            except AttributeError:
-                pass
 
-            serial = cfg.fpga_array.iceboards
-            time.sleep(10)
-            print "Waiting for iceboard %s to boot and show up on the network (30 second timeout)" %serial
-            blockPrint()
-            ca = FPGAArray(**cfg.fpga_array)
-            enablePrint()
-            assert(len(ca.ib) == 1), 'Could not find iceboard with serial #%s' %serial
+        if 'ps18v' in self.instr:        
+            if(self.instr.ps18v.status()['status'] != 'OK' or self.instr.ps18v.status()['power'] == 0.0):
+                input_yes_no('\nAre you ready to apply power to the board? [Y(es) / Q(uit)]: ')
+        
+                try:
+                    self.instr.ps18v.output(state=False, readonly=False) #Ensuring power on N5764A is off
+                    self.instr.ps18v.clear() #Clearing any previous protection
+                    self.instr.ps18v.control_voltage(voltage=cfg.vlt, readonly=False) #Setting voltage to 18V, power still off
+                    self.instr.ps18v.set_current_limit(current=cfg.curlmt, ocp=True) #Setting current limit and turning on ocp feature
+                    self.instr.ps18v.output(state=True, readonly=False)
+                except AttributeError:
+                    pass
+
+                serial = cfg.fpga_array.iceboards
+                time.sleep(10)
+                print "Waiting for iceboard %s to boot and show up on the network (30 second timeout)" %serial
+                blockPrint()
+                ca = FPGAArray(**cfg.fpga_array)
+                enablePrint()
+                assert(len(ca.ib) == 1), 'Could not find iceboard with serial #%s' %serial
+        else:
+            input('Turn ON power to the Iceboard, wait for the front LEDs to blink (about 20 s), and press ENTER')
 
         xr.header('Testing...')
         # testing function will now begin
@@ -312,8 +329,8 @@ class MGADC08CarrierTests():
         Total time: 3 s
         """
         cfg = self.cfg.carrier_tests.eeprom_test
-        instr = util.open_instruments(self.cfg.instruments, cfg.instruments)  # open only instruments listed in cfg.instruments
-        dmm = instr.dmm
+        # instr = util.open_instruments(self.cfg.instruments, cfg.instruments)  # open only instruments listed in cfg.instruments
+        dmm = self.instr.dmm
         dmm.display('EEPROM tests', '%s SN%s' % (self.model, self.serial))
 
         tr = NameSpace() # test results container
@@ -934,8 +951,8 @@ class MGADC08CarrierTests():
         plt.ion()
 
         if not dummy_instr:
-            instr = util.open_instruments(self.cfg.instruments, cfg.instruments)  # open only instruments listed in cfg.instruments
-            na = instr.na
+            # instr = util.open_instruments(self.cfg.instruments, cfg.instruments)  # open only instruments listed in cfg.instruments
+            na = self.instr.na
         else:
             class DummyNA(object):
                 def command(*args, **kwargs): return
@@ -956,6 +973,7 @@ class MGADC08CarrierTests():
         r = None
         try:
 
+            print "Connecting to Iceboard"
             ib, mezz = self._get_iceboard(**cfg.fpga_array)
 
             r = ib.get_data_receiver()
@@ -966,12 +984,17 @@ class MGADC08CarrierTests():
             passed_s11 = []
             passed_fr = []
 
+            print "Initializing data acquisition path"
+
             frame_transmission_period = 0.1
             ib.set_adc_delays(compute_delays=2, save_delays=False, check_sync_delays=True, check_adc_delays=20, verbose=0, retry=5)
             tr.delay_table = ib.get_adc_delays()
             ib.set_adcdaq_mode('data')
             ib.set_data_source('adc')
             ib.set_adc_mode('data')
+
+            print "Starting data capture & SYNC"
+
             ib.start_data_capture(period=frame_transmission_period, source='adc')
             ib.sync()
 
@@ -981,16 +1004,120 @@ class MGADC08CarrierTests():
             fr_a = [x[1] for x in cfg.expected_frequency_response]
             full_scale_response = ((np.sin(np.arange(2048) / 2048. * 10 * 2 * np.pi) + 1) / 2 * 255 - 128).astype(np.int8)
 
+            print "Starting channel-by-channel tests"
+
+
             for channel in range(8):
+
                 # --------------------------------
-                #   S11 Test
+                #   Frequency response Test
                 # --------------------------------
+                print
+                print 'Measuring analog frequency reponse of channel'
+
                 print
                 print 'Testing CHANNEL %i' % (channel + 1)
                 input('Connect cable to ***CHANNEL %i*** SMA and press [ENTER] or [Q] to abort.' % (channel + 1))
+                plt.close('all')
+
+
+                # na.command('CWFREQ 10 MHz') # kick the network analyser in CW mode early
+                # na.command('POWE %f DB' % power_level)  # should we wait for the power to stabilize?
+                while True:
+                    na.set_cw_source(freq=10e6, power=power_level)
+                    r.read_frames(flush=1, frames=3)  # flush
+
+                    ampl = []
+                    fr_ok = []
+                    resp = NameSpace(freq=[], data=[], dbfs=[])
+                    for f in fr_freqs:
+                            print ('   CHANNEL %02i, Sinewave %7.3f MHz @ %f dBm' % (channel+1, f, power_level)),
+                            # na.command('CWFREQ %f MHz' % f)
+                            na.set_cw_source(freq=f*1e6)
+                            print '.',
+                            # time.sleep(frame_transmission_period)
+                            r.read_frames(flush=True, frames=3)  # let the new data propagate
+                            print '.',
+                            trial = 0
+                            while True:
+                                data = r.read_frames(cfg.number_of_frames)
+                                if channel in data:
+                                    break
+                                assert trial < 40, 'Did not receive data from the board.'
+                                trial += 1
+
+                                    # answer = input_yes_no('Did not receive data from the board. Want to try again [Y] or quit [Q]?' )
+                                    # assert answer, 'Interrupting test upon user request because of missing data'
+                                # else:
+                            data = data[channel].astype(float)
+                            # print "Got %i samples" % len(data)
+                                    # break
+                            resp.freq.append(f)
+                            resp.data.append(data)
+                            a = 10 * np.log10(data.var() / full_scale_response.var())  # in dBFS
+                            resp.dbfs.append(a)
+                            if  min(fr_f) <= f <=max(fr_f):
+                                expected_a = np.interp(f, fr_f, fr_a)
+                                ok = a > expected_a
+                            else:
+                                ok = True
+                                expected_a = None
+                            fr_ok.append(ok)
+                            print 'Response = %0.3f dBFS%s' % (a, ', expected %0.3f dBFS (%s)' % (expected_a, ['FAILED','PASSED'][ok]) if expected_a is not None else '')
+                            '''plt.figure(2)
+                            plt.clf()
+                            plt.plot(data)
+                            plt.ylim(-128, 128)
+                            plt.title('CHANNEL %02i, Sinewave %f MHz @ %f dBm' % (channel+1, f, power_level))
+                            plt.pause(0.0001)
+                            xr.insert_plot()'''
+                            ampl.append(a)  # 8044 = approximare
+    
+                    print
+                    print 'Frequency response'
+                    fig = plt.figure(3)
+                    fig.canvas.get_tk_widget().configure(takefocus=False)
+                    # plt.ion()
+                    # plt.show(block=False)
+                    wm = plt.get_current_fig_manager()
+                    wm.window.wm_geometry("-0-0")
+                    plt.clf()
+                    plt.plot(fr_freqs, ampl, 'b.-', fr_f, fr_a, 'r-')
+                    plt.ylabel('Response [dB Full Scale]')
+                    plt.xlabel('Frequency [MHz]')
+                    plt.grid(1)
+                    plt.title('CHANNEL %02i Frequency respsonse, Input power =  %f dBm' % (channel+1, power_level))
+                    # plt.ion()
+                    plt.pause(0.0001)
+                    # plt.draw()
+
+                    # fig.canvas.get_tk_widget().configure(takefocus=False)
+                    plt.draw()
+                    plt.show(block=False)
+                    xr.insert_plot()
+
+                    if all(fr_ok):
+                        print 'PASSED'
+                    else:
+                        print 'FAILED'
+    
+                    if all(fr_ok):
+                        break
+                    else:
+                        ans = input_yes_no('Frequency reponse test failed. Do you want to check connections and retry [Y/N or Quit=Q]?')
+                        if not ans:
+                            break
+                passed_fr.append(all(fr_ok))
+                tr.freq_resp[channel] = resp
+
+                # assert fr_ok, 'Did not pass the frequency response'
+
+                # --------------------------------
+                #   S11 Test
+                # --------------------------------
 
                 while True:
-                    freqs, (s11_data, ) = na.get_s_params(['S11'])
+                    freqs, (s11_data, ) = na.get_s_params(['S11'], start=10e6, stop=1000e6, numpts=201)
                     tr.s11_data[channel] = (freqs, s11_data)
                     plt.figure(1)
                     wm = plt.get_current_fig_manager()
@@ -1015,83 +1142,8 @@ class MGADC08CarrierTests():
                         passed_s11.append(False)
                         break
 
-                # --------------------------------
-                #   Frequency response Test
-                # --------------------------------
-                print
-                print 'Measuring analog frequency reponse of channel'
 
-                na.command('CWFREQ 10 MHz') # kick the network analyser in CW mode early
-                na.command('POWE %f DB' % power_level)  # should we wait for the power to stabilize?
-                r.read_frames(flush=1, frames=3)  # flush
-
-                ampl = []
-                fr_ok = []
-                resp = NameSpace(freq=[], data=[], dbfs=[])
-                for f in fr_freqs:
-                    print ('   CHANNEL %02i, Sinewave %7.3f MHz @ %f dBm' % (channel+1, f, power_level)),
-                    na.command('CWFREQ %f MHz' % f)
-                    print '.',
-                    # time.sleep(frame_transmission_period)
-                    r.read_frames(flush=True, frames=3)  # let the new data propagate
-                    print '.',
-                    trial = 0
-                    while True:
-                        data = r.read_frames(cfg.number_of_frames)
-                        if channel in data:
-                            break
-                        assert trial < 40, 'Did not receive data from the board.'
-                        trial += 1
-
-                            # answer = input_yes_no('Did not receive data from the board. Want to try again [Y] or quit [Q]?' )
-                            # assert answer, 'Interrupting test upon user request because of missing data'
-                        # else:
-                    data = data[channel].astype(float)
-                            # break
-                    resp.freq.append(f)
-                    resp.data.append(data)
-                    a = 10 * np.log10(data.var() / full_scale_response.var())  # in dBFS
-                    resp.dbfs.append(a)
-                    if  min(fr_f) <= f <=max(fr_f):
-                        expected_a = np.interp(f, fr_f, fr_a)
-                        ok = a > expected_a
-                    else:
-                        ok = True
-                        expected_a = None
-                    fr_ok.append(ok)
-                    print 'Response = %0.3f dBFS%s' % (a, ', expected %0.3f dBFS (%s)' % (expected_a, ['ERROR!','OK'][ok]) if expected_a is not None else '')
-                    '''plt.figure(2)
-                    plt.clf()
-                    plt.plot(data)
-                    plt.ylim(-128, 128)
-                    plt.title('CHANNEL %02i, Sinewave %f MHz @ %f dBm' % (channel+1, f, power_level))
-                    plt.pause(0.0001)
-                    xr.insert_plot()'''
-                    ampl.append(a)  # 8044 = approximare
-
-                if all(fr_ok):
-                    print 'PASSED'
-                else:
-                    print 'FAILED'
-
-                passed_fr.append(all(fr_ok))
-                tr.freq_resp[channel] = resp
-                print
-                print 'Frequency response'
-                plt.figure(3)
-                wm = plt.get_current_fig_manager()
-                wm.window.wm_geometry("-0-0")
-                plt.clf()
-                plt.plot(fr_freqs, ampl, 'b.-', fr_f, fr_a, 'r-')
-                plt.ylabel('Response [dB Full Scale]')
-                plt.xlabel('Frequency [MHz]')
-                plt.grid(1)
-                plt.title('CHANNEL %02i Frequency respsonse, Input power =  %f dBm' % (channel+1, power_level))
-                plt.pause(0.0001)
-                xr.insert_plot()
-                assert fr_ok, 'Did not pass the frequency response'
-
-                plt.close('all')
+            # plt.close('all')
 
             assert all(passed_s11), 'Some of the input have too much return loss'
             assert all(passed_fr), 'Some of the frequency responses are wrong'
@@ -1109,7 +1161,8 @@ class MGADC08CarrierTests():
             if ib:
                 ib.set_mezzanine_power(False, self.slot)
             xr.save_data(tr)
-            self.instr.ps18v.output(state=False, readonly=False)
+            if 'ps18v' in self.instr:
+                self.instr.ps18v.output(state=False, readonly=False)
             # na.close()
 
 if __name__ == '__main__':

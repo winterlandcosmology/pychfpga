@@ -5,3 +5,4 @@ from sr770 import sr770 # FFT analyzer
 from agilent_ps import AgilentPS # Agilent E3648A Dual output power supply
 from agilent_N5700 import agilent_N5700 # Agilent N5700 series power supply (CHIME power supply)
 from agilent_dmm import agilent_dmm # Agilent 34410A digital multimeter and Agilent 34980A Multifunction Switch/Measure Mainframe and Modules
+from keysight_n9923 import KeysightN9923

@@ -93,8 +93,8 @@ def plotGammaDataRL(frequency, data, filename=None, title=None, clear=1, plot_ph
  #   pylab.clf()
     # Prepare for the user to plot additional data on top of this plot
     pyplot.sca(ax1) # set current y axis back to magnitude axis in case we want to plot something else on top of this graph
-    pyplot.hold(1)
-    pyplot.show()
+    # pyplot.hold(1)
+    pyplot.show(block=False)
 
 
 def plot_spectrum(freq, ampl, title=None, freq_units='Hz', ampl_units='dBm', filename = None):
