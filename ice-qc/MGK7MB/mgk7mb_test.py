@@ -18,6 +18,7 @@ import memtest_rs232 as rs232
 import subprocess
 import shlex
 import re
+import socket
 
 import visa
 
@@ -562,13 +563,18 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
             flush()
             ping_error = os.system("ping -c 1 -i 1 " + serial)
             flush()
+            hostname = serial
             if not ping_error:
+                hostname = serial
                 break
             print ".",
             flush()
-            ping_error = os.system("ping -c 1 -i 1 iceboard.local")
+            #ping_error = os.system("ping -c 1 -i 1 iceboard.local")
+            r = os.popen("avahi-resolve -n4 iceboard.local").read().split()
             flush()
-            if not ping_error:
+            if r and r[0]=='iceboard.local':
+                #hostname = socket.gethostbyname('iceboard.local')
+                hostname = r[1]
                 break
             if count == 10:
                 print "\n No response so far. We will restart the mDNS service (avahi) and continue to try. Please enter password if asked."
@@ -578,19 +584,19 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
         print
         flush()
-        print('Board was found!')
+        print('Board %s was found!' % hostname)
         current_path = os.path.dirname(__file__)
         current_path += '/' if current_path else ''
         bitfile = current_path + self.cfg.fpga_bit_file
 
         #So rather than doing the iceboards="*", and then later singling out the one we want. We could maybe have extracted the ip address from the ping command
-        ibs = fpga_array.FPGAArray(iceboards="*", open = 0, prog = 0, mdns_timeout=5, ping=1, bitfile=bitfile)
+        ibs = fpga_array.FPGAArray(iceboards=[hostname], open = 0, prog = 0, mdns_timeout=5, ping=5, bitfile=bitfile)
         serials = ibs.ib.discover_serial().values()
         if xr.params.serial in serials:
             print "Found an iceboard with the correct serial number on the network"
             ib_index = serials.index(xr.params.serial)
             ib = ibs.ib[ib_index]
-        elif serial.count(None): # The there are one or more boards with Empty serials
+        elif serials.count(None): # The there are one or more boards with Empty serials
             print "Found an iceboard with the no serial number programmed on the network"
             if serials.count(None)==1:
                 ib_index = serials.index(None)
@@ -672,7 +678,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
 
             totalPower = ib.get_motherboard_power()
             power['VCC3V3']     = ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC3V3')
-            power['VCC12V0']    = ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC12V0')
+            power['VCC12V0']    = sum([ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC12V0') for _ in range(30)])/30.0
             power['VCC5V5']     = ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC5V5')
             power['VCC1V0_GTX'] = ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC1V0_GTX')
             power['VCC1V0']     = ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC1V0')
@@ -720,7 +726,10 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
             print "\nTemperature:"
             for x in temp:
                 print x, ':\t', temp[x]
-
+            ib.set_mezzanine_power(False,1)
+            ib.set_mezzanine_power(False,2)
+            time.sleep(0.5)
+ 
             moffvoltage = {}
             moffvoltage['VCC3V3']  = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC3V3', 1)  ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC3V3', 2)
             moffvoltage['VCC12V0'] = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC12V0', 1) ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC12V0', 2)
@@ -1489,6 +1498,7 @@ class MGK7MBNetworkTests(unittest.TestCase):  #
         print "Please ensure the QSFP cable is plugged into the motherboard in both ports, and sufficient cooling for FPGA"
         print "The motherboard must be plugged into the one slot backplane"
         (ib, ibs, ib_index) = self.connect_to_board(xr, cfg, program=1, questions=self.cfg.ready_check)
+        self.prog_fpga(ib)
 
         print "Calling ib.open()"
         ib.open()

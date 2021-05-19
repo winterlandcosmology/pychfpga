@@ -3208,7 +3208,7 @@ class FPGAArray(object):
             col_labels = ['%i' % (s) for s in slot_range]
             if add_serial:
                 for i, slot in enumerate(slot_range):
-                   col_labels[i] += ('\nSN' + crate.slot[slot].serial) if slot in crate.slot else '\n-'
+                   col_labels[i] += ('\nSN%s' % crate.slot[slot].serial) if slot in crate.slot else '\n-'
             if add_serial:
                 for i, slot in enumerate(slot_range):
                    col_labels[i] += ('\n%s' % crate.slot[slot].hostname) if slot in crate.slot else '\n-'

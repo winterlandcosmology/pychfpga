@@ -163,7 +163,7 @@ motherboard_tests:
 
         current:
             VCC3V3:     {nom: 2.00,  pmargin: 0.30,  amargin: 0}     # 30%
-            VCC12V0:    {nom: 0.1,  pmargin: 0.0,  amargin: 0.1}   # +-100mA
+            VCC12V0:    {nom: 0.00,  pmargin: 0.0,  amargin: 0.1}   # +-100mA (2021-04-11 JFC Change to +-100mA like in the comment)
             VCC5V5:     {nom: 1.069, pmargin: 0.30,  amargin: 0}     # 30%
             VCC1V0_GTX: {nom: 3.8,   pmargin: 0.00,  amargin: 4}  # +-1A (Change by R.Dubois for A.Gilbert 170922)
             VCC1V0:     {nom: -3.8,   pmargin: 0.00,  amargin: 4}   # +-1A (Change by R.Dubois for A.Gilbert 170922)
@@ -201,7 +201,7 @@ motherboard_tests:
 
         fmcoffvoltage:
             VCC3V3:     {nom: 0.4,   pmargin: 0.00,  amargin: 0.4}     # +-0.4V
-            VCC12V0:    {nom: 0.4,   pmargin: 0.00,  amargin: 0.4}     # +-0.4V
+            VCC12V0:    {nom: 2.0,   pmargin: 0.00,  amargin: 2.0}     # was +-0.4V. 2021-05-12 JFC changed to 0-2V because the rail takes a long time (30s) to dscharge. Other rails are ok 
             VADJ:       {nom: 0.4,   pmargin: 0.00,  amargin: 0.4}     # +-0.4V
 
     ser_test:
