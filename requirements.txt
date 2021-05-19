@@ -3,16 +3,19 @@
 # but can be used manually as well with ``pip install -r requirements.txt``
 
 # Private packages
-wtl.namespace @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.namespace.git
-wtl.metrics @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.metrics.git
-wtl.log @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.log.git
-wtl.rest @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.rest.git
-wtl.config @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.config.git
-wtl.archive @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.h5-archive.git@v1.0.3
+wtl.namespace @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.namespace.git@v1.0.0
+wtl.metrics @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.metrics.git@v1.0.0
+wtl.log @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.log.git@v1.0.0
+wtl.rest @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.rest.git@afae2cf
+wtl.config @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.config.git@v1.0.0
+wtl.h5-archive @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.h5-archive.git@v1.0.3
 
 # PyPi packages
 numpy==1.15.2
-psutil==5.4.7
+psutil==5.4.7 
+# psutils requires the following libraries to install:
+# Ubuntu:
+#   sudo apt-get install gcc python2-dev
 tornado==5.1.1
 
 # raw_acq-specific dependencies
@@ -31,6 +34,14 @@ requests==2.19.1
 SQLAlchemy==1.2.12
 netifaces
 pybonjour @ git+https://github.com/Eichhoernchen/pybonjour.git@c63b48c1f0ebf0fb20d412a853ecb6b09e29439b  # check for newer commit
+# pybonjour requires the development libraries:
+# On Ubuntu:
+#     sudo apt-get install libavahi-compat-libdnssd1
 
-
-
+# for testing
+pyvisa
+pyvisa-py
+serial
+pyudev
+gitpython
+rst2pdf

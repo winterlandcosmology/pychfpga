@@ -17,14 +17,16 @@ default_model: 'MGADC08'
 default_serial: null
 
 instruments:
-    dmm:       {labpy_object: 'agilent_dmm', interface: 'prologix_eth', ip_addr: '11.11.11.130', gpib_addr: 22} # Agilent 34410A multimeter (we don't use the LAN connection so we can go back in local mode remotely)
-    ps12v:     {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '11.11.11.130', gpib_addr: 5}  # Agilent E3648A dual output power supply  12V on output 1, output 2 not used
-    ps3v3_2v5: {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '11.11.11.130', gpib_addr: 6}  # Agilent E3648A dual output power supply. 3.3V on output1, 2.5V on output 2
-    na:        {labpy_object: 'hp8753e',     interface: 'prologix_eth', ip_addr: '11.11.11.130', gpib_addr: 15} # HP8753E Network Analyzer
-    ps18v:     {labpy_object: 'agilent_N5700', interface: 'lan', ip_addr: '11.11.11.73', gpib_addr: 5}  # Agilent N5764A power supply
+    dmm:       {labpy_object: 'agilent_dmm', interface: 'lan', ip_addr: '10.3.0.4', gpib_addr: 22} # Agilent 34410A multimeter (we don't use the LAN connection so we can go back in local mode remotely)
+    ps12v:     {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '10.3.0.129', gpib_addr: 5}  # Agilent E3648A dual output power supply  12V on output 1, output 2 not used
+    ps3v3_2v5: {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '10.3.0.129', gpib_addr: 6}  # Agilent E3648A dual output power supply. 3.3V on output1, 2.5V on output 2
+    na:        {labpy_object: 'KeysightN9923', interface: 'lan', ip_addr: '10.3.0.6', gpib_addr: 15} # HP8753E Network Analyzer
+    # na:        {labpy_object: 'hp8753e',     interface: 'prologix_eth', ip_addr: '11.11.11.130', gpib_addr: 15} # HP8753E Network Analyzer
+    # ps18v:     {labpy_object: 'agilent_N5700', interface: 'lan', ip_addr: '11.11.11.73', gpib_addr: 5}  # Agilent N5764A power supply
 
 ?: &default_fpga_array
-    iceboards: ['0387']
+    iceboards: ['0183']
+    stderr_log_level: info
 
 test_list:
     # This list all the tests that will be done my the test software, in the proper order
@@ -105,8 +107,10 @@ bench_tests:
 
 carrier_tests:
     setup:
+        check_mtu: false
         fmc_slot: 1 # This is the FMC slot where we expect the Mezzanine to be
-        instruments: [ps18v]
+        instruments: []
+        # instruments: [ps18v]
         vlt: 18
         curlmt: 5
         fpga_array: {<<: *default_fpga_array, no_mezz: True, prog: 0,  open: 0, mdns_timeout: 30}

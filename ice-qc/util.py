@@ -38,7 +38,7 @@ def flush_input_buffer():
 def run_tests(config_file):
     cfg = load_config(config_file)
 
-    test_results_folder = cfg.test_results_folder
+    test_results_folder = os.path.expanduser(cfg.test_results_folder)
     """ Need to make this line independant
     """
     model_number = cfg.model_number
