@@ -17,15 +17,15 @@ default_model: 'MGADC08'
 default_serial: null
 
 instruments:
-    dmm:       {labpy_object: 'agilent_dmm', interface: 'lan', ip_addr: '10.3.0.4', gpib_addr: 22} # Agilent 34410A multimeter (we don't use the LAN connection so we can go back in local mode remotely)
-    ps12v:     {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '10.3.0.129', gpib_addr: 5}  # Agilent E3648A dual output power supply  12V on output 1, output 2 not used
-    ps3v3_2v5: {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '10.3.0.129', gpib_addr: 6}  # Agilent E3648A dual output power supply. 3.3V on output1, 2.5V on output 2
-    na:        {labpy_object: 'KeysightN9923', interface: 'lan', ip_addr: '10.3.0.6', gpib_addr: 15} # HP8753E Network Analyzer
+    dmm:       {labpy_object: 'agilent_dmm', interface: 'lan', ip_addr: '10.11.1.79', gpib_addr: 22} # Agilent 34410A multimeter (we don't use the LAN connection so we can go back in local mode remotely)
+    ps12v:     {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '10.11.1.135', gpib_addr: 5}  # Agilent E3648A dual output power supply  12V on output 1, output 2 not used
+    ps3v3_2v5: {labpy_object: 'AgilentPS',   interface: 'prologix_eth', ip_addr: '10.11.1.135', gpib_addr: 6}  # Agilent E3648A dual output power supply. 3.3V on output1, 2.5V on output 2
+    na:        {labpy_object: 'KeysightN9923', interface: 'lan', ip_addr: '10.11.1.116', gpib_addr: 15} # HP8753E Network Analyzer
     # na:        {labpy_object: 'hp8753e',     interface: 'prologix_eth', ip_addr: '11.11.11.130', gpib_addr: 15} # HP8753E Network Analyzer
     # ps18v:     {labpy_object: 'agilent_N5700', interface: 'lan', ip_addr: '11.11.11.73', gpib_addr: 5}  # Agilent N5764A power supply
 
 ?: &default_fpga_array
-    iceboards: ['0183']
+    iceboards: ['0047']
     stderr_log_level: info
 
 test_list:
@@ -62,6 +62,8 @@ menu:
     - { key: 'R', description: 'Generate summary of all tests',                       type: summary}
     - { key: 'Q', description: 'Exit',                                                type: exit}
     - {           description: "or Enter or scan board's serial number or menu item", type: text}
+    - { regex: '45844-0000-(\d{4})',                                                  type: board_info, model: 'MGADC08', serial: '{0}', next_key: '1'}  # 29821-0000-nnnn are MGADC08 Serial nnnn
+
     - { regex: '29821-0000-(\d{4})',                                                  type: board_info, model: 'MGADC08', serial: '{0}', next_key: '1'}  # 29821-0000-nnnn are MGADC08 Serial nnnn
     - { regex: '35896-0000-(\d{4})',                                                  type: board_info, model: 'MGADC08', serial: '{0}', next_key: '1'}  # 35896-0000-nnnn are MGADC08 Serial nnnn
     - { regex: '38161-0000-(\d{4})',                                                  type: board_info, model: 'MGADC08', serial: '{0}', next_key: '1'}  # 38161-0000-nnnn are MGADC08 Serial nnnn
@@ -89,7 +91,7 @@ bench_tests:
         # zmin: minimum impedance below which the test will fail
            - ['J7-2 (12V)',     {delay: 0.1, zmin: 500}]
            - ['J7-3 (2.5V)',    {delay: 0.1, zmin: 500}]
-           - ['J7-4 (3.3V)',    {delay: 0.1, zmin: 500}]
+           - ['J7-4 (3.3V)',    {delay: 0.1, zmin: 100}]
            - ['3V3 test point', {delay: 0.1, zmin: 500}]
            - ['1V8 test point', {delay: 0.1, zmin: 300}]
 

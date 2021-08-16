@@ -1075,26 +1075,27 @@ class MGADC08CarrierTests():
     
                     print
                     print 'Frequency response'
-                    fig = plt.figure(3)
-                    fig.canvas.get_tk_widget().configure(takefocus=False)
-                    # plt.ion()
-                    # plt.show(block=False)
-                    wm = plt.get_current_fig_manager()
-                    wm.window.wm_geometry("-0-0")
-                    plt.clf()
-                    plt.plot(fr_freqs, ampl, 'b.-', fr_f, fr_a, 'r-')
-                    plt.ylabel('Response [dB Full Scale]')
-                    plt.xlabel('Frequency [MHz]')
-                    plt.grid(1)
-                    plt.title('CHANNEL %02i Frequency respsonse, Input power =  %f dBm' % (channel+1, power_level))
-                    # plt.ion()
-                    plt.pause(0.0001)
-                    # plt.draw()
+                    if True:
+                        fig = plt.figure(3)
+                        #fig.canvas.get_tk_widget().configure(takefocus=False)
+                        # plt.ion()
+                        # plt.show(block=False)
+                        wm = plt.get_current_fig_manager()
+                        wm.window.wm_geometry("-0-0")
+                        plt.clf()
+                        plt.plot(fr_freqs, ampl, 'b.-', fr_f, fr_a, 'r-')
+                        plt.ylabel('Response [dB Full Scale]')
+                        plt.xlabel('Frequency [MHz]')
+                        plt.grid(1)
+                        plt.title('CHANNEL %02i Frequency respsonse, Input power =  %f dBm' % (channel+1, power_level))
+                        # plt.ion()
+                        plt.pause(0.0001)
+                        # plt.draw()
 
-                    # fig.canvas.get_tk_widget().configure(takefocus=False)
-                    plt.draw()
-                    plt.show(block=False)
-                    xr.insert_plot()
+                        # fig.canvas.get_tk_widget().configure(takefocus=False)
+                        plt.draw()
+                        #plt.show(block=False)
+                        xr.insert_plot()
 
                     if all(fr_ok):
                         print 'PASSED'
@@ -1128,7 +1129,7 @@ class MGADC08CarrierTests():
                     ff = freqs[ix]
                     dd = 20 * np.log10(np.abs(s11_data[ix]))
                     plt.plot([400e6, 800e6], [cfg.s11_max]*2, 'r-')  # plot the limit
-                    plt.pause(0.0001)
+                    #plt.pause(0.0001)
                     xr.insert_plot()
                     print '   Worst case return loss is %0.1f dB. Limit is %0.1d dB' % (max(dd), cfg.s11_max)
                     if all(dd <= cfg.s11_max):
