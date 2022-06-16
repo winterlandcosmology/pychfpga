@@ -159,6 +159,7 @@ class FPGAArray(object):
 
             mode=None,
             frames_per_packet=2,
+            chan8_channel_map=list(range(8)),
             tx_power=None,
             integration_period=None,
             corner_turn_bad_links=None,
@@ -440,6 +441,7 @@ class FPGAArray(object):
              adc_bandwidth=adc_bandwidth,
              mode=mode,
              frames_per_packet=frames_per_packet,
+             chan8_channel_map=chan8_channel_map,
              sampling_frequency=sampling_frequency,
              tx_power=tx_power,
              integration_period=integration_period,
@@ -523,6 +525,7 @@ class FPGAArray(object):
 
             mode=None,
             frames_per_packet=2,
+            chan8_channel_map=list(range(8)),
             sampling_frequency=800e6,
             tx_power=None,
             integration_period=None,
@@ -1161,6 +1164,7 @@ class FPGAArray(object):
                 self.set_operational_mode(
                     mode=mode,
                     frames_per_packet=frames_per_packet,
+                    chan8_channel_map=chan8_channel_map,
                     tx_power=tx_power,
                     integration_period=integration_period,
                     corner_turn_bad_links=corner_turn_bad_links,
@@ -1645,7 +1649,8 @@ class FPGAArray(object):
             for ib in self.ib:
                 stream_ids = ib.init_crossbars(
                     mode='chan8',
-                    frames_per_packet=frames_per_packet)
+                    frames_per_packet=frames_per_packet,
+                    chan8_channel_map=chan8_channel_map)
                 for lane, stream_id in enumerate(stream_ids):
                     self.corner_turn_stream_ids[ib.get_id(lane)] = stream_id
             self.sync()

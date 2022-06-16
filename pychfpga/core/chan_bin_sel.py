@@ -96,7 +96,7 @@ class ChanBinSel(Module_base):
         if isinstance(bins_to_enable, int):
             bins_to_enable = list(range(bins_to_enable))
 
-        if min(np.diff(sorted(bins_to_enable))) < 8:
+        if len(bins_to_enable) and min(np.diff(sorted(bins_to_enable))) < 8:
             raise ValueError('Crossbar 1 bin spacing must be at least 8 bins')
 
         # Initialize filter mask (8 flags per byte)
