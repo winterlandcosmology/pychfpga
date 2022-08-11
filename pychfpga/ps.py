@@ -27,8 +27,9 @@ class AgilentN5700(SocketContext):
     """
     SUPPORTED_PS = {
         # model : (name, IDN substring, Vmax, Imax)
-        'N5764A': ('Agilent Power Supply', 'Agilent Technologies,N5764A', 21, 79.8 ),
-        'N8731' : ('Agilent Power Supply', 'Agilent Technologies,N8731A', 8, 400)
+        'N5764A': ('Agilent Power Supply', 'Agilent Technologies,N5764A', 21, 79.8 ), # CRATE PSU
+        'N8731' : ('Agilent Power Supply', 'Agilent Technologies,N8731A', 8, 400), # CHIME Rx hut FLA PSU
+        'N5743A' : ('Agilent Power Supply', 'Agilent Technologies,N5743A', 8, 50) # PCO FLA PSU
     }
 
     def __init__(self,  hostname, port=5025, timeout=0.5, verbose=1):
@@ -408,6 +409,7 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
     POWER_SUPPLY_CLASSES = {
         'AgilentN5764': AgilentN5700,
         'AgilentN8731': AgilentN5700
+#        'AgilentN5764A': AgilentN5700
         }
 
     def __init__(self,  address='', port=DEFAULT_PORT, logging_params={}):

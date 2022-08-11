@@ -15,10 +15,12 @@ importlib.reload(GPIB)
 
 # Define instrument model codes to easily refer to specific DVMs
 AGILENTN5764A = 'N5764A'
+AGILENTN5743A = 'N5743A'
 
 # The following dictionnary lists the supported DVMs and provides a tuple containing (instrument name, ID string)
 SUPPORTED_PS = {
-    AGILENTN5764A: ('Agilent Power Supply', 'Agilent Technologies,N5764A')
+    AGILENTN5764A: ('Agilent Power Supply', 'Agilent Technologies,N5764A'),
+    AGILENTN5743A: ('Agilent Power Supply', 'Agilent Technologies,N5743A')
 }
 
 class agilent_N5700(GPIB.GPIB):
@@ -28,7 +30,7 @@ class agilent_N5700(GPIB.GPIB):
 
     def __init__(self, interface='lan', gpib_addr=14, ip_addr='10.10.10.220', ip_port=5025, timeout=0.5, verbose=1):
 
-        super(agilent_N5700, self).__init__(interface=interface, gpib_addr=gpib_addr, ip_addr=ip_addr, ip_port=ip_port, timeout=timeout)
+        super().__init__(interface=interface, gpib_addr=gpib_addr, ip_addr=ip_addr, ip_port=ip_port, timeout=timeout)
 
         if verbose:
             print('Initializing instrument')
