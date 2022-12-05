@@ -1079,7 +1079,7 @@ class FPGAMaster(object):
                 raise RuntimeError(errmsg)
         else:
             self.log.warning(f'ADC delay table folder (adc_delay_params.delay_table_folder) is not set. Delays will be saved in the default folder specified in set_adc_delays()')
-        await ca.set_adc_delays_async(**adc_delay_params)
+        #await ca.set_adc_delays_async(**adc_delay_params)
 
         # Reset the correlator. Not sure if this is necesssary?
         # ca.ib.set_corr_reset(1)

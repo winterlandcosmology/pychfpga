@@ -1091,6 +1091,8 @@ class RawPacketProcessor(object):
             is_old = (t0 - self.hdf5_last_time[ix]) > self.hdf5_refresh_time  # boolean ndarray
             # find buffer index of entries that should be written
             bix = buf_ix[is_old]
+            iix = ix[is_old]
+            bix = bix[self.stream_id[iix]==6]
             if bix.size:
                 # update the last time of the channels . We use the boolean
                 # array directly, since we don't need to reuse an channel
