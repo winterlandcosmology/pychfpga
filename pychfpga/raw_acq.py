@@ -847,7 +847,9 @@ class RawPacketProcessor(object):
         self.hdf5_run = False
         self.hdf5_base_dir = None
         self.hdf5_file = None
+        self.hdf5_file_maser= None
         self.hdf5_refresh_time = 30  # is updated when HDF5 capture is requested
+        self.hdf5_refresh_time_maser = 1 #updated when HDF5 capture is requested
         self.hdf5_last_time = np.zeros(self.NCHAN, dtype=np.float64)
         self.hdf5_block_writes = 0
 
@@ -1085,14 +1087,45 @@ class RawPacketProcessor(object):
 
         We write data for channels that have not been written for at least self.hdf5_refresh_time
         """
+        #copy the whole function for maser input
+        if self.hdf5_file_maser:
+            t0 = time.time()
+            # find the channel index of channels that need to be written
+            is_old = (t0 - self.hdf5_last_time[ix]) > self.hdf5_refresh_time_maser  # boolean ndarray
+            # find buffer index of entries that should be written
+            bix = buf_ix[is_old]
+            iix = ix[is_old]
+            bix = bix[self.stream_id[iix]==6]
+            if bix.size:
+                # update the last time of the channels . We use the boolean
+                # array directly, since we don't need to reuse an channel
+                # index array anymore
+                self.hdf5_last_time[ix[is_old]] = t0
+                # save the selected entries. Unfortunately, the array indexing
+                # buf_x[bix] will cause copies to be created for each
+                # argument. To avoid this extra copy, we would have to pass
+                # bix separately, and let the copy happen only when we
+                # transfer the data to the hdf5 internal buffers.
+                self.hdf5_file_maser.write(
+                    self.buf_ts[bix],
+                    self.buf_stream_id[bix],
+                    self.buf_flags[bix],
+                    self.buf_data[bix])
+
+            # keep track of how many packets we write and how much time it
+            # takes so we can get an average that informs us of the maximum
+            # packet rate we can sustain
+            dt = time.time() - t0
+            # self.log.info(f'{self!r}: it took {dt*1000:.3f} ms to write {len(bix) packets to HDF5 file')
+            #self.hdf5_block_writes += 1
+
+
         if self.hdf5_file:
             t0 = time.time()
             # find the channel index of channels that need to be written
             is_old = (t0 - self.hdf5_last_time[ix]) > self.hdf5_refresh_time  # boolean ndarray
             # find buffer index of entries that should be written
             bix = buf_ix[is_old]
-            iix = ix[is_old]
-            bix = bix[self.stream_id[iix]==6]
             if bix.size:
                 # update the last time of the channels . We use the boolean
                 # array directly, since we don't need to reuse an channel
@@ -1115,6 +1148,7 @@ class RawPacketProcessor(object):
             dt = time.time() - t0
             # self.log.info(f'{self!r}: it took {dt*1000:.3f} ms to write {len(bix) packets to HDF5 file')
             self.hdf5_block_writes += 1
+
 
     def start_adc_hdf5(self,
                        base_dir,
@@ -1155,6 +1189,11 @@ class RawPacketProcessor(object):
         self.hdf5_file = HDF5RawWriter(base_dir=self.hdf5_base_dir,
                                        filename=base_filename,
                                        elements_per_file=self.elements_per_file)
+        #Separate file for maser:
+        self.hdf5_file_maser = HDF5RawWriter(base_dir=self.hdf5_base_dir,
+                                       filename=base_filename+'_maser',
+                                       elements_per_file=self.elements_per_file)
+
 
     def stop_adc_hdf5(self):
         if not self.hdf5_file:
@@ -1163,12 +1202,24 @@ class RawPacketProcessor(object):
         hdf5_file = self.hdf5_file
         self.hdf5_file = None  # Stop the thread from using the file before we close it
         hdf5_file.close()
+
+        #Copied for maser:
+        if not self.hdf5_file_maser:
+            raise RuntimeError(f'{self!r}: maser HDF5 dataWriter is not running. Cannot stop it.')
+        self.log.info(f'{self!r}: Stopping maser HDF5 data writer')
+        hdf5_file_maser = self.hdf5_file_maser
+        self.hdf5_file_maser = None  # Stop the thread from using the file before we close it
+        hdf5_file_maser.close()
+
+
         self.hdf5_start_time = None
         write_rate = ((self.adc_hdf5_max_processing_time * 1000. / self.hdf5_block_writes)
                       if self.hdf5_block_writes else 0)
         self.log.info(
             f'{self!r}: Write {self.hdf5_block_writes} data blocks in {self.adc_hdf5_max_processing_time:.3f} s total'
             f'({write_rate:.0f} ms/write)')
+
+
 
     def process_adc_rms(self, buf_ix, ix):
         """ Compute averaged RMS values
