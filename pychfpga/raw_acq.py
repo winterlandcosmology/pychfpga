@@ -1679,13 +1679,14 @@ class HDF5RawWriter(object):
         self.nn = 0  # sample number of the first sample of the current file
         self.elements_per_file = elements_per_file
         self.f = None
+        self.maser_input=maser_input
         self.start_new_hdf5_file()
 
     def start_new_hdf5_file(self):
         self.close()
         fields = dict(
             file_number=self.file_number)
-        if maser_input is True:
+        if self.maser_input is True:
             self.filename='%(file_number)06d_maser.h5'
             filename = os.path.join(self.base_dir, self.filename.format(**fields) % fields)
         else:
