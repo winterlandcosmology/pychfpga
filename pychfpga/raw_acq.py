@@ -849,7 +849,8 @@ class RawPacketProcessor(object):
         self.hdf5_file = None
         self.hdf5_file_maser= None
         self.hdf5_refresh_time = 30  # is updated when HDF5 capture is requested
-        self.hdf5_refresh_time_maser = 0 #updated when HDF5 capture is requested
+        self.hdf5_refresh_time_maser = 1 #updated when HDF5 capture is requested
+        self.hdf5_maser_stream_id=6 
         self.hdf5_last_time = np.zeros(self.NCHAN, dtype=np.float64)
         self.hdf5_last_time_maser = np.zeros(self.NCHAN, dtype=np.float64)
         self.hdf5_block_writes = 0
@@ -1096,7 +1097,7 @@ class RawPacketProcessor(object):
             # find buffer index of entries that should be written
             bix = buf_ix[is_old]
             iix = ix[is_old]
-            bix = bix[self.stream_id[iix]==6]
+            bix = bix[self.stream_id[iix]==self.hdf5_maser_stream_id]
             if bix.size:
                 # update the last time of the channels . We use the boolean
                 # array directly, since we don't need to reuse an channel
@@ -1156,6 +1157,8 @@ class RawPacketProcessor(object):
                        base_filename,
                        capture_duration=60,
                        capture_refresh_time=0,
+                       capture_refresh_time_maser=0,
+                       capture_maser_stream_id=6,
                        elements_per_file=2048 * 64):
         if self.hdf5_file:
             self.stop_adc_hdf5()
@@ -1170,6 +1173,8 @@ class RawPacketProcessor(object):
         self.hdf5_start_time = time.time()  # used to keep track of how long the disk capture has been running
 
         self.hdf5_refresh_time = capture_refresh_time
+        self.hdf5_refresh_time_maser = capture_refresh_time_maser
+        self.hdf5_maser_stream_id = capture_maser_stream_id
 
         # Schedule for the acquisition to stop if capture_ducation is non-zero
         if capture_duration:
@@ -2761,12 +2766,16 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
             base_filename='RawAcq',
             capture_duration=0,
             capture_refresh_time=0,
+            capture_refresh_time_maser=0,
+            capture_maser_stream_id=6,
             elements_per_file=2048 * 64):
         self.receiver.raw_packet_processor.start_adc_hdf5(
             base_dir=base_dir,
             base_filename=base_filename,
             capture_duration=capture_duration,
             capture_refresh_time=capture_refresh_time,
+            capture_refresh_time_maser=capture_refresh_time_maser,
+            capture_maser_stream_id=capture_maser_stream_id,
             elements_per_file=elements_per_file)
         return "started hdf5 writing to disk."
 
@@ -2962,6 +2971,8 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
                              base_filename=None,
                              capture_duration=0,
                              capture_refresh_time=0,
+                             capture_refresh_time_maser=0,
+                             capture_maser_stream_id=6,
                              elements_per_file=2048 * 64):
         result = await self.post(
             'start-raw-hdf5',
@@ -2969,6 +2980,8 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
             base_filename=base_filename or self.base_filename,
             capture_duration=capture_duration,
             capture_refresh_time=capture_refresh_time,
+            capture_refresh_time_maser=capture_refresh_time_maser,
+            capture_maser_stream_id=capture_maser_stream_id,
             elements_per_file=elements_per_file)
         return result
 
