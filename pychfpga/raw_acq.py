@@ -1191,8 +1191,8 @@ class RawPacketProcessor(object):
                                        elements_per_file=self.elements_per_file)
         #Separate file for maser:
         self.hdf5_file_maser = HDF5RawWriter(base_dir=self.hdf5_base_dir,
-                                       filename=base_filename+'_maser',
-                                       elements_per_file=self.elements_per_file)
+                                       filename=base_filename,
+                                       elements_per_file=self.elements_per_file, maser_input=True)
 
 
     def stop_adc_hdf5(self):
@@ -1666,7 +1666,7 @@ class HDF5RawWriter(object):
                  filename='%(file_number)06d.h5',
                  elements_per_file=2048 * 64,
                  crate_and_slot_from_port=False,
-                 chunk_size=1024):
+                 chunk_size=1024, maser_input=False):
         self.log = log.get_logger(self)
         self.N_SAMP = 2048  # data bytes per frame
         self.base_dir = base_dir
@@ -1685,8 +1685,11 @@ class HDF5RawWriter(object):
         self.close()
         fields = dict(
             file_number=self.file_number)
-
-        filename = os.path.join(self.base_dir, self.filename.format(**fields) % fields)
+        if maser_input is True:
+            self.filename='%(file_number)06d_maser.h5'
+            filename = os.path.join(self.base_dir, self.filename.format(**fields) % fields)
+        else:
+            filename = os.path.join(self.base_dir, self.filename.format(**fields) % fields)
         self.open(filename)
         self.n = 0
         self.file_number += 1
