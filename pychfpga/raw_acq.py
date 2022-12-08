@@ -849,8 +849,9 @@ class RawPacketProcessor(object):
         self.hdf5_file = None
         self.hdf5_file_maser= None
         self.hdf5_refresh_time = 30  # is updated when HDF5 capture is requested
-        self.hdf5_refresh_time_maser = 1 #updated when HDF5 capture is requested
+        self.hdf5_refresh_time_maser = 0 #updated when HDF5 capture is requested
         self.hdf5_last_time = np.zeros(self.NCHAN, dtype=np.float64)
+        self.hdf5_last_time_maser = np.zeros(self.NCHAN, dtype=np.float64)
         self.hdf5_block_writes = 0
 
         # ADC averaged RMS processing
@@ -1091,7 +1092,7 @@ class RawPacketProcessor(object):
         if self.hdf5_file_maser:
             t0 = time.time()
             # find the channel index of channels that need to be written
-            is_old = (t0 - self.hdf5_last_time[ix]) > self.hdf5_refresh_time_maser  # boolean ndarray
+            is_old = (t0 - self.hdf5_last_time_maser[ix]) > self.hdf5_refresh_time_maser  # boolean ndarray
             # find buffer index of entries that should be written
             bix = buf_ix[is_old]
             iix = ix[is_old]
@@ -1100,7 +1101,7 @@ class RawPacketProcessor(object):
                 # update the last time of the channels . We use the boolean
                 # array directly, since we don't need to reuse an channel
                 # index array anymore
-                self.hdf5_last_time[ix[is_old]] = t0
+                self.hdf5_last_time_maser[ix[is_old]] = t0
                 # save the selected entries. Unfortunately, the array indexing
                 # buf_x[bix] will cause copies to be created for each
                 # argument. To avoid this extra copy, we would have to pass
