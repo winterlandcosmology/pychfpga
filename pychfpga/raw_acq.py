@@ -846,6 +846,7 @@ class RawPacketProcessor(object):
         self.hdf5_start_time = None
         self.hdf5_run = False
         self.hdf5_base_dir = None
+        self.hdf5_base_dir_maser = None
         self.hdf5_file = None
         self.hdf5_file_maser = None
         self.hdf5_refresh_time_maser = 1 #updated when HDF5 caprute is requested
@@ -1152,6 +1153,7 @@ class RawPacketProcessor(object):
 
     def start_adc_hdf5(self,
                        base_dir,
+                       base_dir_maser,
                        base_filename,
                        capture_duration=60,
                        capture_refresh_time=0,
@@ -1166,6 +1168,13 @@ class RawPacketProcessor(object):
             f'with base_dir={base_dir}, base_filename={base_filename}, '
             f'capture_duration={capture_duration} (type={type(capture_duration)}), '
             f'elements_per_file={elements_per_file}')
+
+        self.log.info(
+            f'{self!r}: Starting HDF5 raw data data writer for maser input'
+            f'with base_dir={base_dir_maser}, base_filename={base_filename}+'_maser.h5', '
+            f'capture_duration={capture_duration} (type={type(capture_duration)}), '
+            f'elements_per_file=1')
+
         self.elements_per_file = elements_per_file
 
         self.hdf5_start_time = time.time()  # used to keep track of how long the disk capture has been running
@@ -1184,6 +1193,7 @@ class RawPacketProcessor(object):
             hdf5_start_time=datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ'))
 
         self.hdf5_base_dir = self.recv.expand_path(base_dir, extra_fields)
+        
         try:
             os.makedirs(self.hdf5_base_dir)
         except Exception:
@@ -1193,8 +1203,16 @@ class RawPacketProcessor(object):
         self.hdf5_file = HDF5RawWriter(base_dir=self.hdf5_base_dir,
                                        filename=base_filename,
                                        elements_per_file=self.elements_per_file)
-        #separate for maser:
-        self.hdf5_file_maser = HDF5RawWriter(base_dir=self.hdf5_base_dir,
+        
+        #separate for maser
+        self.hdf5_base_dir_maser = self.recv.expand_path(base_dir_maser, extra_fields)
+        try:
+            os.makedirs(self.hdf5_base_dir_maser)
+        except Exception:
+            self.log.warning(f"{self!r}: couldn't make directory '{self.hdf5_base_dir_maser}'. Using current directory.")
+            self.hdf5_base_dir_maser = './'
+
+        self.hdf5_file_maser = HDF5RawWriter(base_dir=self.hdf5_base_dir_maser,
                                        filename=base_filename,
                                        elements_per_file=self.elements_per_file, maser_input=True)
 
@@ -2759,6 +2777,7 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
     async def start_raw_hdf5(
             self,
             base_dir='./',
+            base_dir_maser='./',
             base_filename='RawAcq',
             capture_duration=0,
             capture_refresh_time=0,
@@ -2767,6 +2786,7 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
             elements_per_file=2048 * 64):
         self.receiver.raw_packet_processor.start_adc_hdf5(
             base_dir=base_dir,
+            base_dir=base_dir_maser,
             base_filename=base_filename,
             capture_duration=capture_duration,
             capture_refresh_time=capture_refresh_time,
@@ -2906,6 +2926,7 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
                  hostname='localhost',
                  port=RawAcqAsyncRESTServer.DEFAULT_PORT,
                  base_dir='~/data',
+                 base_dir_maser='~/data',
                  base_filename=None,
                  create_server=True,
                  **config):
@@ -2917,6 +2938,7 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
 
         self.name = name
         self.hdf5_base_dir = base_dir
+        self.hdf5_base_dir_maser = base_dir_maser
         self.base_filename = base_filename or name
         self.config = config
 
@@ -2964,6 +2986,7 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
 
     async def start_raw_hdf5(self,
                              base_dir=None,
+                             base_dir_maser=None,
                              base_filename=None,
                              capture_duration=0,
                              capture_refresh_time=0,
@@ -2973,6 +2996,7 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
         result = await self.post(
             'start-raw-hdf5',
             base_dir=base_dir or self.hdf5_base_dir,
+            base_dir_maser=base_dir_maser or self.hdf5_base_dir_maser,
             base_filename=base_filename or self.base_filename,
             capture_duration=capture_duration,
             capture_refresh_time=capture_refresh_time,

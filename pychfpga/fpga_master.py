@@ -718,7 +718,7 @@ class FPGAMaster(object):
             await self.compute_gains(targets=[group], **params)
 
 
-    async def start_hdf5_capture(self, capture_folder=None, capture_filename=None, capture_refresh_time=None,
+    async def start_hdf5_capture(self, capture_folder=None, capture_folder_maser=None, capture_filename=None, capture_refresh_time=None,
                             capture_refresh_time_maser=None, capture_duration=None, capture_elements_per_file=None,
                             capture_maser_stream_id=None):
         """
@@ -749,6 +749,7 @@ class FPGAMaster(object):
         """
         conf = self.config.raw_acq.common_config
         capture_folder = capture_folder or conf.hdf5_capture_folder
+        capture_folder_maser = capture_folder_maser or conf.hdf5_capture_folder_maser
         capture_filename = capture_filename or conf.hdf5_capture_filename
         capture_duration = capture_duration or conf.hdf5_capture_duration
         capture_elements_per_file = capture_elements_per_file or conf.hdf5_capture_elements_per_file
@@ -763,6 +764,7 @@ class FPGAMaster(object):
 
             await asyncio.gather(*[server.start_raw_hdf5(
                     base_dir=capture_folder,
+                    base_dir_maser=capture_folder_maser,
                     base_filename=capture_filename,
                     capture_duration=capture_duration,
                     capture_refresh_time=capture_refresh_time,
