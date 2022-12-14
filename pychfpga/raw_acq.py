@@ -1171,7 +1171,7 @@ class RawPacketProcessor(object):
 
         self.log.info(
             f'{self!r}: Starting HDF5 raw data data writer for maser input'
-            f'with base_dir={base_dir_maser}, base_filename={base_filename}+'_maser.h5', '
+            f'with base_dir={base_dir_maser}, base_filename={base_filename}, '
             f'capture_duration={capture_duration} (type={type(capture_duration)}), '
             f'elements_per_file=1')
 
@@ -2786,7 +2786,7 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
             elements_per_file=2048 * 64):
         self.receiver.raw_packet_processor.start_adc_hdf5(
             base_dir=base_dir,
-            base_dir=base_dir_maser,
+            base_dir_maser=base_dir_maser,
             base_filename=base_filename,
             capture_duration=capture_duration,
             capture_refresh_time=capture_refresh_time,
