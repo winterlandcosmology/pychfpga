@@ -1067,7 +1067,7 @@ class FPGAMaster(object):
             return
         # Set ADC delays from delay files. Recompute and save new delays if the files do not exist or if
         # the delays loaded from them do not work.
-        #await ca.set_adc_delays_async(**conf.fpga.adc_delay_params)
+        await ca.set_adc_delays_async(**conf.fpga.adc_delay_params)
 
         # Reset the correlator. Not sure if this is necesssary?
         # ca.ib.set_corr_reset(1)
