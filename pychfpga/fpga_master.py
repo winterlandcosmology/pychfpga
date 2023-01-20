@@ -710,8 +710,9 @@ class FPGAMaster(object):
             await self.compute_gains(targets=[group], **params)
 
 
-    async def start_hdf5_capture(self, capture_folder=None, capture_filename=None, capture_refresh_time=None,
-                           capture_duration=None, capture_elements_per_file=None):
+    async def start_hdf5_capture(self, capture_folder=None, capture_folder_maser=None, capture_filename=None, capture_refresh_time=None,
+                            capture_refresh_time_maser=None, capture_duration=None, capture_elements_per_file=None,
+                            capture_maser_stream_id=None):
         """
         Instructs the raw_acq server to start storing raw data in HDF5 files
         at a specified rate, duration and in the specified folder.
@@ -740,10 +741,12 @@ class FPGAMaster(object):
         """
         conf = self.config.raw_acq.common_config
         capture_folder = capture_folder or conf.hdf5_capture_folder
+        capture_folder_maser = capture_folder_maser or conf.hdf5_capture_folder_maser
         capture_filename = capture_filename or conf.hdf5_capture_filename
         capture_duration = capture_duration or conf.hdf5_capture_duration
         capture_elements_per_file = capture_elements_per_file or conf.hdf5_capture_elements_per_file
         capture_refresh_time = capture_refresh_time or conf.hdf5_capture_refresh_time
+        capture_refresh_time_maser = capture_refresh_time_maser or conf.hdf5_capture_maser_stream_id
 
         if capture_duration is not None:
             self.log.info(
@@ -752,9 +755,12 @@ class FPGAMaster(object):
 
             await asyncio.gather(*[server.start_raw_hdf5(
                     base_dir=capture_folder,
+                    base_dir_maser=capture_folder_maser,
                     base_filename=capture_filename,
                     capture_duration=capture_duration,
                     capture_refresh_time=capture_refresh_time,
+                    capture_refresh_time_maser=capture_refresh_time_maser,
+                    capture_maser_stream_id=capture_maser_stream_id,
                     elements_per_file=capture_elements_per_file
                     )
                 for server_name, server in self.raw_acq.items()])
