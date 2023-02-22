@@ -767,8 +767,7 @@ class FPGAMaster(object):
         capture_elements_per_file = capture_elements_per_file or conf.hdf5_capture_elements_per_file
         capture_refresh_time = capture_refresh_time or conf.hdf5_capture_refresh_time
 
-                capture_aux_enable = capture_aux_enable or conf.get("hdf5_capture_aux_enable", False)
-
+        capture_aux_enable = capture_aux_enable or conf.get("hdf5_capture_aux_enable", False)
         capture_aux_folder = capture_aux_folder or conf.get("hdf5_capture_aux_folder", './')
         capture_aux_filename = capture_aux_filename or conf.get("hdf5_capture_aux_filename", '{file_number:06d}_aux.h5')
         capture_aux_refresh_time = capture_aux_refresh_time or conf.get("hdf5_capture_aux_refresh_time", 0)
