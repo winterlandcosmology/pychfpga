@@ -7,7 +7,7 @@ wtl.namespace @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.namespace.gi
 wtl.metrics @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.metrics.git  # testing 1.1
 wtl.log @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.log.git  # testing 1.1.0
 wtl.rest @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.rest.git  # testing
-wtl.config @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.config.git # testing 1.1.0
+wtl.config @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.config.git@1.1.1 # testing 1.1.0
 wtl.h5-archive @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.h5-archive.git   # was @v1.0.3, testing 1.1.0
 
 # PyPi packages
