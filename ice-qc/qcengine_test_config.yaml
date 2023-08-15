@@ -14,6 +14,7 @@ test_results_folder: '../../qc_results'  # relative to this config file's folder
 test_results_folder_uses_git: false
 # xml_test_results_pathname: ""  # not needed for a pure menu
 
+
 xformat: ['pdf']  # Output formats for the test reports. xml is always saved.
 
 submenus:

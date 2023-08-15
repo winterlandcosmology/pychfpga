@@ -1009,11 +1009,11 @@ class chFPGA(FPGAFirmware):
                 await mezz.set_mezzanine_power_async(False)   # this method uses power-sequencing
                 await mezz.set_mezzanine_reset_async(True)   # Puts the ADCs in reset
 
-                await asyncio.sleep(0.2)  # *** make async
+                await asyncio.sleep(0.5)  # *** make async
                 self.logger.debug('%r:   Powering up FMC%i' % (self, mezz_number - 1))
                 await mezz.set_mezzanine_power_async(True)
                 # mezz.set_power(True)
-                await asyncio.sleep(0.2)  # Give it some time for the power to stabilize
+                await asyncio.sleep(0.5)  # Give it some time for the power to stabilize
                 # We need to initialize the ADC board before we initialize the channelizer
                 # (and its data acquisition) because the delay blocks need a
                 # clock
@@ -1030,10 +1030,15 @@ class chFPGA(FPGAFirmware):
             else:
                 self.logger.debug('%r:    Skipping FMC%i initialization since no board is present in that slot' % (
                     self, mezz_number - 1))
-        # self.set_sync_delays((0,0))  # debug
-        self.sync()  # pulse the sync lines of the mezzanines to activate the ADC configurations
+        #self.set_sync_delays((0,0))  # debug
+        #self.sync()  # pulse the sync lines of the mezzanines to activate the ADC configurations
         #self.set_sync_delays((4,4))  # debug
-        #self.sync()  # debug
+        self.sync()  # debug
+        #########################################################################################################
+        #self.REFCLK.ADC_SYNC = 1
+        #self.REFCLK.ADC_SYNC = 0
+        #await asyncio.sleep(1)
+        #########################################################################################################
         self.check_adc_frequencies('after 1st post-mezz-init SYNC (chan reset active) ')
 
 
@@ -1125,11 +1130,18 @@ class chFPGA(FPGAFirmware):
         # Create a data receiver
         if create_receiver:
             self.get_data_receiver()
+        
+        #self.set_sync_delays((0,0))
+        #self.REFCLK.ADC_SYNC = 1
+        #self.REFCLK.ADC_SYNC = 0
+        #await asyncio.sleep(1)
+        #self.check_adc_frequencies('after sync pulse')
 
     def check_adc_frequencies(self, stage):
         for trial in range(10):
             freqs = [self.FreqCtr.read_frequency(f'ADC_CLK{i}', gate_time=0.001) for i in (0,4,8,12)] # ***JFC debug
             err = any(abs(f-self._sampling_frequency/4) > 2.1e3 for f in freqs)
+            #err = any(abs(f-self._sampling_frequency/8) > 2.1e3 for f in freqs)
             msg = f'{self!r}: ADC output frequencies at stage {stage} are {[f/1e6 for f in freqs]} (check #{trial+1}) {"ERROR!" if err else ""}'
             if err:
                 self.logger.warn(msg)
@@ -2532,7 +2544,9 @@ class chFPGA(FPGAFirmware):
                 self.REFCLK.local_sync()
             else:
                 self.REFCLK.remote_sync()
+    ##############################################################
             self.set_adc_mask(0xff)  # restore full ADC data
+    #############################################################
 
     def pulse_ant_reset(self):
         """ Resets the stats of all channelizers and clear the processing pipeline.

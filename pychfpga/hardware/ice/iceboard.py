@@ -1821,7 +1821,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         result = await self._call_subprocess(scp_cmd)
         return result
 
-    async def _update_arm_firmware(self, image_filename, delay=120):
+    async def _update_arm_firmware(self, image_filename, delay=10):
         """
         Overwrites the ARM firmware on the SD card with the specified image compressed with bzip2.
 
@@ -1844,7 +1844,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         print('%r: Sending file...' % self)
         await self.arm_scp(image_filename, '/tmp/image.bz2')
         print('%r: Writing SD card' % self)
-        await self.arm_exec('bzcat /tmp/image.bz2 >/dev/mmcblk0')
+        await self.arm_exec('bzcat /tmp/image.bz2 >/dev/mmcblk0 && sync')
         self.logger.info('%r: Command completed. Waiting %i seconds to ensure cache is flushed' % (self, delay))
         print('%r: Waiting %i seconds' % (self, delay))
         await asyncio.sleep(delay)

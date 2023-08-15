@@ -48,7 +48,7 @@ class ADC_chip:
             self,
             adc_mode=0,
             standby_mode=0,
-            dmux=False,
+            dmux = False,
             gray_code=False,
             bandwidth=2,
             full_scale=0,

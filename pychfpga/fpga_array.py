@@ -1149,6 +1149,29 @@ class FPGAArray(object):
                     corner_turn_bin_priority=corner_turn_bin_priority,
                     corner_turn_remap_level=corner_turn_remap_level)
 
+            # low level sync each board
+            # remote sync on ca but first tr without and check boards individually if clocks are all thre (ignore backplane)
+            #run bench tests on individual boards upstairs to do so
+################################################################################
+            #for ib in self.ib:
+                #if ib.check_adc_frequencies(f'AFTER FPGAARRAY INIT'): 
+            #    for n in range(10):
+                
+            #        ib.set_sync_delays((0,0))
+            #        await asyncio.sleep(1)
+                    
+            #        ib.REFCLK.ADC_SYNC = 1
+            #        await asyncio.sleep(1)
+            #        ib.REFCLK.ADC_SYNC = 0
+                    
+            #        await asyncio.sleep(1)
+                    
+            #        if not ib.check_adc_frequencies(f'AFTER SYNC PULSE #{n}'):
+            #            break
+            
+            #await asyncio.sleep(1)
+            #self.ib.check_adc_frequencies('AFTER SYNC PULSE')
+##############################################################################
         self.print_flush()
 
         #################################
