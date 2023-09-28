@@ -4899,7 +4899,8 @@ class FPGAArray(object):
                     if not i:
                         fn0, ts0 = (fn, ts)
                     crate, slot = ib.get_id()
-                    slot = ib.slot - 1
+                    if ib.slot:
+                        slot = ib.slot - 1
                     metrics.add('fpga_time_delta', ts.nano - ts0.nano, crate=crate, slot=slot)
                     metrics.add('fpga_frame_number_delta', fn - fn0, crate=crate, slot=slot)
                     metrics.add('fpga_time_error',
