@@ -338,7 +338,7 @@ class GainCalc(object):
         # it, which is rounded up so we keep our headroom of at least 4.
         #
         # glog has one less dimension than `g`.
-        glog = np.clip((np.ceil(np.log2(np.ma.median(np.abs(g) / target_glin, axis=-1)))).astype(np.int), 0, 31)
+        glog = np.clip((np.ceil(np.log2(np.ma.median(np.abs(g) / target_glin, axis=-1)))).astype(np.int32), 0, 31)
         # ma.median will result in a masked value if all elements are masked. In
         # these cases, give to glog the the median glog from all channels
         # (hopefully there is at lease one good glog) .
@@ -411,7 +411,7 @@ class GainCalc(object):
                 filtered_mask_signal[filtered_mask_signal.mask] = signal[filtered_mask_signal.mask]
         else:
             raise ValueError
-        filtered_mask_signal = (filtered_mask_signal.real).astype(np.int).astype(np.complex)
+        filtered_mask_signal = (filtered_mask_signal.real).astype(np.int32).astype(np.complex64)
         return filtered_mask_signal
 
     def fourier_filter(self, signal, num_components):
@@ -441,7 +441,7 @@ class GainCalc(object):
         # We eliminate all high frequency beyond num_components
         f_signal[..., num_components: -num_components] = 0
         filtered = np.fft.ifft(f_signal, axis=-1)[..., signal_length // 2: -signal_length // 2 + 1]
-        filtered = (filtered.real).astype(np.int).astype(np.complex)
+        filtered = (filtered.real).astype(np.int32).astype(np.complex64)
         return filtered
 
     def mask_rfi(self, signal, filtered_signal, threshold):
