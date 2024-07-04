@@ -13,7 +13,7 @@ pipelines:
           caches:
             - pip
           script:
-            - if [ -f pyproject.toml ]; then pip install -r pyproject.toml; fi
+            - if [ -f pyproject.toml ]; then pip install -e .; fi
             - pip install pytest
             #- pytest -v tests/* --junitxml=test-reports/report.xml
       - step:
