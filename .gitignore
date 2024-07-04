@@ -20,3 +20,4 @@ out_*/
 *.jou
 *.egg-info
 .ipynb_checkpoints
+.vscode/

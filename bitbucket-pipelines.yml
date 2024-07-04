@@ -9,16 +9,27 @@ pipelines:
   default:
     - parallel:
       - step:
-          name: Test
+          name: Automatic test
+          # Test which require no configuaration of hardware components and are therefore platform agnostic
           caches:
             - pip
           script:
             - if [ -f pyproject.toml ]; then pip install -e .; fi
             - pip install pytest
-            #- pytest -v tests/* --junitxml=test-reports/report.xml
+            - pytest -v software_tests/automatic_tests/*
       - step:
           name: Lint code
           script:
             # Enforce style consistency across Python projects https://flake8.pycqa.org
             - pip install flake8
-            - flake8 . --extend-exclude=dist,build --statistics
+            # - flake8 . --extend-exclude=dist,build --statistics
+
+      - step:
+          name: Manual test
+          # Test which require manual configuration of hardware components
+          caches:
+            - pip
+          script:
+            - if [ -f pyproject.toml ]; then pip install -e .; fi
+            - pip install pytest
+            - pytest -v software_tests/manual_tests/*
