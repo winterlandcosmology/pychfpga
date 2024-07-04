@@ -11,7 +11,6 @@ R11.3f3: Added linux boot delay
 R11.3g: fixed SD card read error in 1st bootloader
 R11.3h: fix libiceboard fan tray readout
 R11.3i: Added file read content to read a version number
-R11.3j: Fix backplane EEPROM read. Handle collisions, and boards switching off the I2C switch of other boards.... Minimal boot delay.
 
 
 
@@ -122,34 +121,4 @@ R11.3i
 		>reboot
 	Then power cycle. Maybe skip reboot command.
 
-R11.3j
 
-# on twiddlebug
-# create working folder if it dies not alreay exists
-mkdir iceboard_arm_firmware
-cd iceboard_arm_firmware/
-
-# Create version working folder
-mkdir R11.3j
-cd R11.3j
-mkdir mnt
-
-# Copy and rename the latest version
-cp ~/pychfpga/pychfpga/hardware/ice/arm_firmware/Chime_R11.3i.img.bz2 Chime_R11.3j.img.bz2
-bunzip2 Chime_R11.3j.img.bz2
-
-# Mount FAT partition and replace MLO
-sudo mount -o loop,offset=999936 Chime_R11.3j.img mnt/
-sudo cp MLO mnt/
-sudo umount mnt
-
-# Mount ext2 Linux partition and ipdte SD card version
-sudo mount -o loop,offset=32000512 Chime_R11.3j.img mnt/
-# sudo cp libiceboard.so mnt/usr/share/tuber/
-echo Chime_R11.3j > mnt/usr/lib/iceboard/version.txt
-sudo umount mnt
-
-# Compress image and put back in pychfpga
-bzip2 -k Chime_R11.3j.img
-
-cp Chime_R11.3j.img.bz2 ~/pychfpga/pychfpga/hardware/ice/arm_firmware/
