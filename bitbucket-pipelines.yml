@@ -27,6 +27,7 @@ pipelines:
       - step:
           name: Manual test
           # Test which require manual configuration of hardware components
+          trigger: manual
           caches:
             - pip
           script:
