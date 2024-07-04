@@ -16,7 +16,7 @@ pipelines:
           script:
             - if [ -f pyproject.toml ]; then pip install -e .; fi
             - pip install pytest
-            - pytest -v software_tests/automatic_tests/*
+            - pytest -v software_tests/automatic_tests/pytest.ini
       - step:
           name: Lint code
           script:
@@ -33,4 +33,4 @@ pipelines:
           script:
             - if [ -f pyproject.toml ]; then pip install -e .; fi
             - pip install pytest
-            - pytest -v software_tests/manual_tests/*
+            - pytest -v software_tests/manual_tests/pytest.ini
