@@ -16,7 +16,7 @@ pipelines:
           script:
             - if [ -f pyproject.toml ]; then pip install -e .; fi
             - pip install pylint
-            - pylint --errors-only
+            - pylint pychfpga/ --errors-only
       - step:
           name: Lint code
           script:
