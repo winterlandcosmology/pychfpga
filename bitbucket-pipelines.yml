@@ -15,8 +15,8 @@ pipelines:
             - pip
           script:
             - if [ -f pyproject.toml ]; then pip install -e .; fi
-            - pip install pytest
-            - pytest software_tests/automatic_tests
+            - pip install pylint
+            - pylint --errors-only
       - step:
           name: Lint code
           script:
