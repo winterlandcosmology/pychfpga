@@ -443,7 +443,7 @@ class MMI(object):
         """
         def entries():  # generator to list all the bitfield values
             for (name, bitfield) in vars(type(self)).items():
-                if isinstnce(bitfield, BitField):
+                if isinstance(bitfield, BitField):
                     value = getattr(self, name)
                     entry = {'name': name,
                              'page': bitfield.page,

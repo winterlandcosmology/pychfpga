@@ -1290,7 +1290,7 @@ class chFPGA(FPGAFirmware):
 
         The cookie is obtained from a core register via the MMI interface.
         """
-        if not (await self.is_fpga_programmed_async()):
+        if not (await self.mb.is_fpga_programmed_async()):
             return None
         cookie = await self.fpga_core_reg_read_async(self.FPGA_CORE_FIRMWARE_COOKIE_ADDR)
         return cookie
@@ -1300,7 +1300,7 @@ class chFPGA(FPGAFirmware):
 
         The cookie is obtained from a core register via the MMI interface.
         """
-        if not (await self.is_fpga_programmed_async()):
+        if not (await self.mb.is_fpga_programmed_async()):
             return None
         cookie = await self.fpga_core_reg_read_async(self.FPGA_APPLICATION_FIRMWARE_COOKIE_ADDR)
         return cookie
@@ -1860,7 +1860,7 @@ class chFPGA(FPGAFirmware):
 
         # We failed, so we will attempt to read it via the FPGA
         # First check if the FPGA is programmed; we need it!
-        fpga_programmed = await self.is_fpga_programmed_async()
+        fpga_programmed = await self.mb.is_fpga_programmed_async()
         if not fpga_programmed:
             self.logger.debug(
                 f"{self!r}: FPGA is not programmed, so cannot read the Mezzanine {mezzanine} "

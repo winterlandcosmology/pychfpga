@@ -10,6 +10,7 @@ CORR.py module
 import time
 import logging
 import numpy as np
+import matplotlib.pyplot as plt
 import socket
 
 from ..mmi import MMI, BitField

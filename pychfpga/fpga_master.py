@@ -1340,7 +1340,7 @@ class FPGAMaster(object):
             while self.raw_acq:
                 server_name, server = self.raw_acq.popitem()
                 msg = await server.stop_raw_hdf5()
-                self.log.info(f'{sefl!r}: stopping hdf5 writing for {server_name}: {msg}')
+                self.log.info(f'{self!r}: stopping hdf5 writing for {server_name}: {msg}')
 
             self.start_time = None
             self.state = 'off'
