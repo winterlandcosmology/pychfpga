@@ -914,7 +914,7 @@ class GPSAsyncRESTServer(AsyncRESTServer):
                 comet_host = config['comet_broker']['host']
                 comet_port = config['comet_broker']['port']
             except KeyError as exc:
-                msg = f"Failure registering initial config with comet broker: 'comet_broker/{exc[0]}' " \
+                msg = f"Failure registering initial config with comet broker: 'comet_broker/{exc}' " \
                       f"not defined in config."
                 self.log.error(msg)
                 return msg
