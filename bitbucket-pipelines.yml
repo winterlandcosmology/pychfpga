@@ -1,7 +1,5 @@
-#  Template python-build
-
-#  This template allows you to validate your python code.
-#  The workflow allows running tests and code linting on the default branch.
+#Pull request pipeline
+#Validation of pull requests into the main deployment branch
 
 image: python:3.8
 
@@ -9,12 +7,14 @@ pipelines:
   pull-requests:
     '**':
       - step:
-          name: Automatic test
+          name: Automatic static code analysis
           # Test which require no configuaration of hardware components and are therefore platform agnostic
+          # This test will ensure that none of the modifications made into the deploy branch cause any disturbances to other elements of the project
           caches:
             - pip
           script:
             - if [ -f pyproject.toml ]; then pip install -e .; fi
             - pip install pylint
-            - pylint pychfpga/ --errors-only
+            #the errors only tags limits the scope of the linter to purely functional errors and ignores style concerns
+            - pylint pychfpga/ --errors-only 
 
