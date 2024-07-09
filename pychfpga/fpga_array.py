@@ -882,7 +882,7 @@ class FPGAArray(object):
         ###########################################################################
         for ib in Motherboard.get_all_instances():
             if ib.serial and exclude_iceboards:
-                int_serial = self._to_int(ib.serial)
+                int_serial = self._to_integer(ib.serial)
                 if ib.serial in exclude_iceboards or int_serial in exclude_iceboards:
                     ib.delete_instance()
                     self.logger.info(

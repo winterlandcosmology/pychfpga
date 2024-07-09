@@ -910,7 +910,7 @@ class FPGAMaster(object):
                 comet_port = config['comet_broker']['port']
             except KeyError as exc:
                 msg = "Failure registering initial config with comet broker: 'comet_broker/{}' " \
-                      "not defined in config.".format(exc[0])
+                      "not defined in config.".format(exc)
                 self.log.error(f'{self!r}: {msg}')
                 raise RuntimeError(msg)
             self.comet_manager = comet.Manager(comet_host, comet_port)
