@@ -73,6 +73,33 @@
 [tool.setuptools_scm]
     version_file = "pychfpga/_version_scm.py"
 
+[tool.pylint.main]
+# recursive = true
+# source-roots = ["pychfpga/"]
+py-version =  "3.8"
+ignore = ["unused"]
+
+# jobs will specify the number of cores to run pylint with
+# jobs = 0 will autodetect the number of available cores
+
+jobs = 0
+
+[tool.pylint."messages control"]
+disable = ["raw-checker-failed",
+            "possibly-used-before-assignment",
+            "bad-inline-option",
+            "locally-disabled", 
+            "file-ignored", 
+            "suppressed-message", 
+            "useless-suppression", 
+            "deprecated-pragma", 
+            "use-implicit-booleaness-not-comparison-to-string", 
+            "use-implicit-booleaness-not-comparison-to-zero", 
+            "use-symbolic-message-instead"
+            ]
+errors-only = true
+
+
 
 [project.optional-dependencies]
     docs = [
