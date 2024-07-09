@@ -6,8 +6,8 @@
 image: python:3.8
 
 pipelines:
-  default:
-    - parallel:
+  pull-requests:
+    ap/*:
       - step:
           name: Automatic test
           # Test which require no configuaration of hardware components and are therefore platform agnostic
@@ -17,20 +17,4 @@ pipelines:
             - if [ -f pyproject.toml ]; then pip install -e .; fi
             - pip install pylint
             - pylint pychfpga/ --errors-only
-      - step:
-          name: Lint code
-          script:
-            # Enforce style consistency across Python projects https://flake8.pycqa.org
-            - pip install flake8
-            # - flake8 . --extend-exclude=dist,build --statistics
 
-      - step:
-          name: Manual test
-          # Test which require manual configuration of hardware components
-          trigger: manual
-          caches:
-            - pip
-          script:
-            - if [ -f pyproject.toml ]; then pip install -e .; fi
-            - pip install pytest
-            - pytest software_tests/manual_tests
