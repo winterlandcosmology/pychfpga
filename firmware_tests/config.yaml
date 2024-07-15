@@ -1,7 +1,7 @@
 connection_config:
     prog: 1                 # 0 - do not reprogram, 1 - reprogram if outdated, 2 - always reprogram
     mode: 'corr16'          # Do not change for a single board
-    hwm: 'mb 498'           # For a different board change the serial number
+    hwm: 'mb 342'           # For a different board change the serial number
 
 test_config:
     loglevelconn: "ERROR"   # Log level during connection to the board

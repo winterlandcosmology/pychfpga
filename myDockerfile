@@ -1,0 +1,34 @@
+FROM python:3.11.2-slim-bullseye
+
+RUN apt-get update && \
+    apt-get upgrade --yes
+
+RUN set -ex \
+    && apt-get update -yqq \
+    && apt-get install -yqq --no-install-recommends \
+        # include curl for health checks of REST servers
+        curl \
+        # Include openssh for ssh-keyscan
+        openssh-client \
+        git \
+        git-lfs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    # make sure git LFS is initialized
+    && git lfs install \
+    # Add public keys from remote git repos to our known host list so we don't have complaints when pip installs depencies from our private repos
+    && mkdir -p -m 0600 ~/.ssh \
+    # && ssh-keyscan github.com >> ~/.ssh/known_hosts \
+    && ssh-keyscan bitbucket.org >> ~/.ssh/known_hosts
+
+RUN useradd --create-home realpython
+USER realpython
+WORKDIR /home/realpython
+
+ENV VIRTUALENV=/home/realpython/venv
+RUN python3 -m venv $VIRTUALENV
+ENV PATH="$VIRTUALENV/bin:$PATH"
+
+RUN git clone git@bitbucket.org:winterlandcosmology/pychfpga.git
+RUN python -m pip install --upgrade pip setuptools==3.2.0
+RUN python -m pip install --no-cache-dir .
