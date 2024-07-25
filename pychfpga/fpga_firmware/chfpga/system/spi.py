@@ -104,7 +104,7 @@ class SPI(MMI):
             if verbose:
                 print('.', end=' ')
         data = self.read(self.get_addr('RX_DATA')-3, length=word_length, type=np.uint8)
-        read_length=np.dtype(type).itemsize
+        read_length= int(np.dtype(type).itemsize)
         data = data[-read_length:].view(type)[0]
         return data
 

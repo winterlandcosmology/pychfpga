@@ -946,11 +946,13 @@ class CorrFrameReceiver(object):
             data_timeout=0.001,
             flush_timeout=0.001
             ):
+        
+        import matplotlib.pyplot as plt 
 
         # fig =  plt.figure()
         fig = plt.gcf()
         d, c, sat = self.read_corr_frames(soft_integ_period=soft_integ_period, flush=flush, align=align)
-        p = plt.plot(arange(1024)/1024*400, d[0,:4,1,:256].real[...,::-1].flatten(order='F'))[0]
+        p = plt.plot(np.arange(1024)/1024*400, d[0,:4,1,:256].real[...,::-1].flatten(order='F'))[0]
 
         while True:
             d, c, sat = r.read_corr_frames(soft_integ_period=soft_integ_period, flush=False, align=False)

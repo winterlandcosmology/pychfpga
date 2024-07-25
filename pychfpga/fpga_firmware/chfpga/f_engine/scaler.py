@@ -226,6 +226,8 @@ class SCALER(MMI):
             pages_per_bank = 8
             for page in range(pages_per_bank):  # there are 8 pages of coefficients per bank
                 self.WRITE_COEFF_BANK = pages_per_bank * bank + page  # Sets which page/bank being read? Not sure if will work...
+
+                # TODO: Read_ram now requires specifying the type of data the following line will fail
                 page_table = self.read_ram(0, length=512)
                 for ix in range(128):  # there are 128 coefficients per page (4 byte per coeff = 512 bytes total per page)
                     g_imag, g_real = struct.unpack('<hh', page_table[4 * ix: 4 * ix + 4])
@@ -287,8 +289,8 @@ class SCALER(MMI):
         else:
             if any(word < -1 << 17) or any(word >= 1 << 17):
                 raise ValueError('input values overflows a signed 18-bit word')
-            data_real = np.reshape([word(0), word(2)], (number_of_frames, 2 * words_per_frame), order='F')
-            data_imag = np.reshape([word(1), word(3)], (number_of_frames, 2 * words_per_frame), order='F')
+            data_real = np.reshape([word[0], word[2]], (number_of_frames, 2 * words_per_frame), order='F')
+            data_imag = np.reshape([word[1], word[3]], (number_of_frames, 2 * words_per_frame), order='F')
             gains = self.get_gain_table()  # 16 bits
             shift_left = self.SHIFT_LEFT
             rounding_mode = self.ROUNDING_MODE
