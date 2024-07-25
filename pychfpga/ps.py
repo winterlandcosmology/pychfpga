@@ -265,7 +265,7 @@ class AgilentN5700(SocketContext):
         self._check_lock()
 
         if ocp is not None:
-            self.protection(ocp=ocp, readonly=False)
+            self.set_protection(ocp=ocp)
         if current > self.instrument_imax or current < 0:
             raise ValueError('Invalid current limit - must be in range [0..76] - no action performed')
         with self.socket():
@@ -286,8 +286,8 @@ class AgilentN5700(SocketContext):
         """
         self._check_lock()
         with self.socket():
-            self.protection(clear=True, readonly=False)[0]
-            problem = self.protection()[0]
+            self.set_protection(clear=True)
+            problem = self.get_protection()[0]
             return problem
 
     def set_protection(self, uvl=None, ovp=None, ocp=None,ilim=None, clear=None):
@@ -503,7 +503,7 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
     @endpoint('stop')
     async def stop(self):
         """ ``GET endpoint: /stop`` Uninlitializes the server and keep it running so it can be started with a new configuration."""
-        if not self.power_supplies():
+        if not self.power_supplies:
             self.log.warning(f'{self!r}: Power Supply server is not started')
         else:
             for ps_name, ps in self.power_supplies.items():
@@ -639,7 +639,7 @@ class PowerSupplyAsyncRESTServer(AsyncRESTServer):
         return is_enabled
 
     @endpoint('is-ready')
-    async def is_ready(self):
+    async def get_is_ready(self):
         is_ready = {name: (ps.is_enabled() and ps.is_ok() ) #and self.is_ready[name]
                     for name, ps in self.power_supplies.items()}
         return self.is_ready
