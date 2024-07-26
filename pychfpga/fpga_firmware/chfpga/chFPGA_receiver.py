@@ -532,7 +532,7 @@ class chFPGA_receiver(object):
                             corr_id, cmac_id, timestamp))
 
                     # chop the data in 5-byte chunks and compute ``num_products`` 40-bit words
-                    # print frame[12:].reshape(num_products, 5)
+                    # print frame[12:].reshape(num_products, 5)                                    #nice spaghetti :) it confuses the linter
                     w = np.flipud((frame[12:].reshape(num_products, 5).view(np.uint8) *
                                   [1, 1 << 8, 1 << 16, 1 << 24, 1 << 32]).sum(-1))
                     re = np.int32((w >> 18) & 0x3FFFF)

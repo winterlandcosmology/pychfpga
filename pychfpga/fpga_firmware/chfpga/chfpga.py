@@ -1373,7 +1373,7 @@ class chFPGA(FPGAFirmware):
 
         """
         if not self.is_open():
-            return metrics
+            return 
 
         if self.PLATFORM_ID == self._PLATFORM_ID_ZCU111:
             self.logger.warning(f'{self!r} ZCU111 platform has no UDP metrics')
