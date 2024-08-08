@@ -797,7 +797,11 @@ class IceCrate_MGK7BP16(IceCrate):
     def get_backplane_eeprom_serial_number(self):
         """ return the 128-bit hardware-coded EEPROM serial number as a hex string. """
         return ''.join(['%02X' % ord(v) for v in self._eeprom_serial.read(0x80, length=16)])
-
+    
+    def _get_backplane_type(self):
+        """TODO: Implement as IPMI read"""
+        return self._ipmi_part_numbers[0]
+    
     def set_led(self, led_name, state):
         """
         Set the LED(s) specified in 'led_name' to the the 'state'. 'led_name'
@@ -913,7 +917,7 @@ class IceCrate_MGK7BP16(IceCrate):
         History:
         141015 AJG & JF: created
         """
-        if not self._reset_ctrl_present:
+        if not self._reset_ctrl:
             raise RuntimeError('The Power/Reset backplane I/O Expander was not '
                                'detected at init. Was the POW I2C bus accessible?')
 

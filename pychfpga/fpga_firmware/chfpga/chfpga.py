@@ -13,6 +13,7 @@ import logging
 import time
 import os
 import pickle
+import base64
 from datetime import datetime, timedelta
 import struct
 from calendar import timegm
@@ -1341,7 +1342,7 @@ class chFPGA(FPGAFirmware):
 
     async def ping_fpga_async(self, timeout=0.3):
         # Open the core right now if needed so we don't mask IOError exceptions this could generate
-        if not self.is_core_open():
+        if not self.mb._is_core_open():
             await self.open_core()
         try:
             self.mmi.read(self._GPIO_COOKIE_REG, type=int, length=1, timeout=timeout)
@@ -2802,7 +2803,7 @@ class chFPGA(FPGAFirmware):
         """ Return the current function generator buffer.
 
         """
-        return {chan.get_id():chan.FUNCGEN.get_buffer() for chan in ib.chan.values()}
+        return {chan.get_id():chan.FUNCGEN.get_buffer() for chan in self.mb.chan.values()}
 
     def set_data_source(self, source=None,  channels=None, **kwargs):
         """
@@ -4042,7 +4043,7 @@ class chFPGA(FPGAFirmware):
         """
         """
         self.logger.info('%r: ----------- chFPGA status ---------------' % self)
-        self.logger.info('%r:  Controller IP address: %s, port: %i ' % (self, self.ip_addr, self.fpga.port_number))
+        self.logger.info('%r:  Controller IP address: %s, port: %i ' % (self, self.ip_addr, self.mb.fpga.port_number))
         self.logger.info('%r:  Firmware version: %s' % (self, self.get_fpga_firmware_version()))
         self.logger.info('%r:  Number of channel inputs: %i' % (self, self.NUMBER_OF_CHANNELIZERS))
         self.logger.info('%r:  Number of channelizers with FFT: %i (channels %s)' % (
@@ -4207,7 +4208,7 @@ class chFPGA(FPGAFirmware):
         try:
             with open(gain_filename, 'r') as f:
                 gains = pickle.load(f)
-            self.logger.debug('%r: Loaded gains for board %s from file %s' % (self, gain_filename))
+            self.logger.debug('r: Loaded gains for board %s from file %s' % (self, gain_filename))
             # ib.set_gain(g_array, bank=bank)  # *** should this be bank=all_bank
         except IOError:
             self.logger.warning("Gain file '%s' not found for (crate,slot)= %r" % (gain_filename, self.get_id()))
@@ -4866,8 +4867,8 @@ class chFPGA(FPGAFirmware):
 
             timeout: time to wait for a reply before giving up and count the trial as a failed
         """
-        old_timeout = self.fpga.get_timeout()
-        self.fpga.set_timeout(timeout)
+        old_timeout = self.mb.fpga.get_timeout()
+        self.mb.fpga.set_timeout(timeout)
         t0 = time.time()
         errors = 0
         trials = 0
@@ -4881,7 +4882,7 @@ class chFPGA(FPGAFirmware):
             except KeyboardInterrupt:
                 break
         t1 = time.time()
-        self.fpga.set_timeout(old_timeout)
+        self.mb.fpga.set_timeout(old_timeout)
         print('%i read operations performed in %.2f s (%.0f read/s) with %i errors (%0.3f%% errors)' % (
             trials,
             t1 - t0,

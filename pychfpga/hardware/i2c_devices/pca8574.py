@@ -31,7 +31,7 @@ class PCA8574(object):
         """
         self.i2c.select_bus(self.bus_name)
 
-    def write(self, value, mask=0xff, select=True):
+    def write(self, value, register, mask=0xff, select=True):
         """
         Writes a byte to the specified register of the IO Expander.
         The I2C port for this device is set prior to the operation if 'select' is True.

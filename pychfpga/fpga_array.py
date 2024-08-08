@@ -4090,8 +4090,8 @@ class FPGAArray(object):
                 continue
             (source_crate, source_slot, source_lane) = tx_id
             (dest_crate, dest_slot, dest_lane) = rx_id
-            ic0 = crates[source_crate]
-            ic1 = crates[dest_crate]
+            ic0 = crate_map[source_crate]
+            ic1 = crate_map[dest_crate]
             if (source_slot not in ic0.slot) or (dest_slot not in ic1.slot):
                 continue
             bp0 = ic0.slot[source_slot].BP_SHUFFLE

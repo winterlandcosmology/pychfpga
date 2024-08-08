@@ -130,7 +130,7 @@ class HardwareMap:
 
         """
         raise NotImplementedError(
-            f'update_instance() is not defined for generic hardware map objects of type {cls}. '
+            f'update_instance() is not defined for generic hardware map objects of type {self}. '
             f'Call this method from a hardware base class (Motherboard, Crate etc.) or its subclasses. ')
 
     @classmethod

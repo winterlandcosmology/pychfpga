@@ -61,7 +61,7 @@ class AMC6821(object):
         """
         Selects the proper I2C port to talk to this device.
         """
-        self._i2c.select_bus(self.bus_name)
+        self._i2c.select_bus(self._bus_name)
 
     def is_present(self):
         return self._i2c.is_present(self._address, self._bus_name)

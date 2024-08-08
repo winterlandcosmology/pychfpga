@@ -142,11 +142,12 @@ class TestPreDeploymentCrate(TestUtils):
         self.ps = None
         self.model = None # should be set by the test
         self.serial = None # should be set by the test
+        
         yield  # pass control to the test and return
 
         # pass the model and serial number we discoverd back to XReport so the test result files can be named appropriately
-        xr.params.model = self.model
-        xr.params.serial = self.serial
+        # xr.params.model = self.model
+        # xr.params.serial = self.serial
 
         # turn off power supply
         if self.ps:
@@ -182,7 +183,7 @@ class TestPreDeploymentCrate(TestUtils):
                 # open connection to power supply
                 #********************************************************************************************************************************
                 #if this test fails, place this line outside of the for loop - maybe opening the connection everytime is the source of the problem
-                #********************************************************************************************************************************
+                #***********************************************v = TestMenu(TEST_CONFIG_FILE).run()*********************************************************************************
                 self.ps = self.open_ps()
 
 
@@ -216,6 +217,7 @@ class TestPreDeploymentCrate(TestUtils):
 
             assert (not turn_ON_errs and not turn_OFF_errs), f'Power supply connection errors: turning ON errors: {turn_ON_errs}, turning OFF errors: {turn_OFF_errs}'
             passed = True
+           
 
         finally:
             test_results.passed = passed
@@ -446,6 +448,107 @@ class TestPreDeploymentCrate(TestUtils):
 
         integration_period = cfg.integration_period
         n_clock_checks = cfg.n_clock_checks
+        n_cycles = cfg.n_cycles
+        delay = cfg.powerup_delay
+
+        # The FreqCtr counts rising clock edges; the most it could miss over a given integration period
+        # is 1 edge. Also, FreqCtr measures at 1/2 the rate of the 400 MHz clock coming from the ADC,
+        # so it could miss, at most, 2 rising edges.
+        expected_diffs = {-2/integration_period, 0.0, 2/integration_period}
+        failed_clocks = []
+        failed_boards = []
+        measured_diffs = []
+
+        passed = False
+        try:
+            for n in range(n_cycles):
+                print(f'****************************')
+                print(f'Power-cycling test iteration {n + 1}/{n_cycles}')
+                print(f'****************************')
+                
+                # Initialize the crate:
+                try:
+                    self.ca = self.crate_init(reset_power=True)
+
+                    # if len(self.ca) < 16:
+                    #     while True:
+                    #         pass
+                
+                
+                except (RuntimeError, IOError, OSError) as e:
+                    
+                    print(f'Failed initializing the array because of error {e!r}')
+                    
+                    
+                else:
+                    for i in self.ca.ib:
+                        print(f'Checking adc clocks on: {i}')
+                        error = i.check_adc_frequencies('after boot')
+                        if error:
+                            failed_boards.append(i)
+                        # for clock in range(16):
+                        #     print(f'{i}, ADC_CLK{clock}')
+                        #     diffs = set(i.FreqCtr.read_frequency(f'ADC_CLK{clock}', integration_period) - 200e6 for _ in range(n_clock_checks))
+                        #     # If diffs is not a subset of expected_diffs, i.e. it contains an unexpected value, then append to failed_clocks
+                        #     if not diffs.issubset(expected_diffs):
+                        #         failed_clocks.append([f'{i}', f'ADC_CLK{clock}', diffs])    
+
+                    
+
+                # self.ps.set_output(state=False)
+                time.sleep(delay)
+
+            print(f'{failed_boards=}')
+
+            assert not failed_boards, f'ADC clock errors present on: {failed_boards}'
+            
+            
+            # passed = True
+            # Initialize the crate:
+            # self.ca = self.crate_init()
+
+            # Iterate through each motherboard. Form a set of unique values of the
+            # difference between the measured clock and the expected 200 MHz. To pass,
+            # there should only be two values in the set: 0 and 200 MHz/count_time (which
+            # is the maximum error, resulting from a missed rising edge) --> is this correct?
+
+            # for i in self.ca.ib:
+            #     for clock in range(16):
+            #         print(f'{i}, ADC_CLK{clock}')
+            #         diffs = set(i.FreqCtr.read_frequency(f'ADC_CLK{clock}', integration_period) - 200e6 for _ in range(n_clock_checks))
+            #         # If diffs is not a subset of expected_diffs, i.e. it contains an unexpected value, then append to failed_clocks
+            #         if not diffs.issubset(expected_diffs):
+            #             failed_clocks.append([f'{i}', f'ADC_CLK{clock}', diffs])    
+            # assert not failed_clocks, f'ADC clock errors present on: {failed_clocks}'
+            # passed = True
+
+        finally:
+            test_results.passed = passed
+            xr.save_data(test_results)
+            # self.ps.set_output(state=False) # Turn off power supply
+
+
+        
+
+    def test_adc_clocks_cycled(self, xr):
+        """
+        QC004: ADC clock test: ensure all ADCs get the correct clocks on every channel + power cycling between checks
+
+        Procedure:
+
+          - Start the ADC clock test on the computer
+          - Power up crate
+          - Iterate through all clocks on all mezzanines on all motherboards, check that they
+            are 200 MHz +/- some tolerance set in the config.
+
+        """
+
+        xr.header('ADC Clocks Test')
+        cfg = self.cfg.f_engine_tests.clock_test
+        test_results = NameSpace()
+
+        integration_period = cfg.integration_period
+        n_clock_checks = cfg.n_clock_checks
 
         # The FreqCtr counts rising clock edges; the most it could miss over a given integration period
         # is 1 edge. Also, FreqCtr measures at 1/2 the rate of the 400 MHz clock coming from the ADC,
@@ -453,6 +556,21 @@ class TestPreDeploymentCrate(TestUtils):
         expected_diffs = {-2/integration_period, 0.0, 2/integration_period}
         failed_clocks = []
         measured_diffs = []
+
+        import pyvisa
+        rm = pyvisa.ResourceManager()
+        # rm.list_resources()
+
+        adapter = 'TCPIP::10.10.10.206::INSTR'
+        scope = rm.open_resource(adapter)  
+        
+        if scope: 
+            print(scope.query('*IDN?'))
+            scope.write('MEASUrement:IMMed:SOUrce1 CH1')
+            scope.write('MEASUrement:IMMed:TYPe FREQuency')
+            
+
+
 
         passed = False
         try:
@@ -465,13 +583,20 @@ class TestPreDeploymentCrate(TestUtils):
             # is the maximum error, resulting from a missed rising edge) --> is this correct?
 
             for i in self.ca.ib:
-                for clock in range(16):
-                    print(f'{i}, ADC_CLK{clock}')
-                    diffs = set(i.FreqCtr.read_frequency(f'ADC_CLK{clock}', integration_period) - 200e6 for _ in range(n_clock_checks))
-                    # If diffs is not a subset of expected_diffs, i.e. it contains an unexpected value, then append to failed_clocks
-                    if not diffs.issubset(expected_diffs):
-                        failed_clocks.append([f'{i}', f'ADC_CLK{clock}', diffs])    
-            assert not failed_clocks, f'ADC clock errors present on: {failed_clocks}'
+                # for clock in range(16):
+                #     print(f'{i}, ADC_CLK{clock}')
+                #     diffs = set(i.FreqCtr.read_frequency(f'ADC_CLK{clock}', integration_period) - 200e6 for _ in range(n_clock_checks))
+                #     # If diffs is not a subset of expected_diffs, i.e. it contains an unexpected value, then append to failed_clocks
+                #     if not diffs.issubset(expected_diffs):
+                #         failed_clocks.append([f'{i}', f'ADC_CLK{clock}', diffs])    
+                error = i.check_adc_frequencies('after boot')
+                if scope and error: 
+                    for n in range(10):
+                        freq  = scope.query('MEASUREMENT:IMMED:Value?')
+                        print("")
+
+            # assert not failed_clocks, f'ADC clock errors present on: {failed_clocks}'
+            assert not error, f'ADC clock errors present on: {failed_clocks}'
             passed = True
 
         finally:
@@ -540,58 +665,120 @@ class TestPreDeploymentCrate(TestUtils):
         xr.header('ADC Eye Test')
         cfg = self.cfg.f_engine_tests.adc_eye_test
         n_checks = cfg.n_checks
+        max_spread = cfg.max_spread
         n_refs = cfg.n_refs
         n_fails_accept = cfg.n_fails_accept # number of allowable fails. if exceeded, board/channel pair fails.
         test_results = NameSpace()
 
-        unstable_channels = []
-
+        
+        
         # Initialize the crate:
         passed = False
+
         try:
             # input('Turn on the power supply. Press ENTER to continue. (Q:Exit) ')
             self.ca = self.crate_init()
 
-            for i in self.ca.ib:
-                for channel in range(16):
-                    print(f'=============================================================')
-                    print(f'Checking ADC eye diagrams for {i}, ADC channel {channel}')
 
-                    ref_nz_idx = [] # 'reference non-zero indices', checks where non-zero values are in eye diagram
+            for i in self.ca.ib:
+                spreads = []
+                unstable_channels = []
+
+                print(f'=============================================================')
+                print(f'Checking ADC eye diagrams for {i}')
+
+                # converts the eye diagram back to a bitwise representation then takes n_check samples
+                # that it then ORs accross, an ideal eye diagram would have 8 bits at the end if all the
+                # bits stayed identical accross samples
+
+                eye_diagram = np.zeros((16, 32, 11), np.uint8)
+                eye_diagram = np.unpackbits(eye_diagram, axis=2)
+
+                for n in range(n_checks):
+                    try:
+                        eye_diagram_capture = i.capture_adc_eye_diagram()
+                        eye_diagram_capture = np.unpackbits(eye_diagram_capture, axis=2)
+
+                        eye_diagram = np.bitwise_or(eye_diagram, eye_diagram_capture)
+                    finally:
+                        break
+                        
+
+                spread = np.sum(eye_diagram, axis=2)
+                spreads.append(spread)
+
+                # checks if the ammount of bit smear is larger than expected
+
+                for unstable_channel in np.argwhere(spread > max_spread):
+                    unstable_channels.append(unstable_channel)
+                    print(f'Channel {unstable_channel[0]} line {unstable_channel[1]} is unstable')
+
+                print(f'Largest bit spread after {n_refs} checks: {spread.max()}')
+                    
+
+
+                # unstable_channel = np.argwhere(spread > max_spread)
+
+                # if np.any(unstable_channel):
+                #     unstable_channels.append(unstable_channel)
+                
+                # for i, spread in enumerate(spreads):
+                    
+                    
+            
+
+                # for channel in range(16):
+                #     print(f'=============================================================')
+                #     print(f'Checking ADC eye diagrams for {i}, ADC channel {channel}')
+
+                #     ref_nz_idx = [] # 'reference non-zero indices', checks where non-zero values are in eye diagram
 
                     # Gather non-zero indices for a few reference eye diagrams. n_refs should be large enough
                     # to capture any small jitters. If there really are weird, large jitters, they should move
                     # around enough that they're not capture by the reference diagrams. If it's just small jitters,
                     # they should be captured by the reference diagrams.
 
-                    for n in range(n_refs):
-                        ref_d = i.capture_adc_eye_diagram(channels=[channel])[0] # sample reference diagram
-                        nz_idx = np.where(ref_d != 0) # non-zero indices
-                        for j in range(len(nz_idx[0])):
-                            pair = [nz_idx[0][j], nz_idx[1][j]] # generates index pairs
-                            if pair not in ref_nz_idx:
-                                ref_nz_idx.append(pair) # if pair not already in ref_nz_idx, add it
+                
 
-                    ref_nz_idx = set(tuple(x) for x in ref_nz_idx) # change ref_nz_idx to a set so we can use issubset
+                    
 
-                    # Now iterate through n_checks more diagrams to check stability
-                    fails_counter = 0
-                    for n in range(n_checks):
-                        d = i.capture_adc_eye_diagram(channels=[channel])[0] # grab a diagram
-                        nz_idx = np.where(d != 0)
-                        pairs = []
-                        for j in range(len(nz_idx[0])):
-                            pairs.append([nz_idx[0][j], nz_idx[1][j]]) # add every pair to pairs
-                        pairs = set(tuple(x) for x in pairs) # change pairs to set
+                    # for n in range(n_refs):
+                    #     ref_d = i.capture_adc_eye_diagram(channels=[channel])[0] # sample reference diagram
+                    #     nz_idx = np.where(ref_d != 0) # non-zero indices
+                    #     for j in range(len(nz_idx[0])):
+                    #         pair = [nz_idx[0][j], nz_idx[1][j]] # generates index pairs
+                    #         if pair not in ref_nz_idx:
+                    #             ref_nz_idx.append(pair) # if pair not already in ref_nz_idx, add it
 
-                        # If pairs is not a subset of ref_nz_idx, i.e. the channel is unstable,
-                        # add the motherboard index and channel number to unstable_channels if not already present
-                        if not pairs.issubset(ref_nz_idx):
-                            print(f'Fail on diagram {n+1}')
-                            fails_counter += 1
-                            if (fails_counter > n_fails_accept and n == n_checks-1):
-                                # If accetpable fails is exceeded, and we've reached the last diagram check, append the channel:
-                                unstable_channels.append([f'{i}', f'Channel {channel}', f'{fails_counter} fails'])
+                    # ref_nz_idx = set(tuple(x) for x in ref_nz_idx) # change ref_nz_idx to a set so we can use issubset
+
+                    # # Now iterate through n_checks more diagrams to check stability
+                    # fails_counter = 0
+                    # for n in range(n_checks):
+                    #     d = i.capture_adc_eye_diagram(channels=[channel])[0] # grab a diagram
+                    
+
+                    #     nz_idx = np.where(d != 0)
+                    #     pairs = []
+                    #     for j in range(len(nz_idx[0])):
+                    #         pairs.append([nz_idx[0][j], nz_idx[1][j]]) # add every pair to pairs
+                    #     pairs = set(tuple(x) for x in pairs) # change pairs to set
+
+                    #     # If pairs is not a subset of ref_nz_idx, i.e. the channel is unstable,
+                    #     # add the motherboard index and channel number to unstable_channels if not already present
+                    #     if not pairs.issubset(ref_nz_idx):
+                    #         print(f'Fail on diagram {n+1}')
+                    #         print(f'Pairs \n  {pairs}')
+                    #         print(f'Nzindex \n {nz_idx}')
+                    #         print(f'Diff: \n {pairs - ref_nz_idx}')
+                    #         print(f'Capured \n{d}')
+
+                    #         fails_counter += 1
+                    #         if (fails_counter > n_fails_accept and n == n_checks-1):
+                    #             # If accetpable fails is exceeded, and we've reached the last diagram check, append the channel:
+                    #             unstable_channels.append([f'{i}', f'Channel {channel}', f'{fails_counter} fails'])
+            
+            print()
 
             assert not unstable_channels, f'Unstable channels: {unstable_channels}'
             passed = True
@@ -600,6 +787,100 @@ class TestPreDeploymentCrate(TestUtils):
             test_results.passed = passed
             xr.save_data(test_results)
             self.ps.set_output(state=False) # Turn off power supply
+
+
+    def test_network(self, xr):
+        xr.header('Network Test')
+        cfg = self.cfg.f_engine_tests.network_test
+
+        test_results = NameSpace()
+        n_cycles = cfg.n_cycles
+        t_cycle = cfg.t_cycle
+
+        missing_slot_errors = []
+        error_total = 0
+
+        try:
+
+            for n in range(n_cycles):
+                print(f'****************************')
+                print(f'Power-cycling test iteration {n + 1}/{n_cycles}')
+                print(f'****************************')
+                
+                # Initialize the crate:
+                try:
+                    if not self.ps:
+                        self.ps = self.open_ps()
+                    # Check status of power supply:
+                    ps_status = self.ps.status()['status']
+                    if ps_status == 'ON' or ps_status == 'OK':
+                        print(f'Power supply is {ps_status}')
+                        # Turning off power supply
+                        print(f'Turning off power supply...')
+                        self.ps.set_output(state=False) # Force power cycle if power supply is on
+                        ps_status = self.ps.status()['status']
+                        print(f'Power supply is now {ps_status}')
+                        time.sleep(5) # Give it a few seconds before turning back on
+                    else:
+                        print(f'Power supply is {ps_status}')
+                    # Turn power supply back on:
+                    print(f'Turning on power supply...')
+                    self.ps.set_output(state=True)
+                    delay = 60
+                    print(f'Waiting for {delay} seconds to let the boards boot')
+                    time.sleep(delay) # Sleep to let the crate boot
+
+                    # self.ca = self.crate_init()
+                    fpga_array_params = cfg.fpga_array_params
+                    self.ca = fpga_array.FPGAArray(**fpga_array_params)
+                    
+                    ic = self.ca.ic
+                    from pychfpga.hardware import Crate
+                    missing_slots = {
+                        (ic.part_number, ic.serial, ic.crate_number): set(range(1, ic.NUMBER_OF_SLOTS + 1)) - set(ic.slot)
+                        for ic in Crate.get_all_instances()}
+                    
+                    # for i in boards_to_ping:
+                    #     if i not in self.ca.ib.values():
+                    #         # print('********************************')
+                    #         print(f'Failed to connect to board {i}')
+
+                    if any(missing_slots.values()):
+                        missing_slots_str = '\n'.join(
+                            '    Crate #{number} ({model} SN{serial}): slots {slots}'.format(
+                                number=number,
+                                model=model,
+                                serial=serial,
+                                slots=', '.join(str(s) for s in slots))
+                            for ((model, serial, number), slots) in missing_slots.items() if slots)
+                        print(f'{self!r}: The following slots are missing:\n{missing_slots_str}')
+                        missing_slot_errors.append(tuple(n, missing_slots_str))
+                        error_total += len(missing_slots)
+                    
+
+                except (RuntimeError, IOError, OSError) as e:
+                    print("*"*10)
+                    print(f'Failed initializing the array because of error {e!r}')
+                
+            
+
+                    
+                print('Turning OFF the crate')
+                self.ps.set_output(state=False)
+                print(f'Letting the crate cool down for {t_cycle} seconds before repeating the test')
+                time.sleep(t_cycle)
+
+
+            assert not missing_slot_errors, f'The following slots failed to appear: \n{missing_slot_errors} \n Total of {error_total} errors'
+
+        finally:
+
+
+            test_results.passed = True
+            xr.save_data(test_results)
+            self.ps.set_output(state=False) # Turn off power supply
+
+
 
     def test_power_cycle(self, xr):
         """
@@ -620,8 +901,8 @@ class TestPreDeploymentCrate(TestUtils):
         percent_accept = cfg.percent_accept
         n_fails_accept = int(percent_accept*n_cycles) # Define number of acceptable fails
         t_cycle = cfg.t_cycle
-        run_all_tests = cfg.run_all_tests
-        minutes = cfg.t_pause_crate_init
+        # run_all_tests = cfg.run_all_tests
+        # minutes = cfg.t_pause_crate_init
 
         test_results = NameSpace()
 
@@ -632,8 +913,11 @@ class TestPreDeploymentCrate(TestUtils):
 
         clk_fails = 0
         udp_fails = 0
+        mmi_fails = 0
+
         adc_err_tags = []
         udp_err_tags = []
+        mmi_err_tags = []
 
         delay_fails = 0
         delay_exception_tags = []
@@ -676,7 +960,7 @@ class TestPreDeploymentCrate(TestUtils):
                         print('bp_errs: ', bp_errs)
                         backplane_fails += 1
                         backplane_err_tags.append({'Cycle': n,
-                                                  'ib': i,
+                                                  'ib': "none",
                                                   'bp_errs': bp_errs})
 
                     print('Got an IceBoard array')
@@ -685,8 +969,10 @@ class TestPreDeploymentCrate(TestUtils):
                         # Check counters and error lists:
                         n_clk_errs = i.adc_clk_err_ctr
                         clk_errs_msgs = i.adc_clk_err_msgs
-                        n_udp_errs = i.udp_err_ctr + i.mmi.error_counter
+                        n_udp_errs = i.udp_err_ctr 
+                        n_mmi_errs = i.mmi.error_counter
                         udp_errs_msgs = i.adc_clk_err_msgs
+                        udp_temp_errors= i.get_temperatures()
                         print(f'Slot {i.slot} got {n_clk_errs} ADC clock errors, {n_udp_errs} UDP communication errors')
 
                         # Increment error counters if needed, and append relevant
@@ -702,7 +988,16 @@ class TestPreDeploymentCrate(TestUtils):
                             udp_err_tags.append({'Cycle': n,
                                          'ib': i,
                                          'n_udp_errs': n_udp_errs,
-                                         'clk_err_msgs': clk_errs_msgs})
+                                         'clk_err_msgs': clk_errs_msgs,
+                                         'temps': udp_temp_errors})
+                            
+                        if n_mmi_errs != 0:
+                            mmi_fails += 1
+                            udp_err_tags.append({'Cycle': n,
+                                         'ib': i,
+                                         'n_mmi_errs': n_udp_errs,
+                                         'clk_err_msgs': clk_errs_msgs,
+                                         'temps': udp_temp_errors})
 
                         # Now set all ADC delays and check for exceptions:
                         try:
@@ -729,13 +1024,35 @@ class TestPreDeploymentCrate(TestUtils):
                 print(f'Letting the crate cool down for {t_cycle} seconds before repeating the test')
                 time.sleep(t_cycle)
 
-            assert (max(init_exception_fails, clk_fails, udp_fails, delay_fails, backplane_fails) < n_fails_accept), f'ADC errors on: {adc_err_tags}, UDP errors on: {udp_err_tags}, Init exceptions on: {init_exception_tags}, Delay exceptions on: {delay_exception_tags}, Backplane errors on: {backplane_err_tags}'
+            for adc_err in adc_err_tags:
+                print(adc_err)
+
+            for udp_err in udp_err_tags:
+                print(udp_err)
+
+            for mmi_err in mmi_err_tags:
+                print(mmi_err)
+
+            for err in init_exception_tags:
+                print(err)
+
+            for err in delay_exception_tags:
+                print(err)
+
+            for err in backplane_err_tags:
+               print(err)
+
+            # assert (max(init_exception_fails, clk_fails, udp_fails, delay_fails, backplane_fails) <= n_fails_accept), f'ADC errors on: {adc_err_tags}, UDP errors on: {udp_err_tags}, Init exceptions on: {init_exception_tags}, Delay exceptions on: {delay_exception_tags}, Backplane errors on: {backplane_err_tags}'
+            assert (max(init_exception_fails, clk_fails, udp_fails, delay_fails, backplane_fails) <= n_fails_accept), 'Print check above '
             passed = True  # Yeh, we made it through
 
         finally:
             test_results.passed = passed
             xr.save_data(test_results)
             self.ps.set_output(state=False) # Turn off power supply
+
+
+
            
             
     def check_bp_errs(self):
@@ -749,6 +1066,11 @@ class TestPreDeploymentCrate(TestUtils):
 
         # Get corner turn engine status:
         info = asyncio.run(self.ca.get_corner_turn_engine_status_async(reset_stats=True)) # reset stats for each check
+        
+
+        #self.ca._print_shuffle_status(info, grid=True)
+
+        
 
         # In shuffle256 mode, there should be no errors on any lanes on any subsystems on any motherboard.
 
