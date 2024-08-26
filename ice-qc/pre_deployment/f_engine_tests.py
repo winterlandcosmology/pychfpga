@@ -178,46 +178,46 @@ class TestPreDeploymentCrate(TestUtils):
 
         try:
 
-            # for n in range(n_ps_cycles):
+            for n in range(n_ps_cycles):
                 
-            #     # open connection to power supply
-            #     #********************************************************************************************************************************
-            #     #if this test fails, place this line outside of the for loop - maybe opening the connection everytime is the source of the problem
-            #     #***********************************************v = TestMenu(TEST_CONFIG_FILE).run()*********************************************************************************
-            #     self.ps = self.open_ps()
+                # open connection to power supply
+                #********************************************************************************************************************************
+                #if this test fails, place this line outside of the for loop - maybe opening the connection everytime is the source of the problem
+                #***********************************************v = TestMenu(TEST_CONFIG_FILE).run()*********************************************************************************
+                self.ps = self.open_ps()
 
 
-            #     print('\n*******************************')
-            #     print(f'Cycle {n+1}/{n_ps_cycles}')
-            #     print('*******************************')
+                print('\n*******************************')
+                print(f'Cycle {n+1}/{n_ps_cycles}')
+                print('*******************************')
 
                           
-            #     print('--------------------------------------------')
-            #     print(f'Turning ON power supply')
-            #     print(f'Wait {on_time} seconds')
-            #     # turn on power supply
-            #     self.ps.set_output(state=True)
-            #     time.sleep(on_time)
-            #     ps_status = self.ps.status()['status']
-            #     print(f'Power supply is {ps_status}')
-            #     if ps_status != 'ON' and ps_status != 'OK':
-            #         turn_ON_errs.append(f'cycle {n+1}: {ps_status}')
+                print('--------------------------------------------')
+                print(f'Turning ON power supply')
+                print(f'Wait {on_time} seconds')
+                # turn on power supply
+                self.ps.set_output(state=True)
+                time.sleep(on_time)
+                ps_status = self.ps.status()['status']
+                print(f'Power supply is {ps_status}')
+                if ps_status != 'ON' and ps_status != 'OK':
+                    turn_ON_errs.append(f'cycle {n+1}: {ps_status}')
                 
-            #     print('--------------------------------------------')
-            #     print(f'Turning OFF power supply')
-            #     print(f'Wait {off_time} seconds')
-            #     # turn off power supply
-            #     self.ps.set_output(state=False)
-            #     time.sleep(off_time)
-            #     ps_status = self.ps.status()['status']
-            #     print(f'Power supply is {ps_status}')
-            #     if ps_status != 'OFF':
-            #         turn_OFF_errs.append(f'cycle {n+1}: {ps_status}')
-            #     print('--------------------------------------------')
+                print('--------------------------------------------')
+                print(f'Turning OFF power supply')
+                print(f'Wait {off_time} seconds')
+                # turn off power supply
+                self.ps.set_output(state=False)
+                time.sleep(off_time)
+                ps_status = self.ps.status()['status']
+                print(f'Power supply is {ps_status}')
+                if ps_status != 'OFF':
+                    turn_OFF_errs.append(f'cycle {n+1}: {ps_status}')
+                print('--------------------------------------------')
 
-            # assert (not turn_ON_errs and not turn_OFF_errs), f'Power supply connection errors: turning ON errors: {turn_ON_errs}, turning OFF errors: {turn_OFF_errs}'
-            passed = True
-            print("Hewwo :3 I'm lobotomized uwu")
+            assert (not turn_ON_errs and not turn_OFF_errs), f'Power supply connection errors: turning ON errors: {turn_ON_errs}, turning OFF errors: {turn_OFF_errs}'
+            # passed = True
+            # print("Hewwo :3 I'm lobotomized uwu")
 
         finally:
             test_results.passed = passed
