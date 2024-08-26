@@ -586,17 +586,21 @@ class FPGAArray(object):
             parent_logger_name = __name__.rsplit('.', 1)[0] if '.' in __name__ else ''
             parent_logger = logging.getLogger(parent_logger_name)
             # Setup logging. If a handler already exists, its log level is simply updated
+            # UPDATE: updating handlers breaks loggin in pytest (getting ValueError: I/O operation on closed file)
+            # Clearing and re-adding all handlers does the trick
+            parent_logger.handlers.clear()
             for (handler_type, log_level) in (
                     (logging.StreamHandler, stderr_log_level),
                     (logging.handlers.SysLogHandler, syslog_log_level)):
                 if log_level:
-                    log_handlers = [h for h in parent_logger.handlers if isinstance(h, handler_type)]
-                    if log_handlers:  # if a handler of that type already exist, just use it
-                        print(f'Updating existing log handlers of {parent_logger} to {log_level}')
-                    else:  # otherwise create a new one
-                        log_handler = handler_type()
-                        parent_logger.addHandler(log_handler)
-                        print(f'Adding new log handlers of {parent_logger} with level {log_level}')
+                    # log_handlers = [h for h in parent_logger.handlers if isinstance(h, handler_type)]
+                    # if log_handlers:  # if a handler of that type already exist, just use it
+                    #     print(f'Updating existing log handlers of {parent_logger} to {log_level}')
+                    #     parent_logger.removeHandler()
+                    # else:  # otherwise create a new one
+                    log_handler = handler_type()
+                    parent_logger.addHandler(log_handler)
+                    print(f'Adding new log handlers of {parent_logger} with level {log_level}')
                     # set level for all handlers of this type
                     for h in parent_logger.handlers:
                         if isinstance(h, handler_type):
