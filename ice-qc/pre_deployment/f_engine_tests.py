@@ -65,28 +65,27 @@ class TestUtils:
         """
         Run fpga_array, initializing the crate. Recover ca object. Power is reset by default.
         """
-        if reset_power:
-             # Check if self.ps already exists (i.e. ps on from previous test)
-             if not self.ps:
-                 self.ps = self.open_ps()
-             # Check status of power supply:
-             ps_status = self.ps.status()['status']
-             if ps_status == 'ON' or ps_status == 'OK':
-                print(f'Power supply is {ps_status}')
+        # Check if self.ps already exists (i.e. ps on from previous test)
+        if not self.ps:
+            self.ps = self.open_ps()
+        # Check status of power supply:
+        ps_status = self.ps.status()['status']
+        print(f'Power supply is {ps_status}')
+
+        if ps_status == 'ON' or ps_status == 'OK':
+            if reset_power:
                 # Turning off power supply
                 print(f'Turning off power supply...')
                 self.ps.set_output(state=False) # Force power cycle if power supply is on
                 ps_status = self.ps.status()['status']
                 print(f'Power supply is now {ps_status}')
                 time.sleep(5) # Give it a few seconds before turning back on
-             else:
-                 print(f'Power supply is {ps_status}')
-             # Turn power supply back on:
-             print(f'Turning on power supply...')
-             self.ps.set_output(state=True)
-             delay = self.cfg.f_engine_tests.global_settings.ps_t_sleep
-             print(f'Waiting for {delay} seconds to let the boards boot')
-             time.sleep(delay) # Sleep to let the crate boot
+        if ps_status != 'ON' and ps_status != 'OK':
+            print(f'Turning on power supply...')
+            self.ps.set_output(state=True)
+            delay = self.cfg.f_engine_tests.global_settings.ps_t_sleep
+            print(f'Waiting for {delay} seconds to let the boards boot')
+            time.sleep(delay) # Sleep to let the crate boot
 
         fpga_array_params = self.cfg.f_engine_tests.global_settings.fpga_array_params
         ca = fpga_array.FPGAArray(**fpga_array_params)
