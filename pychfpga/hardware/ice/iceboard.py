@@ -8,6 +8,7 @@ import bz2
 import subprocess
 import shlex
 import traceback
+import datetime
 
 # Pypi packages
 import nest_asyncio
@@ -34,6 +35,9 @@ from ..i2c_devices import ina230  # I2C Voltage and current monitor
 from ..i2c_devices import eeprom
 from ..i2c_devices import qsfp
 from ..i2c_devices import gpio
+from ..i2c_devices.eeprom import eeprom as EEPROM
+
+from .icecore import hw
 
 
 class IceBoard(Motherboard, TuberIceBoardBase):
@@ -1272,6 +1276,37 @@ class IceBoard(Motherboard, TuberIceBoardBase):
             kwargs: additional parameters passed to the self.i2c object
         """
         return self._i2c_mb_eeprom_data.write(addr, data, **kwargs)
+
+    def write_bp16_eeprom(self, serial_number, product_version="2"):
+        eeprom_data = EEPROM(
+            getattr(self, "i2c"), bus_name='BP',
+            address=0x54,
+            address_width=10,
+            write_page_size=16)
+
+        fru = hw.ipmi_fru.FRU(
+            board=hw.ipmi_fru.Board(
+                mfg_date=datetime.datetime.now(),
+                manufacturer="Winterland",
+                product_name="IceCrate",
+                part_number="MGK7MB",
+                serial_number=serial_number,
+                fru_file="",
+            ),
+            product=hw.ipmi_fru.Product(
+                manufacturer="Winterland",
+                product_name="IceCrate",
+                part_number="MGK7MB",
+                product_version=product_version,
+                serial_number=serial_number,
+                asset_tag="",
+                fru_file="",
+            ),
+        )
+
+        eeprom_data.write(0, fru.encode())
+        self.logger.info(f"Programmed EEPROM at address {eeprom_data.address} with"
+                         f"serial number {serial_number} and product version {product_version}")
 
     # def get_motherboard_serial(self):
     #     """ Read the motherboard serial number from the IPMI data. """
