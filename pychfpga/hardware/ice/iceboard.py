@@ -1289,14 +1289,14 @@ class IceBoard(Motherboard, TuberIceBoardBase):
                 mfg_date=datetime.datetime.now(),
                 manufacturer="Winterland",
                 product_name="IceCrate",
-                part_number="MGK7MB",
+                part_number="MGK7BP16",
                 serial_number=serial_number,
                 fru_file="",
             ),
             product=hw.ipmi_fru.Product(
                 manufacturer="Winterland",
                 product_name="IceCrate",
-                part_number="MGK7MB",
+                part_number="MGK7BP16",
                 product_version=product_version,
                 serial_number=serial_number,
                 asset_tag="",
@@ -1786,11 +1786,11 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         else:
             version = (await self._tuber_get_file_contents_async('/usr/lib/iceboard/version.txt')).strip()
             self.logger.info(f'{self!r}: SD card version is {version}')
-            if version != 'Hirax_R11.4a':
-                if version == 'Chime_R11.3i':
-                    self.logger.warning(f'{self!r}: The current version of the SD card is not up to date. Please update the SD card if there are boot issues (boards not booting or not showing up on the network). Build info is {build_info}, version is {version}')
-                else:
-                    raise RuntimeError(f"{self!r}: The current version of the SD card is not up to date. Please update the SD card")
+            # if version != 'Hirax_R11.4a':
+            #     if version == 'Chime_R11.3i':
+            #         self.logger.warning(f'{self!r}: The current version of the SD card is not up to date. Please update the SD card if there are boot issues (boards not booting or not showing up on the network). Build info is {build_info}, version is {version}')
+            #     else:
+            #         raise RuntimeError(f"{self!r}: The current version of the SD card is not up to date. Please update the SD card")
         return True
 
     def print_tuber_methods(self):
