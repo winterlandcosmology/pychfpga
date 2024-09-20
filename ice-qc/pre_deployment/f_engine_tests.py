@@ -65,6 +65,7 @@ class TestUtils:
         """
         Run fpga_array, initializing the crate. Recover ca object. Power is reset by default.
         """
+        # TODO: clear handlers before calling fpgaarray
         # Check if self.ps already exists (i.e. ps on from previous test)
         if not self.ps:
             self.ps = self.open_ps()
@@ -464,7 +465,7 @@ class TestPreDeploymentCrate(TestUtils):
                 print(f'****************************')
                 print(f'Power-cycling test iteration {n + 1}/{n_cycles}')
                 print(f'****************************')
-                
+
                 # Initialize the crate:
                 try:
                     self.ca = self.crate_init(reset_power=False)
@@ -472,13 +473,12 @@ class TestPreDeploymentCrate(TestUtils):
                     # if len(self.ca) < 16:
                     #     while True:
                     #         pass
-                
-                
+
+                # TODO: make it fail on missing iceboards
                 except (RuntimeError, IOError, OSError) as e:
-                    
                     print(f'Failed initializing the array because of error {e!r}')
-                    
-                    
+
+
                 else:
                     for i in self.ca.ib:
                         print(f'Checking adc clocks on: {i}')
@@ -490,9 +490,9 @@ class TestPreDeploymentCrate(TestUtils):
                         #     diffs = set(i.FreqCtr.read_frequency(f'ADC_CLK{clock}', integration_period) - 200e6 for _ in range(n_clock_checks))
                         #     # If diffs is not a subset of expected_diffs, i.e. it contains an unexpected value, then append to failed_clocks
                         #     if not diffs.issubset(expected_diffs):
-                        #         failed_clocks.append([f'{i}', f'ADC_CLK{clock}', diffs])    
+                        #         failed_clocks.append([f'{i}', f'ADC_CLK{clock}', diffs])
 
-                    
+
 
                 # self.ps.set_output(state=False)
                 time.sleep(delay)
@@ -806,7 +806,7 @@ class TestPreDeploymentCrate(TestUtils):
                     # Turn power supply back on:
                     print(f'Turning on power supply...')
                     self.ps.set_output(state=True)
-                    delay = 40
+                    delay = self.cfg.f_engine_tests.global_settings.ps_t_sleep
                     print(f'Waiting for {delay} seconds to let the boards boot')
                     time.sleep(delay) # Sleep to let the crate boot
 
