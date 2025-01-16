@@ -370,6 +370,9 @@ class RawFrameReceiver(object):
         elif format == "16+16":
             data = data.view('>i2')
             data = data[:, :, ::2] + 1j*data[:, :, 1::2]
+        elif format == "32+32":
+            data = data.view('>i4')
+            data = data[:, :, ::2] + 1j*data[:, :, 1::2]
         elif format != '8':
             raise ValueError('Invalid format')
 
