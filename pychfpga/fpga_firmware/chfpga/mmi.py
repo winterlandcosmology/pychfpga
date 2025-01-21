@@ -53,12 +53,6 @@ class BitField(object):
     RAM = RAM  # RAM or FIFO
     DRP = DRP  # Dynamic Reconfiguration Port
 
-    data_types = {  # bit_width: numpy_data_type
-        1: np.dtype('>u1'),
-        2: np.dtype('>u2'),
-        4: np.dtype('>u4'),
-        8: np.dtype('>u8')}
-
     def __init__(self, page, addr, bit, width=1, default=None, doc='No documentation available'):
 
         if page not in PAGE_OFFSET:
@@ -119,11 +113,6 @@ class BitField(object):
             raise RuntimeError(f'Unknown page {self.page}')  # Should never happen, was tested in __init__
 
     def read(self, obj):
-        # if self.number_of_bytes not in self.data_types:
-        #     raise ValueError(
-        #         'Unsupported byte width %i. The bitfield must '
-        #         'span exactly 1, 2, 4 or 8 bytes' % self.number_of_bytes)
-        # data_type = self.data_types[self.number_of_bytes]
 
         if self.page == self.DRP:
             value = obj.read_drp(self._addr)  # read 16-bit value
@@ -157,15 +146,13 @@ class MMI(object):
     #BitDef=BitDef_base # make class accessible to subclass (somehow the class is not inherited directly)
     # BITS = {} # Should be overriden by the subclass
 
-    def __init__(self, fpga_instance, base_address, instance_number=None):
+    def __init__(self, fpga_instance, base_address, instance_number=None, address_width=9):
         self._unlock()
         self.fpga = fpga_instance
         self.base_address = base_address
         self.instance_number = instance_number
-        # self.module_number = module_number
-        # for field_name, bitfield in self.BITS.items():
-        #     setattr(self.__class__, field_name, bitfield)
-        #     print ' OBSOLETE:  Defining property "%s"' % (field_name)
+        self.address_width = address_width
+        self.address_max = (1 << address_width) - 1
 
     def __repr__(self):
         """ Return a string that represents this object and its parent object.
@@ -217,7 +204,7 @@ class MMI(object):
         internal devices (PLL, SYSMON, MGT etc). 'addr' is the 16-bit DRP
         register address.
         """
-        if not 0 <= 2* addr <= 0x1FF:
+        if not 0 <= 2 * addr <= self.address_max:
             raise RuntimeError('%r: Invalid DRP address %i' % (self, addr))
         return self.read(_RAM_BASE_ADDR + 2 * addr, type=np.dtype('<u2'), length=1)[0]
 
@@ -225,7 +212,7 @@ class MMI(object):
         """
         Reads an array of `length` bytes from address `addr` in the RAM space
         """
-        if not 0 <= addr <= 0x1FF:
+        if not 0 <= addr <= self.address_max:
             raise RuntimeError('%r: Invalid RAM address %i' % (self, addr))
         return self.read(_RAM_BASE_ADDR + addr, type=type, length=length, **kwargs)
 
@@ -292,7 +279,7 @@ class MMI(object):
         Writes within the RAM/FIFO address space of the module. Simply calls the write() function with the appropriate address offset.
         """
 
-        if not 0 <= addr <= 0x1FF:
+        if not 0 <= addr <= self.address_max:
             raise RuntimeError('%r: Invalid RAM address %i' % (self, addr))
         return self.write(_RAM_BASE_ADDR + addr, data, *args, **kwargs)
 
@@ -329,7 +316,7 @@ class MMI(object):
             - The DRP and RAM pages use the same address space. Either one or the other is connected to the module.
             - The DRP values are stored as little endians
         """
-        if not 0 <= 2 * addr <= 0x1FF:
+        if not 0 <= 2 * addr <= self.address_max:
             raise RuntimeError('%r: Invalid DRP address %i' % (self, addr))
         if not 0 <= data <= 65535:
             raise AttributeError('%r: Invalid unsigned 16-bit DRP register value %i' % (self, data))

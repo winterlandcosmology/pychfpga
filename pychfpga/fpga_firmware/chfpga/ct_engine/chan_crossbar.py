@@ -44,12 +44,12 @@ class ChanCrossbar(MMI):
     # ALIGN_GLOBAL_FRAME_CTR    = BitField(STATUS, 5, 0, width=8, doc='')
     DELAY_CAPTURE    = BitField(STATUS, 4, 0, width=16, doc="")
 
-    def __init__(self, fpga_instance, base_address, address_increment, verbose=0):
+    def __init__(self, fpga_instance, base_address, address_increment, address_width=16, verbose=0):
         self.fpga = fpga_instance
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
         self.crossbar_level = 1
-        super().__init__(fpga_instance, base_address)
+        super().__init__(fpga_instance, base_address, address_width=address_width)
         self.BIN_SEL = []
         self.NUMBER_OF_CROSSBAR_INPUTS = self.fpga.NUMBER_OF_CROSSBAR_INPUTS
         self.NUMBER_OF_CROSSBAR_OUTPUTS = self.fpga.NUMBER_OF_CROSSBAR1_OUTPUTS
