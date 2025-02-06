@@ -8,6 +8,7 @@ import bz2
 import subprocess
 import shlex
 import traceback
+from datetime import datetime
 
 # Pypi packages
 import nest_asyncio
@@ -34,7 +35,9 @@ from ..i2c_devices import ina230  # I2C Voltage and current monitor
 from ..i2c_devices import eeprom
 from ..i2c_devices import qsfp
 from ..i2c_devices import gpio
+from ..i2c_devices.eeprom import eeprom as EEPROM
 
+from .icecore import hw
 
 class IceBoard(Motherboard, TuberIceBoardBase):
     """ Provide the methods needed to operate the Iceboard hardware and its FPGA firmware.
@@ -1241,6 +1244,37 @@ class IceBoard(Motherboard, TuberIceBoardBase):
     async def _write_motherboard_spi_eeprom_base64(self, *args, **kwargs):
         result = await self._tuber_motherboard_eeprom_write_base64_async(*args, **kwargs)
         return(result)
+
+    def write_bp16_eeprom(self, serial_number, product_version="2"):
+        eeprom_data = EEPROM(
+            getattr(self, "i2c"), bus_name='BP',
+            address=0x54,
+            address_width=10,
+            write_page_size=16)
+
+        fru = hw.ipmi_fru.FRU(
+            board=hw.ipmi_fru.Board(
+                mfg_date=datetime.now(),
+                manufacturer="Winterland",
+                product_name="IceCrate",
+                part_number="MGK7BP16",
+                serial_number=serial_number,
+                fru_file="",
+            ),
+            product=hw.ipmi_fru.Product(
+                manufacturer="Winterland",
+                product_name="IceCrate",
+                part_number="MGK7BP16",
+                product_version=product_version,
+                serial_number=serial_number,
+                asset_tag="",
+                fru_file="",
+            ),
+        )
+
+        eeprom_data.write(0, fru.encode())
+        self.logger.info(f"Programmed EEPROM at address {eeprom_data.address} with"
+                         f"serial number {serial_number} and product version {product_version}")
 
     def read_motherboard_eeprom(self, addr, length, **kwargs):
         """ Reads the Motherboard's EEPROM through the I2C interface object (via the FPGA)
