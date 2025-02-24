@@ -110,6 +110,9 @@ class FPGAArray(object):
             # reference_frequency=10e6,
             # data_width=4,
 
+            pre_init_irigb_gen_ib=None,
+            pre_init_irigb_gen_out="sma_a",
+
             sync_method=None,
             sync_source=None,
             sync_master=None,
@@ -298,6 +301,13 @@ class FPGAArray(object):
                    - '(a,b,3,d)': Uses the IP address of the ARM but replaces the third byte by ``3``
                    - '(a,b,c+1,d)': Uses the IP address of the ARM but adds 1 to the third byte
 
+            pre_init_irigb_gen_ib (str): ICE board to be set as IRIG-B generator before initializing the array.
+                                         Must be str with 4 digits (ICE board serial number) or a string with the
+                                         crate number and slot (starting from 0) numbers separated by comma.
+                                         Examples: "0495", "0, 15").
+
+            pre_init_irigb_gen_out (str): the output to which generated output will be sent. Defults to sma_a. Possible
+                                          options: sma_a, sma_b, bp_sma
 
             sync_method (str): Method used to synchronize (to sync) the data acquisition on an array of boards:
 
@@ -434,6 +444,8 @@ class FPGAArray(object):
             init=init,
             if_ip=if_ip,
             fpga_ip_addr_fn=fpga_ip_addr_fn,
+            pre_init_irigb_gen_ib=pre_init_irigb_gen_ib,
+            pre_init_irigb_gen_out=pre_init_irigb_gen_out,
             sync_method=sync_method,
             sync_source=sync_source,
             sync_master=sync_master,
@@ -511,6 +523,9 @@ class FPGAArray(object):
             if_ip=None,
             fpga_ip_addr_fn='(a,b,3,d)',
             udp_retries=10,
+
+            pre_init_irigb_gen_ib=None,
+            pre_init_irigb_gen_out="sma_a",
 
             sync_method=None,
             sync_source=None,
@@ -1096,6 +1111,37 @@ class FPGAArray(object):
                     ) for ib in self.ib])
 
 
+            if init >= 3:
+                ################################################################
+                # If specified, use one of the ICE boards as IRIG-B generator
+                ################################################################
+                if pre_init_irigb_gen_ib:
+                    if ',' not in pre_init_irigb_gen_ib:
+                        ib_: IceBoard = self._get_ib_by_serial(pre_init_irigb_gen_ib)
+                    elif ',' in pre_init_irigb_gen_ib:
+                        ib_: IceBoard = self._get_ib_by_id(tuple([int(n_.strip()) for n_ in pre_init_irigb_gen_ib.split(',')]))
+                    else:
+                        raise ValueError("The pre_init_irigb_gen_ib parameter must be either a string or a tuple")
+                    if not ib_:
+                        raise RuntimeError(
+                            f'The ICE board #{pre_init_irigb_gen_ib} was not found in the hardware map.'
+                            f'Could not initialize n IRIG-B generator')
+
+                    ib_.set_user_output_source(source="irigb_gen", output=pre_init_irigb_gen_out)
+                    self.logger.info(f'{self!r}: Set ICE board {pre_init_irigb_gen_ib} to generate IRIG-B on output '
+                                     f'{pre_init_irigb_gen_out}.')
+
+                else:
+                    self.logger.info(f'{self!r}: IRIG-B generator ICE board serial not specified - skipping. '
+                                     f'pre_init_irigb_gen_ib: {pre_init_irigb_gen_ib}')
+
+                if sync_master:
+                    self.logger.error(f'{self!r}: Both sync_master and pre_init_irigb_gen_ib are specified. Sync '
+                                      f'problems are possible. pre_init_irigb_gen_ib is meant to be used when '
+                                      f'distributing IRIG-B through backplane.')
+
+
+            if init >= 3: # initialize the backplane
                 ########################
                 # Initializing backplane hardware communication firmware
                 ########################
@@ -1154,6 +1200,27 @@ class FPGAArray(object):
         #################################
         # Completed array creation and initialization
         #################################
+
+
+    def _get_ib_by_serial(self, serial: str):
+        for ib in self.hwm:
+            self.logger.info(f'{self!r}: Checking IceBoard serial {ib.serial}')
+            if ib.serial == serial:
+                return ib
+        self.logger.warning(f'{self!r}: No IceBoards found for {serial!r}')
+        return None
+
+
+    def _get_ib_by_id(self, id: tuple):
+        """
+        id (tuple): (crate, slot)
+        """
+        for ib in self.hwm:
+            self.logger.info(f'{self!r}: Checking IceBoard id {ib.get_id()}')
+            if ib.get_id() == id:
+                return ib
+        self.logger.warning(f'{self!r}: No IceBoards found for {id} crate/slot')
+        return None
 
     async def prog_and_open_fpga(self, ib, prog, init, mode, bitfile=None, max_trials=3, **kwargs):
         """ Try to open communication with the FPGA and reprogram the FPGA and retry a number of
@@ -2762,6 +2829,9 @@ class FPGAArray(object):
                     raise ValueError('The master board that generates the the time signal on its '
                                      'SMA connector and its time source must be specified')
                 if master:
+                    # Possible override during init, should double check. What is default?
+                    # master_uos = master.get_user_output_source()
+                    # if master_uos ...
                     master.set_user_output_source(master_time_source)
             elif source in ['bp_gpio_int']:
                 if not master or not master_time_source:
