@@ -309,13 +309,13 @@ def: &default  # defaults, referenced below
 #       - make sure to update pychfpga on basil to latest on jfc/dev branch (hopefully on its own D3A branch by now)
 #       - new key under index_map: uid, tells which board data comes from; new load_acq indexes by board.
 
-UAPISHKA:
+cgu:
     <<: *default
-    corr_sn: "UAPISHKA"
-    corr_name: "UAPISHKA"
-    comment: "UAPISHKA, corr16 mode, one board"
+    corr_sn: "CHIME GPU UPGRADE"
+    corr_name: "CHIME GPU UPGRADE"
+    comment: "CHIME GPU UPGRADE, shuffle512 mode, two crates"
     run_name: '%(isotime)s_%(corr_name)s'
-    data_folder: '~/UAPISHKA/data'
+    data_folder: '~/cgu/data'
     run_folder: '%(data_folder)s/%(run_name)s'
     current_folder: '%(data_folder)s/current'  # symlink that points to the latest run folder
 
@@ -327,11 +327,22 @@ UAPISHKA:
         <<: *default_fpga
         fpga_array_params:
             <<: *default_fpga_array_params
-            hwm: 'mb 257:1' # ID of the board used. Can also use a direct IP
-            mode: corr16  # shuffle 256 and 512 require crate numbers
+            hwm: 'BP16 030:0 034:1'
+#            icecrates: ["030", "034"]
+#            icecrates: '030'
+
+            mode: shuffle512  # shuffle 256 and 512 require crate numbers
             prog: 1
-            sync_method: local #  distributed_time # <-- For R232. Change to --> sync_method: distributed_time <-- for D3A. #local_soft_trigger
-            sync_source: sma_a
+
+            # The first must be specified, the second defaults to sma_a
+            # TODO: make it a tuple!
+            pre_init_irigb_gen_ib: "0, 15" # 4 digits - ICE board serial number or tuple (crate, slot).
+            pre_init_irigb_gen_out: "sma_a"
+
+            max_sync_time_difference: 200
+
+            sync_method: distributed_time #  distributed_time # <-- For R232. Change to --> sync_method: distributed_time <-- for D3A. #local_soft_trigger
+            sync_source: bp_time
             udp_retries: 10
             fpga_ip_addr_fn: '(a,b,c+1,d)'
 
@@ -377,7 +388,7 @@ UAPISHKA:
 
         raw_data_capture:
             capture_source: 'adc'
-            baseline_capture_rate: 10  # Frame per second. 0 = disable.
+            baseline_capture_rate: 1  # Frame per second. 0 = disable.
             tmux_factor: 3
 
         initial_gains:  # overwritten by load initial gains and compute gains if enabled
@@ -386,20 +397,22 @@ UAPISHKA:
         load_initial_gains: True
 
         gain_hdf5:
-            output_dir: "~/UAPISHKA/data/digital_gains"
+            output_dir: "~/cgu/data/digital_gains"
             output_suffix: "digitalgain"
             search: True
             max_num: 1
             max_file_size: 1000000000
 
         compute_gains:
-            enable: True
+            enable: False
             targets: # List of (crate,slot) tuples for which fains will be computed
               - ['*']
             initial_gains:
               - [['*'], [1.0, 22]] # Starting gain value, applied to all selected channels
             save_gains: True
-            capture_rate: 10  # period = (2**(capture_rate + 1) frames). DOn't recommend faster (less than 12) because we start losing packets due to REST HTTP encoding of the RMS vectors
+            capture_rate: 14  # period = (2**(capture_rate + 1) frames).
+                              # Don't recommend faster (less than 12) because we start
+                              # losing packets due to REST HTTP encoding of the RMS vectors
               # Recommended rate codes to avoid :
               # 1 crate: 12
               # 2 crates: 13
@@ -424,7 +437,7 @@ UAPISHKA:
 
         firmware_correlator: # use only when mode=`corr16`
             # Static parameters - set once at initialization
-            enable: True # False  # Starts data transmission if True. Works only in corr16 with the proper FPGA firmware
+            enable: False # False  # Starts data transmission if True. Works only in corr16 with the proper FPGA firmware
             firmware_integration_period: 16384 # frames.
             # 800 Msps/s (adc) / 2048 smp/frame = 390625 frames / s -> 0.00000256 s/frame
             # 16384 -> 0.04194304 s -> 42 ms
