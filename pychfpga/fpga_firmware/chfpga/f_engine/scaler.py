@@ -245,7 +245,7 @@ class SCALER(MMI):
                 self.WRITE_COEFF_BANK_B = (abs_page >> 4) & 1
                 self.WRITE_COEFF_BANK_C = (abs_page >> 5) & 1
 
-                page_table = self.read_ram(0, length=512/2, type = '<i2')
+                page_table = self.read_ram(0, length=512//2, type = '<u2')
                 # for ix in range(256):  # there are 256 coefficients per page (2 bytes per coeff = 512 bytes total per page)
                 #     g = struct.unpack('<hh', page_table[2 * ix: 2 * ix + 2])
                 gain_table.append(page_table.tolist())
