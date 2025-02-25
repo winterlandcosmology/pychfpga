@@ -73,9 +73,14 @@ class UCorn(MMI):
         self.source_mac_addr = "00:5D:03:01:02:03"
         self.source_ip_addr = "10.70.0.1"
         self.source_ip_port = 41000
-        self.targets = {
-            0: dict(bin=0, target_mac_addr="FF:FF:FF:FF:FF:FF", target_ip_addr="10.88.0.1", target_ip_port=41001, source_id=0, stream_id=0x1234)
-        }
+        # self.targets = {
+        #     0: dict(bin=0, target_mac_addr="FF:FF:FF:FF:FF:FF", target_ip_addr="10.88.0.1", target_ip_port=41001, source_id=0, stream_id=0x1234)
+        # }
+        self.N_TARGETS = 26 # 26 # 3 # 25 is bad
+        self.targets = {}
+        # default_dict = dict(bin=0, target_mac_addr="FF:FF:FF:FF:FF:FF", target_ip_addr="10.88.0.1", target_ip_port=41001, source_id=0, stream_id=0x1234)
+        for n in range(self.N_TARGETS): # range(128):
+            self.targets.update({n: dict(bin=n, target_mac_addr="FF:FF:FF:FF:FF:FF", target_ip_addr=f"10.88.0.{n}", target_ip_port=41001, source_id=0, stream_id=n)})
 
     def init(self):
         """ Initializes the UCorn module
@@ -92,11 +97,31 @@ class UCorn(MMI):
         self.TX_OVERRIDE_DATA = 0 # Do not override the output data (for low level debugging)
         self.TX_RESET = 1 # put the module in reset state
 
-        # program data for one bin
-        self.set_bin_data(bin=1, frame=0, data=np.arange(8*16, dtype=np.uint8))
+        # # program data for one bin
+        # self.set_bin_data(bin=1, frame=0, data=np.arange(8*16, dtype=np.uint8))
 
-        # Set the playlist to send data from that bin
-        self.set_playlist(bins=( (0,[1]),) )
+        # # Set the playlist to send data from that bin
+        # self.set_playlist(bins=( (0,[1]),) )
+
+        # Program data for 300--1200 MHz bins
+        # self.CHORD_FIDX = np.arange(1536, 7680 + 1) # Frequency bin indices for 300--1200 MHz
+        self.NBINS_PER_PACKET = 4 # 2 # 48 # 33 is the max number we can send for two packets at a time
+        self.CHORD_FIDX = np.arange(1536, 1536 + self.N_TARGETS*self.NBINS_PER_PACKET)
+
+        # for n in range(len(self.CHORD_FIDX)):
+        for n in range(len(self.CHORD_FIDX)):
+            self.set_bin_data(bin=self.CHORD_FIDX[n], frame=0, data=np.arange(128, dtype = np.uint8)) # np.repeat(np.uint8(n), 128)) # np.uint16(d), int(128/2)))
+
+        playlist = []
+        for n in range(self.N_TARGETS):
+            pair = (n, list(np.arange(1536 + n*self.NBINS_PER_PACKET, 1536 + (n+1)*self.NBINS_PER_PACKET)))
+            playlist.append(pair)
+        playlist = tuple(playlist)
+        print(playlist)
+
+        self.set_playlist(bins = playlist)
+
+        # self.TX_PERIOD = int(2**30)
 
         self.TX_RESET = 0 # take the module out of reset. Packet transmisison starts.
 
@@ -208,7 +233,7 @@ class UCorn(MMI):
         # udp_header = f"{src_port:04X} {dest_port:04X} {udp_len:04X} 0000"; #-- Src port, dest port, UDP len,  UDP checksum (0=disable)
 
         # user header
-        user_bytes = h("CF14") + stream_id.to_bytes(2, 'little') + stream_id.to_bytes(2, 'little') + h('0000 0000000000000000 000000000000')
+        user_bytes = h("CF14") + source_id.to_bytes(2, 'little') + stream_id.to_bytes(2, 'little') + h('0000 0000000000000000 000000000000')
 
         # total header
         header = eth_bytes + ip_bytes + udp_bytes + user_bytes
