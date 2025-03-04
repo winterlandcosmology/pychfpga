@@ -318,7 +318,7 @@ class FUNCGEN(MMI):
         # info = data_str[:data_str.index(chr(0))]
         fn_number = self.BYTE_C
         fn_names = [name for name, (n, _) in self.FUNCTION_NAMES.items() if n==fn_number]
-        fn_name = fn_names[0] if len(fn_name) == 1 else 'Unknown'
+        fn_name = fn_names[0] if len(fn_names) == 1 else 'Unknown'
         info = f'Function {fn_number}: {fn_name}'
         return (fn_number, info, None)  # Fn number, info string, CRC32
 
