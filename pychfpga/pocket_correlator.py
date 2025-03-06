@@ -109,6 +109,7 @@ class POCKET_CORRELATOR:
         self.f_res = self.fs/self.M # frequency resolution of FFT
         self.f = self.f_res*np.arange(self.NBINS) # an array containing the frequency bins
         self.bin_map = self.make_bin_map() # generate the frequency bin map (see the function description for details) 
+        self.inv_bin_map = self.make_inv_bin_map() # generate the inverse frequency bin map (see the function description for details) 
         
         for n in range(self.NPOLS):
 
@@ -277,12 +278,10 @@ class POCKET_CORRELATOR:
                     raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
 
             # Bypass the FFT
-            if not self.i.chan[n].FFT.BYPASS:
-                self.i.chan[n].FFT.BYPASS = 1
+            self.i.chan[n].FFT.BYPASS = 1
 
             # Bypass the SCALER
-            if not self.i.chan[n].SCALER.BYPASS:
-                self.i.chan[n].SCALER.BYPASS = 1
+            self.i.chan[n].SCALER.BYPASS = 1
         
         # Start data capture, always setting the source to 'adc' (meaning that the data is
         # always captured at the output of the FUNCGEN module, no matter if it is real ADC 
@@ -356,7 +355,7 @@ class POCKET_CORRELATOR:
 
         """
 
-        inv_bin_map = np.argsort(make_bin_map())
+        inv_bin_map = np.argsort(self.make_bin_map())
 
         return inv_bin_map
 
@@ -465,12 +464,10 @@ class POCKET_CORRELATOR:
                     raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
 
             # Do not bypass the FFT
-            if self.i.chan[n].FFT.BYPASS:
-                self.i.chan[n].FFT.BYPASS = 0
+            self.i.chan[n].FFT.BYPASS = 0
 
             # Bypass the SCALER
-            if not self.i.chan[n].SCALER.BYPASS:
-                self.i.chan[n].SCALER.BYPASS = 1
+            self.i.chan[n].SCALER.BYPASS = 1
 
         if fft_bit_res == '16+16':
 
@@ -662,19 +659,57 @@ class POCKET_CORRELATOR:
         # New digital gain computation algorithm for bit-growth FFT.
         # =========================================================
 
-        # Capture FFT data
-        d_fft = self.read_fft_frames(n_frames = n_fft_frames,
-                                     fft_bit_res = '32+32',
-                                     data_source = 'adc',
-                                     period = 0.02,
-                                     split = True,
-                                     verbose = 0
-                                     )
+        # Capture FFT data, ensuring that there are no ADC overrange 
+        # or overvoltage flags raised such that the digital gains
+        # are not biased
+        NTRIES = 10
+        for n in range(NTRIES):
+            try:
+                print(f'FFT capture trial {n + 1} of {NTRIES}')
+                # Reset the ADC overrange and overvoltage flags
+                self.i.GPIO.ADC_OR_CLEAR = 1
+                self.i.GPIO.ADC_OR_CLEAR = 0
+                self.i.GPIO.ADC_OV_CLEAR = 1
+                self.i.GPIO.ADC_OV_CLEAR = 0
+        
+                # Capture FFT data
+                d_fft = self.read_fft_frames(n_frames = n_fft_frames,
+                                             fft_bit_res = '32+32',
+                                             data_source = 'adc',
+                                             period = 0.02,
+                                             split = True,
+                                             verbose = 0
+                                             )
+        
+                # Check the ADC overrange and overvoltage flags
+                adc_or = self.i.GPIO.ADC_OR
+                adc_ov = self.i.GPIO.ADC_OV
+
+                print('')
+                print(f'On FFT capture trial {n + 1} of {NTRIES}:')
+                print(f'ADC Overrange = {adc_or}')
+                print(f'ADC Overvoltage = {adc_ov}')
+                print('')
+
+                if adc_or == 0 and adc_ov == 0:
+                    break
+
+                if n == NTRIES - 1:
+                    raise Exception('All FFT capture trials unsuccessful. Please try again!')
+            except Exception as e:
+                raise Exception(e)
 
         # Compute theoretical gains using the mean magnitude of the FFT data
         target_full = target*2**44
         d_fft_mean_mag = np.mean(np.abs(d_fft), axis = 1)
         gain_theory = target_full/d_fft_mean_mag
+
+        # IMPORTANT subtelty: usually we want to keep the digital gains with frequency bins 
+        # in the proper order, and read_fft_frames() does so automatically. However, we 
+        # must *write* the gains in the scrambled order! Therefore, we must apply the 
+        # inverse bin map to scramble the frequency bins such that they are written in 
+        # the native order in which they are processed in firmware
+        gain_theory_inv_mapped = gain_theory[..., self.inv_bin_map]
 
         # Buffers for actual gains as read from FPGA (using the word "actual"
         # just to be explicit that these gains are not necessarily equivalent to
@@ -692,7 +727,7 @@ class POCKET_CORRELATOR:
             # Set the gains; note that SCALER performs additional processing to split gain_theory into
             # linear and logarithmic components (i.e., mantissa and exponent). We therefore need to read
             # the actual gains in the next step, which are directly read from the FPGA.
-            self.i.chan[n].SCALER.set_gain_table(gain_theory[n], bank = bank, gain_timestamp = None, log_gain = None)
+            self.i.chan[n].SCALER.set_gain_table(gain_theory_inv_mapped[n], bank = bank, gain_timestamp = None, log_gain = None)
 
             # Read the actual gains written in the memory bank of the SCALER module in the FPGA.
             # Apply some processing to recover the value in a fully linear unit.
@@ -713,9 +748,18 @@ class POCKET_CORRELATOR:
             d_sclr = None
 
         if save_gains:
-            self.save_gains(gain_lin = gain_lin, gain_log = gain_log)
+            self.save_gains(gain_lin = gain_lin_actual[..., self.bin_map], 
+                            gain_log = gain_log_actual[..., self.bin_map]
+                            )
 
-        return d_fft, d_fft_mean_mag, gain_lin_actual, gain_log_actual, d_sclr
+        # Return the data arrays, ensuring that bin maps are applied where needed (i.e., if inverse bin
+        # maps were applied earlier)
+        return (d_fft, 
+                d_fft_mean_mag, 
+                gain_lin_actual[..., self.bin_map], 
+                gain_log_actual[..., self.bin_map], 
+                d_sclr
+                )
 
         # =====================================================================================
         # Old digital gain computation algorithm used with fixed-point FFT. Kept for reference.
@@ -1056,17 +1100,15 @@ class POCKET_CORRELATOR:
                     raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
 
             # Do not bypass the FFT
-            if not self.i.chan[n].FFT.BYPASS:
-                self.i.chan[n].FFT.BYPASS = 0
+            self.i.chan[n].FFT.BYPASS = 0
 
             # Bypass the SCALER, and set the mode so that we send the most significant 16+16 bits of the saturated post-gain FFT values
-            if not self.i.chan[n].SCALER.BYPASS:
-                self.i.chan[n].SCALER.BYPASS = 1
-                self.i.chan[n].SCALER.DATA_TYPE = 1 
+            self.i.chan[n].SCALER.BYPASS = 1
+            self.i.chan[n].SCALER.DATA_TYPE = 1 
 
         # Start data capture, grabbing data at the output of the
         # scaler, which has been bypassed.
-        pc.i.start_data_capture(period = 0.02, 
+        pc.i.start_data_capture(period = period, 
                                 source = 'scaler'
                                 )
 
@@ -1169,13 +1211,11 @@ class POCKET_CORRELATOR:
                     raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
 
             # Do not bypass the FFT
-            if not self.i.chan[n].FFT.BYPASS:
-                self.i.chan[n].FFT.BYPASS = 0
+            self.i.chan[n].FFT.BYPASS = 0
 
             # Do not bypass the SCALER, and set the mode so that we read 4+4-bit SCALER data
-            if not self.i.chan[n].SCALER.BYPASS:
-                self.i.chan[n].SCALER.BYPASS = 0
-                self.i.chan[n].SCALER.DATA_TYPE = 0 # Send 4-bit scaler values
+            self.i.chan[n].SCALER.BYPASS = 0
+            self.i.chan[n].SCALER.DATA_TYPE = 0 # Send 4-bit scaler values
             
         # Start data capture, always setting the source to 'scaler'
         self.i.start_data_capture(period = period, 
@@ -1288,7 +1328,7 @@ class POCKET_CORRELATOR:
                          n_software_frames = 1,
                          number_of_results = 1,
                          flush = True,
-                         align = True,
+                         align = False,
                          data_timeout = 0.1,
                          flush_timeout = 0.01,
                          return_format = 'raw',
@@ -1421,13 +1461,11 @@ class POCKET_CORRELATOR:
                     raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
 
             # Do not bypass the FFT
-            if not self.i.chan[n].FFT.BYPASS:
-                self.i.chan[n].FFT.BYPASS = 0
+            self.i.chan[n].FFT.BYPASS = 0
 
             # Do not bypass the SCALER, and set the mode so that we read 4+4-bit SCALER data
-            if not self.i.chan[n].SCALER.BYPASS:
-                self.i.chan[n].SCALER.BYPASS = 0
-                self.i.chan[n].SCALER.DATA_TYPE = 0 # Send 4-bit scaler values
+            self.i.chan[n].SCALER.BYPASS = 0
+            self.i.chan[n].SCALER.DATA_TYPE = 0 # Send 4-bit scaler values
 
         # Configure correlator if it has not been done so
         if not self.corr_is_configured:
@@ -1437,7 +1475,7 @@ class POCKET_CORRELATOR:
                                 )
 
         t1 = time.time() # This is our timestamp  
-        d_corr, count, sat, = self.corr_receiver.read_corr_frames(soft_integ_period = soft_integ_period,
+        d_corr, count, sat, = self.corr_receiver.read_corr_frames(soft_integ_period = n_software_frames,
                                                                   number_of_results = number_of_results,
                                                                   filename = None,
                                                                   flush = flush,
@@ -1451,7 +1489,7 @@ class POCKET_CORRELATOR:
 
         print(f'Took {t2 - t1} s to capture corr data')
 
-        return t1, d[:, self.bin_map, :], count, sat
+        return t1, d_corr[:, self.bin_map, :], count, sat
 
     def make_time_string(self):
         """
