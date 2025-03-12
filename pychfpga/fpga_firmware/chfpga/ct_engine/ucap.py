@@ -309,7 +309,8 @@ class RawFrameReceiver(object):
 
         if flush:
             flushed = self.flush(flush_timeout, verbose=verbose)
-            print(f'Flushed {flushed} packets while emptying UDP buffers')
+            if verbose:
+                print(f'Flushed {flushed} packets while emptying UDP buffers')
             self.last_ts = None
             flushed = self.wait_for_new_timestamp(self.cookie, data_timeout, verbose=verbose)
             if verbose:

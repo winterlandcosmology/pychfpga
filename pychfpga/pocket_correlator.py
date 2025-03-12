@@ -581,7 +581,9 @@ class POCKET_CORRELATOR:
                       n_fft_frames = 1000,
                       bank = 0,
                       return_scaler_frames = False,
-                      save_gains = False
+                      save_gains = False,
+                      digital_gains_parent_path = None,
+                      digital_gains_dir_name = None
                       ):
         """
         Compute digital gains used to quantize FFT data into 4+4 bits with the SCALER. When floating point
@@ -636,6 +638,11 @@ class POCKET_CORRELATOR:
 
         save_gains : (bool) Whether or not to save the digital gains in an HDF5 file, which calls save_gains() if True.
         Set to True, for example, if you are saving correlated data and need to apply the digital gains for offline analysis.
+
+        digital_gains_parent_path : (str) A parent directory containing sub-directories of digital gains. Only used if save_gains is True.
+
+        digital_gains_dir_name : (str) The directory in which the digital gains will be stored. This directory lives within
+        the parent digital_gains_path directory. Only used if save_gains is True.
 
         Returns
         -------
@@ -749,7 +756,9 @@ class POCKET_CORRELATOR:
 
         if save_gains:
             self.save_gains(gain_lin = gain_lin_actual[..., self.bin_map], 
-                            gain_log = gain_log_actual[..., self.bin_map]
+                            gain_log = gain_log_actual[..., self.bin_map],
+                            digital_gains_parent_path = digital_gains_parent_path,
+                            digital_gains_dir_name = digital_gains_dir_name
                             )
 
         # Return the data arrays, ensuring that bin maps are applied where needed (i.e., if inverse bin
@@ -943,7 +952,7 @@ class POCKET_CORRELATOR:
 
         **NOTE**: be sure that you are saving the *actual* digital gains, which can be read with the 
         SCALER.get_gain_table() method. It is critical that the *actual* digital gains are applied in 
-        offline analysis!
+        offline analysis, not the theoretical gains! See compute_gains() for details.
 
         Parameters
         ----------
@@ -962,44 +971,47 @@ class POCKET_CORRELATOR:
 
         """
 
-        # Digital gains
+        # Create the "parent" path for the digital gains if it does not exist
         if not os.path.exists(digital_gains_parent_path):
             print(f'Creating digital gains directory at {digital_gains_parent_path}')
             os.mkdir(digital_gains_parent_path)
         else:
             print(f'Digital gains parent directory is {digital_gains_parent_path}')
 
+        # Create the sub-path and name of the digital gains file
+        os.mkdir(digital_gains_dir_name)
         digital_gain_file_name = f'{digital_gains_dir_name}/gains.hdf5'
         print(f'Creating digital gains file {digital_gain_file_name}')
 
         # Create the gain hdf5 file
-        f = h5py.File(digital_gain_file_name, 'w')
+        file = h5py.File(digital_gain_file_name, 'w')
 
-        gain_lin_dset = f.create_dataset('gain_lin',
-                                         (self.NPOLS, self.NBINS),
-                                         data = gain_lin,
-                                         dtype = np.uint16
-                                         )
+        gain_lin_dset = file.create_dataset('gain_lin',
+                                            (self.NPOLS, self.NBINS),
+                                            data = gain_lin,
+                                            dtype = np.uint16
+                                            )
 
         if gain_log.shape == (self.NPOLS, self.NBINS):
             # Assume floating point gains have been used
 
-            log_gain_dset = f.create_dataset('gain_log', 
-                                             (self.NPOLS, self.NBINS),
-                                             data = gain_log,
-                                             dtype = np.uint16
-                                             ) 
+            gain_log_dset = file.create_dataset('gain_log', 
+                                                (self.NPOLS, self.NBINS),
+                                                data = gain_log,
+                                                dtype = np.uint16
+                                                ) 
 
-        if log_gain.shape == (self.NPOLS):
+        if gain_log.shape == (self.NPOLS):
             # Assume constant log gains have been used
             
-            log_gain_dset = f.create_dataset('gain_log', 
-                                             (self.NPOLS,),
-                                             data = gain_log,
-                                             dtype = np.uint8 # type might be 'int', but small enough that 8 bits is plenty (max log gain is 31)
-                                             ) 
+            gain_log_dset = file.create_dataset('gain_log', 
+                                                (self.NPOLS,),
+                                                data = gain_log,
+                                                dtype = np.uint8 # type might be 'int', but small enough that 8 bits is plenty (max log gain is 31)
+                                                ) 
 
-        f.close()
+        # Close the file
+        file.close()
 
         print(f'Gains have been saved to {digital_gain_file_name}')
 
@@ -1673,7 +1685,7 @@ class POCKET_CORRELATOR:
             self.digital_gains_path = f'{self.data_path}/digital_gains'
             self.gain_file_path = f'{self.digital_gains_path}/{self.obs_string}_digitalgain'
 
-            # Create general digital gains directory if it doesn't exist yet
+            # Create general "parent" digital gains directory if it doesn't exist yet
             if not os.path.exists(self.digital_gains_path):
                 print(f'Creating general digital gains directory at {self.digital_gains_path}')
                 os.mkdir(self.digital_gains_path)
@@ -1681,26 +1693,28 @@ class POCKET_CORRELATOR:
                 print(f'General digital gains directory is {self.digital_gains_path}')
 
             # Make observation-specific directory for the digital gains
-            if not os.path.exists(self.gain_file_path):
-                print(f'Creating digital gains directory at {self.gain_file_path}')
-                os.mkdir(self.gain_file_path)
-            else:
-                print(f'Digital gains directory is {self.gain_file_path}')
+            # if not os.path.exists(self.gain_file_path):
+            #     print(f'Creating digital gains directory at {self.gain_file_path}')
+            #     os.mkdir(self.gain_file_path)
+            # else:
+            #     print(f'Digital gains directory is {self.gain_file_path}')
 
             # ===========
             # Compute gains.
-
+            
             print('')
             print('')
             print('===================================')
             print('')
-            print('--- C O M P U T E   G A I N S  ---')
+            print('---  C O M P U T E   G A I N S  ---')
             print('')
             self.compute_gains(target = gain_target,
                                n_fft_frames = n_fft_frames_for_gain_comp, 
                                bank = 0,
                                return_scaler_frames = False,
-                               save_gains = True
+                               save_gains = True,
+                               digital_gains_parent_path = self.digital_gains_path,
+                               digital_gains_dir_name = self.gain_file_path
                                )
             print('Gain computation completed!')
             print('')
@@ -1711,7 +1725,7 @@ class POCKET_CORRELATOR:
             print('')
             print('===================================')
             print('')
-            print('---   L O A D   G A I N S ---')
+            print('    ---   L O A D   G A I N S ---')
             print('')
             print(f'Loading digital gains from file {self.digital_gains_path}/gains.hdf5 ---')
             print('')
@@ -1755,7 +1769,7 @@ class POCKET_CORRELATOR:
         print('')
         print('===================================')
         print('')
-        print('      --- O B S E R V E  ---')
+        print('    --- O B S E R V E ---')
         print('')
 
         # Run data capture until keyboard interrupt
@@ -1853,13 +1867,13 @@ class POCKET_CORRELATOR:
                     
                     # Capture bursts
                     print(f'Capturing {n_fft_frames_per_file} FFT frames...')
-                    d_fft_frames = read_fft_frames(n_frames = n_fft_frames_per_file,
-                                                   fft_bit_res = '32+32',
-                                                   data_source = 'adc',
-                                                   period = 0.02,
-                                                   split = True,
-                                                   verbose = 0
-                                                   )
+                    d_fft = self.read_fft_frames(n_frames = n_fft_frames_per_file,
+                                                 fft_bit_res = '32+32',
+                                                 data_source = 'adc',
+                                                 period = 0.02,
+                                                 split = True,
+                                                 verbose = 0
+                                                 )
 
                     # Write to file
                     dset_fft[...] = d_fft
@@ -1874,9 +1888,9 @@ class POCKET_CORRELATOR:
 
                     # ADC overrange/overvoltage flag reset, recalling that the reset 
                     # is an 8-bit number so we can index each ADC individually
-                    self.i.GPIO.ADC_OR_CLEAR = 2**8
+                    self.i.GPIO.ADC_OR_CLEAR = 2**8 - 1 # 255, i.e., 11111111 for all 8 pols
                     self.i.GPIO.ADC_OR_CLEAR = 0
-                    self.i.GPIO.ADC_OV_CLEAR = 2**8
+                    self.i.GPIO.ADC_OV_CLEAR = 2**8 - 1 # 255, i.e., 11111111 for all 8 pols
                     self.i.GPIO.ADC_OV_CLEAR = 0
 
                     for m in range(self.NPOLS):
@@ -1901,7 +1915,7 @@ class POCKET_CORRELATOR:
                         
                     # Capture correlated data (note that many default arguments are used here)
                     t, vis, counts, sat = self.read_corr_frames(data_source = 'adc',
-                                                                soft_integ_period = n_software_frames,
+                                                                n_software_frames = n_software_frames,
                                                                 number_of_results = 1,
                                                                 flush = flush,
                                                                 align = False,
@@ -1922,11 +1936,11 @@ class POCKET_CORRELATOR:
                     
                     # Read ADC_OR flag
                     adc_overrange_raw = self.i.GPIO.ADC_OV
-                    adc_overrange_buf[n] = np.array([(adc_overrange_raw & mask[m]) >> m for m in bitshifts])
+                    adc_overrange_buf[n] = np.array([(adc_overrange_raw & bitmask[m]) >> m for m in bitshifts])
 
                     # Read ADC_OV flag
                     adc_overvoltage_raw = self.i.GPIO.ADC_OV
-                    adc_overvoltage_buf[n] = np.array([(adc_overvoltage_raw & mask[m]) >> m for m in bitshifts])
+                    adc_overvoltage_buf[n] = np.array([(adc_overvoltage_raw & bitmask[m]) >> m for m in bitshifts])
 
                     for m in range(self.NPOLS):
 
@@ -1955,7 +1969,7 @@ class POCKET_CORRELATOR:
                     print(f'ADC Overvoltage: {adc_overvoltage_buf[n]}')
                     print(f'FFT Overflows: {fft_overflows_buf[n]}')
                     print(f'Scaler Overflows: {scaler_overflows_buf[n]}')
-                    print(f'Correlator Overflows: {corr_overrun_buf[n]}')
+                    print(f'Correlator Overruns: {corr_overrun_buf[n]}')
 
                 # Once the loop is complete, write the numpy buffers to disk
                 print('')

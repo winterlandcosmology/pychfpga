@@ -181,7 +181,7 @@ class SCALER(MMI):
                 glog = (np.floor(np.log2(gains))-10).clip(0, 31)  #
                 gains /= 2**glog
                 # print(f'{glog=}\n {gains=}')
-                if any(gains < 0) or any(gains >= 2**11):
+                if any(gains < 0) or any(gains >= (2**31)*(2**11 - 1)):
                     raise ValueError('Floating gain exceeds allowable range of 2^31*(2^11-1) = 4.3959E12')
                 gains = (glog.astype(np.uint16) << 11) | gains.astype(np.uint16)
                 print(f"Gains = {[f'{g:04x}' for g in gains[:10]]}")
