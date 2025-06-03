@@ -673,10 +673,11 @@ class POCKET_CORRELATOR:
         for n in range(NTRIES):
             try:
                 print(f'FFT capture trial {n + 1} of {NTRIES}')
+                
                 # Reset the ADC overrange and overvoltage flags
-                self.i.GPIO.ADC_OR_CLEAR = 1
+                self.i.GPIO.ADC_OR_CLEAR = 2**8 - 1
                 self.i.GPIO.ADC_OR_CLEAR = 0
-                self.i.GPIO.ADC_OV_CLEAR = 1
+                self.i.GPIO.ADC_OV_CLEAR = 2**8 - 1
                 self.i.GPIO.ADC_OV_CLEAR = 0
         
                 # Capture FFT data
@@ -698,11 +699,14 @@ class POCKET_CORRELATOR:
                 print(f'ADC Overvoltage = {adc_ov}')
                 print('')
 
+                # Break loop if no flags are high
                 if adc_or == 0 and adc_ov == 0:
                     break
 
+                # Otherwise, raise an exception
                 if n == NTRIES - 1:
-                    raise Exception('All FFT capture trials unsuccessful. Please try again!')
+                   raise Exception('All FFT capture trials unsuccessful. Please try again!')
+
             except Exception as e:
                 raise Exception(e)
 
@@ -1238,7 +1242,8 @@ class POCKET_CORRELATOR:
         t, d_scaler, c = self.u_receiver.read_raw_frames(format = '16+16', 
                                                          ncap = ncap, 
                                                          split = True,
-                                                         verbose = verbose)
+                                                         verbose = verbose
+                                                         )
 
         # Shift the raw data by 12 bits, as the data is packed into the upper 4+4 bits
         # of a 16+16-bit number 
