@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 """
 CORR.py module
  Implements interface to the correlator blocks
@@ -12,6 +10,7 @@ import logging
 import numpy as np
 import matplotlib.pyplot as plt
 import socket
+import select
 
 from ..mmi import MMI, BitField
 
@@ -20,7 +19,7 @@ from ..mmi import MMI, BitField
 #############################################
 
 # Driving parameters
-NCHAN = 8  # Number of channels on which to generate N-squared products
+# NCHAN = 8  # Number of channels on which to generate N-squared products
 NBINS_TOTAL = 8192  # Number of frequency bins to process
 NBYTES_PER_PROD = 5
 
@@ -33,6 +32,8 @@ class UCORR(MMI):
 
     # Control registers
     SOFT_RESET         = BitField(CONTROL, 0x00, 7, doc="Resets the correlator array.")
+    OVERRUN_RESET      = BitField(CONTROL, 0x00, 6, doc="Resets the overrun flag")
+    CORR_ID            = BitField(CONTROL, 0x00, 2, width=4, doc="Correlator ID, placed in th e MSB of the stream ID")
     NO_ACCUM           = BitField(CONTROL, 0x00, 1, doc="Don't accumulate values - only last product of period is kept")
     AUTOCORR_ONLY      = BitField(CONTROL, 0x00, 0, doc="Force the correlator to output autocorrelations only")
     # NO_ACCUM           = BitField(CONTROL, 0x00, 5, doc="Disables accumulation - only the last result is saved")
@@ -42,9 +43,12 @@ class UCORR(MMI):
     # BINS_PER_FRAME     = BitField(CONTROL, 0x06, 0, width=9, doc="Number of frequency bins per frame minus one")
 
     # Status registers
-    OVERRUN   = BitField(STATUS, 0x00, 0, doc="An overrun has occured in one of the correlator cores")
-    # IN_FRAME_CTR  = BitField(STATUS, 0x01, 0, width=8, doc="Input frame counter")
-    # OUT_FRAME_CTR = BitField(STATUS, 0x02, 0, width=8, doc="Output frame counter")
+    OVERRUN   = BitField(STATUS, 0, 0, doc="An overrun has occured in one of the correlator cores")
+    NCHAN = BitField(STATUS, 1, 0, width=8, doc="NUmber of input channelsto correlate")
+    NCORR   = BitField(STATUS, 2, 4, width=4, doc="Number of correlator cores")
+    BIN_DECIMATION_FACTOR   = BitField(STATUS, 2, 0, width=4, doc="Bin decimation factor")
+    IN_FRAME_CTR  = BitField(STATUS, 0x02, 0, width=8, doc="Input frame counter")
+    OUT_FRAME_CTR = BitField(STATUS, 0x03, 0, width=8, doc="Output frame counter")
 
     def __init__(self, fpga_instance, base_address, instance_number, verbose=0):
         super().__init__(fpga_instance, base_address, instance_number)
@@ -55,7 +59,7 @@ class UCORR(MMI):
         """ Inisializes all modules of a correlator block."""
         # self.INTEGRATION_PERIOD = 16384-1
         # self.USER_ID = self.fpga.slot - 1 if self.fpga.slot else 0
-
+        self.CORR_ID = self.fpga.slot-1
 
     def status(self):
         """Displays the status of the correlator array"""
@@ -70,7 +74,7 @@ class UCORR(MMI):
         self.logger.info(f' Starting correlator')
 
     def get_data_receiver(self, sock, **kwargs):
-        return UCorrFrameReceiver(sock, **kwargs)
+        return UCorrFrameReceiver(sock, NCHAN=self.NCHAN, NCORR=self.NCORR, NDECIM=self.BIN_DECIMATION_FACTOR, **kwargs)
 
 class UCorrFrameReceiver(object):
     """
@@ -128,40 +132,45 @@ class UCorrFrameReceiver(object):
         watch -cd -n .5 "cat  /proc/net/udp"
     """
 
-    def __init__(self, socket, N=NCHAN, Nbins=NBINS_TOTAL, Ncorr=4, packets_per_chunk=10*NBINS_TOTAL, ignore_packet_size=False):
+    NBYTES_PER_HEADER = 10
+    NBYTES_PER_PROD = 5
 
-        NCORR = Ncorr
 
-        self.NCHAN = N
+    def __init__(self, socket, NCHAN, Nbins=NBINS_TOTAL, NCORR=4, NDECIM=1, NBOARDS=1, packets_per_chunk=10*NBINS_TOTAL, ignore_packet_size=True):
+
+
         self.socket = socket
+        self.NCHAN = NCHAN
+        self.NDECIM = NDECIM
+        self.NBOARDS = NBOARDS
+        self.NBINS = Nbins # number of bins in the array
         self.NPACKETS = packets_per_chunk
-        self.NCORR = NCORR
-        self.NPROD = NCHAN * (NCHAN + 1) // 2  # Total number of products per correlator frame
+        self.NCORR = NCORR # number of correlator per board, i.e. number of streams per board
+        self.NPROD = NCHAN * (NCHAN + 1) // 2   # Total number of products per correlator frame
+        self.NCLK = self.NDECIM  # number of clocks required to compute the products for one bin
+        self.NCMAC = self.NPROD // self.NCLK # Number of complex multipliers/accumulators
         # self.NPROD = NCHAN   # Autocorrelation-only Total number of products per correlator frame
-        self.NBINS = Nbins
-        self.NBYTES_PER_HEADER = 10
-        self.NBYTES_PER_PROD = 5
-        self.PACKET_SIZE = self.NBYTES_PER_HEADER + self.NPROD * self.NBYTES_PER_PROD # size of one packet (all products for a single bin plus header)
-        # self.NPACKETS = NBINS # Number of packets per frame: This correlator sends one packet per bin
-        self.ignore_packet_size = ignore_packet_size
-        # Define numpy data types that will be used to efficiently parse the data
-        # self.product_dtype = np.dtype(dict(
-        #     names=['sat', 'l', 'h'],
-        #     offsets=[0, 0, 1],
-        #     formats=['u1', '>i4', '>i4']))
-        self.product_dtype = np.dtype(dict(
-            names=['sat', 'l', 'h'],
-            offsets=[4, 0, 1],
-            formats=['u1', '<i4', '<i4']))
+        self.NSTREAMS = self.NCORR * self.NBOARDS
+        self.NBINS_PER_STREAM = self.NBINS // self.NSTREAMS
+        self.NPROD_PER_CMAC = self.NBINS_PER_STREAM // self.NDECIM * self.NCLK
 
+        self.PACKET_SIZE = self.NBYTES_PER_HEADER + self.NCMAC * self.NBYTES_PER_PROD # size of one packet (all products for a single bin plus header)
+        self.ignore_packet_size = ignore_packet_size
+
+        # Define numpy data types that will be used to efficiently parse the data
         self.header_dtype = np.dtype(dict(
             names=['cookie', 'stream_id', 'flags', 'ts'],
             offsets=[0, 1, 3, 2],
             formats=['u1', '>u2', 'u1', '>u8']))
 
+        self.product_dtype = np.dtype(dict(
+            names=['sat', 'l', 'h'],
+            offsets=[4, 0, 1],
+            formats=['u1', '<i4', '<i4']))
+
         self.packet_dtype = np.dtype([
             ('header', self.header_dtype, (1, )),
-            ('data', self.product_dtype, (self.NPROD, ))])
+            ('data', self.product_dtype, (self.NCMAC, ))])
 
         # Pre-allocate buffers in which recv_into() will put the received data
         # directly. We could use empty() to save some cycles, but the
@@ -186,13 +195,15 @@ class UCorrFrameReceiver(object):
         self.last_ts = None  # timestamp of the last packet written in the buffer
 
         # Pre-allocate temporary storage to extract the real/imaginary part from the 5-byte packed product
-        self.temp32 = np.empty((self.NPACKETS, self.NPROD), dtype=np.int32)
+        self.temp32 = np.empty((self.NPACKETS, self.NCMAC), dtype=np.int32)
+        # Integration number for each packet, that will be computed from the timestamp
+        self.integ = np.empty(self.NPACKETS, dtype=np.uint64)
 
         # Pre-compute the remapping vectors that will be used to convert the
         # raw integrated results (Nresults, NCORR, NPROD) into more palatable
         # arrays
         # self.raw_to_matrix_map, self.raw_to_vector_map = get_raw_corr_map(N=N, Nbins=Nbins, Ncorr=Ncorr)
-        self.firmware_integ_period = 16384  # ToDo: fetch value automatically or get it via param
+        self.firmware_integ_period = 65536  # ToDo: fetch value automatically or get it via param
 
     def flush(self, timeout=0.001, max_flush_time=2, verbose=0):
         """ Flush the UDP buffer (read packets until timeout).
@@ -255,7 +266,7 @@ class UCorrFrameReceiver(object):
             number_of_results=1,
             filename=None,
             flush=True,
-            align=True,
+            # align=True,
             data_timeout=0.1,
             flush_timeout=0.001,
             return_format='raw',
@@ -300,17 +311,18 @@ class UCorrFrameReceiver(object):
         self.soft_integ_period = soft_integ_period
 
         # Storage for the accumulated value
-        self.acc_re = np.zeros((number_of_results, self.NBINS, self.NPROD), dtype=np.int64)
-        self.acc_im = np.zeros((number_of_results, self.NBINS, self.NPROD), dtype=np.int64)
+        self.acc_re = np.zeros((number_of_results+2, self.NSTREAMS, self.NPROD_PER_CMAC, self.NCMAC), dtype=np.int64)
+        self.acc_im = np.zeros((number_of_results+2, self.NSTREAMS, self.NPROD_PER_CMAC, self.NCMAC), dtype=np.int64)
         print(f'acc_re shape (N_results, Ncorr, Ncmac, Nprod) = {self.acc_re.shape}')
         # Number of saturations for the real and imaginary part of each product
-        self.sat = np.zeros((number_of_results, self.NBINS, self.NPROD, 2), dtype=np.int32)
-        self.sat_cplx = np.zeros((number_of_results, self.NBINS, self.NPROD), dtype=np.complex64)
+        self.sat = np.zeros((number_of_results+2, self.NSTREAMS, self.NPROD_PER_CMAC, self.NCMAC, 2), dtype=np.int32)
         # Number of packets received for each NCMAC (and therefore each
         # product). Can be used to know how many packets were lost and to
         # normalize the data
-        self.count = np.zeros((number_of_results, self.NBINS), dtype=np.uint32)
-        # self.ts = np.zeros((number_of_results, self.NBINS), dtype=np.uint64)
+        self.count = np.zeros((number_of_results+2, self.NSTREAMS, self.NPROD_PER_CMAC), dtype=np.uint32)
+
+        # Processed data
+        self.sat_cplx = np.zeros((number_of_results, self.NSTREAMS, self.NPROD_PER_CMAC, self.NCMAC), dtype=np.complex64)
         self.overrun = 0
         # Complex value data results
         #
@@ -324,7 +336,7 @@ class UCorrFrameReceiver(object):
         # leaves room for less than one second of integration in the worst
         # case. We cannot thereofre use a complex64 value (float32+float32),
         # and thereofre use a complex128 format.
-        self.data = np.zeros((number_of_results, self.NBINS, self.NPROD), dtype=np.complex128)
+        self.data = np.zeros((number_of_results, self.NSTREAMS, self.NPROD_PER_CMAC, self.NCMAC), dtype=np.complex128)
 
         # lists for debugging
         # self.bin_ = [] # used for debugging missing bins
@@ -337,7 +349,9 @@ class UCorrFrameReceiver(object):
         # chunks = 0
         timeouts = 0
 
-        integ_period = self.soft_integ_period * self.firmware_integ_period
+        # Compute the software integration period in number of frames. This will be used to determine the integration_number index in the destination matrix.
+        # Note that we HAVE TO cast integ_period in an unsigned integer, otherwise any operations with other unsigned (e.g ts differences) will be promoted to a float64.
+        integ_period = np.uint64(self.soft_integ_period * self.firmware_integ_period)
 
         # Flush the UDP buffer by reading data until we timeout. We assume
         # here that we can read the data fast enough to empty the buffer and
@@ -346,11 +360,10 @@ class UCorrFrameReceiver(object):
             self.flush(flush_timeout)
 
         # Make sure we have at least one packet in the buffer so we have a reference timestamp
-        self.last_ts = None
         self.socket.settimeout(data_timeout)
-        # if not self.n:
 
         # wait for a new timestamp to make sure we start at the beginning of a new firmware integration
+        self.last_ts = None
         while True:
             try:
                 s = self.socket.recv_into(self.buf[0])
@@ -358,101 +371,87 @@ class UCorrFrameReceiver(object):
                     continue
                 ts = self.buf_ts[0] & self.ts_mask
 
-                if  ts != self.last_ts:
-                    if self.last_ts is None:
-                        self.last_ts = ts
-                    else:
-                        self.last_ts = ts
-                        self.n = 1
-                        break
+                if self.last_ts is None:
+                    self.last_ts = ts
+                elif ts != self.last_ts:
+                    self.last_ts = ts
+                    self.n = 1
+                    break
                 # print(f'Waiting for new frame')
             except socket.timeout:
                 continue
         # get the timestamp
         # self.last_ts = self.buf_ts[self.n-1] & self.ts_mask
 
-        self.first_ts = 0
-        # Wait for a new timestamp that is the first of an integ period
-        if align:
-            self.align(integ_period)
-        else:
-            self.first_ts = self.last_ts
+        # self.first_ts = 0
+        # # Wait for a new timestamp that is the first of an integ period
+        # if align:
+        #     self.align(integ_period)
 
-        current_integ = (self.last_ts - self.first_ts) // integ_period
-        integ_number = 0
+        first_ts = self.last_ts
+        self.n = 0
+        # timestamps = [] # timestamps for each integ period
+        # timestamps.append(self.last_ts)
+        current_integ = 0
+        # integ_number = 0
         packets = 0
         timeouts = 0
-        bad_packets = 0
-        print(f'Accumulating software frame #{current_integ}, '
+        # bad_packets = 0
+        # n_integs = 0  # number of integrations
+        print(f'Accumulating soft integration #{current_integ}, '
               f'starting with correlator frame number {self.last_ts} ')
         while True:
             try:
                 s = self.socket.recv_into(self.buf[self.n])
+                if self.buf_cookie[self.n] != 0xcf:
+                    continue
+                packets += 1
             except socket.timeout:
                 timeouts += 1
                 continue
-            if self.buf_cookie[self.n] != 0xcf:
-                continue
 
-            # Ignore packets that don't have the right length
-            if s != self.PACKET_SIZE and not self.ignore_packet_size:
-                bad_packets += 1
-                continue
-            # size += s
-            packets += 1
+            # get timestamp of packet and compute integration period
             ts = self.buf_ts[self.n] & self.ts_mask
-            # If we start a new timestamp, process what was in the buffer (if
-            # any) and make sure that the new sample is at the top of the
-            # buffer.
-            if ts != self.last_ts:
-                if verbose > 1:
-                    print(f'new timestamp {self.last_ts} => {ts}, n={self.n}')
-                if self.n:
-                    self.accumulate_data(self.n, integ_number, self.last_ts, verbose=verbose)
-                    self.buf[0, :] = self.buf[self.n, :]
-                self.n = 1
-                self.last_ts = ts
-                # If the timestamp change imply and integration period change,
-                # increase the counter, and exit if we have all the
-                # integration periods we wanted.
-                integ = (ts - self.first_ts) // integ_period
-                if verbose > 1:
-                    print(f'integ number = {integ}, current_integ={current_integ}')
-                # if the packet belongs to another integration period, update the integration ts and count
-                if integ != current_integ:
-                    integ_number += 1
-                    current_integ = integ
-                    if integ_number == number_of_results:
-                        break
-            # If this is the last entry in the buffer, process the data
-            elif self.n == self.NPACKETS - 1:
-                if verbose > 1:
-                    print(f'Packet buffer full {self.n}')
-                self.accumulate_data(self.n + 1, integ_number, self.last_ts, verbose=verbose)
-                self.n = 0
-            else:
-                self.n += 1
 
-            # packets += n
-            # chunks += 1
-            # packets_per_chunk += n
-            # # z=zeros(h.shape,dtype=int64)
-            # l=empty((1*8*34,512), dtype=np.int32)
-            # h=a.view(t)[:,0]['data']['h'].copy();np.left_shift(h,4,h);np.right_shift(h,14,h);np.add(z,h,out=z)
-        # print 'Got %i packets in %i chunks with %i timeouts total and %i data timeouts. Processing took on average %i packets/chunk at %.3f ms/chunk, %.1f bytes/packet' % (packets, chunks, timeouts, data_timeouts, float(self.NPACKETS)/chunks, (float(dt) / chunks) * 1000, float(size)/packets)
-        print(f'Received {packets} packets, {timeouts} timeouts, {bad_packets} bad packets')
+            if ts < first_ts:
+                continue
+
+            integ = (ts - first_ts) // integ_period  # watch out! integ_period needs to be uint64 or the result will be "promoted" to float64 (signed OP unsigned=float)
+
+            # if we are receiving packets from integrations that are way beyond the one we want, let's stop
+            if integ > number_of_results + 2:
+                    break
+            # Ignore packets outside our integration range, but don't quit yet as valid packets might still come
+            if integ > number_of_results + 1:
+                    continue
+
+            self.integ[self.n]  = integ
+
+            if verbose >=2 and integ > current_integ:
+                print(f'{ts=} {first_ts=},  {(ts - first_ts)}//{integ_period}=, new integ = {integ} (type={type(integ)}), n={self.n}')
+                print(f'{self.integ[self.n]=}')
+
+            self.n += 1
+
+            if integ > current_integ or self.n == self.NPACKETS:
+                self.accumulate_data(self.n, verbose=verbose)
+                self.n = 0  # clear the buffer
+                current_integ = integ
+
+
+        print(f'Received {packets} packets, {timeouts} timeouts')
         packet_percent = packets/((self.NBINS-1) * self.soft_integ_period * number_of_results) * 100
         print(f'Got {packet_percent:.1f}% of the packets')
         if self.overrun:
             print(f"*** Warning: the correlator experienced an overrun condition. All products could not be sent within the hardware integration period.")
         # self.sat.real /= 32.
         # self.sat.imag /= 16.
-        self.sat_cplx.real = self.sat[..., 0] / 32.
-        self.sat_cplx.imag = self.sat[..., 1] / 16.
-        self.data.real = self.acc_re
-        self.data.imag = self.acc_im
+        self.sat_cplx.real = self.sat[1:-1, ..., 0] / 32.
+        self.sat_cplx.imag = self.sat[1:-1, ..., 1] / 16.
+        self.data.real = self.acc_re[1:-1]
+        self.data.imag = self.acc_im[1:-1]
         if return_format == 'raw':
-            return (self.data, self.count, self.sat_cplx) #, tt, self.bin_)
+            return (self.data, self.count[1:-1], self.sat_cplx) #, tt, self.bin_)
         elif return_format == 'matrix':
             m = self.raw_to_matrix_map
             matrix = self.data[:, m[0], m[1], m[2]]
@@ -469,8 +468,8 @@ class UCorrFrameReceiver(object):
                     self.count[:, m[0], m[1]],
                     self.sat_cplx[:, m[0], m[1], m[2]])
 
-    def accumulate_data(self, number_of_packets, integ_number, ts, verbose=1):
-        """ Add the data from the packets 0 to `number_of_packets` in to the
+    def accumulate_data(self, n, verbose=1):
+        """ Add the data from the packets 0 to `n` in to the
         software accumulator array for software integration number
         `integ_number`.
         """
@@ -478,18 +477,26 @@ class UCorrFrameReceiver(object):
 
         # v = a.view(t)[:n, 0]
         # hh = h[:n]
-
-        bin_ = self.buf_stream_id[:number_of_packets]
-        if len(bin_) != len(np.unique(bin_)):
-            # print(bin_)
-            # print(np.unique(bin_))
-            raise ValueError(f'Received {len(bin_)} frequency bins, but there are only {len(np.unique(bin_))} unique bins. Some bins are repeated.')
+        stream_id = self.buf_stream_id[:n] >> 11
+        bin_ = self.buf_stream_id[:n] &  0b111_11111111
+        integ = self.integ[:n]
+        # if len(bin_) != len(np.unique(bin_)):
+        #     # print(bin_)
+        #     # print(np.unique(bin_))
+        #     raise ValueError(f'Received {len(bin_)} bin_, but there are only {len(np.unique(bin_))} unique bins. Some bins are repeated.')
         # self.bin_.append(bin_)
-        # cmac = self.buf_cmac[:number_of_packets]
+        # cmac = self.buf_cmac[:n]
         # print 'corr=', corr
         # print 'cmac=', cmac
 
-        # ts = self.buf_ts[:n]
+        # ts = self.buf_ts[:n] & self.ts_mask
+
+        if verbose >=2:
+            print(f'Integ {set(integ)}')
+            print(f'corr_id shape={stream_id.shape}, {stream_id.min()} - {stream_id.max()}')
+            print(f'bin shape={bin_.shape}, {bin_.min()}-{bin_.max()}')
+            print(f'{len(stream_id)} corr/bin IDs, Unique corr/bins IDs: {len(set(zip(stream_id, bin_)))}')
+
 
         # Extract the real part (in bits 27:10 of the data_h). We shift
         # left the MSB to bit 31 and sift the lsb back down to 0 to sign
@@ -498,41 +505,41 @@ class UCorrFrameReceiver(object):
         np.left_shift(self.temp32, 4, self.temp32)
         np.right_shift(self.temp32, 14, self.temp32)
         # Add the sign-extended value to the 64-bit accumulator.
-        # print(f'bin = {corr.shape}')
+        # print(f'bin_ = {corr.shape}')
         # print(f'cmac shape = {cmac.shape}')
 
-        self.acc_re[integ_number, bin_] += self.temp32[:number_of_packets]
+        self.acc_re[integ, stream_id, bin_] += self.temp32[:n]
 
         # Extract the imag part (in bits 17:0 of the data_l).
         np.copyto(self.temp32, self.buf_data_l)
         np.left_shift(self.temp32, 14, self.temp32)
         np.right_shift(self.temp32, 14, self.temp32)
         # Add the sign-extended value to the 64-bit accumulator.
-        self.acc_im[integ_number, bin_] += self.temp32[:number_of_packets]
+        self.acc_im[integ, stream_id, bin_] += self.temp32[:n]
 
         t2 = time.time()
 
         # Keep track of how many packets were received for each correlator/cmac
-        self.count[integ_number, bin_] += 1
+        self.count[integ, stream_id, bin_] += 1
         # self.ts[integ_number, corr, cmac]
         # Accumulate the flags for each product by or'ing them together
         # We'll mask those later to save time
-        self.sat[integ_number, bin_, :, 0] += self.buf_data_sat[:number_of_packets] & 0x20
-        self.sat[integ_number, bin_, :, 1] += self.buf_data_sat[:number_of_packets] & 0x10
+        self.sat[integ, stream_id, bin_, :, 0] += self.buf_data_sat[:n] & 0x20
+        self.sat[integ, stream_id, bin_, :, 1] += self.buf_data_sat[:n] & 0x10
 
         t3 = time.time()
-        self.overrun |= any(self.buf_flags[:number_of_packets] & 1);
+        self.overrun |= any(self.buf_flags[:n] & 1);
         if verbose:
             # print 'count=', count[0,0]
             dt1 = t2 - t1
             dt2 = t3 - t2
             dt = t3 - t1
-            print(f'Processing & accumulating {number_of_packets} packets '
-                  f'for software frame {integ_number} '
-                  f'from correlator frame {ts} '
-                  f'({(ts - self.first_ts)% self.soft_integ_period}/{self.soft_integ_period};  '
-                  f'took {dt * 1000:.3f} ms ({(float(dt) / (self.NBINS) * 1000):.3f} ms/corr frame) '
-                  f'({dt1 * 1000:.3f} + {dt2 * 1000:.3f} ms) '
+            print(f'Processing & accumulating {n} packets '
+                  f'for software integ(s) # [{set(integ)}] '
+                  # f'from correlator frame {ts} '
+                  # f'({(ts - self.first_ts)% self.soft_integ_period}/{self.soft_integ_period};  '
+                  # f'took {dt * 1000:.3f} ms ({(float(dt) / (self.NBINS) * 1000):.3f} ms/corr frame) '
+                  # f'({dt1 * 1000:.3f} + {dt2 * 1000:.3f} ms) '
                   f' overrun={self.overrun}')
 
 

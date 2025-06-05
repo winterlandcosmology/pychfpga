@@ -37,7 +37,7 @@ class UCAP(MMI):
     RST_MON          = BitField(STATUS, 0, 2, doc='debug')
     USER_RST_MON     = BitField(STATUS, 0, 3, doc='debug')
     PERIOD_CTR       = BitField(STATUS, 1, 0, width=8, doc='debug')
-    CAPTURE_CTR      = BitField(STATUS, 2, 0, width=8, doc='debug')
+    SOURCE_SEL_IN    = BitField(STATUS, 2, 0, width=8, doc='debug')
 
     def __init__(self, fpga_instance, base_address, address_increment, verbose=0):
         self.fpga = fpga_instance
@@ -371,12 +371,16 @@ class RawFrameReceiver(object):
         elif format == "16+16":
             data = data.view('>i2')
             data = data[:, :, ::2] + 1j*data[:, :, 1::2]
+        elif format == "32":
+            data = data.view('>i4')
         elif format == "32+32":
             data = data.view('>i4')
             data = data[:, :, ::2] + 1j*data[:, :, 1::2]
-        elif format != '8':
-            raise ValueError('Invalid format')
-
+        elif format == '8':
+            pass
+        else:
+            raise ValueError(f'Invalid format "{format}"')
+            
         if split:
             data = data.reshape((nchan, ncap*frames_per_channel,-1))
 

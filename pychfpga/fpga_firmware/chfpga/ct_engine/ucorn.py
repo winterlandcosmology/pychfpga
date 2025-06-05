@@ -42,7 +42,7 @@ class UCorn(MMI):
     IN_FRAME_CTR        = BitField(STATUS, 1, 0, width=8, doc='Counts the number of frames coming in.')
     OUT_FRAME_CTR       = BitField(STATUS, 2, 0, width=8, doc='Counts the number of frames coming out.')
 
-    def __init__(self, fpga_instance, base_address, address_increment=0, address_width=16, verbose=0):
+    def __init__(self, fpga_instance, base_address, address_increment=0, address_width=16, router_port=None, verbose=0):
         """ Creates a UCorn corner-turn engine instance.
 
         ``__init__`` initializes the instnce but does not yet start communicating with. This allows
@@ -62,7 +62,7 @@ class UCorn(MMI):
             verbose (int): When non-zero, debugging messages will be printed.
 
         """
-        super().__init__(fpga_instance, base_address=base_address, address_width=address_width)
+        super().__init__(fpga_instance, base_address=base_address, address_width=address_width, router_port=router_port)
         # self.fpga = fpga_instance
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
@@ -73,14 +73,11 @@ class UCorn(MMI):
         self.source_mac_addr = "00:5D:03:01:02:03"
         self.source_ip_addr = "10.70.0.1"
         self.source_ip_port = 41000
-        # self.targets = {
-        #     0: dict(bin=0, target_mac_addr="FF:FF:FF:FF:FF:FF", target_ip_addr="10.88.0.1", target_ip_port=41001, source_id=0, stream_id=0x1234)
-        # }
-        self.N_TARGETS = 26 # 26 # 3 # 25 is bad
-        self.targets = {}
-        # default_dict = dict(bin=0, target_mac_addr="FF:FF:FF:FF:FF:FF", target_ip_addr="10.88.0.1", target_ip_port=41001, source_id=0, stream_id=0x1234)
-        for n in range(self.N_TARGETS): # range(128):
-            self.targets.update({n: dict(bin=n, target_mac_addr="FF:FF:FF:FF:FF:FF", target_ip_addr=f"10.88.0.{n}", target_ip_port=41001, source_id=0, stream_id=n)})
+        self.targets = {
+            0: dict(dest_mac_addr="FF:FF:FF:FF:FF:FF", dest_ip_addr="10.88.0.1", dest_ip_port=41001),
+            1: dict(dest_mac_addr="01:23:45:67:89:AB", dest_ip_addr="10.88.0.2", dest_ip_port=41002),
+        }
+        self.sacrificial_bins = list(range(128))  # bins locations used to store packet headers
 
     def init(self):
         """ Initializes the UCorn module
@@ -100,6 +97,7 @@ class UCorn(MMI):
         # # program data for one bin
         # self.set_bin_data(bin=1, frame=0, data=np.arange(8*16, dtype=np.uint8))
 
+<<<<<<< HEAD
         # # Set the playlist to send data from that bin
         # self.set_playlist(bins=( (0,[1]),) )
 
@@ -122,10 +120,26 @@ class UCorn(MMI):
         self.set_playlist(bins = playlist)
 
         # self.TX_PERIOD = int(2**30)
+=======
+        first_bin = 300*8192//1600 # 1536
+        last_bin= 1500*8192//1600  # Last bin is excluded
+        number_of_bins = last_bin - first_bin
+        number_of_packets = 128
+        bins_per_packet = number_of_bins // number_of_packets
+
+        self.playlist = [
+            (dict(dest_mac_addr=f"01:23:34:67:89:{i+1:02X}",
+                  dest_ip_addr=f"10.88.0.{i+1}",
+                  dest_ip_port=41001),
+             np.arange(bins_per_packet) + first_bin + bins_per_packet*i)
+            for i in range(number_of_packets)]
+        # Set the playlist to send data from that bin
+        self.set_playlist(playlist=self.playlist)
+>>>>>>> jfc/corr_ct
 
         self.TX_RESET = 0 # take the module out of reset. Packet transmisison starts.
 
-    def set_bin_data(self, frame=0, bin=0, data=b''):
+    def set_bin_data(self, frame=0, bin=0, data=b'', bank=(0,1)):
         """ Set the bin data for one or more consecutive frames.
 
         Parameters:
@@ -138,17 +152,24 @@ class UCorn(MMI):
                 values). If more than 8 bytes are specified, each block of 8 bytes is written in
                 consecutive frames starting at `frame`.
 
+            bank (int, tuple or list): Bank into which the data will be written
+
         """
+        if isinstance(bank, int):
+            bank = (bank,)
         for i in range(0, len(data), 8):
-            self.write_data_buffer(bank=0, frame=frame, bin=bin, data=data[i:i+8])
+            for b in bank:
+                self.write_data_buffer(bank=b, frame=frame, bin=bin, data=data[i:i+8])
             frame += 1
 
-    def set_ethernet_header(self, target, length):
+    def set_ethernet_header(self, target, dest_bin, length, stream_id=None, source_id=None, dest_mac_addr=None, dest_ip_addr=None, dest_ip_port=None):
         """ Created and stores an Ethernet/IP/UDP/payload header in the bin corresponding to specified target.
 
         Parameters:
 
-            target (any): target ID, which is a key that is used to index a target (destination address) in the ``self.targets`` dict.
+            target (any): key used to lookup ``self.targets`` for the destination address of a packet.
+
+            dest_bin (int): Index of bin whose memory space will be used to store the packet header
 
             length (int): number of bytes in the payload. Used to fill the IP & UDP header length fields
 
@@ -198,20 +219,22 @@ class UCorn(MMI):
 
         """
         def h(s):
-            print(s)
+            # print(s)
             return bytes.fromhex(s.translate({ord(c):None for c in "_ :"}))
         src_mac_addr = h(self.source_mac_addr)
         src_ip_addr = socket.inet_aton(self.source_ip_addr)
         src_port = self.source_ip_port.to_bytes(2, 'big')
 
-        tgt = self.targets[target]
-        dest_mac_addr = h(tgt['target_mac_addr'])
-        dest_ip_addr = socket.inet_aton(tgt['target_ip_addr'])
-        dest_port = tgt['target_ip_port'].to_bytes(2, 'big')
-        dest_bin = tgt['bin']
-
-        source_id = tgt['source_id']
-        stream_id = tgt['stream_id']
+        if isinstance(target, dict):
+            tgt = target
+        elif target is not None:
+            tgt = self.targets[target]
+        else:
+            tgt = {}
+        dest_mac_addr = h(dest_mac_addr or tgt['dest_mac_addr'])
+        dest_ip_addr = socket.inet_aton(dest_ip_addr or tgt['dest_ip_addr'])
+        dest_port = (dest_ip_port or tgt['dest_ip_port']).to_bytes(2, 'big')
+        # dest_bin = tgt['bin']
 
         udp_len = 8 + 22 + length
         ip_len = 20 + udp_len
@@ -237,16 +260,16 @@ class UCorn(MMI):
 
         # total header
         header = eth_bytes + ip_bytes + udp_bytes + user_bytes
-        print(f"Eth Header is {eth_bytes.hex()} ({len(eth_bytes)} bytes)")
-        print(f"IP Header is {ip_bytes.hex()} ({len(ip_bytes)} bytes)")
-        print(f"UDP Header is {udp_bytes.hex()} ({len(udp_bytes)} bytes)")
-        print(f"User Header is {user_bytes.hex()} ({len(user_bytes)} bytes)")
+        self.logger.info(f"{self!r}: Target {target} (bin {dest_bin}) Eth Header is {eth_bytes.hex()} ({len(eth_bytes)} bytes)")
+        self.logger.info(f"{self!r}: Target {target} (bin {dest_bin}) IP Header is {ip_bytes.hex()} ({len(ip_bytes)} bytes)")
+        self.logger.info(f"{self!r}: Target {target} (bin {dest_bin}) UDP Header is {udp_bytes.hex()} ({len(udp_bytes)} bytes)")
+        self.logger.info(f"{self!r}: Target {target} (bin {dest_bin}) User Header is {user_bytes.hex()} ({len(user_bytes)} bytes)")
 
         # print(f"Header is {header.hex()} ({len(header)} bytes)")
         self.set_bin_data(bin=dest_bin, data=header)
 
 
-    def set_playlist(self, bins=((0,[1]),)):
+    def set_playlist(self, playlist=((0,[1]),)):
         """ Configure the playlist buffer to send the selected bins
 
         Parameters:
@@ -262,8 +285,8 @@ class UCorn(MMI):
 
         - bit 15: End of transmission: Is '1' when this on the last word of the playlist
         - bit 14: End of packet. Is '1' when this is the last bin of a packet. Must be set when ``end_of_transmission`` is set.
-        - bit 13: Number of frames: '0'= 2 frames (64 bytes), '1'= 4 frames (128 bytes). Set
-              to '0' for transmitting an ethernet header, and sent to '1' to send actual data.
+        - bit 13: Number of frames: '0'= 2 framegroup (2*4=8 frames = 64 bytes), '1'= 4 framegroups (4*4=16 frames = 128 bytes).
+              Set to '0' for transmitting an ethernet header, and sent to '1' to send actual data.
         - bit 12-0: Bin number. Bin to send, from 0 to 8191.
 
         The first bin of each packet described in the playlist shall point to a bin that has been
@@ -282,18 +305,29 @@ class UCorn(MMI):
         RFI etc.).
 
         """
+
+        bins_total = sum(len(b) for t,b in playlist)
+        print(f'Total data rate: {1*(bins_total*16*8+64)*8*3200e6/16384/16/1e9} Gbps')
+        for (t,b) in playlist:
+            l = len(b)*8*16+8*8
+            print(f"Target {t.get('dest_ip_addr', t) if isinstance(t,dict) else t}: Eth: {l} bytes, UDP: {l-42} bytes, {len(b)*4+2} words")
         addr = 0
-        for i, (target, b) in enumerate(bins):
+        for i, (target, b) in enumerate(playlist):
             # COmpute the number of bytes to send excluding the ethernet/IP/UDP/payload header. Used to compute the headers.
             #  length =  bytes_per_bin * frames_per_bin * number_of_bins
             length = 8 * 16 * len(b)
-            self.set_ethernet_header(target=target, length=length)  # Program the ethernet header
-            b = np.array([self.targets[target]['bin']] + b, dtype='>u2')
+            dest_bin = self.sacrificial_bins[i]
+            crate,slot = self.fpga.get_id(default_crate=0, default_slot=0)
+            source_id = crate <<8 | slot << 4
+            self.set_ethernet_header(target=target, dest_bin=dest_bin, length=length, stream_id=i, source_id= source_id)  # Program the ethernet header
+            b = np.concatenate(([dest_bin], b)).astype('>u2')
+            if any(b >= 8192):
+                raise('Invalid bin number in bin list')
             b[-1] |= 1<<14 # end of packet on last bin
             b[1:] |= 1<<13 # Send 4 frames except for 1st bin
-            if i == len(bins)-1:
+            if i == len(playlist) - 1:
                 b[-1] |= (1<<15) # end of transmission on last bin of last packet
-            print(f'Writing Playlist RAM[{addr}]={b.tobytes().hex()}')
+            self.logger.debug(f"Writing Playlist RAM[{addr}]={b.tobytes().hex(':')}")
             self.write_playlist_buffer(addr, b.tobytes())
             addr += 2 * len(b)
 

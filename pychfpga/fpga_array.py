@@ -15,7 +15,7 @@ import __main__
 import os
 import sys
 import socket  # for gethostbyname()
-from collections import OrderedDict
+# from collections import OrderedDict
 import pickle
 import re
 import datetime
@@ -845,7 +845,7 @@ class FPGAArray(object):
             await asyncio.gather(*[ib.discover_serial_async() for ib in ib_without_serial])
             # self.logger.info('%r: Got all discover_serial futures after %f seconds' % (self, time.time() - t0))
             # [ib.discover_serial.async() for ib in ib_without_serial]
-            self.logger.info(f'{self!r}: Finished Auto-Discovering serial number for IceBoards. '
+            self.logger.debug(f'{self!r}: Finished Auto-Discovering serial number for IceBoards. '
                              f'Took {time.time() - t0:.3f} seconds.')
 
         if discover_slot:
@@ -969,7 +969,7 @@ class FPGAArray(object):
         #################################
         # Auto-discover mezzanines and add them to the hardware map.
         if self.hwm and not no_mezz:
-            self.logger.info('Discovering Mezzanines...')
+            self.logger.info(f'{self!r}: Discovering Mezzanines...')
             # make sure we see the previous prints right away so we have a better feeling of what is happening
             self.print_flush()
             await asyncio.gather(*[ib.discover_mezzanines_async() for ib in self.hwm])
@@ -1009,10 +1009,10 @@ class FPGAArray(object):
         # comprehension in case any has been overriden with np.any in a pylab
         # session, which does not work with generators.
         if any([not c.part_number for c in Crate.get_all_instances()]):
-            raise RuntimeError('There are generic IceCrates left in the hardware map')
+            raise RuntimeError('There are generic motherboards left in the hardware map')
         # Same for Motherboards
         if any([not i.part_number for i in Motherboard.get_all_instances()]):
-            raise RuntimeError('There are generic IceBoards left in the hardware map')
+            raise RuntimeError('There are generic crates left in the hardware map')
 
         #################################
         # Create self.ib and self.ic
@@ -1026,21 +1026,28 @@ class FPGAArray(object):
 
         # Courtesy warning
         if not self.ic:
-            self.logger.warning('There are no IceCrates in the hardware map!')
+            self.logger.debug(f'{self!r}: There are no crates or backplanes in the hardware map')
 
         #################################
         # Print the Motherboard table
         #################################
+
         self.logger.debug(f'New HWM={self.hwm}')
         for ib in self.hwm:
             crate_info = (f"{ib.crate}(serial={ib.crate.serial}, "
                           f"crate_number={ib.crate.crate_number})"
                           if ib.crate else None)
             self.logger.debug(f"{ib}, crate={crate_info}")
-        self.print_iceboard_table(
-            lambda ib: '%s\n%s' % (get_mezz_name(ib, 1), get_mezz_name(ib, 2)),
-            row_labels=['Mezz1\nMezz2'],
-            add_serial=True)
+
+        n_mezz = max(ib.NUMBER_OF_FMC_SLOTS for ib in self.ib)
+        if n_mezz:
+            self.print_iceboard_table(
+                func = lambda ib: '\n'.join(get_mezz_name(ib, mezz_number+1)  for ib in self.ib for mezz_number in range(n_mezz) if mezz_number < ib.NUMBER_OF_FMC_SLOTS),
+                row_labels= '\n'.join(f'Mezz{mezz_number}' for mezz_number in range(n_mezz)),
+                add_serial=True)
+        else:
+            self.print_iceboard_table(add_serial=True)
+
         self.print_flush()
 
         # Store as Ccoll collections to allow easy parallel operations
@@ -1230,6 +1237,7 @@ class FPGAArray(object):
                     await ib.open_fpga_async(**kwargs)
                     break
                 except IOError as e:
+                    raise
                     self.logger.warning(f'{self!r}: Error while initializing core firmware on trial {trial}/{max_trials}. '
                                         f'Error is: \n{e!r}')
                     if trial == max_trials:
@@ -1487,7 +1495,9 @@ class FPGAArray(object):
 
         current_class = None
         for el in elements:
-            if '.' in el:  # if hostname (has a '.' somewhere)
+            if not el:
+                continue
+            elif '.' in el:  # if hostname (has a '.' somewhere)
                 hostname, slot, crate_number = split_fields(el, 3)
                 # print(f'Adding Motherboard {hostname}, {slot}, {crate_number}')
                 if current_class:
@@ -1496,7 +1506,7 @@ class FPGAArray(object):
                     ib = Motherboard.get_unique_instance(hostname=hostname, slot=slot, crate_number=crate_number)
                 else:
                     raise RuntimeError('Must specify model number before an IP address')
-                current_class = None
+                # current_class = None
             elif el[0].isdigit():  # if a serial (is only digits)
                 if not current_class:
                     raise RuntimeError('A part number must be specified before a target serial number')
@@ -1662,7 +1672,7 @@ class FPGAArray(object):
                   is based on the crate number: Crate N and N+1 form a pair, whereas N
                   is a even number.
 
-                - 'corr4', 'corr8', 'corr16': The corner-turn engine is configured to feed the
+                - 'corr4', 'corr8', 'corr16', 'corr32': The corner-turn engine is configured to feed the
                   internal firmware correlator (only if the firmware was compiled with it).
 
             frames_per_packet (int): Number of frames to combine in a single
@@ -1750,12 +1760,12 @@ class FPGAArray(object):
             # Sync board(s)
             self.sync()
 
-        elif mode in ['shuffle8']:
+        elif mode in ('shuffle8',):
             # For use with the CRS
             for mb in self.ib:
                 mb.set_corr_reset(0)
 
-        elif mode in ['shuffle256', 'shuffle512', 'shuffle16', 'shuffle128', 'chord16']:
+        elif mode in ('shuffle256', 'shuffle512', 'shuffle16', 'shuffle128', 'chord16'):
             if not all(self.ib.CROSSBAR2) or not all(self.ib.CROSSBAR3):
                 raise RuntimeError(f' Mode {mode} requires all boards to have their CROSSBAR2 and CROSSBAR 3 implemented')
             self.ib.BP_SHUFFLE.set_tx_power(13)
@@ -1776,7 +1786,7 @@ class FPGAArray(object):
             self.ib.CROSSBAR3.reset_stats()
             # Sync was performed by init_corner_turn()
 
-        elif mode in ('corr16', 'corr8', 'corr4'):
+        elif mode in ('corr16', 'corr8', 'corr32', 'corr4'):
             if not all(self.ib.CORR):
                 raise RuntimeError(f'Mode {mode} requires all boards to have a firmware correlator engine')
             bin_map = self.get_corner_turn_bin_map(
@@ -1794,7 +1804,7 @@ class FPGAArray(object):
             # Sync board(s)
             self.sync()
         else:
-            raise ValueError(f'Unknown operational mode {mode}')
+            raise ValueError(f"Unknown operational mode '{mode}'")
 
     def get_corner_turn_bin_map(self, mode, bad_links=None, bin_priority=None, remap_level=0, verbose=0):
         """
@@ -2788,7 +2798,7 @@ class FPGAArray(object):
         self.sync_method = method
 
 
-        if method == 'distributed_time':
+        if method in ('irig-b', 'irigb', 'distributed_time'):
             source = source or 'bp_time'
             self.ib.set_sync_source('irigb')
             self.ib.set_irigb_source_sync(source)
@@ -2840,7 +2850,7 @@ class FPGAArray(object):
                 raise ValueError('In the local soft trigger mode, a master_time_source should NOT be specified')
             self.ib.set_sync_source(source)
         else:
-            raise ValueError("Unknown syncing method '%s'" % method)
+            raise ValueError(f"Unknown syncing method '{method}'")
 
     def sync(self, delay=2 - 0.006556800, check=True, align_to_seconds=True, max_trials=3):
         """ Generate a SYNC event across the whole array based on the syncing method set by ``set_sync_method()``.
@@ -3688,7 +3698,7 @@ class FPGAArray(object):
         `apply_shuffle_map` method) to obtain the contents of the output of
         the corner-turn engine.
         """
-        ch_out = OrderedDict()
+        ch_out = {}
         for ib in self.ib:
             for (crate, slot, lane) in ib.get_channel_ids():
 
@@ -3735,7 +3745,7 @@ class FPGAArray(object):
         # Channels are converted to (crate_number, slot, input_number)
         # Output lane id is converted to (crate_number, slot, lane)
 
-        cb1_out = OrderedDict()
+        cb1_out = {}
         for ib in self.ib:
             # extract channels for this iceboard only
             cb1_in = {ch: chan_map[(crate, slot, ch)] for (crate, slot, ch) in ib.get_channel_ids()}
@@ -3743,7 +3753,7 @@ class FPGAArray(object):
                 cb1_out[ib.get_id(lane)] = data
 
         # Apply pcb shuffling
-        pcb_shuffle_out = OrderedDict()
+        pcb_shuffle_out = {}
         for ic in self.ic:
             pcb_link_map = ic.get_pcb_link_map()
             for (rx_slot, rx_lane), (tx_slot, tx_lane) in pcb_link_map.items():
@@ -3753,7 +3763,7 @@ class FPGAArray(object):
                     else dict(data=[None] * 1024))
 
         # Apply CROSSBAR2
-        cb2_out = OrderedDict()
+        cb2_out = {}
         for ib in self.ib:
             (crate, slot) = ib.get_id()
             # extract channels for this iceboard only
@@ -3763,7 +3773,7 @@ class FPGAArray(object):
                 cb2_out[(crate, slot, lane)] = data
 
         # Apply QSFP shuffling
-        qsfp_shuffle_out = OrderedDict()
+        qsfp_shuffle_out = {}
         for ib in self.ib:
             (crate, slot) = ib.get_id()
             bypass = ib.BP_SHUFFLE.BYPASS_QSFP_SHUFFLE
@@ -3777,7 +3787,7 @@ class FPGAArray(object):
                         (crate ^ crate_offset, slot, rx_lane), dict(data=[None] * 2048))
 
         # Apply CROSSBAR3
-        cb3_out = OrderedDict()
+        cb3_out = {}
         for ib in self.ib:
             (crate, slot) = ib.get_id()
             # extract channels for this iceboard only
@@ -4825,9 +4835,11 @@ class FPGAArray(object):
             if isinstance(func, dict):
                 data = func
             elif hasattr(func, 'async_map'):
-                data = OrderedDict(list(zip(self.ib, func.async_map(self.ib))))
+                data = dict(zip(self.ib, func.async_map(self.ib)))
             else:
-                data = OrderedDict((ib, func(ib)) for ib in self.ib)
+                data = {ib: func(ib) for ib in self.ib}
+        else:
+            data = {ib: '' for ib in self.ib}
 
         iceboards = list(data.keys())
 
@@ -4848,13 +4860,15 @@ class FPGAArray(object):
             # cell = 'SN' + ib.serial + '\n' if add_serial else ''
             cell = data[ib] if data else ''
             table.append([cell])  # append single-row column
+        if not any(table):
+            table = []
         if table:
             self.print_table(
                 table, row_labels=row_labels, col_labels=col_labels,
                 corner_label=corner_label, line_sep=grid)
 
-        # Create an OrderedSet of valid crates. Use the OrderedDict trick to impelment an OrderedSet
-        valid_crates = list(OrderedDict((ib.crate, None) for ib in iceboards if ib.crate and ib.crate.serial).keys())
+        # Create list of unique crates, preserving order. We use the keys of a dict to implement a de-facto ordered set (Python 3 dicts are ordered, sets ar enot)
+        valid_crates = list({ib.crate: None for ib in iceboards if ib.crate and ib.crate.serial}.keys())
 
         for crate in valid_crates:
             corner_label = '%s\nCrate #%s' % (crate.get_string_id(), crate.crate_number)

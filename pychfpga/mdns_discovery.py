@@ -252,7 +252,7 @@ async def mdns_discover(
                 break
             with time_info as ti:
                 if last_msg_time is None or t - last_msg_time > 1:
-                    logger.info(f'mdns_discover: searching: elapsed={t-t0:.1f}, elapsed since last time={t-ti.last_time:.1f}, dt_max={ti.dt_max:.1f}, n={ti.n}, last_time={ti.last_time}')
+                    logger.debug(f'mdns_discover: searching: elapsed={t-t0:.1f}, elapsed since last time={t-ti.last_time:.1f}, dt_max={ti.dt_max:.1f}, n={ti.n}, last_time={ti.last_time}')
                     last_msg_time = t
                 if (timeout and t - t0 > timeout):
                     break

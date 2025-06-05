@@ -44,16 +44,23 @@ class SCALER(MMI):
 
     GAIN_BANK_SWITCH_FRAME_NUMBER = BitField(CONTROL, 0x09, 0, width=32, doc="Frame number at which the target gain bak is to be activated.")
     USE_FLOAT_GAINS       = BitField(CONTROL, 0x0A, 7, doc="When '1', floating point gains are used. Works only if USE_COMPLEX_GAINS=0")
-    DATA_TYPE             = BitField(CONTROL, 0x0A, 0, width=2, doc=" Selects the output data in conjunction with Bypass.\n"
-                                "   BYPASS=0, DATA_TYPE=0: Send normal scaled data in 4 or 8 bit mode\n"
-                                "   BYPASS=0, DATA_TYPE=1: Send (1+0j) if there is a saturation on either Re or Im\n"
-                                "   BYPASS=0, DATA_TYPE=2: Send (1+0j) if Re has a positive saturation and (0+1j) if it has a negative saturation\n"
-                                "   BYPASS=0, DATA_TYPE=3: Send (1+0j) if Im has a positive saturation and (0+1j) if it has a negative saturation\n"
+    MON_RESET_STATS       = BitField(CONTROL, 0x0A, 6, doc="When '1', MON stats are reset")
+    DATA_TYPE             = BitField(CONTROL, 0x0A, 3, width=2, doc=" Selects the main output data in conjunction with BYPASS.\n"
+                                "   BYPASS=0, DATA_TYPE=X: Send normal scaled data in 4 or 8 bit mode\n"
                                 "   BYPASS=1, DATA_TYPE=0: Send the most significant bits of the raw FFT values\n"
-                                "   BYPASS=1, DATA_TYPE=1: Send the most significant bits of the saturated post-gain FFT values\n"
-                                "   BYPASS=1, DATA_TYPE=2: Send Even bins with twice the resolution\n"
-                                "   BYPASS=1, DATA_TYPE=3: Send Odd bins with twice the resolution\n"
+                                "   BYPASS=1, DATA_TYPE=1: Send (1+0j) if there is a saturation on either Re or Im\n"
+                                "   BYPASS=1, DATA_TYPE=2: Send (1+0j) if Re has a positive saturation and (0+1j) if it has a negative saturation\n"
+                                "   BYPASS=1, DATA_TYPE=3: Send (1+0j) if Im has a positive saturation and (0+1j) if it has a negative saturation\n"
                                 )
+    CAP_DATA_TYPE         = BitField(CONTROL, 0x0A, 0, width=3, doc=" Selects the source of the capture data port.\n"
+                                "   0: Main scaler output\n"
+                                "   1: MSB of the raw FFT values\n"
+                                "   2: MSB of post-gain FFT value with saturation\n"
+                                "   3: 4+4 bit scaled values\n"
+                                "   4: Even bins of raw FFT with twice the bit width\n"
+                                "   5: Odd bins of raw FFT with twice the bit width\n"
+                                )
+
     STATS_READY            = BitField(STATUS, 0x00, 7, doc="Indicates that new stats results are ready")
     CURRENT_GAIN_BANK      = BitField(STATUS, 0x00, 6, doc="Currently active gain bank.")
     EIGHT_BIT_SUPPORT      = BitField(STATUS, 0x00, 5, doc="'1' when the SCALER supports 8-bit output")
@@ -65,6 +72,10 @@ class SCALER(MMI):
     STATS_ADC_OVERFLOWS    = BitField(STATUS, 0x04, 0, width=16, doc="Stats result: number of ADC overflows")
     FRAME_CTR              = BitField(STATUS, 0x05, 0, width=8, doc="Free running frame counter (last 8 bits)")
     DELAY_CTR              = BitField(STATUS, 0x07, 0, width=16, doc="Debug: Delay counter")
+    MON_PACKET_LENGTH              = BitField(STATUS, 0x09, 0, width=16, doc="Debug")
+    MON_PACKET_CTR              = BitField(STATUS, 10, 0, width=8, doc="Debug")
+    MON_WORD_CTR              = BitField(STATUS, 12, 0, width=16, doc="Debug")
+    CAP_FRAME_CTR              = BitField(STATUS, 13, 0, width=8, doc="Debug")
 
 
     ROUNDING_MODE_TRUNCATE         = 0b00
@@ -178,13 +189,22 @@ class SCALER(MMI):
 
             if log_gain is None: # use floating point gains
                 self.USE_FLOAT_GAINS = 1
-                glog = (np.floor(np.log2(gains))-10).clip(0, 31)  #
-                gains /= 2**glog
-                # print(f'{glog=}\n {gains=}')
-                if any(gains < 0) or any(gains >= (2**31)*(2**11 - 1)):
-                    raise ValueError('Floating gain exceeds allowable range of 2^31*(2^11-1) = 4.3959E12')
+                # self.SHIFT_LEFT = 0
+                glog = (np.floor(np.log2(gains))-10).astype(np.int32).clip(0,63)  #
+                glog_common = int(min(glog).clip(0, 31))
+                self.SHIFT_LEFT = glog_common
+                glog -= glog_common
+                # print(f'pre-gains {gains=}\n{glog=}\n{glog_common=}\n{glog + glog_common=}\n{2.0**(glog + glog_common)=}')
+                gains /= 2.0**(glog + glog_common)
+                # print(f'glog_common={glog_common}, {glog=}')
+                # print(f'{glog_common=}\n{glog[0]=}\nglin[0]={gains[0]}')
+                if any(gains < 0) or any(gains >= 2**11):
+                    raise ValueError('Floating point gain mantissa exceeds 2**11')
+                if any(glog < 0) or any(glog >31):
+                    raise ValueError(f'Floating point gain exponent of {max(glog)} exceeds 31 even after removal of the common exponent of {glog_common}')
+
                 gains = (glog.astype(np.uint16) << 11) | gains.astype(np.uint16)
-                print(f"Gains = {[f'{g:04x}' for g in gains[:10]]}")
+                # print(f"Gains = {[f'{g:04x}' for g in gains[:10]]}")
 
             else: # use linear + log gains
                 self.USE_FLOAT_GAINS = 0

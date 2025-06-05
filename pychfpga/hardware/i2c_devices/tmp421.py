@@ -35,7 +35,7 @@ class tmp421(object):
         'DID': 0xFF  # Device ID
         }
 
-    def __init__(self, i2c_interface, address, port='BP', verbose=0):
+    def __init__(self, i2c_interface, address, port='BP', n_ext=1, verbose=0):
         """
         Creates an object that interfaces the TMP421 I2C temperature sensor.
 
@@ -45,10 +45,24 @@ class tmp421(object):
         The i2c interface must provide the following methods:
             set_port()
             write_read()
+
+        Parameters:
+
+            i2c_interface (I2CInterface): I2C interface object
+
+            address (int): device address of the temperature sensor
+
+            port: object or string describing the parent object
+
+            n_ext (int): number of external sensors
+
+            verbose (int): level of verbosity
+
         """
         self.i2c = i2c_interface
         self.address = address
         self.port = port
+        self.n_ext = n_ext
 
     def init(self, ShutDown=1, Range=0, RemoteCor=0x00):
         """
@@ -111,8 +125,17 @@ class tmp421(object):
 
     def get_temperature(self, n_ext=1):
         """
-        Reads temperature (in degrees Celcius) from TEMP register
+        Reads temperature (in degrees Celsius) from TEMP register
+
+        Returns:
+
+            ``(local_temp, remote_temp, remote_fault)`` tuple, where:
+            - ``local_temp``: temperature from the on-chip sensor
+            - ``remote_temp``: temperature obtained from the off chip diode
+            - ``remote_fault``: Indicates if there is a fault on the remote sensor
         """
+        if n_ext is None:
+            s_ext = self.n_ext
 
         self.write('ONESHOT', 0xFF, 0xFF)
         while self.read('STATUS', read_length=1)[0] >> 8:  # while BUSY=1

@@ -108,9 +108,10 @@ class FUNCGEN(MMI):
         'a':              (1, lambda self, a: np.full(self.NS, a)),  # All bytes are Byte A. 16-bit friendly
         'b':              (2, lambda self, b: np.full(self.NS, b)),  # All bytes are Byte B
         'ab':             (3, lambda self, a, b, : np.tile((a , b ), self.NS // 2)),  # Bytes alternate between A and B.
-        'ramp':           (4, lambda self, **kwargs: np.arange(self.NS)),  #
+        'ramp':           (4, lambda self, **kwargs: (np.arange(self.NS) - self.Nvalues / 2) % self.Nvalues - self.Nvalues / 2),  #  0 ... Nvalues/2-1, -Nvalues/2 ... 0
         'real_ramp':      (5, lambda self, **kwargs: np.ravel([(i,0) for i in range(self.NS//2)])),  # Generates the ramp: 0,0,1,0,2,0... If the data is read as (8+8)-bit complex value pairs, we obtain (0,0j), (1+0j)... (255+0j)
         '4bit_ramp':      (6, lambda self, **kwargs: np.arange(self.NS) << (self.Nbits - 4)),  # Generates the ramp in the upper 4 bits of the ADC sample (e.g for 8 bits: 0x00, 0x10, 0x20, ... 0xF0.)
+        '8bit_ramp':      (15, lambda self, **kwargs: np.arange(self.NS) << (self.Nbits - 8)),  # Generates the ramp in the upper 4 bits of the ADC sample (e.g for 8 bits: 0x00, 0x10, 0x20, ... 0xF0.)
         '4bit_real_ramp': (7, lambda self, **kwargs: np.ravel([(i,0) for i in range(self.NS//2)]) << (self.Nbits - 4)),  # Generates the ramp: 0x00, 0x00, 0x10, 0x00, 0x20, 0x00 ... 0xF0, 0x00
          # '4bit_split_ramp': (0, FN_BUFFER, ),  # Generates 0x0000, 0x0010, 0x0020, .. 0x00F0, 0x1000, 0x1010 ...
         'sin':            (8, lambda self, freq=1, ampl=None: (np.sin(np.arange(self.NS) * 2 * np.pi / self.NS * freq) * (ampl if ampl is not None else ((1 << (self.Nbits - 1)) - 1) ))),
@@ -133,6 +134,7 @@ class FUNCGEN(MMI):
         self.BYTES_PER_FRAME = self.NB = self.fpga.ADC_BYTES_PER_FRAME
         self.BYTES_PER_SAMPLE = self.BPS = self.fpga.ADC_BYTES_PER_SAMPLE
         self.Nbits  = self.fpga.ADC_BITS_PER_SAMPLE
+        self.Nvalues = 1 << self.Nbits
         # self.BUFFER_SIZE = self.BYTES_PER_FRAME  # bytes
         self.FRAME_SIZE = self.BYTES_PER_FRAME  # bytes
         self.PAGE_SIZE = 512 # number of bytes accessible in one RAM page
@@ -266,9 +268,9 @@ class FUNCGEN(MMI):
         if isinstance(data, (bytes, bytearray)):
             pass  # use buffer as is.
         else:
-            # make sure the data fits in the number of bits per sample for this platform
-            if any(data < -2**(self.fpga.ADC_BITS_PER_SAMPLE-1)) or any (data > 2**(self.fpga.ADC_BITS_PER_SAMPLE-1)-1):
-                raise ValueError('Some data points are out or range')
+            # make sure the data fits in the number of bits per sample for this platform as a signed or unsigned value
+            if any(data < -2**(self.fpga.ADC_BITS_PER_SAMPLE-1)) or any (data > 2**(self.fpga.ADC_BITS_PER_SAMPLE)-1):
+                self.logger.warning(f'{self!r}: Some sample values to be written to the FUNCGEN buffer exceed a signed or unsigned value range. Only the lower {self.fpga.ADC_BITS_PER_SAMPLE}) bits will be stored')
             if isinstance(data, np.ndarray):
                 data = ((data.astype(int) << self.lshift)).astype(self.dtype).tobytes()  # convert to dtype *after* shift otherwise we lose type and endianness
             else:

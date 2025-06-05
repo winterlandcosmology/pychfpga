@@ -19,6 +19,7 @@
 
 import numpy as np
 import time
+import logging
 
 _CONTROL_BASE_ADDR = 0x000000
 _STATUS_BASE_ADDR = 0x080000
@@ -146,13 +147,14 @@ class MMI(object):
     #BitDef=BitDef_base # make class accessible to subclass (somehow the class is not inherited directly)
     # BITS = {} # Should be overriden by the subclass
 
-    def __init__(self, fpga_instance, base_address, instance_number=None, address_width=9):
+    def __init__(self, fpga_instance, base_address, instance_number=None, address_width=9, router_port=0):
         self._unlock()
         self.fpga = fpga_instance
-        self.base_address = base_address
+        self.base_address = base_address + (router_port << address_width)
         self.instance_number = instance_number
         self.address_width = address_width
         self.address_max = (1 << address_width) - 1
+        self.logger = logging.getLogger(__name__)
 
     def __repr__(self):
         """ Return a string that represents this object and its parent object.

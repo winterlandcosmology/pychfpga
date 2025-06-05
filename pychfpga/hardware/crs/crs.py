@@ -33,7 +33,7 @@ from ..i2c_devices.eeprom import eeprom
 from ..i2c_devices.qsfp import QSFP as qsfp
 from ..i2c_devices.gpio import GPIO
 from ..i2c_devices.hmc7044 import hmc7044  # Dual PLL
-
+from ..i2c_devices.ssd1306 import SSD1306
 
 class iic_dummy:
     def __init__(self, *args, **kwargs):
@@ -121,6 +121,13 @@ class CRS(Motherboard):
 
     port = 7  # port number on which to access the platform `hostname`
 
+
+    TX_TO_RX_LANE_MAP = { # (Tx_slot, Tx_lane):(Rx_slot, Rx_lane), slots are 0-based
+     (0,0): (0,0),    (0, 1): (3, 3),   (0, 2): (2, 3),   (0, 3): (1, 3),
+     (1,0): (1,0),    (1, 1): (0, 3),   (1, 2): (2, 2),   (1, 3): (3, 2),
+     (2,0): (2,0),    (2, 1): (3, 1),   (2, 2): (1, 2),   (2, 3): (0, 2),
+     (3,0): (3,0),    (3, 1): (2, 1),   (3, 2): (1, 1),   (3, 3): (0, 1)}
+    RX_TO_TX_LANE_MAP = {rx:tx for tx,rx in TX_TO_RX_LANE_MAP.items()}
     # ---------------
 
     def __init__(self, hostname=None, serial=None, slot=None, subarray=None, **kwargs):
@@ -196,7 +203,9 @@ class CRS(Motherboard):
 
         self.i2c1_tmp421_1v4 = tmp421(self.iic, address=0x4C, port=(i2c1_switch0, 0))
         self.i2c1_tmp421_1v2b = tmp421(self.iic, address=0x4D, port=(i2c1_switch0, 0))
-        self.i2c1_tmp422_0v85 = tmp421(self.iic, address=0x4f, port=(i2c1_switch0, 0))
+        self.i2c1_tmp422_0v85 = tmp421(self.iic, address=0x4f, port=(i2c1_switch0, 0), n_ext=2)
+
+        self.i2c0_tmp421_pll = tmp421(self.iic, address=0x4E, port=(i2c1_switch0, 0)) # PLL temp monitor U45: int: Bot 1cm left of VCXO, ext: Q12 Bot Under Prog PLL
 
         if self.revision > 0:
             self.i2c1_disp = PCA8574(self.iic, address=0x22, port=(i2c1_switch0, 0))
@@ -204,6 +213,8 @@ class CRS(Motherboard):
             self.i2c1_disp = None
         self.i2c1_eeprom_data = eeprom(self.iic, address=0x57, bus_name=(i2c1_switch0, 0), address_width=7, max_read_length=255, max_write_length=8, write_page_size=8)
         self.i2c1_eeprom_serial = eeprom(self.iic, address=0x5F, bus_name=(i2c1_switch0, 0), address_width=8, max_read_length=255)  # must read 16 bytes from memory address 0x80
+
+        self.display = SSD1306(self.iic, address=0x3C, port=(i2c1_switch0, 0))
 
         # I2C1 Switch 0 port 1 devices
         #   0x18: DDR4 SODIMM Temp sensor
@@ -296,6 +307,8 @@ class CRS(Motherboard):
 
     async def pll_init_async(
             self,
+            input_sel = 1,
+            input_priorities = (2, 1, 0, 3),
             fref=10e6,  # external 10 MHz reference from backplane or SMA
             fosc=50e6,  # on-board VCXO nominal frequency
             fvco=3000e6, # PLL2 VCO frequency, which is also the ADC sampling frequency
@@ -339,6 +352,8 @@ class CRS(Motherboard):
         fpl = frfdc / 8 # signal processing clock, typ. 375 MHz
 
         self.pll.init(
+            input_sel=input_sel, # 0: Ethernet recovery, 1: backplane REFCLK, 2 = motherboard REFCLK, 3: FPGA
+            input_priorities=input_priorities, # not used if input_sel is specified and is not None
             fref=fref, # external 10 MHz reference from backplane or SMA
             fosc=fosc, # on-board VCXO nominal frequency
             fvco=fvco,
@@ -509,7 +524,7 @@ class CRS(Motherboard):
 
 
         t0 = time.time()
-        self.logger.debug(f'{self!r}: called set_fpga_bitstream')
+        self.logger.debug(f'{self!r}: Called set_fpga_bitstream')
 
         if hasattr(self, 'close'):
             self.close()
@@ -517,7 +532,7 @@ class CRS(Motherboard):
         fw_cls, buf, fw_params = FPGAFirmware.get_firmware(self.part_number, firmware_mode, bitfile_override=bitfile_override)
         crc32 = buf.crc32
         bitstream = buf.raw_bitstream
-
+        self.logger.info(f'{self!r}: Programming PLL before configuring the FPGA. {fw_params=}')
         await self.pll_init_async(fvco=fw_params['sampling_frequency'])  # add fw params here if we want to have mode/application-specific frequencies sent to the FPGA
 
         self.logger.debug(f'{self!r}: Getting is_programmed')
@@ -538,7 +553,7 @@ class CRS(Motherboard):
             self.logger.debug(
                 f'{self!r}: FPGA is already configured. Skipping configuration.')
 
-        self.fpga = fw_cls(self, **fw_params)
+        self.fpga = fw_cls(self, mode=firmware_mode, **fw_params)
 
     # Mezzanine management
 

@@ -9,7 +9,7 @@
     2012-09-20 JFC: Changed FFT_SHIFT init value: left at default. FW was updated with updated value.
         Added OVERFLOW_RESET, SOFT_RESET bitfields to match FW
 """
-#import time
+import time
 import numpy as np
 from ..mmi import MMI, BitField
 
@@ -42,16 +42,12 @@ class FFT(MMI):
 
     def init(self):
         """ Initialize the FFT module"""
-        # self.BYPASS = 0
-        # self.SYNC_PERIOD *= 2
-        # self.FFT_SHIFT= 2**3 - 1
-        # self.FFT_SHIFT = 0b11111111111111
-        # self.PIPELINE_DELAY = 3230
-        # self.PIPELINE_DELAY = 12533 # self.MEASURED_PIPELINE_DELAY # try
-        self.PIPELINE_DELAY = 10452 # Bitgrowth FFT good value=10452 10450= DC@bin 8, 16451 DC @ bin 4,
-        # meas_pipeline_delay = self.MEASURED_PIPELINE_DELAY
-        # self.PIPELINE_DELAY = meas_pipeline_delay
-        # print('set delay, meas delay', self.PIPELINE_DELAY, self.MEASURED_PIPELINE_DELAY)
+
+        # Set the FFT Pipeline delay.
+        self.PIPELINE_DELAY = self.fpga.FFT_LATENCY
+
+        # For the CRS, the pipeline delay is not yet measured at this point, and is not measured even if we pulse SOFT_RESET.
+        # So we can't check if it is right until the pipeline is running. This is why we disable the check below
         # if self.PIPELINE_DELAY != self.MEASURED_PIPELINE_DELAY:
         #    raise Exception('FFT pipeline delay is not set to the measured value!')
 

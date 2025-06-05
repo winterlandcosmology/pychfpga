@@ -34,6 +34,7 @@ class TCPipe:
     opened_sockets = {}
 
     def __init__(self, hostname, port=7, timeout=2):
+        self.log = logging.getLogger(__name__)
         self.hostname = hostname
         self.port = port
         self.sock = self.opened_sockets.pop((hostname, port), None)
@@ -43,12 +44,12 @@ class TCPipe:
         self.sock.settimeout(timeout)
         self.sock.connect((hostname, self.port))
         self.opened_sockets[(hostname, port)] = self.sock
-        self.tx_buf = bytearray(1024)
+        self.tx_buf = bytearray(2048)
         self.tx_view = memoryview(self.tx_buf)
-        self.rx_buf = bytearray(1024)
+        self.rx_buf = bytearray(2048)
         self.rx_view = memoryview(self.rx_buf)
         self.firmware_crc = None
-        print(f'Opened TCPipe socket at {self.sock.getsockname()}')
+        self.log.debug(f'{self!r}: Opened TCPipe socket at {self.sock.getsockname()}')
         self.bsb_sent_ctr = 0
 
     def close(self):
@@ -214,7 +215,7 @@ class TCPipe:
         rx_len = self.sock.recv_into(self.rx_buf)
         return self.rx_buf[:rx_len]
 
-    def spi_write_read(self, spi_device, data, read_length):
+    def spi_write_read(self, spi_device, data, read_length, timeout=None):
         """ Writes `data` to SPI address `spi_device` while reading the same number of bytes, and return  the last `read_length` bytes transaction.
 
         Parameters:
@@ -224,6 +225,8 @@ class TCPipe:
             data (bytes): data to write during the write phase. `read_length` null bytes will be appended for the read phase.
 
             read_length (int): number of bytes to read (1-255)
+
+            timeout (float): time before timeout
 
         Returns:
 
@@ -244,7 +247,14 @@ class TCPipe:
 
         # print(f'TCPIPE SPI: Sending {self.tx_buf[:tx_len + len(data) + read_length]}')
         self.sock.sendall(self.tx_view[:tx_len + len(data) + read_length])
-        rx_len = self.sock.recv_into(self.rx_buf)
+        if timeout:
+            old_timeout = self.sock.gettimeout()
+            self.sock.settimeout(timeout)
+        try:
+            rx_len = self.sock.recv_into(self.rx_buf)
+        finally:
+            if timeout:
+                self.sock.settimeout(old_timeout)
         if self.rx_buf[0]:
             raise IOError(f'SPI Reply has error code {self.rx_buf[0]}')
         if rx_len != 1 + len(data) + read_length:
@@ -566,7 +576,7 @@ class TCPipe_SPI:
     #     self.current_switch_params[switch] = switch_params
 
     # def write_read(self, *args, **kwargs):
-    def write_read(self, spi_device=0, data=[], read_length=0, verbose=1, noerror=False, retry=1):
+    def write_read(self, spi_device=0, data=[], read_length=0, verbose=1, noerror=False, retry=1, timeout=None):
         """
         Writes and read to/from SPI device `spi_device`.
 
@@ -586,6 +596,8 @@ class TCPipe_SPI:
 
             retry (int): Number of times to retry a transfer before raising an exception
 
+            timeout (float): Time to wait (in seconds) before timeout exception
+
         Returns:
             bytearray containing the read bytes
 
@@ -597,7 +609,7 @@ class TCPipe_SPI:
         """
         # self._logger.debug("Accessing I2C bus...")
 
-        return self.tcpipe.spi_write_read(spi_device, data, read_length)
+        return self.tcpipe.spi_write_read(spi_device, data, read_length, timeout=timeout)
 
     # def is_present(self, addr, bus_name=None):
     #     """ Test the presence of an I2C device at the specified address.

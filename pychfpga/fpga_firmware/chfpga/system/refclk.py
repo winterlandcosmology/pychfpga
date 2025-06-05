@@ -69,7 +69,7 @@ class REFCLK(MMI):
 
         # self.ENABLE_SYNC_DETECTION = 1
         # self.ENABLE_SYNC_GENERATION = 1
-        if self.fpga.is_fmc_present(0):
+        if self.fpga.HAS_FMC and self.fpga.is_fmc_present(0):
             self.logger.debug('%r:   REFCLK is using the 10 MHz reference clock from the ADC board' % self.fpga)
             self.REFCLK_SEL = 0  # Use REFCLK coming from the FMC
         else:
