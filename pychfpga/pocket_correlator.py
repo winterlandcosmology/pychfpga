@@ -473,7 +473,7 @@ class POCKET_CORRELATOR:
 
             # Set the SCALER data_type such that we can recover upper 16+16 MSBs of FFT
             for m in range(self.NPOLS):
-                self.i.chan[m].SCALER.DATA_TYPE = 0
+                self.i.chan[m].SCALER.CAP_DATA_TYPE = 1 
 
             # Start data capture (recall that we have bypassed the SCALER, but UCAP still
             # captures data from its output)
@@ -493,7 +493,7 @@ class POCKET_CORRELATOR:
             for n in range(ncap):
                 for m in range(self.NPOLS):
                     # Capture even bins
-                    self.i.chan[m].SCALER.DATA_TYPE = 2
+                    self.i.chan[m].SCALER.CAP_DATA_TYPE = 4 
 
                 # Start data capture for even bins (recall that we have bypassed the SCALER, 
                 # but UCAP still captures data from the output of the SCALER)
@@ -510,7 +510,7 @@ class POCKET_CORRELATOR:
 
                 for m in range(self.NPOLS):
                     # Capture odd bins
-                    self.i.chan[m].SCALER.DATA_TYPE = 3
+                    self.i.chan[m].SCALER.CAP_DATA_TYPE = 5 
 
                 # Start data capture for odd bins (recall that we have bypassed the SCALER, 
                 # but UCAP still captures data from the output of the SCALER)
@@ -540,41 +540,6 @@ class POCKET_CORRELATOR:
         
         # Return the FFT data with the frequency bins in their proper order
         return d_fft[..., self.bin_map]
-
-    # -----------------------------------------------------------------------
-    # Deprecated, SCALER handles all this for floating point gains
-    # def set_gains(self, 
-    #               lin_gain, 
-    #               log_gain
-    #               ):
-    #     """
-    #     Description.
-
-    #     Parameters
-    #     ----------
-    #     the : TYPE
-    #         DESCRIPTION.
-
-    #     Returns
-    #     -------
-    #     None.
-
-    #     """
-
-    #     # if not type(lin_gain) == np.ndarray:
-    #     #     # If not passed as an array, create an array of
-    #     #     # linear gains of constant value
-    #     #     lin_gain = np.repeat(lin_gain, self.NBINS) #, dtype = '>i2')
-
-    #     #     # From this point forward, lin_gain is an ndarray
-
-    #     # # Set gains on all channelizers
-    #     # for n in range(self.NPOLS):
-    #     #     self.i.chan[n].SCALER.set_gain_table(lin_gain[n], bank = 0)
-    #     #     self.i.chan[n].SCALER.SHIFT_LEFT = log_gain[n]
-
-    #     return 
-    # -----------------------------------------------------------------------
 
     def compute_gains(self,
                       target = 1.5*np.sqrt(2), # default value borrowed from CHIME
@@ -693,10 +658,9 @@ class POCKET_CORRELATOR:
                 adc_or = self.i.GPIO.ADC_OR
                 adc_ov = self.i.GPIO.ADC_OV
 
-                print('')
-                print(f'On FFT capture trial {n + 1} of {NTRIES}:')
-                print(f'ADC Overrange = {adc_or}')
-                print(f'ADC Overvoltage = {adc_ov}')
+                print(f'Read {n_fft_frames} FFT frames')
+                print(f'ADC Overrange = {bin(adc_or).zfill(8)}')
+                print(f'ADC Overvoltage = {bin(adc_ov).zfill(8)}')
                 print('')
 
                 # Break loop if no flags are high
@@ -744,8 +708,8 @@ class POCKET_CORRELATOR:
             # Apply some processing to recover the value in a fully linear unit.
             gain_actual = (np.array(self.i.chan[n].SCALER.get_gain_table(bank = bank)) & 0xFFFF).flatten() # Full 16-bit value, meaningless without being processed
             gain_lin_actual[n] = gain_actual & 0x7FF # Lower 11 bits, linear (mantissa) component
-            gain_log_actual[n] = gain_actual >> 11 # Upper 5 bits, logarithmic (exponential) component
-
+            gain_log_actual[n] = (gain_actual >> 11) + self.i.chan[n].SCALER.SHIFT_LEFT # Upper 5 bits, logarithmic (exponential) component, plus common log component
+        
         if return_scaler_frames:
             n_sclr_frames = n_fft_frames # capture the same number of frames
             d_sclr = self.read_scaler_frames(n_frames = n_sclr_frames,
@@ -773,174 +737,6 @@ class POCKET_CORRELATOR:
                 gain_log_actual[..., self.bin_map], 
                 d_sclr
                 )
-
-        # =====================================================================================
-        # Old digital gain computation algorithm used with fixed-point FFT. Kept for reference.
-        # =====================================================================================
-        # # Capture ncap FFT frames of data, checking for FFT overflows. If there are any, start the FFT capture again
-        # # until we have a clean set of data.
-        
-        # ctr = 0
-        # while True:
-        #     print(f'Gain computation trial {ctr}')
-        #     ctr += 1
-
-        #     fft_overflows = np.zeros(self.NPOLS)
-
-        #     for n in range(self.NPOLS):
-        #         # Pulse FFT overflow reset
-        #         self.i.chan[n].FFT.OVERFLOW_RESET = 1
-        #         self.i.chan[n].FFT.OVERFLOW_RESET = 0
-            
-        #     # ==================
-        #     # Capture ncap FFT frames of data
-        #     fft_data = self.read_fft_frames(period = 0.02,
-        #                                     data_source = 'adc',
-        #                                     ncap = int(number_of_fft_averages/self.n_frames_per_capture),
-        #                                     split = True,
-        #                                     verbose = 0)
-
-        #     for n in range(self.NPOLS):
-        #         # Check FFT overflow status on each pol, and pulse the reset again.
-        #         fft_overflows[n] = self.i.chan[n].FFT.OVERFLOW_COUNT
-        #         self.i.chan[n].FFT.OVERFLOW_RESET = 1
-        #         self.i.chan[n].FFT.OVERFLOW_RESET = 0
-
-        #     print(f'FFT Overflows: {fft_overflows}')
-
-        #     if all(fft_overflows == 0):
-        #         break
-        
-        # # ==================
-        # # Compute FFT RMS. The np.abs just converts the np.complex128 to np.float64, since the magnitude is real-valued
-        # fft_rms = np.sqrt(np.mean(np.abs(fft_data*np.conj(fft_data)), axis = 1))
-
-        # # Check the target Scaler RMS
-        # if target < 0 or target > np.sqrt(7**2 + 7**2):
-        #     raise ValueError(f'Scaler target magnitude {target} is outside of bounds 0 < target < {np.sqrt(7**2 + 7**2)}')
-        # target *= 2**31 # target RMS is scaled by 31 bits, since the scaler takes 4 MSBs of 35 bit number
-
-        # # Compute the gain needed to shift the fft_rms to the target
-        # gain = target / fft_rms
-
-        # # Treat any possible infinities
-        # gain[gain == np.inf] = 2**31 
-
-        # # ==================
-        # # Break down the raw gains into linear and log gains, where gain = lin * 2**log
-
-        # # IMPORTANT! let the linear gains absorb some of the bits that would otherwise 
-        # # be used in the log gains so that we have better linear gain resolution.
-        # # print('log2 gain', np.log2(gain)) # need to make a loop to check best log
-        # trim_bits = 12 # need a way to cycle through the number that preserves the largest linear gain
-
-        # # Compute the log gains. Take log2 of the raw gains so that we get an idea of how many bit shifts
-        # # we need to do (plus some decimal shifting that will be absorbed in the linear gains). Take its
-        # # ceiling, and clip it just in case it's too big or too small. Reduce this value by trim_bits to
-        # # obtain the log gain. The rest of the gain will be allocated to the linear gains.
-        # log = np.clip((np.ceil(np.log2(np.median(gain, axis = 1)))), 0, 31) - trim_bits
-        # print('log', log)
-
-        # # Allocate the remainder of the raw gains to the linear gains. 
-        # lin = (gain / 2**np.repeat(log.reshape(self.NPOLS, 1), self.NBINS, axis = 1)) + 0.5 # add 0.5 for rounding
-
-        # # ==================
-        # # Now that we have our raw gains, we can apply some additional processing.
-        # if gain_type == 'raw':
-        #     print('Setting gains to raw')
-        #     # self.set_gains(lin, [int(n) for n in log]) # cast log gains to int
-
-        # elif gain_type == 'flat':
-        #     print('Setting gains to flat')
-        #     lin = np.mean(lin[:, np.where(self.f > 300)[0]], axis = 1) # Determine the mean of the linear gains, ignoring frequencies below 300 MHz.
-        #     # self.set_gains(lin_flat, [int(n) for n in log]) # cast log gains to int
-
-        # elif gain_type == 'smooth':
-
-        #     # Functions for fitting polynomials to gain
-
-        #     def make_A(x, order):
-        #         A = np.zeros((len(x), order))
-        #         for n in range(order):
-        #             A[:, n] = x**n
-        #         return A
-
-        #     def lstsqr_fit(x, y, sigma, order):
-        #         sigma = np.diag(sigma) # assume sigma is the variance, not std dev
-        #         sigma_inv = np.linalg.inv(sigma)
-        #         A = make_A(x, order)
-        #         m = np.linalg.inv(A.T @ sigma_inv @ A) @ A.T @ sigma_inv @ y
-        #         return m
-
-        #     def make_poly(x, coeffs):
-        #         y = np.zeros(len(x))
-        #         for n in range(len(coeffs)):
-        #             y += coeffs[n]*x**n
-        #         return y
-
-        #     print('Smoothing gains...')
-
-        #     # The following is hardcoded for now.
-        #     order = 8
-        #     lin_smooth = np.zeros((self.NPOLS, len(self.f)))
-        #     for n in range(self.NPOLS):
-        #         # Trim first 300 MHz when running the fit
-        #         m = lstsqr_fit(x = self.f, # [np.where(self.f > 50)[0]], 
-        #                        y = lin[n], # , np.where(self.f > 50)[0]], 
-        #                        sigma = np.repeat(10, len(self.f)), # 10 is just a guess
-        #                        # sigma = np.repeat(10, len(self.f[np.where(self.f > 50)[0]])), # 10 is just a guess
-        #                        order = order) 
-        #         lin_smooth[n] = make_poly(x = self.f, coeffs = m)
-        #     # lin_smooth = lin_smooth.astype(np.int16) # cast to np.int16
-
-        #     # Set lin = lin_smooth
-        #     print('Setting gains to smooth')
-        #     lin = lin_smooth
-
-        # # Cast the linear gains to np.int16
-        # lin = lin.astype(np.int16)
-
-        # # Anywhere that the linear gain is saturated (> 32767) or negative shall be set to 0
-        # lin = np.where((0 < lin) & (lin < 32767), lin, 0)
-
-        # # Set the gains
-        # self.set_gains(lin, [int(n) for n in log]) # cast log gains to int
-
-        # # ==================
-        # # If rms_accuracy_tol is not None, capture SCALER data and check that they are at or near the target
-
-        # if rms_accuracy_tol is not None:
-        #     print('Checking RMS of Scaler output is within the specified tolerance.')
-        #     scaler_data = self.read_scaler_frames(data_source = 'adc', ncap = 100)
-        #     scaler_data_rms = np.sqrt(abs(np.mean(scaler_data * scaler_data.conj(), axis = 1)))
-        #     mean_abs_rms = np.mean(scaler_data_rms, axis = 1)
-
-        #     tol = (rms_accuracy_tol/100) * (target / 2**31) # Calculate 
-        #     tol_range = np.array([(target / 2**31) - tol, (target / 2**31) + tol]) # Tolerance range
-
-        #     out_of_tol_channels = []
-        #     out_of_tol_mean_rms = []
-        #     for n in range(self.NPOLS):
-        #         if tol_range.min() < mean_abs_rms[n] < tol_range.max():
-        #             out_of_tol_channels.append(n)
-        #             out_of_tol_mean_rms.append(mean_abs_rms[n])
-
-        #     if not len(out_of_tol_channels) == 0:
-        #         raise ValueError(f'Channels {out_of_tol_channels} are outside the allowed Scaler RMS range of {rms_accuracy_tol}%. \n \
-        #                            The allowed range is {tol_range} LSBs RMS. \n \
-        #                            The mean values on these channels are {out_of_tol_mean_rms} LSBs RMS.')
-
-        # else:
-        #     print('Skipping Scaler tolerance check.')
-        #     scaler_data = None
-
-        # if save_gains:
-        #     # Save gains, calling save_gains()
-        #     print('Saving gains')
-        #     self.save_gains(lin, log, gain_type)
-        # ==================================================================
-        # End of old digital gain computation algorithm. Kept for reference.
-        # ==================================================================
                       
     def save_gains(self, 
                    gain_lin,
@@ -962,7 +758,8 @@ class POCKET_CORRELATOR:
         ----------
         gain_lin : (np.ndarray) The linear component of the "actual" digital gains. The shape is (NPOLS, NBINS).
 
-        gain_log : (np.ndarray) The logarithmic component of the "actual" digital gains. The shape is (NPOLS, NBINS).
+        gain_log : (np.ndarray) The logarithmic component of the "actual" digital gains. The shape is (NPOLS, NBINS). gain_log should include the "common" log
+        gain, which can be read using self.i.chan[n].SCALER.SHIFT_LEFT.
 
         digital_gains_parent_path : (str) A parent directory containing sub-directories of digital gains. 
 
@@ -1120,7 +917,7 @@ class POCKET_CORRELATOR:
 
             # Bypass the SCALER, and set the mode so that we send the most significant 16+16 bits of the saturated post-gain FFT values
             self.i.chan[n].SCALER.BYPASS = 1
-            self.i.chan[n].SCALER.DATA_TYPE = 1 
+            self.i.chan[n].SCALER.CAP_DATA_TYPE = 2 
 
         # Start data capture, grabbing data at the output of the
         # scaler, which has been bypassed.
@@ -1231,8 +1028,8 @@ class POCKET_CORRELATOR:
 
             # Do not bypass the SCALER, and set the mode so that we read 4+4-bit SCALER data
             self.i.chan[n].SCALER.BYPASS = 0
-            self.i.chan[n].SCALER.DATA_TYPE = 0 # Send 4-bit scaler values
-            
+            self.i.chan[n].SCALER.CAP_DATA_TYPE = 2 # Main scaler output
+
         # Start data capture, always setting the source to 'scaler'
         self.i.start_data_capture(period = period, 
                                   source = 'scaler'
@@ -1345,7 +1142,6 @@ class POCKET_CORRELATOR:
                          n_software_frames = 1,
                          number_of_results = 1,
                          flush = True,
-                         align = False,
                          data_timeout = 0.1,
                          flush_timeout = 0.01,
                          return_format = 'raw',
@@ -1385,12 +1181,6 @@ class POCKET_CORRELATOR:
 
         flush : (bool) Whether to flush the UDP buffers. If data is allowed to accumulate in the UDP
         buffers for a while, it's a good idea to flush the buffer and get a fresh start.
-
-        align : (bool) "Flush packets until we receive the packet that is part of the first
-        frame of the specified integration period. This first packet is left in the buffer." Copied
-        directly from 
-
-            pychfpga/pychfpga/fpga_firmware/chfpga/x_engine/UCORR.py
 
         data_timeout : (float) The socket timeout for capturing data in the UDP buffer.
 
@@ -1480,7 +1270,9 @@ class POCKET_CORRELATOR:
             # Do not bypass the FFT
             self.i.chan[n].FFT.BYPASS = 0
 
-            # Do not bypass the SCALER, and set the mode so that we read 4+4-bit SCALER data
+            # Do not bypass the SCALER, and set the mode so that we read 4+4-bit SCALER data.
+            # Note that we need to set the DATA_TYPE control byte rather than the CAP_DATA_TYPE
+            # control byte now that we want to configure the data type being sent to the correlator.
             self.i.chan[n].SCALER.BYPASS = 0
             self.i.chan[n].SCALER.DATA_TYPE = 0 # Send 4-bit scaler values
 
@@ -1496,7 +1288,6 @@ class POCKET_CORRELATOR:
                                                                   number_of_results = number_of_results,
                                                                   filename = None,
                                                                   flush = flush,
-                                                                  align = align,
                                                                   data_timeout = data_timeout,
                                                                   flush_timeout = flush_timeout,
                                                                   return_format = return_format,
@@ -1506,7 +1297,8 @@ class POCKET_CORRELATOR:
 
         print(f'Took {t2 - t1} s to capture corr data')
 
-        return t1, d_corr[:, self.bin_map, :], count, sat
+        # Remove the "Ncorr" axis
+        return t1, d_corr[:, 0, self.bin_map], count, sat
 
     def make_time_string(self):
         """
@@ -1923,7 +1715,6 @@ class POCKET_CORRELATOR:
                                                                 n_software_frames = n_software_frames,
                                                                 number_of_results = 1,
                                                                 flush = flush,
-                                                                align = False,
                                                                 corr_is_configured = self.corr_is_configured
                                                                 )
 
@@ -1970,8 +1761,8 @@ class POCKET_CORRELATOR:
                     corr_overrun_buf[n] = self.corr.OVERRUN
 
                     # Print some statistics:
-                    print(f'ADC Overranges: {adc_overrange_buf[n]}')
-                    print(f'ADC Overvoltage: {adc_overvoltage_buf[n]}')
+                    print(f'ADC Overranges: {bin(adc_overrange_buf[n])[2:].zfill(8)}')
+                    print(f'ADC Overvoltage: {bin(adc_overvoltage_buf[n])[2:].zfill(8)}')
                     print(f'FFT Overflows: {fft_overflows_buf[n]}')
                     print(f'Scaler Overflows: {scaler_overflows_buf[n]}')
                     print(f'Correlator Overruns: {corr_overrun_buf[n]}')
