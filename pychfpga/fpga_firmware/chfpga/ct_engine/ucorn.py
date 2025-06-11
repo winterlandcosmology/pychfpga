@@ -97,30 +97,6 @@ class UCorn(MMI):
         # # program data for one bin
         # self.set_bin_data(bin=1, frame=0, data=np.arange(8*16, dtype=np.uint8))
 
-<<<<<<< HEAD
-        # # Set the playlist to send data from that bin
-        # self.set_playlist(bins=( (0,[1]),) )
-
-        # Program data for 300--1200 MHz bins
-        # self.CHORD_FIDX = np.arange(1536, 7680 + 1) # Frequency bin indices for 300--1200 MHz
-        self.NBINS_PER_PACKET = 4 # 2 # 48 # 33 is the max number we can send for two packets at a time
-        self.CHORD_FIDX = np.arange(1536, 1536 + self.N_TARGETS*self.NBINS_PER_PACKET)
-
-        # for n in range(len(self.CHORD_FIDX)):
-        for n in range(len(self.CHORD_FIDX)):
-            self.set_bin_data(bin=self.CHORD_FIDX[n], frame=0, data=np.arange(128, dtype = np.uint8)) # np.repeat(np.uint8(n), 128)) # np.uint16(d), int(128/2)))
-
-        playlist = []
-        for n in range(self.N_TARGETS):
-            pair = (n, list(np.arange(1536 + n*self.NBINS_PER_PACKET, 1536 + (n+1)*self.NBINS_PER_PACKET)))
-            playlist.append(pair)
-        playlist = tuple(playlist)
-        print(playlist)
-
-        self.set_playlist(bins = playlist)
-
-        # self.TX_PERIOD = int(2**30)
-=======
         first_bin = 300*8192//1600 # 1536
         last_bin= 1500*8192//1600  # Last bin is excluded
         number_of_bins = last_bin - first_bin
@@ -135,7 +111,6 @@ class UCorn(MMI):
             for i in range(number_of_packets)]
         # Set the playlist to send data from that bin
         self.set_playlist(playlist=self.playlist)
->>>>>>> jfc/corr_ct
 
         self.TX_RESET = 0 # take the module out of reset. Packet transmisison starts.
 
