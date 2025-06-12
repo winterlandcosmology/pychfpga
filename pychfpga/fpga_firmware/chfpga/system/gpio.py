@@ -328,7 +328,7 @@ class GPIO(MMI):
             # self.logger.info(f'Enabling CRS Buck sync at {200/16/self.BUCK_CLK_DIV:.3f} MHz NOW!')
             # self.BUCK_SYNC_ENABLE = 1
 
-        self.logger.info(f'Buck switching frequency is set at {200/16/self.BUCK_CLK_DIV:.3f} MHz. Status: {"Enabled" if self.BUCK_SYNC_ENABLE else "DISABLED"}')
+        self.logger.info(f'{self!r}: Buck switching frequency is set at {200/16/self.BUCK_CLK_DIV:.3f} MHz. Status: {"Enabled" if self.BUCK_SYNC_ENABLE else "DISABLED"}')
 
         # In the alternate code below, we do not use self.ANT_RESET=1 to reset
         # the antenna because this implies reading the control register, and

@@ -57,7 +57,7 @@ class CGE(MMI):
         """
         Enable link.
         """
-        self.logger.warn('{self!r}: set_enable()  is not implemented on UltraCT. Command is ignored. ')
+        self.logger.warn(f'{self!r}: set_enable()  is not implemented on {__name__}. Command is ignored. ')
 
     # def reset(self):
     #     """ Resets the UDP/MAC stack, the SGMII interface and the GTX """

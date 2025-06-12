@@ -172,7 +172,7 @@ class FPGAArray(object):
                   ``subarray`` criteria.
 
 
-            iceboards (list of str): Iceboard to add to the hardware map,
+            iceboards (list of str): Motherboard to add to the hardware map,
                 specified as an IP address, hostname, or serial number. The
                 boards specified here are added to the hardware map specified
                 in `hwm` parameter. When a serial number is used, the IceBoard
@@ -203,7 +203,7 @@ class FPGAArray(object):
 
 
             subarrays (list): List of integers describing the subarrays to include in
-                the default IceBoard set. If None, all
+                the default Motherboard set. If None, all
                 Iceboards in the hardware map will be selected. Affects only the
                 boards specified in the hardware map specified with the ``hwm`` parameter.
 
@@ -405,34 +405,32 @@ class FPGAArray(object):
 
             Note:
 
-                If an IceBoard is specified by IP address (e.g. '10.10.10.7'),
+                If a Motherboard is specified by IP address (e.g. '10.10.10.7'),
                 then the board can be added directly in the hardware map. This
                 does *not* rely on the system mDNS client or the Python
                 ``pybonjour`` package.
 
-                If an IceBoard is specified by its mDNS hostname (e.g.
+                If an Motherboard is specified by its mDNS hostname (e.g.
                 'iceboard0007.local'), the operating system will automatically
                 resolve the IP address using mDNS, assuming that a mDNS client
                 (Bonjour on Windows or Mac, avahi on Linux) is running on this
                 computer. The ``pybonjour`` Python package is *not* needed.
 
                 In both cases, the crate, slot and serial number information will
-                be automatically obtained directly through the IceBoard's ARM
+                be automatically obtained directly through the Motherboard's
                 processor if that information not already present in the hardware
                 map.
 
-                If an IceBoard is specified by its serial number (e.g. '0007', or
-                just a numeric 7 as a convenient shortcut), the board will use the
-                ``pybonjour`` package to actively query mDNS and find boards that
-                match the serial number.
+                If an Motherboard is specified by its serial number (e.g. '0007', or
+                just a numeric 7 as a convenient shortcut), the board will use mDNS to
+                actively find and query  boards that match the serial number.
 
 
             Note:
 
                 Selecting boards by Crate serial number *always*
-                require the ``pybonjour`` package and the system mDNS
-                client to automatically probe the network and discover the
-                specified Iceboards that advertised themseles along with
+                require mDNS queries to discover the
+                specified Motherboards that advertised themseles along with
                 their associated crate number.
 
         """
@@ -711,20 +709,21 @@ class FPGAArray(object):
         missing_boards = []
         if ping:
             boards_to_ping = [ib for ib in self.hwm if ib.hostname]
-            # Find iceboards to ping. Use `as_dict` so ib_to_ping does not change as we delete boards from the hwm
-            self.logger.info(f'{self!r}: Pinging the {len(boards_to_ping)} IceBoards with explicit hostnames')
-            # TCP-ping boards. Make is an asynchronous parallel call to all boards
-            ping_results = await asyncio.gather(*[ib.ping_async(timeout=ping_timeout) for ib in boards_to_ping])
-            # self.logger.debug('%r: Ping results are %s' % (self, ping_results))
-            for ib, ping_successful in zip(boards_to_ping, ping_results):
-                if ping_successful:
-                    ib.hostname = socket.gethostbyname(ib.hostname)
-                else:
-                    missing_boards.append(
-                        f"{ib.hostname} (SN{ib.serial or '????'}, "
-                        f"({ib.crate.crate_number if ib.crate else '?'},{ib.slot - 1 if ib.slot else '?'})")
-                    self.logger.debug(f'{self!r}: Deleting {ib} from the YAML hardware map')
-                    ib.delete_instance()
+            if boards_to_ping:
+                # Find iceboards to ping. Use `as_dict` so ib_to_ping does not change as we delete boards from the hwm
+                self.logger.info(f'{self!r}: Pinging {len(boards_to_ping)} Motherboards with explicit hostnames')
+                # TCP-ping boards. Make is an asynchronous parallel call to all boards
+                ping_results = await asyncio.gather(*[ib.ping_async(timeout=ping_timeout) for ib in boards_to_ping])
+                # self.logger.debug('%r: Ping results are %s' % (self, ping_results))
+                for ib, ping_successful in zip(boards_to_ping, ping_results):
+                    if ping_successful:
+                        ib.hostname = socket.gethostbyname(ib.hostname)
+                    else:
+                        missing_boards.append(
+                            f"{ib.hostname} (SN{ib.serial or '????'}, "
+                            f"({ib.crate.crate_number if ib.crate else '?'},{ib.slot - 1 if ib.slot else '?'})")
+                        self.logger.debug(f'{self!r}: Deleting {ib} from the YAML hardware map')
+                        ib.delete_instance()
         else:
             self.logger.info(f'{self!r}: Ping not performed on IceBoards with explicit hostnames. ')
         if missing_boards:
@@ -838,14 +837,14 @@ class FPGAArray(object):
         ib_without_serial = [ib for ib in self.hwm if ib.hostname and ib.serial is None]
         if ib_without_serial:
             t0 = time.time()
-            self.logger.info(f'{self!r}: Auto-Discovering the serial number of the IceBoards with known hostnames')
+            self.logger.info(f'{self!r}: Auto-Discovering the serial number of the Motherboards with known hostnames')
             ad_boards = ', '.join(ib.hostname for ib in ib_without_serial)
             self.logger.debug(f'{self!r}: Serial Auto-discovery is performed on the following boards: {ad_boards}')
             # concurrently resolve serials
             await asyncio.gather(*[ib.discover_serial_async() for ib in ib_without_serial])
             # self.logger.info('%r: Got all discover_serial futures after %f seconds' % (self, time.time() - t0))
             # [ib.discover_serial.async() for ib in ib_without_serial]
-            self.logger.debug(f'{self!r}: Finished Auto-Discovering serial number for IceBoards. '
+            self.logger.debug(f'{self!r}: Finished Auto-Discovering serial number for Motherboards. '
                              f'Took {time.time() - t0:.3f} seconds.')
 
         if discover_slot:
@@ -855,10 +854,10 @@ class FPGAArray(object):
             ib_without_slot = [ib for ib in self.hwm if ib.hostname]
             if ib_without_slot:
                 self.logger.info(f'{self!r}: Auto-Discovering & validating the slot numbers '
-                                 f'for {len(ib_without_slot)} IceBoards with known hostnames...')
+                                 f'for {len(ib_without_slot)} Motherboards with known hostnames...')
                 t0 = time.time()
                 await asyncio.gather(*[ib.discover_slot_async() for ib in ib_without_slot])
-                self.logger.info(f'{self!r}: Finished Auto-Discovering slot numbers for IceBoards. '
+                self.logger.info(f'{self!r}: Finished Auto-Discovering slot numbers for Motherboards. '
                                  f'Took {time.time() - t0} seconds.')
 
         self.logger.debug(f'{self!r}: Hardware map so far:')
@@ -872,7 +871,7 @@ class FPGAArray(object):
                 t0 = time.time()
                 hostnames = ', '.join(ib.hostname for ib in ib_without_crate)
                 self.logger.info(f'{self!r}: Auto-Discovering crate information '
-                                 f'for IceBoards with known hostnames: {hostnames}')
+                                 f'for Motherboards with known hostnames: {hostnames}')
                 await asyncio.gather(*[ib.discover_crate_async() for ib in ib_without_crate])
                 self.logger.info(f'{self!r}: Finished Auto-Discovering crate serial numbers. '
                                  f'Took {time.time() - t0} seconds.')
@@ -983,7 +982,7 @@ class FPGAArray(object):
             return 'SN%s' % (m.serial) if m else '-'
 
         ################################
-        # Update generic iceboard objects with firmware-specific ones
+        # Update generic Motherboard objects with firmware-specific ones
         ################################
         # For now, we assume that all the boards boards with two MGADC08
         # boards are running the chFPGA firmware variant.
@@ -1188,7 +1187,7 @@ class FPGAArray(object):
 
         Parameters:
 
-            ib: IceBoard object to program and open
+            ib: Motherboard object to program and open
 
 
             init (int): Initialization level
@@ -1233,7 +1232,7 @@ class FPGAArray(object):
 
                     # Initialize FPGA UDP communications. Overrides
                     # default parameters that were temporarily set when
-                    # the iceboard handler object was created.
+                    # the motherboard handler object was created.
                     await ib.open_fpga_async(**kwargs)
                     break
                 except IOError as e:
@@ -1327,7 +1326,7 @@ class FPGAArray(object):
         for i in self.ib:
             mezz = ['%s SN%s' % (m.part_number, m.serial) if m else 'None'
                     for m in [i.mezzanine.get(1, None), i.mezzanine.get(2, None)]]
-            string += '   Crate SN%s, slot %2i: Iceboard SN%s at %s (ping =%s), Mezz1=%s, Mezz2=%s\n' % (
+            string += '   Crate SN%s, slot %2i: Motherboard SN%s at %s (ping =%s), Mezz1=%s, Mezz2=%s\n' % (
                 i.crate.serial if i.crate else None,
                 i.slot, i.serial, i.hostname,
                 i.ping(), mezz[0], mezz[1])
@@ -2852,7 +2851,7 @@ class FPGAArray(object):
         else:
             raise ValueError(f"Unknown syncing method '{method}'")
 
-    def sync(self, delay=2 - 0.006556800, check=True, align_to_seconds=True, max_trials=3):
+    def sync(self, delay=2 - 0.006556800, check=True, align_to_seconds=True, max_trials=3, max_sync_time_difference=None):
         """ Generate a SYNC event across the whole array based on the syncing method set by ``set_sync_method()``.
 
         Parameters:
@@ -2906,22 +2905,31 @@ class FPGAArray(object):
                     self.ib.set_irigb_trigger_time_sync(dt, delay=300)
                     setting_time = (time.time() - t0)
                     self.logger.info(f'{self!r}: It takes {setting_time:0.3f} seconds to set the trigger time across the array')
-                    setting_time = round(2 * setting_time) + delay
+                    setting_time = round(2 * setting_time)
                     # Now set the trigger time using that delay
                     dt = self.ib[0].get_irigb_time_sync()
                     if align_to_seconds:
                         self.logger.info(f'{self!r}: Rounding trigger time to the second')
                         dt = dt.replace(microsecond=0)
-                    self.logger.info(f'{self!r}: Triggering SYNC {setting_time:0.6f} seconds after {dt.isoformat()}')
-                    self.print_flush()
+                    # self.print_flush()
                     t0 = time.time()
-                    self.sync_start_time = sync_time = self.ib.set_irigb_trigger_time_sync(dt, delay=setting_time)
+                    if isinstance(delay, (list, tuple)):
+                        max_delay = max(delay)
+                        sync_time = []
+                        for ib,dly in zip(self.ib, delay):
+                            self.logger.info(f'{self!r}: Triggering SYNC on {ib!r} {setting_time+dly:0.9f} seconds after {dt.isoformat()}')
+                            sync_time.append(ib.set_irigb_trigger_time_sync(dt, delay=setting_time+dly))
+                        self.sync_start_time = sync_time
+                    else:
+                        max_delay = delay
+                        self.logger.info(f'{self!r}: Triggering SYNC {setting_time+delay:0.9f} seconds after {dt.isoformat()}')
+                        self.sync_start_time = sync_time = self.ib.set_irigb_trigger_time_sync(dt, delay=setting_time+delay)
                     self.logger.info(f'{self!r}: It took {time.time() - t0:0.3f} seconds to set the final trigger time')
                     t0 = time.time()
                     # for _ in range(30):
                     while any(self.ib.is_irigb_before_trigger_time_async()):
                         #     print(f'trig={any(self.ib.is_irigb_before_trigger_time_async())}, sync={self.ib.REFCLK.SYNC_CTR}')
-                        if time.time() - t0 > setting_time + 1:
+                        if time.time() - t0 > max_delay + 1:
                             raise RuntimeError('Timout while waiting for the IRIG-B-based SYNC to complete')
                         time.sleep(0.1)
                     time.sleep(0.1) # make sure the sync sequence has time to finish
@@ -2958,9 +2966,10 @@ class FPGAArray(object):
                         for i, ib in enumerate(self.ib))
                     self.logger.info(f'{self!r}: The IRIG-B time for Frame 0 on all boards is:\n{irigb_times}')
                     self.logger.info(f'{self!r}: The maximum Frame 0 time difference is {delta_ts} ns')
-                    if delta_ts > self.max_sync_time_difference:
+                    max_sync_time_difference = max_sync_time_difference or self.max_sync_time_difference
+                    if delta_ts > max_sync_time_difference:
                         raise RuntimeError(f'The Frame 0 time difference of {delta_ts} '
-                                           f'exceeds the maximum limit of {self.max_sync_time_difference}')
+                                           f'exceeds the maximum limit of {max_sync_time_difference}')
 
                 for ib in self.ib:
                     ib.reset_scaler_overflow_flags()
@@ -2987,7 +2996,7 @@ class FPGAArray(object):
         """
             Configures the operations of all channelizers for all boards in the array.
 
-            See IceBoard's set_channelizer(...) for details.
+            See firmware set_channelizer(...) for details.
         """
         for ib in self.ib:
             ib.set_channelizer(
@@ -3016,7 +3025,7 @@ class FPGAArray(object):
         Parameters:
 
             board:  is either the serial number (as a string) of the target
-                board, or is the target IceBoard object. If board evaluates to
+                board, or is the target motherboard object. If board evaluates to
                 False (empty string), the noise injection setup is skipped.
 
         Notes:
@@ -3041,7 +3050,7 @@ class FPGAArray(object):
 
         Parameters:
 
-            board (tuple/list, str, IceBoard):  is either a 2-element tuple or
+            board (tuple/list, str, Motherboard):  is either a 2-element tuple or
                 list describing the board, or a string containing the board's
                 serial number or hostname.
 
@@ -3139,11 +3148,11 @@ class FPGAArray(object):
         return [cid for ib in self.ib for cid in ib.get_channel_ids()]
 
     def get_iceboard(self, board):
-        """ Return the ICEBoard specified by tuple or serial number.
+        """ Return the Motherboard specified by tuple or serial number.
 
         Parameters:
 
-            board (tuple, str or IceBoard): board identifier.
+            board (tuple, str or Motherboard): board identifier.
 
                 - If `board` is a str, it will be matched with either the
                   board serial number string (with leading zeros) or with the
@@ -3151,12 +3160,12 @@ class FPGAArray(object):
                 - If `board` is a tuple or a list,  describing a (crate,
                   slot), it will be matched with the board ID as return by the
                   board's get_id().
-                - If `board` is already an IceBoard object, `board` is
+                - If `board` is already an Motherboard object, `board` is
                   returned directly. An exception is raised if there are
                   multiple matches.
         """
         if not self.ib:
-            raise RuntimeError('There are no Iceboard to select in the current array')
+            raise RuntimeError('There are no Motherboards to select in the current array')
         elif isinstance(board, type(self.ib[0])):
             return board
         elif isinstance(board, str):
@@ -3179,22 +3188,22 @@ class FPGAArray(object):
             else:
                 return matches[0]
         else:
-            raise AttributeError(f'{self!r}: Invalid Iceboard specification {board}')
+            raise AttributeError(f'{self!r}: Invalid Motherboard specification {board}')
 
     def get_iceboard_from_id(self, id):
-        """ return the iceboard corresponding to the specified (crate,slot) tuple. ``slot`` is zero-based.
+        """ return the Motherboard corresponding to the specified (crate,slot) tuple. ``slot`` is zero-based.
         """
         return self.get_iceboard(id)
 
     def get_iceboards(self, board_ids=None, lane_type=None):
         """
-        Return the iceboard object(s) corresponding to the board ID tuples or
+        Return the Motherboard object(s) corresponding to the board ID tuples or
         dict specified in `ib` , including wildcards.
 
         Parameters:
 
             board_ids (list of tuple): List of (crate_number, slot_number)
-                tuple describing the an iceboard. A value of None is
+                tuple describing the a Motherboard. A value of None is
                 equivalent to a '*' wildcard. Missing tuple entries are
                 considered to be None.
 
@@ -3203,7 +3212,7 @@ class FPGAArray(object):
                 numbers are not decoded nor returned.
 
         Returns:
-            if `lane_type` is None: list of iceboard objects
+            if `lane_type` is None: list of Motherboard objects
             otherwise: a dict of {iceboard_object:set_of_lanes, ...}
 
         Notes:
@@ -3238,9 +3247,9 @@ class FPGAArray(object):
                     elif k in ('lane', 'chan', 'channel'):
                         lane_number = v
                     else:
-                        raise RuntimeError("Unknown element '%s' in iceboard selection item %s" % (k, ib))
+                        raise RuntimeError(f"Unknown element {k} in motherboard selection item {ib}")
             else:
-                raise ValueError('Unknown iceboard selection format %s', ib)
+                raise ValueError(f'Unknown Motherboard selection format {ib}')
 
             # Convert the wildcard '*' into None
             crate_number = None if crate_number == '*' else crate_number
@@ -3252,7 +3261,7 @@ class FPGAArray(object):
                 crate, slot = ib.get_id()
                 # print('   checking', ib_id)
                 if (crate_number is None or crate_number == crate) and (slot_number is None or slot_number == slot):
-                    # get the iceboard's lanes. Create an entry with an emply list if it does not exist
+                    # get the Motherboard's lanes. Create an entry with an emply list if it does not exist
                     lanes = iceboards.setdefault(ib, set())
                     if lane_type is not None:
                         if lane_type in ('channel', 'chan'):
@@ -3277,18 +3286,7 @@ class FPGAArray(object):
         else:
             return iceboards
 
-#    def init_gains(self):
-#        """ Should be deprecated. Use load_gains() instead.
-#        """
-#        for ib in self.ib:
-#            try:
-#                g_array = pickle.load(open('/home/chime/ch_acq/gains_'+str(ib.GPIO.FPGA_SERIAL_NUMBER)+'.pkl', 'rb'))
-#            except:
-#                g_array = pickle.load(open('/home/chime/ch_acq/gains.pkl', 'rb'))
-#                print 'Could not find gain settings for %r, sn %i. Using default gain settings.' \
-#                      % (ib, ib.get_fpga_serial_number())
-#            print 'Setting gains on IceBoard SN%s' % ib.serial
-#            ib.set_gain(g_array)
+
     async def load_gains_async(self, bank=0, gain_folder='/home/chime/ch_acq/gains'):
         """ Returns the gains from the gain files associated with every board of the array.
 
@@ -3747,7 +3745,7 @@ class FPGAArray(object):
 
         cb1_out = {}
         for ib in self.ib:
-            # extract channels for this iceboard only
+            # extract channels for this motherboard only
             cb1_in = {ch: chan_map[(crate, slot, ch)] for (crate, slot, ch) in ib.get_channel_ids()}
             for lane, data in ib.CROSSBAR.map(cb1_in).items():
                 cb1_out[ib.get_id(lane)] = data
@@ -3766,7 +3764,7 @@ class FPGAArray(object):
         cb2_out = {}
         for ib in self.ib:
             (crate, slot) = ib.get_id()
-            # extract channels for this iceboard only
+            # extract channels for this motherboard only
             cb2_in = {lane: pcb_shuffle_out[(crate, slot, lane)]
                       for lane in range(ib.BP_SHUFFLE.NUMBER_OF_PCB_LANES)}
             for lane, data in ib.CROSSBAR2.map(cb2_in).items():
@@ -3790,7 +3788,7 @@ class FPGAArray(object):
         cb3_out = {}
         for ib in self.ib:
             (crate, slot) = ib.get_id()
-            # extract channels for this iceboard only
+            # extract channels for this motherboard only
             cb_in = {lane: qsfp_shuffle_out[(crate, slot, lane)]
                      for lane in range(ib.BP_SHUFFLE.NUMBER_OF_QSFP_LANES)}
             for lane, data in ib.CROSSBAR3.map(cb_in).items():
@@ -3815,16 +3813,14 @@ class FPGAArray(object):
 
         fail = 0
         for test_number in range(10):
-            print('Trial # %i: Sending SYNC pulse from Slot %02i (Iceboard SN%s)'
-                  % (test_number + 1, sync_board.slot, sync_board.serial))
+            print(f'Trial # {test_number + 1}: Sending SYNC pulse from Slot {sync_board.slot:02i} (Motherboard SN{sync_board.serial})')
             sync_board.REFCLK.local_sync()
             for i, bb in enumerate(c):
                 new_sync_ctr = bb.REFCLK.SYNC_CTR
                 diff = (new_sync_ctr - sync_ctr[i]) & 0xF
                 sync_ctr[i] = bb.REFCLK.SYNC_CTR
                 fail += bool(diff != 1)
-                print('    Slot %02i (Iceboard SN%s): Sync counter = %2i, diff = %2i => %s'
-                      % (bb.slot, bb.serial, new_sync_ctr, diff, ('FAILED!', 'PASS')[bool(diff == 1)]))
+                print(f'    Slot {bb.slot:02d} (Motherboard SN{bb.serial}): Sync counter = {new_sync_ctr:2d}, diff = {diff:2d} => {("FAILED!", "PASS")[diff == 1]}')
             time.sleep(0.2)
         if fail:
             print('SYNC Test has FAILED!')
@@ -4065,7 +4061,7 @@ class FPGAArray(object):
 
         Returns:
 
-            A resolved, iceboard- and lane-oriented connectivity list in the format:
+            A resolved, motherboard- and lane-oriented connectivity list in the format:
 
                 [('BP_QSFP', (tx_crate, tx_iceboard_slot, tx_lane), (rx_crate, rx_iceboard_slot, rx_lane) ), ...]
 
@@ -4823,14 +4819,14 @@ class FPGAArray(object):
         """
         func=function
         func=async function : wll be called concurrently
-        func=data, dict, key is iceboard object
+        func=data, dict, key is motherboard object
         """
 
         if not len(self.ib):
             print('[ There are no Motherboards in the hardware map ]')
             return
 
-        # Process func and end up with a dict of {iceboard:cell_text}
+        # Process func and end up with a dict of {motherboard:cell_text}
         if func:
             if isinstance(func, dict):
                 data = func
@@ -4848,7 +4844,7 @@ class FPGAArray(object):
         if isinstance(row_labels, str):
             row_labels = [row_labels]
 
-        # Print a table of crate-less (stand-alone) iceboard
+        # Print a table of crate-less (stand-alone) motherboards
         orphan_iceboards = [ib for ib in iceboards if not ib.crate or not ib.crate.serial]
         corner_label = 'Standalone\nMotherboards'
         # col_labels = ['-'] * len(orphan_iceboards)
@@ -4920,23 +4916,23 @@ class FPGAArray(object):
         Includes:
 
             - Backplane metrics, as measured from one board in each crate
-            - Iceboard hardware metrics (voltages, temperatures), which also includes mezzanines voltage/current.
+            - Motherboard hardware metrics (voltages, temperatures), which also includes mezzanines voltage/current.
 
         Returns:
             A :class:`Metrics` object.
         """
 
         # IceCrate metrics
-        self.logger.debug(f'{self!r}: Getting IceBoard backplane hardware metrics (over ARM link)')
+        self.logger.debug(f'{self!r}: Getting Motherboard backplane hardware metrics')
         for ic in self.ic:
             slot, ib = list(ic.slot.items())[0]
             metrics += await ib.get_backplane_metrics_async()
 
         # IceBoard metrics
-        self.logger.debug(f'{self!r}: Getting IceBoard temperature & power supply metrics (over ARM link)')
+        self.logger.debug(f'{self!r}: Getting Motherboard temperature & power supply metrics')
         m = await asyncio.gather(*[ib.get_metrics_async() for ib in self.ib])
         metrics += m
-        self.logger.debug(f'{self!r}: Got {len(m)} IceBoard temperature & power supply metrics')
+        self.logger.debug(f'{self!r}: Got {len(m)} Motherboard temperature & power supply metrics')
         metrics += await asyncio.gather(*[ib.get_fpga_udp_metrics_async() for ib in self.ib if ib.fpga])
 
     async def get_fpga_metrics_async(self, metrics, reset=True):
@@ -5187,8 +5183,8 @@ class FPGAArray(object):
 
     async def set_adc_delays_async(self, **kwargs):
         """
-        Set ADC delays for all Mezzanines on all IceBoards of the array. Calls
-        set_adc_delays() on each IceBoard instance with the specified
+        Set ADC delays for all Mezzanines on all Motherboards of the array. Calls
+        set_adc_delays() on each Motherboard instance with the specified
         paramaters.
         """
 
@@ -5294,7 +5290,7 @@ def add_fpga_array_arguments(parser):
                         '--open 1: equivalent to --init 3')
     parser.add_argument('--sync_method',     type=str, help="Sets the global syncing method ('distributed_time', 'centralized_time_trigger', 'centralized_soft_trigger', 'local_soft_trigger')")
     parser.add_argument('--sync_source',     type=str, help="Sets the global syncing source ('bp_gpio_int', 'bp_time', 'bp_trig')")
-    parser.add_argument('--sync_master',     type=str, help="Serial number of the IceBoard that generates the time or trig signal")
+    parser.add_argument('--sync_master',     type=str, help="Serial number of the Motherboard that generates the time or trig signal")
     parser.add_argument('--sync_master_time_source', type=str, help="Source of the time signal used by the master board to generate the time or trigger signal ('bp_gpio_int', 'bp_time', 'bp_trig')")
     parser.add_argument('-f', '--frames_per_packet', '--fpp',     type=int, help="Number of frames per packeet. Default=2.")
     parser.add_argument('-s', '--sampling_frequency', type=float, help="Sampling frequency of the ADC in Hz. Default=800e6.")

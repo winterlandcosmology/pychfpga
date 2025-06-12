@@ -235,16 +235,16 @@ class UCorn(MMI):
 
         # total header
         header = eth_bytes + ip_bytes + udp_bytes + user_bytes
-        self.logger.info(f"{self!r}: Target {target} (bin {dest_bin}) Eth Header is {eth_bytes.hex()} ({len(eth_bytes)} bytes)")
-        self.logger.info(f"{self!r}: Target {target} (bin {dest_bin}) IP Header is {ip_bytes.hex()} ({len(ip_bytes)} bytes)")
-        self.logger.info(f"{self!r}: Target {target} (bin {dest_bin}) UDP Header is {udp_bytes.hex()} ({len(udp_bytes)} bytes)")
-        self.logger.info(f"{self!r}: Target {target} (bin {dest_bin}) User Header is {user_bytes.hex()} ({len(user_bytes)} bytes)")
+        self.logger.debug(f"{self!r}: Target {target} (bin {dest_bin}) Eth Header is {eth_bytes.hex()} ({len(eth_bytes)} bytes)")
+        self.logger.debug(f"{self!r}: Target {target} (bin {dest_bin}) IP Header is {ip_bytes.hex()} ({len(ip_bytes)} bytes)")
+        self.logger.debug(f"{self!r}: Target {target} (bin {dest_bin}) UDP Header is {udp_bytes.hex()} ({len(udp_bytes)} bytes)")
+        self.logger.debug(f"{self!r}: Target {target} (bin {dest_bin}) User Header is {user_bytes.hex()} ({len(user_bytes)} bytes)")
 
         # print(f"Header is {header.hex()} ({len(header)} bytes)")
         self.set_bin_data(bin=dest_bin, data=header)
 
 
-    def set_playlist(self, playlist=((0,[1]),)):
+    def set_playlist(self, playlist=((0,[1]),), verbose=0):
         """ Configure the playlist buffer to send the selected bins
 
         Parameters:
@@ -282,10 +282,11 @@ class UCorn(MMI):
         """
 
         bins_total = sum(len(b) for t,b in playlist)
-        print(f'Total data rate: {1*(bins_total*16*8+64)*8*3200e6/16384/16/1e9} Gbps')
-        for (t,b) in playlist:
-            l = len(b)*8*16+8*8
-            print(f"Target {t.get('dest_ip_addr', t) if isinstance(t,dict) else t}: Eth: {l} bytes, UDP: {l-42} bytes, {len(b)*4+2} words")
+        self.logger.info(f'{self!r}: Total data rate: {1*(bins_total*16*8+64)*8*3200e6/16384/16/1e9} Gbps')
+        if verbose:
+            for (t,b) in playlist:
+                l = len(b)*8*16+8*8
+                self.logger.info(f"Target {t.get('dest_ip_addr', t) if isinstance(t,dict) else t}: Eth: {l} bytes, UDP: {l-42} bytes, {len(b)*4+2} words")
         addr = 0
         for i, (target, b) in enumerate(playlist):
             # COmpute the number of bytes to send excluding the ethernet/IP/UDP/payload header. Used to compute the headers.
@@ -371,6 +372,6 @@ class UCorn(MMI):
         """
         Set the number of frame per packets.
         """
-        self.logger.warn('{self!r}: set_frames_per_packet is not implemented on UCorn. Packet size is set through the playlist. Command is ignored. ')
+        self.logger.warn(f'{self!r}: set_frames_per_packet() is not implemented on {__name__}. Packet size is set through the playlist. Command is ignored. ')
 
 

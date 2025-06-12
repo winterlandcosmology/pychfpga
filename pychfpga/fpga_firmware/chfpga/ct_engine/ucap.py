@@ -8,6 +8,7 @@ Interface to the FPGA UltraRAM-based frame capture module.
 import logging
 import asyncio
 import socket
+import time
 
 from ..mmi import MMI, BitField
 import numpy as np
@@ -31,6 +32,7 @@ class UCAP(MMI):
     CAPTURE_PERIOD2  = BitField(CONTROL, 7, 0, width=24, doc='Number of frames between captures for source 1')
     SUB_PERIOD       = BitField(CONTROL, 8, 0, width=5, doc='Dynamic capture rate, 2**(N+1) frames')
     SOURCE_SEL       = BitField(CONTROL, 9, 0, width=8, doc='0 = source selector output (timestream), 255 = scaler output (spectrum)')
+    USER_STREAM_ID   = BitField(CONTROL, 10, 0, width=8, doc='Bits 11:4 of the Stream ID found in the raw packet header')
 
     FIFO_OVERFLOW    = BitField(STATUS, 0, 0, doc='1 when dat FIFO has overflowed. Sticky flag.')
     OVERRUN          = BitField(STATUS, 0, 1, doc='1 when data transmission request was performed before the previous transmission was completed. Sticky flag.')
@@ -48,7 +50,7 @@ class UCAP(MMI):
 
     def init(self):
         """ Initializes UCAP module"""
-        pass
+        self.USER_STREAM_ID = self.fpga.slot or 0
 
     DATA_SOURCE_TABLE = {
         'adc': 0,
@@ -309,7 +311,7 @@ class RawFrameReceiver(object):
 
         if flush:
             flushed = self.flush(flush_timeout, verbose=verbose)
-            if verbose:
+            if verbose >=1:
                 print(f'Flushed {flushed} packets while emptying UDP buffers')
             self.last_ts = None
             flushed = self.wait_for_new_timestamp(self.cookie, data_timeout, verbose=verbose)
@@ -319,13 +321,13 @@ class RawFrameReceiver(object):
 
         if not self.n:
             raise RuntimeError('There is no initial data in the buffer. Run with Flush=True first')
-        return_multiple_captures = ncap
+        return_multiple_captures = ncap is not None
         ncap = ncap or 1
 
         # Determine the capture mode based in the first packet in the buffer
         mode = (self.buf_subframe[0] >> 2) & 0x3
         frames_per_channel = 2 * 2**(mode)
-        nchan = min(len(sid_map), 16 // frames_per_channel)
+        nchan = len(sid_map)  # number of captured channels
         if verbose:
             print(f"mode={mode}, {nchan} channel(s), {frames_per_channel} frames per channel, {ncap} captures")
 
@@ -343,17 +345,18 @@ class RawFrameReceiver(object):
             if verbose >=2:
                 print(f'sf={self.buf_subframe[:self.n]}')
 
-
+            t0 = time.time()
             for i in range(self.n-1):
-                bix = sid_map.get(self.buf_stream_id[i] & 0x7, None)
+                bix = sid_map.get(self.buf_stream_id[i] & 0xFFF, None)
                 subframe = self.buf_subframe[i] & 0x3
                 frame = (self.buf_stream_id[i] >> 12) & 0x0F
-                # print(f'Ch={bix}, frame={frame}, subframe={subframe}')
+                if verbose >=3:
+                    print(f'sid = {self.buf_stream_id[i] & 0xFFF:03x}, Ch={bix}, frame={frame}, subframe={subframe}')
                 if bix is not None:
                     x = frame * self.FRAME_SIZE + subframe*self.DATA_SIZE
                     data[bix, n, x:x+self.DATA_SIZE] = self.buf_data[i]
                     data_count[bix, n] += 1
-
+            # print(f'proc took {(time.time()-t0)*1000:.3f} ms')
             ts[n] = self.buf_ts[0] & self.ts_mask
 
             self.buf[0] = self.buf[self.n-1]

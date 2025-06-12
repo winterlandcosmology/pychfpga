@@ -1,5 +1,8 @@
 import time
 
+
+import freetype
+
 from . import font
 
 
@@ -10,16 +13,13 @@ class Display:
     BYTES_PER_PIXEL = None
 
     # Basic colors
-    WHITE = 0b11111_111111_11111 # R5_G6_B5 format
-    BLACK = 0b00000_000000_00000
-    YELLOW = 0b11111_111111_00000
-    GREEN = 0b00000_111111_00000
-    BLUE = 0b00000_000000_11111
+    WHITE = 1 # R5_G6_B5 format
+    BLACK = 0
 
     def __init__(self):
-        self.BYTES_PER_LINE = self.WIDTH * self.BYTES_PER_PIXEL
-        self.fb = memoryview(bytearray(self.BYTES_PER_LINE * self.HEIGHT)) # frame buffer, 2 bytes per pixel
-        self.zeros = memoryview(bytearray(self.BYTES_PER_LINE)) # preallocate a line of zeros for efficiency
+        # self.BYTES_PER_LINE = self.WIDTH * self.BYTES_PER_PIXEL
+        self.fb = memoryview(bytearray(self.WIDTH * self.HEIGHT//8)) # frame buffer, 2 bytes per pixel
+        # self.zeros = memoryview(bytearray(self.BYTES_PER_LINE)) # preallocate a line of zeros for efficiency
 
 
         self.fb_y0 = 0  # current lowest modified frame buffer line
@@ -29,20 +29,21 @@ class Display:
         self.last_time = time.time()
 
         # current font information
-        self.font = None  # Font bitmap table
-        self.font_width = None  # font horizontal pitch in pixels
-        self.font_height = None # font vertical pitch in pixels
+        self.font_path = '/home/jfcliche/Downloads/Roboto/static/'
+        self.font_name = 'Roboto-Medium.ttf'
+        self.font_size = 8
 
-        self.set_font(5)
+        # self.font_path = '/home/jfcliche/Downloads/oldschool_pc_font_pack_v2.2_linux/ttf - Mx (mixed outline+bitmap)/'
+        # self.font_name = 'Mx437_Acer_VGA_8x8.ttf'
         self.text_x = 0
         self.text_y = 0
         self.fg = self.WHITE
         self.bg = self.BLACK
 
     def init(self):
-        self.set_brightness(16)
-        self.clear()
-
+        # self.set_brightness(16)
+        # self.clear()
+        pass
 
     def set_brightness(self, brightness=16):
         if brightness == 16:
@@ -63,11 +64,8 @@ class Display:
         self.write_frame_buffer(y0=y0, y1=y1)
 
     def clear(self, update=True):
-        addr = 0
-        fb = self.fb
-        for j in range(self.HEIGHT):
-            fb[addr: addr + self.BYTES_PER_LINE] = self.zeros
-            addr += self.BYTES_PER_LINE
+        for addr in range(len(self.fb)):
+            self.fb[addr] = 0
         self.fb_y0 = 0
         self.fb_y1 = self.HEIGHT - 1
         self.text_x = self.text_y = 0
@@ -96,11 +94,8 @@ class Display:
             x0, x1, y (int): coordinates of the line. Line will be drawn between (x0,y) and (x1,y).
 
         """
-        fb = self.fb
-        a = (x0 + y * self.WIDTH) * self.BYTES_PER_PIXEL
-        for i in range(x1 - x0):
-            fb[a] = color >> 8; a +=1
-            fb[a] = color & 0xFF; a +=1
+        for x in range(x0, x1+1):
+            self.set_pixel(x, y, color)
         self.fb_y0 = min(self.fb_y0, y)
         self.fb_y1 = max(self.fb_y1, y)
 
@@ -112,92 +107,52 @@ class Display:
             x, y0, y1 (int): coordinates of the line. Line will be drawn between (x,y0) and (x,y1).
 
         """
-        fb = self.fb
-        a = (x + y0 * self.WIDTH) * self.BYTES_PER_PIXEL
-        for i in range(y1 - y0):
-            fb[a] = color >> 8
-            fb[a+1] = color & 0xFF
-            a += self.BYTES_PER_LINE
+        for y in range(y0, y1+1):
+            self.set_pixel(x, y, color)
         self.fb_y0 = min(self.fb_y0, y0)
         self.fb_y1 = max(self.fb_y1, y1)
 
-    def draw_row_wise_mono_bitmap(self, x: int, y: int, data: list, width=8, height=8, fg=WHITE,  bg=BLACK) -> None:
-        """ Writes a 8x8 monochrome bitmap in the frame buffer.
+    def set_pixel(self, x, y, color):
+        if x < 0 or x >= self.WIDTH or y < 0 or y >= self.HEIGHT-1:
+            return
+        addr = x + self.WIDTH*(y//8)
+        bit = 1 << (y & 7)
+        self.fb[addr] = (self.fb[addr] & ~bit) | (bit if color else 0)
 
-        The routine is optimized to be efficient in micropython.
-        As currently written, it works only for BYTES_PER_PIXEL=2, with R=5 bits, G=6 bits and  B=5 bits.
-
-        Parameters:
-
-            x, y (int): coordinate of the upper-left corner of the bitmap
-
-            r, g, b (int): foreground color (0-255)
-
-            bg_r, bg_g, bg_b: background color (0-255)
-        """
-        # t0 = time.ticks_ms()
-        fb = self.fb
-        addr = (x + y * self.WIDTH) * self.BYTES_PER_PIXEL
-        # ta = time.ticks_cpu()
-        for j in range(height): # scan rows
-            d = data[j]
-            a = addr
-            for i in range(width): # scan columns
-                if (d & (0x80 >> i)):
-                    fb[a] = fg >> 8; a +=1
-                    fb[a] = fg & 0xFF; a +=1
-                else:
-                    fb[a] = bg >> 8; a +=1
-                    fb[a] = bg & 0xFF; a +=1
-            addr += self.BYTES_PER_LINE
-
-        # expand the refresh zone to include modified lines
-        self.fb_y0 = min(self.fb_y0, y)
-        self.fb_y1 = max(self.fb_y1, y + height -1)
-
-    def draw_col_wise_mono_bitmap(self, x: int, y: int, data: list, width=5, height=7, fg=WHITE, bg=BLACK) -> None:
-        """ Writes a 5x7 monochrome bitmap in the frame buffer. Data bytes represent columns.
+    def draw_glyph(self, x, y, glyph, width, height, fg=1,  bg=0, rotate=False) -> None:
+        """ Writes a freetype glyph in the frame buffer.
 
         Parameters:
 
             x, y (int): coordinate of the upper-left corner of the bitmap
 
-            r, g, b (int): foreground color (0-255)
+            fg (int): foreground color
 
-            bg_r, bg_g, bg_b: background color (0-255)
+            bg: background color
         """
         # t0 = time.ticks_ms()
         fb = self.fb
-        addr = (x + y * self.WIDTH) * self.BYTES_PER_PIXEL
+        bm = glyph.bitmap
+        # addr = (x + y * self.WIDTH) * self.BYTES_PER_PIXEL
         # ta = time.ticks_cpu()
-        for col in range(width): # scan columns
-            d = data[col]
-            a = addr
-            for row in range(height): # scan rows
-                if (d & (1 << row)):
-                    fb[a] = fg >> 8;
-                    fb[a + 1] = fg & 0xFF;
+        # voffset = height - glyph.bitmap_top
+        for row in range(height):
+            r = row - height + 1 + glyph.bitmap_top
+            for col in range(width):
+                color = (bm.buffer[bm.pitch*r+(col>>3)] >> (7-(col & 7))) & 1 if r >= 0 and r < bm.rows and col < bm.width else 0
+                if rotate:
+                    self.set_pixel(x+row, y-col, color)
                 else:
-                    fb[a] = bg >> 8;
-                    fb[a + 1] = bg & 0xFF;
-                a += self.BYTES_PER_LINE
-            addr += self.BYTES_PER_PIXEL
+                    self.set_pixel(x+col, y+row, color)
 
         # expand the refresh zone to include modified lines
         self.fb_y0 = min(self.fb_y0, y)
-        self.fb_y1 = max(self.fb_y1, y + height -1)
+        self.fb_y1 = max(self.fb_y1, y + bm.rows -1)
 
-    def set_font(self, font_size):
-        if font_size==8:
-            self.font = font.font8x8
-            self.font_width = 8
-            self.font_height = 8
-            self.font_is_row_wise = True
-        else:
-            self.font = font.font5x7
-            self.font_width = 5
-            self.font_height = 7
-            self.font_is_row_wise = False
+
+    # def set_font(self, font_name, font_size):
+    #     if font_name is not None:
+    #         self.font_name = font_name
 
     def set_fg_color(self, color):
         if isinstance(color, tuple):
@@ -211,7 +166,7 @@ class Display:
         else:
             self.bg = color
 
-    def print(self, text, x=None, y=None, fg=None, bg=None, update=True, font_size=None):
+    def print(self, text, x=None, y=None, fg=None, bg=None, update=True, font_name=None, font_size=None, rotate=False):
         """ Print text in the frame buffer
 
         Parameters:
@@ -227,8 +182,10 @@ class Display:
             font_size (int): Indicates which font to use by calling ``set_font()``. If not specified, the current font is used.
 
         """
+        if font_name:
+            self.font_name = font_name
         if font_size:
-            self.set_font(font_size)
+            self.font_size = font_size
         if x is not None:
             self.text_x = x
         if y is not None:
@@ -237,39 +194,54 @@ class Display:
             self.set_fg_color(fg)
         if bg is not None:
             self.set_bg_color(bg)
-        font = self.font
-        font_width = self.font_width
-        font_height = self.font_height
-        font_is_row_wise = self.font_is_row_wise
 
+        face = freetype.Face(self.font_path + self.font_name)
+        face.set_pixel_sizes(0, self.font_size)
+        font_height = font_size
         # print(f'Printing {text} at {self.text_x=}, {self.text_y=}')
         for c in text:
             if c == '\r':
-                self.text_x = 0
+                if rotate:
+                    self.text_y = self.HEIGHT-1
+                else:
+                    self.text_x = 0
                 continue
             elif c == '\n':
-                self.text_y += font_height
+                if rotate:
+                    self.text_x += font_height
+                else:
+                    self.text_y += font_height
                 continue
-            if self.text_x + font_width > self.WIDTH:
+
+
+            face.load_char(ord(c), freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_MONO)
+            glyph = face.glyph
+            bitmap = glyph.bitmap
+            font_width = bitmap.width
+            advance = (face.glyph.linearHoriAdvance+65535)//65536
+
+            if rotate and self.text_y < font_width-1:
+                self.text_y = self.HEIGHT-1
+                self.text_x += font_height
+                print('ret')
+            elif not rotate and self.text_x + font_width -1 >= self.WIDTH:
                 self.text_x = 0
                 self.text_y += font_height
 
-            if font_is_row_wise: # implied 8x8 font with row-wise encoding
-                cc = ord(c) * self.font_height # x8
-                bitmap = font[cc: cc + font_height]
-                self.draw_row_wise_mono_bitmap(self.text_x, self.text_y, bitmap, width=font_width, height=font_height, fg=self.fg, bg=self.bg)
-            else: # implied 5x7 font with column-wise encoding
-                cc = ord(c) * self.font_width
-                bitmap = font[cc: cc + font_width]
-                self.draw_col_wise_mono_bitmap(self.text_x, self.text_y, bitmap, width=font_width, height=font_height, fg=self.fg, bg=self.bg)
-            self.text_x += font_width
+            print(f' char {c} @ {self.text_x}, {self.text_y}, width={font_width}, adv={advance}')
 
-            # wrap text
-            if self.text_x >= self.WIDTH:
-                self.text_x = 0
-                self.text_y += font_height
+            self.draw_glyph(self.text_x, self.text_y, glyph, width= advance, height=font_height, fg=self.fg, bg=self.bg, rotate=rotate)
 
-        # print(f' {self.fb_y0=}, {self.fb_y1=}')
+            if rotate:
+                self.text_y -= advance
+                if self.text_y < 0:
+                    self.text_y = self.HEIGHT-1
+                    self.text_x += font_height
+            else:
+                self.text_x += advance
+                if self.text_x >= self.WIDTH:
+                    self.text_x = 0
+                    self.text_y += font_height
 
         if update:
             self.write_frame_buffer()

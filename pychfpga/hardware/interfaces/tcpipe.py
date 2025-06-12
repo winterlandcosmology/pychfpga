@@ -52,6 +52,9 @@ class TCPipe:
         self.log.debug(f'{self!r}: Opened TCPipe socket at {self.sock.getsockname()}')
         self.bsb_sent_ctr = 0
 
+    def __repr__(self):
+        return f'TCPipe({self.hostname}:{self.port})'
+
     def close(self):
         print(f'Closing TCPipe socket at {self.sock.getsockname()}')
         self.sock.close()
@@ -110,9 +113,9 @@ class TCPipe:
             if no_error:
                 return b''
             else:
-                raise IOError(f'Reply has {rx_len} bytes but has error code {self.rx_buf[0]}')
+                raise IOError(f'{self!r}: I2C Reply has {rx_len} bytes but has error code {self.rx_buf[0]}')
         if rx_len < 1+read_length:
-            raise IOError(f'did not receive enough bytes {rx_len} instead of {1+read_length}')
+            raise IOError(f'{self!r}: I2C Did not receive enough bytes {rx_len} instead of {1+read_length}')
         return self.rx_buf[1:read_length + 1]
 
 
@@ -151,7 +154,7 @@ class TCPipe:
         if not isinstance(data, (bytes, bytearray)):
             data = bytes(data)
         if 0 > read_length >= 256:
-            raise ValueError('Read length bust be between 0 and 255')
+            raise ValueError('{self!r}: Read length bust be between 0 and 255')
         tx_len = 6 # RPC header, I2C address, read length,  excluding data
         tx_len_data = tx_len + len(data)
         rpc_len = 2 + len(data)
@@ -171,9 +174,9 @@ class TCPipe:
             if no_error:
                 return b''
             else:
-                raise IOError(f'TCPipe I2C: Reply has error code {self.rx_buf[0]} ({", ".join(e for v,e in self.I2C_ERROR_CODES.items() if self.rx_buf[0] & v)})')
+                raise IOError(f'{self!r}: TCPipe I2C: Reply has error code {self.rx_buf[0]} ({", ".join(e for v,e in self.I2C_ERROR_CODES.items() if self.rx_buf[0] & v)})')
         if rx_len != 1 + read_length:
-            raise IOError(f'TCPipe I2C: Receive {rx_len} bytes instead of {1+read_length} bytes (including status byte)')
+            raise IOError(f'{self!r}: TCPipe I2C: Receive {rx_len} bytes instead of {1+read_length} bytes (including status byte)')
         return self.rx_buf[1:read_length + 1]
 
     def i2c_write(self, addr, data):
@@ -256,9 +259,9 @@ class TCPipe:
             if timeout:
                 self.sock.settimeout(old_timeout)
         if self.rx_buf[0]:
-            raise IOError(f'SPI Reply has error code {self.rx_buf[0]}')
+            raise IOError(f'{self!r}: SPI Reply has error code {self.rx_buf[0]}')
         if rx_len != 1 + len(data) + read_length:
-            raise IOError(f'SPI Received {rx_len} bytes instead of {1 + len(data) + read_length} bytes')
+            raise IOError(f'{self!r}: SPI Received {rx_len} bytes instead of {1 + len(data) + read_length} bytes')
         # print(f'received {self.rx_buf[:rx_len]}, returning {self.rx_buf[rx_len-read_length:rx_len]}')
 
         return self.rx_buf[rx_len - read_length: rx_len]
@@ -364,6 +367,9 @@ class TCPipe_I2C:
         self._logger = logging.getLogger(__name__)
         self.current_port = None;  # I2C port currently in use
         self.current_switch_params = {}  # keep track of switch params so we don't set the switch needlessly
+
+    def __repr__(self):
+        return repr(self.tcpipe)
 
     def select_bus(self, bus_info, retry=1):
         """
@@ -508,6 +514,9 @@ class TCPipe_SPI:
         self._logger = logging.getLogger(__name__)
         self.current_port = None;  # I2C port currently in use
 
+    def __repr__(self):
+        return repr(self.tcpipe)
+
     # def select_bus(self, bus_info, retry=1):
     #     """
     #     Configure the I2C port and I2C switches so the following
@@ -646,10 +655,13 @@ class TCPipe_BSB_MMI(BSB_MMI):
         self.send_counter = 0
         self.recv_counter = 0
 
+    def __repr__(self):
+        return repr(self.tcpipe)
+
     def _send_command(self, cmd, expected_reply_length, retry=1, resync=False, **kwargs):
         reply = self.tcpipe.bsb_write_read(cmd)
         if len(reply) != expected_reply_length + 1:
-            raise IOError(f'Unexpected number of reply bytes. Got {len(reply)} bytes ({reply.hex(",")}), expected {expected_reply_length + 1} bytes')
+            raise IOError(f'{self!r}: Unexpected number of reply bytes. Got {len(reply)} bytes ({reply.hex(",")}), expected {expected_reply_length + 1} bytes')
         return reply[1:]
 
     def close(self):
