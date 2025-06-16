@@ -96,6 +96,7 @@ class POCKET_CORRELATOR:
                                   )
 
         # Define useful objects
+        self.ca = ca
         self.i = ca.ib[0] # we only need to grab the t0.CRS board
         # self.i.GPIO.HOST_FRAME_READ_RATE = 14
         self.ucap = self.i.UCAP # UCAP module
@@ -1244,6 +1245,11 @@ class POCKET_CORRELATOR:
 
         """
 
+        # TEMPORARY: if more than one software frame is requested, throw an error. There is a bug somewhere
+        # that shows up for > 1 software frame.
+        if n_software_frames > 1:
+            raise ValueError(f'{n_software_frames} software frames requested. More than one software frame is untrusted in this commit.')
+
         # Verify that 'data_source' has been specified correctly
         valid_data_sources = ['adc', 'funcgen']
         if data_source not in valid_data_sources:
@@ -1295,10 +1301,16 @@ class POCKET_CORRELATOR:
                                                                   )
         t2 = time.time()
 
-        print(f'Took {t2 - t1} s to capture corr data')
+        print(f'Took {t2 - t1} s to capture correlated data')
 
-        # Remove the "Ncorr" axis
-        return t1, d_corr[:, 0, self.bin_map], count, sat
+        # Reshape the d_corr array according to the number of correlators (4 in the case of corr8) and the number of bins
+        # per stream (2048 for corr8 mode); i.e., there are 4 individual firmware correlator modules, each responsible
+        # for correlating 2048 frequency bins
+        d_corr = d_corr.reshape(number_of_results, self.corr_receiver.NCORR*self.corr_receiver.NBINS_PER_STREAM, self.corr_receiver.NPROD)
+        count = count.reshape(number_of_results, self.corr_receiver.NCORR*self.corr_receiver.NBINS_PER_STREAM)
+        
+        # Apply the bin map when returning the array
+        return t1, d_corr[:, self.bin_map], count[:, self.bin_map], sat
 
     def make_time_string(self):
         """
