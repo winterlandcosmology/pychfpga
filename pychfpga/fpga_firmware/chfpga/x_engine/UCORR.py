@@ -44,11 +44,12 @@ class UCORR(MMI):
 
     # Status registers
     OVERRUN   = BitField(STATUS, 0, 0, doc="An overrun has occured in one of the correlator cores")
+    RST_STATUS   = BitField(STATUS, 0, 1, doc="reset line status")
     NCHAN = BitField(STATUS, 1, 0, width=8, doc="NUmber of input channelsto correlate")
     NCORR   = BitField(STATUS, 2, 4, width=4, doc="Number of correlator cores")
     BIN_DECIMATION_FACTOR   = BitField(STATUS, 2, 0, width=4, doc="Bin decimation factor")
-    IN_FRAME_CTR  = BitField(STATUS, 0x02, 0, width=8, doc="Input frame counter")
-    OUT_FRAME_CTR = BitField(STATUS, 0x03, 0, width=8, doc="Output frame counter")
+    IN_FRAME_CTR  = BitField(STATUS, 3, 0, width=8, doc="Input frame counter")
+    OUT_FRAME_CTR = BitField(STATUS, 4, 0, width=8, doc="Output frame counter")
 
     def __init__(self, fpga_instance, base_address, instance_number, verbose=0):
         super().__init__(fpga_instance, base_address, instance_number)

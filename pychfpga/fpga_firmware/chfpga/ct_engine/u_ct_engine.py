@@ -11,7 +11,16 @@ from . import xxvglink
 
 
 class CT1Regs(MMI):
-    pass
+    CONTROL = BitField.CONTROL
+    STATUS = BitField.STATUS
+
+    CT_LEVEL = BitField(STATUS, 0, 0, width=2, doc='Corner-turning level')
+    CT1_RST_STATUS = BitField(STATUS, 0, 2, doc='Reset line state')
+    RST_STATUS = BitField(STATUS, 0, 3, doc='Reset line state')
+    ARST_STATUS = BitField(STATUS, 0, 4, doc='Reset line state')
+
+    IN_FRAME_CTR = BitField(STATUS, 1, 0, width=8, doc='Counts frames coming into the CT engine')
+    OUT_FRAME_CTR = BitField(STATUS, 2, 0, width=8, doc='Counts frames coming out of the CT engine')
 
 class CT2Regs(MMI):
     CONTROL = BitField.CONTROL
@@ -94,7 +103,7 @@ class UCTEngine(MMI):
 
         super().__init__(fpga_instance, base_address=base_address, address_width=address_width, router_port=router_port)
 
-        router_port_address_width = address_width - self.BSB_ROUTING_ADDRESS_WIDTH
+        submodule_address_width = address_width - self.BSB_ROUTING_ADDRESS_WIDTH
         self.CT_LEVEL = self.fpga.CT_LEVEL
 
         assert self.CT_LEVEL >=1, "CT_LEVEL cannot be < 1"
@@ -103,7 +112,7 @@ class UCTEngine(MMI):
         self.CT1 = CT1Regs(
             fpga_instance,
             base_address=self.base_address,
-            address_width=router_port_address_width,
+            address_width=submodule_address_width,
             router_port=self.BSB_ROUTER_CT1_PORT)
 
         if self.CT_LEVEL >=2:
@@ -111,12 +120,12 @@ class UCTEngine(MMI):
             self.CT2 = CT2Regs(
                 fpga_instance,
                 base_address=self.base_address,
-                address_width=router_port_address_width,
+                address_width=submodule_address_width,
                 router_port=self.BSB_ROUTER_CT2_PORT)
             self.BPLINKS = xxvglink.XXVGLinkArray(
                 fpga_instance=fpga_instance,
                 base_address = self.base_address,
-                address_width = router_port_address_width,
+                address_width = submodule_address_width,
                 router_port =  self.BSB_ROUTER_BPLINKS_PORT,
                 lane_groups=lane_groups,
                 verbose=1)
@@ -129,7 +138,7 @@ class UCTEngine(MMI):
             self.CT3 = CT3Regs(
                 fpga_instance,
                 base_address=self.base_address,
-                address_width=router_port_address_width,
+                address_width=submodule_address_width,
                 router_port=self.BSB_ROUTER_CT3_PORT)
         else:
             self.CT3 = None

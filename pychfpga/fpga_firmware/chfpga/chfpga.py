@@ -3131,7 +3131,7 @@ class chFPGA(FPGAFirmware):
 
         return self.recv
 
-    def get_data_socket(self, port_number=0):
+    def get_data_socket(self, port_number=None):
         """
         Return a UDP socket that receives the raw/correlator data.
 
@@ -3162,6 +3162,7 @@ class chFPGA(FPGAFirmware):
             self.logger.debug(f'{self!r}: Reusing already allocated socket {sock} for port {port_number}')
         else: # open a new port. If port_number is zero, it will be a OS-assigned port.
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            port_number = port_number or 0
             self.logger.debug(f'{self!r}: Binding data socket at port {port_number} to interface IP {self.interface_ip_addr}')
             try:
                     sock.bind((self.interface_ip_addr, port_number))
