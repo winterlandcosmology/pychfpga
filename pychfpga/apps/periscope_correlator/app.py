@@ -39,6 +39,7 @@ NPROD = NCHAN * (NCHAN + 1) // 2
 DEFAULT_SERIAL = "0016"
 DEFAULT_GAIN_TARGET = 2.1
 DEFAULT_WATERFALL_LEN = 250
+DEFAULT_FRAMES_TO_AVERAGE = 1
 FS_HZ = 3_200_000_000.0  # 3.2 GHz
 M_FACTOR = 2**14
 
@@ -102,6 +103,7 @@ class CorrelatorConfig:
     idx11: int = 0
     idx01: int = 0
     waterfall_len: int = DEFAULT_WATERFALL_LEN
+    frames_to_average: int = DEFAULT_FRAMES_TO_AVERAGE
 
 class LagSpectraComputer(threading.Thread):
     """
@@ -129,9 +131,11 @@ class LagSpectraComputer(threading.Thread):
         self.last_fps_time = time.time()
         self.fps = 0
         
-        # Skip frames if falling behind
-        self.skip_counter = 0
-        self.skip_rate = 1  # Process every Nth frame
+        # Frame validation statistics
+        self.total_frames_captured = 0
+        self.valid_frames_processed = 0
+        self.frames_skipped = 0
+        self.last_stats_print_time = time.time()
         
     def set_compute_enabled(self, enabled: bool):
         """Enable or disable lag computation."""
@@ -139,10 +143,6 @@ class LagSpectraComputer(threading.Thread):
             self.compute_enabled.set()
         else:
             self.compute_enabled.clear()
-            
-    def set_skip_rate(self, rate: int):
-        """Set frame skip rate (1 = process every frame, 2 = every other, etc.)."""
-        self.skip_rate = max(1, rate)
     
     def run(self):
         """Main thread loop for computing lag spectra."""
@@ -151,12 +151,9 @@ class LagSpectraComputer(threading.Thread):
             with self.shared_buffers.new_data_condition:
                 self.shared_buffers.new_data_condition.wait(timeout=0.1)
                 
-            # Only compute if enabled and it's time (based on skip rate)
+            # Only compute if enabled
             if self.compute_enabled.is_set():
-                self.skip_counter += 1
-                if self.skip_counter >= self.skip_rate:
-                    self.skip_counter = 0
-                    self._compute_lag_spectra()
+                self._compute_lag_spectra()
                     
     def _compute_lag_spectra(self):
         """Compute lag spectra from visibility data."""
@@ -237,10 +234,11 @@ class FineLagComputer(threading.Thread):
     A thread that captures raw ADC data and computes fine-resolution lag spectra.
     Uses direct pocket_correlator calls to get raw ADC frames.
     """
-    def __init__(self, pocket_correlator: POCKET_CORRELATOR, shared_buffers: 'SharedDataBuffers'):
+    def __init__(self, pocket_correlator: POCKET_CORRELATOR, shared_buffers: 'SharedDataBuffers', config: CorrelatorConfig):
         super().__init__(daemon=True)
         self.pc = pocket_correlator
         self.shared_buffers = shared_buffers
+        self.config = config
         self.running = True
         self.enabled = threading.Event()
         
@@ -248,6 +246,12 @@ class FineLagComputer(threading.Thread):
         self.frames_processed = 0
         self.last_fps_time = time.time()
         self.fps = 0
+        
+        # Frame validation statistics
+        self.total_frames_captured = 0
+        self.valid_frames_processed = 0
+        self.frames_skipped = 0
+        self.last_stats_print_time = time.time()
         
     def set_enabled(self, enabled: bool):
         """Enable or disable fine lag computation."""
@@ -262,8 +266,14 @@ class FineLagComputer(threading.Thread):
         self.pc.set_ucap_mode(mode=0)  # 8-channel capture (2 frames per channel)
         
         # Do initial capture with flush=True to set everything up
-        n_frames_to_average = 20
-        d_adc = self.pc.read_adc_frames(n_frames=n_frames_to_average, split=True, verbose=0)
+        # Always capture at least 2 frames (minimum for mode 0)
+        n_frames_to_capture = max(2, self.config.frames_to_average)
+        # Round up to nearest multiple of 2
+        n_frames_to_capture = ((n_frames_to_capture + 1) // 2) * 2
+        d_adc = self.pc.read_adc_frames(n_frames=n_frames_to_capture, split=True, verbose=0)
+        
+        # Debug: check which channels have data on first capture
+        debug_printed = False
         
         while self.running:
             if not self.enabled.is_set():
@@ -271,10 +281,12 @@ class FineLagComputer(threading.Thread):
                 continue
                 
             try:
-                # For subsequent frames, use read_raw_frames directly
-                # In mode 0, we get 2 frames per channel per capture
-                # Since we want 20 frames total, we need 10 captures
-                ncap = n_frames_to_average // 2  # 20 frames / 2 frames per capture = 10 captures
+                # Get current frames to average from config (dynamic update)
+                n_frames_to_capture = max(2, self.config.frames_to_average)
+                # Round up to nearest multiple of 2
+                n_frames_to_capture = ((n_frames_to_capture + 1) // 2) * 2
+                
+                ncap = n_frames_to_capture // 2  # Number of captures needed
                 
                 # Use a small flush to ensure we're synchronized to a new timestamp
                 # This is lighter than the full flush in read_adc_frames
@@ -289,13 +301,23 @@ class FineLagComputer(threading.Thread):
                 
                 # Shift to 14 bits (same as in read_adc_frames)
                 d_adc = d_adc >> 2
-                # d_adc shape: (8, 10, 16384)
+                # d_adc shape: (8, n_frames, 16384)
                 
-                # # Debug: Check if we got data
-                # if self.frames_processed == 0:
-                #     print(f"Fine lag: Got ADC data shape: {d_adc.shape}")
-                #     print(f"Fine lag: ADC0 range: [{np.min(d_adc[0]):.1f}, {np.max(d_adc[0]):.1f}]")
-                #     print(f"Fine lag: ADC1 range: [{np.min(d_adc[1]):.1f}, {np.max(d_adc[1]):.1f}]")
+                # Increment total frames captured counter
+                self.total_frames_captured += 1
+                
+                # Try to find ADC1 at a different channel if channel 1 is empty
+                adc1_ch_idx = 1  # Default assumption
+                
+                # Debug: Check which channels have data
+                if not debug_printed:
+                    print(f"Fine lag: Got ADC data shape: {d_adc.shape}")
+                    for ch in range(d_adc.shape[0]):
+                        ch_min = np.min(d_adc[ch])
+                        ch_max = np.max(d_adc[ch])
+                        ch_mean = np.mean(d_adc[ch])
+                        print(f"  Channel {ch}: range=[{ch_min:.1f}, {ch_max:.1f}], mean={ch_mean:.1f}")
+                    debug_printed = True
                 
                 # Process each frame separately and average for better SNR
                 n_samples = 16384  # Samples per frame
@@ -307,11 +329,82 @@ class FineLagComputer(threading.Thread):
                 lag_p11_sum = np.zeros(n_lags)
                 lag_p01_sum = np.zeros(n_lags, dtype=np.complex128)  # Complex for cross-correlation
                 
-                # Process each of the frames for averaging
-                for frame_idx in range(n_frames_to_average):
+                # Process only the requested number of frames for averaging
+                # (we may have captured more to meet the 2-frame requirement)
+                frames_to_process = min(self.config.frames_to_average, d_adc.shape[1])
+                
+                # Check for missing data within frames
+                missing_data_detected = False
+                frames_actually_processed = 0  # Track how many frames passed validation
+                valid_frame_indices = []  # Track which frame indices passed validation
+                
+                for frame_idx in range(frames_to_process):
                     # Get data for this frame
                     adc0_frame = d_adc[0, frame_idx, :].astype(np.float64)  # 16384 samples
-                    adc1_frame = d_adc[1, frame_idx, :].astype(np.float64)  # 16384 samples
+                    adc1_frame = d_adc[adc1_ch_idx, frame_idx, :].astype(np.float64)  # Use the correct channel for ADC1
+                    
+                    # Check for gaps/missing data (consecutive zeros)
+                    # Look for runs of zeros that indicate missing data
+                    zero_threshold = 1.0  # Values below this are considered missing
+                    adc0_zeros = np.abs(adc0_frame) < zero_threshold
+                    adc1_zeros = np.abs(adc1_frame) < zero_threshold
+                    
+                    # Count consecutive zeros with more sophisticated detection
+                    def find_max_consecutive_zeros(zero_mask):
+                        """Find the maximum length of consecutive zeros in the data."""
+                        if not np.any(zero_mask):
+                            return 0, []
+                        # Find changes from non-zero to zero and vice versa
+                        changes = np.diff(np.concatenate(([False], zero_mask, [False])).astype(int))
+                        starts = np.where(changes == 1)[0]
+                        ends = np.where(changes == -1)[0]
+                        
+                        if len(starts) > 0 and len(ends) > 0:
+                            lengths = ends - starts
+                            max_length = np.max(lengths)
+                            # Also return all significant run lengths for debugging
+                            significant_runs = lengths[lengths > 100]
+                            return max_length, significant_runs
+                        return 0, []
+                    
+                    adc0_max_zeros, adc0_runs = find_max_consecutive_zeros(adc0_zeros)
+                    adc1_max_zeros, adc1_runs = find_max_consecutive_zeros(adc1_zeros)
+                    
+                    # New validation: reject frame if we find runs of zeros > 4000
+                    # These are likely blocks of missing data that are multiples of 4096
+                    critical_threshold = 4000
+                    
+                    if adc0_max_zeros > critical_threshold or adc1_max_zeros > critical_threshold:
+                        # Reject this entire frame for both ADCs
+                        self.frames_skipped += 1
+                        
+                        # Print detailed info
+                        percent_zeros_adc0 = np.sum(adc0_zeros) / len(adc0_frame) * 100
+                        percent_zeros_adc1 = np.sum(adc1_zeros) / len(adc1_frame) * 100
+                        
+                        print(f"Fine lag: REJECTING frame {self.total_frames_captured} due to large zero blocks:")
+                        print(f"  ADC0: max run = {adc0_max_zeros} zeros ({percent_zeros_adc0:.1f}% zeros total)")
+                        print(f"  ADC1: max run = {adc1_max_zeros} zeros ({percent_zeros_adc1:.1f}% zeros total)")
+                        
+                        # Show distribution of run lengths if there are multiple significant runs
+                        if len(adc0_runs) > 0:
+                            print(f"  ADC0 significant runs: {adc0_runs}")
+                        if len(adc1_runs) > 0:
+                            print(f"  ADC1 significant runs: {adc1_runs}")
+                        
+                        # Skip processing this frame entirely
+                        continue
+                    
+                    # If we have smaller gaps (more than 100 consecutive zeros), just flag it
+                    gap_threshold = 100
+                    if adc0_max_zeros > gap_threshold or adc1_max_zeros > gap_threshold:
+                        missing_data_detected = True
+                        if self.frames_processed < 10 or self.frames_processed % 100 == 0:
+                            percent_zeros_adc0 = np.sum(adc0_zeros) / len(adc0_frame) * 100
+                            percent_zeros_adc1 = np.sum(adc1_zeros) / len(adc1_frame) * 100
+                            print(f"Fine lag: Minor gaps in frame {self.total_frames_captured}, idx {frame_idx}:")
+                            print(f"  ADC0: {adc0_max_zeros} consecutive zeros ({percent_zeros_adc0:.1f}% zeros total)")
+                            print(f"  ADC1: {adc1_max_zeros} consecutive zeros ({percent_zeros_adc1:.1f}% zeros total)")
                     
                     # Remove DC offset to reduce artifacts
                     adc0_frame -= np.mean(adc0_frame)
@@ -348,11 +441,23 @@ class FineLagComputer(threading.Thread):
                     lag_p00_sum += lag_p00_frame
                     lag_p11_sum += lag_p11_frame
                     lag_p01_sum += lag_p01_complex  # Keep complex for averaging
+                    
+                    # Increment counter of successfully processed frames
+                    frames_actually_processed += 1
+                    valid_frame_indices.append(frame_idx)  # Track this as a valid frame
                 
-                # Average the results
-                lag_p00 = lag_p00_sum / n_frames_to_average
-                lag_p11 = lag_p11_sum / n_frames_to_average
-                lag_p01_complex_avg = lag_p01_sum / n_frames_to_average
+                # Check if any frames were successfully processed
+                if frames_actually_processed == 0:
+                    # No valid frames in this capture, skip it entirely
+                    if self.frames_processed < 10 or self.frames_processed % 50 == 0:
+                        print(f"Fine lag: Skipping entire capture {self.total_frames_captured} - all frames rejected")
+                    time.sleep(0.05)  # Small delay before trying next capture
+                    continue
+                
+                # Average the results (using actual number of frames processed)
+                lag_p00 = lag_p00_sum / frames_actually_processed
+                lag_p11 = lag_p11_sum / frames_actually_processed
+                lag_p01_complex_avg = lag_p01_sum / frames_actually_processed
                 
                 # Take magnitude of cross-correlation
                 lag_p01 = np.abs(lag_p01_complex_avg)
@@ -363,7 +468,7 @@ class FineLagComputer(threading.Thread):
                 
                 # For cross-correlation, normalize by sqrt of auto-correlation zero-lags
                 # This gives correlation coefficient
-                norm_factor = np.sqrt(lag_p00_sum[0] * lag_p11_sum[0]) / n_frames_to_average
+                norm_factor = np.sqrt(lag_p00_sum[0] * lag_p11_sum[0]) / frames_to_process
                 if norm_factor > 0:
                     lag_p01 = lag_p01 / norm_factor
                 
@@ -373,12 +478,47 @@ class FineLagComputer(threading.Thread):
                     self.shared_buffers.fine_lag_p11[:] = lag_p11
                     self.shared_buffers.fine_lag_p01[:] = lag_p01  # Cross-correlation magnitude
                     
-                    # Store raw time domain data (concatenate first 2 frames for display)
-                    # This is just for visualization - the lag computation uses all frames
-                    adc0_display = np.concatenate([d_adc[0, 0, :], d_adc[0, 1, :]])
-                    adc1_display = np.concatenate([d_adc[1, 0, :], d_adc[1, 1, :]])
-                    self.shared_buffers.fine_time_adc0[:] = adc0_display
-                    self.shared_buffers.fine_time_adc1[:] = adc1_display
+                    # Store raw time domain data (concatenate frames for display)
+                    # Limit to max frames that fit in the buffer
+                    max_frames_for_display = 10  # Buffer is sized for 10 frames max
+                    
+                    # Only concatenate VALID frames that passed validation
+                    valid_frames_to_display = valid_frame_indices[:max_frames_for_display]
+                    n_valid_frames_to_display = len(valid_frames_to_display)
+                    
+                    if n_valid_frames_to_display > 0:
+                        # Only concatenate the valid frames
+                        adc0_display = np.concatenate([d_adc[0, idx, :] for idx in valid_frames_to_display])
+                    else:
+                        # No valid frames to display
+                        adc0_display = np.zeros(16384)  # Show at least one frame of zeros
+                        n_valid_frames_to_display = 1
+                    
+                    # Try different channel indices for ADC1
+                    # Mode 0 might have ADC1 at a different index
+                    adc1_ch_idx = 1  # Default assumption
+                    
+                    # Concatenate frames for ADC1 display (only valid frames)
+                    if n_valid_frames_to_display > 0 and len(valid_frames_to_display) > 0:
+                        adc1_display = np.concatenate([d_adc[adc1_ch_idx, idx, :] for idx in valid_frames_to_display])
+                    else:
+                        adc1_display = np.zeros(16384)  # Show at least one frame of zeros
+                    
+                    # Only copy as much data as we have from valid frames
+                    n_samples_total = n_valid_frames_to_display * 16384
+                    self.shared_buffers.fine_time_adc0[:n_samples_total] = adc0_display
+                    self.shared_buffers.fine_time_adc1[:n_samples_total] = adc1_display
+                    
+                    # Store the actual number of samples for plotting
+                    self.shared_buffers.fine_time_n_samples = n_samples_total
+                    
+                    # # Debug info about what frames are being displayed
+                    # if self.frames_processed < 5 or self.frames_processed % 100 == 0:
+                    #     print(f"Fine lag: Displaying {n_valid_frames_to_display} valid frames out of {frames_to_process} processed")
+                    
+                    # # Debug info about what's being displayed
+                    # if self.frames_processed == 0:
+                    #     print(f"Fine lag: Displaying all {n_frames_captured} captured frames ({n_samples_total} samples) in time domain")
                     
                     # Update waterfall - shift existing data down and insert new at top
                     # Roll the arrays down by 1 to make room at position 0
@@ -484,7 +624,7 @@ class SuperFFTComputer(threading.Thread):
                     ncap=1,  # In mode 3, we get 16 frames per capture
                     split=True,
                     verbose=0,
-                    flush=False,  # Minimal flush to ensure timestamp sync
+                    flush=True,  # Minimal flush to ensure timestamp sync
                     flush_timeout=0.0001  # Very short flush
                 )
                 
@@ -656,7 +796,10 @@ class SharedDataBuffers:
         
         # Fine lag data (8192 positive lag bins - half of 16384)
         n_fine_lags = 8192
-        n_time_samples = 32768  # Raw time domain samples
+        # Time domain samples - allocate for max frames we might average
+        # Maximum 200 frames * 16384 samples/frame = 3,276,800 samples
+        max_frames_for_display = 10
+        n_time_samples = max_frames_for_display * 16384
         self.shm_fine_lag_p00 = shared_memory.SharedMemory(create=True, size=n_fine_lags * 8)
         self.shm_fine_lag_p11 = shared_memory.SharedMemory(create=True, size=n_fine_lags * 8)
         self.shm_fine_lag_p01 = shared_memory.SharedMemory(create=True, size=n_fine_lags * 8)  # Cross-correlation
@@ -693,6 +836,9 @@ class SharedDataBuffers:
         self.fine_lag_wf_write_pos = 0
         self.fine_lag_frames_written = 0
         self.fine_lag_lock = threading.Lock()
+        
+        # Track actual number of time domain samples being used
+        self.fine_time_n_samples = 32768  # Default to 2 frames
         
         # Super FFT data (131,073 frequency bins for 262,144 sample FFT)
         n_super_fft_bins = 131073  # (16 * 16384) // 2 + 1
@@ -956,8 +1102,10 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         # Range: 0 to ~383 meters with 4.68 cm resolution
         
         # Time axis for raw ADC samples (microseconds)
-        time_samples = np.arange(32768)  # 32768 samples
-        self.time_axis_us = time_samples / FS_HZ * 1e6  # Convert to microseconds
+        # Will be dynamically adjusted based on actual frames captured
+        max_time_samples = 10 * 16384  # Maximum samples we might display (10 frames)
+        time_samples = np.arange(max_time_samples)
+        self.time_axis_us_full = time_samples / FS_HZ * 1e6  # Convert to microseconds
         
         self.prod_map = self._generate_prod_map()
         self._precalculate_indices()
@@ -1086,13 +1234,13 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.enable_lag_checkbox.setChecked(False)
         self.enable_lag_checkbox.stateChanged.connect(self._toggle_lag_computation)
         
-        self.lag_skip_rate_spinner = QtWidgets.QSpinBox()
-        self.lag_skip_rate_spinner.setRange(1, 10)
-        self.lag_skip_rate_spinner.setValue(1)
-        self.lag_skip_rate_spinner.setPrefix("Lag Update: 1/")
-        self.lag_skip_rate_spinner.setSuffix(" frames")
-        self.lag_skip_rate_spinner.setToolTip("Process every Nth frame for lag computation")
-        self.lag_skip_rate_spinner.valueChanged.connect(self._update_lag_skip_rate)
+        # Frames to average spinner (applies to all modes)
+        self.frames_to_average_spinner = QtWidgets.QSpinBox()
+        self.frames_to_average_spinner.setRange(1, 2000)
+        self.frames_to_average_spinner.setValue(DEFAULT_FRAMES_TO_AVERAGE)
+        self.frames_to_average_spinner.setPrefix("Frames to Average: ")
+        self.frames_to_average_spinner.setToolTip("Number of frames to average (applies to all modes)")
+        self.frames_to_average_spinner.valueChanged.connect(self._update_frames_to_average)
         
         # Fine lag mode controls
         self.fine_lag_mode_button = QtWidgets.QPushButton("Enable Fine Lag Mode")
@@ -1121,7 +1269,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         toolbar_row2.addWidget(self.viewbox_mode_checkbox)
         toolbar_row2.addSpacing(20)
         toolbar_row2.addWidget(self.enable_lag_checkbox)
-        toolbar_row2.addWidget(self.lag_skip_rate_spinner)
+        toolbar_row2.addWidget(self.frames_to_average_spinner)
         toolbar_row2.addSpacing(20)
         toolbar_row2.addWidget(self.fine_lag_mode_button)
         toolbar_row2.addWidget(self.super_fft_mode_button)
@@ -1198,7 +1346,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         p00_plot.addLegend()
         layout.addWidget(p00_widget, 0, 0)
         # Connect checkbox to hide/show the widget
-        p00_cb.stateChanged.connect(lambda state: p00_widget.setVisible(state == QtCore.Qt.Checked))
+        p00_cb.stateChanged.connect(lambda state, w=p00_widget: w.setVisible(state == QtCore.Qt.Checked))
 
         # --- P01 Abs Plot ---
         p01_abs_widget = QtWidgets.QWidget()
@@ -1216,7 +1364,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         p01_abs_plot.setLabel('bottom', 'Frequency', units='Hz')
         layout.addWidget(p01_abs_widget, 1, 0)
         # Connect checkbox to hide/show the widget
-        p01_abs_cb.stateChanged.connect(lambda state: p01_abs_widget.setVisible(state == QtCore.Qt.Checked))
+        p01_abs_cb.stateChanged.connect(lambda state, w=p01_abs_widget: w.setVisible(state == QtCore.Qt.Checked))
 
         # --- P01 Real Plot ---
         p01_real_widget = QtWidgets.QWidget()
@@ -1235,7 +1383,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         p01_real_plot.setLabel('left', 'Real Part')
         layout.addWidget(p01_real_widget, 1, 1)
         # Connect checkbox to hide/show the widget
-        p01_real_cb.stateChanged.connect(lambda state: p01_real_widget.setVisible(state == QtCore.Qt.Checked))
+        p01_real_cb.stateChanged.connect(lambda state, w=p01_real_widget: w.setVisible(state == QtCore.Qt.Checked))
 
         # --- P11 Plot ---
         p11_widget = QtWidgets.QWidget()
@@ -1253,7 +1401,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         p11_plot.addLegend()
         layout.addWidget(p11_widget, 0, 1)
         # Connect checkbox to hide/show the widget
-        p11_cb.stateChanged.connect(lambda state: p11_widget.setVisible(state == QtCore.Qt.Checked))
+        p11_cb.stateChanged.connect(lambda state, w=p11_widget: w.setVisible(state == QtCore.Qt.Checked))
 
     def _setup_waterfall_plots(self) -> None:
         """Set up the image views for the Waterfall tab."""
@@ -1308,6 +1456,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Connect checkbox to hide/show the container
             cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
 
+
     def _setup_lag_spectra_plots(self) -> None:
         """Set up the plots for the Lag Spectra tab."""
         layout = QtWidgets.QGridLayout(self.lag_spectra_tab)
@@ -1333,7 +1482,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         lag_p00_plot.addLegend()
         layout.addWidget(lag_p00_widget, 0, 0)
         # Connect checkbox to hide/show the widget
-        lag_p00_cb.stateChanged.connect(lambda state: lag_p00_widget.setVisible(state == QtCore.Qt.Checked))
+        lag_p00_cb.stateChanged.connect(lambda state, w=lag_p00_widget: w.setVisible(state == QtCore.Qt.Checked))
 
         # --- Lag P11 Plot ---
         lag_p11_widget = QtWidgets.QWidget()
@@ -1352,7 +1501,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         lag_p11_plot.addLegend()
         layout.addWidget(lag_p11_widget, 0, 1)
         # Connect checkbox to hide/show the widget
-        lag_p11_cb.stateChanged.connect(lambda state: lag_p11_widget.setVisible(state == QtCore.Qt.Checked))
+        lag_p11_cb.stateChanged.connect(lambda state, w=lag_p11_widget: w.setVisible(state == QtCore.Qt.Checked))
 
         # --- Lag P01 Magnitude Plot ---
         lag_p01_mag_widget = QtWidgets.QWidget()
@@ -1371,7 +1520,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         lag_p01_mag_plot.setLabel('left', 'Power')
         layout.addWidget(lag_p01_mag_widget, 1, 0)
         # Connect checkbox to hide/show the widget
-        lag_p01_mag_cb.stateChanged.connect(lambda state: lag_p01_mag_widget.setVisible(state == QtCore.Qt.Checked))
+        lag_p01_mag_cb.stateChanged.connect(lambda state, w=lag_p01_mag_widget: w.setVisible(state == QtCore.Qt.Checked))
 
     def _setup_lag_waterfall_plots(self) -> None:
         """Set up the image views for the Lag Waterfall tab."""
@@ -1399,6 +1548,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             cb = QtWidgets.QCheckBox(title)
             cb.setChecked(True)
             self.plot_checkboxes[f"lag_wf_{key}"] = cb
+            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
+
             
             plot = pg.PlotWidget()
             plot.setLabel('left', 'Time')
@@ -1447,7 +1598,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         fine_lag_p00_plot.addLegend()
         layout.addWidget(fine_lag_p00_widget, 0, 0)
         # Connect checkbox to hide/show the widget
-        fine_lag_p00_cb.stateChanged.connect(lambda state: fine_lag_p00_widget.setVisible(state == QtCore.Qt.Checked))
+        fine_lag_p00_cb.stateChanged.connect(lambda state, w=fine_lag_p00_widget: w.setVisible(state == QtCore.Qt.Checked))
 
         # --- Fine Lag P11 Plot ---
         fine_lag_p11_widget = QtWidgets.QWidget()
@@ -1466,7 +1617,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         fine_lag_p11_plot.addLegend()
         layout.addWidget(fine_lag_p11_widget, 0, 1)
         # Connect checkbox to hide/show the widget
-        fine_lag_p11_cb.stateChanged.connect(lambda state: fine_lag_p11_widget.setVisible(state == QtCore.Qt.Checked))
+        fine_lag_p11_cb.stateChanged.connect(lambda state, w=fine_lag_p11_widget: w.setVisible(state == QtCore.Qt.Checked))
         
         # --- Fine Lag P01 Plot (Cross-correlation) ---
         fine_lag_p01_widget = QtWidgets.QWidget()
@@ -1485,7 +1636,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         fine_lag_p01_plot.addLegend()
         layout.addWidget(fine_lag_p01_widget, 1, 0, 1, 2)  # Span both columns
         # Connect checkbox to hide/show the widget
-        fine_lag_p01_cb.stateChanged.connect(lambda state: fine_lag_p01_widget.setVisible(state == QtCore.Qt.Checked))
+        fine_lag_p01_cb.stateChanged.connect(lambda state, w=fine_lag_p01_widget: w.setVisible(state == QtCore.Qt.Checked))
         
         # --- Time Domain ADC0 Plot ---
         time_adc0_widget = QtWidgets.QWidget()
@@ -1504,7 +1655,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         time_adc0_plot.addLegend()
         layout.addWidget(time_adc0_widget, 2, 0)
         # Connect checkbox to hide/show the widget
-        time_adc0_cb.stateChanged.connect(lambda state: time_adc0_widget.setVisible(state == QtCore.Qt.Checked))
+        time_adc0_cb.stateChanged.connect(lambda state, w=time_adc0_widget: w.setVisible(state == QtCore.Qt.Checked))
         
         # --- Time Domain ADC1 Plot ---
         time_adc1_widget = QtWidgets.QWidget()
@@ -1523,7 +1674,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         time_adc1_plot.addLegend()
         layout.addWidget(time_adc1_widget, 2, 1)
         # Connect checkbox to hide/show the widget
-        time_adc1_cb.stateChanged.connect(lambda state: time_adc1_widget.setVisible(state == QtCore.Qt.Checked))
+        time_adc1_cb.stateChanged.connect(lambda state, w=time_adc1_widget: w.setVisible(state == QtCore.Qt.Checked))
 
     def _setup_fine_lag_waterfall_plots(self) -> None:
         """Set up the image views for the Fine Lag Waterfall tab."""
@@ -1549,6 +1700,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             
             cb = QtWidgets.QCheckBox(title)
             cb.setChecked(True)
+            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
             self.plot_checkboxes[f"fine_lag_wf_{key}"] = cb
             
             plot = pg.PlotWidget()
@@ -1596,7 +1748,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         super_fft_plot.addLegend()
         layout.addWidget(super_fft_widget, 0, 0, 1, 2)  # Span both columns
         # Connect checkbox to hide/show the widget
-        super_fft_cb.stateChanged.connect(lambda state: super_fft_widget.setVisible(state == QtCore.Qt.Checked))
+        super_fft_cb.stateChanged.connect(lambda state, w=super_fft_widget: w.setVisible(state == QtCore.Qt.Checked))
         
         # --- Time Domain Plot ---
         time_domain_widget = QtWidgets.QWidget()
@@ -1615,7 +1767,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         time_domain_plot.addLegend()
         layout.addWidget(time_domain_widget, 1, 0, 1, 2)  # Span both columns
         # Connect checkbox to hide/show the widget
-        time_domain_cb.stateChanged.connect(lambda state: time_domain_widget.setVisible(state == QtCore.Qt.Checked))
+        time_domain_cb.stateChanged.connect(lambda state, w=time_domain_widget: w.setVisible(state == QtCore.Qt.Checked))
         
         # Calculate frequency axis for super FFT
         n_super_fft_bins = 131073
@@ -2048,11 +2200,12 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             status = "enabled" if enabled else "disabled"
             print(f"Lag computation {status}")
             
-    def _update_lag_skip_rate(self, value: int) -> None:
-        """Update the frame skip rate for lag computation."""
-        if self.lag_computer_thread:
-            self.lag_computer_thread.set_skip_rate(value)
-            print(f"Lag skip rate set to: process every {value} frame(s)")
+    def _update_frames_to_average(self, value: int) -> None:
+        """Update the number of frames to average."""
+        if hasattr(self, 'config'):
+            self.config.frames_to_average = value
+            # TODO: Apply this to running threads
+            print(f"Frames to average set to: {value}")
     
     def _toggle_fine_lag_mode(self, checked: bool) -> None:
         """Toggle between normal mode and fine lag mode."""
@@ -2079,7 +2232,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             
             # Create and start fine lag computer if needed
             if not self.fine_lag_computer_thread:
-                self.fine_lag_computer_thread = FineLagComputer(self.pocket_correlator, self.shared_buffers)
+                self.fine_lag_computer_thread = FineLagComputer(self.pocket_correlator, self.shared_buffers, self.config)
                 self.fine_lag_computer_thread.start()
             
             self.fine_lag_computer_thread.set_enabled(True)
@@ -2554,6 +2707,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
     
     def _update_lag_waterfall_plots(self) -> None:
         """Update the lag waterfall plots."""
+        if not self.shared_buffers:
+            return
         # Get the current write position to properly display circular buffer
         pos = self.shared_buffers.lag_wf_write_pos
         
@@ -2664,6 +2819,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
 
     def _update_fine_lag_spectra_plots(self) -> None:
         """Update the fine lag spectra line plots."""
+        if not self.shared_buffers:
+            return
         use_log_scale = self.log_scale_checkbox.isChecked()
         
         # Update plot log modes based on checkbox
@@ -2684,15 +2841,23 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         
         # Update time domain plots
         if self.plot_checkboxes["fine_time_adc0"].isChecked():
-            # Plot raw ADC0 time domain data
-            self.fine_time_plots[0].setData(x=self.time_axis_us, y=self.shared_buffers.fine_time_adc0)
+            # Plot raw ADC0 time domain data - only the actual samples captured
+            n_samples = self.shared_buffers.fine_time_n_samples
+            time_axis = self.time_axis_us_full[:n_samples]
+            adc0_data = self.shared_buffers.fine_time_adc0[:n_samples]
+            self.fine_time_plots[0].setData(x=time_axis, y=adc0_data)
             
         if self.plot_checkboxes["fine_time_adc1"].isChecked():
-            # Plot raw ADC1 time domain data
-            self.fine_time_plots[1].setData(x=self.time_axis_us, y=self.shared_buffers.fine_time_adc1)
+            # Plot raw ADC1 time domain data - only the actual samples captured
+            n_samples = self.shared_buffers.fine_time_n_samples
+            time_axis = self.time_axis_us_full[:n_samples]
+            adc1_data = self.shared_buffers.fine_time_adc1[:n_samples]
+            self.fine_time_plots[1].setData(x=time_axis, y=adc1_data)
 
     def _update_fine_lag_waterfall_plots(self) -> None:
         """Update the fine lag waterfall plots."""
+        if not self.shared_buffers:
+            return
         # Get the current write position to properly display circular buffer
         pos = self.shared_buffers.fine_lag_wf_write_pos
         
@@ -2704,6 +2869,9 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         # Calculate fine lag axis range (in meters)
         fine_lag_min = self.fine_lag_axis[0]
         fine_lag_max = self.fine_lag_axis[-1]
+        
+        # Get log scale setting
+        use_log_scale = self.log_scale_checkbox.isChecked()
         
         # Helper function to update a fine lag waterfall plot
         def update_fine_lag_waterfall(key, data):
@@ -2730,25 +2898,28 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             
             # Update levels every N frames or if not set
             if self.fine_lag_waterfall_levels[key] is None or self.fine_lag_waterfall_level_update_counter[key] >= scale_update_interval:
+                self.fine_lag_waterfall_level_update_counter[key] = 0
                 # Calculate robust levels using percentiles
                 valid_data = wf_data[np.isfinite(wf_data)]
                 
-                # For normalized autocorrelation data (0 to 1 range)
+                # For normalized autocorrelation data
                 if len(valid_data) > 0:
-                    vmin = np.percentile(valid_data, 5)
-                    vmax = np.percentile(valid_data, 95)
-                    # Ensure we capture the full range
-                    vmin = min(vmin, 0)
-                    vmax = max(vmax, 1)
+                    # Use percentiles for more robust scaling (like other waterfalls)
+                    vmin = min(valid_data) #np.percentile(valid_data, 5)
+                    vmax = max(valid_data) #np.percentile(valid_data, 95)
+                    
+                    # For normalized data, ensure we don't go below 0 for log scale
+                    if use_log_scale:
+                        vmin = max(vmin, 1e-6)  # Prevent log of negative/zero
+                        vmax = max(vmax, vmin * 10)  # Ensure reasonable dynamic range
                 else:
-                    vmin, vmax = 0, 1
+                    vmin, vmax = 1e-6, 1
                 
                 self.fine_lag_waterfall_levels[key] = (vmin, vmax)
                 self.fine_lag_waterfall_level_update_counter[key] = 0
             
             # Set image with fixed levels
             img = self.fine_lag_waterfall_images[key]
-            use_log_scale = self.log_scale_checkbox.isChecked()
             
             if use_log_scale:
                 # For normalized autocorrelation data, use log scale to better visualize small values
@@ -2784,6 +2955,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
 
     def _update_super_fft_spectra_plots(self) -> None:
         """Update the super FFT spectra line plots."""
+        if not self.shared_buffers:
+            return
         use_log_scale = self.log_scale_checkbox.isChecked()
         
         # Update plot log mode based on checkbox
@@ -2799,6 +2972,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
 
     def _update_super_fft_waterfall_plots(self) -> None:
         """Update the super FFT waterfall plots."""
+        if not self.shared_buffers:
+            return
         # Get the current write position to properly display circular buffer
         pos = self.shared_buffers.super_fft_wf_write_pos
         
