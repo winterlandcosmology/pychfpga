@@ -26,6 +26,25 @@ try:
 except ImportError:
     NUMBA_AVAILABLE = False
     print("Numba not available, using pure NumPy optimizations")
+try:
+    from scipy import signal
+    from scipy.optimize import least_squares
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+    print("Warning: scipy not found. Radar mode will not work.")
+
+# For matplotlib 3D visualization
+try:
+    import matplotlib
+    matplotlib.use('Qt5Agg')
+    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+    from matplotlib.figure import Figure
+    from mpl_toolkits.mplot3d import Axes3D
+    MATPLOTLIB_3D_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_3D_AVAILABLE = False
+    print("Warning: matplotlib 3D not available. 3D radar visualization will be disabled.")
 
 # Add the parent directory to the path to allow for package imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -322,12 +341,13 @@ class FineLagComputer(threading.Thread):
                 # Process each frame separately and average for better SNR
                 n_samples = 16384  # Samples per frame
                 n_fft = n_samples  # Use same size - no zero padding
-                n_lags = n_samples // 2  # Only positive lags (0 to 8191)
+                n_lags = n_samples // 2  # Only positive lags (0 to 8191) for autocorrelations
+                n_lags_cross = n_samples // 2  # For cross-correlation, we'll use fftshift to center around zero lag
                 
                 # Initialize accumulators for averaging
                 lag_p00_sum = np.zeros(n_lags)
                 lag_p11_sum = np.zeros(n_lags)
-                lag_p01_sum = np.zeros(n_lags, dtype=np.complex128)  # Complex for cross-correlation
+                lag_p01_sum = np.zeros(n_lags_cross, dtype=np.complex128)  # Complex for cross-correlation
                 
                 # Process only the requested number of frames for averaging
                 # (we may have captured more to meet the 2-frame requirement)
@@ -433,9 +453,14 @@ class FineLagComputer(threading.Thread):
                     lag_p00_frame = np.abs(lag_p00_complex.real)
                     lag_p11_frame = np.abs(lag_p11_complex.real)
                     
-                    # Compute cross-correlation
+                    # Compute cross-correlation - include both positive and negative lags
                     cross_spectrum = adc0_fft * np.conj(adc1_fft)
-                    lag_p01_complex = np.fft.ifft(cross_spectrum)[:n_lags]
+                    lag_p01_complex_full = np.fft.ifft(cross_spectrum)
+                    # Apply fftshift to center zero lag and take middle n_lags_cross points
+                    lag_p01_complex_shifted = np.fft.fftshift(lag_p01_complex_full)
+                    # Take the middle portion centered around zero lag
+                    start_idx = (n_samples - n_lags_cross) // 2
+                    lag_p01_complex = lag_p01_complex_shifted[start_idx:start_idx + n_lags_cross]
                     
                     # Add to accumulator
                     lag_p00_sum += lag_p00_frame
@@ -556,6 +581,346 @@ class FineLagComputer(threading.Thread):
             except Exception as e:
                 print(f"Error in fine lag computation: {e}")
                 time.sleep(0.1)  # Wait a bit before retrying
+                
+    def stop(self):
+        """Stop the thread."""
+        self.running = False
+
+
+class RadarComputer(threading.Thread):
+    """
+    A thread that captures raw ADC data from 4 channels and performs 3D radar localization.
+    Uses ucap_mode=0 for 4-channel capture.
+    """
+    def __init__(self, pocket_correlator: POCKET_CORRELATOR, shared_buffers: 'SharedDataBuffers', config: CorrelatorConfig):
+        super().__init__(daemon=True)
+        self.pc = pocket_correlator
+        self.shared_buffers = shared_buffers
+        self.config = config
+        self.running = True
+        self.enabled = threading.Event()
+        
+        # Radar parameters
+        self.c = 3e8  # Speed of light
+        self.x01 = 1.0  # Antenna spacing ADC0-ADC1 (meters)
+        self.x02 = 1.0  # Antenna spacing ADC0-ADC2 (meters)
+        self.significance_threshold = 0.75  # Default threshold
+        
+        # Antenna positions (L-shaped array)
+        self.ant_pos = np.array([
+            [0, 0, 0],      # ADC0 at origin
+            [self.x01, 0, 0],    # ADC1 along x-axis
+            [0, self.x02, 0]     # ADC2 along y-axis
+        ])
+        
+        # Performance tracking
+        self.frames_processed = 0
+        self.last_fps_time = time.time()
+        self.fps = 0
+        
+    def set_enabled(self, enabled: bool):
+        """Enable or disable radar computation."""
+        if enabled:
+            self.enabled.set()
+        else:
+            self.enabled.clear()
+    
+    def set_threshold(self, threshold: float):
+        """Update significance threshold."""
+        self.significance_threshold = threshold
+    
+    # Radar processing functions extracted from radar_test.py
+    def compute_lag_spectrum(self, sig1, sig2, fs):
+        """Compute cross-correlation lag spectrum between two signals."""
+        X1 = np.fft.fft(sig1)
+        X2 = np.fft.fft(sig2)
+        cross_spectrum = np.conj(X1) * X2
+        lag_spectrum = np.fft.ifft(cross_spectrum)
+        lag_spectrum = np.fft.fftshift(lag_spectrum)
+        n = len(sig1)
+        lags = np.arange(-n//2, n//2) / fs
+        return lags, lag_spectrum
+
+    def extract_delay_with_phase(self, lags, lag_spectrum, peak_idx, adc_idx=None):
+        """Extract precise delay using centroid method around the peak."""
+        coarse_delay = lags[peak_idx]
+        magnitude = np.abs(lag_spectrum)
+        
+        # Use a fixed window size around the peak (e.g., ±15 samples)
+        window_half_size = 15
+        start = max(0, peak_idx - window_half_size)
+        end = min(len(magnitude), peak_idx + window_half_size + 1)
+        
+        # Store centroid window info if ADC index is provided
+        if adc_idx is not None and adc_idx < 3:
+            with self.shared_buffers.radar_lock:
+                self.shared_buffers.radar_centroid_starts[adc_idx] = start
+                self.shared_buffers.radar_centroid_ends[adc_idx] = end
+        
+        # Extract windowed data
+        lags_window = lags[start:end]
+        mag_window = magnitude[start:end]
+        
+        # Calculate centroid using all points in the window
+        weighted_sum = np.sum(lags_window * mag_window)
+        weight_total = np.sum(mag_window)
+        
+        if weight_total > 0:
+            delay = weighted_sum / weight_total
+        else:
+            delay = coarse_delay
+        
+        # Store detected delay if ADC index is provided
+        if adc_idx is not None and adc_idx < 3:
+            with self.shared_buffers.radar_lock:
+                self.shared_buffers.radar_delays[adc_idx] = delay
+        
+        return delay
+
+    def find_single_peak(self, lags, lag_spectrum, adc_idx=None):
+        """Find only the strongest peak in lag spectrum using simple argmax."""
+        magnitude = np.abs(lag_spectrum)
+        
+        # Optional: Apply simple smoothing with moving average (window size 5)
+        window_size = 5
+        if len(magnitude) > window_size:
+            # Simple moving average
+            smoothed = np.convolve(magnitude, np.ones(window_size)/window_size, mode='same')
+            # Use smoothed data for peak finding
+            magnitude_for_peak = smoothed
+        else:
+            magnitude_for_peak = magnitude
+        
+        # Simply find the index of the maximum value
+        peak_idx = np.argmax(magnitude_for_peak)
+        
+        # Extract precise delay with ADC index for storing debug info
+        delay = self.extract_delay_with_phase(lags, lag_spectrum, peak_idx, adc_idx)
+        return np.array([delay])
+
+    def trilaterate_3d(self, ant_positions, ranges):
+        """Find 3D position given ranges from three antennas."""
+        if not SCIPY_AVAILABLE:
+            # Simple geometric solution without scipy
+            # This is a simplified approach - not as accurate as least squares
+            x1, y1, z1 = ant_positions[0]
+            x2, y2, z2 = ant_positions[1]
+            x3, y3, z3 = ant_positions[2]
+            r1, r2, r3 = ranges
+            
+            # Simplified calculation (assuming z=0 for now)
+            A = 2*x2 - 2*x1
+            B = 2*y2 - 2*y1
+            C = r1**2 - r2**2 - x1**2 + x2**2 - y1**2 + y2**2
+            
+            D = 2*x3 - 2*x1
+            E = 2*y3 - 2*y1
+            F = r1**2 - r3**2 - x1**2 + x3**2 - y1**2 + y3**2
+            
+            try:
+                x = (C*E - F*B) / (E*A - B*D)
+                y = (C*D - A*F) / (B*D - A*E)
+                z = np.sqrt(max(0, r1**2 - (x-x1)**2 - (y-y1)**2))
+                return np.array([x, y, z])
+            except:
+                return np.array([5.0, 0.0, 5.0])  # Default position
+        else:
+            # Use scipy least squares for accurate solution
+            def residuals(p):
+                x, y, z = p
+                res = []
+                for i in range(3):
+                    predicted_range = np.sqrt(
+                        (x - ant_positions[i][0])**2 + 
+                        (y - ant_positions[i][1])**2 + 
+                        (z - ant_positions[i][2])**2
+                    )
+                    res.append(predicted_range - ranges[i])
+                return res
+            
+            # Initial guess
+            x0 = [np.mean([p[0] for p in ant_positions]),
+                  np.mean([p[1] for p in ant_positions]),
+                  5.0]
+            
+            # Solve
+            result = least_squares(residuals, x0)
+            
+            if result.success and result.cost < 0.1:
+                return result.x
+            else:
+                # Try with negative z
+                x0[2] = -5.0
+                result2 = least_squares(residuals, x0)
+                if result2.success and result2.cost < result.cost:
+                    return result2.x
+                return result.x
+    
+    def process_radar_frame(self, adc0, adc1, adc2, adc3, fs):
+        """Process one frame of radar data to find emitter position."""
+        # Step 1: Compute lag spectra for all correlations
+        all_delays = {}
+        lag_spectra = {}  # Store for debug
+        
+        # Emitter (ADC3) to antenna correlations (for absolute ranging)
+        for i, adc in enumerate([adc0, adc1, adc2]):
+            lags, lag_spectrum = self.compute_lag_spectrum(adc3, adc, fs)
+            # Store magnitude of lag spectrum for debug
+            lag_spectra[i] = np.abs(lag_spectrum)
+            delays = self.find_single_peak(lags, lag_spectrum, adc_idx=i)
+            if len(delays) > 0:
+                all_delays[('emitter', i)] = delays[0]
+        
+        # Store lag spectra for debug visualization
+        with self.shared_buffers.radar_lock:
+            if 0 in lag_spectra:
+                self.shared_buffers.radar_lag_adc0[:] = lag_spectra[0]
+            if 1 in lag_spectra:
+                self.shared_buffers.radar_lag_adc1[:] = lag_spectra[1]
+            if 2 in lag_spectra:
+                self.shared_buffers.radar_lag_adc2[:] = lag_spectra[2]
+        
+        # Check if we have enough detections
+        if len(all_delays) < 3:
+            return None  # Need at least 3 for trilateration
+        
+        # Step 2: Extract delays for trilateration
+        emitter_delays = {}
+        for i in range(3):
+            key = ('emitter', i)
+            if key in all_delays:
+                emitter_delays[i] = all_delays[key]
+        
+        if len(emitter_delays) != 3:
+            return None  # Need exactly 3 measurements
+        
+        # Step 3: Convert to ranges and trilaterate
+        ranges = [self.c * abs(delay) for delay in emitter_delays.values()]
+        
+        try:
+            pos = self.trilaterate_3d(self.ant_pos, ranges)
+            x, y, z = pos
+            r = np.sqrt(x**2 + y**2 + z**2)
+            
+            if r > 0 and r < 100:  # Reasonable range check
+                azimuth = np.degrees(np.arctan2(y, x))
+                elevation = np.degrees(np.arcsin(z / r))
+                
+                return {
+                    'range_m': r,
+                    'azimuth_deg': azimuth,
+                    'elevation_deg': elevation,
+                    'x': x,
+                    'y': y,
+                    'z': z
+                }
+        except Exception as e:
+            print(f"Radar trilateration failed: {e}")
+        
+        return None
+    
+    def run(self):
+        """Main thread loop for radar processing."""
+        # Initial setup
+        self.pc.set_ucap_mode(mode=0)  # 4-channel capture
+        
+        # Do initial capture
+        n_frames = max(2, self.config.frames_to_average)
+        n_frames = ((n_frames + 1) // 2) * 2  # Round to multiple of 2
+        d_adc = self.pc.read_adc_frames(n_frames=n_frames, split=True, verbose=0)
+        
+        while self.running:
+            if not self.enabled.is_set():
+                time.sleep(0.1)
+                continue
+                
+            try:
+                # Capture ADC data
+                n_frames = max(2, self.config.frames_to_average)
+                n_frames = ((n_frames + 1) // 2) * 2
+                ncap = n_frames // 2
+                
+                t, d_adc, c = self.pc.u_receiver.read_raw_frames(
+                    format='16',
+                    ncap=ncap,
+                    split=True,
+                    verbose=0,
+                    flush=True,
+                    flush_timeout=0.0001
+                )
+                
+                # Shift to 14 bits
+                d_adc = d_adc >> 2
+                # d_adc shape: (8, n_frames, 16384)
+                # We need channels 0,1,2,3 for ADC0,1,2,3
+                
+                # Process each frame and average results
+                detections = []
+                
+                for frame_idx in range(min(self.config.frames_to_average, d_adc.shape[1])):
+                    # Extract data for this frame
+                    adc0_frame = d_adc[0, frame_idx, :].astype(np.float64)
+                    adc1_frame = d_adc[1, frame_idx, :].astype(np.float64)
+                    adc2_frame = d_adc[2, frame_idx, :].astype(np.float64)
+                    adc3_frame = d_adc[3, frame_idx, :].astype(np.float64)
+                    
+                    # Remove DC offset
+                    adc0_frame -= np.mean(adc0_frame)
+                    adc1_frame -= np.mean(adc1_frame)
+                    adc2_frame -= np.mean(adc2_frame)
+                    adc3_frame -= np.mean(adc3_frame)
+                    
+                    # Process frame
+                    result = self.process_radar_frame(adc0_frame, adc1_frame, adc2_frame, adc3_frame, FS_HZ)
+                    if result:
+                        detections.append(result)
+                
+                # Average detections if we have multiple
+                if detections:
+                    avg_range = np.mean([d['range_m'] for d in detections])
+                    avg_azimuth = np.mean([d['azimuth_deg'] for d in detections])
+                    avg_elevation = np.mean([d['elevation_deg'] for d in detections])
+                    
+                    # Update shared buffers
+                    with self.shared_buffers.radar_lock:
+                        self.shared_buffers.radar_range[0] = avg_range
+                        self.shared_buffers.radar_azimuth[0] = avg_azimuth
+                        self.shared_buffers.radar_elevation[0] = avg_elevation
+                        self.shared_buffers.radar_detection_valid[0] = True
+                        
+                        # Update history (shift and add new)
+                        self.shared_buffers.radar_history_range[1:] = self.shared_buffers.radar_history_range[:-1]
+                        self.shared_buffers.radar_history_azimuth[1:] = self.shared_buffers.radar_history_azimuth[:-1]
+                        self.shared_buffers.radar_history_elevation[1:] = self.shared_buffers.radar_history_elevation[:-1]
+                        
+                        self.shared_buffers.radar_history_range[0] = avg_range
+                        self.shared_buffers.radar_history_azimuth[0] = avg_azimuth
+                        self.shared_buffers.radar_history_elevation[0] = avg_elevation
+                        
+                        self.shared_buffers.radar_history_count = min(
+                            self.shared_buffers.radar_history_count + 1,
+                            self.shared_buffers.radar_history_len
+                        )
+                else:
+                    # No detection
+                    with self.shared_buffers.radar_lock:
+                        self.shared_buffers.radar_detection_valid[0] = False
+                
+                # Update performance metrics
+                self.frames_processed += 1
+                current_time = time.time()
+                time_delta = current_time - self.last_fps_time
+                if time_delta >= 1.0:
+                    self.fps = self.frames_processed / time_delta
+                    self.last_fps_time = current_time
+                    self.frames_processed = 0
+                    
+                # Small delay (20 Hz update rate)
+                time.sleep(0.05)
+                
+            except Exception as e:
+                print(f"Error in radar computation: {e}")
+                time.sleep(0.1)
                 
     def stop(self):
         """Stop the thread."""
@@ -861,6 +1226,70 @@ class SharedDataBuffers:
         self.super_fft_frames_written = 0
         self.super_fft_lock = threading.Lock()
         
+        # Radar data
+        self.radar_history_len = 100  # Keep history of last 100 detections
+        self.shm_radar_range = shared_memory.SharedMemory(create=True, size=8)
+        self.shm_radar_azimuth = shared_memory.SharedMemory(create=True, size=8)
+        self.shm_radar_elevation = shared_memory.SharedMemory(create=True, size=8)
+        self.shm_radar_x = shared_memory.SharedMemory(create=True, size=8)
+        self.shm_radar_y = shared_memory.SharedMemory(create=True, size=8)
+        self.shm_radar_z = shared_memory.SharedMemory(create=True, size=8)
+        self.shm_radar_detection_valid = shared_memory.SharedMemory(create=True, size=1)
+        
+        # Radar history buffers
+        self.shm_radar_history_range = shared_memory.SharedMemory(create=True, size=self.radar_history_len * 8)
+        self.shm_radar_history_azimuth = shared_memory.SharedMemory(create=True, size=self.radar_history_len * 8)
+        self.shm_radar_history_elevation = shared_memory.SharedMemory(create=True, size=self.radar_history_len * 8)
+        
+        # Radar debug data - antenna-to-reference lag spectra
+        self.shm_radar_lag_adc0 = shared_memory.SharedMemory(create=True, size=16384 * 8)  # Full lag spectrum
+        self.shm_radar_lag_adc1 = shared_memory.SharedMemory(create=True, size=16384 * 8)
+        self.shm_radar_lag_adc2 = shared_memory.SharedMemory(create=True, size=16384 * 8)
+        
+        # Radar detected delays and centroid windows
+        self.shm_radar_delays = shared_memory.SharedMemory(create=True, size=3 * 8)  # 3 delays (one per antenna)
+        self.shm_radar_centroid_starts = shared_memory.SharedMemory(create=True, size=3 * 4)  # 3 start indices
+        self.shm_radar_centroid_ends = shared_memory.SharedMemory(create=True, size=3 * 4)  # 3 end indices
+        
+        # Create numpy arrays for radar data
+        self.radar_range = np.ndarray((1,), dtype=np.float64, buffer=self.shm_radar_range.buf)
+        self.radar_azimuth = np.ndarray((1,), dtype=np.float64, buffer=self.shm_radar_azimuth.buf)
+        self.radar_elevation = np.ndarray((1,), dtype=np.float64, buffer=self.shm_radar_elevation.buf)
+        self.radar_detection_valid = np.ndarray((1,), dtype=np.bool_, buffer=self.shm_radar_detection_valid.buf)
+        
+        self.radar_history_range = np.ndarray((self.radar_history_len,), dtype=np.float64, buffer=self.shm_radar_history_range.buf)
+        self.radar_history_azimuth = np.ndarray((self.radar_history_len,), dtype=np.float64, buffer=self.shm_radar_history_azimuth.buf)
+        self.radar_history_elevation = np.ndarray((self.radar_history_len,), dtype=np.float64, buffer=self.shm_radar_history_elevation.buf)
+        
+        # Radar debug arrays
+        self.radar_lag_adc0 = np.ndarray((16384,), dtype=np.float64, buffer=self.shm_radar_lag_adc0.buf)
+        self.radar_lag_adc1 = np.ndarray((16384,), dtype=np.float64, buffer=self.shm_radar_lag_adc1.buf)
+        self.radar_lag_adc2 = np.ndarray((16384,), dtype=np.float64, buffer=self.shm_radar_lag_adc2.buf)
+        
+        # Radar delay and centroid window arrays
+        self.radar_delays = np.ndarray((3,), dtype=np.float64, buffer=self.shm_radar_delays.buf)
+        self.radar_centroid_starts = np.ndarray((3,), dtype=np.int32, buffer=self.shm_radar_centroid_starts.buf)
+        self.radar_centroid_ends = np.ndarray((3,), dtype=np.int32, buffer=self.shm_radar_centroid_ends.buf)
+        
+        # Initialize radar arrays
+        self.radar_range[0] = 0.0
+        self.radar_azimuth[0] = 0.0
+        self.radar_elevation[0] = 0.0
+        self.radar_detection_valid[0] = False
+        self.radar_history_range.fill(0)
+        self.radar_history_azimuth.fill(0)
+        self.radar_history_elevation.fill(0)
+        self.radar_lag_adc0.fill(0)
+        self.radar_lag_adc1.fill(0)
+        self.radar_lag_adc2.fill(0)
+        self.radar_delays.fill(0)
+        self.radar_centroid_starts.fill(0)
+        self.radar_centroid_ends.fill(0)
+        
+        # Radar lock and counter
+        self.radar_lock = threading.Lock()
+        self.radar_history_count = 0
+        
     def cleanup(self):
         """Clean up shared memory."""
         for shm in [self.shm_p00, self.shm_p11, self.shm_p01_real, self.shm_p01_imag,
@@ -870,7 +1299,10 @@ class SharedDataBuffers:
                     self.shm_fine_lag_p00, self.shm_fine_lag_p11, self.shm_fine_lag_p01,
                     self.shm_fine_lag_wf_p00, self.shm_fine_lag_wf_p11, self.shm_fine_lag_wf_p01,
                     self.shm_fine_time_adc0, self.shm_fine_time_adc1,
-                    self.shm_super_fft_psd, self.shm_super_fft_wf_psd, self.shm_super_fft_time]:
+                    self.shm_super_fft_psd, self.shm_super_fft_wf_psd, self.shm_super_fft_time,
+                    self.shm_radar_range, self.shm_radar_azimuth, self.shm_radar_elevation,
+                    self.shm_radar_detection_valid, self.shm_radar_history_range,
+                    self.shm_radar_history_azimuth, self.shm_radar_history_elevation]:
             shm.close()
             shm.unlink()
 
@@ -1077,6 +1509,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.lag_computer_thread: Optional[LagSpectraComputer] = None
         self.fine_lag_computer_thread: Optional[FineLagComputer] = None
         self.super_fft_computer_thread: Optional[SuperFFTComputer] = None
+        self.radar_computer_thread: Optional[RadarComputer] = None
         self.shared_buffers: Optional[SharedDataBuffers] = None
         
         self.config = CorrelatorConfig()
@@ -1095,11 +1528,11 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.lag_axis = lag_time_s * c_m_per_s / 2  # Convert to distance in meters (round trip)
         
         # Fine lag axis in meters (for raw ADC data)
-        # Only positive lags (half of FFT output)
-        fine_lag_samples = np.arange(8192)  # 0 to 8191 samples
+        # For cross-correlations, we now have both positive and negative lags centered around zero
+        fine_lag_samples = np.arange(8192) - 8192 // 2  # -4096 to 4095 samples (centered around zero)
         fine_lag_time_s = fine_lag_samples / FS_HZ  # Time in seconds
         self.fine_lag_axis = fine_lag_time_s * c_m_per_s / 2  # Distance in meters (round trip)
-        # Range: 0 to ~383 meters with 4.68 cm resolution
+        # Range: ~-192 to +192 meters with 4.68 cm resolution (centered around zero lag)
         
         # Time axis for raw ADC samples (microseconds)
         # Will be dynamically adjusted based on actual frames captured
@@ -1256,6 +1689,23 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.super_fft_mode_button.clicked.connect(self._toggle_super_fft_mode)
         self.super_fft_mode_button.setEnabled(False)  # Disabled until connected
         
+        # Radar mode controls
+        self.radar_mode_button = QtWidgets.QPushButton("Enable Radar Mode")
+        self.radar_mode_button.setCheckable(True)
+        self.radar_mode_button.setToolTip("Switch to 3D radar localization mode")
+        self.radar_mode_button.clicked.connect(self._toggle_radar_mode)
+        self.radar_mode_button.setEnabled(False)  # Disabled until connected
+        
+        self.radar_threshold_spinner = QtWidgets.QDoubleSpinBox()
+        self.radar_threshold_spinner.setRange(0.0, 1.0)
+        self.radar_threshold_spinner.setSingleStep(0.05)
+        self.radar_threshold_spinner.setValue(0.75)
+        self.radar_threshold_spinner.setDecimals(2)
+        self.radar_threshold_spinner.setPrefix("Threshold: ")
+        self.radar_threshold_spinner.setToolTip("Significance threshold for radar peak detection")
+        self.radar_threshold_spinner.valueChanged.connect(self._update_radar_threshold)
+        self.radar_threshold_spinner.setEnabled(False)  # Disabled until radar mode active
+        
         # Restore all plots button
         self.restore_plots_button = QtWidgets.QPushButton("Restore All Plots")
         self.restore_plots_button.setToolTip("Show all hidden plots")
@@ -1273,6 +1723,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         toolbar_row2.addSpacing(20)
         toolbar_row2.addWidget(self.fine_lag_mode_button)
         toolbar_row2.addWidget(self.super_fft_mode_button)
+        toolbar_row2.addWidget(self.radar_mode_button)
+        toolbar_row2.addWidget(self.radar_threshold_spinner)
         toolbar_row2.addSpacing(20)
         toolbar_row2.addWidget(self.restore_plots_button)
         toolbar_row2.addStretch(1)
@@ -1302,6 +1754,10 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.fine_lag_waterfall_tab = QtWidgets.QWidget()
         self.super_fft_spectra_tab = QtWidgets.QWidget()
         self.super_fft_waterfall_tab = QtWidgets.QWidget()
+        self.radar_azel_tab = QtWidgets.QWidget()
+        self.radar_azrange_tab = QtWidgets.QWidget()
+        self.radar_xyz_tab = QtWidgets.QWidget()
+        self.radar_debug_tab = QtWidgets.QWidget()
 
         self.tabs.addTab(self.spectra_tab, "Spectra")
         self.tabs.addTab(self.waterfall_tab, "Waterfall")
@@ -1311,6 +1767,10 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.tabs.addTab(self.fine_lag_waterfall_tab, "Fine Lag Waterfall")
         self.tabs.addTab(self.super_fft_spectra_tab, "Super FFT Spectra")
         self.tabs.addTab(self.super_fft_waterfall_tab, "Super FFT Waterfall")
+        self.tabs.addTab(self.radar_azel_tab, "Radar Az/El")
+        self.tabs.addTab(self.radar_azrange_tab, "Radar Az/Range")
+        self.tabs.addTab(self.radar_xyz_tab, "Radar 3D")
+        self.tabs.addTab(self.radar_debug_tab, "Radar Debug")
 
         self.plot_checkboxes: Dict[str, QtWidgets.QCheckBox] = {}
         self._setup_spectra_plots()
@@ -1321,6 +1781,10 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self._setup_fine_lag_waterfall_plots()
         self._setup_super_fft_spectra_plots()
         self._setup_super_fft_waterfall_plots()
+        self._setup_radar_azel_plots()
+        self._setup_radar_azrange_plots()
+        self._setup_radar_xyz_plots()
+        self._setup_radar_debug_plots()
 
     def _setup_spectra_plots(self) -> None:
         """Set up the plots for the Spectra tab."""
@@ -1818,6 +2282,342 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         
         # Connect checkbox to hide/show the container
         cb.stateChanged.connect(lambda state: container.setVisible(state == QtCore.Qt.Checked))
+    
+    def _setup_radar_azel_plots(self) -> None:
+        """Set up the plots for the Radar Az/El tab."""
+        layout = QtWidgets.QVBoxLayout(self.radar_azel_tab)
+        
+        self.radar_plots = {}
+        self.radar_plot_widgets = {}
+        colors = pg.colormap.get("tab10", "matplotlib").getColors()
+        
+        # Create a container widget with checkbox
+        container = QtWidgets.QWidget()
+        container_layout = QtWidgets.QVBoxLayout(container)
+        
+        cb = QtWidgets.QCheckBox("Radar Azimuth/Elevation View")
+        cb.setChecked(True)
+        self.plot_checkboxes["radar_azel"] = cb
+        
+        # Create the scatter plot
+        plot = pg.PlotWidget()
+        plot.setLabel('bottom', 'Azimuth', units='degrees')
+        plot.setLabel('left', 'Elevation', units='degrees')
+        plot.showGrid(x=True, y=True)
+        plot.setXRange(-90, 90)
+        plot.setYRange(0, 90)
+        plot.setAspectLocked(False)
+        
+        # Create scatter plot item for current position
+        self.radar_azel_scatter = pg.ScatterPlotItem(
+            size=15, 
+            pen=pg.mkPen(colors[0], width=2),
+            brush=pg.mkBrush(colors[0]),
+            symbol='o'
+        )
+        plot.addItem(self.radar_azel_scatter)
+        
+        # Create line plot for history trail
+        self.radar_azel_trail = pg.PlotDataItem(
+            pen=pg.mkPen(colors[0], width=1, style=QtCore.Qt.DashLine)
+        )
+        plot.addItem(self.radar_azel_trail)
+        
+        # Add text item for "No Detection"
+        self.radar_azel_text = pg.TextItem(
+            text="No Detection",
+            color=(200, 200, 200),
+            anchor=(0.5, 0.5)
+        )
+        self.radar_azel_text.setPos(0, 45)
+        plot.addItem(self.radar_azel_text)
+        
+        self.radar_plots['azel'] = plot
+        self.radar_plot_widgets['azel'] = plot
+        
+        container_layout.addWidget(cb)
+        container_layout.addWidget(plot)
+        
+        layout.addWidget(container)
+        
+        # Connect checkbox
+        cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
+    
+    def _setup_radar_debug_plots(self) -> None:
+        """Set up the plots for the Radar Debug tab showing antenna-to-reference lag spectra."""
+        layout = QtWidgets.QGridLayout(self.radar_debug_tab)
+        
+        self.radar_lag_plots = {}
+        self.radar_lag_plot_widgets = {}
+        colors = pg.colormap.get("tab10", "matplotlib").getColors()
+        
+        # Create lag axis for radar (16384 samples centered around zero)
+        lag_samples = np.arange(16384) - 16384 // 2
+        lag_time_s = lag_samples / FS_HZ
+        c_m_per_s = 299792458.0
+        self.radar_lag_axis = lag_time_s * c_m_per_s  # Convert to distance in meters (one-way)
+        
+        # --- ADC0-to-Reference Lag Plot ---
+        adc0_widget = QtWidgets.QWidget()
+        adc0_layout = QtWidgets.QVBoxLayout(adc0_widget)
+        adc0_cb = QtWidgets.QCheckBox("ADC0-to-Reference Lag Spectrum")
+        adc0_cb.setChecked(True)
+        self.plot_checkboxes["radar_lag_adc0"] = adc0_cb
+        adc0_plot = pg.PlotWidget()
+        adc0_layout.addWidget(adc0_cb)
+        adc0_layout.addWidget(adc0_plot)
+        self.radar_lag_plots[0] = adc0_plot.plot(pen=colors[0], name='ADC0-Ref')
+        self.radar_lag_plot_widgets[0] = adc0_plot
+        adc0_plot.showGrid(x=True, y=True)
+        adc0_plot.setLabel('bottom', 'Distance', units='m')
+        adc0_plot.setLabel('left', 'Correlation Magnitude')
+        adc0_plot.addLegend()
+        layout.addWidget(adc0_widget, 0, 0)
+        adc0_cb.stateChanged.connect(lambda state, w=adc0_widget: w.setVisible(state == QtCore.Qt.Checked))
+        
+        # --- ADC1-to-Reference Lag Plot ---
+        adc1_widget = QtWidgets.QWidget()
+        adc1_layout = QtWidgets.QVBoxLayout(adc1_widget)
+        adc1_cb = QtWidgets.QCheckBox("ADC1-to-Reference Lag Spectrum")
+        adc1_cb.setChecked(True)
+        self.plot_checkboxes["radar_lag_adc1"] = adc1_cb
+        adc1_plot = pg.PlotWidget()
+        adc1_layout.addWidget(adc1_cb)
+        adc1_layout.addWidget(adc1_plot)
+        self.radar_lag_plots[1] = adc1_plot.plot(pen=colors[1], name='ADC1-Ref')
+        self.radar_lag_plot_widgets[1] = adc1_plot
+        adc1_plot.showGrid(x=True, y=True)
+        adc1_plot.setLabel('bottom', 'Distance', units='m')
+        adc1_plot.setLabel('left', 'Correlation Magnitude')
+        adc1_plot.addLegend()
+        layout.addWidget(adc1_widget, 0, 1)
+        adc1_cb.stateChanged.connect(lambda state, w=adc1_widget: w.setVisible(state == QtCore.Qt.Checked))
+        
+        # --- ADC2-to-Reference Lag Plot ---
+        adc2_widget = QtWidgets.QWidget()
+        adc2_layout = QtWidgets.QVBoxLayout(adc2_widget)
+        adc2_cb = QtWidgets.QCheckBox("ADC2-to-Reference Lag Spectrum")
+        adc2_cb.setChecked(True)
+        self.plot_checkboxes["radar_lag_adc2"] = adc2_cb
+        adc2_plot = pg.PlotWidget()
+        adc2_layout.addWidget(adc2_cb)
+        adc2_layout.addWidget(adc2_plot)
+        self.radar_lag_plots[2] = adc2_plot.plot(pen=colors[2], name='ADC2-Ref')
+        self.radar_lag_plot_widgets[2] = adc2_plot
+        adc2_plot.showGrid(x=True, y=True)
+        adc2_plot.setLabel('bottom', 'Distance', units='m')
+        adc2_plot.setLabel('left', 'Correlation Magnitude')
+        adc2_plot.addLegend()
+        layout.addWidget(adc2_widget, 1, 0, 1, 2)  # Span both columns
+        adc2_cb.stateChanged.connect(lambda state, w=adc2_widget: w.setVisible(state == QtCore.Qt.Checked))
+    
+    def _setup_radar_azrange_plots(self) -> None:
+        """Set up the plots for the Radar Az/Range tab."""
+        layout = QtWidgets.QVBoxLayout(self.radar_azrange_tab)
+        
+        colors = pg.colormap.get("tab10", "matplotlib").getColors()
+        
+        # Create a container widget with checkbox
+        container = QtWidgets.QWidget()
+        container_layout = QtWidgets.QVBoxLayout(container)
+        
+        cb = QtWidgets.QCheckBox("Radar Azimuth/Range View")
+        cb.setChecked(True)
+        self.plot_checkboxes["radar_azrange"] = cb
+        
+        # Create the scatter plot
+        plot = pg.PlotWidget()
+        plot.setLabel('bottom', 'Azimuth', units='degrees')
+        plot.setLabel('left', 'Range', units='meters')
+        plot.showGrid(x=True, y=True)
+        plot.setXRange(-90, 90)
+        plot.setYRange(0, 50)
+        plot.setAspectLocked(False)
+        
+        # Create scatter plot item for current position
+        self.radar_azrange_scatter = pg.ScatterPlotItem(
+            size=15,
+            pen=pg.mkPen(colors[1], width=2),
+            brush=pg.mkBrush(colors[1]),
+            symbol='o'
+        )
+        plot.addItem(self.radar_azrange_scatter)
+        
+        # Create line plot for history trail
+        self.radar_azrange_trail = pg.PlotDataItem(
+            pen=pg.mkPen(colors[1], width=1, style=QtCore.Qt.DashLine)
+        )
+        plot.addItem(self.radar_azrange_trail)
+        
+        # Add text item for "No Detection"
+        self.radar_azrange_text = pg.TextItem(
+            text="No Detection",
+            color=(200, 200, 200),
+            anchor=(0.5, 0.5)
+        )
+        self.radar_azrange_text.setPos(0, 25)
+        plot.addItem(self.radar_azrange_text)
+        
+        self.radar_plots['azrange'] = plot
+        self.radar_plot_widgets['azrange'] = plot
+        
+        container_layout.addWidget(cb)
+        container_layout.addWidget(plot)
+        
+        layout.addWidget(container)
+        
+        # Connect checkbox
+        cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
+    
+    def _setup_radar_xyz_plots(self) -> None:
+        """Set up the 3D plot for the Radar 3D Position tab using matplotlib."""
+        layout = QtWidgets.QVBoxLayout(self.radar_xyz_tab)
+        
+        # Create a container widget with checkbox
+        container = QtWidgets.QWidget()
+        container_layout = QtWidgets.QVBoxLayout(container)
+        
+        cb = QtWidgets.QCheckBox("Radar 3D Position View")
+        cb.setChecked(True)
+        self.plot_checkboxes["radar_xyz"] = cb
+        
+        if not MATPLOTLIB_3D_AVAILABLE:
+            # Create fallback message
+            fallback_label = QtWidgets.QLabel(
+                "3D visualization unavailable.\n"
+                "Matplotlib 3D is not installed.\n"
+                "Please check Az/El and Az/Range tabs for 2D views."
+            )
+            fallback_label.setAlignment(QtCore.Qt.AlignCenter)
+            fallback_label.setStyleSheet("font-size: 16px; padding: 50px;")
+            
+            self.radar_xyz_info_label = QtWidgets.QLabel("No Detection")
+            self.radar_xyz_info_label.setStyleSheet("font-size: 16px; padding: 5px;")
+            
+            container_layout.addWidget(cb)
+            container_layout.addWidget(self.radar_xyz_info_label)
+            container_layout.addWidget(fallback_label)
+            
+            layout.addWidget(container)
+            
+            # Connect checkbox
+            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
+            self.radar_xyz_view = None
+            return
+        
+        # Create matplotlib figure and canvas
+        self.radar_xyz_figure = Figure(figsize=(8, 6))
+        self.radar_xyz_canvas = FigureCanvas(self.radar_xyz_figure)
+        self.radar_xyz_ax = self.radar_xyz_figure.add_subplot(111, projection='3d')
+        
+        # Set up the 3D axes
+        self.radar_xyz_ax.set_xlabel('X (m)')
+        self.radar_xyz_ax.set_ylabel('Y (m)')
+        self.radar_xyz_ax.set_zlabel('Z (m)')
+        self.radar_xyz_ax.set_xlim(-10, 10)
+        self.radar_xyz_ax.set_ylim(-10, 10)
+        self.radar_xyz_ax.set_zlim(-10, 10)
+        
+        # Add grid
+        self.radar_xyz_ax.grid(True)
+        
+        # Initialize plot elements
+        colors = pg.colormap.get("tab10", "matplotlib").getColors()
+        
+        # Debug: print color info
+        print(f"Radar 3D: Color at index 2: {colors[2]}")
+        print(f"Radar 3D: Color type: {type(colors[2])}, length: {len(colors[2])}")
+        
+        # Normalize colors to 0-1 range for matplotlib
+        # PyQtGraph colors can be either tuples or arrays, and may have 3 or 4 components
+        raw_color = colors[2]
+        if len(raw_color) >= 3:
+            # Take first 3 components (RGB)
+            rgb = [float(raw_color[0]), float(raw_color[1]), float(raw_color[2])]
+            # Check if in 0-255 range
+            if any(c > 1.0 for c in rgb):
+                color_normalized = [c/255.0 for c in rgb]
+            else:
+                color_normalized = rgb
+        else:
+            # Fallback color
+            color_normalized = [0.2, 0.6, 0.2]  # Green
+        
+        print(f"Radar 3D: Normalized color: {color_normalized}")
+        
+        # Create scatter plot for current position
+        self.radar_xyz_scatter = self.radar_xyz_ax.scatter(
+            [0], [0], [0], 
+            c=[color_normalized], 
+            s=100, 
+            marker='o',
+            edgecolors='black',
+            linewidths=2
+        )
+        
+        # Create line plot for history trail
+        self.radar_xyz_trail, = self.radar_xyz_ax.plot(
+            [0], [0], [0], 
+            color=color_normalized, 
+            alpha=0.5, 
+            linewidth=2,
+            linestyle='--'
+        )
+        
+        # Add antenna position markers
+        antenna_positions = np.array([
+            [0, 0, 0],      # ADC0 at origin
+            [1, 0, 0],      # ADC1 along x-axis
+            [0, 1, 0]       # ADC2 along y-axis
+        ])
+        
+        self.antenna_markers = self.radar_xyz_ax.scatter(
+            antenna_positions[:, 0],
+            antenna_positions[:, 1],
+            antenna_positions[:, 2],
+            c='gray',
+            s=80,
+            marker='^',
+            edgecolors='black',
+            linewidths=1
+        )
+        
+        # Add antenna labels
+        for i, pos in enumerate(antenna_positions):
+            self.radar_xyz_ax.text(
+                pos[0], pos[1], pos[2] + 0.5,
+                f'ADC{i}',
+                fontsize=10,
+                ha='center'
+            )
+        
+        # Add labels for info display
+        info_widget = QtWidgets.QWidget()
+        info_layout = QtWidgets.QHBoxLayout(info_widget)
+        
+        self.radar_xyz_info_label = QtWidgets.QLabel("No Detection")
+        self.radar_xyz_info_label.setStyleSheet("font-size: 16px; padding: 5px;")
+        info_layout.addWidget(self.radar_xyz_info_label)
+        info_layout.addStretch()
+        
+        self.radar_plots['xyz'] = self.radar_xyz_ax
+        self.radar_plot_widgets['xyz'] = self.radar_xyz_canvas
+        self.radar_xyz_view = self.radar_xyz_canvas  # For compatibility
+        
+        container_layout.addWidget(cb)
+        container_layout.addWidget(info_widget)
+        container_layout.addWidget(self.radar_xyz_canvas)
+        
+        layout.addWidget(container)
+        
+        # Connect checkbox
+        cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
+        
+        # Set initial view angle
+        self.radar_xyz_ax.view_init(elev=20, azim=45)
+        
+        # Draw the initial canvas
+        self.radar_xyz_canvas.draw()
 
     def _setup_status_bar(self) -> None:
         """Initialize the status bar at the bottom of the window."""
@@ -1847,6 +2647,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             self.configure_button.setEnabled(True)
             self.fine_lag_mode_button.setEnabled(True)  # Enable fine lag mode button after connection
             self.super_fft_mode_button.setEnabled(True)  # Enable super FFT mode button after connection
+            self.radar_mode_button.setEnabled(True)  # Enable radar mode button after connection
             self.serial_input.setEnabled(False)
             print("Connection successful.")
         except Exception as e:
@@ -2392,6 +3193,119 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Switch back to spectra tab
             self.tabs.setCurrentIndex(0)
 
+    def _toggle_radar_mode(self, checked: bool) -> None:
+        """Toggle between normal mode and 3D radar localization mode."""
+        if not self.pocket_correlator:
+            self.radar_mode_button.setChecked(False)
+            return
+            
+        if checked:
+            print("Switching to Radar Mode...")
+            self.status_label.setText("Switching to 3D Radar Localization Mode...")
+            
+            # Make sure other modes are off
+            if self.fine_lag_mode_button.isChecked():
+                self.fine_lag_mode_button.setChecked(False)
+                self._toggle_fine_lag_mode(False)
+            if self.super_fft_mode_button.isChecked():
+                self.super_fft_mode_button.setChecked(False)
+                self._toggle_super_fft_mode(False)
+            
+            # Stop normal threads
+            if self.receiver_thread and self.receiver_thread.is_alive():
+                self.receiver_thread.stop()
+                self.receiver_thread.join(timeout=2)
+            
+            if self.lag_computer_thread and self.lag_computer_thread.is_alive():
+                self.lag_computer_thread.set_compute_enabled(False)
+            
+            # Create shared buffers if they don't exist
+            if not self.shared_buffers:
+                waterfall_len = self.waterfall_len_spinner.value()
+                self.shared_buffers = SharedDataBuffers(waterfall_len=waterfall_len)
+            
+            # Create and start radar computer if needed
+            if not self.radar_computer_thread:
+                self.radar_computer_thread = RadarComputer(self.pocket_correlator, self.shared_buffers, self.config)
+                self.radar_computer_thread.start()
+            
+            self.radar_computer_thread.set_enabled(True)
+            
+            # Update UI
+            self.radar_mode_button.setText("Disable Radar Mode")
+            self.status_label.setText("Radar Mode Active - 3D Localization")
+            
+            # Disable normal operation controls and other modes
+            self.calibrate_button.setEnabled(False)
+            self.configure_button.setEnabled(False)
+            self.enable_lag_checkbox.setEnabled(False)
+            self.fine_lag_mode_button.setEnabled(False)
+            self.super_fft_mode_button.setEnabled(False)
+            
+            # Enable radar threshold spinner
+            self.radar_threshold_spinner.setEnabled(True)
+            
+            # Switch to radar Az/El tab
+            self.tabs.setCurrentIndex(8)  # Radar Az/El tab
+            
+            # Start a timer to trigger plot updates for radar mode
+            if not hasattr(self, 'radar_timer'):
+                self.radar_timer = QtCore.QTimer()
+                self.radar_timer.timeout.connect(self._update_plots)
+            self.radar_timer.start(50)  # Update at 20 Hz
+            
+        else:
+            print("Switching back to Normal Mode...")
+            self.status_label.setText("Switching back to Normal Mode...")
+            
+            # Stop the radar timer
+            if hasattr(self, 'radar_timer'):
+                self.radar_timer.stop()
+            
+            # Stop radar thread
+            if self.radar_computer_thread:
+                self.radar_computer_thread.set_enabled(False)
+            
+            # Restart normal operation if it was configured
+            if hasattr(self, 'config') and self.config and self.shared_buffers and hasattr(self.pocket_correlator, 'corr_receiver'):
+                try:
+                    # Restart receiver thread
+                    sock = self.pocket_correlator.corr_receiver.socket
+                    sock.settimeout(0.1)
+                    
+                    self.receiver_thread = UDPReceiver(sock, self.shared_buffers, self.packet_dtype, self.config)
+                    self.receiver_thread.data_ready_callback = lambda: self.data_ready.emit()
+                    self.receiver_thread.start()
+                    
+                    # Re-enable lag computation if it was enabled
+                    if self.enable_lag_checkbox.isChecked() and self.lag_computer_thread:
+                        self.lag_computer_thread.set_compute_enabled(True)
+                except Exception as e:
+                    print(f"Could not restart normal mode receiver: {e}")
+            
+            # Update UI
+            self.radar_mode_button.setText("Enable Radar Mode")
+            self.status_label.setText("Normal Mode Active")
+            
+            # Re-enable normal controls
+            self.calibrate_button.setEnabled(True)
+            self.configure_button.setEnabled(True)
+            self.enable_lag_checkbox.setEnabled(True)
+            self.fine_lag_mode_button.setEnabled(True)
+            self.super_fft_mode_button.setEnabled(True)
+            
+            # Disable radar threshold spinner
+            self.radar_threshold_spinner.setEnabled(False)
+            
+            # Switch back to spectra tab
+            self.tabs.setCurrentIndex(0)
+    
+    def _update_radar_threshold(self, value: float) -> None:
+        """Update the radar peak detection threshold."""
+        if self.radar_computer_thread:
+            self.radar_computer_thread.set_threshold(value)
+            print(f"Radar threshold set to: {value:.2f}")
+
     def _update_plots(self) -> None:
         """Update all plots with new data from the shared buffers."""
         if not self.shared_buffers:
@@ -2400,8 +3314,24 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         # Check which tab is active
         current_tab_index = self.tabs.currentIndex()
         
+        # Check if in radar mode
+        if self.radar_mode_button.isChecked() and current_tab_index >= 8:
+            with self.shared_buffers.radar_lock:
+                if current_tab_index == 8:  # Radar Az/El Tab
+                    self._update_radar_azel_plot()
+                elif current_tab_index == 9:  # Radar Az/Range Tab
+                    self._update_radar_azrange_plot()
+                elif current_tab_index == 10:  # Radar 3D Tab
+                    self._update_radar_xyz_plot()
+                elif current_tab_index == 11:  # Radar Debug Tab
+                    self._update_radar_debug_plot()
+                    
+            # Update FPS for radar mode
+            if self.radar_computer_thread:
+                fps = self.radar_computer_thread.fps
+                self.metrics_label.setText(f"Radar FPS: {fps:.2f}")
         # Check if in super FFT mode
-        if self.super_fft_mode_button.isChecked() and current_tab_index >= 6:
+        elif self.super_fft_mode_button.isChecked() and current_tab_index >= 6:
             with self.shared_buffers.super_fft_lock:
                 if current_tab_index == 6:  # Super FFT Spectra Tab
                     self._update_super_fft_spectra_plots()
@@ -3055,6 +3985,224 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             plot = self.super_fft_waterfall_plots[key]
             plot.setLabel('bottom', 'Frequency', units='Hz')
             plot.setLabel('left', 'Time (frames ago)')
+    
+    def _update_radar_azel_plot(self) -> None:
+        """Update the radar azimuth/elevation plot."""
+        if not self.shared_buffers or not self.plot_checkboxes["radar_azel"].isChecked():
+            return
+            
+        # Check if we have a valid detection
+        if self.shared_buffers.radar_detection_valid[0]:
+            # Get current position
+            azimuth = self.shared_buffers.radar_azimuth[0]
+            elevation = self.shared_buffers.radar_elevation[0]
+            
+            # Update scatter plot with current position
+            self.radar_azel_scatter.setData([azimuth], [elevation])
+            
+            # Update trail with history
+            history_count = self.shared_buffers.radar_history_count
+            if history_count > 0:
+                # Get historical positions (newest first)
+                az_history = self.shared_buffers.radar_history_azimuth[:history_count]
+                el_history = self.shared_buffers.radar_history_elevation[:history_count]
+                
+                # Reverse to show oldest to newest
+                az_trail = az_history[::-1]
+                el_trail = el_history[::-1]
+                
+                # Update trail line
+                self.radar_azel_trail.setData(az_trail, el_trail)
+            
+            # Hide "No Detection" text
+            self.radar_azel_text.setVisible(False)
+        else:
+            # No detection - clear plots and show text
+            self.radar_azel_scatter.setData([], [])
+            self.radar_azel_trail.setData([], [])
+            self.radar_azel_text.setVisible(True)
+    
+    def _update_radar_xyz_plot(self) -> None:
+        """Update the radar 3D position plot."""
+        if not self.shared_buffers or not self.plot_checkboxes["radar_xyz"].isChecked():
+            return
+            
+        # Check if we have a valid detection
+        if self.shared_buffers.radar_detection_valid[0]:
+            # Get current position
+            range_m = self.shared_buffers.radar_range[0]
+            azimuth = self.shared_buffers.radar_azimuth[0]
+            elevation = self.shared_buffers.radar_elevation[0]
+            
+            # Convert spherical to Cartesian coordinates
+            azimuth_rad = np.radians(azimuth)
+            elevation_rad = np.radians(elevation)
+            
+            x = range_m * np.cos(elevation_rad) * np.cos(azimuth_rad)
+            y = range_m * np.cos(elevation_rad) * np.sin(azimuth_rad)
+            z = range_m * np.sin(elevation_rad)
+            
+            # Update scatter plot with current position
+            self.radar_xyz_scatter.setData(pos=np.array([[x, y, z]]))
+            
+            # Update trail with history
+            history_count = self.shared_buffers.radar_history_count
+            if history_count > 0:
+                # Get historical positions and convert to Cartesian
+                range_history = self.shared_buffers.radar_history_range[:history_count]
+                az_history = self.shared_buffers.radar_history_azimuth[:history_count]
+                el_history = self.shared_buffers.radar_history_elevation[:history_count]
+                
+                # Convert to Cartesian coordinates
+                az_rad = np.radians(az_history)
+                el_rad = np.radians(el_history)
+                
+                x_trail = range_history * np.cos(el_rad) * np.cos(az_rad)
+                y_trail = range_history * np.cos(el_rad) * np.sin(az_rad)
+                z_trail = range_history * np.sin(el_rad)
+                
+                # Create trail positions array
+                trail_positions = np.column_stack((x_trail[::-1], y_trail[::-1], z_trail[::-1]))
+                
+                # Update trail line
+                self.radar_xyz_trail.setData(pos=trail_positions)
+            
+            # Update info label
+            self.radar_xyz_info_label.setText(
+                f"Range: {range_m:.2f}m | Az: {azimuth:.1f}° | El: {elevation:.1f}°"
+            )
+        else:
+            # No detection - clear plots
+            self.radar_xyz_scatter.setData(pos=np.array([[0, 0, 0]]))
+            self.radar_xyz_trail.setData(pos=np.array([[0, 0, 0], [0, 0, 0]]))
+            self.radar_xyz_info_label.setText("No Detection")
+    
+    def _update_radar_azrange_plot(self) -> None:
+        """Update the radar azimuth/range plot."""
+        if not self.shared_buffers or not self.plot_checkboxes["radar_azrange"].isChecked():
+            return
+            
+        # Check if we have a valid detection
+        if self.shared_buffers.radar_detection_valid[0]:
+            # Get current position
+            azimuth = self.shared_buffers.radar_azimuth[0]
+            range_m = self.shared_buffers.radar_range[0]
+            
+            # Update scatter plot with current position
+            self.radar_azrange_scatter.setData([azimuth], [range_m])
+            
+            # Update trail with history
+            history_count = self.shared_buffers.radar_history_count
+            if history_count > 0:
+                # Get historical positions (newest first)
+                az_history = self.shared_buffers.radar_history_azimuth[:history_count]
+                range_history = self.shared_buffers.radar_history_range[:history_count]
+                
+                # Reverse to show oldest to newest
+                az_trail = az_history[::-1]
+                range_trail = range_history[::-1]
+                
+                # Update trail line
+                self.radar_azrange_trail.setData(az_trail, range_trail)
+            
+            # Hide "No Detection" text
+            self.radar_azrange_text.setVisible(False)
+        else:
+            # No detection - clear plots and show text
+            self.radar_azrange_scatter.setData([], [])
+            self.radar_azrange_trail.setData([], [])
+            self.radar_azrange_text.setVisible(True)
+    
+    def _update_radar_debug_plot(self) -> None:
+        """Update the radar debug plots showing antenna-to-reference lag spectra."""
+        if not self.shared_buffers:
+            return
+            
+        # Colors for the peak markers and centroid windows
+        colors = pg.colormap.get("tab10", "matplotlib").getColors()
+        
+        # Update each ADC plot
+        for adc_idx in range(3):
+            checkbox_key = f"radar_lag_adc{adc_idx}"
+            if not self.plot_checkboxes[checkbox_key].isChecked():
+                continue
+                
+            # Get the lag spectrum data
+            if adc_idx == 0:
+                lag_data = self.shared_buffers.radar_lag_adc0
+            elif adc_idx == 1:
+                lag_data = self.shared_buffers.radar_lag_adc1
+            else:
+                lag_data = self.shared_buffers.radar_lag_adc2
+            
+            # Update the main plot
+            self.radar_lag_plots[adc_idx].setData(
+                x=self.radar_lag_axis, 
+                y=lag_data
+            )
+            
+            # Get the plot widget
+            plot_widget = self.radar_lag_plot_widgets[adc_idx]
+            
+            # Remove any existing vertical lines and fill items
+            # We'll store references in the plot widget for cleanup
+            if hasattr(plot_widget, '_peak_line'):
+                plot_widget.removeItem(plot_widget._peak_line)
+            if hasattr(plot_widget, '_centroid_fill'):
+                plot_widget.removeItem(plot_widget._centroid_fill)
+            if hasattr(plot_widget, '_peak_text'):
+                plot_widget.removeItem(plot_widget._peak_text)
+            
+            # Only add markers if we have valid data and a detection
+            if self.shared_buffers.radar_detection_valid[0]:
+                # Get the detected delay for this antenna
+                delay_seconds = self.shared_buffers.radar_delays[adc_idx]
+                delay_meters = delay_seconds * 299792458.0  # Convert to meters
+                
+                # Add vertical line at detected peak
+                peak_line = pg.InfiniteLine(
+                    pos=delay_meters,
+                    angle=90,
+                    pen=pg.mkPen(colors[adc_idx], width=2, style=QtCore.Qt.DashLine),
+                    label=f'{delay_meters:.2f}m',
+                    labelOpts={'position': 0.95, 'color': colors[adc_idx], 'movable': False}
+                )
+                plot_widget.addItem(peak_line)
+                plot_widget._peak_line = peak_line  # Store reference for cleanup
+                
+                # Get centroid window boundaries
+                start_idx = self.shared_buffers.radar_centroid_starts[adc_idx]
+                end_idx = self.shared_buffers.radar_centroid_ends[adc_idx]
+                
+                # Convert indices to lag axis values
+                if 0 <= start_idx < len(self.radar_lag_axis) and 0 <= end_idx < len(self.radar_lag_axis):
+                    start_meters = self.radar_lag_axis[start_idx]
+                    end_meters = self.radar_lag_axis[end_idx]
+                    
+                    # Create shaded region for centroid window
+                    # We need to create a FillBetweenItem-like effect
+                    # PyQtGraph doesn't have a direct equivalent, so we'll use a LinearRegionItem
+                    centroid_region = pg.LinearRegionItem(
+                        values=(start_meters, end_meters),
+                        orientation='vertical',
+                        brush=pg.mkBrush(colors[adc_idx] + (50,)),  # Add transparency
+                        movable=False
+                    )
+                    plot_widget.addItem(centroid_region)
+                    plot_widget._centroid_fill = centroid_region  # Store reference for cleanup
+                
+                # Add text label with range value
+                range_m = self.shared_buffers.radar_range[0]
+                peak_magnitude = lag_data[np.argmin(np.abs(self.radar_lag_axis - delay_meters))]
+                
+                text_item = pg.TextItem(
+                    text=f'Range: {range_m:.2f}m',
+                    color=colors[adc_idx],
+                    anchor=(0, 1)
+                )
+                text_item.setPos(delay_meters, peak_magnitude * 1.1)
+                plot_widget.addItem(text_item)
+                plot_widget._peak_text = text_item  # Store reference for cleanup
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         """Handle the main window close event."""
