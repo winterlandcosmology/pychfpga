@@ -641,8 +641,11 @@ class RadarComputer(threading.Thread):
         lags = np.arange(-n//2, n//2) / fs
         return lags, lag_spectrum
 
-    def extract_delay_with_phase(self, lags, lag_spectrum, peak_idx, adc_idx=None):
-        """Extract precise delay using centroid method around the peak."""
+    def extract_delay_with_phase(self, lags, lag_spectrum, peak_idx):
+        """
+        Extract precise delay using centroid method around the peak.
+        Returns the calculated delay, and the start/end indices of the centroid window.
+        """
         coarse_delay = lags[peak_idx]
         magnitude = np.abs(lag_spectrum)
         
@@ -650,12 +653,6 @@ class RadarComputer(threading.Thread):
         window_half_size = 15
         start = max(0, peak_idx - window_half_size)
         end = min(len(magnitude), peak_idx + window_half_size + 1)
-        
-        # Store centroid window info if ADC index is provided
-        if adc_idx is not None and adc_idx < 3:
-            with self.shared_buffers.radar_lock:
-                self.shared_buffers.radar_centroid_starts[adc_idx] = start
-                self.shared_buffers.radar_centroid_ends[adc_idx] = end
         
         # Extract windowed data
         lags_window = lags[start:end]
@@ -669,16 +666,14 @@ class RadarComputer(threading.Thread):
             delay = weighted_sum / weight_total
         else:
             delay = coarse_delay
-        
-        # Store detected delay if ADC index is provided
-        if adc_idx is not None and adc_idx < 3:
-            with self.shared_buffers.radar_lock:
-                self.shared_buffers.radar_delays[adc_idx] = delay
-        
-        return delay
+            
+        return delay, start, end
 
-    def find_single_peak(self, lags, lag_spectrum, adc_idx=None):
-        """Find only the strongest peak in lag spectrum using simple argmax."""
+    def find_single_peak(self, lags, lag_spectrum):
+        """
+        Find the strongest peak in lag spectrum.
+        Returns the delay, and centroid window start/end.
+        """
         magnitude = np.abs(lag_spectrum)
         
         # Optional: Apply simple smoothing with moving average (window size 5)
@@ -694,9 +689,9 @@ class RadarComputer(threading.Thread):
         # Simply find the index of the maximum value
         peak_idx = np.argmax(magnitude_for_peak)
         
-        # Extract precise delay with ADC index for storing debug info
-        delay = self.extract_delay_with_phase(lags, lag_spectrum, peak_idx, adc_idx)
-        return np.array([delay])
+        # Extract precise delay and centroid window
+        delay, centroid_start, centroid_end = self.extract_delay_with_phase(lags, lag_spectrum, peak_idx)
+        return delay, centroid_start, centroid_end
 
     def trilaterate_3d(self, ant_positions, ranges):
         """Find 3D position given ranges from three antennas."""
@@ -757,39 +752,42 @@ class RadarComputer(threading.Thread):
                 return result.x
     
     def process_radar_frame(self, adc0, adc1, adc2, adc3, fs):
-        """Process one frame of radar data to find emitter position."""
-        # Step 1: Compute lag spectra for all correlations
-        all_delays = {}
-        lag_spectra = {}  # Store for debug
+        """
+        Process one frame of radar data to find emitter position.
+        Only updates shared buffers on a successful detection.
+        """
+        # Step 1: Compute lag spectra and find peaks for all correlations
+        # Store results locally before committing to shared memory
+        local_delays = {}
+        local_lag_spectra = {}
+        local_centroid_starts = {}
+        local_centroid_ends = {}
         
         # Emitter (ADC3) to antenna correlations (for absolute ranging)
         for i, adc in enumerate([adc0, adc1, adc2]):
             lags, lag_spectrum = self.compute_lag_spectrum(adc3, adc, fs)
-            # Store magnitude of lag spectrum for debug
-            lag_spectra[i] = np.abs(lag_spectrum)
-            delays = self.find_single_peak(lags, lag_spectrum, adc_idx=i)
-            if len(delays) > 0:
-                all_delays[('emitter', i)] = delays[0]
-        
-        # Store lag spectra for debug visualization
-        with self.shared_buffers.radar_lock:
-            if 0 in lag_spectra:
-                self.shared_buffers.radar_lag_adc0[:] = lag_spectra[0]
-            if 1 in lag_spectra:
-                self.shared_buffers.radar_lag_adc1[:] = lag_spectra[1]
-            if 2 in lag_spectra:
-                self.shared_buffers.radar_lag_adc2[:] = lag_spectra[2]
+            
+            # Store magnitude of lag spectrum locally
+            local_lag_spectra[i] = np.abs(lag_spectrum)
+            
+            # Find peak and get delay and centroid info
+            delay, centroid_start, centroid_end = self.find_single_peak(lags, lag_spectrum)
+            
+            if delay is not None:
+                local_delays[('emitter', i)] = delay
+                local_centroid_starts[i] = centroid_start
+                local_centroid_ends[i] = centroid_end
         
         # Check if we have enough detections
-        if len(all_delays) < 3:
+        if len(local_delays) < 3:
             return None  # Need at least 3 for trilateration
         
         # Step 2: Extract delays for trilateration
         emitter_delays = {}
         for i in range(3):
             key = ('emitter', i)
-            if key in all_delays:
-                emitter_delays[i] = all_delays[key]
+            if key in local_delays:
+                emitter_delays[i] = local_delays[key]
         
         if len(emitter_delays) != 3:
             return None  # Need exactly 3 measurements
@@ -805,6 +803,22 @@ class RadarComputer(threading.Thread):
             if r > 0 and r < 100:  # Reasonable range check
                 azimuth = np.degrees(np.arctan2(y, x))
                 elevation = np.degrees(np.arcsin(z / r))
+                
+                # --- SUCCESS: Update shared buffers with all data ---
+                with self.shared_buffers.radar_lock:
+                    # Update lag spectra for debug plots
+                    if 0 in local_lag_spectra:
+                        self.shared_buffers.radar_lag_adc0[:] = local_lag_spectra[0]
+                    if 1 in local_lag_spectra:
+                        self.shared_buffers.radar_lag_adc1[:] = local_lag_spectra[1]
+                    if 2 in local_lag_spectra:
+                        self.shared_buffers.radar_lag_adc2[:] = local_lag_spectra[2]
+                        
+                    # Update delays and centroid windows
+                    for i in range(3):
+                        self.shared_buffers.radar_delays[i] = emitter_delays.get(i, 0)
+                        self.shared_buffers.radar_centroid_starts[i] = local_centroid_starts.get(i, 0)
+                        self.shared_buffers.radar_centroid_ends[i] = local_centroid_ends.get(i, 0)
                 
                 return {
                     'range_m': r,
@@ -881,8 +895,9 @@ class RadarComputer(threading.Thread):
                     avg_azimuth = np.mean([d['azimuth_deg'] for d in detections])
                     avg_elevation = np.mean([d['elevation_deg'] for d in detections])
                     
-                    # Update shared buffers
+                    # Update shared buffers - only update position values on valid detection
                     with self.shared_buffers.radar_lock:
+                        # Update position values only when we have a valid detection
                         self.shared_buffers.radar_range[0] = avg_range
                         self.shared_buffers.radar_azimuth[0] = avg_azimuth
                         self.shared_buffers.radar_elevation[0] = avg_elevation
@@ -902,9 +917,16 @@ class RadarComputer(threading.Thread):
                             self.shared_buffers.radar_history_len
                         )
                 else:
-                    # No detection
+                    # No detection - only update validity flag, keep last valid position values
                     with self.shared_buffers.radar_lock:
+                        # Do NOT update radar_range/azimuth/elevation - hold last valid values
                         self.shared_buffers.radar_detection_valid[0] = False
+                        # Debug: print that we're holding last valid values
+                        if self.frames_processed % 50 == 0:  # Print occasionally
+                            print(f"Radar: No detection, holding last valid values: "
+                                  f"Range={self.shared_buffers.radar_range[0]:.2f}m, "
+                                  f"Az={self.shared_buffers.radar_azimuth[0]:.1f}°, "
+                                  f"El={self.shared_buffers.radar_elevation[0]:.1f}°")
                 
                 # Update performance metrics
                 self.frames_processed += 1
@@ -1810,7 +1832,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         p00_plot.addLegend()
         layout.addWidget(p00_widget, 0, 0)
         # Connect checkbox to hide/show the widget
-        p00_cb.stateChanged.connect(lambda state, w=p00_widget: w.setVisible(state == QtCore.Qt.Checked))
+        p00_cb.stateChanged.connect(lambda state, w=p00_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
         # --- P01 Abs Plot ---
         p01_abs_widget = QtWidgets.QWidget()
@@ -1828,7 +1850,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         p01_abs_plot.setLabel('bottom', 'Frequency', units='Hz')
         layout.addWidget(p01_abs_widget, 1, 0)
         # Connect checkbox to hide/show the widget
-        p01_abs_cb.stateChanged.connect(lambda state, w=p01_abs_widget: w.setVisible(state == QtCore.Qt.Checked))
+        p01_abs_cb.stateChanged.connect(lambda state, w=p01_abs_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
         # --- P01 Real Plot ---
         p01_real_widget = QtWidgets.QWidget()
@@ -1847,7 +1869,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         p01_real_plot.setLabel('left', 'Real Part')
         layout.addWidget(p01_real_widget, 1, 1)
         # Connect checkbox to hide/show the widget
-        p01_real_cb.stateChanged.connect(lambda state, w=p01_real_widget: w.setVisible(state == QtCore.Qt.Checked))
+        p01_real_cb.stateChanged.connect(lambda state, w=p01_real_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
         # --- P11 Plot ---
         p11_widget = QtWidgets.QWidget()
@@ -1865,7 +1887,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         p11_plot.addLegend()
         layout.addWidget(p11_widget, 0, 1)
         # Connect checkbox to hide/show the widget
-        p11_cb.stateChanged.connect(lambda state, w=p11_widget: w.setVisible(state == QtCore.Qt.Checked))
+        p11_cb.stateChanged.connect(lambda state, w=p11_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
     def _setup_waterfall_plots(self) -> None:
         """Set up the image views for the Waterfall tab."""
@@ -1918,7 +1940,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             layout.addWidget(container, row, col)
             
             # Connect checkbox to hide/show the container
-            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
+            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
 
     def _setup_lag_spectra_plots(self) -> None:
@@ -1946,7 +1968,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         lag_p00_plot.addLegend()
         layout.addWidget(lag_p00_widget, 0, 0)
         # Connect checkbox to hide/show the widget
-        lag_p00_cb.stateChanged.connect(lambda state, w=lag_p00_widget: w.setVisible(state == QtCore.Qt.Checked))
+        lag_p00_cb.stateChanged.connect(lambda state, w=lag_p00_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
         # --- Lag P11 Plot ---
         lag_p11_widget = QtWidgets.QWidget()
@@ -1965,7 +1987,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         lag_p11_plot.addLegend()
         layout.addWidget(lag_p11_widget, 0, 1)
         # Connect checkbox to hide/show the widget
-        lag_p11_cb.stateChanged.connect(lambda state, w=lag_p11_widget: w.setVisible(state == QtCore.Qt.Checked))
+        lag_p11_cb.stateChanged.connect(lambda state, w=lag_p11_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
         # --- Lag P01 Magnitude Plot ---
         lag_p01_mag_widget = QtWidgets.QWidget()
@@ -1984,7 +2006,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         lag_p01_mag_plot.setLabel('left', 'Power')
         layout.addWidget(lag_p01_mag_widget, 1, 0)
         # Connect checkbox to hide/show the widget
-        lag_p01_mag_cb.stateChanged.connect(lambda state, w=lag_p01_mag_widget: w.setVisible(state == QtCore.Qt.Checked))
+        lag_p01_mag_cb.stateChanged.connect(lambda state, w=lag_p01_mag_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
     def _setup_lag_waterfall_plots(self) -> None:
         """Set up the image views for the Lag Waterfall tab."""
@@ -2012,7 +2034,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             cb = QtWidgets.QCheckBox(title)
             cb.setChecked(True)
             self.plot_checkboxes[f"lag_wf_{key}"] = cb
-            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
+            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
             
             plot = pg.PlotWidget()
@@ -2062,7 +2084,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         fine_lag_p00_plot.addLegend()
         layout.addWidget(fine_lag_p00_widget, 0, 0)
         # Connect checkbox to hide/show the widget
-        fine_lag_p00_cb.stateChanged.connect(lambda state, w=fine_lag_p00_widget: w.setVisible(state == QtCore.Qt.Checked))
+        fine_lag_p00_cb.stateChanged.connect(lambda state, w=fine_lag_p00_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
         # --- Fine Lag P11 Plot ---
         fine_lag_p11_widget = QtWidgets.QWidget()
@@ -2081,7 +2103,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         fine_lag_p11_plot.addLegend()
         layout.addWidget(fine_lag_p11_widget, 0, 1)
         # Connect checkbox to hide/show the widget
-        fine_lag_p11_cb.stateChanged.connect(lambda state, w=fine_lag_p11_widget: w.setVisible(state == QtCore.Qt.Checked))
+        fine_lag_p11_cb.stateChanged.connect(lambda state, w=fine_lag_p11_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
         
         # --- Fine Lag P01 Plot (Cross-correlation) ---
         fine_lag_p01_widget = QtWidgets.QWidget()
@@ -2100,7 +2122,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         fine_lag_p01_plot.addLegend()
         layout.addWidget(fine_lag_p01_widget, 1, 0, 1, 2)  # Span both columns
         # Connect checkbox to hide/show the widget
-        fine_lag_p01_cb.stateChanged.connect(lambda state, w=fine_lag_p01_widget: w.setVisible(state == QtCore.Qt.Checked))
+        fine_lag_p01_cb.stateChanged.connect(lambda state, w=fine_lag_p01_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
         
         # --- Time Domain ADC0 Plot ---
         time_adc0_widget = QtWidgets.QWidget()
@@ -2119,7 +2141,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         time_adc0_plot.addLegend()
         layout.addWidget(time_adc0_widget, 2, 0)
         # Connect checkbox to hide/show the widget
-        time_adc0_cb.stateChanged.connect(lambda state, w=time_adc0_widget: w.setVisible(state == QtCore.Qt.Checked))
+        time_adc0_cb.stateChanged.connect(lambda state, w=time_adc0_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
         
         # --- Time Domain ADC1 Plot ---
         time_adc1_widget = QtWidgets.QWidget()
@@ -2138,7 +2160,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         time_adc1_plot.addLegend()
         layout.addWidget(time_adc1_widget, 2, 1)
         # Connect checkbox to hide/show the widget
-        time_adc1_cb.stateChanged.connect(lambda state, w=time_adc1_widget: w.setVisible(state == QtCore.Qt.Checked))
+        time_adc1_cb.stateChanged.connect(lambda state, w=time_adc1_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
     def _setup_fine_lag_waterfall_plots(self) -> None:
         """Set up the image views for the Fine Lag Waterfall tab."""
@@ -2164,7 +2186,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             
             cb = QtWidgets.QCheckBox(title)
             cb.setChecked(True)
-            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
+            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.CheckState.Checked))
             self.plot_checkboxes[f"fine_lag_wf_{key}"] = cb
             
             plot = pg.PlotWidget()
@@ -2212,7 +2234,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         super_fft_plot.addLegend()
         layout.addWidget(super_fft_widget, 0, 0, 1, 2)  # Span both columns
         # Connect checkbox to hide/show the widget
-        super_fft_cb.stateChanged.connect(lambda state, w=super_fft_widget: w.setVisible(state == QtCore.Qt.Checked))
+        super_fft_cb.stateChanged.connect(lambda state, w=super_fft_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
         
         # --- Time Domain Plot ---
         time_domain_widget = QtWidgets.QWidget()
@@ -2231,7 +2253,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         time_domain_plot.addLegend()
         layout.addWidget(time_domain_widget, 1, 0, 1, 2)  # Span both columns
         # Connect checkbox to hide/show the widget
-        time_domain_cb.stateChanged.connect(lambda state, w=time_domain_widget: w.setVisible(state == QtCore.Qt.Checked))
+        time_domain_cb.stateChanged.connect(lambda state, w=time_domain_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
         
         # Calculate frequency axis for super FFT
         n_super_fft_bins = 131073
@@ -2281,7 +2303,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         layout.addWidget(container)
         
         # Connect checkbox to hide/show the container
-        cb.stateChanged.connect(lambda state: container.setVisible(state == QtCore.Qt.Checked))
+        cb.stateChanged.connect(lambda state: container.setVisible(state == QtCore.Qt.CheckState.Checked))
     
     def _setup_radar_azel_plots(self) -> None:
         """Set up the plots for the Radar Az/El tab."""
@@ -2319,7 +2341,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         
         # Create line plot for history trail
         self.radar_azel_trail = pg.PlotDataItem(
-            pen=pg.mkPen(colors[0], width=1, style=QtCore.Qt.DashLine)
+            pen=pg.mkPen(colors[0], width=1, style=QtCore.Qt.PenStyle.DashLine)
         )
         plot.addItem(self.radar_azel_trail)
         
@@ -2341,7 +2363,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         layout.addWidget(container)
         
         # Connect checkbox
-        cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
+        cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.CheckState.Checked))
     
     def _setup_radar_debug_plots(self) -> None:
         """Set up the plots for the Radar Debug tab showing antenna-to-reference lag spectra."""
@@ -2373,7 +2395,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         adc0_plot.setLabel('left', 'Correlation Magnitude')
         adc0_plot.addLegend()
         layout.addWidget(adc0_widget, 0, 0)
-        adc0_cb.stateChanged.connect(lambda state, w=adc0_widget: w.setVisible(state == QtCore.Qt.Checked))
+        adc0_cb.stateChanged.connect(lambda state, w=adc0_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
         
         # --- ADC1-to-Reference Lag Plot ---
         adc1_widget = QtWidgets.QWidget()
@@ -2391,7 +2413,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         adc1_plot.setLabel('left', 'Correlation Magnitude')
         adc1_plot.addLegend()
         layout.addWidget(adc1_widget, 0, 1)
-        adc1_cb.stateChanged.connect(lambda state, w=adc1_widget: w.setVisible(state == QtCore.Qt.Checked))
+        adc1_cb.stateChanged.connect(lambda state, w=adc1_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
         
         # --- ADC2-to-Reference Lag Plot ---
         adc2_widget = QtWidgets.QWidget()
@@ -2409,7 +2431,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         adc2_plot.setLabel('left', 'Correlation Magnitude')
         adc2_plot.addLegend()
         layout.addWidget(adc2_widget, 1, 0, 1, 2)  # Span both columns
-        adc2_cb.stateChanged.connect(lambda state, w=adc2_widget: w.setVisible(state == QtCore.Qt.Checked))
+        adc2_cb.stateChanged.connect(lambda state, w=adc2_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
     
     def _setup_radar_azrange_plots(self) -> None:
         """Set up the plots for the Radar Az/Range tab."""
@@ -2445,7 +2467,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         
         # Create line plot for history trail
         self.radar_azrange_trail = pg.PlotDataItem(
-            pen=pg.mkPen(colors[1], width=1, style=QtCore.Qt.DashLine)
+            pen=pg.mkPen(colors[1], width=1, style=QtCore.Qt.PenStyle.DashLine)
         )
         plot.addItem(self.radar_azrange_trail)
         
@@ -2467,7 +2489,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         layout.addWidget(container)
         
         # Connect checkbox
-        cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
+        cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.CheckState.Checked))
     
     def _setup_radar_xyz_plots(self) -> None:
         """Set up the 3D plot for the Radar 3D Position tab using matplotlib."""
@@ -2488,7 +2510,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                 "Matplotlib 3D is not installed.\n"
                 "Please check Az/El and Az/Range tabs for 2D views."
             )
-            fallback_label.setAlignment(QtCore.Qt.AlignCenter)
+            fallback_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             fallback_label.setStyleSheet("font-size: 16px; padding: 50px;")
             
             self.radar_xyz_info_label = QtWidgets.QLabel("No Detection")
@@ -2501,7 +2523,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             layout.addWidget(container)
             
             # Connect checkbox
-            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
+            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.CheckState.Checked))
             self.radar_xyz_view = None
             return
         
@@ -2514,9 +2536,9 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.radar_xyz_ax.set_xlabel('X (m)')
         self.radar_xyz_ax.set_ylabel('Y (m)')
         self.radar_xyz_ax.set_zlabel('Z (m)')
-        self.radar_xyz_ax.set_xlim(-10, 10)
-        self.radar_xyz_ax.set_ylim(-10, 10)
-        self.radar_xyz_ax.set_zlim(-10, 10)
+        self.radar_xyz_ax.set_xlim(-25, 25)
+        self.radar_xyz_ax.set_ylim(-25, 25)
+        self.radar_xyz_ax.set_zlim(-25, 25)
         
         # Add grid
         self.radar_xyz_ax.grid(True)
@@ -2611,7 +2633,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         layout.addWidget(container)
         
         # Connect checkbox
-        cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.Checked))
+        cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.CheckState.Checked))
         
         # Set initial view angle
         self.radar_xyz_ax.view_init(elev=20, azim=45)
@@ -2792,7 +2814,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             return
         
         print("Pre-calculating gain normalization factor...")
-        gains = self.computed_gains.copy()  # Shape: (NPOLS, NBINS)
+        gains = self.computed_gains.copy()
         gains[gains == 0] = 1e-9
         
         p0_indices = self.prod_map[:, 0]
@@ -2928,7 +2950,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
     
     def _toggle_viewbox_mode(self, state: int) -> None:
         """Toggle between normal pan mode and rect zoom mode."""
-        is_checked = (state == QtCore.Qt.Checked)
+        is_checked = (state == QtCore.Qt.CheckState.Checked)
         
         # Define the mouse mode for each plot widget
         if is_checked:
@@ -2996,7 +3018,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
     def _toggle_lag_computation(self, state: int) -> None:
         """Toggle lag computation on/off."""
         if self.lag_computer_thread:
-            enabled = (state == QtCore.Qt.Checked)
+            enabled = (state == QtCore.Qt.CheckState.Checked)
             self.lag_computer_thread.set_compute_enabled(enabled)
             status = "enabled" if enabled else "disabled"
             print(f"Lag computation {status}")
@@ -3310,7 +3332,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         """Update all plots with new data from the shared buffers."""
         if not self.shared_buffers:
             return
-            
+
         # Check which tab is active
         current_tab_index = self.tabs.currentIndex()
         
@@ -3386,6 +3408,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
 
     def _update_spectra_plots(self) -> None:
         """Update the line plots in the Spectra tab."""
+        if not self.shared_buffers:
+            return
         use_log_scale = self.log_scale_checkbox.isChecked()
         
         # Update plot log modes based on checkbox
@@ -3433,6 +3457,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
 
     def _update_waterfall_plots(self) -> None:
         """Update the waterfall plots with new data."""
+        if not self.shared_buffers:
+            return
         # Data is already in correct order with newest at top (index 0)
         
         # Calculate frequency axis
@@ -3610,6 +3636,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
 
     def _update_lag_spectra_plots(self) -> None:
         """Update the lag spectra line plots."""
+        if not self.shared_buffers:
+            return
         use_log_scale = self.log_scale_checkbox.isChecked()
         
         # Update plot log modes based on checkbox
@@ -3991,14 +4019,19 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         if not self.shared_buffers or not self.plot_checkboxes["radar_azel"].isChecked():
             return
             
+        # Get current position (always available, even if stale)
+        azimuth = self.shared_buffers.radar_azimuth[0]
+        elevation = self.shared_buffers.radar_elevation[0]
+        
         # Check if we have a valid detection
         if self.shared_buffers.radar_detection_valid[0]:
-            # Get current position
-            azimuth = self.shared_buffers.radar_azimuth[0]
-            elevation = self.shared_buffers.radar_elevation[0]
-            
-            # Update scatter plot with current position
-            self.radar_azel_scatter.setData([azimuth], [elevation])
+            # Valid detection - show with normal style
+            colors = pg.colormap.get("tab10", "matplotlib").getColors()
+            self.radar_azel_scatter.setData(
+                [azimuth], [elevation],
+                pen=pg.mkPen(colors[0], width=2),
+                brush=pg.mkBrush(colors[0])
+            )
             
             # Update trail with history
             history_count = self.shared_buffers.radar_history_count
@@ -4017,24 +4050,50 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Hide "No Detection" text
             self.radar_azel_text.setVisible(False)
         else:
-            # No detection - clear plots and show text
-            self.radar_azel_scatter.setData([], [])
-            self.radar_azel_trail.setData([], [])
-            self.radar_azel_text.setVisible(True)
+            # No valid detection but we have last known position
+            if azimuth != 0 or elevation != 0:  # Check if we have any position data
+                # Show last position with different style (hollow/gray)
+                self.radar_azel_scatter.setData(
+                    [azimuth], [elevation],
+                    pen=pg.mkPen((150, 150, 150), width=2),  # Gray outline
+                    brush=pg.mkBrush(None)  # Hollow
+                )
+                # Keep showing the trail
+                history_count = self.shared_buffers.radar_history_count
+                if history_count > 0:
+                    az_history = self.shared_buffers.radar_history_azimuth[:history_count]
+                    el_history = self.shared_buffers.radar_history_elevation[:history_count]
+                    az_trail = az_history[::-1]
+                    el_trail = el_history[::-1]
+                    self.radar_azel_trail.setData(az_trail, el_trail)
+                
+                # Update text to show stale data
+                self.radar_azel_text.setText("Last Known Position (Stale)")
+                self.radar_azel_text.setVisible(True)
+            else:
+                # No data at all
+                self.radar_azel_scatter.setData([], [])
+                self.radar_azel_trail.setData([], [])
+                self.radar_azel_text.setText("No Detection")
+                self.radar_azel_text.setVisible(True)
     
     def _update_radar_xyz_plot(self) -> None:
         """Update the radar 3D position plot."""
         if not self.shared_buffers or not self.plot_checkboxes["radar_xyz"].isChecked():
             return
             
+        # Skip if matplotlib 3D is not available
+        if not MATPLOTLIB_3D_AVAILABLE or not hasattr(self, 'radar_xyz_scatter'):
+            return
+            
+        # Get current position (always available, even if stale)
+        range_m = self.shared_buffers.radar_range[0]
+        azimuth = self.shared_buffers.radar_azimuth[0]
+        elevation = self.shared_buffers.radar_elevation[0]
+        
         # Check if we have a valid detection
         if self.shared_buffers.radar_detection_valid[0]:
-            # Get current position
-            range_m = self.shared_buffers.radar_range[0]
-            azimuth = self.shared_buffers.radar_azimuth[0]
-            elevation = self.shared_buffers.radar_elevation[0]
-            
-            # Convert spherical to Cartesian coordinates
+            # Valid detection - convert spherical to Cartesian coordinates
             azimuth_rad = np.radians(azimuth)
             elevation_rad = np.radians(elevation)
             
@@ -4042,8 +4101,23 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             y = range_m * np.cos(elevation_rad) * np.sin(azimuth_rad)
             z = range_m * np.sin(elevation_rad)
             
-            # Update scatter plot with current position
-            self.radar_xyz_scatter.setData(pos=np.array([[x, y, z]]))
+            # Update scatter plot with current position (matplotlib way)
+            self.radar_xyz_scatter._offsets3d = ([x], [y], [z])
+            
+            # Update color to show valid detection
+            colors = pg.colormap.get("tab10", "matplotlib").getColors()
+            raw_color = colors[2]
+            if len(raw_color) >= 3:
+                rgb = [float(raw_color[0]), float(raw_color[1]), float(raw_color[2])]
+                if any(c > 1.0 for c in rgb):
+                    color_normalized = [c/255.0 for c in rgb]
+                else:
+                    color_normalized = rgb
+            else:
+                color_normalized = [0.2, 0.6, 0.2]
+            
+            self.radar_xyz_scatter.set_color([color_normalized])
+            self.radar_xyz_scatter.set_alpha(1.0)  # Full opacity
             
             # Update trail with history
             history_count = self.shared_buffers.radar_history_count
@@ -4061,35 +4135,90 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                 y_trail = range_history * np.cos(el_rad) * np.sin(az_rad)
                 z_trail = range_history * np.sin(el_rad)
                 
-                # Create trail positions array
-                trail_positions = np.column_stack((x_trail[::-1], y_trail[::-1], z_trail[::-1]))
+                # Reverse to show oldest to newest
+                x_trail = x_trail[::-1]
+                y_trail = y_trail[::-1]
+                z_trail = z_trail[::-1]
                 
-                # Update trail line
-                self.radar_xyz_trail.setData(pos=trail_positions)
+                # Update trail line (matplotlib way)
+                self.radar_xyz_trail.set_data_3d(x_trail, y_trail, z_trail)
+            else:
+                # No history yet, just show a point
+                self.radar_xyz_trail.set_data_3d([x], [y], [z])
             
             # Update info label
             self.radar_xyz_info_label.setText(
                 f"Range: {range_m:.2f}m | Az: {azimuth:.1f}° | El: {elevation:.1f}°"
             )
         else:
-            # No detection - clear plots
-            self.radar_xyz_scatter.setData(pos=np.array([[0, 0, 0]]))
-            self.radar_xyz_trail.setData(pos=np.array([[0, 0, 0], [0, 0, 0]]))
-            self.radar_xyz_info_label.setText("No Detection")
+            # No valid detection but we have last known position
+            if range_m != 0 or azimuth != 0 or elevation != 0:  # Check if we have any position data
+                # Convert last known position to Cartesian
+                azimuth_rad = np.radians(azimuth)
+                elevation_rad = np.radians(elevation)
+                
+                x = range_m * np.cos(elevation_rad) * np.cos(azimuth_rad)
+                y = range_m * np.cos(elevation_rad) * np.sin(azimuth_rad)
+                z = range_m * np.sin(elevation_rad)
+                
+                # Update scatter plot with last position (matplotlib way)
+                self.radar_xyz_scatter._offsets3d = ([x], [y], [z])
+                
+                # Update color to gray/transparent to show stale data
+                self.radar_xyz_scatter.set_color([[0.6, 0.6, 0.6]])  # Gray
+                self.radar_xyz_scatter.set_alpha(0.5)  # Semi-transparent
+                
+                # Keep showing the trail
+                history_count = self.shared_buffers.radar_history_count
+                if history_count > 0:
+                    range_history = self.shared_buffers.radar_history_range[:history_count]
+                    az_history = self.shared_buffers.radar_history_azimuth[:history_count]
+                    el_history = self.shared_buffers.radar_history_elevation[:history_count]
+                    
+                    az_rad = np.radians(az_history)
+                    el_rad = np.radians(el_history)
+                    
+                    x_trail = range_history * np.cos(el_rad) * np.cos(az_rad)
+                    y_trail = range_history * np.cos(el_rad) * np.sin(az_rad)
+                    z_trail = range_history * np.sin(el_rad)
+                    
+                    x_trail = x_trail[::-1]
+                    y_trail = y_trail[::-1]
+                    z_trail = z_trail[::-1]
+                    
+                    self.radar_xyz_trail.set_data_3d(x_trail, y_trail, z_trail)
+                
+                # Update info label to show stale data
+                self.radar_xyz_info_label.setText(
+                    f"Range: {range_m:.2f}m | Az: {azimuth:.1f}° | El: {elevation:.1f}° (Last Known)"
+                )
+            else:
+                # No data at all - clear plots
+                self.radar_xyz_scatter._offsets3d = ([], [], [])
+                self.radar_xyz_trail.set_data_3d([], [], [])
+                self.radar_xyz_info_label.setText("No Detection")
+        
+        # Redraw the canvas
+        self.radar_xyz_canvas.draw_idle()
     
     def _update_radar_azrange_plot(self) -> None:
         """Update the radar azimuth/range plot."""
         if not self.shared_buffers or not self.plot_checkboxes["radar_azrange"].isChecked():
             return
             
+        # Get current position (always available, even if stale)
+        azimuth = self.shared_buffers.radar_azimuth[0]
+        range_m = self.shared_buffers.radar_range[0]
+        
         # Check if we have a valid detection
         if self.shared_buffers.radar_detection_valid[0]:
-            # Get current position
-            azimuth = self.shared_buffers.radar_azimuth[0]
-            range_m = self.shared_buffers.radar_range[0]
-            
-            # Update scatter plot with current position
-            self.radar_azrange_scatter.setData([azimuth], [range_m])
+            # Valid detection - show with normal style
+            colors = pg.colormap.get("tab10", "matplotlib").getColors()
+            self.radar_azrange_scatter.setData(
+                [azimuth], [range_m],
+                pen=pg.mkPen(colors[1], width=2),
+                brush=pg.mkBrush(colors[1])
+            )
             
             # Update trail with history
             history_count = self.shared_buffers.radar_history_count
@@ -4108,10 +4237,32 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Hide "No Detection" text
             self.radar_azrange_text.setVisible(False)
         else:
-            # No detection - clear plots and show text
-            self.radar_azrange_scatter.setData([], [])
-            self.radar_azrange_trail.setData([], [])
-            self.radar_azrange_text.setVisible(True)
+            # No valid detection but we have last known position
+            if azimuth != 0 or range_m != 0:  # Check if we have any position data
+                # Show last position with different style (hollow/gray)
+                self.radar_azrange_scatter.setData(
+                    [azimuth], [range_m],
+                    pen=pg.mkPen((150, 150, 150), width=2),  # Gray outline
+                    brush=pg.mkBrush(None)  # Hollow
+                )
+                # Keep showing the trail
+                history_count = self.shared_buffers.radar_history_count
+                if history_count > 0:
+                    az_history = self.shared_buffers.radar_history_azimuth[:history_count]
+                    range_history = self.shared_buffers.radar_history_range[:history_count]
+                    az_trail = az_history[::-1]
+                    range_trail = range_history[::-1]
+                    self.radar_azrange_trail.setData(az_trail, range_trail)
+                
+                # Update text to show stale data
+                self.radar_azrange_text.setText("Last Known Position (Stale)")
+                self.radar_azrange_text.setVisible(True)
+            else:
+                # No data at all
+                self.radar_azrange_scatter.setData([], [])
+                self.radar_azrange_trail.setData([], [])
+                self.radar_azrange_text.setText("No Detection")
+                self.radar_azrange_text.setVisible(True)
     
     def _update_radar_debug_plot(self) -> None:
         """Update the radar debug plots showing antenna-to-reference lag spectra."""
@@ -4153,19 +4304,38 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             if hasattr(plot_widget, '_peak_text'):
                 plot_widget.removeItem(plot_widget._peak_text)
             
-            # Only add markers if we have valid data and a detection
-            if self.shared_buffers.radar_detection_valid[0]:
-                # Get the detected delay for this antenna
-                delay_seconds = self.shared_buffers.radar_delays[adc_idx]
-                delay_meters = delay_seconds * 299792458.0  # Convert to meters
+            # Get the detected delay for this antenna
+            delay_seconds = self.shared_buffers.radar_delays[adc_idx]
+            delay_meters = delay_seconds * 299792458.0  # Convert to meters
+            
+            # Check if we have valid data or last known values
+            has_delay_data = delay_seconds != 0
+            is_current_detection = self.shared_buffers.radar_detection_valid[0]
+            
+            if has_delay_data:
+                # Determine style based on whether detection is current or stale
+                if is_current_detection:
+                    # Current detection - use normal colors
+                    line_color = colors[adc_idx]
+                    line_style = QtCore.Qt.PenStyle.DashLine
+                    fill_transparency = 50
+                    text_suffix = ""
+                    text_color = colors[adc_idx]
+                else:
+                    # Stale detection - use gray/muted colors
+                    line_color = (150, 150, 150)  # Gray
+                    line_style = QtCore.Qt.PenStyle.DotLine  # Dotted line for stale
+                    fill_transparency = 25  # More transparent
+                    text_suffix = " (Last Known)"
+                    text_color = (150, 150, 150)
                 
                 # Add vertical line at detected peak
                 peak_line = pg.InfiniteLine(
                     pos=delay_meters,
                     angle=90,
-                    pen=pg.mkPen(colors[adc_idx], width=2, style=QtCore.Qt.DashLine),
-                    label=f'{delay_meters:.2f}m',
-                    labelOpts={'position': 0.95, 'color': colors[adc_idx], 'movable': False}
+                    pen=pg.mkPen(line_color, width=2, style=line_style),
+                    label=f'{delay_meters:.2f}m{text_suffix}',
+                    labelOpts={'position': 0.95, 'color': line_color, 'movable': False}
                 )
                 plot_widget.addItem(peak_line)
                 plot_widget._peak_line = peak_line  # Store reference for cleanup
@@ -4180,12 +4350,15 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                     end_meters = self.radar_lag_axis[end_idx]
                     
                     # Create shaded region for centroid window
-                    # We need to create a FillBetweenItem-like effect
-                    # PyQtGraph doesn't have a direct equivalent, so we'll use a LinearRegionItem
+                    if is_current_detection:
+                        brush_color = colors[adc_idx] + (fill_transparency,)
+                    else:
+                        brush_color = (150, 150, 150, fill_transparency)
+                    
                     centroid_region = pg.LinearRegionItem(
                         values=(start_meters, end_meters),
                         orientation='vertical',
-                        brush=pg.mkBrush(colors[adc_idx] + (50,)),  # Add transparency
+                        brush=pg.mkBrush(brush_color),
                         movable=False
                     )
                     plot_widget.addItem(centroid_region)
@@ -4196,8 +4369,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                 peak_magnitude = lag_data[np.argmin(np.abs(self.radar_lag_axis - delay_meters))]
                 
                 text_item = pg.TextItem(
-                    text=f'Range: {range_m:.2f}m',
-                    color=colors[adc_idx],
+                    text=f'Range: {range_m:.2f}m{text_suffix}',
+                    color=text_color,
                     anchor=(0, 1)
                 )
                 text_item.setPos(delay_meters, peak_magnitude * 1.1)
