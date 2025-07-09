@@ -2528,8 +2528,9 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             return
         
         # Create matplotlib figure and canvas
-        self.radar_xyz_figure = Figure(figsize=(8, 6))
+        self.radar_xyz_figure = Figure()
         self.radar_xyz_canvas = FigureCanvas(self.radar_xyz_figure)
+        self.radar_xyz_canvas.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.radar_xyz_ax = self.radar_xyz_figure.add_subplot(111, projection='3d')
         
         # Set up the 3D axes
