@@ -20,7 +20,7 @@
         { name = "McGill University"},
         { name = "JF Cliche", email = "vhdl@jfcliche.com" }
         ]
-    requires-python = "==3.8"
+    requires-python = ">=3.8"
     readme = "README"
 
     dependencies = [
