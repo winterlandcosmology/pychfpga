@@ -48,6 +48,7 @@ import argparse
 
 # Import custom packages
 from pychfpga import fpga_array
+from pychfpga.network_utils import verify_network_settings
 
 class POCKET_CORRELATOR:
     # Include a super parent class?
@@ -88,6 +89,53 @@ class POCKET_CORRELATOR:
         None.
 
         """
+
+        # Extract serial number from hwm for CRS board discovery
+        serial_number = None
+        if hwm and isinstance(hwm, str):
+            # Parse hwm format like 'crs 0016' to extract serial number
+            parts = hwm.strip().split()
+            if len(parts) >= 2 and parts[0].lower() == 'crs':
+                serial_number = parts[1].strip()
+        
+        # Verify network settings before attempting hardware connection
+        print("Checking network settings for UDP data reception...")
+        if serial_number:
+            print(f"Will attempt to discover CRS board with serial number {serial_number}")
+            # Use find_best_interface with serial number to discover the board
+            from pychfpga.network_utils import find_best_interface
+            interface = find_best_interface(serial_number=serial_number)
+            all_ok, errors, fix_commands = verify_network_settings(interface=interface)
+        else:
+            all_ok, errors, fix_commands = verify_network_settings()
+        
+        if not all_ok:
+
+            # e_msg = '\n" + "="*60'
+            e_msg = '\n' + 'NETWORK CONFIGURATION ERROR'
+            # e_msg += '\n" + "="*60'
+            e_msg += '\n'
+            e_msg += '\n' + 'The following network configuration issues were found:'
+            e_msg += '\n'
+            for error in errors:
+                e_msg += '\n' + f"✗ {error}"
+            e_msg += '\n'
+            e_msg += '\n' + 'To fix these issues, run the following commands:'
+            e_msg += '\n'
+            for cmd in fix_commands:
+                e_msg += '\n' + f"{cmd}"
+
+            e_msg += '\n'
+            e_msg += '\n' + 'These settings are required for high-rate UDP data reception'
+            e_msg += '\n' + 'to avoid dropped packets. Please configure your network'
+            e_msg += '\n' + 'settings and restart the application.'
+            # e_msg += '\n" + "="*60'
+
+            # print(e_msg)
+
+            raise RuntimeError(e_msg)
+        else:
+            print("✓ Network settings verified - ready for UDP data reception")
 
         ca = fpga_array.FPGAArray(hwm = hwm,
                                   stderr_log_level = stderr_log_level,
