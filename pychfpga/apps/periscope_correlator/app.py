@@ -1540,7 +1540,11 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         ucorr_receiver = UCorrFrameReceiver(None, 8, Nbins=NBINS_TOTAL, NCORR=NPROD)
         self.packet_dtype = ucorr_receiver.packet_dtype
 
-        self.freq_axis = (FS_HZ / M_FACTOR) * np.arange(NBINS_TOTAL)
+        # Initialize Nyquist zone tracking
+        self.current_nyquist_zone = 1  # Default to Zone 1
+        
+        # Initialize frequency axes for Zone 1
+        self._update_all_frequency_axes(1)
         
         # Lag axis in meters (distance = c * time / 2 for radar applications)
         lag_bins = np.arange(NBINS_TOTAL) - NBINS_TOTAL // 2
@@ -1728,6 +1732,13 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.radar_threshold_spinner.valueChanged.connect(self._update_radar_threshold)
         self.radar_threshold_spinner.setEnabled(False)  # Disabled until radar mode active
         
+        # Nyquist zone selector
+        self.nyquist_zone_combo = QtWidgets.QComboBox()
+        self.nyquist_zone_combo.addItems(["Zone 1 (0-1600 MHz)", "Zone 2 (1600-3200 MHz)", "Zone 3 (3200-4800 MHz)"])
+        self.nyquist_zone_combo.setCurrentIndex(0)  # Default to Zone 1
+        self.nyquist_zone_combo.setToolTip("Select Nyquist zone for frequency axis display")
+        self.nyquist_zone_combo.currentIndexChanged.connect(self._on_nyquist_zone_changed)
+
         # Restore all plots button
         self.restore_plots_button = QtWidgets.QPushButton("Restore All Plots")
         self.restore_plots_button.setToolTip("Show all hidden plots")
@@ -1739,6 +1750,9 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         toolbar_row2.addWidget(self.log_scale_checkbox)
         toolbar_row2.addWidget(self.symlog_crossover_spinner)
         toolbar_row2.addWidget(self.viewbox_mode_checkbox)
+        toolbar_row2.addSpacing(20)
+        toolbar_row2.addWidget(QtWidgets.QLabel("Nyquist Zone:"))
+        toolbar_row2.addWidget(self.nyquist_zone_combo)
         toolbar_row2.addSpacing(20)
         toolbar_row2.addWidget(self.enable_lag_checkbox)
         toolbar_row2.addWidget(self.frames_to_average_spinner)
@@ -2799,6 +2813,72 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.metrics_label.setText("")
         print("Disconnected.")
 
+    def _calculate_frequency_axis(self, zone: int) -> np.ndarray:
+        """Calculate frequency axis for the specified Nyquist zone.
+        
+        Args:
+            zone: Nyquist zone number (1, 2, or 3)
+            
+        Returns:
+            Frequency axis array in Hz
+        """
+        # Base frequency axis (0 to FS_HZ/2)
+        base_freq_axis = (FS_HZ / M_FACTOR) * np.arange(NBINS_TOTAL)
+        
+        if zone == 1:
+            # Zone 1: 0 to 1600 MHz
+            return base_freq_axis
+        elif zone == 2:
+            # Zone 2: 1600 to 3200 MHz (reversed due to aliasing)
+            # In the second Nyquist zone, frequencies are aliased and appear reversed
+            reversed_axis = base_freq_axis[::-1]  # Reverse the frequency order
+            return reversed_axis + FS_HZ / 2
+        elif zone == 3:
+            # Zone 3: 3200 to 4800 MHz
+            return base_freq_axis + FS_HZ
+        else:
+            print(f"Warning: Invalid Nyquist zone {zone}, defaulting to Zone 1")
+            return base_freq_axis
+    
+    def _update_all_frequency_axes(self, zone: int) -> None:
+        """Update all frequency axes for the specified Nyquist zone."""
+        self.current_nyquist_zone = zone
+        self.freq_axis = self._calculate_frequency_axis(zone)
+        
+        # Update super FFT frequency axis
+        n_super_fft_bins = 131073
+        base_super_fft_freq_axis = np.linspace(0, FS_HZ/2, n_super_fft_bins)
+        
+        if zone == 1:
+            self.super_fft_freq_axis = base_super_fft_freq_axis
+        elif zone == 2:
+            # Zone 2: 1600 to 3200 MHz (reversed due to aliasing)
+            reversed_super_fft_axis = base_super_fft_freq_axis[::-1]  # Reverse the frequency order
+            self.super_fft_freq_axis = reversed_super_fft_axis + FS_HZ / 2
+        elif zone == 3:
+            self.super_fft_freq_axis = base_super_fft_freq_axis + FS_HZ
+        else:
+            self.super_fft_freq_axis = base_super_fft_freq_axis
+    
+    def _on_nyquist_zone_changed(self, index: int) -> None:
+        """Handle Nyquist zone selection change."""
+        zone = index + 1  # Convert 0-based index to 1-based zone number
+        print(f"Switching to Nyquist Zone {zone}")
+        
+        # Update frequency axes
+        self._update_all_frequency_axes(zone)
+        
+        # Update status
+        zone_ranges = {
+            1: "0-1600 MHz",
+            2: "1600-3200 MHz", 
+            3: "3200-4800 MHz"
+        }
+        self.status_label.setText(f"Nyquist Zone {zone} selected ({zone_ranges[zone]})")
+        
+        # Force plot updates by triggering a refresh
+        self._update_plots()
+
     def _precalculate_indices(self) -> None:
         """Pre-calculate the indices for the products to be plotted."""
         try:
@@ -3421,7 +3501,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         # Real plot can use log scale if enabled (for symmetry log)
         self.plot_widgets[(0,1,'real')].setLogMode(y=False)
         
-        # Only update plots that are checked
+        # Only update plots that are checked (using zone-adjusted frequency axis)
         if self.plot_checkboxes["s_p00"].isChecked():
             self.plots[(0,0)].setData(x=self.freq_axis, y=self.shared_buffers.p00)
             
@@ -3563,18 +3643,16 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                 # Linear scale
                 img.setImage(wf_data.T, autoLevels=False, levels=self.waterfall_levels[key])
             
-            # Set the scale to show frequency on x-axis and time on y-axis (only need to do once)
-            # Check if we need to set the scale by checking if we have a flag
-            if not hasattr(img, '_scale_set'):
-                # Set the image rectangle to map bins to frequency and time
-                # Y-axis: 0 at top (newest), waterfall_len at bottom (oldest)
-                img.setRect(QtCore.QRectF(freq_min, 0, freq_max - freq_min, self.shared_buffers.waterfall_len))
-                img._scale_set = True  # Mark that scale has been set
-                
-                # Update plot labels
+            # Set the scale to show frequency on x-axis and time on y-axis
+            # Update every time in case Nyquist zone changed
+            img.setRect(QtCore.QRectF(freq_min, 0, freq_max - freq_min, self.shared_buffers.waterfall_len))
+            
+            # Update plot labels (only need to do once)
+            if not hasattr(img, '_labels_set'):
                 plot = self.waterfall_plots[key]
                 plot.setLabel('bottom', 'Frequency', units='Hz')
                 plot.setLabel('left', 'Time (frames ago)')
+                img._labels_set = True  # Mark that labels have been set
         
         # Update each waterfall plot
         update_waterfall('p00', self.shared_buffers.wf_p00, is_magnitude=True)
@@ -4002,18 +4080,16 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Linear scale
             img.setImage(wf_data.T, autoLevels=False, levels=self.super_fft_waterfall_levels[key])
         
-        # Set the scale to show frequency on x-axis (only need to do once)
-        if not hasattr(img, '_scale_set'):
-            # Set the image rectangle to map bins to frequency
-            # Note: we need to handle the fact that we have many more bins (131k vs 8k)
-            # The waterfall should show the full frequency range
-            img.setRect(QtCore.QRectF(freq_min, 0, freq_max - freq_min, self.shared_buffers.waterfall_len))
-            img._scale_set = True
-            
-            # Update plot labels
-            plot = self.super_fft_waterfall_plots[key]
-            plot.setLabel('bottom', 'Frequency', units='Hz')
-            plot.setLabel('left', 'Time (frames ago)')
+        # Set the scale to show frequency on x-axis (update every time in case Nyquist zone changed)
+        # Set the image rectangle to map bins to frequency
+        # Note: we need to handle the fact that we have many more bins (131k vs 8k)
+        # The waterfall should show the full frequency range
+        img.setRect(QtCore.QRectF(freq_min, 0, freq_max - freq_min, self.shared_buffers.waterfall_len))
+        
+        # Update plot labels
+        plot = self.super_fft_waterfall_plots[key]
+        plot.setLabel('bottom', 'Frequency', units='Hz')
+        plot.setLabel('left', 'Time (frames ago)')
     
     def _update_radar_azel_plot(self) -> None:
         """Update the radar azimuth/elevation plot."""
