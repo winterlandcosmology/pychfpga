@@ -14,11 +14,14 @@ Todo:
 """
 import logging
 
-from ..mmi import MMI, BitField
+from ..mmi import MMI, BitField, CONTROL, STATUS, DRP
 
 
 class SYSMON(MMI):
-    # Registers
+
+    ADDRESS_WIDTH = 12
+
+    # DRP Registers
     TEMP_ADDR = 0x00
     TEMP_MIN_ADDR = 0x24
     TEMP_MAX_ADDR = 0x20
@@ -50,10 +53,11 @@ class SYSMON(MMI):
     SEQ_ADC_ACQTIME1_ADDR = 0x4E
     SEQ_ADC_ACQTIME2_ADDR = 0x4F
 
-    def __init__(self, fpga_instance, base_address, verbose=1):
+    def __init__(self, *, router, router_port, verbose=1):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
-        fpga = fpga_instance
+        super().__init__(router=router, router_port=router_port)
+        fpga = self.fpga
         self.supported_by_platform = fpga.PLATFORM_ID in (
             fpga._PLATFORM_ID_ML605,
             fpga._PLATFORM_ID_KC705,
@@ -63,7 +67,6 @@ class SYSMON(MMI):
             fpga._PLATFORM_ID_CRS,
             )
 
-        super().__init__(fpga_instance, base_address)
         self._lock()  # Prevent accidental addition of attributes
 
     def init(self):

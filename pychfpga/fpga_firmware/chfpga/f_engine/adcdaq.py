@@ -20,6 +20,8 @@ from ..mmi import MMI, BitField
 class ADCDAQ(MMI):
     """ Implements interface to the ADC data acquisition logic"""
 
+    ADDRESS_WIDTH = 19-3-4-3
+
     # Create local variables for page numbers to make the table more readable
     CONTROL = BitField.CONTROL
     STATUS = BitField.STATUS
@@ -101,8 +103,8 @@ class ADCDAQ(MMI):
     MMCM_POWER =        BitField(DRP, 0x28, 0, width=16, doc='MCMM Power bits. Must be set to 0xFFFF in order to successfully program the other MMCM registers')
 
 
-    def __init__(self, fpga_instance, base_address, instance_number):
-        super().__init__(fpga_instance, base_address, instance_number)
+    def __init__(self, *, router, router_port, instance_number):
+        super().__init__(router=router, router_port=router_port, instance_number=instance_number)
         self._lock() # Prevent accidental addition of attributes (if, for example, a value is assigned to a wrongly-spelled property)
 
     def set_ADCDAQ_mode(self, mode):

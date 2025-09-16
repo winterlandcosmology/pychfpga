@@ -642,7 +642,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
 
 
         Returns:
-            a :cls:`Metrics` object containing the IceBoard monitoring information.
+            a :class:`Metrics` object containing the IceBoard monitoring information.
         """
         try:
             _, metrics = await self._get_motherboard_metrics_async()
@@ -673,7 +673,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         The measurements are obtained only through the ARM processor; the FPGA does not need to be configured.
 
         Returns:
-            A :cls:`Metrics` object.
+            A :class:`Metrics` object.
 
         Note: an 'info' dict is also created but is not returned as the metrics is sufficient for now.
 
@@ -740,7 +740,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         The measurements are obtained only through the ARM processor; the FPGA does not need to be configured.
 
         Returns:
-            a :cls:`Metrics` object.
+            a :class:`Metrics` object.
         """
         try:
             metrics = await self._get_backplane_metrics_async()
@@ -775,10 +775,10 @@ class IceBoard(Motherboard, TuberIceBoardBase):
 
             force (bool or None):
 
-                force = True: FPGA will always be configured independent of the signature of the currently programmed firmware
-                force = False: FPGA will be configured if it is not configured or
-                        if its bitstream CRC differ from the provided bitstream
-                force = None: FPGA will be configured only if it is not configured
+                - force = True: FPGA will always be configured independent of the signature of the currently programmed firmware
+                - force = False: FPGA will be configured if it is not configured or if its bitstream
+                  CRC differ from the provided bitstream
+                - force = None: FPGA will be configured only if it is not configured
 
             bitfile_override (str): Specifies the path to a folder in which to
                 search for the default bitstream file,  or the path to the
@@ -816,7 +816,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         else:
             self.logger.debug(
                 f'{self!r}: FPGA is already configured. Skipping configuration.')
-        self.fpga = fw_cls(self, **fw_params)
+        self.fpga = fw_cls(self, mode=firmware_mode, **fw_params)
 
 
     FPGA_FIRMWARE_CRC32_ADDR = 4 * 3
@@ -1850,6 +1850,13 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         self.logger.info('%r: Command completed. Waiting %i seconds to ensure cache is flushed' % (self, delay))
         print('%r: Waiting %i seconds' % (self, delay))
         await asyncio.sleep(delay)
+        return True
+
+    async def _update_arm_MLO(self, mlo_filename):
+        await self.arm_exec('mount -o remount,rw /dev/mmcblk0p1')
+        await self.arm_scp(mlo_filename, '/boot/MLO')
+        await self.arm_exec('sync')
+
         return True
 
     async def _upload_fpga_bitstream(self, filename, card_filename=None, delay=120):

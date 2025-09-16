@@ -3,12 +3,12 @@
 """
 lmk04208spi: Interface to the LMK04208 PLL via the SC18IS202 II2-to-SPI bridge.
 
-History:
+.. History:
     2013-08-08 : JFC : Created
     2014-02-23 JFC: Added register table, select(), masked write.
     2014-03-04 JM: Added default I/O pin configuration at init()
     2014-03-18 JM: Fixed read function to allow reading by register name, not only by register address
-                Fixed masking in write function
+                   Fixed masking in write function
 """
 
 import time

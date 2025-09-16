@@ -10,13 +10,12 @@ import numpy as np
 import time
 import logging
 
-from ..mmi import MMI, BitField
+from ..mmi import MMI, BitField, CONTROL, STATUS
 
 class SPI(MMI):
     # SPI addresses
 
-    CONTROL = BitField.CONTROL
-    STATUS = BitField.STATUS
+    ADDRESS_WIDTH = 12
 
     TX_DATA        = BitField(CONTROL, 0x03, 0, width=32, doc='Data to be transmitted. MSB (bit 31) is transmited first.')
     ADDR           = BitField(CONTROL, 0x04, 4, width=4, doc='Address of SPI device to communicate with')
@@ -33,9 +32,9 @@ class SPI(MMI):
 
 
 
-    def __init__(self, fpga, base_address):
-        self.fpga_instance = fpga;
-        super().__init__(fpga, base_address)
+    def __init__(self, *, router, router_port):
+        # self.fpga_instance = fpga;
+        super().__init__(router=router, router_port=router_port)
         self.current_port = 0
         self.logger = logging.getLogger(__name__)
         self._lock() # Prevent inadvertent changes to the class instance

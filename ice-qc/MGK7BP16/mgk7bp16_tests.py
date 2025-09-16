@@ -14,8 +14,8 @@ from wtl.namespace import NameSpace
 from wtl.pytest_xreport import xr, run_test_menu
 
 # from icecore.tests.xreport import test_report
-from pychfpga import ipmi_fru, FPGAArray
-
+from pychfpga.fpga_array import FPGAArray
+from pychfpga.hardware.interfaces import ipmi_fru
 
 TEST_CONFIG_FILE = './MGK7BP16/test_config.yaml'
 
@@ -39,7 +39,7 @@ class TestMGK7BP16Crate:
     def open_instrument(self, name):
         instr_params = self.cfg.instruments[name].copy()
         class_name = instr_params.pop('labpy_object')
-        return labpy.open_instrument(class_name, **instr_params) 
+        return labpy.open_instrument(class_name, **instr_params)
 
     def open_dmm(self):
         self.dmm = self.open_instrument('dmm')
@@ -148,8 +148,8 @@ class TestMGK7BP16Crate:
 
         #print(f'cfg = {cfg}')
         test_results = NameSpace()
-        passed = False 
-        failed_test_points = [] 
+        passed = False
+        failed_test_points = []
         try:
             xr.input('If the backplane is connected to power, turn off the supply and disconnect it from the board. Press ENTER to continue. (Q:Exit)')
             test_results.test_points = NameSpace()
@@ -230,7 +230,7 @@ class TestMGK7BP16Crate:
 
             passed = True  # We get here only if no assert failed
 
-        finally: 
+        finally:
             test_results.passed = passed
             xr.save_data(test_results)
             xr.input('Disconnect the backplane from power and turn off the power supply. Turn off the dmm. Press ENTER to conclude the test. (Q:Exit)')
@@ -287,7 +287,7 @@ class TestMGK7BP16Crate:
 
         #print(f'cfg = {cfg}')
         xr.input('Turn on the power supply and set it to 17V. Connect it to any of the white 6 pin plastic Molex connectors on the board. Has a green LED lit up? Is the input current around ~0.25-0.35A? If so, press ENTER to continue. If not, reconnect power elsewhere and try again. (Q:Exit)')
-        
+
         test_results = NameSpace()
         passed = False
 
@@ -299,7 +299,7 @@ class TestMGK7BP16Crate:
 
                 xr.input(f'Attach the {signal_name} dongle cable to channel 1 of the scope. Press ENTER to continue. (Q:Exit)')
                 xr.input(f'Attach the function generator to {signal_name} with a BNC to SMA (male output) connector. Press ENTER to continue. (Q:Exit)')
-                
+
                 if signal_name == 'Clock':
                     dongle_location = 'bottom'
                     vmin = cfg.min_LVPECL
@@ -332,7 +332,7 @@ class TestMGK7BP16Crate:
 
                 assert not failed_tests, f"{signal_name} signal failed on slot(s): {failed_tests}"
                 passed = True
-        finally: 
+        finally:
             test_results.passed = passed
             xr.save_data(test_results)
             xr.input('Disconnect the function generator from the backplane SMA. \n'
@@ -396,7 +396,7 @@ class TestMGK7BP16Crate:
         finally:
             test_results.passed = passed
             xr.save_data(test_results)
-            xr.input('Disconnect the backplane from power and turn off the power supply. \n' 
+            xr.input('Disconnect the backplane from power and turn off the power supply. \n'
                      'Disconnect the function generator from Sync. Disconnect the scope. Disconnect the jumper. (Q:Exit)')
 
 
@@ -412,7 +412,7 @@ class TestMGK7BP16Crate:
         wfg = self.open_wfg()
 
         #print(f'cfg = {cfg}')
-        
+
         test_results = NameSpace()
         passed = False
 

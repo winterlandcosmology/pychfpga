@@ -5,6 +5,7 @@
 *.pkl
 *.pyo
 *.bak
+*.mif
 *.orig
 /Archives
 /build
@@ -13,7 +14,8 @@ out_*/
 /nbproject/
 /src/
 /venv/
-/.venv/
+.py*venv/
+.venv/
 \.DS_Store
 .Xil
 *.str

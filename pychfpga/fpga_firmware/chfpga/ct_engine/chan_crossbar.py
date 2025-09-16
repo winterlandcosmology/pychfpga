@@ -14,16 +14,19 @@ import asyncio
 
 
 from wtl.metrics import Metrics
-from ..mmi import MMI, BitField
+from ..mmi import MMI, MMIRouter, BitField, CONTROL, STATUS
 
 from . import chan_bin_sel
 
+class CCBRouter(MMIRouter):
+    ROUTER_PORT_NUMBER_WIDTH = 5
+    ROUTER_PORT_MAP = {
+        'COMMON': 0
+        # port numbers for BIN_SELS are computed
+        }
 
 class ChanCrossbar(MMI):
     """ Object that allows access to a channelizer crossbar"""
-
-    CONTROL = BitField.CONTROL
-    STATUS = BitField.STATUS
 
     ALIGN_RESET        = BitField(CONTROL, 0, 6, doc='')
     LANE_MONITOR_RESET = BitField(CONTROL, 0, 4, doc='')
@@ -44,17 +47,18 @@ class ChanCrossbar(MMI):
     # ALIGN_GLOBAL_FRAME_CTR    = BitField(STATUS, 5, 0, width=8, doc='')
     DELAY_CAPTURE    = BitField(STATUS, 4, 0, width=16, doc="")
 
-    def __init__(self, fpga_instance, base_address, address_increment, address_width=16, verbose=0):
-        self.fpga = fpga_instance
+    def __init__(self, *, router, router_port, verbose=0):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
+        ccb_router = CCBRouter(router=router, router_port=router_port)
+        super().__init__(router=ccb_router, router_port='COMMON')
+        print(f'Reset Mon = {self.RESET_MON}')
         self.crossbar_level = 1
-        super().__init__(fpga_instance, base_address, address_width=address_width)
         self.BIN_SEL = []
         self.NUMBER_OF_CROSSBAR_INPUTS = self.fpga.NUMBER_OF_CROSSBAR_INPUTS
         self.NUMBER_OF_CROSSBAR_OUTPUTS = self.fpga.NUMBER_OF_CROSSBAR1_OUTPUTS
         for i in range(self.fpga.NUMBER_OF_CROSSBAR1_OUTPUTS):
-            self.BIN_SEL.append(chan_bin_sel.ChanBinSel(fpga_instance, base_address + (i+1) * address_increment, i))
+            self.BIN_SEL.append(chan_bin_sel.ChanBinSel(router=ccb_router, router_port=i + 1, instance_number=i))
 
     def __getitem__(self, key):
         """    Returns the bin selector instance specified by the key"""

@@ -13,14 +13,13 @@ import time
 import numpy as np
 
 # Local packages
-from ..mmi import MMI, BitField
+from ..mmi import MMI, BitField, CONTROL, STATUS
 
 
 class SCALER(MMI):
     """ Implements interface to the SCALER module within a procecessor pipeline"""
-    # Create local variables for page numbers tomake the table more readable
-    CONTROL = BitField.CONTROL
-    STATUS = BitField.STATUS
+
+    ADDRESS_WIDTH = 9
 
     # Define Control registers
     RESET                 = BitField(CONTROL, 0x00, 7, doc="Reset the SCALER.")
@@ -45,6 +44,7 @@ class SCALER(MMI):
     GAIN_BANK_SWITCH_FRAME_NUMBER = BitField(CONTROL, 0x09, 0, width=32, doc="Frame number at which the target gain bak is to be activated.")
     USE_FLOAT_GAINS       = BitField(CONTROL, 0x0A, 7, doc="When '1', floating point gains are used. Works only if USE_COMPLEX_GAINS=0")
     MON_RESET_STATS       = BitField(CONTROL, 0x0A, 6, doc="When '1', MON stats are reset")
+    MON_CTRL              = BitField(CONTROL, 10, 5, doc="When '1', Disable FIFO write")
     DATA_TYPE             = BitField(CONTROL, 0x0A, 3, width=2, doc=" Selects the main output data in conjunction with BYPASS.\n"
                                 "   BYPASS=0, DATA_TYPE=X: Send normal scaled data in 4 or 8 bit mode\n"
                                 "   BYPASS=1, DATA_TYPE=0: Send the most significant bits of the raw FFT values\n"
@@ -76,6 +76,9 @@ class SCALER(MMI):
     MON_PACKET_CTR              = BitField(STATUS, 10, 0, width=8, doc="Debug")
     MON_WORD_CTR              = BitField(STATUS, 12, 0, width=16, doc="Debug")
     CAP_FRAME_CTR              = BitField(STATUS, 13, 0, width=8, doc="Debug")
+    MON_WORD              = BitField(STATUS, 15, 0, width=16, doc="Debug")
+    MON_CLK_CTR           = BitField(STATUS, 16, 0, width=8, doc="Debug")
+    MON_BIT_CTR           = BitField(STATUS, 17, 0, width=8, doc="Debug")
 
 
     ROUNDING_MODE_TRUNCATE         = 0b00
@@ -84,10 +87,8 @@ class SCALER(MMI):
 
     # Define Status registers
 
-    def __init__(self, fpga_instance, base_address, instance_number):
-
-        super().__init__(fpga_instance, base_address, instance_number)
-
+    def __init__(self, *, router, router_port, instance_number):
+        super().__init__(router=router, router_port=router_port, instance_number=instance_number)
         self.cached_gain_table = {}
         self.cached_gain_timestamp = {}
 
@@ -131,7 +132,7 @@ class SCALER(MMI):
                 - if `gain_list` is a 1024-element list or ndarray, the numeric gains therein are
                   applied to each bin.
 
-                - if `gains_list is a scalar int, float or complex numbers, all bins are set to that
+                - if `gains_list` is a scalar int, float or complex numbers, all bins are set to that
                   scalar value.
 
                 - if `gain_list` is `None`, no gains are set.
@@ -208,7 +209,7 @@ class SCALER(MMI):
 
             else: # use linear + log gains
                 self.USE_FLOAT_GAINS = 0
-                if any(gains < 0) or any(gains > 65535) or any(gains != gains.astype('<i2')):
+                if any(gains < 0) or any(gains > 65535) or any(gains != gains.astype('<u2')):
                     raise ValueError('All gains must be integers between 0 and 65535')
 
 
@@ -234,8 +235,8 @@ class SCALER(MMI):
 
         Returns:
 
-            Gain table, as a list of self.fpga.NUMBER_OF_FREQUENCY_BINS values. If self.USE_COMPLEX_GAINS == True, we
-            have complex values, where the real and imaginary parts are 16 bit integers. If self.USE_COMPLEX_GAINS == False,
+            Gain table, as a list of self.fpga.NUMBER_OF_FREQUENCY_BINS values. If ``self.USE_COMPLEX_GAINS == True``, we
+            have complex values, where the real and imaginary parts are 16 bit integers. If ``self.USE_COMPLEX_GAINS == False``,
             we just have real gains.
         """
         if use_cache and bank in self.cached_gain_table:

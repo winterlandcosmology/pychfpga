@@ -20,7 +20,7 @@
         { name = "McGill University"},
         { name = "JF Cliche", email = "vhdl@jfcliche.com" }
         ]
-    requires-python = ">=3.8"
+    requires-python = "==3.8.*"
     readme = "README"
 
     dependencies = [
@@ -47,7 +47,6 @@
         "psutil",  # was ==5.4.7, now testing 5.7.3
         "netifaces",   # was not specified, now using 0.10.9
         "zeroconf==0.34.3",  # new, was tested with 0.34.3
-
         ]
 
 [project.urls]
@@ -105,13 +104,13 @@ errors-only = true
     docs = [
         "sphinx",
         "sphinx_rtd_theme",
-        "sphinxcontrib.restbuilder",  # used for debugging output
+        "sphinxcontrib.restbuilder",  # used for debugging outputs
         ]
+
     qc = [
         # Private packages
         "wtl.pytest-xreport @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.pytest-xreport.git@jfc/dev",
         "labpy @ git+ssh://git@bitbucket.org/winterlandcosmology/labpy.git@qc",
-
 
         # Pypi packages
         "numpy",

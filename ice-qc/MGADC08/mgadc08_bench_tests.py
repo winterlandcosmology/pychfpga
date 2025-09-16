@@ -31,7 +31,7 @@ import pychfpga
 
 from pychfpga import fpga_array 
 from pychfpga.common import run_async, async_to_sync
-
+from pychfpga.hardware.ice.icecore import hw
 
 
 
@@ -483,7 +483,30 @@ class TestMGADC08Carrier(TestUtils):
         tr = NameSpace() # test results container
         passed = False
         try:
-            ib, mezz =  self._get_iceboard(**cfg.fpga_array)
+            # ib, mezz =  self._get_iceboard(**cfg.fpga_array)
+            FPGA_IP_SET_FUNCTION = '(a,b,3,d)'
+            
+            try:
+                print('Connecting to the IceBoard...')
+                a = fpga_array.FPGAArray(**cfg.fpga_array, fpga_ip_addr_fn=FPGA_IP_SET_FUNCTION, mdns_timeout=1)
+            except RuntimeError:  # if we can't find the board
+                a = None
+
+            if not a: # turn on the supply and try again if we did not find the board 
+                self.ps.set_output(state=True)
+                self.xr.input('Press [ENTER] once board has booted and front LED is green')
+                
+                print('Searching for the IceBoard for up to 70 seconds...')
+                a = fpga_array.FPGAArray(**cfg.fpga_array, fpga_ip_addr_fn=FPGA_IP_SET_FUNCTION, mdns_timeout=70)
+
+            assert len(a.ib), 'No Iceboard was found with parameters %s' % kwargs
+            assert len(a.ib) == 1, 'One than one Iceboard was found with parameters %s' % kwargs
+            ib = a.ib[0]
+
+            run_async(ib.set_fpga_bitstream_async(firmware_mode = 'corr16', force=False)) #needs to be added to the open iceboard funct
+            ip_fn = lambda a, b, c, d: (a, b, 3, d)
+            run_async(ib.open_fpga_async(verbose=1, fpga_ip_addr_fn = ip_fn)) 
+
             print()
             print('Testing Mezzanine EEPROM with %r' % ib)
             # Check if PRSNT line is help low
@@ -591,15 +614,15 @@ class TestMGADC08Carrier(TestUtils):
                     strev = '0'+str(rev)
                 print()
                 print('Based on the serial number, the revision number will be:' , rev)
-                ipmi = pychfpga.ipmi_fru.FRU(
-                    board=pychfpga.ipmi_fru.Board(
+                ipmi = hw.ipmi_fru.FRU(
+                    board=hw.ipmi_fru.Board(
                         mfg_date=datetime.datetime.now(),
                         manufacturer="Winterland",
                         product_name="McGill Mezzanine",
                         part_number=self.model,
                         serial_number=self.serial,
                         fru_file=""),
-                    product=pychfpga.ipmi_fru.Product(
+                    product=hw.ipmi_fru.Product(
                         manufacturer="Winterland",
                         product_name="McGill Mezzanine",
                         part_number=self.model,

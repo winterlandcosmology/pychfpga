@@ -49,7 +49,7 @@ class TCPipe:
         self.rx_buf = bytearray(2048)
         self.rx_view = memoryview(self.rx_buf)
         self.firmware_crc = None
-        self.log.debug(f'{self!r}: Opened TCPipe socket at {self.sock.getsockname()}')
+        self.log.debug(f'{self!r}: Opened TCPipe socket from local address{self.sock.getsockname()} to remote address {self.hostname}:{self.port}')
         self.bsb_sent_ctr = 0
 
     def __repr__(self):
@@ -373,13 +373,11 @@ class TCPipe_I2C:
 
     def select_bus(self, bus_info, retry=1):
         """
-        Configure the I2C port and I2C switches so the following
-        communications will access the desired I2C bus. 'bus_id'
-        can be a bus name or bus number, or a list of those if
-        multiple buses are to be accessed at the same time. An
-        error will be provided if all the buses are not accessible
-        through the same FPGA I2C port. This function assumes that
-        each FPGA I2C port has an identical I2C switch.
+        Configure the I2C port and I2C switches so the following communications will access the
+        desired I2C bus. 'bus_id' can be a bus name or bus number, or a list of those if multiple
+        buses are to be accessed at the same time. An error will be provided if all the buses are
+        not accessible through the same FPGA I2C port. This function assumes that each FPGA I2C port
+        has an identical I2C switch.
 
         Parameters:
 
@@ -388,7 +386,7 @@ class TCPipe_I2C:
 
                 - ``i2c_port`` integer,
                 - ``(switch_obj, switch_params)`` tuple, or ``{"port":i2c_port, "switch":switch_obj,
-                  "switch_params": switch_params"} dict
+                  "switch_params": switch_params"}`` dict
 
                 where
 
@@ -404,8 +402,8 @@ class TCPipe_I2C:
 
         Example:
 
-            select_bus(1)  # activate I2C port 1
-            select_bus((some_i2c_switch, 3)) # select bus from specified switch, and enable I2C port 3 of the switch
+            - select_bus(1)  # activate I2C port 1
+            - select_bus((some_i2c_switch, 3)) # select bus from specified switch, and enable I2C port 3 of the switch
 
         """
 

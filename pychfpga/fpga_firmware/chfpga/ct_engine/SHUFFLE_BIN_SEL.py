@@ -22,6 +22,8 @@ import logging
 class SHUFFLE_BIN_SEL_base(MMI):
     """ Implements an interface to the SHUFFLE_BIN_SEL FPGA module"""
 
+    ADDRESS_WIDTH = 9 # 19-3-2-5
+
     # Create local variables for page numbers to make the bitfield table more readable
     CONTROL = BitField.CONTROL
     STATUS = BitField.STATUS

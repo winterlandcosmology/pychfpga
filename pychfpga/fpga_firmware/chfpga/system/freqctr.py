@@ -12,12 +12,13 @@ History:
     2012-10-17 JFC: Added correlator frequency
     2012-11-09 JFC: Modified to use Module. Uses fpga SYSTEM_CLOCK_FREQUENCY variable.
 """
-from ..mmi import MMI, BitField
+from ..mmi import MMI, BitField, CONTROL, STATUS
 
 class FreqCtr(MMI):
     """
     Implements the Frequency Counter Interface.
     """
+    ADDRESS_WIDTH = 12
 
     _SYSTEM_CLOCK_FREQUENCY = 200e6  # in Hz
 
@@ -65,10 +66,6 @@ class FreqCtr(MMI):
     'PLL_OSCOUT': 39,  #
     }
 
-    # Create local variables for page numbers tomake the table more readable
-    CONTROL = BitField.CONTROL
-    STATUS = BitField.STATUS
-
     GATE_COUNT = BitField(CONTROL, 3, 0, width=32, doc='Gate time, set in 200 MHz clocks')
     SOURCE = BitField(CONTROL, 4, 0, width=7, doc='Select signal to be measured')
     START = BitField(CONTROL, 4, 7, doc='When 0, resets the frequency counter.  When high, counts the uncoming clock edges until the gate time is elapsed.')
@@ -76,9 +73,9 @@ class FreqCtr(MMI):
     FREQ_COUNT = BitField(STATUS, 3, 0, width=32, doc='Frequency count (number of rising edges seen on the source signal during the gate time)')
     DONE = BitField(STATUS, 4, 0, doc='Frequency counting is complete (gate time has been reached).')
 
-    def __init__(self, fpga_instance, base_address, verbose=1):
+    def __init__(self, *, router, router_port, verbose=1):
         self.verbose = verbose
-        super().__init__(fpga_instance, base_address)
+        super().__init__(router=router, router_port=router_port)
         self._lock()  # prevent further property creation to avoid creating attributes by mistake
 
 

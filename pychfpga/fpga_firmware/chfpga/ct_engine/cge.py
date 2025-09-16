@@ -31,10 +31,10 @@ class CGE(MMI):
     # DATA_FIFO_OVERFLOW  = BitField(STATUS, 2+2, 0, width=8, doc='Indicates if the data FIFO has overflows on the last 8 GPU links. Bit 0 is for lane 0.')
     # FRAME_FIFO_OVERFLOW = BitField(STATUS, 2+3, 0, width=8, doc='Indicates if the frame header FIFO has overflows on the last 8 GPU links. Bit 0 is for lane 0.')
 
-    def __init__(self, fpga_instance, base_address, address_width, router_port, verbose=1):
+    def __init__(self, *, router, router_port, verbose=1):
         self.logger = logging.getLogger(__name__)
         self.verbose = verbose
-        super().__init__(fpga_instance, base_address=base_address, address_width=address_width, router_port=router_port)
+        super().__init__(router=router, router_port=router_port)
 
     def init(self):
         self.TEST_PACKET_ENABLE = 0

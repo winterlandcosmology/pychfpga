@@ -14,18 +14,14 @@ History:
     2011-10-11 JFC: Updated delay tables
 """
 import logging
-# reload(logging) # needed to reset the logger config in case we change the formatting
 import argparse
 import time
 import __main__
 
 # from pychfpga.icecore import hardware_map
-# reload(hardware_map) #needed to make sure database-mapped classes are build into a fresh list
 
 # from icecore import hardware_map
 # from icecore import tuber
-# reload(hardware_map)
-# reload(tuber)
 
 # from pychfpga.icecore.icearray import IceArray, close_all_sockets
 # from pychfpga.icecore.fpgabitfile import FpgaBitFile
@@ -52,11 +48,6 @@ import plot_utils.plot_utils as pu
 # from pychfpga import receiver_corr_fast
 
 # print 'Reloading modules'
-# dreload(chFPGA_controller) # just to make sure that any changes to the code are reloaded
-#dreload(chFPGA_receiver) # just to make sure that any changes to the code are reloaded
-reload(pu)
-# reload(inj)
-# reload(receiver_corr_fast)
 
 # Default data and clock line delays for the two FMC boards/ML605 combination.
 # First 8 values are the delays for bits 0 to 7, 8th value is the delay for the clock line.

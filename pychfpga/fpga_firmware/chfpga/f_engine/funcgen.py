@@ -7,16 +7,15 @@ History:
     2012-10-17 JFC: Sets ramp as default function
 """
 
-from ..mmi import MMI, BitField
+from ..mmi import MMI, BitField, CONTROL, STATUS
 import numpy as np
-
+import asyncio
 
 class FUNCGEN(MMI):
     """ Implements interface to the function generator within a procecessor
     pipeline"""
-    # Create local variables for page numbers tomake the table more readable
-    CONTROL = BitField.CONTROL
-    STATUS = BitField.STATUS
+
+    ADDRESS_WIDTH = 9
 
     # Memory-mapped register definition
     RESET            = BitField(CONTROL, 0x00, 7, doc='Resets this module')
@@ -25,38 +24,38 @@ class FUNCGEN(MMI):
     FUNCTION         = BitField(CONTROL, 0x00, 0, width=3, doc="Selects the source of the signal to be generated")
     BYTE_A           = BitField(CONTROL, 0x01, 0, width=8, doc="Byte A to be used by the function generator")
     BYTE_B           = BitField(CONTROL, 0x02, 0, width=8, doc="Byte B to be used by the function generator")
-    NUMBER_OF_FRAMES = BitField(CONTROL, 0x03, 0, width=8, doc="Number of frames to send. If 0, send continuously.")
-    BYTE_C           = BitField(CONTROL, 0x04, 0, width=8, doc="Byte C to be used by the function generator")
+    STATS_PERIOD     = BitField(CONTROL, 0x04, 0, width=16, doc="Number of frames to send. If 0, send continuously")
+    RST_LFSR         = BitField(CONTROL, 0x06, 6, width=1, doc="Reset the noise generator to inject seed for LFSR")
     SHIFT            = BitField(CONTROL, 0x05, 0, width=4, doc="Number of bits to shift-right the ADC data before it is passed on")
     RAM_PAGE_MSB     = BitField(CONTROL, 0x05, 4, width=4, doc="MSB of the 512-byte RAM page we want to access")
-    RESET_STATS      = BitField(CONTROL, 0x06, 7, doc="Reset the overflow statistics counter")
-    CLIP_WIDTH       = BitField(CONTROL, 0x06, 0, width=4, doc="Saturates the ADC data to a ``clip_width-1``-bit wide signed value (i.e. clip_width is the position of the sign bit). Saturation is applied after the right-shift.")
-
+    STATS_ENABLE     = BitField(CONTROL, 0x06, 7, doc="Enables overflow_ctr update. Clears stats_done when stats_enabled cleared.")
+    CLIP_WIDTH       = BitField(CONTROL, 0x06, 0, width=4, doc="Saturates the output data to a ``clip_width-1``-bit wide signed value (i.e. clip_width is the position of the sign bit). Saturation is applied after the right-shift. ")
+    FN_ID            = BitField(CONTROL, 0x07, 0, width=8, doc="Function number stored in buffer")
 
     RAMP_CTR   = BitField(STATUS, 0x00, 0, width=8, doc="Last 8 bits of the ramp counter (for debuging)")
     FRAME_CTR  = BitField(STATUS, 0x01, 0, width=8, doc="Frame counter")
+    FRAME_OVERFLOW_FLAG = BitField(STATUS, 0x02, 2, doc="Indicates if there is at least an adc overflow in current frame.")
+    STATS_DONE = BitField(STATUS, 0x02, 1, doc="overflow_ctr ready with new value for new integration period")
     SEND_FRAME = BitField(STATUS, 0x02, 0, doc="debug")
     DELAY_CTR = BitField(STATUS, 0x04, 0, width=16, doc="Debug: Delay counter")
-    ADC_OVERFLOW_CTR = BitField(STATUS, 0x05, 0, width=8, doc="Number of ADC overflows since the counter was last cleared")
+    OVERFLOW_CTR = BitField(STATUS, 0x08, 0, width=32, doc="Number of ADC overflows since the counter was last cleared")
 
-    FN_ADC = 0
-    FN_BUFFER = 1
-    FN_NOISE = 2
-    FN_WORD_CTR = 3
-    FN_FRAME8 = 4
-    FN_FRAME4 = 5
-    FN_BUFFER_NIBBLE4 = 6
-    FN_ADC16 = 7 # *deprecated*
+    FN_ADC = 0 # Sends the ADC data
+    FN_BUFFER = 1 # Sends the data stored in the buffer
+    FN_NOISE = 2 # Uniform white noise generator
+    FN_WORD_CTR = 3 # 32-bit Frame/word counter, with ADC overflow from bit 0 of buffer bytes
+    FN_FRAME8 = 4 # Sends the frame number
+    FN_FRAME4 = 5 # Sends the frame number if the upper 4 bits of each samples. The lower bits are zero.
+    FN_BUFFER_NIBBLE4 = 6 # Sends the lower/upper nibble of the bytes in the buffer as a real value based on whether the frame number is even/odd.
 
     # The following define the source of the data
     DATA_SOURCE_NAMES = {
         'adc':                   FN_ADC,  # Sends the ADC data
-        'adc16':                 FN_ADC16,  # Sends the every other sample of ADC data in 16 bit, MSB first
         'noise':                 FN_NOISE,  # Uniform white noise generator
         'word_ctr_buffer_flags': FN_WORD_CTR,  # 32-bit Frame/word counter, with ADC overflow from bit 0 of buffer bytes
         'buffer':                FN_BUFFER,  # Sends the data stored in the buffer
         'funcgen':               FN_BUFFER,  # Sends the data stored in the buffer (for backwards compatibility)
-        'frame8':                FN_FRAME8,  # Sends the frame number in every 8-bit sample
+        'frame8':                FN_FRAME8,  # Sends the frame number
         'frame4':                FN_FRAME4,  # Sends the frame number if the upper 4 bits of each samples. The lower bits are zero.
         'nibble4':               FN_BUFFER_NIBBLE4,  # Sends the lower/upper nibble of the bytes in the buffer as a real value based on whether the frame number is even/odd.
         }
@@ -69,67 +68,114 @@ class FUNCGEN(MMI):
         return v
 
     def freq_test(self, freq_test_bins=[]):
-        N = min(len(freq_test_bins), 108) # N has to be less that 108 for this to work
+        """ Create a test pattern that produce unique autocorrelation products in selected bins.
+
+        There are 108 unique complex numbers that can be produced by computing the autocorrelation
+        of a (4+4) bit complex number. These numbers are stored in a table. `freq_test_bins`
+        specifies in which bins these numbers will be assigned to. The correlator output can then
+        use the integrated products to unambiguously determine if the correct frequency bin is seen
+        by a specific correlator node, therefore testing the corner-turn engine and the correlator
+        itself. Multiple passes with different bin combinations are needed to test the routing and
+        correlating of all bins.
+
+        Parameters:
+
+            freq_test_bins (list of int): list of bin numbers to which the complex numbers will be
+                assign. There can be up to 108 bin numbers in the list.
+
+        Returns:
+
+
+        """
+        N = min(len(freq_test_bins), 108) # Number of bins to fill. N has to be less that 108.
+
+        # real and imaginary vectors below are to be used in pairs. Values are 4-bit, using offet
+        # encoding, and are left aligned to the sample bit width.
         freq_pattern_real = np.array([ 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,
                                        2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  3,  3,  3,  3,  3,
                                        3,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,  4,  4,  4,  4,  4,  4,
                                        4,  4,  5,  5,  5,  5,  5,  5,  5,  5,  5,  6,  6,  6,  6,  6,  6,
                                        6,  6,  7,  7,  7,  7,  7,  7,  7,  8,  8,  8,  8,  8,  8,  9,  9,
                                        9,  9,  9,  9, 10, 10, 10, 10, 11, 11, 11, 11, 11, 12, 12, 12, 12,
-                                       13, 13, 13, 14, 14, 15], dtype=np.uint8) << (self.Nbits - 4)
+                                       13, 13, 13, 14, 14, 15], dtype=self.dtype) << (self.Nbits - 4)
         freq_pattern_imag = np.array([ 1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  2,  3,
                                         4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  3,  4,  5,  6,  7,
                                         8,  9, 10, 11, 12, 13, 14, 15,  4,  5,  6,  8,  9, 10, 11, 12, 13,
                                        14, 15,  6,  7,  8,  9, 11, 12, 13, 14, 15,  6,  8,  9, 10, 11, 12,
                                        14, 15,  7,  8, 10, 12, 13, 14, 15,  8, 10, 12, 13, 14, 15,  9, 10,
                                        11, 12, 14, 15, 12, 13, 14, 15, 11, 12, 13, 14, 15, 12, 13, 14, 15,
-                                       13, 14, 15, 14, 15, 15], dtype=np.uint8) << (self.Nbits - 4)
-        v = np.zeros(self.NB, dtype=np.uint8)
-        v_real = np.zeros(self.NB // 2, dtype=np.uint8)
-        v_imag = np.zeros(self.NB // 2, dtype=np.uint8)
+                                       13, 14, 15, 14, 15, 15], dtype=self.dtype) << (self.Nbits - 4)
+        v = np.zeros(self.NB, dtype=self.dtype)
+        v_real = np.zeros(self.NB // 2, dtype=self.dtype)
+        v_imag = np.zeros(self.NB // 2, dtype=self.dtype)
         v_real[freq_test_bins] = freq_pattern_real[:N]
         v_imag[freq_test_bins] = freq_pattern_imag[:N]
         v[::2] = v_real
         v[1::2] = v_imag
         return v
 
+    def noise(self, seed=0):
+        """ Set-up the noise generator by programming the seed value onto the BYTE_A and BYTE_B registers"""
+        self.BYTE_A = seed & 0xff
+        self.BYTE_B = (seed >> 8) & 0xff
 
-    FUNCTION_NAMES = {  # key : (function number, buffer generator fn)
 
-        # The following define the patterns we can program in the waveform buffer
-        # If the function returns a numpy array, it should be self.NS long; it will be reinterpreted as self.dtype type
-        # If the function returns a bytestring, the bytes will be written directly into the buffer.
 
-        # Warning!:
-        #   - byte ordering and dtype are changed when using operators (>>, /, +, & etc).
-        #   - Use N//2 to make sure  the arange is of integer type.
-        'buffer':         (0, lambda buffer=None, self=None: buffer),  # Arbitrary waveform
-        'arb':            (0, lambda data, self=None: data),  # Arbitrary waveform
-        'a':              (1, lambda self, a: np.full(self.NS, a)),  # All bytes are Byte A. 16-bit friendly
-        'b':              (2, lambda self, b: np.full(self.NS, b)),  # All bytes are Byte B
-        'ab':             (3, lambda self, a, b, : np.tile((a , b ), self.NS // 2)),  # Bytes alternate between A and B.
-        'ramp':           (4, lambda self, **kwargs: (np.arange(self.NS) - self.Nvalues / 2) % self.Nvalues - self.Nvalues / 2),  #  0 ... Nvalues/2-1, -Nvalues/2 ... 0
-        'real_ramp':      (5, lambda self, **kwargs: np.ravel([(i,0) for i in range(self.NS//2)])),  # Generates the ramp: 0,0,1,0,2,0... If the data is read as (8+8)-bit complex value pairs, we obtain (0,0j), (1+0j)... (255+0j)
-        '4bit_ramp':      (6, lambda self, **kwargs: np.arange(self.NS) << (self.Nbits - 4)),  # Generates the ramp in the upper 4 bits of the ADC sample (e.g for 8 bits: 0x00, 0x10, 0x20, ... 0xF0.)
-        '8bit_ramp':      (15, lambda self, **kwargs: np.arange(self.NS) << (self.Nbits - 8)),  # Generates the ramp in the upper 4 bits of the ADC sample (e.g for 8 bits: 0x00, 0x10, 0x20, ... 0xF0.)
-        '4bit_real_ramp': (7, lambda self, **kwargs: np.ravel([(i,0) for i in range(self.NS//2)]) << (self.Nbits - 4)),  # Generates the ramp: 0x00, 0x00, 0x10, 0x00, 0x20, 0x00 ... 0xF0, 0x00
+    """
+    FUNCTION_NAME table: {fn_name: (fn_id, fn_code, buffer_fn), ...} dict where:
+
+    - fn_name (str) function name
+    - fn_id (int) a arbitrary unique 8-bit identifier stored in FN_ID to allow python to keep track of the currently programmed function.
+    - fn_code (int): FUNCGEN function number (FN_ADC, FN_BUFFER, FN_NOISE etc.)
+    - buffer_fn: function that sets-up the data source.
+
+        Can be None if no setup function is needed.
+        Can return None if the buffer does not have to be programmed.
+        If the function returns a numpy array, it should be self.NS long; it will be reinterpreted as self.dtype type.
+        If the function returns a bytestring, the bytes will be written directly into the buffer.
+
+    Warning:
+       - byte ordering and dtype are changed when using operators (>>, /, +, & etc).
+       - Use integer division (e.g. N//2) to make sure values are if integer type when needed (e.g. ``arange``).
+
+    """
+    FUNCTION_NAMES = {
+
+        'adc':            (17, FN_ADC, None),
+        'noise':          (16, FN_NOISE, noise),
+        'word_ctr_buffer_flags': (18, FN_WORD_CTR, lambda self, overflow_buffer=None: overflow_buffer),  # 32-bit Frame/word counter, with ADC overflow from bit 0 of buffer bytes
+        'frame8':         (19, FN_FRAME8, lambda self, overflow_buffer=None: overflow_buffer),  # Sends the frame number
+        'frame4':         (20, FN_FRAME4, lambda self, overflow_buffer=None: overflow_buffer),  # Sends the frame number if the upper 4 bits of each samples. The lower bits are zero.
+        'nibble4':        (21, FN_BUFFER_NIBBLE4, lambda self, buffer=None: buffer),  # Sends the lower/upper nibble of the bytes in the buffer as a real value based on whether the frame number is even/odd.
+        'buffer':         (0, FN_BUFFER, lambda self, buffer=None: buffer),  # Arbitrary waveform
+        'arb':            (0, FN_BUFFER, lambda self, data=None: data),  # Arbitrary waveform
+        'funcgen':        (0, FN_BUFFER, lambda self, data: data),  # Arbitrary waveform, use 'buffer' instead
+
+        'a':              (1, FN_BUFFER, lambda self, a: np.full(self.NS, a)),  # All bytes are Byte A. 16-bit friendly
+        'b':              (2, FN_BUFFER, lambda self, b: np.full(self.NS, b)),  # All bytes are Byte B
+        'ab':             (3, FN_BUFFER, lambda self, a, b, : np.tile((a , b ), self.NS // 2)),  # Bytes alternate between A and B.
+        'ramp':           (4, FN_BUFFER, lambda self, **kwargs: (np.arange(self.NS) - self.Nvalues / 2) % self.Nvalues - self.Nvalues / 2),  #  0 ... Nvalues/2-1, -Nvalues/2 ... 0
+        'real_ramp':      (5, FN_BUFFER, lambda self, **kwargs: np.ravel([(i,0) for i in range(self.NS//2)])),  # Generates the ramp: 0,0,1,0,2,0... If the data is read as (8+8)-bit complex value pairs, we obtain (0,0j), (1+0j)... (255+0j)
+        '4bit_ramp':      (6, FN_BUFFER, lambda self, **kwargs: np.arange(self.NS) << (self.Nbits - 4)),  # Generates the ramp in the upper 4 bits of the ADC sample (e.g for 8 bits: 0x00, 0x10, 0x20, ... 0xF0.)
+        '8bit_ramp':      (15, FN_BUFFER, lambda self, **kwargs: np.arange(self.NS) << (self.Nbits - 8)),  # Generates the ramp in the upper 4 bits of the ADC sample (e.g for 8 bits: 0x00, 0x10, 0x20, ... 0xF0.)
+        '4bit_real_ramp': (7, FN_BUFFER, lambda self, **kwargs: np.ravel([(i,0) for i in range(self.NS//2)]) << (self.Nbits - 4)),  # Generates the ramp: 0x00, 0x00, 0x10, 0x00, 0x20, 0x00 ... 0xF0, 0x00
          # '4bit_split_ramp': (0, FN_BUFFER, ),  # Generates 0x0000, 0x0010, 0x0020, .. 0x00F0, 0x1000, 0x1010 ...
-        'sin':            (8, lambda self, freq=1, ampl=None: (np.sin(np.arange(self.NS) * 2 * np.pi / self.NS * freq) * (ampl if ampl is not None else ((1 << (self.Nbits - 1)) - 1) ))),
-        'cos':            (8, lambda self, freq=1, ampl=None: (np.cos(np.arange(self.NS) * 2 * np.pi / self.NS * freq) * (ampl if ampl is not None else ((1 << (self.Nbits - 1)) - 1) ))),
-        'crate_slot':     (9, lambda self: np.tile(self.fpga.get_id()[:2], self.NS // 2) << (self.Nbits - 4)),  # Bytes alternate between crate number and slot number (in upper 4 bits). If FFT and scaler are bypassed, then the complex data has the crate number in the real part and slot number in imag part.
+        'sin':            (8, FN_BUFFER, lambda self, freq=1, ampl=None: (np.sin(np.arange(self.NS) * 2 * np.pi / self.NS * freq) * (ampl if ampl is not None else ((1 << (self.Nbits - 1)) - 1) ))),
+        'cos':            (8, FN_BUFFER, lambda self, freq=1, ampl=None: (np.cos(np.arange(self.NS) * 2 * np.pi / self.NS * freq) * (ampl if ampl is not None else ((1 << (self.Nbits - 1)) - 1) ))),
+        'crate_slot':     (9, FN_BUFFER, lambda self: np.tile(self.fpga.get_id()[:2], self.NS // 2) << (self.Nbits - 4)),  # Bytes alternate between crate number and slot number (in upper 4 bits). If FFT and scaler are bypassed, then the complex data has the crate number in the real part and slot number in imag part.
         #'crate':          (10, lambda self, N=BUFFER_SIZE: np.tile(np.array([self.get_id()[0]<<4, 0], np.uint8), N / 2)),  # Bytes alternate between crate number (in upper 4 bits) and 0. If FFT and scaler are bypassed, then the complex data has the crate number in the real part.
-        'freq_test':      (10, freq_test),
-        'one':            (11, one), # complex value 1+0j in 4-bit mode & offset encoding
+        'freq_test':      (10, FN_BUFFER, freq_test),
+        'one':            (11, FN_BUFFER, one), # complex value 1+0j in 4-bit mode & offset encoding
         # '4bit_complex_ramp': (12, lambda self=None: (((np.arange(self.NS // 2) & 0xf0) << 8) + ((np.arange(self.NS // 2) & 0xf) << 4)).astype('>u2').view('u1')),  # Generates the ramp: 0x00, 0x00, 0x00, 0x10, 0x00, 0x20 ... 0xF0, 0xF0. The corner turn interpret these as (0+0j), (0+1j,) ...  (0+15j), (1+0j), ... (15+15j)
-        '4bit_complex_ramp':  (12, lambda self: np.ravel([((i>>4) & 0xf , i & 0xf) for i in range(self.NS//2)]) << (self.Nbits - 4)),  # Generates the ramp: 0x00, 0x00, 0x00, 0x10, 0x00, 0x20 ... 0xF0, 0xF0. The corner turn interpret these as (0+0j), (0+1j,) ...  (0+15j), (1+0j), ... (15+15j)
-        '4bit_real_a':        (13, lambda self, a: np.full((self.NB//2, 2), (a, 0)).ravel() << (self.Nbits - 4)),  # Generates the complex value (a+0j) in 4-bit mode. Not offset encoded.
-        '4bit_complex_ab':    (14, lambda self, a, b: np.full((self.NB//2, 2), (a, b)).ravel() << (self.Nbits - 4)),  # Generates the complex value (a+jb) in 4-bit mode. Not offset encoded.
+        '4bit_complex_ramp':  (12, FN_BUFFER, lambda self: np.ravel([((i>>4) & 0xf , i & 0xf) for i in range(self.NS//2)]) << (self.Nbits - 4)),  # Generates the ramp: 0x00, 0x00, 0x00, 0x10, 0x00, 0x20 ... 0xF0, 0xF0. The corner turn interpret these as (0+0j), (0+1j,) ...  (0+15j), (1+0j), ... (15+15j)
+        '4bit_real_a':        (13, FN_BUFFER, lambda self, a: np.full((self.NB//2, 2), (a, 0)).ravel() << (self.Nbits - 4)),  # Generates the complex value (a+0j) in 4-bit mode. Not offset encoded.
+        '4bit_complex_ab':    (14, FN_BUFFER, lambda self, a, b: np.full((self.NB//2, 2), (a, b)).ravel() << (self.Nbits - 4)),  # Generates the complex value (a+jb) in 4-bit mode. Not offset encoded.
         }
 
     buffer_cache = None
 
-    def __init__(self, fpga_instance, base_address, instance_number):
-        super().__init__(fpga_instance, base_address, instance_number)
+    def __init__(self,  *, router, router_port, instance_number):
+        super().__init__(router=router, router_port=router_port, instance_number=instance_number)
         self.SAMPLES_PER_FRAME = self.NS = self.fpga.ADC_SAMPLES_PER_FRAME
         self.BYTES_PER_FRAME = self.NB = self.fpga.ADC_BYTES_PER_FRAME
         self.BYTES_PER_SAMPLE = self.BPS = self.fpga.ADC_BYTES_PER_SAMPLE
@@ -154,76 +200,105 @@ class FUNCGEN(MMI):
         """ Resets the function generator"""
         self.pulse_bit('RESET')
 
-    def set_data_source(self, source_name, data=None, seed=None, **kwargs):
+    def reset_noise(self):
+        """Resets the seed of the noise generator and the output to 0"""
+        self.pulse_bit('RST_LFSR')
+
+    def set_data_source(self, source_name, verbose=0, **kwargs):
         """
-        Selects the type of data outputed by the function generator: ADC
-        signal, noise generator, frame counters, predetermined or user-provided waveform.
+        Selects the type of data outputted by the function generator.
 
-        If the noise generator is selected, the seed can be specified as as 15-bit value in ``seed``.
+        The data source can be ADC data, data generated on the fly by the function generator (noise,
+        constants, counters), or software-defined waveform that is played back from a buffer.
 
-        If ``data`` is specified, its values are written in the buffer.
+        Some data source require arguments; those are passed by `kwargs`.
+
+        Each data source or waveform specified in the FUNCTION_NAMES table has an associated
+        function ID that is stored in a firmware register to identify the current type of output.
+
+        This method should be used instead of `set_function` as it is more generic: is sets both the
+        firmware's function selector and programs the waveform buffer when appropriate.
 
         You may need to sync after changing the data source between the 'adc'
         and the other internally-generated sources as packet transmission
         might be interrupted and might confuse the downstream logic (FFT,
         crossbars, packet aligner etc.)
+
+        Parameters:
+
+            source_name (str): name of the data source (also called function) that is to be
+                outputted by the function generator. The name must be present as a key in the
+                FUNCTION_NAMES table.
+
+            verbose (int): Sets the verbosity level
+
+            kwargs (dict): arguments passed to the source-setting function.
         """
 
-        data_sources = self.DATA_SOURCE_NAMES.keys()
-        function_names = self.FUNCTION_NAMES.keys()
+        if source_name not in self.FUNCTION_NAMES:
+            raise RuntimeError(f"Invalid source/function name '{source_name}'. Valid names are {', '.join(self.FUNCTION_NAMES)}")
+        (fn_id, fn_code, buffer_fn) = self.FUNCTION_NAMES[source_name]
+        if verbose:
+            fn_args = ', '.join(f'{arg}={val}' for (arg, val) in kwargs.items())
+            fn_sig = f'{source_name}({fn_args})'  # function signature
+            print(f'*** Setting function to {fn_sig}')
+        self.FUNCTION = fn_code
+        self.FN_ID = fn_id
+        if buffer_fn:
+            self.set_buffer(data=buffer_fn(self=self, **kwargs), verbose=verbose)
 
-        if source_name in function_names:
-            self.set_function(source_name, **kwargs)  # set the buffer with desired waveform
-            source_name = 'buffer'
-        elif source_name not in data_sources:
-            raise ValueError(f"Invalid data source or function name '{source_name}'. "
-                             f"Valid values are {', '.join(list(data_sources) + list(function_names))}")
+        # if seed is not None:
+        #     self.BYTE_A = seed & 0xff
+        #     self.BYTE_B = (seed >> 8) & 0xff | 0x80  # Set bit 7 to indicate unknown waveform
+
+        # # data_sources = self.DATA_SOURCE_NAMES.keys()
+        # function_names = self.FUNCTION_NAMES.keys()
+
+        # if source_name in function_names:
+        # else:
+        #     raise ValueError(f"Invalid data source or function name '{source_name}'. "
+        #                      f"Valid values are {', '.join(function_names)}")
 
 
-        if seed is not None:
-            self.BYTE_A = seed & 0xff
-            self.BYTE_B = (seed >> 8) & 0xff | 0x80  # Set bit 7 to indicate unknown waveform
+        # if seed is not None:
+        #     self.BYTE_A = seed & 0xff
+        #     self.BYTE_B = (seed >> 8) & 0xff | 0x80  # Set bit 7 to indicate unknown waveform
 
-        if data is not None:
-            self.set_function('arb', data=data)
+        # if data is not None:
+        #     self.set_function('arb', data=data)
 
-        self.FUNCTION = self.DATA_SOURCE_NAMES[source_name]
+        # self.FUNCTION = self.DATA_SOURCE_NAMES[source_name]
 
     def get_data_source(self):
+        """ Returns the name of the currently programmed data source.
+
+        The data source is determined by the value programmed in the FN_ID bitfield when the data source was last set.
+        If the ID matches multiple data source names, only the first name found in the table is returned.
+
+        Returns:
+            str: name of the currently selected data source.
         """
-        Gets the data source currently selected by the the SOURCE selector.
-        """
-        data_source_number = self.FUNCTION  # make sure we read this only once
-        return [key for (key, value) in self.DATA_SOURCE_NAMES.items() if value == data_source_number][0]
+
+        current_fn_id = self.FN_ID
+        fn_names = [fn_name for fn_name, (fn_id, *_) in self.FUNCTION_NAMES.items() if fn_id == current_fn_id]
+        if not fn_names:
+            raise RuntimeError(f'Cannot find current function number {current_fn_id} in the function table')
+        return fn_names[0]
+
 
     def set_function(self, function_name, verbose=False, **kwargs):
         """
         Sets the waveform buffer with a predetermined waveform. It is recommended to use set_data_source() instead.
-
-        Keyword arguments are passed directly to the function that generate
-        the buffer data. The argument 'a' and 'b' can be specified for
-        waveforms that require them. ``data`` is used to specify an arbitrary
-        waveform as 2048 bytes .
         """
-        if function_name not in self.FUNCTION_NAMES:
-            raise RuntimeError("Invalid function name. Valid ones are '%s'" % ', '.join(self.FUNCTION_NAMES.keys()))
-        (fn_number, buffer_gen) = self.FUNCTION_NAMES[function_name]
-        function_args = ', '.join('%s=%.30r' % (arg, val) for (arg, val) in kwargs.items())
-        buffer_info = f'{function_name}({function_args})'
-        if verbose:
-            print(f'*** Setting function to {buffer_info}')
-        self.set_buffer(buffer_gen(self=self, **kwargs), function_number=fn_number, info=buffer_info, verbose=verbose)
+
+        self.set_data_source(source_name=function_name, verbose=verbose, **kwargs)  # set the buffer with desired waveform
+
 
     def get_function(self):
         """
-        Return the name of the current waveform generated by the function generator.
+        Return the name of the current waveform generated by the function generator. It is recommended to use get_data_source() instead.
         """
-        (fn_number, info, crc) = self.get_buffer_info()
-        fn_names = [key for (key, (number, _)) in self.FUNCTION_NAMES.items() if number == fn_number]
-        if not fn_names:
-            return 'Unknown'
-        else:
-            return fn_names[0]
+        return get_data_source()
 
     def set_ram_page(self, page):
         """ Sets the RAM page number
@@ -236,7 +311,7 @@ class FUNCGEN(MMI):
         self.RAM_PAGE_LSB = page & 0b111
         self.RAM_PAGE_MSB = (page >> 3) & 0b1111
 
-    def set_buffer(self, data, function_number=0, info='Arbitrary data', verbose=False):
+    def set_buffer(self, data, function_number=None, info=None, verbose=False):
         """ Sets the buffer contents to be used for functions that uses it.
 
         Parameters:
@@ -253,16 +328,24 @@ class FUNCGEN(MMI):
 
                if `data` is None, no action is taken.
 
-            function_number: Value  (0-255) to store along with the data to identify the buffer
-                contents. It has no impact on the generated waveforms.
+            function_number: (deprecated) Value (0-255) stored in a FUNCGEN register to identify the
+                buffer contents. It has no impact on the generated waveforms. This is now set in
+                `set_data_source`. The value is set here for mackwards compatibility only if a
+                non-None value is provided.
 
-            info (str): *deprecated, not used* String that was originally stored in the FPGA to
-                convey more information on the waveform that was in the buffer.
+            info (str): (deprecated and unused). String that was originally stored in the FPGA to convey more
+                information on the waveform that was in the buffer. Was replaced by the FN_ID
+                numeric field handled by `set_data_source`, as is uses less memory.
 
             verbose (int): Verbosity level
 
         """
-        if data is None:
+
+        # Store info on the buffer contents
+        if function_number is not None:
+            self.FN_ID = function_number
+
+        if data is None:  # no data, nothing else to do
             return
 
         if isinstance(data, (bytes, bytearray)):
@@ -275,7 +358,6 @@ class FUNCGEN(MMI):
                 data = ((data.astype(int) << self.lshift)).astype(self.dtype).tobytes()  # convert to dtype *after* shift otherwise we lose type and endianness
             else:
                 data = (np.fromiter(data, int) << self.lshift).astype(self.dtype).tobytes()
-
         # data = data.tobytes()
         # print(len(data), data[:100].hex(':'))
 
@@ -285,7 +367,6 @@ class FUNCGEN(MMI):
 
         if self.buffer_cache is None:
             self.buffer_cache = bytearray(self.NB)
-
         # Write the data, page by page
         for page in range(self.N_PAGES):
             page_slice = slice(page * self.PAGE_SIZE, (page + 1) * self.PAGE_SIZE)
@@ -295,12 +376,6 @@ class FUNCGEN(MMI):
             if verbose:
                 print(f'page={page}, slice={page_slice}')
             self.buffer_cache[page_slice] = page_data
-
-        # Store info on the buffer contents
-        self.BYTE_C = function_number
-        # self.RAM_PAGE = 4
-        # self.write_ram(0, function_number)
-        # self.write_ram(1, info.encode() + b'\x00')
 
     def get_buffer(self, use_cache=True):
 
@@ -312,17 +387,20 @@ class FUNCGEN(MMI):
             data[page * self.PAGE_SIZE: (page + 1) * self.PAGE_SIZE] = self.read_ram(0, length=self.PAGE_SIZE, type=bytearray)
         return data
 
+
     def get_buffer_info(self):
-        # self.RAM_PAGE = 4
-        # data = self.read_ram(0, length=512)
-        # fn_number = data[0]
-        # data_str = data[1:].tostring()
-        # info = data_str[:data_str.index(chr(0))]
-        fn_number = self.BYTE_C
-        fn_names = [name for name, (n, _) in self.FUNCTION_NAMES.items() if n==fn_number]
-        fn_name = fn_names[0] if len(fn_names) == 1 else 'Unknown'
-        info = f'Function {fn_number}: {fn_name}'
-        return (fn_number, info, None)  # Fn number, info string, CRC32
+        """ Returns information on the currently programmed data source.
+
+        Returns:
+            (fn_id, fn_info, None) tuple where:
+
+                - fn_id (int): source/function identifier code currently stored in the function generator
+                - fn_info (str): string containing the function ID and function name
+                - None: The last argument is always `None`
+        """
+        fn_name = self.get_data_source()
+        info = f'Function {self.FN_ID}: {fn_name}'
+        return (self.FN_ID, info, None)  # Fn number, info string, CRC32
 
     def get_sim_output(self, adc_input=None, source=None, number_of_frames=4):
         """

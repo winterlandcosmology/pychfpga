@@ -1,32 +1,38 @@
 import matplotlib.pyplot as plt
+from cycler import cycler
 import numpy as np
-from test_setup import PLOT_DIR
+from pathlib import Path
+from textwrap import wrap
 
+def plot(datasets, split_complex=False, title="test"):
+    styles = cycler(color=['tab:blue', 'orange', 'forestgreen'], marker=['.', ' ', ' '])
+    plt.rc('axes', prop_cycle=styles)
 
-def plot_comp_data(fname: str, ref_data: np.ndarray, data: np.ndarray, x: np.ndarray = None, title: str = None, crop_data_ind: int = -1):
-    data = np.atleast_2d(data)
-    x = x or np.arange(ref_data.size)
-    if fname == 'test_funcgen_ab':
-        crop_data_ind = 50
-    elif fname == 'test_funcgen_real_ramp':
-        crop_data_ind = 300
-    bbox_props = dict(boxstyle='round', facecolor='white', alpha=0.9)
-    caption_props = dict(horizontalalignment='left', verticalalignment='center')
+    labels = ["Returned", "Reference"]
 
-    fig, axs = plt.subplots(2, 1, figsize=(8, 6))
-    axs[0].plot(x[:crop_data_ind], ref_data[:crop_data_ind], lw=2)
-    axs[0].set_title('Reference')
+    l = len(labels)
+    for i in range(len(datasets) - l):
+        labels.append(f"Dataset {i}")
 
-    for i, data_row in enumerate(data):
-        axs[1].plot(x[:crop_data_ind], data_row[:crop_data_ind], lw=2, ls='--', dashes=(5, i))
-        break
-    axs[1].set_title('Returned data')
+    # Check all datasets are the same length
+    lengths = [d.size for d in datasets]
+    if len(set(lengths)) != 1:
+        raise ValueError("All datasets must be the same length if data_range is not specified")
 
-    if crop_data_ind != -1:
-        caption = f"CROPPED FROM LEN={len(ref_data)} TO LEN={crop_data_ind}"
-        axs[0].text(0.02, 0.9, caption, bbox=bbox_props, **caption_props, transform=axs[0].transAxes)
-        axs[1].text(0.02, 0.9, caption, bbox=bbox_props, **caption_props, transform=axs[1].transAxes)
+    fig, axs = plt.subplots(2 if split_complex else 1)
+    for i in range(2*len(datasets)):
+        im = i >= len(datasets)
+        ax = axs[int(im)] if split_complex else axs
+        if im and not split_complex:
+            break
+        if split_complex and not im:
+            ax.plot(datasets[i][::2], label=labels[i] + "(Re)")
+        elif split_complex and im:
+            ax.plot(datasets[i % len(datasets)][1::2], label=labels[i % len(datasets)] + "(Im)")
+        else:
+            ax.plot(datasets[i], label=labels[i])
+        ax.legend()
 
-    fig.suptitle(title)
-    fig.tight_layout()
-    plt.savefig(PLOT_DIR/fname)
+    fig.supxlabel("Bin")
+    fig.supylabel("Output")
+    fig.suptitle("\n".join(wrap(title, 60)))

@@ -23,11 +23,13 @@ class tca6416a(object):
 
     def __init__(self, i2c_interface, address, port='GPIO', verbose=0):
         """
-        Creates an object that interfaces the PCS8575 I2C IO Extender.
-        Access is done through the I2C object 'i2c_interface' at I2C address 'address' and on port 'port'.
+        Creates an object that interfaces the PCS8575 I2C IO Extender. Access is done through the
+        I2C object 'i2c_interface' at I2C address 'address' and on port 'port'.
+
         The i2c interface must provide the following methods:
-            set_port()
-            write_read()
+
+        - set_port()
+        - write_read()
         """
         self.i2c = i2c_interface
         self.address = address

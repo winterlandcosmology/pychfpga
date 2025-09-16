@@ -14,17 +14,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import asyncio
 
-from ..mmi import MMI, BitField
+from ..mmi import MMI, MMIRouter, BitField, CONTROL, STATUS, DRP
 from wtl.metrics import Metrics
-
-# Types of memory-mapped registers
-CONTROL = BitField.CONTROL
-STATUS = BitField.STATUS
-DRP = BitField.DRP
 
 
 class QPLL(MMI):
     """ Implements interface to one of the COMMON """
+
+    ADDRESS_WIDTH = 9
 
     QPLL_LOCK                = BitField(STATUS, 0, 0, doc='Indicates if the QPLL is locked')
     QPLL_PD                  = BitField(CONTROL, 0,0, doc="power down qpll.  needs 500ns after reset.")
@@ -52,10 +49,9 @@ class QPLL(MMI):
     COMMON_CFG0              = BitField(DRP, 0x0043, 0, width=16, doc="COMMON_CFG[15:0 ] 0-65535")
     COMMON_CFG1              = BitField(DRP, 0x0044, 0, width=16, doc="COMMON_CFG[31:16] 0-65535")
 
-    def __init__(self, fpga_instance, base_address, instance_number):
-        # self.fpga = fpga
+    def __init__(self, *, router, router_port, instance_number):
         self.logger = logging.getLogger(__name__)
-        super().__init__(fpga_instance, base_address, instance_number)
+        super().__init__(router=router, router_port=router_port, instance_number=instance_number)
 
     def init(self):
         """ Initializes the antenna modules"""
@@ -68,7 +64,7 @@ class QPLL(MMI):
 
 class GTX(MMI):
     """ Implements interface to a GTX_CHANNEL block """
-
+    ADDRESS_WIDTH = 9
 
     USER_RESET     = BitField(CONTROL, 0, 7, doc='')
     USER_GTTXRESET = BitField(CONTROL, 0, 6, doc='')
@@ -201,10 +197,10 @@ class GTX(MMI):
 
 # Add DRP registers here...
 
-    def __init__(self, fpga_instance, base_address, instance_number):
+    def __init__(self, *, router, router_port, instance_number):
         # self.fpga = fpga
         self.logger = logging.getLogger(__name__)
-        super().__init__(fpga_instance, base_address, instance_number)
+        super().__init__(router=router, router_port=router_port, instance_number=instance_number)
         self.node_id = (self.fpga.slot, instance_number + 1)
         self._lock()
 
@@ -390,6 +386,12 @@ class GTX(MMI):
             iceboard.slot,
             eye_diag.gtx.instance_number + 1))
 
+class XGLRouter(MMIRouter):
+    ROUTER_PORT_NUMBER_WIDTH = 5
+    ROUTER_PORT_MAP = {
+        'COMMON': 0
+        # port numbers for QPLL and GTY are computed
+        }
 
 class XGLinkCore(MMI):
     """ Instantiates a container for all the xglink core module
@@ -413,23 +415,26 @@ class XGLinkCore(MMI):
     RESET_DONE      = BitField(STATUS, 1, 4, doc='debug')
     QPLL_RESET_MON  = BitField(STATUS, 1, 3, doc='debug')
 
-    def __init__(self, fpga_instance, base_address, address_increment,verbose=1):
+    def __init__(self, *, router, router_port, verbose=1):
         # self.fpga = fpga
         self.logger = logging.getLogger(__name__)
         self.verbose = verbose
-        super().__init__(fpga_instance, base_address)
+
+        xgl_router = XGLRouter(router=router, router_port=router_port)
+
+        super().__init__(router=xgl_router, router_port='COMMON')
 
         i = 1
 
         # Instantiate QUAD objects
         self.qpll = []
         for j in range(self.NUMBER_OF_QUADS):
-            self.qpll.append(QPLL(fpga_instance, base_address + i * address_increment, j))
+            self.qpll.append(QPLL(router=xgl_router, router_port=i, instance_number=j))
             i += 1
 
         self.gtx = []
         for j in range(self.NUMBER_OF_LINKS):
-            self.gtx.append(GTX(fpga_instance, base_address + i * address_increment, j))
+            self.gtx.append(GTX(router=xgl_router, router_port=i, instance_number=j))
             i += 1
 
     def init(self):
@@ -540,15 +545,9 @@ class XGLinkArray(XGLinkCore):
         # 'RX_CTR': 'RX_CTR',
         'RX_FRAME_CTR': 'RX_FRAME_CTR'}
 
-    def __init__(self, fpga_instance, base_address, address_increment,  lane_groups, verbose=1):
-        # self.fpga = fpga
+    def __init__(self, *, router, router_port, lane_groups, verbose=1):
 
-        super(XGLinkArray, self).__init__(fpga_instance, base_address, address_increment, verbose)
-
-        # self.LANE_GROUPS = {}
-        # group name : (first lane, number_of_bypass_lanes, number_of_links)
-        # self.LANE_GROUPS[0] = self.LANE_GROUPS['pcb'] = (0, self.NUMBER_OF_PCB_DIRECT_LANES, self.NUMBER_OF_PCB_LINKS)
-        # self.LANE_GROUPS[1] = self.LANE_GROUPS['qsfp'] = (self.NUMBER_OF_PCB_LANES, self.NUMBER_OF_QSFP_DIRECT_LANES, self.NUMBER_OF_QSFP_LINKS)
+        super().__init__(router=router, router_port=router_port, verbose=verbose)
 
         # lane_list = []
         phys_lane = 0

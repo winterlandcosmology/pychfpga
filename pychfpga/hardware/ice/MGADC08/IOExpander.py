@@ -4,12 +4,12 @@
 IOExpander.py module
  Implements IOExpander interface of chFPGFA
 
- History:
- 2011-07-08 JFC : Created from test code in chFPGA.py
- 2011-07-17 JFC: Fixed the getter and setter : needed to use a closure to fix the bit name at function creation.
-            Created bit definition class to access elements by name instead of index. Updated code appropriately.
- 2011-07-18 JFC: Added comments
- 2011-09-08 JFC: Removed printed message when defining the properties
+ .. History:
+     2011-07-08 JFC : Created from test code in chFPGA.py
+     2011-07-17 JFC: Fixed the getter and setter : needed to use a closure to fix the bit name at function creation.
+                Created bit definition class to access elements by name instead of index. Updated code appropriately.
+     2011-07-18 JFC: Added comments
+     2011-09-08 JFC: Removed printed message when defining the properties
 """
 import time
 import numpy as np
@@ -69,7 +69,7 @@ class IOExpander_base(object):
         'ADC_RESET'        : BitDef(PORT_A, 0, WR, 1),  # Not used. Is not connected to the ADC: R62 is not installed by default
         'PLL1_CE'          : BitDef(PORT_A, 1, RD, 0),
         'PLL1_LOCK'        : BitDef(PORT_A, 2, RD, 0),
-        'PLL1_MUTE'        : BitDef(PORT_A, 3, WR, 1),  # changed to WR,1: force the PDOrf line high to make sure the PLL output is on.  
+        'PLL1_MUTE'        : BitDef(PORT_A, 3, WR, 1),  # changed to WR,1: force the PDOrf line high to make sure the PLL output is on.
         'PLL1_MUXOUT'      : BitDef(PORT_A, 4, RD, 0),
         'PLL2_LOCK'        : BitDef(PORT_A, 5, RD, 0),
         'LED0'             : BitDef(PORT_A, 6, WR, 1),  # changed to 0

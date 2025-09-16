@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 """
-top_test.py script 
+top_test.py script
  Instantiates a chFPGA object 'c' for interactive testing. Import in ipython using "r -i top_test" so the created chFPGA object "c" is accessible in the ipython interactive workspace.
 
 
@@ -12,7 +12,6 @@ top_test.py script
 #import matplotlib
 #matplotlib.use("TkAgg")
 import chFPGA
-reload(chFPGA) # just to make sure that any changes to the code are reloaded
 
 
 SN001_adc_delays=(
@@ -47,7 +46,7 @@ SN002_adc_delays=(
 	[14]*8, #CH7 (BUFR)
 	)
 
-if __name__=='__main__':		
+if __name__=='__main__':
 	print '------------------------'
 	print 'top_test.py: chFGPA test script'
 	print 'J.-F. Cliche'
@@ -67,7 +66,7 @@ if __name__=='__main__':
 	# Create the new chFPGA object.
 	c=chFPGA.chFPGA(adc_test_mode=ADC_TEST_MODE, adc_delay_table=ADC_DELAY_TABLE);
 	print
-	
+
 	# Displays the system frequencies
 	c.FreqCtr.status()
 	# Continuously plot the ADC output

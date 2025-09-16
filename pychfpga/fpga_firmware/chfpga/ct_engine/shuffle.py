@@ -19,7 +19,7 @@ class Shuffle(xglink.XGLinkArray):
     through PBC lanes or QSFP cables.
     """
 
-    def __init__(self, fpga_instance, base_address, address_increment, verbose=1):
+    def __init__(self, *, parent_module, router_port, verbose=1):
 
         self.NUMBER_OF_PCB_DIRECT_LANES = 1
         self.NUMBER_OF_QSFP_DIRECT_LANES = 4
@@ -31,7 +31,7 @@ class Shuffle(xglink.XGLinkArray):
 
         self.lane_group_names = [name for (name, _, _) in self.lane_groups]
 
-        super().__init__(fpga_instance, base_address, address_increment, self.lane_groups, verbose)
+        super().__init__(parent_module=parent_module, router_port=router_port, lane_groups=self.lane_groups, verbose=verbose)
 
         self.NUMBER_OF_PCB_LANES = 16
         self.NUMBER_OF_QSFP_LANES = 8

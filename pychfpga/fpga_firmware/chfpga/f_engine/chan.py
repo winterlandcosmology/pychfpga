@@ -11,59 +11,52 @@ History:
     2012-08-31 JFC: Swapped addresses of PROBER and SCALER to match the same change in firmware
     2012-09-25 JFC: Renamed to FRAMER and FR_DIST to SRCSEL
 """
+
+# Standard packages
+
 import logging
 
+# Pypi packages
+
+from numpy import NaN as npNaN
+
+# Local packages
+
+from ..mmi import MMIRouter
 from . import adcdaq
 from . import fft
 from . import scaler
 from . import prober
 from . import funcgen
-from numpy import NaN as npNaN
-# import INJECT
 
 
-class Chan:
+class Chan(MMIRouter):
     """ Implements the interface to an individual channelizer"""
+    ROUTER_PORT_NUMBER_WIDTH = 3
+    ROUTER_PORT_MAP = {
+        'ADCDAQ': 0,
+        'FFT': 2,
+        'SCALER': 3,
+        'PROBER': 4,
+        'FUNCGEN': 5
+    }
 
-    # Channelizer module addresses
-    ADCDAQ_OFFSET_ADDR  = 0
-    # SRCSEL_OFFSET_ADDR  = 1
-    FFT_OFFSET_ADDR     = 2
-    SCALER_OFFSET_ADDR  = 3
-    PROBER_OFFSET_ADDR  = 4
-    FUNCGEN_OFFSET_ADDR = 5
-    # INJECT_OFFSET_ADDR  = 6
-
-    def __init__(self, fpga_instance, base_address, submodule_address_increment, instance_number):
+    def __init__(self, router, router_port, instance_number):
         self.chan_number = instance_number  # store current channelizer number for this instance
-        self.fpga = fpga_instance
         self.logger = logging.getLogger(__name__)
+        super().__init__(router=router, router_port=router_port)
+
         if self.fpga.HAS_ADCDAQ:
-            self.ADCDAQ = adcdaq.ADCDAQ(
-                fpga_instance,
-                base_address + self.ADCDAQ_OFFSET_ADDR * submodule_address_increment,
-                instance_number)
+            self.ADCDAQ = adcdaq.ADCDAQ(router=self, router_port='ADCDAQ', instance_number=instance_number)
         else:
             self.ADCDAQ = None
-        self.FFT = fft.FFT(
-            fpga_instance,
-            base_address + self.FFT_OFFSET_ADDR * submodule_address_increment,
-            instance_number)
-        self.SCALER = scaler.SCALER(
-            fpga_instance,
-            base_address + self.SCALER_OFFSET_ADDR * submodule_address_increment,
-            instance_number)
+        self.FFT = fft.FFT(router=self, router_port='FFT', instance_number=instance_number)
+        self.SCALER = scaler.SCALER(router=self, router_port='SCALER', instance_number=instance_number)
         if self.fpga.CAPTURE_TYPE == 'PROBER':
-            self.PROBER = prober.PROBER(
-                fpga_instance,
-                base_address + self.PROBER_OFFSET_ADDR * submodule_address_increment,
-                instance_number)
+            self.PROBER = prober.PROBER(router=self, router_port='PROBER', instance_number=instance_number)
         else:
             self.PROBER = None
-        self.FUNCGEN = funcgen.FUNCGEN(
-            fpga_instance,
-            base_address + self.FUNCGEN_OFFSET_ADDR * submodule_address_increment,
-            instance_number)
+        self.FUNCGEN = funcgen.FUNCGEN(router=self, router_port='FUNCGEN', instance_number=instance_number)
         self.frame_length = self.fpga.FRAME_LENGTH
 
     def __repr__(self):
@@ -115,22 +108,24 @@ class Chan:
         scaler_out = self.SCALER.get_sim_output(fft_out)
         return scaler_out
 
-class ChanArray:
+class ChanArray(MMIRouter):
     """
     Instantiates a container for all channelizers available on the FPGA.
     It mimics the basin functionnalities of a 'dict'.
 
     """
 
-    def __init__(self, fpga, base_address, address_increment, submodule_address_increment, verbose=0):
-        self.fpga = fpga
+    ROUTER_PORT_NUMBER_WIDTH = 4
+
+    def __init__(self, *, router, router_port, verbose=0):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
+        super().__init__(router=router, router_port=router_port)
         # Create an instance of ADC_chip for each chip of the FMC board
-        self.frame_length = fpga.FRAME_LENGTH
+        self.frame_length = self.fpga.FRAME_LENGTH
         self.chan = []
-        for i in range(fpga.NUMBER_OF_CHANNELIZERS):
-            self.chan.append(Chan(self.fpga, base_address + i * address_increment, submodule_address_increment, i))
+        for i in range(self.fpga.NUMBER_OF_CHANNELIZERS):
+            self.chan.append(Chan(router=self, router_port=i, instance_number=i))
 
     def __repr__(self):
         """ Return a string that represents this object and its parent object.
@@ -273,9 +268,15 @@ class ChanArray:
     def set_data_width(self, width):
         """
         Set the number of bits used to represent the values computed by the channelizers.
+
         All channelizers are set to the new setting.
-            width=4: data is 4 bits Real + 4 bits Imaginary
-            width=8: data is 8 bits Real + 8 bits Imaginary
+
+        Parameters:
+
+            width (int): Target data width:
+
+                - width=4: data is 4 bits Real + 4 bits Imaginary
+                - width=8: data is 8 bits Real + 8 bits Imaginary
         """
 
         if width == 4:

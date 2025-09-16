@@ -129,8 +129,9 @@ class FPGABitstream(object):
             with open(self.url, 'rb') as file:
                 data = file.read()
             self.file_mtime = os.path.getmtime(self.url)
+            file_time = datetime.datetime.fromtimestamp(self.file_mtime)
 
-        self.logger.info(f'{self!r}: Bitstream size is {len(data)/1e6:0.3f} MBytes')
+        self.logger.info(f'{self!r}: Bitstream size is {len(data)/1e6:0.3f} MBytes, last modified on {file_time}')
 
         if len(data) < 1e6:
             raise RuntimeError(f'Bitstream at {self.url} is too small (length = {len(data)/1e6:0.3f} MBytes). Is it a git LFS pointer? If so, make sure LFS is installed and then pull the binaries.')

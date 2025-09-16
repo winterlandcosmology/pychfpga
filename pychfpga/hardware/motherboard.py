@@ -594,7 +594,7 @@ class Motherboard(HardwareMap):
         Should be overriden to populate the Metrics object.
 
         Returns:
-            a :cls:`Metrics` object.
+            a :class:`Metrics` object.
         """
 
         metrics = Metrics(

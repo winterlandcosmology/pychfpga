@@ -19,7 +19,7 @@
     2012-10-21 JFC: Added HOST_FRAME_READ_RATE bitfield
 """
 
-from ..mmi import MMI, BitField
+from ..mmi import MMI, BitField, CONTROL, STATUS
 import logging
 
 #import numpy as np
@@ -27,9 +27,7 @@ import logging
 class GPIO(MMI):
     """ Provides access to the system-level GPIO lines """
 
-    # Create local variables for page numbers to make the table more readable
-    CONTROL = BitField.CONTROL
-    STATUS = BitField.STATUS
+    ADDRESS_WIDTH = 12
 
     GLOBAL_TRIG      = BitField(CONTROL, 0x00, 7, doc='Global trigger')
     BUCK_SYNC_ENABLE = BitField(CONTROL, 0x00, 6, doc='Enable generation of the Buck SYNC signals')
@@ -126,6 +124,15 @@ class GPIO(MMI):
     ADC_PLL_LOCK1              = BitField(STATUS, 33, 7,  doc='Lock status of the ADC PLL in FMC1')
     CMD_RPLY_PACKET_COUNTERS   = BitField(STATUS, 35, 0, width=16, doc='Number of reply packets received since last FPGA configuration. MSB=Commands, LSB=Replies')
     NUMBER_OF_BP_SHUFFLE_LANES = BitField(STATUS, 36, 0, width=8, doc='Number of backplane links (including the direct internal link)')
+    EXTRA_IO                   = BitField(STATUS, 37, 0, width=8, doc='Various input IO signals provided by the platform. Used to QC the board.')
+    ADC_CM_OV                  = BitField(STATUS, 38, 0, width=8, doc='ADC common-mode overvoltage flag')
+    ADC_CM_OV                  = BitField(STATUS, 39, 0, width=8, doc='ADC common-mode undervoltage flag')
+    ADC_CM_OT1                 = BitField(STATUS, 40, 0, width=8, doc='ADC over thresold1 flag')
+    ADC_CM_OT1                 = BitField(STATUS, 41, 0, width=8, doc='ADC over thresold2 flag')
+    CT_TYPE                    = BitField(STATUS, 42, 0, width=4, doc='Type of Corner-Turn engine used. 0=None, 1=BCT, 2=UCT')
+    CT_LEVEL                   = BitField(STATUS, 42, 4, width=4, doc='Level of corner-turning implemented in the CT Engine. CT_LEVEL=1 Means internal CT only, which is hardwired for BCT and UCT')
+    FFT_TYPE                   = BitField(STATUS, 43, 0, width=4, doc='Type of FFT implemented in the channelizers')
+
 
     SERIAL_MATCH               = BitField(CONTROL, 37, 7, doc='1 when the programmable target serial number matches the FPGA serial number. This means that the core register can be writtten if  ')
     BP_GPIO_INT_IN             = BitField(CONTROL, 37, 6, doc="FPGA I/O line")
@@ -136,8 +143,8 @@ class GPIO(MMI):
     GPIO_RST_IN                = BitField(CONTROL, 37, 1, doc="FPGA I/O line")
     ARM_IRQ_IN                 = BitField(CONTROL, 37, 0, doc="FPGA I/O line")
 
-    def __init__(self, fpga, base_address, address_width, router_port):
-        super().__init__(fpga, base_address, address_width, router_port)
+    def __init__(self, *,  router,  router_port):
+        super().__init__(router=router, router_port=router_port)
         self._lock() # prevent further property creation to avoid creating attributes by mistake
 
     def get_bitstream_date(self):

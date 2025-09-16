@@ -10,15 +10,14 @@ import asyncio
 import socket
 
 from wtl.metrics import Metrics
-from ..mmi import MMI, BitField
+from ..mmi import MMI, BitField, CONTROL, STATUS
 import numpy as np
 
 
 class UCorn(MMI):
     """ Class to operate the UltraRAM-based corner-turn module"""
 
-    CONTROL = BitField.CONTROL
-    STATUS = BitField.STATUS
+    ADDRESS_WIDTH = 16
 
     RAM_SEL             = BitField(CONTROL, 0, 5, doc='When 0, RAM writes are made to the UltraRAM data memory. When 1, RAM writes are made to the playlist memory.')
     RAM_BANK            = BitField(CONTROL, 0, 4, doc='Determines in which bank of the data buffer is written by RAM writes')
@@ -42,7 +41,7 @@ class UCorn(MMI):
     IN_FRAME_CTR        = BitField(STATUS, 1, 0, width=8, doc='Counts the number of frames coming in.')
     OUT_FRAME_CTR       = BitField(STATUS, 2, 0, width=8, doc='Counts the number of frames coming out.')
 
-    def __init__(self, fpga_instance, base_address, address_increment=0, address_width=16, router_port=None, verbose=0):
+    def __init__(self, *, router, router_port, verbose=0):
         """ Creates a UCorn corner-turn engine instance.
 
         ``__init__`` initializes the instnce but does not yet start communicating with. This allows
@@ -62,7 +61,7 @@ class UCorn(MMI):
             verbose (int): When non-zero, debugging messages will be printed.
 
         """
-        super().__init__(fpga_instance, base_address=base_address, address_width=address_width, router_port=router_port)
+        super().__init__(router=router, router_port=router_port)
         # self.fpga = fpga_instance
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)

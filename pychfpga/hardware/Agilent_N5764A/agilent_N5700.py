@@ -1,17 +1,6 @@
-#!/Library/Frameworks/EPD64.framework/Versions/Current/bin/python
-#import matplotlib.pyplot as pyplot
-#matplotlib.use('Agg')
-#import pylab
-#import numpy as np
-#import os.path
-#import re
-
 from . import GPIB
 import time
 import importlib
-#import utils
-
-importlib.reload(GPIB)
 
 # Define instrument model codes to easily refer to specific DVMs
 AGILENTN5764A = 'N5764A'

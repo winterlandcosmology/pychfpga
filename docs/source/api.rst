@@ -13,7 +13,7 @@ The ``:orphan:`` metadata field at the beginning of this file tells Sphinx not t
    wtl.rest
    wtl.metrics
    wtl.config
-
+   firmware_tests
 
 
 .. project-module.rst.jinja2

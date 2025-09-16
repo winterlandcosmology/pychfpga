@@ -14,14 +14,13 @@ Was CH_DIST.PY in the old days.
 
 import numpy as np
 import logging
-from ..mmi import MMI, BitField
+from ..mmi import MMI, BitField, CONTROL, STATUS
 
 
 class ChanBinSel(MMI):
     """ Implements interface to the FR_DIST within a processor pipeline"""
-    # Create local variables for page numbers to make the bitfield table more readable
-    CONTROL = BitField.CONTROL
-    STATUS = BitField.STATUS
+
+    ADDRESS_WIDTH = 9
 
     # Control bitfields
     RESET                    = BitField(CONTROL, 0x00, 7, doc="Reset the CH_DIST. Clears FIFO.")
@@ -57,10 +56,10 @@ class ChanBinSel(MMI):
     # ADC_FLAG_FIFO_OVERFLOW   = BitField(STATUS, 0x04, 5, doc="Debug")
     # DATA_FIFO_RD_EN          = BitField(STATUS, 0x04, 6, doc="Debug")
 
-    def __init__(self, fpga_instance, base_address, instance_number):
+    def __init__(self, *, router, router_port, instance_number):
         # self.parent = parent
         # self.fpga = fpga_instance
-        super().__init__(fpga_instance, base_address, instance_number)
+        super().__init__(router=router, router_port=router_port, instance_number=instance_number)
         self.logger = logging.getLogger(__name__)
         self.NUMBER_OF_CROSSBAR_INPUTS = self.fpga.NUMBER_OF_CROSSBAR_INPUTS
         self.NUMBER_OF_CROSSBAR_OUTPUTS = self.fpga.NUMBER_OF_CROSSBAR1_OUTPUTS

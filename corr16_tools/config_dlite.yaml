@@ -309,13 +309,13 @@ def: &default  # defaults, referenced below
 #       - make sure to update pychfpga on basil to latest on jfc/dev branch (hopefully on its own D3A branch by now)
 #       - new key under index_map: uid, tells which board data comes from; new load_acq indexes by board.
 
-DLITE:
+UAPISHKA:
     <<: *default
-    corr_sn: "DLITE"
-    corr_name: "DLITE"
-    comment: "DLITE, corr16 mode, one board"
+    corr_sn: "UAPISHKA"
+    corr_name: "UAPISHKA"
+    comment: "UAPISHKA, corr16 mode, one board"
     run_name: '%(isotime)s_%(corr_name)s'
-    data_folder: '~/DLITE/data'
+    data_folder: '~/UAPISHKA/data'
     run_folder: '%(data_folder)s/%(run_name)s'
     current_folder: '%(data_folder)s/current'  # symlink that points to the latest run folder
 
@@ -327,7 +327,7 @@ DLITE:
         <<: *default_fpga
         fpga_array_params:
             <<: *default_fpga_array_params
-            hwm: 'mb 498:1' # ID of the board used. Can also use a direct IP
+            hwm: 'mb 257:1' # ID of the board used. Can also use a direct IP
             mode: corr16  # shuffle 256 and 512 require crate numbers
             prog: 1
             sync_method: local #  distributed_time # <-- For R232. Change to --> sync_method: distributed_time <-- for D3A. #local_soft_trigger
@@ -386,7 +386,7 @@ DLITE:
         load_initial_gains: True
 
         gain_hdf5:
-            output_dir: "~/DLITE/data/digital_gains"
+            output_dir: "~/UAPISHKA/data/digital_gains"
             output_suffix: "digitalgain"
             search: True
             max_num: 1

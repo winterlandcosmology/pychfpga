@@ -3,12 +3,12 @@
 """
 pca9575: Implememnts access to a TCA9548A I2C switch.
 
-History:
+.. History:
     2013-08-08 : JFC : Created
     2014-02-23 JFC: Added register table, select(), masked write.
     2014-03-04 JM: Added default I/O pin configuration at init()
     2014-03-18 JM: Fixed read function to allow reading by register name, not only by register address
-                Fixed masking in write function
+                   Fixed masking in write function
 """
 
 
@@ -39,9 +39,11 @@ class pca9575(object):
         """
         Creates an object that interfaces the PCS8575 I2C IO Extender.
         Access is done through the I2C object 'i2c_interface' at I2C address 'address' and on port 'port'.
+
         The i2c interface must provide the following methods:
-            set_port()
-            write_read()
+
+        - set_port()
+        - write_read()
         """
         self.i2c = i2c_interface
         self.address = address
@@ -59,8 +61,8 @@ class pca9575(object):
             pupd1=0b00001000,
             verbose=0):
         """
-        Initialization of PCS8575 I2C IO Extender object
-        cfg0_def, cfg1_def sets the default configuration of the I/O pins. By default all pins are inputs.
+        Initialization of PCS8575 I2C IO Extender object cfg0_def, cfg1_def sets the default
+        configuration of the I/O pins. By default all pins are inputs.
         """
         if out0_default is not None:
             self.write_reg('OUT0', out0_default)

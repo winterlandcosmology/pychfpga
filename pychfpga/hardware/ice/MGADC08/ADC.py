@@ -248,7 +248,7 @@ class ADC_base(object):
         if check:
             d = self.read(adc_number, addr)
             if d != data:
-                raise RuntimeError(f'Error writing ADC register {addr}: wrote {data:0X4} but read back {d:0X4}')
+                raise RuntimeError(f'Error writing ADC register {addr}: wrote {data:04X} but read back {d:04X}')
 
     # High level functions
     def get_temperature(self, adc_number, verbose=False):

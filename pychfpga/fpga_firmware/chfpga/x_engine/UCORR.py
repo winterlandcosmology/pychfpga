@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import socket
 import select
 
-from ..mmi import MMI, BitField
+from ..mmi import MMI, BitField, CONTROL, STATUS
 
 #############################################
 # Basic Geometry of the firmware correlator
@@ -27,8 +27,7 @@ NBYTES_PER_PROD = 5
 class UCORR(MMI):
     """ Implements interface the UCORR44_ARRAY correlator array"""
 
-    CONTROL = BitField.CONTROL
-    STATUS = BitField.STATUS
+    ADDRESS_WIDTH = 16
 
     # Control registers
     SOFT_RESET         = BitField(CONTROL, 0x00, 7, doc="Resets the correlator array.")
@@ -51,8 +50,8 @@ class UCORR(MMI):
     IN_FRAME_CTR  = BitField(STATUS, 3, 0, width=8, doc="Input frame counter")
     OUT_FRAME_CTR = BitField(STATUS, 4, 0, width=8, doc="Output frame counter")
 
-    def __init__(self, fpga_instance, base_address, instance_number, verbose=0):
-        super().__init__(fpga_instance, base_address, instance_number)
+    def __init__(self, *, router, router_port, verbose=0):
+        super().__init__(router=router, router_port=router_port)
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
 
@@ -60,7 +59,11 @@ class UCORR(MMI):
         """ Inisializes all modules of a correlator block."""
         # self.INTEGRATION_PERIOD = 16384-1
         # self.USER_ID = self.fpga.slot - 1 if self.fpga.slot else 0
+<<<<<<< HEAD
         self.CORR_ID = self.fpga.slot-1 if self.fpga.slot else 0
+=======
+        self.CORR_ID = (self.fpga.slot-1) if self.fpga.slot else 0
+>>>>>>> jfc/crs_corr8
 
     def status(self):
         """Displays the status of the correlator array"""

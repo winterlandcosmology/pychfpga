@@ -11,16 +11,11 @@ import logging
 import numpy as np
 
 from .udp import Udp as UDP
-from .bsb_mmi import BSB_MMI
+from .bsb_mmi import BSB_MMI, FpgaMmiException
 # pychfpga.fpga_firmware.chfpga.chFPGA:  imported at runtime to prevent circular imports (chFPGA imports fpga_mmi)
-
-class FPGAMmiException(IOError):
-    pass
-
 
 class TimeoutException(IOError):
     pass
-
 
 class FPGAMmi(BSB_MMI):
     """

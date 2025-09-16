@@ -18,14 +18,20 @@
 .. toctree::
    :hidden:
    :maxdepth: 4
-   :caption: Old Home
+   :caption: Operation and Development
 
-   Old installation <installation>
-   Old setup <howto/setup_python>
-   howto/takeData
-   howto
-   quick_start
    howto/pocket_correlator
+   howto/deploy
+   howto/scaler_test
+
+.. toctree::
+   :hidden:
+   :maxdepth: 4
+   :caption: Hardware
+
+   hardware/ice/index
+   hardware/gps/gps
+   hardware/ps/ps
 
 .. toctree::
    :maxdepth: 3
@@ -33,6 +39,8 @@
    :hidden:
 
    _autosummaries/pychfpga
+   _autosummaries/firmware_tests.scaler_test
+
 
 .. toctree::
    :maxdepth: 3

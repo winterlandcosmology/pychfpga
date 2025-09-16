@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from wtl.config import load_yaml_config
 
 from pychfpga.fpga_array import FPGAArray
+import matplotlib
+matplotlib.use('TkAgg')
 
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 

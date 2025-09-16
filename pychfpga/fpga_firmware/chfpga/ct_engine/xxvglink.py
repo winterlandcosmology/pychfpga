@@ -1,7 +1,5 @@
-#!/usr/bin/python
-
 """
-xXVglink.py module
+xxvglink.py module
     Implements the interface to the generic 25 Gbps packet transmitter/receiver array.
 
 History:
@@ -14,17 +12,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import asyncio
 
-from ..mmi import MMI, BitField
+from ..mmi import MMI, MMIRouter, BitField, CONTROL, STATUS, DRP
 from wtl.metrics import Metrics
-
-# Types of memory-mapped registers
-CONTROL = BitField.CONTROL
-STATUS = BitField.STATUS
-DRP = BitField.DRP
-
 
 class QPLL(MMI):
     """ Implements interface to one of the COMMON """
+
+    ADDRESS_WIDTH = 10
 
     QPLL_LOCK                = BitField(STATUS, 0, 0, doc='Indicates if the QPLL is locked')
     QPLL_PD                  = BitField(CONTROL, 0,0, doc="power down qpll.  needs 500ns after reset.")
@@ -52,10 +46,9 @@ class QPLL(MMI):
     COMMON_CFG0              = BitField(DRP, 0x0043, 0, width=16, doc="COMMON_CFG[15:0 ] 0-65535")
     COMMON_CFG1              = BitField(DRP, 0x0044, 0, width=16, doc="COMMON_CFG[31:16] 0-65535")
 
-    def __init__(self, fpga_instance, base_address,  address_width, router_port, instance_number):
-        # self.fpga = fpga
+    def __init__(self, *, router, router_port, instance_number):
         self.logger = logging.getLogger(__name__)
-        super().__init__(fpga_instance, base_address=base_address,  address_width=address_width, router_port=router_port, instance_number=instance_number)
+        super().__init__(router=router, router_port=router_port, instance_number=instance_number)
 
     def init(self):
         """ Initializes the antenna modules"""
@@ -69,6 +62,7 @@ class QPLL(MMI):
 class GTY(MMI):
     """ Implements interface to a GTY_CHANNEL block """
 
+    ADDRESS_WIDTH = 10
 
     # USER_RESET     = BitField(CONTROL, 0, 7, doc='')
     # USER_GTTXRESET = BitField(CONTROL, 0, 6, doc='')
@@ -211,10 +205,9 @@ class GTY(MMI):
 
 # Add DRP registers here...
 
-    def __init__(self, fpga_instance, base_address, address_width, router_port, instance_number):
-        # self.fpga = fpga
+    def __init__(self, *, router, router_port, instance_number):
         self.logger = logging.getLogger(__name__)
-        super().__init__(fpga_instance, base_address=base_address,  address_width=address_width, router_port=router_port, instance_number=instance_number)
+        super().__init__(router=router, router_port=router_port, instance_number=instance_number)
         self.node_id = (self.fpga.slot, instance_number + 1)
         self._lock()
 
@@ -436,6 +429,13 @@ class GTY(MMI):
             iceboard.slot,
             eye_diag.gty.instance_number + 1))
 
+class XXVGLRouter(MMIRouter):
+    ROUTER_PORT_NUMBER_WIDTH = 4
+    ROUTER_PORT_MAP = {
+        'COMMON': 0
+        # port numbers for QPLL and GTY are computed
+        }
+
 
 class XXVGLinkCore(MMI):
     """ Instantiates a container for all the xXVglink core module
@@ -449,13 +449,13 @@ class XXVGLinkCore(MMI):
     by registers added by the protocol-specific logic.
     """
 
-    # XXVGLINK common control and status registers
-    CORE_RESET      = BitField(CONTROL, 0, 7, doc='The GTY cores are reset when this signal goes from 1 to 0')
+    # XXVGLINK common control and status registers. These registers are technically on port 0 with
+    # an address width of 10 bits, but we place them on the base address for convenience.
+    CORE_RESET            = BitField(CONTROL, 0, 7, doc='The GTY cores are reset when this signal goes from 1 to 0')
     TX_RESET              = BitField(CONTROL, 0, 3, doc='')
     RX_PLL_DATAPATH_RESET = BitField(CONTROL, 0, 2, doc='')
     RX_DATAPATH_RESET     = BitField(CONTROL, 0, 1, doc='')
     RX_RESET              = BitField(CONTROL, 0, 0, doc='')
-
 
     TX_DATA_MSB     = BitField(CONTROL, 3, 0, width=24, doc='24 most significant bits of the data word that can be sent manually. This is common to all lanes.')
 
@@ -466,35 +466,27 @@ class XXVGLinkCore(MMI):
     QPLL_RESET_MON  = BitField(STATUS, 1, 3, doc='debug')
     RX_CDR_STABLE   = BitField(STATUS, 1, 2, doc='debug')
 
-    BSB_ROUTING_ADDRESS_WIDTH = 4  # xxgvlink router allocates 10 bits of address space to each port.
-    # BSB_ROUTER_PORT_ADDRESS_WIDTH = 10  # xxgvlink router allocates 10 bits of address space to each port.
-
-    def __init__(self, fpga_instance, base_address, address_width, router_port, verbose=1):
-        # self.fpga = fpga
+    def __init__(self, *, router, router_port, verbose=1):
         self.logger = logging.getLogger(__name__)
         self.verbose = verbose
+        xxvgl_router = XXVGLRouter(router=router, router_port=router_port)
 
-        router_base_address = base_address + (router_port << address_width)
-        router_port_address_width = address_width - self.BSB_ROUTING_ADDRESS_WIDTH
+        super().__init__(router=xxvgl_router, router_port='COMMON')
 
-        router_port = 0  # port 0 is for this module's registers
-
-        super().__init__(fpga_instance, base_address=router_base_address, address_width=router_port_address_width, router_port=router_port)
-
-        router_port += 1
+        router_port = 1
 
         # Instantiate QUAD objects
         self.logger.info(f'{self!r}: Instantiating {self.NUMBER_OF_QUADS} QPLLs')
-        print(f'{self!r}: Instantiating {self.NUMBER_OF_QUADS} QPLLs and {self.NUMBER_OF_LINKS} GTYs, XXVGLINK base addr={self.base_address:06x}, width={self.address_width} {router_port_address_width} {address_width}')
+        print(f'{self!r}: Instantiating {self.NUMBER_OF_QUADS} QPLLs and {self.NUMBER_OF_LINKS} GTYs, XXVGLINK base addr={self.base_address:06x}, width={self.address_width}')
         self.qpll = []
         for j in range(self.NUMBER_OF_QUADS):
-            self.qpll.append(QPLL(fpga_instance, base_address=router_base_address, address_width=router_port_address_width, router_port=router_port, instance_number=j))
+            self.qpll.append(QPLL(router=xxvgl_router, router_port=router_port, instance_number=j))
             router_port += 1
 
         self.logger.info(f'{self!r}: Instantiating {self.NUMBER_OF_LINKS} GTYs')
         self.gty = []
         for j in range(self.NUMBER_OF_LINKS):
-            self.gty.append(GTY(fpga_instance, base_address=router_base_address, address_width=router_port_address_width, router_port=router_port, instance_number=j))
+            self.gty.append(GTY(router=xxvgl_router, router_port=router_port, instance_number=j))
             router_port += 1
 
     def init(self):
@@ -620,10 +612,9 @@ class XXVGLinkArray(XXVGLinkCore):
         # 'RX_CTR': 'RX_CTR',
         'RX_FRAME_CTR': 'RX_FRAME_CTR'}
 
-    def __init__(self, fpga_instance, base_address, address_width, router_port,  lane_groups, verbose=1):
-        # self.fpga = fpga
+    def __init__(self, *, router, router_port, lane_groups, verbose=1):
 
-        super().__init__(fpga_instance, base_address=base_address, address_width=address_width, router_port=router_port, verbose=verbose)
+        super().__init__(router=router, router_port=router_port, verbose=verbose)
 
         # self.LANE_GROUPS = {}
         # group name : (first lane, number_of_bypass_lanes, number_of_links)

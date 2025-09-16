@@ -10,7 +10,7 @@ import asyncio
 import socket
 import time
 
-from ..mmi import MMI, BitField
+from ..mmi import MMI, BitField, CONTROL, STATUS
 import numpy as np
 import __main__
 
@@ -18,9 +18,8 @@ import __main__
 
 class UCAP(MMI):
     """ Object that allows access to an UltraRAM-based frame capture module"""
+    ADDRESS_WIDTH = 16
 
-    CONTROL = BitField.CONTROL
-    STATUS = BitField.STATUS
     MODE             = BitField(CONTROL, 0, 6, width=2, doc='Capture mode: 0: 8 channel, 1: 4 channel, 2: 2 channel, 3: 1 channel')
     CH0              = BitField(CONTROL, 0, 0, width=3, doc='Channel #0 in 1, 2, or 4-channel mode')
     CH1              = BitField(CONTROL, 0, 3, width=3, doc='Channel #1 in 2 or 4-channel mode')
@@ -41,11 +40,10 @@ class UCAP(MMI):
     PERIOD_CTR       = BitField(STATUS, 1, 0, width=8, doc='debug')
     SOURCE_SEL_IN    = BitField(STATUS, 2, 0, width=8, doc='debug')
 
-    def __init__(self, fpga_instance, base_address, address_increment, verbose=0):
-        self.fpga = fpga_instance
+    def __init__(self, *, router, router_port, verbose=0):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
-        super().__init__(fpga_instance, base_address)
+        super().__init__(router=router, router_port=router_port)
         self.sock = None
 
     def init(self):
@@ -98,8 +96,8 @@ class UCAP(MMI):
 
         return b[:64, 5:]
 
-    def get_data_receiver(self, sock=None):
-        return RawFrameReceiver(sock or self.fpga.get_data_socket())
+    def get_data_receiver(self, sock=None, buffer_length=256):
+        return RawFrameReceiver(sock or self.fpga.get_data_socket(), buffer_length=buffer_length)
 
 class RawFrameReceiver(object):
     """
@@ -227,37 +225,36 @@ class RawFrameReceiver(object):
     def receive_packets(self, cookie, verbose=0):
         """ Receive some packets into the buffer until there is a timeout or the buffer is full
         """
-        while True:
-            if self.n == self.NPACKETS:
-                return
+        n = self.n # current packet number
+        last_ts = None
+        while n < self.NPACKETS:
             try:
-                s = self.socket.recv_into(self.buf[self.n])
+                s = self.socket.recv_into(self.buf[n])
                 # check if the packet has the right cookie
                 if verbose >= 2:
-                    print(f'got packet len={s} cookie=0x{self.buf_cookie[self.n]:02x} ts={self.buf_ts[self.n] & self.ts_mask}')
-                if self.buf_cookie[self.n] & 0xfe != cookie:
+                    print(f'got packet len={s} cookie=0x{self.buf_cookie[n]:02x} ts={self.buf_ts[n] & self.ts_mask}')
+                if self.buf_cookie[n] & 0xfe != cookie: # ignore packets with wrong cookie
                     continue
 
                 # Ignore packets that don't have the right length
                 if s != self.PACKET_SIZE:
                     continue
-                ts = self.buf_ts[self.n] & self.ts_mask
-                self.n += 1
+                ts = self.buf_ts[n] & self.ts_mask
                 if verbose >=2:
-                    print(f'ts={ts}, last_ts={self.last_ts}, sid={self.buf_stream_id[self.n]:04x}')
-                if self.last_ts is None:
+                    print(f'ts={ts}, last_ts={self.last_ts}, sid={self.buf_stream_id[n]:04x}')
+                n += 1
+                if last_ts is None: # if we don't have a last timestamp, initialize it and continue
                     self.last_ts = ts
-                    continue
-                if ts != self.last_ts:
+                elif ts != last_ts: # if we have a new timestamp, exit
                     break
             except socket.timeout:  # we have a timeout, so we probably have time to process data
-                if self.n:  # continue if we don't have any data to process
-                    print('timeout')
-                    continue
+                print('timeout')
+                continue
         # we get here if there is a timeout, a timestamp change, or if the buffer is full
         if verbose:
-            print(f'got {self.n} packets, delta_ts={ts-self.last_ts}')
-        self.last_ts = ts
+            print(f'got {n} packets, delta_ts={ts-self.last_ts}')
+        self.n = n
+        return n
 
     def read_raw_frames(
             self,
@@ -268,7 +265,7 @@ class RawFrameReceiver(object):
             format='8',
             ncap = None,
             split = False,
-            verbose=1):
+            verbose=0):
         """ Capture raw data frames sent by UCAP.
 
         Parameters:
@@ -291,6 +288,9 @@ class RawFrameReceiver(object):
                 '8': return the data as array of bytes (int8)
                 '16': return the data as array of 16-bit signed integers. Use when capturing the output of the FUNCGEN.
                 '16+16': return the data as an array of (16+16) bit complex numbers. Use for data at the output of the SCALER (unless the FFT is bypassed)
+
+            ncap (int): Number of bursts to capture
+            
             verbose (int): verbosity level. 0: no messages, 1: basic messages, 2: detailed messages
 
         Returns:
@@ -336,32 +336,37 @@ class RawFrameReceiver(object):
         data = np.zeros((nchan, ncap, self.FRAME_SIZE*frames_per_channel), dtype=np.int8)
         data_count = np.zeros((nchan, ncap), dtype=np.uint16)
         ts = np.zeros((ncap,), dtype=np.uint64)
-
-
-        for n in range(ncap):
-            # Get packets until a new timestamp
-            self.receive_packets(cookie=self.cookie, verbose=verbose)
+        ts_dict = {} # {timestamp:n, ...): keeps track of the known timestamps and associated capture slots
+        n = 0 # current capture slot
+        last_timestamp = None
+        while n < ncap + 1: # process packets until we have checked ncap+1 timestamps to make sure we have all the data for ncap timestamps
+            # Get some packets until a new timestamp, timeout, or buffer full
+            npkts = self.receive_packets(cookie=self.cookie, verbose=verbose)
 
             if verbose >=2:
                 print(f'sf={self.buf_subframe[:self.n]}')
 
             t0 = time.time()
-            for i in range(self.n-1):
-                bix = sid_map.get(self.buf_stream_id[i] & 0xFFF, None)
-                subframe = self.buf_subframe[i] & 0x3
-                frame = (self.buf_stream_id[i] >> 12) & 0x0F
-                if verbose >=3:
-                    print(f'sid = {self.buf_stream_id[i] & 0xFFF:03x}, Ch={bix}, frame={frame}, subframe={subframe}')
-                if bix is not None:
-                    x = frame * self.FRAME_SIZE + subframe*self.DATA_SIZE
-                    data[bix, n, x:x+self.DATA_SIZE] = self.buf_data[i]
-                    data_count[bix, n] += 1
-            # print(f'proc took {(time.time()-t0)*1000:.3f} ms')
-            ts[n] = self.buf_ts[0] & self.ts_mask
-
-            self.buf[0] = self.buf[self.n-1]
-            self.n = 1
-
+            for i in range(npkts):
+                timestamp = self.buf_ts[i] & self.ts_mask
+                if timestamp != last_timestamp:  # update n only when the timestamp changes to minimize slow lookups
+                    last_timestamp = timestamp
+                    n = ts_dict.setdefault(timestamp, len(ts_dict)) # get existing slot if timestamp exists, otherwise create next slot
+                    if verbose:
+                        print(f'Switching to slot {n} at timestamp {timestamp}')
+                    if n < ncap:
+                        ts[n] = timestamp
+                if n < ncap:
+                    bix = sid_map.get(self.buf_stream_id[i] & 0xFFF, None)
+                    subframe = self.buf_subframe[i] & 0x3
+                    frame = (self.buf_stream_id[i] >> 12) & 0x0F
+                    if verbose >= 3:
+                        print(f'sid = {self.buf_stream_id[i] & 0xFFF:03x}, Ch={bix}, frame={frame}, subframe={subframe}')
+                    if bix is not None:
+                        x = frame * self.FRAME_SIZE + subframe*self.DATA_SIZE
+                        data[bix, n, x:x+self.DATA_SIZE] = self.buf_data[i]
+                        data_count[bix, n] += 1
+            self.n = 0
         if verbose:
             for i in range(nchan):
                 print(f'Chan {i}: {data_count[i].sum()-ncap*16*4 or "no"} missing packets')

@@ -178,25 +178,24 @@ class ZUBoard(Motherboard):
         """
         Configures the FPGA with the specified bitstream.
 
-
         Parameters:
 
             firmware (str or FPGABitstream): The firmware to program into the FPGA
 
-                FPGABitstream: Use the specified bitstream object directly.
+                - ``FPGABitstream``: Use the specified bitstream object directly.
 
-                str: if `firmware` has no special characters ('.', '/' etc) it is treated as a generic name that will used to be look up the firmware filename in the PLATFORM_SUPPORT table of all registered FPGAFirmware classes.
-                Otherwise, the string is treated as a pathname and is passed to FPGABitstream directly.
+                - str: if `firmware` has no special characters ('.', '/' etc) it is treated as a
+                  generic name that will used to be look up the firmware filename in the
+                  PLATFORM_SUPPORT table of all registered FPGAFirmware classes. Otherwise, the
+                  string is treated as a pathname and is passed to FPGABitstream directly.
 
             force (bool or None):
 
-                force = True: FPGA will always be configured independent of the signature of the currently programmed firmware
-                force = False: FPGA will be configured if it is not configured or
-                        if its bitstream CRC differ from the provided bitstream
-                force = None: FPGA will be configured only if it is not configured
-
+                - force = True: FPGA will always be configured independent of the signature of the currently programmed firmware
+                - force = False: FPGA will be configured if it is not configured or if its bitstream
+                  CRC differ from the provided bitstream
+                - force = None: FPGA will be configured only if it is not configured
         """
-
 
         t0 = time.time()
         self.logger.debug(f'{self!r}: called set_fpga_bitstream')
@@ -281,7 +280,7 @@ class ZUBoard(Motherboard):
 
         These fields are read back and parsed by software, so you have
         to get them right or things will misbehave. This method currently
-        expects the following formatting:
+        expects the following formatting::
 
             m._eeprom_write_ipmi(serial_number="004", product_version="2")
 
@@ -341,7 +340,7 @@ class ZUBoard(Motherboard):
         """ Get the motherboard hardware monitoring information.
 
         Returns:
-            a :cls:`Metrics` object.
+            a :class:`Metrics` object.
         """
 
         metrics = await super().get_metrics_async()

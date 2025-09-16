@@ -5,7 +5,7 @@ ADC_PLL.py module
 
 Implements the ADC PLL interface
 
-History:
+.. History:
     2011-07-08 JFC : Created from test code in chFPGA.py
     2011-08-30 KB : Changed default reference to 10 MHz
     2011-09-25 JFC: Made fdiv computation work for any frequency
@@ -45,7 +45,7 @@ class ADC_PLL_base(object):
             verbose (bool): When True, additional information is printed out. If None, the object's own verbose setting is used.
 
 
-            muxout (int): Mux pin output configuration. Pin is typically used for lock detect (LD) 
+            muxout (int): Mux pin output configuration. Pin is typically used for lock detect (LD)
 
                  0= Hi-Z,
                  1= Vdd,

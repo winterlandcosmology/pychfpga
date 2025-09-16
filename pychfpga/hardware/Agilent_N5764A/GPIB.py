@@ -1,8 +1,5 @@
-#!/Library/Frameworks/EPD64.framework/Versions/Current/bin/python
 import socket
 import time
-#import serial # need to install pySerial package
-#import numpy as np
 
 class GPIBException(Exception):
     pass
@@ -35,7 +32,7 @@ class GPIB(object):
             timeout (float):
 
             """
-        GPIBException = GPIBException
+        # GPIBException = GPIBException
         def __init__(self, interface=None, gpib_addr=None, ip_addr=None,  ip_port = 1234, usb_port=None, timeout=0.5):
                 #self.interface = interface
                 self.ip_addr = None

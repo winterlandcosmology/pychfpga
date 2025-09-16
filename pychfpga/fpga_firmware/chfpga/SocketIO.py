@@ -3,7 +3,7 @@
 # pylint: disable=W0312,C0301
 
 """
-socketIO.py module. Implements socket communications to chFPGA
+socketIO.py module. Implements socket communications to chFPGA. Used by chFPGA_receiver.py. *To be obsoleted*.
 
 
 History:
@@ -22,11 +22,12 @@ import __main__
 timeout = socket.timeout  #110918 JFC
 TimeoutException = socket.timeout
 
-class FPGAException(Exception):
-    logger = logging.getLogger('FPGAException')
-    def __init__(self, message):
-        super().__init__(message)
-        self.logger.exception(message)
+# The following exception name exists elsewhere. Removed to prevent collision in docs. Does not seem to be used.
+# class FPGAException(Exception):
+#     logger = logging.getLogger('FPGAException')
+#     def __init__(self, message):
+#         super().__init__(message)
+#         self.logger.exception(message)
 
 
 class DataSocket_base(object):

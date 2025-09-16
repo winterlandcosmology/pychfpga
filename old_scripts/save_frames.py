@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
 """
-save_frames.py script 
- saves number of frames to a numpy file for looking at later.  
+save_frames.py script
+ saves number of frames to a numpy file for looking at later.
 
 
 #
@@ -11,7 +11,6 @@ History:
 """
 
 import chFPGA
-reload(chFPGA) # just to make sure that any changes to the code are reloaded
 
 # Default data and clock line delays for the two FMC boards/ML605 combination.
 # First 8 values are the delays for bits 0 to 7, 8th value is the delay for the clock line.
@@ -59,7 +58,7 @@ SN002_adc_delays=(
 	)
 
 
-if __name__=='__main__':		
+if __name__=='__main__':
 	print '------------------------'
 	print 'Saving data to npy file'
 	print 'J.-F. Cliche, Kevin Bandura'
@@ -75,17 +74,17 @@ if __name__=='__main__':
 
 	ADC_TEST_MODE=0 	#  0= normal, 1= ramp, 2=pulse (1 high, 10 low)
 	ADC_DELAY_TABLE=SN002_adc_delays # select the table corresponding to the FMC serial number
-	FREF=10 # FMC Reference clock frequency 
+	FREF=10 # FMC Reference clock frequency
 
 	# Create the new chFPGA object.
 	c=chFPGA.chFPGA(adc_test_mode=ADC_TEST_MODE, adc_delay_table=ADC_DELAY_TABLE,fref=FREF);
 	c.sync()
 	print
-	
+
 	# Displays the system frequencies
 	c.FreqCtr.status()
 	# save some number of frames to disk.
-	
+
 	c.save_ADC_frames(channels=[0,1,2,3], frames=2048, contiguousFrames=4, filename='DRAO_2_term_2_sky.npy')
 	#c.save_ADC_frames(channels=[0,1,2,3], frames=65536, contiguousFrames=4, filename='coax_DRAO_all_sky65536.npy')
 

@@ -35,6 +35,7 @@ Boot mode configuration
 The IceBoard ARM processor can boot off multiple sources.
 
 .. image: ARM_boot_mode_configurations.png
+
 Note that the table lists the bits values from BTMODE[4] to BTMODE[0] from left to right. Read the its from right to left to get the bits in the more natural order of BTMODE[4] to BTMODE[0].
 
 BTMODE 4:0 are set by the DIP switch SW1, from position 1 to 5. the "ON" position on the switch means a binary '1'.

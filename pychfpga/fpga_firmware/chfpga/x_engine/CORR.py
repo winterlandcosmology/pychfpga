@@ -12,7 +12,7 @@ import logging
 import numpy as np
 import socket
 
-from ..mmi import MMI, BitField
+from ..mmi import MMI, MMIRouter, BitField, CONTROL, STATUS
 
 #############################################
 # Basic Geometry of the firmware correlator
@@ -43,8 +43,7 @@ raw_to_vector_map = None
 class CORR_core(MMI):
     """ Implements interface to one of the correlator"""
 
-    CONTROL = BitField.CONTROL
-    STATUS = BitField.STATUS
+    ADDRESS_WIDTH = 12
 
     # Control registers
     SOFT_RESET         = BitField(CONTROL, 0x00, 7, doc="Resets this correlator core.")
@@ -59,8 +58,8 @@ class CORR_core(MMI):
     IN_FRAME_CTR  = BitField(STATUS, 0x01, 0, width=8, doc="Input frame counter")
     OUT_FRAME_CTR = BitField(STATUS, 0x02, 0, width=8, doc="Output frame counter")
 
-    def __init__(self, fpga_instance, base_address, instance_number, verbose=0):
-        super().__init__(fpga_instance, base_address, instance_number)
+    def __init__(self, *, router, router_port, instance_number, verbose=0):
+        super().__init__(router=router, router_port=router_port, instance_number=instance_number)
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
 
@@ -76,16 +75,18 @@ class CORR_core(MMI):
         # self.CH_DIST.status()
 
 
-class CORR(object):
+class CORR(MMIRouter):
     """ Instantiates a container for all correlators blocks"""
 
-    def __init__(self, fpga_instance, base_address, address_increment, verbose=0):
-        self.fpga = fpga_instance
+    ROUTER_PORT_NUMBER_WIDTH = 4
+
+    def __init__(self, *, router, router_port, verbose=0):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
+        super().__init__(router=router, router_port=router_port, instance_number=instance_number)
         self.corr = []
         for i in range(self.fpga.NUMBER_OF_CORRELATORS):
-            self.corr.append(CORR_core(self.fpga, base_address + i * address_increment, i))
+            self.corr.append(CORR_core(router=self, router_port=i, instance_number=i))
 
     def __getitem__(self, key):
         """    Returns the correlator instance specified by the index"""
@@ -946,8 +947,8 @@ class CorrFrameReceiver(object):
             data_timeout=0.001,
             flush_timeout=0.001
             ):
-        
-        import matplotlib.pyplot as plt 
+
+        import matplotlib.pyplot as plt
 
         # fig =  plt.figure()
         fig = plt.gcf()

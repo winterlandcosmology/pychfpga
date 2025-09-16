@@ -22,9 +22,8 @@ class I2C(MMI):
     """ Object defining the interface to the FPGA's firmware-implemented I2C interface.
 
     """
-    # I2C addresses
-    # I2C_FMC_HPC_EPPROM_ADDR = 0    # ADC. R/W device. 8 bit address+RW, 16 bit data.
 
+    ADDRESS_WIDTH = 12
 
     # Memory-mapped registers
     START           = BitField(CONTROL, 0x04, 7, doc='A 0 to 1 transition on this bit starts I2C transaction')
@@ -51,8 +50,8 @@ class I2C(MMI):
     DONE_CTR        = BitField(STATUS, 0x07, 0, width=4, doc='Counts the number of DONE events')
 
 
-    def __init__(self, fpga, base_address):
-        super().__init__(fpga, base_address)
+    def __init__(self, *, router, router_port):
+        super().__init__(router=router, router_port=router_port)
         self.current_port = None
         self.logger = logging.getLogger(__name__)
 

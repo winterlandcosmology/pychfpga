@@ -1,21 +1,20 @@
 #!/usr/bin/python
 
-"""
-MGT_PLL.py module
- Implements the MGT PLL interface
-#
-# History:
-2011-07-13 JFC : Created from test code in ADC_PLL.py
+""" Implements the MGT PLL interface
 
-2011-08-11 JFC : Complete cleanup. Made the PLL programming work. Changed the
-    order of computations. Changed the PLL parameter selection algorithm to
-    select the values that yield the lowest frequency error. Print frequency
-    table at the end, which computation of precision, error and PPM
 
-2011-06-08 JFC: Added an Exception if there are no valid P0/P1/N combinations
-    for target frequency Slightly changed the programming sequence. Now done
-    in 2 phases only: 1) program registers (including outputs levels)  and 2)
-    initiate VCO cal.
+.. History:
+    2011-07-13 JFC : Created from test code in ADC_PLL.py
+
+    2011-08-11 JFC : Complete cleanup. Made the PLL programming work. Changed the
+        order of computations. Changed the PLL parameter selection algorithm to
+        select the values that yield the lowest frequency error. Print frequency
+        table at the end, which computation of precision, error and PPM
+
+    2011-06-08 JFC: Added an Exception if there are no valid P0/P1/N combinations
+        for target frequency Slightly changed the programming sequence. Now done
+        in 2 phases only: 1) program registers (including outputs levels)  and 2)
+        initiate VCO cal.
 """
 import numpy as np
 import time

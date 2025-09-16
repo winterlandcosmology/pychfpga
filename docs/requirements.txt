@@ -8,5 +8,5 @@ wtl.sphinx-paramlinks @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.sphi
 # PyPi packages
 sphinx
 sphinx_rtd_theme
-
+sts-pylib
 

@@ -25,15 +25,19 @@ import numpy as np
 from wtl.metrics import Metrics
 
 # local packages
-from ..mmi import MMI, BitField
+from ..mmi import MMI, MMIRouter, BitField, CONTROL, STATUS
 from . import SHUFFLE_BIN_SEL
+
+class SCBRouter(MMIRouter):
+    ROUTER_PORT_NUMBER_WIDTH = 5
+    ROUTER_PORT_MAP = {
+        'COMMON': 0
+        # port numbers for BIN_SELS are computed
+        }
 
 
 class ShuffleCrossbar(MMI):
     """ Instantiates a container for all correlators blocks"""
-
-    CONTROL = BitField.CONTROL
-    STATUS = BitField.STATUS
 
     HEADER_CAPTURE_EN  = BitField(CONTROL, 0, 7, doc="Enables capture of header info on all lanes simultaneously.")
     # FRAME_CLK_SEL      = BitField(CONTROL, 0, 7, doc='')
@@ -84,26 +88,20 @@ class ShuffleCrossbar(MMI):
     FIFO_COUNT       = BitField(STATUS, 12, 0, width=16, doc="")
     PACKET_ERROR_CTR = BitField(STATUS, 14, 0, width=16, doc="Number of CRC/length/aligment errors for the lane selected by LANE_MONITOR_SEL. Saturates to maximum value. Is reset by LANE_MONITOR_RESET")
 
-    def __init__(
-            self,
-            fpga_instance,
-            base_address,
-            address_increment,
-            crossbar_level=1,
-            verbose=0,
-            number_of_bin_sel=2):
+    def __init__(self, *, router, router_port, crossbar_level=1, verbose=0, number_of_bin_sel=2):
 
-        self.fpga = fpga_instance
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
         self.crossbar_level = crossbar_level
-        super().__init__(fpga_instance, base_address)
+
+        scb_router = SCBRouter(router=router, router_port=router_port)
+        super().__init__(router=scb_router, router_port='COMMON')
         self.BIN_SEL = []
         for i in range(number_of_bin_sel):
             self.BIN_SEL.append(SHUFFLE_BIN_SEL.SHUFFLE_BIN_SEL_base(
-                    fpga_instance,
-                    base_address + (i + 1) * address_increment,
-                    i,
+                    router=scb_router,
+                    router_port=i+1,
+                    instance_number=i,
                     crossbar_level=crossbar_level))
 
     def __getitem__(self, key):

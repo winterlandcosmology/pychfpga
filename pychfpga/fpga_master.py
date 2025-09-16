@@ -703,7 +703,7 @@ class FPGAMaster(object):
                 each element of the list will have their gains computed in parallel.
                 If not provided, then will default to  a list of the crates.
 
-            **accepts all other parameters for `compute_gains`**
+            ** accepts all other parameters for `compute_gains` **
 
         """
 
@@ -1803,7 +1803,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
                 Missing tuple elements, ``"*"`` and `None` are considered to be a
                 wildcard.
 
-            **accepts all other parameters for `FPGAMaster.compute_gains`**
+            **accepts all other parameters for `FPGAMaster.compute_gains` **
 
         Example::
 
@@ -1832,7 +1832,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
                 Missing tuple elements, ``"*"`` and None are considered to be a
                 wildcard.
 
-            **accepts all other parameters for `FPGAMaster.compute_gains`**
+            **accepts all other parameters for `FPGAMaster.compute_gains` **
 
         Example::
 
@@ -1896,7 +1896,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
                 each element of the list will have their gains computed in parallel.
                 If not provided, then will default to  a list of the crates.
 
-            **accepts all other parameters for `FPGAMaster.compute_gains`**
+            ** accepts all other parameters for `FPGAMaster.compute_gains` **
 
         Example::
 

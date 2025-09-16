@@ -1,0 +1,473 @@
+# Configuration for ch_master.py. Only edit this file if you know what you are
+# doing"
+
+#===============================================================================
+#===============================================================================
+#==   GLOBAL SETTINGS
+#===============================================================================
+#===============================================================================
+
+comet_broker: &comet_broker
+    # If this is enabled, a number of servers will only start if they manage to register their
+    # config with comet. Currently, that is the GPS server, fpga_master and the raw_acq server.
+    enabled: False
+    host: recv1
+    port: 12050
+
+#===============================================================================
+#===============================================================================
+#==   D3A - HIRAX + CHORD Prototype
+#===============================================================================
+#===============================================================================
+
+def: &default  # defaults, referenced below
+    # single board operation, no backplane
+    corr_name: "specify"
+    corr_sn: "specify"
+    comment: "specify"             # A comment to be inserted into the header.
+    # base_path: "~/data/"  # base local folder where to store logs etc.
+
+    # Run and current folders: Used to store logs and other run-specific data
+    #    isotime: time & date in ISO format
+    #    corr_name: see corr_name above
+
+    run_name: '{isotime}_{corr_name}'
+    data_folder: '~/data'
+    run_folder: '{data_folder}/{run_name}'
+    current_folder: '{data_folder}/current'  # symlink that points to the latest run folder
+
+    input_sn: "{corr_sn}{crate:02d}{slot_zero_based:02d}{input:02d}"
+    input_reorder: null
+
+    enable_gain_switching : false # Digital gain switching
+
+    # fpga_master REST server address
+    hostname: localhost
+    port: 54321
+
+    comet_broker:
+        <<: *comet_broker
+
+    # Global parameters
+    n_input: 256             # Number of receiver elements/inputs.
+    n_freq : 1024          # Number of frequency bins.
+
+    # Translates FPGA channel number into physical board input number
+    input_number_map: &jfc_input_number_map [12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3]
+
+    debug:
+        allow_empty_fpga_array: True
+        # skip_power_supply: True
+
+    logging: &default_logging
+        base_package_name: 'pychfpga'  # part of the logger name that will be stripped from the logger name and replaced with the full runtime package path to match the actual value returned by the variable __name__
+        script_name: 'pychfpga.fpga_master' # a copy of this logger  will be created with name `pychfpga.__main__` in case the module is run as a script
+
+        dict_config: &default_logging_dict_config
+            formatters: &default_formatters
+                long:
+                    format: "%(asctime)s %(levelname)s %(name)s.%(funcName)s() %(filename)s:%(lineno)d>> %(message)s"
+                    datefmt: "%b %d %H:%M:%S"
+                short:
+                    format: "%(asctime)s %(levelname)s %(name)s: %(message)s"
+                    datefmt: "%H:%M:%S"
+            handlers: &default_logging_handlers
+                stderr:
+                    class : logging.StreamHandler
+                    formatter: short
+                    level   : DEBUG
+                syslog:
+                    class: logging.handlers.SysLogHandler
+                    formatter: long
+                    level   : DEBUG
+                fm_monitoring_logfile:
+                    class : logging.handlers.RotatingFileHandler
+                    formatter: short
+                    level: INFO
+                    filename: "%(run_folder)s/fpga_master.log"  # will be processed by setup_logger
+                    maxBytes: 10000000
+                    backupCount: 100 # 0 = no rollover (single file)
+                fm_debug_logfile:
+                    class : logging.handlers.RotatingFileHandler
+                    formatter: long
+                    level: DEBUG
+                    filename: "%(run_folder)s/fpga_master_debug.log"  # will be processed by setup_logger
+                    maxBytes: 10000000
+                    backupCount: 100 # 0 = no rollover (single file)
+                # pychfpga_logfile:
+                #     class : logging.handlers.RotatingFileHandler
+                #     formatter: long
+                #     level: DEBUG
+                #     filename: "%(run_folder)s/pychfpga.log"  # is prefixed
+                #     maxBytes: 10000000
+                #     backupCount: 100 # 0 = no rollover (single file)
+                # ps_logfile:
+                #     class : logging.handlers.RotatingFileHandler
+                #     formatter: long
+                #     level: DEBUG
+                #     filename: "%(run_folder)s/ps.log"  # is prefixed
+                #     maxBytes: 10000000
+                #     backupCount: 100 # 0 = no rollover (single file)
+                ra_logfile:
+                    class : logging.handlers.RotatingFileHandler
+                    formatter: long
+                    level: DEBUG
+                    filename: "%(run_folder)s/raw_acq.log"  # is prefixed
+                    maxBytes: 10000000
+                    backupCount: 100 # 0 = no rollover (single file)
+
+            loggers:
+                pychfpga: # root logger - catch anything else from pychfpga submodules
+                    level: DEBUG
+                    handlers: [fm_debug_logfile, fm_monitoring_logfile, stderr, syslog]
+                    propagate: false # we have stored all we need
+                # pychfpga.fpga_master:
+                #     level: DEBUG
+                #     handlers: [fm_debug_logfile, fm_monitoring_logfile, stderr, syslog]
+                #     propagate: false # we have stored all we need
+                pychfpga.raw_acq:
+                    level: DEBUG
+                    handlers: [ra_logfile, stderr, syslog]
+                    propagate: false
+                # pychfpga.core: # Anything coming from the pychfpga package
+                #     level: DEBUG  # Accept any logs above DEBUG (but don't necessarily print/save them - the handlers will decide)
+                #     handlers: [pychfpga_logfile, stderr, syslog]
+                #     propagate: false
+                # pychfpga.fpga_array: # Anything coming from the pychfpga package
+                #     level: DEBUG  # Accept any logs above DEBUG (but don't necessarily print/save them - the handlers will decide)
+                #     handlers: [pychfpga_logfile, stderr, syslog]
+                #     propagate: false
+                # pychfpga.ps: # Anything coming from the pychfpga package
+                #     level: INFO  # Accept any logs above DEBUG (but don't necessarily print/save them - the handlers will decide)
+                #     handlers: [ps_logfile, stderr, syslog]
+                #     propagate: true
+
+
+        log_levels: # below are shortcut to set log levels on the handlers defined above
+        #    logfile: debug
+        #    stderr: info
+        #    syslog: debug
+
+    power_supplies: &default_power_supplies # all power supplies available in the array
+        servers: # power supply control REST server
+
+        common_config:
+            units:
+
+        power_on:  # power supplies to turn on and off in this config
+            units: []
+            delay: 70
+
+    fpga: &default_fpga
+        # <<: *default_pathfinder_fpga  # populate with all fields from specified references. Some are modified below.
+
+        fpga_array_params: &default_fpga_array_params
+            hwm: "" # must specify
+            mode: none  # Must specify. shuffle 256 and 512 require crate numbers
+            prog: 1
+            open: 1
+            frames_per_packet: 2     # how many frames per packet sent to gpu
+            samp_freq: 800       # MHz
+            sync_method: 'distributed_time'
+            sync_source: 'bp_time'
+            sync_master : null # Serial number of the board that provides the sync for the all the boards in fpga crate
+            sync_master_time_source: null # Not used if there is no sync board
+            #syslog_log_level: 'debug'
+            #stderr_log_level: 'warning'
+
+        #  Noise injection parameters
+        noise_injection:
+            # cyl0.1:
+            #     board : '' # Board that controls the pwm signal for noise injection
+            #     enable : 1 # Enable the pwm signal for noise injection gating
+            #     offset : 0 # Offset, in fpga frames, of the pwm signal for noise injection
+            #     high_time : 32768 # High time, in fpga frames, of the pwm signal for noise injection
+            #     period : 65536 # Period, in fpga frames, of the pwm signal for noise injection
+            # 26m :
+            #     board : [7, 0] # Board that controls the pwm signal for 26m noise injection. Can be a serial number (e.g. '0345') or a (crate, zerobased-slot) tuple (e.g. [0,0])
+            #     enable : 1 # Enable the pwm signal for 26m noise injection gating
+            #     offset : 0  # Offset, in fpga frames, of the pwm signal for 26m noise injection
+            #     high_time : 1941504 # High time, in fpga frames, of the pwm signal for 26m noise injection
+            #     period : 23298048 # Period, in fpga frames, of the pwm signal for 26m noise injection
+            #     output: 'bp_sma' # Output to which to send the PWM signal. 'sma_a' (ICEBoard SMA) or 'bp_sma' (Backplace MMCX conector)
+
+        adc_delay_params: # parameters passed to set_adc_delays()
+            source : 'default'
+            compute_delays : 1
+            save_delays : True # False  # True
+            check_sync_delays : 0
+            check_adc_delays : 10
+            verbose : 1
+            retry : 5
+
+        channelizer_params: # parameters used to set-up the channelizers
+            adc_mode : 'data'  # Mode of the ADC *chip*: 'data' (digitized analog inputs), 'ramp' or 'pulse'
+            adcdaq_mode : 'data' # 'data': data from the ADC chip;  or 'ramp': Ramp is generated in the FPGA (ADC chip is ignored)
+            data_source : 'adc' # Source of the function generator, as follows:
+                # 'adc': Sends the ADC data
+                # 'noise': Uniform white noise generator
+                # 'word_ctr_buffer_flags': 32-bit Frame/word counter, with ADC overflow from bit 0 of waveform buffer bytes
+                # 'buffer' or 'funcgen': Sends the data stored in the waveform buffer
+                # 'frame8': Sends the frame number in every 8-bit sample
+                # 'frame4': Sends the frame number if the upper 4 bits of each samples. The lower bits are zero.
+            function: '4bit_real_ramp' # wafeform to be programmed in the function generator waveform buffer:
+                # 'arb': Arbitrary waveform stored in buffer
+                # 'a': All bytes are Byte A
+                # 'b': All bytes are Byte B
+                # 'ab': Bytes alternate between A and B.
+                # 'ramp': Successive bytes generate a repeating ramp from 0 to 255.
+                # 'real_ramp': Generates the ramp: 0,0,0,1,0,2,0,3,0... If the data is read as (8+8)-bit complex value pairs, we obtain (0,0j), (1+0j)... (255+0j)
+                # '4bit_ramp': Generates the ramp 0x00, 0x10, 0x20, ... 0xF0.
+                # '4bit_real_ramp': Generates the ramp: 0x00, 0x00, 0x10, 0x00, 0x20, 0x00 ... 0xF0, 0x00
+                # 'sin': Generates a sinewave. The 'freq' parameter needs to be supplied.
+            fft_bypass : False
+            fft_shift : 1367 # 0b10101010111->1367 (~4bit noise to ~3bit noise) 2^5 - 1 -> old, might be ideal.  2^10-1 safest, but add a bit of noise
+            scaler_bypass : False
+            offset_binary_encoding : True
+
+        raw_data_capture:
+            capture_source: 'adc' # initial source. Can be changed dynamically during operations
+            baseline_capture_rate: 1  # In frames/s. 0 = disable data capture. (will prevent raw_acq from getting any data)
+            tmux_factor: 4 # factor to apply to the slot number set the send delay
+
+        reset_stats: True
+
+        load_initial_gains: True
+
+        gain_hdf5:
+            output_dir: "/data/digital_gains"
+            output_suffix: "digitalgain"
+            search: True
+            max_num: 1
+            max_file_size: 1000000000
+
+        compute_gains:
+            enable: True # False
+            save_gains: True
+            targets: # List of (crate,slot) tuples for which fains will be computed
+              - ['*']
+            capture_rate: 15
+            number_of_fft_averages: 100
+            number_of_gain_update_iterations: 20
+            initial_gains: []
+            # noise_injection : # noise injection parametrs used for gain calculations
+            #     cyl0.1: # cylinder noise source (name is arbitrary)
+            #         board : '' # Board that controls the noise gating PWM signal for noise injection
+            #         enable : 1
+            #         offset : 0
+            #         high_time: 3
+            #         period: 4
+            #     # Add more cylinder sources as needed
+            #     26m : # 26m dish noise source
+            #         board : '' # Board that controls the noise gating PWM signal for 26m noise injection
+            #         enable : 0 # Enable the pwm signal for 26m noise injection gating
+            #         offset : 0
+            #         high_time: 3
+            #         period: 4
+
+    raw_acq: &default_raw_acq
+        logging:
+            dict_config:
+                formatters:
+                    <<: *default_formatters
+                handlers:
+                    <<: *default_logging_handlers
+                    logfile: {class : logging.FileHandler, formatter: std, filename: "%(run_folder)s/fpga_master.log"}
+                loggers:
+                    pychfpga.ps:
+                        propagate: false
+                        handlers: [logfile, stderr, syslog]
+
+        use_fixed_port_numbers: True # fpga_master will assign fixed port numbers using port_number= 41000 + 100*(crate_number+1) + slot_number
+        servers:  # node_name: {hostname: rest_server_hostname, port: rest_server_port, iceboards: [(crate, slot), (crate, slot)...]}
+            # 'raw_acq0': {hostname: null , port: 54322, iceboards: [[null, 0]]}  # UDP port numbers are assigned automatically an
+        common_config: # This is merged with each server config before sending it to the server along with the start() command
+            # Capture paratemers to use when the raw_acq server is started
+
+            # HDF5 file data capture (ADC data only)
+            hdf5_capture_refresh_time: 30 # cadence in seconds at which raw data is written to the hdf5 file.
+            hdf5_capture_duration: 0 # number of seconds during which data is captured. 0= forver (until stopped), null = Do not write hdf5 data start
+            hdf5_capture_folder: '/data/raw_acq/%(hdf5_start_time)s_%(corr_name)s_rawadc' # Don't use a leading / or the path will be absolute. Without leading /, Data will be saved in base_path/run_folder/capture_folder/timestamp_capture_filename/nnnnnn.h5
+            hdf5_capture_filename: '%(file_number)06d.h5'
+            hdf5_capture_elements_per_file: 131072
+
+            # ADC metrics continuous capture
+            metrics_refresh_time: 30
+            adc_rms_refresh_count: 60
+            input_number_map: *jfc_input_number_map
+            jump_thresholds: [ 24, 48, 96] # thresholds used to generate signal jump counter metrics
+            comet_broker:
+                <<: *comet_broker
+
+
+EXAMPLE:
+    <<: *default
+    corr_sn: "EXAMPLE"
+    corr_name: "EXAMPLE"
+    comment: "EXAMPLE, corr16 mode, one board"
+    run_name: '%(isotime)s_%(corr_name)s'
+    data_folder: '~/EXAMPLE/data'
+    run_folder: '%(data_folder)s/%(run_name)s'
+    current_folder: '%(data_folder)s/current'  # symlink that points to the latest run folder
+
+    comet_broker:
+        <<: *comet_broker
+        enabled: False
+
+    fpga:
+        <<: *default_fpga
+        fpga_array_params:
+            <<: *default_fpga_array_params
+            hwm: 'mb 498:1' # ID of the board used. Can also use a direct IP
+            mode: corr16  # shuffle 256 and 512 require crate numbers
+            prog: 1
+            sync_method: local #  distributed_time # <-- For R232. Change to --> sync_method: distributed_time <-- for D3A. #local_soft_trigger
+            sync_source: sma_a
+            udp_retries: 10
+            fpga_ip_addr_fn: '(a,b,c+1,d)'
+
+        channelizer_params: # parameters used to set up the channelizers
+            adc_mode : 'data'  # Mode of the ADC *chip*: 'data' (digitized analog inputs), 'ramp' or 'pulse'
+            adc_sampling_mode: 0 # 0: 4-channel, 4: 2-channel A+C
+            adc_bandwidth: 2 # 0:500 MHz, 1: 600 MHz, 2:1500MHz, 3:2 GHz.
+            adcdaq_mode : 'data' # 'data': data from the ADC chip;  or 'ramp': Ramp is generated in the FPGA (ADC chip is ignored)
+            data_source : 'adc' # Source of the function generator, as follows:
+                # 'adc': Sends the ADC data
+                # 'noise': Uniform white noise generator
+                # 'word_ctr_buffer_flags': 32-bit Frame/word counter, with ADC overflow from bit 0 of waveform buffer bytes
+                # 'buffer' or 'funcgen': Sends the data stored in the waveform buffer
+                # 'frame8': Sends the frame number in every 8-bit sample
+                # 'frame4': Sends the frame number if the upper 4 bits of each samples. The lower bits are zero.
+            function: 'ramp' # wafeform to be programmed in the function generator waveform buffer:
+                # 'arb': Arbitrary waveform stored in buffer
+                # 'a': All bytes are Byte A
+                # 'b': All bytes are Byte B
+                # 'ab': Bytes alternate between A and B.
+                # 'ramp': Successive bytes generate a repeating ramp from 0 to 255.
+                # 'real_ramp': Generates the ramp: 0,0,0,1,0,2,0,3,0... If the data is read as (8+8)-bit complex value pairs, we obtain (0,0j), (1+0j)... (255+0j)
+                # '4bit_ramp': Generates the ramp 0x00, 0x10, 0x20, ... 0xF0.
+                # '4bit_real_ramp': Generates the ramp: 0x00, 0x00, 0x10, 0x00, 0x20, 0x00 ... 0xF0, 0x00
+                # 'sin': Generates a sinewave. The 'freq' parameter needs to be supplied.
+            fft_bypass : False
+            fft_shift : 1367 # 0b10101010111->1367 (~4bit noise to ~3bit noise) 2^5 - 1 -> old, might be ideal.  2^10-1 safest, but add a bit of noise
+            scaler_bypass : False
+            offset_binary_encoding : True  # Must be True for compute_gains!
+
+
+        noise_injection:
+            # 26m :
+            #     board : [] # Board that controls the pwm signal for 26m noise injection. Can be a serial number (e.g. '0345') or a (crate, zerobased-slot) tuple (e.g. [0,0])
+            #     # board : ['MGK7BP16_SN025', 0] # Board that controls the pwm signal for 26m noise injection. Can be a serial number (e.g. '0345') or a (crate, zerobased-slot) tuple (e.g. [0,0])
+            #     enable : false # Enable the pwm signal for 26m noise injection gating
+            #     offset : 0  # Offset, in fpga frames, of the pwm signal for 26m noise injection
+            #     # high_time : 1941504 # High time, in fpga frames, of the pwm signal for 26m noise injection
+            #     # period : 23298048 # Period, in fpga frames, of the pwm signal for 26m noise injection
+            #     high_time : 1941 # High time, in fpga frames, of the pwm signal for 26m noise injection
+            #     period : 23298 # Period, in fpga frames, of the pwm signal for 26m noise injection
+            #     output: 'bp_sma' # Output to which to send the PWM signal. 'sma_a' (ICEBoard SMA) or 'bp_sma' (Backplace MMCX conector)
+
+        raw_data_capture:
+            capture_source: 'adc'
+            baseline_capture_rate: 10  # Frame per second. 0 = disable.
+            tmux_factor: 3
+
+        initial_gains:  # overwritten by load initial gains and compute gains if enabled
+            - [['*'], [0.0, 20]]
+
+        load_initial_gains: True
+
+        gain_hdf5:
+            output_dir: "~/UAPISHKA/data/digital_gains"
+            output_suffix: "digitalgain"
+            search: True
+            max_num: 1
+            max_file_size: 1000000000
+
+        compute_gains:
+            enable: True
+            targets: # List of (crate,slot) tuples for which fains will be computed
+              - ['*']
+            initial_gains:
+              - [['*'], [1.0, 22]] # Starting gain value, applied to all selected channels
+            save_gains: True
+            capture_rate: 10  # period = (2**(capture_rate + 1) frames). DOn't recommend faster (less than 12) because we start losing packets due to REST HTTP encoding of the RMS vectors
+              # Recommended rate codes to avoid :
+              # 1 crate: 12
+              # 2 crates: 13
+              # 4 crates: 14
+              # 8 crates: 15
+            weight: 0.2
+              # Capture rates
+              #  5: 0.163 ms, 6104 fps, delay=0
+              #  6: 0.327 ms, 3052 fps, delay=0
+              #  7: 0.655 ms, 1526 fps, delay <= 1
+              #  8: 1.310 ms, 763 fps, delay <=2,
+              #  9: 2.621 ms, 382 fps, delay <= 5
+              # 10: 5.242 ms,  191 fps, delay <=10
+              # 11: 10.485 ms, 96 fps, delay <=20, tmux <= 1
+              # 12: 20.971 ms, 48 fps, delay <=40, tmux <=2
+              # 13: 41.943 ms, 24 fps, delay <=80, tmux <=5
+              # 14: 83.886 ms, 12 fps, delay <=160, tmux <=10
+              # 15: 167.77s ms, 6 fps, delay <=320, tmux <= 21
+              # 16: 335.544 ms, 3 fps, delay <=640, tmux <= 42
+            number_of_fft_averages: 100
+            number_of_gain_update_iterations: 30
+
+        firmware_correlator: # use only when mode=`corr16`
+            # Static parameters - set once at initialization
+            enable: True # False  # Starts data transmission if True. Works only in corr16 with the proper FPGA firmware
+            firmware_integration_period: 16384 # frames.
+            # 800 Msps/s (adc) / 2048 smp/frame = 390625 frames / s -> 0.00000256 s/frame
+            # 16384 -> 0.04194304 s -> 42 ms
+              # 16384: 41.943 ms, 23.842 frames/s. 135 Mbit/s/board
+            software_integration_period: 250
+            autocorr_only: false  # if true, sends only the autocorrelation products
+            # The following parameters can be changed each time a capture is started
+            n_inputs: 16 # Number of inputs channels to be correlated (from 0 to n_inputs-1)
+            hdf5_capture_folder: '%(run_folder)s/corr/%(hdf5_start_time)s'
+            hdf5_capture_filename: '%(file_number)04d' #'data'
+            hdf5_capture_duration: 0 #300 # number of seconds during which data is captured. 0= forver (until stopped), null = Do not write hdf5 data start
+#            hdf5_capture_elements_per_file: 256 # 256 elements=7Mbytes
+            hdf5_capture_elements_per_file: 8 # 256 elements=7Mbytes
+            hdf5_capture_n_inputs: 16
+#    gps:
+#        servers:
+#            gpss:
+#                hostname: localhost
+#                port: 54325
+#                units:
+#                    tm4d: {hostname: 172.246.44.4, port: 1234, timeout: 5} # Uncomment for DRAO
+#                    #gps_east: {hostname: 10.10.10.208, port: 1234, timeout: 5} # Uncomment for R232
+    raw_acq:
+        <<: *default_raw_acq
+        servers:  # node_name: {hostname: rest_server_hostname, port: rest_server_port, iceboards: [(crate, slot), (crate, slot)...]}
+            'raw_acq0':
+                hostname: localhost # null forces the creation of a new local server. Use 'localhost' to use an existing local server
+                port: 54322
+                receiver_ports:
+                    - {port: 'myport', sources: [{crate: '*', slot: '*'}] }  # This is standard for single board operation
+                    # Port syntax:
+                    # - {port: 1234, sources: []} # all sources on port 1234
+                    # - {port:'myport', sources:[...]} # all sources on the same randomly selected port. 'myport' can be used in multiple lines to add more selections on this port.
+                    # - {port: 0, sources: [...]}  # each sources is on its own individual randomly selected port
+
+        common_config: # This is merged with each server config before sending it to the server with the start() command
+            # Capture paratemers to use when the raw_acq server is started
+             # idle_capture_rate: 15 # number of frames per second when monitoring but not storing data
+            # compute_gains_capture_rate: 15 # Number of frames per second to send when computing gains
+            # hdf5_capture_rate: 15 #1 # number of frames per second to use when storing data to HDF5 files; 0= Donot capture hdf5 files
+            hdf5_capture_refresh_time: 0 # in seconds
+            hdf5_capture_duration: 3600 #300 # number of seconds during which data is captured. 0= forver (until stopped), null = Do not write hdf5 data start
+            hdf5_capture_folder: '{run_folder}/raw_acq/' #'raw_data'  # Don't use a leading / or the path will be absolute. Without leading /, Data will be saved in base_path/run_folder/capture_folder/timestamp_capture_filename/nnnnnn.h5
+            hdf5_capture_filename: '{file_number:06d}' #'data'
+            hdf5_capture_elements_per_file: 131072
+
+            metrics_refresh_time: 1
+            adc_rms_refresh_count: 60
+            input_number_map: [12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3] # Translates FPGA channel number into CHIME input #. Used to label metrics in more user-friendly way
+            jump_thresholds: [ 24, 48, 96] # thresholds used to generate signal jump counter metrics
+
+
+            comet_broker:
+                <<: *comet_broker
+                enabled: False
