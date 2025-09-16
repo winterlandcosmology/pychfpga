@@ -243,6 +243,48 @@ class LagSpectraComputer(threading.Thread):
         except Exception as e:
             print(f"Error in lag computation: {e}")
             
+    def _reset_adc_flags(self):
+        """Reset ADC overrange and overvoltage flags before data capture.""" 
+        try:
+            # Reset flags for next capture 
+            self.pc.i.GPIO.ADC_OR_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
+            self.pc.i.GPIO.ADC_OR_CLEAR = 0
+            self.pc.i.GPIO.ADC_OV_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
+            self.pc.i.GPIO.ADC_OV_CLEAR = 0
+        except Exception as e:
+            print(f"Error resetting ADC flags: {e}")
+
+    def _check_adc_flags(self):
+        """Check ADC overrange and overvoltage flags and update shared buffers."""
+        
+        # Helper array for reading individual bits of ADC_OR and ADC_OV flags
+        bitmask = 2**np.arange(8) # 8-bit bitmask for isolating values of individual bits
+        bitshifts = np.arange(0, 8)[::-1] # bitshifts to read values of bits as 1 or 0
+                            
+        try:
+            # Check the ADC overrange and overvoltage flags 
+            adc_or = self.pc.i.GPIO.ADC_OR
+            adc_ov = self.pc.i.GPIO.ADC_OV
+
+            # Create arrays to print the overrange/overflow status of individual ADCs,
+            # reversing the array so that the ADCs are indexed in ascending order from ADC1 to ADC8
+            adc_or_arr = np.array([(adc_or & bitmask[m]) >> m for m in bitshifts])[::-1]
+            adc_ov_arr = np.array([(adc_ov & bitmask[m]) >> m for m in bitshifts])[::-1]
+
+            # Update shared buffer counters
+            self.shared_buffers.total_captures += 1
+            
+            # Count any overrange or overvoltage flags
+            if adc_or != 0:
+                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_or_arr[n] != 0])
+                self.shared_buffers.adc_or_count += 1
+            if adc_ov != 0:
+                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_ov_arr[n] != 0])
+                self.shared_buffers.adc_ov_count += 1
+                
+        except Exception as e:
+            print(f"Error checking ADC flags: {e}")
+
     def stop(self):
         """Stop the thread."""
         self.running = False
@@ -300,6 +342,9 @@ class FineLagComputer(threading.Thread):
                 continue
                 
             try:
+                # Reset ADC flags before data capture
+                self._reset_adc_flags()
+                
                 # Get current frames to average from config (dynamic update)
                 n_frames_to_capture = max(2, self.config.frames_to_average)
                 # Round up to nearest multiple of 2
@@ -317,6 +362,11 @@ class FineLagComputer(threading.Thread):
                     flush=True,  # Light flush to ensure timestamp sync
                     flush_timeout=0.0001  # Very short flush, just to sync
                 )
+                
+                # Check ADC flags after data capture and skip if flags detected
+                if self._check_adc_flags():
+                    # ADC flags detected, skip this data and continue to next iteration
+                    continue
                 
                 # Shift to 14 bits (same as in read_adc_frames)
                 d_adc = d_adc >> 2
@@ -582,6 +632,48 @@ class FineLagComputer(threading.Thread):
                 print(f"Error in fine lag computation: {e}")
                 time.sleep(0.1)  # Wait a bit before retrying
                 
+    def _reset_adc_flags(self):
+        """Reset ADC overrange and overvoltage flags before data capture."""
+        try:
+            # Reset flags for next capture 
+            self.pc.i.GPIO.ADC_OR_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
+            self.pc.i.GPIO.ADC_OR_CLEAR = 0
+            self.pc.i.GPIO.ADC_OV_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
+            self.pc.i.GPIO.ADC_OV_CLEAR = 0
+        except Exception as e:
+            print(f"Error resetting ADC flags: {e}")
+
+    def _check_adc_flags(self):
+        """Check ADC overrange and overvoltage flags and update shared buffers."""
+
+        # Helper array for reading individual bits of ADC_OR and ADC_OV flags
+        bitmask = 2**np.arange(8) # 8-bit bitmask for isolating values of individual bits
+        bitshifts = np.arange(0, 8)[::-1] # bitshifts to read values of bits as 1 or 0
+                            
+        try:
+            # Check the ADC overrange and overvoltage flags 
+            adc_or = self.pc.i.GPIO.ADC_OR
+            adc_ov = self.pc.i.GPIO.ADC_OV
+
+            # Create arrays to print the overrange/overflow status of individual ADCs,
+            # reversing the array so that the ADCs are indexed in ascending order from ADC1 to ADC8
+            adc_or_arr = np.array([(adc_or & bitmask[m]) >> m for m in bitshifts])[::-1]
+            adc_ov_arr = np.array([(adc_ov & bitmask[m]) >> m for m in bitshifts])[::-1]
+
+            # Update shared buffer counters
+            self.shared_buffers.total_captures += 1
+            
+            # Count any overrange or overvoltage flags
+            if adc_or != 0:
+                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_or_arr[n] != 0])
+                self.shared_buffers.adc_or_count += 1
+            if adc_ov != 0:
+                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_ov_arr[n] != 0])
+                self.shared_buffers.adc_ov_count += 1
+                
+        except Exception as e:
+            print(f"Error checking ADC flags: {e}")
+
     def stop(self):
         """Stop the thread."""
         self.running = False
@@ -849,6 +941,9 @@ class RadarComputer(threading.Thread):
                 continue
                 
             try:
+                # Reset ADC flags before data capture
+                self._reset_adc_flags()
+                
                 # Capture ADC data
                 n_frames = max(2, self.config.frames_to_average)
                 n_frames = ((n_frames + 1) // 2) * 2
@@ -862,6 +957,11 @@ class RadarComputer(threading.Thread):
                     flush=True,
                     flush_timeout=0.0001
                 )
+                
+                # Check ADC flags after data capture and skip if flags detected
+                if self._check_adc_flags():
+                    # ADC flags detected, skip this data and continue to next iteration
+                    continue
                 
                 # Shift to 14 bits
                 d_adc = d_adc >> 2
@@ -943,6 +1043,48 @@ class RadarComputer(threading.Thread):
             except Exception as e:
                 print(f"Error in radar computation: {e}")
                 time.sleep(0.1)
+
+    def _reset_adc_flags(self):
+        """Reset ADC overrange and overvoltage flags before data capture."""
+        try:
+            # Reset flags for next capture 
+            self.pc.i.GPIO.ADC_OR_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
+            self.pc.i.GPIO.ADC_OR_CLEAR = 0
+            self.pc.i.GPIO.ADC_OV_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
+            self.pc.i.GPIO.ADC_OV_CLEAR = 0
+        except Exception as e:
+            print(f"Error resetting ADC flags: {e}")
+
+    def _check_adc_flags(self):
+        """Check ADC overrange and overvoltage flags and update shared buffers."""
+        
+        # Helper array for reading individual bits of ADC_OR and ADC_OV flags
+        bitmask = 2**np.arange(8) # 8-bit bitmask for isolating values of individual bits
+        bitshifts = np.arange(0, 8)[::-1] # bitshifts to read values of bits as 1 or 0
+                            
+        try:
+            # Check the ADC overrange and overvoltage flags 
+            adc_or = self.pc.i.GPIO.ADC_OR
+            adc_ov = self.pc.i.GPIO.ADC_OV
+
+            # Create arrays to print the overrange/overflow status of individual ADCs,
+            # reversing the array so that the ADCs are indexed in ascending order from ADC1 to ADC8
+            adc_or_arr = np.array([(adc_or & bitmask[m]) >> m for m in bitshifts])[::-1]
+            adc_ov_arr = np.array([(adc_ov & bitmask[m]) >> m for m in bitshifts])[::-1]
+
+            # Update shared buffer counters
+            self.shared_buffers.total_captures += 1
+            
+            # Count any overrange or overvoltage flags
+            if adc_or != 0:
+                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_or_arr[n] != 0])
+                self.shared_buffers.adc_or_count += 1
+            if adc_ov != 0:
+                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_ov_arr[n] != 0])
+                self.shared_buffers.adc_ov_count += 1
+                
+        except Exception as e:
+            print(f"Error checking ADC flags: {e}")
                 
     def stop(self):
         """Stop the thread."""
@@ -1003,6 +1145,9 @@ class SuperFFTComputer(threading.Thread):
             try:
                 # Small delay to avoid overwhelming the receiver
                 #time.sleep(0.02)  # 20ms between captures to reduce packet loss
+
+                # Reset ADC flags before data capture
+                self._reset_adc_flags()
                 
                 # For subsequent frames, use read_raw_frames directly
                 # Use minimal flush to ensure we're synchronized
@@ -1014,6 +1159,11 @@ class SuperFFTComputer(threading.Thread):
                     flush=True,  # Minimal flush to ensure timestamp sync
                     flush_timeout=0.0001  # Very short flush
                 )
+
+                # Check ADC flags after data capture and skip if flags detected
+                if self._check_adc_flags():
+                    # ADC flags detected, skip this data and continue to next iteration
+                    continue
                 
                 self.total_captures += 1
                 
@@ -1091,6 +1241,48 @@ class SuperFFTComputer(threading.Thread):
             except Exception as e:
                 print(f"Error in super FFT computation: {e}")
                 time.sleep(0.1)  # Wait a bit before retrying
+
+    def _reset_adc_flags(self):
+        """Reset ADC overrange and overvoltage flags before data capture."""
+        try:
+            # Reset flags for next capture 
+            self.pc.i.GPIO.ADC_OR_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
+            self.pc.i.GPIO.ADC_OR_CLEAR = 0
+            self.pc.i.GPIO.ADC_OV_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
+            self.pc.i.GPIO.ADC_OV_CLEAR = 0
+        except Exception as e:
+            print(f"Error resetting ADC flags: {e}")
+
+    def _check_adc_flags(self):
+        """Check ADC overrange and overvoltage flags and update shared buffers."""
+        
+        # Helper array for reading individual bits of ADC_OR and ADC_OV flags
+        bitmask = 2**np.arange(8) # 8-bit bitmask for isolating values of individual bits
+        bitshifts = np.arange(0, 8)[::-1] # bitshifts to read values of bits as 1 or 0
+                            
+        try:
+            # Check the ADC overrange and overvoltage flags 
+            adc_or = self.pc.i.GPIO.ADC_OR
+            adc_ov = self.pc.i.GPIO.ADC_OV
+
+            # Create arrays to print the overrange/overflow status of individual ADCs,
+            # reversing the array so that the ADCs are indexed in ascending order from ADC1 to ADC8
+            adc_or_arr = np.array([(adc_or & bitmask[m]) >> m for m in bitshifts])[::-1]
+            adc_ov_arr = np.array([(adc_ov & bitmask[m]) >> m for m in bitshifts])[::-1]
+
+            # Update shared buffer counters
+            self.shared_buffers.total_captures += 1
+            
+            # Count any overrange or overvoltage flags
+            if adc_or != 0:
+                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_or_arr[n] != 0])
+                self.shared_buffers.adc_or_count += 1
+            if adc_ov != 0:
+                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_ov_arr[n] != 0])
+                self.shared_buffers.adc_ov_count += 1
+                
+        except Exception as e:
+            print(f"Error checking ADC flags: {e}")
                 
     def stop(self):
         """Stop the thread."""
@@ -1101,6 +1293,11 @@ class SharedDataBuffers:
     """Manages shared memory buffers for zero-copy data transfer."""
     def __init__(self, waterfall_len: int):
         self.waterfall_len = waterfall_len
+        
+        # ADC flag tracking
+        self.total_captures = 0
+        self.adc_or_count = 0
+        self.adc_ov_count = 0
         
         # Create shared memory for current frame data
         self.shm_p00 = shared_memory.SharedMemory(create=True, size=NBINS_TOTAL * 8)
@@ -1334,13 +1531,14 @@ class UDPReceiver(threading.Thread):
     Uses shared memory buffers for zero-copy data transfer to the GUI.
     """
     def __init__(self, sock: socket.socket, shared_buffers: SharedDataBuffers, 
-                 packet_dtype: np.dtype, config: CorrelatorConfig):
+                 packet_dtype: np.dtype, config: CorrelatorConfig, pocket_correlator=None):
         super().__init__(daemon=True)
         self.socket = sock
         self.shared_buffers = shared_buffers
         self.packet_dtype = packet_dtype
         self.config = config
         self.running = True
+        self.pc = pocket_correlator  # Reference to pocket correlator for ADC flag access
         
         # Pre-allocate buffers for packet processing
         self.raw_frame = np.zeros((NBINS_TOTAL, NPROD), dtype=np.complex128)
@@ -1406,7 +1604,14 @@ class UDPReceiver(threading.Thread):
         
         while self.running:
             try:
+                # Reset ADC flags for next frame capture
+                self._reset_adc_flags()
+
                 nbytes, _ = self.socket.recvfrom_into(packet_buffer)
+
+                # Check ADC flags after completing frame capture
+                self._check_adc_flags()
+                
                 if nbytes > 0:
                     self._process_packet(packet_buffer[:nbytes])
             except socket.timeout:
@@ -1506,6 +1711,48 @@ class UDPReceiver(threading.Thread):
         # Signal that new data is available
         if self.data_ready_callback:
             self.data_ready_callback()
+
+    def _reset_adc_flags(self):
+        """Reset ADC overrange and overvoltage flags before data capture."""
+        try:
+            # Reset flags for next capture 
+            self.pc.i.GPIO.ADC_OR_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
+            self.pc.i.GPIO.ADC_OR_CLEAR = 0
+            self.pc.i.GPIO.ADC_OV_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
+            self.pc.i.GPIO.ADC_OV_CLEAR = 0
+        except Exception as e:
+            print(f"Error resetting ADC flags: {e}")
+
+    def _check_adc_flags(self):
+        """Check ADC overrange and overvoltage flags and update shared buffers."""
+        
+        # Helper array for reading individual bits of ADC_OR and ADC_OV flags
+        bitmask = 2**np.arange(8) # 8-bit bitmask for isolating values of individual bits
+        bitshifts = np.arange(0, 8)[::-1] # bitshifts to read values of bits as 1 or 0
+                            
+        try:
+            # Check the ADC overrange and overvoltage flags 
+            adc_or = self.pc.i.GPIO.ADC_OR
+            adc_ov = self.pc.i.GPIO.ADC_OV
+
+            # Create arrays to print the overrange/overflow status of individual ADCs,
+            # reversing the array so that the ADCs are indexed in ascending order from ADC1 to ADC8
+            adc_or_arr = np.array([(adc_or & bitmask[m]) >> m for m in bitshifts])[::-1]
+            adc_ov_arr = np.array([(adc_ov & bitmask[m]) >> m for m in bitshifts])[::-1]
+
+            # Update shared buffer counters
+            self.shared_buffers.total_captures += 1
+            
+            # Count any overrange or overvoltage flags
+            if adc_or != 0:
+                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_or_arr[n] != 0])
+                self.shared_buffers.adc_or_count += 1
+            if adc_ov != 0:
+                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_ov_arr[n] != 0])
+                self.shared_buffers.adc_ov_count += 1
+                
+        except Exception as e:
+            print(f"Error checking ADC flags: {e}")
 
     def stop(self) -> None:
         """Stop the receiver thread."""
@@ -2662,8 +2909,11 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.setStatusBar(self.statusBar)
         self.status_label = QtWidgets.QLabel("Ready. Please connect to a board.")
         self.metrics_label = QtWidgets.QLabel("")
-        self.statusBar.addWidget(self.status_label, 1)
-        self.statusBar.addWidget(self.metrics_label)
+        self.adc_flags_label = QtWidgets.QLabel("ADC: OK")
+        self.adc_flags_label.setStyleSheet("color: #90EE90;")  # Light green
+        self.statusBar.addWidget(self.status_label, 1)  # Takes up remaining space
+        self.statusBar.addWidget(self.metrics_label)    # Middle-right
+        self.statusBar.addWidget(self.adc_flags_label)  # Bottom-right
 
     def connect_to_board(self) -> None:
         """Establish connection to the FPGA board."""
@@ -2735,7 +2985,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             self.shared_buffers = SharedDataBuffers(waterfall_len=self.config.waterfall_len)
             
             # Create and start receiver thread
-            self.receiver_thread = UDPReceiver(sock, self.shared_buffers, self.packet_dtype, self.config)
+            self.receiver_thread = UDPReceiver(sock, self.shared_buffers, self.packet_dtype, self.config, self.pocket_correlator)
             self.receiver_thread.data_ready_callback = lambda: self.data_ready.emit()
             self.receiver_thread.start()
             
@@ -3178,7 +3428,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                     sock = self.pocket_correlator.corr_receiver.socket
                     sock.settimeout(0.1)
                     
-                    self.receiver_thread = UDPReceiver(sock, self.shared_buffers, self.packet_dtype, self.config)
+                    self.receiver_thread = UDPReceiver(sock, self.shared_buffers, self.packet_dtype, self.config, self.pocket_correlator)
                     self.receiver_thread.data_ready_callback = lambda: self.data_ready.emit()
                     self.receiver_thread.start()
                     
@@ -3273,7 +3523,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                     sock = self.pocket_correlator.corr_receiver.socket
                     sock.settimeout(0.1)
                     
-                    self.receiver_thread = UDPReceiver(sock, self.shared_buffers, self.packet_dtype, self.config)
+                    self.receiver_thread = UDPReceiver(sock, self.shared_buffers, self.packet_dtype, self.config, self.pocket_correlator)
                     self.receiver_thread.data_ready_callback = lambda: self.data_ready.emit()
                     self.receiver_thread.start()
                     
@@ -3409,6 +3659,40 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             self.radar_computer_thread.set_threshold(value)
             print(f"Radar threshold set to: {value:.2f}")
 
+    def _update_adc_status(self) -> None:
+        """Update the ADC status display in the status bar."""
+        if not self.shared_buffers:
+            return
+            
+        total_captures = self.shared_buffers.total_captures
+        adc_or_count = self.shared_buffers.adc_or_count
+        adc_ov_count = self.shared_buffers.adc_ov_count
+        
+        if total_captures == 0:
+            # No captures yet
+            self.adc_flags_label.setText("ADC: OK")
+            self.adc_flags_label.setStyleSheet("color: #90EE90;")  # Light green
+        elif adc_or_count == 0 and adc_ov_count == 0:
+            # No issues detected
+            self.adc_flags_label.setText(f"ADC: OK ({total_captures})")
+            self.adc_flags_label.setStyleSheet("color: #90EE90;")  # Light green
+        else:
+            # Issues detected
+            or_rate = (adc_or_count / total_captures) * 100 if total_captures > 0 else 0
+            ov_rate = (adc_ov_count / total_captures) * 100 if total_captures > 0 else 0
+            
+            status_parts = []
+            if adc_or_count > 0:
+                status_parts.append(f"OR: {or_rate:.1f}%")
+            if adc_ov_count > 0:
+                status_parts.append(f"OV: {ov_rate:.1f}%")
+                
+            status_text = f"ADC: {', '.join(status_parts)}"
+            self.adc_flags_label.setText(status_text)
+            
+            # Use red for any overranges or overvoltages
+            self.adc_flags_label.setStyleSheet("color: #FF6B6B;")  # Light red
+
     def _update_plots(self) -> None:
         """Update all plots with new data from the shared buffers."""
         if not self.shared_buffers:
@@ -3486,6 +3770,9 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                     metrics_text += f" | Lag FPS: {lag_fps:.2f}"
                     
                 self.metrics_label.setText(metrics_text)
+                
+                # Update ADC flag status
+                self._update_adc_status()
 
     def _update_spectra_plots(self) -> None:
         """Update the line plots in the Spectra tab."""
