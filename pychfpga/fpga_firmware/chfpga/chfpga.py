@@ -3387,7 +3387,7 @@ class chFPGA(FPGAFirmware):
             elif mode == 2 :
                 self.UCAP.CH0 = channels[0]
                 self.UCAP.CH1 = channels[1]
-            elif mode == 1:
+            elif mode == 3:
                 self.UCAP.CH0 = channels[0]
             else:
                 raise RuntimeError(f'Invalid UCAP mode number {mode}')
