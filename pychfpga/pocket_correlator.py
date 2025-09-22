@@ -145,7 +145,7 @@ class POCKET_CORRELATOR:
 
         # Define useful objects
         self.ca = ca
-        self.i = ca.ib[0] # we only need to grab the t0.CRS board
+        self.i = ca.ib[0] # we only need to grab the t0.CRS board object
         # self.i.GPIO.HOST_FRAME_READ_RATE = 14
         self.ucap = self.i.UCAP # UCAP module
         self.set_ucap_mode(mode = 0) # by default, capture data from all channels
@@ -175,8 +175,8 @@ class POCKET_CORRELATOR:
             scaler.SATURATE_ON_MINUS_7 = 1 # this is typically set as default
 
         # Define a bool to check if the correlator is configured; it can be configured
-        # by calling configure_corr()
-        self.corr_is_configured = False # we'll configur the correlator later
+        # by calling configure_corr(). When the board is initialized, the correlator is not configured.
+        self.corr_is_configured = False
 
     
     def set_ucap_mode(self, 
@@ -208,6 +208,8 @@ class POCKET_CORRELATOR:
             self.NPOLS = 2
         elif mode == 3:
             self.NPOLS = 1
+
+        print(f'UCAP mode is set to {mode}')
 
         return self.NPOLS
 
