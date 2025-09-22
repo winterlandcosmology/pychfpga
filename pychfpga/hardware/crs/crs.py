@@ -92,6 +92,9 @@ class CRS(Motherboard):
     RX_TO_TX_LANE_MAP = {rx:tx for tx,rx in TX_TO_RX_LANE_MAP.items()}
     # ---------------
 
+    REFCLK_BP = 1
+    REFCLK_MB_SMA = 2
+
     def __init__(self, hostname=None, serial=None, slot=None, subarray=None, **kwargs):
         super().__init__(
             hostname=hostname,

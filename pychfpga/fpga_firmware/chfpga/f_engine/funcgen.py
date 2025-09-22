@@ -26,10 +26,10 @@ class FUNCGEN(MMI):
     BYTE_B           = BitField(CONTROL, 0x02, 0, width=8, doc="Byte B to be used by the function generator")
     STATS_PERIOD     = BitField(CONTROL, 0x04, 0, width=16, doc="Number of frames to send. If 0, send continuously")
     RST_LFSR         = BitField(CONTROL, 0x06, 6, width=1, doc="Reset the noise generator to inject seed for LFSR")
-    SHIFT            = BitField(CONTROL, 0x05, 0, width=4, doc="Number of bits to shift-right the ADC data before it is passed on")
+    RIGHT_SHIFT      = BitField(CONTROL, 0x05, 0, width=4, doc="Number of bits to right-shift the output of the FUNCGEN. Performed after the left shift.")
     RAM_PAGE_MSB     = BitField(CONTROL, 0x05, 4, width=4, doc="MSB of the 512-byte RAM page we want to access")
     STATS_ENABLE     = BitField(CONTROL, 0x06, 7, doc="Enables overflow_ctr update. Clears stats_done when stats_enabled cleared.")
-    CLIP_WIDTH       = BitField(CONTROL, 0x06, 0, width=4, doc="Saturates the output data to a ``clip_width-1``-bit wide signed value (i.e. clip_width is the position of the sign bit). Saturation is applied after the right-shift. ")
+    LEFT_SHIFT       = BitField(CONTROL, 0x06, 0, width=4, doc="Number of bits to left-shift the output of the FUNCGEN. Output will be saturated as needed. Performed before the right shift.")
     FN_ID            = BitField(CONTROL, 0x07, 0, width=8, doc="Function number stored in buffer")
 
     RAMP_CTR   = BitField(STATUS, 0x00, 0, width=8, doc="Last 8 bits of the ramp counter (for debuging)")
@@ -172,6 +172,9 @@ class FUNCGEN(MMI):
         '4bit_complex_ab':    (14, FN_BUFFER, lambda self, a, b: np.full((self.NB//2, 2), (a, b)).ravel() << (self.Nbits - 4)),  # Generates the complex value (a+jb) in 4-bit mode. Not offset encoded.
         }
 
+    # List the arguments used by the functions so we can validate those even if we don't call the function
+    FUNCTION_ARGS = ('overflow_buffer', 'buffer', 'data', 'a', 'b', 'freq', 'seed', 'freq_test_bins')
+
     buffer_cache = None
 
     def __init__(self,  *, router, router_port, instance_number):
@@ -204,6 +207,22 @@ class FUNCGEN(MMI):
         """Resets the seed of the noise generator and the output to 0"""
         self.pulse_bit('RST_LFSR')
 
+    def set_output_shifting(self, left_shift=0, right_shift=0):
+        """Sets the left- and right-shifting of the FUNCGEN output
+
+        Parameters:
+
+             left_shift (int): Number of bits to shift left the output of the function generator.
+                Result is saturated. Left shift is applied before the right shift. Unchanged if ``None``.
+
+            right_shift (int): Number of bits to right left the output of the function generator.
+                Left shift is applied before the right shift. Unchanged if ``None``.
+
+        """
+        if left_shift is not None:
+            self.LEFT_SHIFT = left_shift
+        if right_shift is not None:
+            self.RIGHT_SHIFT = right_shift
     def set_data_source(self, source_name, verbose=0, **kwargs):
         """
         Selects the type of data outputted by the function generator.
@@ -228,15 +247,26 @@ class FUNCGEN(MMI):
 
             source_name (str): name of the data source (also called function) that is to be
                 outputted by the function generator. The name must be present as a key in the
-                FUNCTION_NAMES table.
+                FUNCTION_NAMES table. Does not change the function if `source_name` is ``None``.
 
             verbose (int): Sets the verbosity level
 
-            kwargs (dict): arguments passed to the source-setting function.
+            kwargs (dict): arguments passed to the source-setting function. These are validated even
+                if no function is called or if `sorce_name` is ``None``.
         """
 
+        # Validate the kwargs so we dont silently gobble bad or wrongly-spelled arguments
+        if any((k not in self.FUNCTION_ARGS) for k in kwargs):
+            valid_args = ', '.join(self.FUNCTION_ARGS)
+            raise RuntimeError(f'Invalid argument(s) {", ".join(kwargs)} passed to funcgen. Valid arguments are {valid_args}')
+
+        if source_name is None:
+            return
+
         if source_name not in self.FUNCTION_NAMES:
-            raise RuntimeError(f"Invalid source/function name '{source_name}'. Valid names are {', '.join(self.FUNCTION_NAMES)}")
+            valid_names = ', '.join(self.FUNCTION_NAMES)
+            raise RuntimeError(f"Invalid source/function name '{source_name}'. Valid names are {valid_names}")
+
         (fn_id, fn_code, buffer_fn) = self.FUNCTION_NAMES[source_name]
         if verbose:
             fn_args = ', '.join(f'{arg}={val}' for (arg, val) in kwargs.items())

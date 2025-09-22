@@ -2763,13 +2763,14 @@ class chFPGA(FPGAFirmware):
             adcdaq_mode=None,
             data_source=None,
             function=None,
+            funcgen_left_shift=None,
+            funcgen_right_shift=None,
             # freq_test_bins=None,  # will be passed into function_kwargs
             fft_bypass=None,
             fft_shift=None,
             scaler_bypass=None,
             scaler_cap_data_type=None,
             scaler_bypass_data_type=None,
-            gain=None,
             postscaler=None,
             scaler_eight_bit=None,
             scaler_rounding_mode=None,
@@ -2779,6 +2780,7 @@ class chFPGA(FPGAFirmware):
             offset_binary_encoding=None,
             local_sync=True,
             channels=None,
+            gains=None,
             **function_kwargs):
         """
         Single command used to set all channelizer settings.
@@ -2799,15 +2801,16 @@ class chFPGA(FPGAFirmware):
         if adcdaq_mode is not None:
             self.set_adcdaq_mode(mode=adcdaq_mode, channels=channels)
 
-        # Set the date source and the function generator that feed the FFT
-        if data_source is not None:
-            self.set_data_source(data_source, channels=channels, **function_kwargs)  # does a channelizer reset
+        # if data_source is not None :
+        #     self.set_data_source(data_source, channels=channels, **function_kwargs)  # does a channelizer reset
 
         if function is not None:
             self.logger.warning(
                 "Using 'function' parameter for setting FUNCGEN function is obsolete. Please use 'data_source' instead."
             )
-            self.set_funcgen_function(function=function, channels=channels, **function_kwargs)
+
+        # Set the date source and the function generator that feed the FFT
+        self.set_funcgen(function=data_source or function, channels=channels, left_shift=funcgen_left_shift, right_shift=funcgen_right_shift, **function_kwargs)
 
         # Set FFT bypass and shift schedule
         if fft_bypass is not None:
@@ -2841,8 +2844,8 @@ class chFPGA(FPGAFirmware):
         if zero_on_sat is not None:
             self.set_zero_on_sat(zero_on_sat=zero_on_sat, channels=channels)
 
-        if gain is not None:
-            self.set_gains(gain=gain, postscaler=postscaler, channels=channels)
+        if gains is not None:
+            self.set_gains(gain=gains, postscaler=postscaler, channels=channels)
 
         if offset_binary_encoding is not None:
             self.set_offset_binary_encoding(offset=offset_binary_encoding, channels=channels, sync=False)
@@ -2888,9 +2891,7 @@ class chFPGA(FPGAFirmware):
         name (and corresponding arguments) is provided, the function generator
         is automatically selected and the waveform is set-up.
 
-        This function resets the channelizers, even if only the function is
-        changed. Use `set_funcgen_function()` if the function generator is
-        already active and you want to change only the waveform
+        This method is a subset of `set_funcgen`.
 
         Parameters:
 
@@ -2906,20 +2907,7 @@ class chFPGA(FPGAFirmware):
             kwargs (dict): parameters that will be passed to the source-setting method.
         """
 
-        if source is None:
-            return
-
-        source = source.lower()
-
-        if channels is None:
-            channels = self.default_channels
-
-        if reset_chan:
-            self.set_chan_reset(1)  # Reset is needed to resynchronize the system with the new data
-        for chan in self.get_channelizers(channels):
-            chan.FUNCGEN.set_data_source(source, **kwargs)
-        if reset_chan:
-            self.set_chan_reset(0)  # Release reset
+        self.set_funcgen(function=source, channels=channels, reset_chan=reset_chan, **kwargs)
 
     def get_data_source(self):
         """
@@ -2932,7 +2920,7 @@ class chFPGA(FPGAFirmware):
         """
         return [chan.FUNCGEN.get_data_source() for chan in self.chan.values()]
 
-    def set_funcgen_function(self, function=None, channels=None, **kwargs):
+    def set_funcgen(self, function=None, channels=None, left_shift=None, right_shift=None, reset_chan=False, **kwargs):
         """
         Same as `set_data_source`, except the channelizer is not reset by default. Use only for
         changing between waveforms.
@@ -2947,11 +2935,30 @@ class chFPGA(FPGAFirmware):
             channels (list): list of integers specifying which channels are to be configured. If
                 `None`, the default channel list is used.
 
+            left_shift (int): Number of bits to shift left the output of the function generator.
+                Result is saturated. Left shift is applied before the right shift. Unchanged if ``None``.
+
+            right_shift (int): Number of bits to right left the output of the function generator.
+                Left shift is applied before the right shift. Unchanged if ``None``.
+
+            reset_chan (bool): If True, the channelizer is reset. This should be done if we change
+                between an external data source (i.e the ADC) to an internal one. It is not needed
+                if we are simply changing a waveform.
+
             kwargs (dict): parameters that will be passed to the source-setting method.
         """
+        if channels is None:
+            channels = self.default_channels
 
-        self.set_data_source(source=function, channels=channels, reset_chan=False, **kwargs)
+        if reset_chan:
+            self.set_chan_reset(1)  # Reset is needed to resynchronize the system with the new data
+        for chan in self.get_channelizers(channels):
+            chan.FUNCGEN.set_output_shifting(left_shift, right_shift)
+            chan.FUNCGEN.set_data_source(function, **kwargs)
+        if reset_chan:
+            self.set_chan_reset(0)  # Release reset
 
+    # set_funcgen_function = set_funcgen # for backwards compatibility
 
     def get_adc_board(self, channel):
         """
@@ -3258,6 +3265,8 @@ class chFPGA(FPGAFirmware):
             number_of_bursts=0,
             channels=None,
             source='scaler',
+            select=False,
+            data_type=0,
             sync=1,
             verbose=1,
             burst_period_in_seconds=None,
@@ -3294,6 +3303,11 @@ class chFPGA(FPGAFirmware):
                   configured to pass on the ADC data or an internally generated waveform.
                 - ``'scaler'``: the data is taken on the scaler capture port.
 
+            select (bool): (UCAP only) If True, the output multiplexer of UCAP will be set to stream the
+                captured data instead of the auxiliary (correlator) data.
+
+            data_type (str or int): If the data is from the scaler, indicates what type of data is to be captured.
+
             channels (list): list of channels for which the data capture will be enabled. others are
                 left untouched. with PROBER, any channel can be slelected. With UCAP mode 3, all
                 channels are sent and ``channels`` is ignored. In mode 1-3, only the first 4, 2 or 1
@@ -3325,8 +3339,6 @@ class chFPGA(FPGAFirmware):
         Burst repetition rate is set either as a period specified in seconds (`period` or
         `burst_period_in_seconds`) or as a number of frames (`burst_period_in_frames`).
         """
-        if channels is None:
-            channels = self.default_channels
 
         if burst_period_in_seconds is not None:
             period = burst_period_in_seconds
@@ -3361,6 +3373,9 @@ class chFPGA(FPGAFirmware):
                 f'    1 crate: {16 * 16 * frames_per_second * packet_size_in_bits / 1e6:.3f} Mbits/s'
                 )))
 
+        for ch in self.chan:
+            ch.SCALER.set_capture_data_type(data_type)
+
         # stop data from going into the PROBER and MASTER to minimize the risk
         # of malformed packets and unstable communications
         reset_state = self.get_chan_reset()
@@ -3370,32 +3385,12 @@ class chFPGA(FPGAFirmware):
 
 
         if self.CAPTURE_TYPE == 'UCAP':
-            self.UCAP.set_data_source(source)
-            # self.UCAP.config_capture() # doesn't exist yet. fixme
-            # self.logger.debug # add some logging?
-            self.UCAP.CAPTURE_PERIOD = burst_period_in_frames-1
-            self.UCAP.CAPTURE_PERIOD2 = burst_period_in_frames-1
+            self.UCAP.set_data_capture(source=source, mode=mode, channels=channels, select=select, periods=[burst_period_in_frames-1, burst_period_in_frames-1])
 
-            if mode == 0:
-                if channels[:8] != list(range(8)):
-                    raise RuntimeError('UCAP mode 0 can only capture channels 0-7')
-            elif mode == 1:
-                self.UCAP.CH0 = channels[0]
-                self.UCAP.CH1 = channels[1]
-                self.UCAP.CH2 = channels[2]
-                self.UCAP.CH3 = channels[3]
-            elif mode == 2 :
-                self.UCAP.CH0 = channels[0]
-                self.UCAP.CH1 = channels[1]
-            elif mode == 1:
-                self.UCAP.CH0 = channels[0]
-            else:
-                raise RuntimeError(f'Invalid UCAP mode number {mode}')
-            self.UCAP.MODE = mode
+        elif self.CAPTURE_TYPE =='PROBER':
 
-
-
-        if self.CAPTURE_TYPE =='PROBER':
+            if channels is None:
+                channels = self.default_channels
 
             # Do not limit the transfer rate
             self.GPIO.HOST_FRAME_READ_RATE = 5
@@ -4289,8 +4284,8 @@ class chFPGA(FPGAFirmware):
             channels (list of int): List of channels to which the command is applied
 
         """
-        if not offset:
-            self.logger.warning(f'Offset binary Encoding is disabled: this mode is incompatible with the firmware correlator and may confuse gain calibrations. This should not be done.')
+        # if not offset:
+        #     self.logger.warning(f'Offset binary Encoding is disabled: this mode is incompatible with the firmware correlator and may confuse gain calibrations. This should not be done.')
 
         if channels is None:
             channels = self.default_channels
