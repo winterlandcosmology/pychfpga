@@ -1030,6 +1030,12 @@ def main():
     parser.add_argument('--list', '-l', action='store_true', help="List archive information")
     parser.add_argument('--plot-capture', '-p', type=int, help="Plot specific capture by index")
     parser.add_argument('--plot-all', action='store_true', help="Generate plots for all captures")
+    parser.add_argument('--waterfall', '-w', nargs=2, type=int, metavar=('START', 'END'),
+                       help="Generate waterfall plot for capture range")
+    parser.add_argument('--log-scale', action='store_true', help="Use logarithmic scale for waterfall data")
+    parser.add_argument('--show-timestamps', action='store_true', 
+                       help="Show timestamps instead of indices on waterfall y-axis")
+    parser.add_argument('--colormap', default='viridis', help="Colormap for waterfall plot")
     parser.add_argument('--interactive', '-i', action='store_true', help="Start interactive browser")
     parser.add_argument('--summary', '-s', help="Create summary report (PDF filename)")
     parser.add_argument('--export', '-e', nargs=2, metavar=('INDEX', 'FILE'),
@@ -1052,6 +1058,18 @@ def main():
         if args.plot_all:
             inspector.plot_all_captures(args.output_dir, args.format)
         
+        if args.waterfall:
+            start, end = args.waterfall
+            save_path = None
+            if args.output_dir and args.format:
+                save_path = f"{args.output_dir}/waterfall_{start}_{end}.{args.format}"
+            inspector.plot_waterfall(start, end, 
+                                   log_scale=args.log_scale,
+                                   show_timestamps=args.show_timestamps,
+                                   colormap=args.colormap,
+                                   save_path=save_path,
+                                   show=True)
+        
         if args.summary:
             inspector.create_summary_report(args.summary)
         
@@ -1063,7 +1081,7 @@ def main():
             inspector.interactive_browse()
             
         # If no specific action was requested, show info and enter interactive mode
-        if not any([args.list, args.plot_capture is not None, args.plot_all, 
+        if not any([args.list, args.plot_capture is not None, args.plot_all, args.waterfall,
                    args.summary, args.export, args.interactive]):
             inspector.list_info()
             print("\nNo specific action requested. Starting interactive mode...")
