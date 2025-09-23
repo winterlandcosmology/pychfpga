@@ -52,6 +52,28 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from pychfpga.pocket_correlator import POCKET_CORRELATOR
 from pychfpga.fpga_firmware.chfpga.x_engine.UCORR import UCorrFrameReceiver, NBINS_TOTAL
 
+# Import data archiver
+try:
+    import h5py
+    try:
+        # Try relative import first (when run as package)
+        from .data_archiver import DataArchiver
+        DATA_ARCHIVER_AVAILABLE = True
+        print(f"DataArchiver available with h5py version {h5py.__version__}")
+    except ImportError:
+        try:
+            # Try absolute import (when run directly)
+            from data_archiver import DataArchiver
+            DATA_ARCHIVER_AVAILABLE = True
+            print(f"DataArchiver available with h5py version {h5py.__version__}")
+        except ImportError as e:
+            print(f"Warning: DataArchiver import failed: {e}")
+            DATA_ARCHIVER_AVAILABLE = False
+except ImportError:
+    print("Warning: h5py not installed. Please install h5py to enable archiving features.")
+    print("Install with: pip install h5py")
+    DATA_ARCHIVER_AVAILABLE = False
+
 # --- Constants ---
 NCHAN = 8
 NPROD = NCHAN * (NCHAN + 1) // 2
@@ -526,7 +548,7 @@ class FineLagComputer(threading.Thread):
                     # No valid frames in this capture, skip it entirely
                     if self.frames_processed < 10 or self.frames_processed % 50 == 0:
                         print(f"Fine lag: Skipping entire capture {self.total_frames_captured} - all frames rejected")
-                    time.sleep(0.05)  # Small delay before trying next capture
+                    time.sleep(0.01)  # Small delay before trying next capture
                     continue
                 
                 # Average the results (using actual number of frames processed)
@@ -612,6 +634,24 @@ class FineLagComputer(threading.Thread):
                         self.shared_buffers.waterfall_len
                     )
                 
+                # Archive the frame if enabled
+                if self.shared_buffers.archiving_enabled and self.shared_buffers.archiver:
+                    archive_data = {
+                        'timestamp': time.time(),
+                        'adc0': d_adc[0, :frames_to_process, :],  # Raw ADC data
+                        'adc1': d_adc[adc1_ch_idx, :frames_to_process, :],
+                        'lag_p00': lag_p00,  # Processed lag spectra
+                        'lag_p11': lag_p11,
+                        'lag_p01': lag_p01,
+                        'frames_averaged': frames_actually_processed
+                    }
+                    success = self.shared_buffers.archiver.archive_fine_lag_frame(archive_data)
+                    if success:
+                        archiver_status = self.shared_buffers.archiver.get_status()
+                        frames_archived = archiver_status['frames_archived']
+                        if frames_archived % 50 == 0:  # Print every 50 successful archives
+                            print(f"FineLag: Archived frame {frames_archived} to file")
+                
                 # # Debug output
                 # if self.frames_processed % 20 == 0:  # Print every 20 frames
                 #     print(f"Fine lag: ADC0 max={np.max(lag_p00):.3f}, ADC1 max={np.max(lag_p11):.3f}, FPS={self.fps:.1f}")
@@ -626,7 +666,7 @@ class FineLagComputer(threading.Thread):
                     self.frames_processed = 0
                     
                 # Small delay to avoid saturating (20 Hz update rate)
-                time.sleep(0.05)
+                time.sleep(0.01)
                 
             except Exception as e:
                 print(f"Error in fine lag computation: {e}")
@@ -1016,6 +1056,32 @@ class RadarComputer(threading.Thread):
                             self.shared_buffers.radar_history_count + 1,
                             self.shared_buffers.radar_history_len
                         )
+                    
+                    # Archive successful detection
+                    if self.shared_buffers.archiving_enabled and self.shared_buffers.archiver:
+                        # Get lag spectra from shared buffers
+                        archive_data = {
+                            'timestamp': time.time(),
+                            'adc0': d_adc[0],
+                            'adc1': d_adc[1], 
+                            'adc2': d_adc[2],
+                            'adc3': d_adc[3],
+                            'lag_adc0': self.shared_buffers.radar_lag_adc0.copy(),
+                            'lag_adc1': self.shared_buffers.radar_lag_adc1.copy(),
+                            'lag_adc2': self.shared_buffers.radar_lag_adc2.copy(),
+                            'range_m': avg_range,
+                            'azimuth_deg': avg_azimuth,
+                            'elevation_deg': avg_elevation,
+                            'delays': {i: self.shared_buffers.radar_delays[i] for i in range(3)},
+                            'valid': True
+                        }
+                        success = self.shared_buffers.archiver.archive_radar_frame(archive_data)
+                        if success:
+                            archiver_status = self.shared_buffers.archiver.get_status()
+                            frames_archived = archiver_status['frames_archived']
+                            if frames_archived % 20 == 0:  # Print every 20 successful archives
+                                print(f"Radar: Archived valid detection {frames_archived} to file")
+                            
                 else:
                     # No detection - only update validity flag, keep last valid position values
                     with self.shared_buffers.radar_lock:
@@ -1027,6 +1093,30 @@ class RadarComputer(threading.Thread):
                                   f"Range={self.shared_buffers.radar_range[0]:.2f}m, "
                                   f"Az={self.shared_buffers.radar_azimuth[0]:.1f}°, "
                                   f"El={self.shared_buffers.radar_elevation[0]:.1f}°")
+                    
+                    # Archive invalid detection (optional - for data completeness)
+                    if self.shared_buffers.archiving_enabled and self.shared_buffers.archiver:
+                        archive_data = {
+                            'timestamp': time.time(),
+                            'adc0': d_adc[0],
+                            'adc1': d_adc[1],
+                            'adc2': d_adc[2], 
+                            'adc3': d_adc[3],
+                            'lag_adc0': self.shared_buffers.radar_lag_adc0.copy(),
+                            'lag_adc1': self.shared_buffers.radar_lag_adc1.copy(),
+                            'lag_adc2': self.shared_buffers.radar_lag_adc2.copy(),
+                            'range_m': self.shared_buffers.radar_range[0],  # Last valid position
+                            'azimuth_deg': self.shared_buffers.radar_azimuth[0],
+                            'elevation_deg': self.shared_buffers.radar_elevation[0], 
+                            'delays': {i: self.shared_buffers.radar_delays[i] for i in range(3)},
+                            'valid': False
+                        }
+                        success = self.shared_buffers.archiver.archive_radar_frame(archive_data)
+                        if success:
+                            archiver_status = self.shared_buffers.archiver.get_status()
+                            frames_archived = archiver_status['frames_archived']
+                            if frames_archived % 100 == 0:  # Print every 100 successful archives
+                                print(f"Radar: Archived invalid detection {frames_archived} to file")
                 
                 # Update performance metrics
                 self.frames_processed += 1
@@ -1226,6 +1316,20 @@ class SuperFFTComputer(threading.Thread):
                         self.shared_buffers.waterfall_len
                     )
                 
+                # Archive the frame if enabled
+                if self.shared_buffers.archiving_enabled and self.shared_buffers.archiver:
+                    archive_data = {
+                        'timestamp': time.time(),
+                        'adc0': adc0_data,  # 262,144 samples
+                        'psd': psd,  # 131,073 bins
+                    }
+                    success = self.shared_buffers.archiver.archive_super_fft_frame(archive_data)
+                    if success:
+                        archiver_status = self.shared_buffers.archiver.get_status()
+                        frames_archived = archiver_status['frames_archived']
+                        if frames_archived % 50 == 0:  # Print every 50 successful archives
+                            print(f"SuperFFT: Archived frame {frames_archived} to file")
+                
                 # Update performance metrics
                 self.frames_processed += 1
                 current_time = time.time()
@@ -1298,6 +1402,11 @@ class SharedDataBuffers:
         self.total_captures = 0
         self.adc_or_count = 0
         self.adc_ov_count = 0
+        
+        # Archiving support
+        self.archiving_enabled = False
+        self.archiver = None  # Will be set to DataArchiver instance
+        self.archive_path = "./archives"
         
         # Create shared memory for current frame data
         self.shm_p00 = shared_memory.SharedMemory(create=True, size=NBINS_TOTAL * 8)
@@ -1991,6 +2100,20 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.restore_plots_button.setToolTip("Show all hidden plots")
         self.restore_plots_button.clicked.connect(self._restore_all_plots)
 
+        # Archive controls
+        self.archive_checkbox = QtWidgets.QCheckBox("Enable Archiving")
+        self.archive_checkbox.setToolTip("Archive data to HDF5 file")
+        self.archive_checkbox.stateChanged.connect(self._toggle_archiving)
+        self.archive_checkbox.setEnabled(DATA_ARCHIVER_AVAILABLE)
+
+        self.archive_path_button = QtWidgets.QPushButton("Archive Path...")
+        self.archive_path_button.setToolTip("Select archive directory")
+        self.archive_path_button.clicked.connect(self._select_archive_path)
+        self.archive_path_button.setEnabled(DATA_ARCHIVER_AVAILABLE)
+
+        self.archive_status_label = QtWidgets.QLabel("Not Recording")
+        self.archive_status_label.setStyleSheet("color: gray;")
+
         # Add widgets to second row
         toolbar_row2.addWidget(self.scale_update_spinner)
         toolbar_row2.addWidget(self.mean_subtract_checkbox)
@@ -2008,6 +2131,10 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         toolbar_row2.addWidget(self.super_fft_mode_button)
         toolbar_row2.addWidget(self.radar_mode_button)
         toolbar_row2.addWidget(self.radar_threshold_spinner)
+        toolbar_row2.addSpacing(20)
+        toolbar_row2.addWidget(self.archive_checkbox)
+        toolbar_row2.addWidget(self.archive_path_button)
+        toolbar_row2.addWidget(self.archive_status_label)
         toolbar_row2.addSpacing(20)
         toolbar_row2.addWidget(self.restore_plots_button)
         toolbar_row2.addStretch(1)
@@ -4741,8 +4868,105 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                 plot_widget.addItem(text_item)
                 plot_widget._peak_text = text_item  # Store reference for cleanup
 
+    def _toggle_archiving(self, state: int) -> None:
+        """Toggle archiving on/off."""
+        if not DATA_ARCHIVER_AVAILABLE:
+            self.archive_checkbox.setChecked(False)
+            QtWidgets.QMessageBox.warning(self, "Archiving Not Available", 
+                "h5py is not installed. Please install h5py to enable archiving.")
+            return
+            
+        enabled = (state == QtCore.Qt.CheckState.Checked)
+        
+        if enabled:
+            # Start archiving
+            current_mode = self._get_current_mode()
+            if current_mode:
+                if not self.shared_buffers.archiver:
+                    self.shared_buffers.archiver = DataArchiver(
+                        base_path=self.shared_buffers.archive_path
+                    )
+                
+                config = {
+                    'fs_hz': FS_HZ,
+                    'frames_to_average': self.config.frames_to_average,
+                    'x01': 1.0,  # Default antenna spacing
+                    'x02': 1.0,
+                    'threshold': self.radar_threshold_spinner.value()
+                }
+                
+                if self.shared_buffers.archiver.start_session(current_mode, config):
+                    self.shared_buffers.archiving_enabled = True
+                    self.archive_status_label.setText("Recording")
+                    self.archive_status_label.setStyleSheet("color: #FF6B6B;")  # Red
+                    print(f"Started archiving in {current_mode} mode")
+                else:
+                    self.archive_checkbox.setChecked(False)
+                    QtWidgets.QMessageBox.critical(self, "Archiving Error", 
+                        "Failed to start archiving session.")
+            else:
+                self.archive_checkbox.setChecked(False)
+                QtWidgets.QMessageBox.warning(self, "No Active Mode", 
+                    "Please enable a capture mode (Fine Lag, Super FFT, or Radar) before archiving.")
+        else:
+            # Stop archiving
+            if self.shared_buffers and self.shared_buffers.archiver:
+                self.shared_buffers.archiver.stop_session()
+                self.shared_buffers.archiving_enabled = False
+                self.archive_status_label.setText("Not Recording")
+                self.archive_status_label.setStyleSheet("color: gray;")
+                print("Stopped archiving")
+
+    def _select_archive_path(self) -> None:
+        """Open dialog to select archive directory."""
+        current_path = self.shared_buffers.archive_path if self.shared_buffers else "./archives"
+        
+        directory = QtWidgets.QFileDialog.getExistingDirectory(
+            self, 
+            "Select Archive Directory",
+            current_path
+        )
+        
+        if directory:
+            if self.shared_buffers:
+                self.shared_buffers.archive_path = directory
+            self.archive_path_button.setText(f"...{directory[-20:]}")  # Show last 20 chars
+            print(f"Archive path set to: {directory}")
+
+    def _get_current_mode(self) -> Optional[str]:
+        """Get the currently active mode for archiving."""
+        if self.fine_lag_mode_button.isChecked():
+            return 'fine_lag'
+        elif self.super_fft_mode_button.isChecked():
+            return 'super_fft'
+        elif self.radar_mode_button.isChecked():
+            return 'radar'
+        else:
+            return None
+
+    def _update_archive_status(self) -> None:
+        """Update archive status display."""
+        if not self.shared_buffers or not self.shared_buffers.archiver:
+            return
+            
+        status = self.shared_buffers.archiver.get_status()
+        
+        if status['recording']:
+            self.archive_status_label.setText(
+                f"Recording: {status['file_size_mb']:.1f} MB | "
+                f"{status['frames_archived']} frames"
+            )
+            self.archive_status_label.setStyleSheet("color: #FF6B6B;")  # Red
+        else:
+            self.archive_status_label.setText("Archive Ready")
+            self.archive_status_label.setStyleSheet("color: #90EE90;")  # Green
+
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         """Handle the main window close event."""
+        # Stop archiving if active
+        if self.shared_buffers and self.shared_buffers.archiver:
+            self.shared_buffers.archiver.stop_session()
+        
         self.stop_workers()
         self.disconnect_from_board()
         event.accept()

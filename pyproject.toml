@@ -130,3 +130,4 @@ errors-only = true
     chime_gps = "pychfpga.gps:main"
     chime_raw_acq = "pychfpga.raw_acq:main"
     chime_rx_ps = "pychfpga.ps:main"
+    periscope = "pychfpga.apps.periscope_correlator.app:main"
