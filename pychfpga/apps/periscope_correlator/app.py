@@ -571,9 +571,24 @@ class FineLagComputer(threading.Thread):
                 
                 # Update shared buffers with lag data
                 with self.shared_buffers.fine_lag_lock:
+                    # Store current lag spectra
                     self.shared_buffers.fine_lag_p00[:] = lag_p00
                     self.shared_buffers.fine_lag_p11[:] = lag_p11
                     self.shared_buffers.fine_lag_p01[:] = lag_p01  # Cross-correlation magnitude
+                    
+                    # Update history buffers for running difference mode
+                    # Store in circular buffer at current position
+                    hist_pos = self.shared_buffers.fine_lag_history_pos
+                    self.shared_buffers.fine_lag_history_p00[hist_pos] = lag_p00
+                    self.shared_buffers.fine_lag_history_p11[hist_pos] = lag_p11
+                    self.shared_buffers.fine_lag_history_p01[hist_pos] = lag_p01
+                    
+                    # Update history position and count
+                    self.shared_buffers.fine_lag_history_pos = (hist_pos + 1) % self.shared_buffers.max_diff_window
+                    self.shared_buffers.fine_lag_history_count = min(
+                        self.shared_buffers.fine_lag_history_count + 1,
+                        self.shared_buffers.max_diff_window
+                    )
                     
                     # Store raw time domain data (concatenate frames for display)
                     # Limit to max frames that fit in the buffer
@@ -627,6 +642,39 @@ class FineLagComputer(threading.Thread):
                     self.shared_buffers.fine_lag_wf_p00[0] = lag_p00
                     self.shared_buffers.fine_lag_wf_p11[0] = lag_p11
                     self.shared_buffers.fine_lag_wf_p01[0] = lag_p01  # Cross-correlation waterfall
+                    
+                    # Calculate and store running difference if enabled
+                    if self.shared_buffers.running_diff_enabled:
+                        window_size = self.shared_buffers.running_diff_window_size
+                        history_count = self.shared_buffers.fine_lag_history_count
+                        
+                        if history_count >= window_size:
+                            # Calculate moving average from the last window_size frames
+                            history_pos = self.shared_buffers.fine_lag_history_pos
+                            
+                            # Get indices for the last window_size frames
+                            indices = []
+                            for i in range(window_size):
+                                idx = (history_pos - 1 - i) % self.shared_buffers.max_diff_window
+                                if idx < history_count:  # Only use valid history entries
+                                    indices.append(idx)
+                            
+                            if len(indices) > 0:
+                                # Calculate moving averages
+                                moving_avg_p00 = np.mean(self.shared_buffers.fine_lag_history_p00[indices], axis=0)
+                                moving_avg_p11 = np.mean(self.shared_buffers.fine_lag_history_p11[indices], axis=0)
+                                moving_avg_p01 = np.mean(self.shared_buffers.fine_lag_history_p01[indices], axis=0)
+                                
+                                # Calculate differences and update diff waterfall buffers
+                                # Shift existing diff data down and insert new at top
+                                self.shared_buffers.fine_lag_diff_wf_p00[1:] = self.shared_buffers.fine_lag_diff_wf_p00[:-1]
+                                self.shared_buffers.fine_lag_diff_wf_p11[1:] = self.shared_buffers.fine_lag_diff_wf_p11[:-1]
+                                self.shared_buffers.fine_lag_diff_wf_p01[1:] = self.shared_buffers.fine_lag_diff_wf_p01[:-1]
+                                
+                                # Write new difference data at position 0 (top)
+                                self.shared_buffers.fine_lag_diff_wf_p00[0] = lag_p00 - moving_avg_p00
+                                self.shared_buffers.fine_lag_diff_wf_p11[0] = lag_p11 - moving_avg_p11
+                                self.shared_buffers.fine_lag_diff_wf_p01[0] = lag_p01 - moving_avg_p01
                     
                     # Update frames written counter
                     self.shared_buffers.fine_lag_frames_written = min(
@@ -1500,6 +1548,11 @@ class SharedDataBuffers:
         self.shm_fine_lag_wf_p11 = shared_memory.SharedMemory(create=True, size=waterfall_len * n_fine_lags * 8)
         self.shm_fine_lag_wf_p01 = shared_memory.SharedMemory(create=True, size=waterfall_len * n_fine_lags * 8)  # Cross-correlation waterfall
         
+        # Running difference waterfall buffers (separate from raw data)
+        self.shm_fine_lag_diff_wf_p00 = shared_memory.SharedMemory(create=True, size=waterfall_len * n_fine_lags * 8)
+        self.shm_fine_lag_diff_wf_p11 = shared_memory.SharedMemory(create=True, size=waterfall_len * n_fine_lags * 8)
+        self.shm_fine_lag_diff_wf_p01 = shared_memory.SharedMemory(create=True, size=waterfall_len * n_fine_lags * 8)
+        
         # Raw time domain data for fine lag
         self.shm_fine_time_adc0 = shared_memory.SharedMemory(create=True, size=n_time_samples * 8)
         self.shm_fine_time_adc1 = shared_memory.SharedMemory(create=True, size=n_time_samples * 8)
@@ -1510,6 +1563,11 @@ class SharedDataBuffers:
         self.fine_lag_wf_p00 = np.ndarray((waterfall_len, n_fine_lags), dtype=np.float64, buffer=self.shm_fine_lag_wf_p00.buf)
         self.fine_lag_wf_p11 = np.ndarray((waterfall_len, n_fine_lags), dtype=np.float64, buffer=self.shm_fine_lag_wf_p11.buf)
         self.fine_lag_wf_p01 = np.ndarray((waterfall_len, n_fine_lags), dtype=np.float64, buffer=self.shm_fine_lag_wf_p01.buf)  # Cross-correlation waterfall
+        
+        # Running difference waterfall arrays
+        self.fine_lag_diff_wf_p00 = np.ndarray((waterfall_len, n_fine_lags), dtype=np.float64, buffer=self.shm_fine_lag_diff_wf_p00.buf)
+        self.fine_lag_diff_wf_p11 = np.ndarray((waterfall_len, n_fine_lags), dtype=np.float64, buffer=self.shm_fine_lag_diff_wf_p11.buf)
+        self.fine_lag_diff_wf_p01 = np.ndarray((waterfall_len, n_fine_lags), dtype=np.float64, buffer=self.shm_fine_lag_diff_wf_p01.buf)
         
         # Time domain arrays
         self.fine_time_adc0 = np.ndarray((n_time_samples,), dtype=np.float64, buffer=self.shm_fine_time_adc0.buf)
@@ -1525,6 +1583,11 @@ class SharedDataBuffers:
         self.fine_time_adc0.fill(0)
         self.fine_time_adc1.fill(0)
         
+        # Initialize running difference arrays
+        self.fine_lag_diff_wf_p00.fill(0)
+        self.fine_lag_diff_wf_p11.fill(0)
+        self.fine_lag_diff_wf_p01.fill(0)
+        
         # Fine lag waterfall position and lock
         self.fine_lag_wf_write_pos = 0
         self.fine_lag_frames_written = 0
@@ -1532,6 +1595,38 @@ class SharedDataBuffers:
         
         # Track actual number of time domain samples being used
         self.fine_time_n_samples = 32768  # Default to 2 frames
+        
+        # Control flags for running difference mode (set by UI thread)
+        self.running_diff_enabled = False
+        self.running_diff_window_size = 10
+        
+        # Running difference mode history buffers for fine lag
+        self.max_diff_window = 100  # Maximum window size for running difference
+        self.shm_fine_lag_history_p00 = shared_memory.SharedMemory(
+            create=True, size=self.max_diff_window * n_fine_lags * 8)
+        self.shm_fine_lag_history_p11 = shared_memory.SharedMemory(
+            create=True, size=self.max_diff_window * n_fine_lags * 8)
+        self.shm_fine_lag_history_p01 = shared_memory.SharedMemory(
+            create=True, size=self.max_diff_window * n_fine_lags * 8)
+        
+        self.fine_lag_history_p00 = np.ndarray(
+            (self.max_diff_window, n_fine_lags), dtype=np.float64, 
+            buffer=self.shm_fine_lag_history_p00.buf)
+        self.fine_lag_history_p11 = np.ndarray(
+            (self.max_diff_window, n_fine_lags), dtype=np.float64, 
+            buffer=self.shm_fine_lag_history_p11.buf)
+        self.fine_lag_history_p01 = np.ndarray(
+            (self.max_diff_window, n_fine_lags), dtype=np.float64, 
+            buffer=self.shm_fine_lag_history_p01.buf)
+        
+        # Initialize history buffers
+        self.fine_lag_history_p00.fill(0)
+        self.fine_lag_history_p11.fill(0)
+        self.fine_lag_history_p01.fill(0)
+        
+        # History position and count
+        self.fine_lag_history_pos = 0
+        self.fine_lag_history_count = 0
         
         # Super FFT data (131,073 frequency bins for 262,144 sample FFT)
         n_super_fft_bins = 131073  # (16 * 16384) // 2 + 1
@@ -1620,17 +1715,22 @@ class SharedDataBuffers:
         
     def cleanup(self):
         """Clean up shared memory."""
+        # Add radar lag and delay/centroid buffers to cleanup
         for shm in [self.shm_p00, self.shm_p11, self.shm_p01_real, self.shm_p01_imag,
                     self.shm_wf_p00, self.shm_wf_p11, self.shm_wf_p01_real, self.shm_wf_p01_imag,
                     self.shm_lag_p00, self.shm_lag_p11, self.shm_lag_p01_mag, self.shm_lag_p01_phase,
                     self.shm_lag_wf_p00, self.shm_lag_wf_p11, self.shm_lag_wf_p01_mag, self.shm_lag_wf_p01_phase,
                     self.shm_fine_lag_p00, self.shm_fine_lag_p11, self.shm_fine_lag_p01,
                     self.shm_fine_lag_wf_p00, self.shm_fine_lag_wf_p11, self.shm_fine_lag_wf_p01,
+                    self.shm_fine_lag_diff_wf_p00, self.shm_fine_lag_diff_wf_p11, self.shm_fine_lag_diff_wf_p01,
                     self.shm_fine_time_adc0, self.shm_fine_time_adc1,
+                    self.shm_fine_lag_history_p00, self.shm_fine_lag_history_p11, self.shm_fine_lag_history_p01,
                     self.shm_super_fft_psd, self.shm_super_fft_wf_psd, self.shm_super_fft_time,
                     self.shm_radar_range, self.shm_radar_azimuth, self.shm_radar_elevation,
                     self.shm_radar_detection_valid, self.shm_radar_history_range,
-                    self.shm_radar_history_azimuth, self.shm_radar_history_elevation]:
+                    self.shm_radar_history_azimuth, self.shm_radar_history_elevation,
+                    self.shm_radar_lag_adc0, self.shm_radar_lag_adc1, self.shm_radar_lag_adc2,
+                    self.shm_radar_delays, self.shm_radar_centroid_starts, self.shm_radar_centroid_ends]:
             shm.close()
             shm.unlink()
 
@@ -2018,6 +2118,31 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.mean_subtract_checkbox.setToolTip("Subtract mean from each frequency bin in waterfall plots")
         self.mean_subtract_checkbox.setChecked(False)
         
+        # Running difference mode controls
+        self.running_diff_checkbox = QtWidgets.QCheckBox("Running Difference")
+        self.running_diff_checkbox.setToolTip("Subtract moving average of previous N frames to highlight changes")
+        self.running_diff_checkbox.setChecked(False)
+        
+        self.diff_window_spinner = QtWidgets.QSpinBox()
+        self.diff_window_spinner.setRange(2, 100)
+        self.diff_window_spinner.setValue(10)
+        self.diff_window_spinner.setPrefix("Window: ")
+        self.diff_window_spinner.setSuffix(" frames")
+        self.diff_window_spinner.setToolTip("Number of frames for moving average in running difference mode")
+        self.diff_window_spinner.setEnabled(False)  # Disabled until running diff is checked
+        
+        # Connect running diff checkbox to enable/disable spinner and update shared buffer flags
+        self.running_diff_checkbox.stateChanged.connect(self._on_running_diff_changed)
+        self.diff_window_spinner.valueChanged.connect(self._on_diff_window_changed)
+        
+        self.fix_color_scale_checkbox = QtWidgets.QCheckBox("Fix Color Scale")
+        self.fix_color_scale_checkbox.setToolTip("Lock the current color scale to see relative changes over time")
+        self.fix_color_scale_checkbox.setChecked(False)
+        
+        self.dark_mode_colors_checkbox = QtWidgets.QCheckBox("Dark Mode Colors")
+        self.dark_mode_colors_checkbox.setToolTip("Use dark diverging colormap (black at zero) for difference modes")
+        self.dark_mode_colors_checkbox.setChecked(False)
+        
         self.log_scale_checkbox = QtWidgets.QCheckBox("Log Scale")
         self.log_scale_checkbox.setToolTip("Use log scale for autocorrelations and symmetric log for cross-correlations")
         self.log_scale_checkbox.setChecked(True)
@@ -2117,6 +2242,10 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         # Add widgets to second row
         toolbar_row2.addWidget(self.scale_update_spinner)
         toolbar_row2.addWidget(self.mean_subtract_checkbox)
+        toolbar_row2.addWidget(self.running_diff_checkbox)
+        toolbar_row2.addWidget(self.diff_window_spinner)
+        toolbar_row2.addWidget(self.fix_color_scale_checkbox)
+        toolbar_row2.addWidget(self.dark_mode_colors_checkbox)
         toolbar_row2.addWidget(self.log_scale_checkbox)
         toolbar_row2.addWidget(self.symlog_crossover_spinner)
         toolbar_row2.addWidget(self.viewbox_mode_checkbox)
@@ -2557,9 +2686,15 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.fine_lag_waterfall_images = {}
         self.fine_lag_waterfall_levels = {}
         self.fine_lag_waterfall_level_update_counter = {}
+        self.fine_lag_waterfall_colorbars = {}  # Store colorbars
         
+        # Get colormaps - viridis for normal, diverging for differences
         viridis_cm = pg.colormap.get('viridis')
-
+        # Light mode: CET-D1 (red-white-blue) for differences 
+        rdbu_light_cm = pg.colormap.get('CET-D1')  # Diverging colormap (white at zero)
+        # Dark mode: CET-D4 (red-black-blue) for differences
+        rdbu_dark_cm = pg.colormap.get('CET-D4')   # Dark diverging colormap (black at zero)
+        
         titles = ["ADC0 Fine Lag", "ADC1 Fine Lag", "Cross-Correlation"]
         keys = ['fine_lag_p00', 'fine_lag_p11', 'fine_lag_p01']
         
@@ -2577,7 +2712,11 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.CheckState.Checked))
             self.plot_checkboxes[f"fine_lag_wf_{key}"] = cb
             
-            plot = pg.PlotWidget()
+            # Create a GraphicsLayoutWidget to hold both plot and colorbar
+            graphics_layout = pg.GraphicsLayoutWidget()
+            
+            # Add the plot
+            plot = graphics_layout.addPlot(row=0, col=0)
             plot.setLabel('left', 'Time')
             plot.setLabel('bottom', 'Distance', units='m')
             # Invert Y axis so 0 is at top (newest data)
@@ -2585,15 +2724,31 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             
             img_item = pg.ImageItem()
             plot.addItem(img_item)
-            img_item.setLookupTable(viridis_cm.getLookupTable())
+            
+            # Store all colormaps - we'll switch between them based on mode
+            img_item._viridis_lut = viridis_cm.getLookupTable()
+            img_item._rdbu_light_lut = rdbu_light_cm.getLookupTable()
+            img_item._rdbu_dark_lut = rdbu_dark_cm.getLookupTable()
+            img_item.setLookupTable(viridis_cm.getLookupTable())  # Start with viridis
+            
+            # Add colorbar
+            colorbar = pg.ColorBarItem(
+                values=(0, 1),  # Will be updated with actual data range
+                colorMap=viridis_cm,
+                width=20,
+                interactive=False
+            )
+            colorbar.setImageItem(img_item)
+            graphics_layout.addItem(colorbar, row=0, col=1)
             
             self.fine_lag_waterfall_plots[key] = plot
             self.fine_lag_waterfall_images[key] = img_item
+            self.fine_lag_waterfall_colorbars[key] = colorbar
             self.fine_lag_waterfall_levels[key] = None
             self.fine_lag_waterfall_level_update_counter[key] = 0
             
             container_layout.addWidget(cb)
-            container_layout.addWidget(plot)
+            container_layout.addWidget(graphics_layout)
             
             layout.addWidget(container, row, col)
 
@@ -3785,6 +3940,23 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         if self.radar_computer_thread:
             self.radar_computer_thread.set_threshold(value)
             print(f"Radar threshold set to: {value:.2f}")
+    
+    def _on_running_diff_changed(self, state: int) -> None:
+        """Handle running difference checkbox state change."""
+        enabled = (state == QtCore.Qt.CheckState.Checked)
+        self.diff_window_spinner.setEnabled(enabled)
+        
+        # Update shared buffer flag if it exists
+        if self.shared_buffers:
+            self.shared_buffers.running_diff_enabled = enabled
+            print(f"Running difference mode {'enabled' if enabled else 'disabled'}")
+    
+    def _on_diff_window_changed(self, value: int) -> None:
+        """Handle difference window size change."""
+        # Update shared buffer flag if it exists
+        if self.shared_buffers:
+            self.shared_buffers.running_diff_window_size = value
+            print(f"Running difference window size set to: {value}")
 
     def _update_adc_status(self) -> None:
         """Update the ADC status display in the status bar."""
@@ -3985,8 +4157,14 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Get the scale update interval from the spinner
             scale_update_interval = self.scale_update_spinner.value()
             
-            # Update levels every N frames or if not set
-            if self.waterfall_levels[key] is None or self.waterfall_level_update_counter[key] >= scale_update_interval:
+            # Update levels every N frames or if not set, but only if color scale is not fixed
+            update_levels = (
+                self.waterfall_levels[key] is None or 
+                (not self.fix_color_scale_checkbox.isChecked() and 
+                 self.waterfall_level_update_counter[key] >= scale_update_interval)
+            )
+            
+            if update_levels:
                 # Calculate robust levels using percentiles
                 # Filter out zeros and invalid data for better scaling
                 valid_data = wf_data[np.isfinite(wf_data)]
@@ -4101,8 +4279,14 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Get the scale update interval
             scale_update_interval = self.scale_update_spinner.value()
             
-            # Update levels for phase data  
-            if self.waterfall_levels[key] is None or self.waterfall_level_update_counter[key] >= scale_update_interval:
+            # Update levels for phase data, but only if color scale is not fixed
+            update_levels = (
+                self.waterfall_levels[key] is None or 
+                (not self.fix_color_scale_checkbox.isChecked() and 
+                 self.waterfall_level_update_counter[key] >= scale_update_interval)
+            )
+            
+            if update_levels:
                 valid_data = wf_data[np.isfinite(wf_data)]
                 if len(valid_data) > 0:
                     # Phase data ranges from -pi to pi
@@ -4195,8 +4379,14 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Get the scale update interval from the spinner
             scale_update_interval = self.scale_update_spinner.value()
             
-            # Update levels every N frames or if not set
-            if self.lag_waterfall_levels[key] is None or self.lag_waterfall_level_update_counter[key] >= scale_update_interval:
+            # Update levels every N frames or if not set, but only if color scale is not fixed
+            update_levels = (
+                self.lag_waterfall_levels[key] is None or 
+                (not self.fix_color_scale_checkbox.isChecked() and 
+                 self.lag_waterfall_level_update_counter[key] >= scale_update_interval)
+            )
+            
+            if update_levels:
                 # Calculate robust levels using percentiles
                 valid_data = wf_data[np.isfinite(wf_data)]
                 
@@ -4325,16 +4515,30 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         use_log_scale = self.log_scale_checkbox.isChecked()
         
         # Helper function to update a fine lag waterfall plot
-        def update_fine_lag_waterfall(key, data):
+        def update_fine_lag_waterfall(key, raw_data):
             """Update a single fine lag waterfall plot with proper scaling and levels."""
             plot_key = f"fine_lag_wf_{key}"
             if not self.plot_checkboxes[plot_key].isChecked():
                 return
+            
+            # Choose which buffer to display based on running difference mode
+            if self.running_diff_checkbox.isChecked():
+                # Use the pre-calculated difference buffer
+                if key == 'fine_lag_p00':
+                    data = self.shared_buffers.fine_lag_diff_wf_p00
+                elif key == 'fine_lag_p11':
+                    data = self.shared_buffers.fine_lag_diff_wf_p11
+                else:  # fine_lag_p01
+                    data = self.shared_buffers.fine_lag_diff_wf_p01
+            else:
+                # Use the raw data buffer
+                data = raw_data
                 
             wf_data = get_ordered_waterfall(data, pos)
             
-            # Apply mean subtraction if enabled
-            if self.mean_subtract_checkbox.isChecked():
+            # Apply mean subtraction only if enabled AND not in running difference mode
+            if self.mean_subtract_checkbox.isChecked() and not self.running_diff_checkbox.isChecked():
+                # Original mean subtraction mode
                 frames_written = self.shared_buffers.fine_lag_frames_written
                 if frames_written > 0:
                     populated_data = wf_data[-frames_written:] if frames_written < self.shared_buffers.waterfall_len else wf_data
@@ -4347,8 +4551,14 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Get the scale update interval from the spinner
             scale_update_interval = self.scale_update_spinner.value()
             
-            # Update levels every N frames or if not set
-            if self.fine_lag_waterfall_levels[key] is None or self.fine_lag_waterfall_level_update_counter[key] >= scale_update_interval:
+            # Update levels every N frames or if not set, but only if color scale is not fixed
+            update_levels = (
+                self.fine_lag_waterfall_levels[key] is None or 
+                (not self.fix_color_scale_checkbox.isChecked() and 
+                 self.fine_lag_waterfall_level_update_counter[key] >= scale_update_interval)
+            )
+            
+            if update_levels:
                 self.fine_lag_waterfall_level_update_counter[key] = 0
                 # Calculate robust levels using percentiles
                 valid_data = wf_data[np.isfinite(wf_data)]
@@ -4371,10 +4581,29 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             
             # Set image with fixed levels
             img = self.fine_lag_waterfall_images[key]
+            colorbar = self.fine_lag_waterfall_colorbars[key]
             
-            if use_log_scale:
+            # Switch colormap based on mode
+            if self.running_diff_checkbox.isChecked() or self.mean_subtract_checkbox.isChecked():
+                # Use diverging colormap for difference data
+                if self.dark_mode_colors_checkbox.isChecked():
+                    # Dark mode: use CET-D4 (black at zero)
+                    rdbu_cm = pg.colormap.get('CET-D4')
+                else:
+                    # Light mode: use CET-D1 (white at zero)
+                    rdbu_cm = pg.colormap.get('CET-D1')
+                
+                img.setLookupTable(rdbu_cm.getLookupTable())
+                colorbar.setColorMap(rdbu_cm)
+            else:
+                # Use viridis for normal data
+                viridis_cm = pg.colormap.get('viridis')
+                img.setLookupTable(viridis_cm.getLookupTable())
+                colorbar.setColorMap(viridis_cm)
+            
+            if use_log_scale and not (self.running_diff_checkbox.isChecked() or self.mean_subtract_checkbox.isChecked()):
                 # For normalized autocorrelation data, use log scale to better visualize small values
-                # When mean subtraction is on, data can be negative, so clip to positive values
+                # Don't use log scale for difference data as it can be negative
                 epsilon = 1e-10
                 clipped_data = np.maximum(wf_data, epsilon)
                 log_wf_data = np.log10(clipped_data)
@@ -4384,9 +4613,14 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                 vmax_clipped = max(vmax, epsilon)
                 log_levels = (np.log10(vmin_clipped), np.log10(vmax_clipped))
                 img.setImage(log_wf_data.T, autoLevels=False, levels=log_levels)
+                # Update colorbar with log scale values
+                colorbar.setLevels((np.log10(vmin_clipped), np.log10(vmax_clipped)))
             else:
-                # Linear scale
+                # Linear scale (or difference mode which should always be linear)
                 img.setImage(wf_data.T, autoLevels=False, levels=self.fine_lag_waterfall_levels[key])
+                # Update colorbar with actual data range
+                vmin, vmax = self.fine_lag_waterfall_levels[key]
+                colorbar.setLevels((vmin, vmax))
             
             # Set the scale to show distance on x-axis (only need to do once)
             if not hasattr(img, '_scale_set'):
@@ -4458,8 +4692,14 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         # Get the scale update interval from the spinner
         scale_update_interval = self.scale_update_spinner.value()
         
-        # Update levels every N frames or if not set
-        if self.super_fft_waterfall_levels[key] is None or self.super_fft_waterfall_level_update_counter[key] >= scale_update_interval:
+        # Update levels every N frames or if not set, but only if color scale is not fixed
+        update_levels = (
+            self.super_fft_waterfall_levels[key] is None or 
+            (not self.fix_color_scale_checkbox.isChecked() and 
+             self.super_fft_waterfall_level_update_counter[key] >= scale_update_interval)
+        )
+        
+        if update_levels:
             # Calculate robust levels using percentiles
             valid_data = wf_data[np.isfinite(wf_data) & (wf_data > 0)]
             
