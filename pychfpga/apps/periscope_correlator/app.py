@@ -1851,13 +1851,13 @@ class UDPReceiver(threading.Thread):
         
         while self.running:
             try:
-                # Reset ADC flags for next frame capture
-                self._reset_adc_flags()
+                ## Reset ADC flags for next frame capture
+                #self._reset_adc_flags()
 
                 nbytes, _ = self.socket.recvfrom_into(packet_buffer)
 
-                # Check ADC flags after completing frame capture
-                self._check_adc_flags()
+                ## Check ADC flags after completing frame capture
+                #self._check_adc_flags()
                 
                 if nbytes > 0:
                     self._process_packet(packet_buffer[:nbytes])
