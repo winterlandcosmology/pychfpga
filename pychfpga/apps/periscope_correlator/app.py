@@ -325,6 +325,13 @@ class FineLagComputer(threading.Thread):
         self.running = True
         self.enabled = threading.Event()
         
+        # Fine lag specific averaging setting
+        self.fine_lag_frames_to_average = 4  # Default to max for best SNR
+        
+        # UCAP mode configuration
+        self.ucap_mode = 1  # Default to mode 1 (4 channels, 4 frames)
+        self.max_frames_per_channel = 4  # Will be updated based on ucap_mode
+        
         # Performance tracking
         self.frames_processed = 0
         self.last_fps_time = time.time()
@@ -343,16 +350,40 @@ class FineLagComputer(threading.Thread):
         else:
             self.enabled.clear()
     
+    def set_frames_to_average(self, n_frames: int):
+        """Set the number of frames to average for fine lag mode."""
+        self.fine_lag_frames_to_average = min(n_frames, self.max_frames_per_channel)
+    
     def run(self):
         """Main thread loop for computing fine lag spectra from raw ADC data."""
-        # Initial setup - do this once before the loop
-        self.pc.set_ucap_mode(mode=0)  # 8-channel capture (2 frames per channel)
+        # Initial setup - detect best ucap_mode (try mode 1 first, fallback to mode 0)
+        try:
+            self.pc.set_ucap_mode(mode=1)  # Try 4-channel capture (4 frames per channel)
+            self.ucap_mode = 1
+            self.max_frames_per_channel = 4
+            print("Fine lag: Using ucap_mode=1 (4 channels, 4 frames per channel)")
+        except:
+            # Fallback to mode 0 if mode 1 not supported
+            self.pc.set_ucap_mode(mode=0)  # 8-channel capture (2 frames per channel)
+            self.ucap_mode = 0
+            self.max_frames_per_channel = 2
+            print("Fine lag: Falling back to ucap_mode=0 (8 channels, 2 frames per channel)")
+        
+        # TODO: When ucap_mode=2 is available, add support here:
+        # if ucap_mode_2_available:
+        #     self.pc.set_ucap_mode(mode=2)  # 2-channel capture (8 frames per channel)
+        #     self.ucap_mode = 2
+        #     self.max_frames_per_channel = 8
         
         # Do initial capture with flush=True to set everything up
-        # Always capture at least 2 frames (minimum for mode 0)
-        n_frames_to_capture = max(2, self.config.frames_to_average)
-        # Round up to nearest multiple of 2
-        n_frames_to_capture = ((n_frames_to_capture + 1) // 2) * 2
+        if self.ucap_mode == 0:
+            n_frames_to_capture = max(2, self.fine_lag_frames_to_average)
+            n_frames_to_capture = ((n_frames_to_capture + 1) // 2) * 2  # Round to multiple of 2
+        elif self.ucap_mode == 1:
+            n_frames_to_capture = 4  # Always capture 4 frames in mode 1
+        else:  # ucap_mode == 2
+            n_frames_to_capture = 8  # Always capture 8 frames in mode 2
+        
         d_adc = self.pc.read_adc_frames(n_frames=n_frames_to_capture, split=True, verbose=0)
         
         # Debug: check which channels have data on first capture
@@ -367,12 +398,16 @@ class FineLagComputer(threading.Thread):
                 # Reset ADC flags before data capture
                 self._reset_adc_flags()
                 
-                # Get current frames to average from config (dynamic update)
-                n_frames_to_capture = max(2, self.config.frames_to_average)
-                # Round up to nearest multiple of 2
-                n_frames_to_capture = ((n_frames_to_capture + 1) // 2) * 2
-                
-                ncap = n_frames_to_capture // 2  # Number of captures needed
+                # Determine frames to capture based on ucap_mode
+                if self.ucap_mode == 0:
+                    n_frames_to_capture = 2  # Mode 0 always captures 2 frames
+                    ncap = 1  # One capture gives 2 frames in mode 0
+                elif self.ucap_mode == 1:
+                    n_frames_to_capture = 4  # Mode 1 always captures 4 frames
+                    ncap = 1  # One capture gives 4 frames in mode 1
+                else:  # ucap_mode == 2
+                    n_frames_to_capture = 8  # Mode 2 always captures 8 frames
+                    ncap = 1  # One capture gives 8 frames in mode 2
                 
                 # Use a small flush to ensure we're synchronized to a new timestamp
                 # This is lighter than the full flush in read_adc_frames
@@ -422,8 +457,7 @@ class FineLagComputer(threading.Thread):
                 lag_p01_sum = np.zeros(n_lags_cross, dtype=np.complex128)  # Complex for cross-correlation
                 
                 # Process only the requested number of frames for averaging
-                # (we may have captured more to meet the 2-frame requirement)
-                frames_to_process = min(self.config.frames_to_average, d_adc.shape[1])
+                frames_to_process = min(self.fine_lag_frames_to_average, d_adc.shape[1])
                 
                 # Check for missing data within frames
                 missing_data_detected = False
@@ -559,13 +593,17 @@ class FineLagComputer(threading.Thread):
                 # Take magnitude of cross-correlation
                 lag_p01 = np.abs(lag_p01_complex_avg)
                 
-                # Normalize by the zero-lag value for autocorrelations
-                lag_p00 = lag_p00 / lag_p00[0]
-                lag_p11 = lag_p11 / lag_p11[0]
+                # Store zero-lag values before normalization for cross-correlation
+                lag_p00_zero = lag_p00[0]
+                lag_p11_zero = lag_p11[0]
                 
-                # For cross-correlation, normalize by sqrt of auto-correlation zero-lags
-                # This gives correlation coefficient
-                norm_factor = np.sqrt(lag_p00_sum[0] * lag_p11_sum[0]) / frames_to_process
+                # Normalize autocorrelations by their zero-lag values
+                lag_p00 = lag_p00 / lag_p00_zero if lag_p00_zero > 0 else lag_p00
+                lag_p11 = lag_p11 / lag_p11_zero if lag_p11_zero > 0 else lag_p11
+                
+                # For cross-correlation, normalize by sqrt of zero-lag autocorrelations
+                # This gives proper correlation coefficient between -1 and +1
+                norm_factor = np.sqrt(lag_p00_zero * lag_p11_zero)
                 if norm_factor > 0:
                     lag_p01 = lag_p01 / norm_factor
                 
@@ -2004,10 +2042,11 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         
         # Lag axis in meters (distance = c * time / 2 for radar applications)
         lag_bins = np.arange(NBINS_TOTAL) - NBINS_TOTAL // 2
-        # Time between lag bins = M_FACTOR / FS_HZ seconds
-        lag_time_s = lag_bins * (M_FACTOR / FS_HZ)  # Time in seconds
+        # Time between lag bins = 1 / FS_HZ seconds (NO M_FACTOR - correlator visibilities are not decimated)
+        lag_time_s = lag_bins / FS_HZ  # Time in seconds
         c_m_per_s = 299792458.0  # Speed of light in meters per second
         self.lag_axis = lag_time_s * c_m_per_s / 2  # Convert to distance in meters (round trip)
+        # Range: ~-192 to +192 meters with 4.68 cm resolution (same as fine lag mode)
         
         # Fine lag axis in meters (for raw ADC data)
         # For cross-correlations, we now have both positive and negative lags centered around zero
@@ -2189,6 +2228,16 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.fine_lag_mode_button.clicked.connect(self._toggle_fine_lag_mode)
         self.fine_lag_mode_button.setEnabled(False)  # Disabled until connected
         
+        # Fine lag frames to average spinner
+        self.fine_lag_avg_spinner = QtWidgets.QSpinBox()
+        self.fine_lag_avg_spinner.setRange(1, 4)  # Will be updated based on ucap_mode
+        self.fine_lag_avg_spinner.setValue(4)  # Default to max for best SNR
+        self.fine_lag_avg_spinner.setPrefix("Fine Lag Avg: ")
+        self.fine_lag_avg_spinner.setSuffix(" frames")
+        self.fine_lag_avg_spinner.setToolTip("Number of frames to average in fine lag mode (more = better SNR)")
+        self.fine_lag_avg_spinner.valueChanged.connect(self._update_fine_lag_averaging)
+        self.fine_lag_avg_spinner.setEnabled(False)  # Disabled until fine lag mode active
+        
         # Super-resolution FFT controls
         self.super_fft_mode_button = QtWidgets.QPushButton("Enable Super-Resolution FFT")
         self.super_fft_mode_button.setCheckable(True)
@@ -2257,6 +2306,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         toolbar_row2.addWidget(self.frames_to_average_spinner)
         toolbar_row2.addSpacing(20)
         toolbar_row2.addWidget(self.fine_lag_mode_button)
+        toolbar_row2.addWidget(self.fine_lag_avg_spinner)
         toolbar_row2.addWidget(self.super_fft_mode_button)
         toolbar_row2.addWidget(self.radar_mode_button)
         toolbar_row2.addWidget(self.radar_threshold_spinner)
@@ -3643,6 +3693,12 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # TODO: Apply this to running threads
             print(f"Frames to average set to: {value}")
     
+    def _update_fine_lag_averaging(self, value: int) -> None:
+        """Update the number of frames to average in fine lag mode."""
+        if self.fine_lag_computer_thread:
+            self.fine_lag_computer_thread.set_frames_to_average(value)
+            print(f"Fine lag frames to average set to: {value}")
+    
     def _toggle_fine_lag_mode(self, checked: bool) -> None:
         """Toggle between normal mode and fine lag mode."""
         if not self.pocket_correlator:
@@ -3670,12 +3726,25 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             if not self.fine_lag_computer_thread:
                 self.fine_lag_computer_thread = FineLagComputer(self.pocket_correlator, self.shared_buffers, self.config)
                 self.fine_lag_computer_thread.start()
+                
+                # Update spinner range based on ucap_mode
+                max_frames = self.fine_lag_computer_thread.max_frames_per_channel
+                self.fine_lag_avg_spinner.setRange(1, max_frames)
+                self.fine_lag_avg_spinner.setValue(max_frames)  # Default to max for best SNR
+                
+                # Apply initial averaging setting
+                self.fine_lag_computer_thread.set_frames_to_average(self.fine_lag_avg_spinner.value())
             
             self.fine_lag_computer_thread.set_enabled(True)
             
+            # Enable the averaging spinner
+            self.fine_lag_avg_spinner.setEnabled(True)
+            
             # Update UI
             self.fine_lag_mode_button.setText("Disable Fine Lag Mode")
-            self.status_label.setText("Fine Lag Mode Active - cm resolution")
+            ucap_mode = self.fine_lag_computer_thread.ucap_mode if self.fine_lag_computer_thread else 0
+            mode_desc = {0: "2 frames", 1: "4 frames", 2: "8 frames"}
+            self.status_label.setText(f"Fine Lag Mode Active - cm resolution, {mode_desc.get(ucap_mode, 'unknown')} max")
             
             # Disable normal operation controls
             self.calibrate_button.setEnabled(False)
@@ -3723,6 +3792,9 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Update UI
             self.fine_lag_mode_button.setText("Enable Fine Lag Mode")
             self.status_label.setText("Normal Mode Active")
+            
+            # Disable the averaging spinner
+            self.fine_lag_avg_spinner.setEnabled(False)
             
             # Re-enable normal controls
             self.calibrate_button.setEnabled(True)
