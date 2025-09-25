@@ -207,6 +207,53 @@ class LagSpectraComputer(threading.Thread):
                 self.vis_p01_complex_buffer.real = self.shared_buffers.p01_real
                 self.vis_p01_complex_buffer.imag = self.shared_buffers.p01_imag
                 
+            # # Apply windowing to reduce edge artifacts and spectral leakage
+            # # This is critical for proper lag spectrum computation from channelized data
+            # window = np.hanning(len(self.vis_p00_buffer))
+            
+            # # Apply window to all visibility data
+            # self.vis_p00_buffer = self.vis_p00_buffer * window
+            # self.vis_p11_buffer = self.vis_p11_buffer * window
+            # self.vis_p01_complex_buffer = self.vis_p01_complex_buffer * window
+            
+            # # Optional: Apply PFB correction
+            # # The PFB channelizer has a sinc-like response that should be corrected
+            # # This is a simplified correction - you may need to calibrate this
+            # pfb_correction = np.ones(NBINS_TOTAL)
+            # # Create a simple correction for PFB rolloff at band edges
+            # # Channels near the edges have reduced response
+            # edge_width = NBINS_TOTAL // 16  # Adjust based on your PFB design
+            # for i in range(edge_width):
+            #     # Gradual correction at edges
+            #     correction = 1.0 / (0.5 + 0.5 * (i / edge_width))
+            #     pfb_correction[i] = correction
+            #     pfb_correction[-(i+1)] = correction
+            
+            # # Apply PFB correction
+            # self.vis_p00_buffer = self.vis_p00_buffer * pfb_correction
+            # self.vis_p11_buffer = self.vis_p11_buffer * pfb_correction
+            # self.vis_p01_complex_buffer = self.vis_p01_complex_buffer * pfb_correction
+            
+            # Add diagnostic logging every 100 frames for phase coherence
+            if self.frames_processed % 100 == 0:
+                # Check phase coherence
+                phase = np.angle(self.vis_p01_complex_buffer)
+                phase_gradient = np.gradient(phase)
+                phase_coherence = np.std(phase_gradient)
+                
+                # Check if we have meaningful complex data
+                imag_power = np.mean(np.abs(self.shared_buffers.p01_imag)**2)
+                real_power = np.mean(np.abs(self.shared_buffers.p01_real)**2)
+                power_ratio = real_power / imag_power if imag_power > 0 else np.inf
+                
+                # Check phase statistics
+                phase_range = np.max(phase) - np.min(phase)
+                phase_std = np.std(phase)
+                
+                print(f"Lag computer: Phase gradient std: {phase_coherence:.3f} (should be ~constant for coherent signal)")
+                print(f"Lag computer: Real/Imag power ratio: {power_ratio:.2f} (should be ~1 for complex data)")
+                print(f"Lag computer: Phase range: {phase_range:.2f} rad, std: {phase_std:.3f}")
+            
             # Compute inverse FFTs (no lock needed)
             # For autocorrelations, take real part since input is real-valued in frequency domain
             lag_p00_complex = np.fft.ifft(self.vis_p00_buffer)
@@ -217,9 +264,23 @@ class LagSpectraComputer(threading.Thread):
             self.lag_p00_buffer = np.abs(lag_p00_complex)**2
             self.lag_p11_buffer = np.abs(lag_p11_complex)**2
             
-            # For cross-correlation, compute magnitude of complex lag
-            self.lag_p01_complex_buffer = np.fft.ifft(self.vis_p01_complex_buffer)
-            lag_p01_magnitude = np.abs(self.lag_p01_complex_buffer)**2  # Power spectrum
+            # Store zero-lag values before normalization for cross-correlation
+            lag_p00_zero = self.lag_p00_buffer[0]  # Zero lag is at index 0 before fftshift
+            lag_p11_zero = self.lag_p11_buffer[0]
+            
+            # Normalize autocorrelations by their zero-lag values (like fine lag mode)
+            # This brings values into 0-1 range instead of e+21!
+            self.lag_p00_buffer = self.lag_p00_buffer / lag_p00_zero if lag_p00_zero > 0 else self.lag_p00_buffer
+            self.lag_p11_buffer = self.lag_p11_buffer / lag_p11_zero if lag_p11_zero > 0 else self.lag_p11_buffer
+            
+            # For cross-correlation, compute IFFT of complex visibility
+            lag_p01_complex = np.fft.ifft(self.vis_p01_complex_buffer)
+            lag_p01_magnitude = np.abs(lag_p01_complex)**2  # Power spectrum
+            
+            # Normalize cross-correlation by sqrt of zero-lag autocorrelations (like fine lag mode)
+            norm_factor = np.sqrt(lag_p00_zero * lag_p11_zero)
+            if norm_factor > 0:
+                lag_p01_magnitude = lag_p01_magnitude / norm_factor
             
             # FFT shift to center zero lag
             self.lag_p00_buffer = np.fft.fftshift(self.lag_p00_buffer)
@@ -234,6 +295,20 @@ class LagSpectraComputer(threading.Thread):
                 # Phase is not meaningful for delay spectra
                 self.shared_buffers.lag_p01_phase[:] = 0  # Not used
                 
+                # Update history buffers for running difference mode
+                # Store in circular buffer at current position
+                hist_pos = self.shared_buffers.lag_history_pos
+                self.shared_buffers.lag_history_p00[hist_pos] = self.lag_p00_buffer
+                self.shared_buffers.lag_history_p11[hist_pos] = self.lag_p11_buffer
+                self.shared_buffers.lag_history_p01[hist_pos] = lag_p01_magnitude
+                
+                # Update history position and count
+                self.shared_buffers.lag_history_pos = (hist_pos + 1) % self.shared_buffers.max_diff_window
+                self.shared_buffers.lag_history_count = min(
+                    self.shared_buffers.lag_history_count + 1,
+                    self.shared_buffers.max_diff_window
+                )
+                
                 # Update lag waterfall - shift existing data down and insert new at top
                 # Roll the arrays down by 1 to make room at position 0
                 self.shared_buffers.lag_wf_p00[1:] = self.shared_buffers.lag_wf_p00[:-1]
@@ -246,6 +321,39 @@ class LagSpectraComputer(threading.Thread):
                 self.shared_buffers.lag_wf_p11[0] = self.lag_p11_buffer
                 self.shared_buffers.lag_wf_p01_mag[0] = lag_p01_magnitude
                 self.shared_buffers.lag_wf_p01_phase[0] = 0  # Not used
+                
+                # Calculate and store running difference if enabled
+                if self.shared_buffers.running_diff_enabled:
+                    window_size = self.shared_buffers.running_diff_window_size
+                    history_count = self.shared_buffers.lag_history_count
+                    
+                    if history_count >= window_size:
+                        # Calculate moving average from the last window_size frames
+                        history_pos = self.shared_buffers.lag_history_pos
+                        
+                        # Get indices for the last window_size frames
+                        indices = []
+                        for i in range(window_size):
+                            idx = (history_pos - 1 - i) % self.shared_buffers.max_diff_window
+                            if idx < history_count:  # Only use valid history entries
+                                indices.append(idx)
+                        
+                        if len(indices) > 0:
+                            # Calculate moving averages
+                            moving_avg_p00 = np.mean(self.shared_buffers.lag_history_p00[indices], axis=0)
+                            moving_avg_p11 = np.mean(self.shared_buffers.lag_history_p11[indices], axis=0)
+                            moving_avg_p01 = np.mean(self.shared_buffers.lag_history_p01[indices], axis=0)
+                            
+                            # Calculate differences and update diff waterfall buffers
+                            # Shift existing diff data down and insert new at top
+                            self.shared_buffers.lag_diff_wf_p00[1:] = self.shared_buffers.lag_diff_wf_p00[:-1]
+                            self.shared_buffers.lag_diff_wf_p11[1:] = self.shared_buffers.lag_diff_wf_p11[:-1]
+                            self.shared_buffers.lag_diff_wf_p01[1:] = self.shared_buffers.lag_diff_wf_p01[:-1]
+                            
+                            # Write new difference data at position 0 (top)
+                            self.shared_buffers.lag_diff_wf_p00[0] = self.lag_p00_buffer - moving_avg_p00
+                            self.shared_buffers.lag_diff_wf_p11[0] = self.lag_p11_buffer - moving_avg_p11
+                            self.shared_buffers.lag_diff_wf_p01[0] = lag_p01_magnitude - moving_avg_p01
                 
                 # Update frames written counter
                 self.shared_buffers.lag_frames_written = min(
@@ -265,48 +373,6 @@ class LagSpectraComputer(threading.Thread):
         except Exception as e:
             print(f"Error in lag computation: {e}")
             
-    def _reset_adc_flags(self):
-        """Reset ADC overrange and overvoltage flags before data capture.""" 
-        try:
-            # Reset flags for next capture 
-            self.pc.i.GPIO.ADC_OR_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
-            self.pc.i.GPIO.ADC_OR_CLEAR = 0
-            self.pc.i.GPIO.ADC_OV_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
-            self.pc.i.GPIO.ADC_OV_CLEAR = 0
-        except Exception as e:
-            print(f"Error resetting ADC flags: {e}")
-
-    def _check_adc_flags(self):
-        """Check ADC overrange and overvoltage flags and update shared buffers."""
-        
-        # Helper array for reading individual bits of ADC_OR and ADC_OV flags
-        bitmask = 2**np.arange(8) # 8-bit bitmask for isolating values of individual bits
-        bitshifts = np.arange(0, 8)[::-1] # bitshifts to read values of bits as 1 or 0
-                            
-        try:
-            # Check the ADC overrange and overvoltage flags 
-            adc_or = self.pc.i.GPIO.ADC_OR
-            adc_ov = self.pc.i.GPIO.ADC_OV
-
-            # Create arrays to print the overrange/overflow status of individual ADCs,
-            # reversing the array so that the ADCs are indexed in ascending order from ADC1 to ADC8
-            adc_or_arr = np.array([(adc_or & bitmask[m]) >> m for m in bitshifts])[::-1]
-            adc_ov_arr = np.array([(adc_ov & bitmask[m]) >> m for m in bitshifts])[::-1]
-
-            # Update shared buffer counters
-            self.shared_buffers.total_captures += 1
-            
-            # Count any overrange or overvoltage flags
-            if adc_or != 0:
-                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_or_arr[n] != 0])
-                self.shared_buffers.adc_or_count += 1
-            if adc_ov != 0:
-                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_ov_arr[n] != 0])
-                self.shared_buffers.adc_ov_count += 1
-                
-        except Exception as e:
-            print(f"Error checking ADC flags: {e}")
-
     def stop(self):
         """Stop the thread."""
         self.running = False
@@ -1573,6 +1639,57 @@ class SharedDataBuffers:
         # Condition variable for lag computation
         self.new_data_condition = threading.Condition(self.lock)
         
+        # Running difference mode history buffers for lag spectra
+        self.max_diff_window = 100  # Maximum window size for running difference
+        self.shm_lag_history_p00 = shared_memory.SharedMemory(
+            create=True, size=self.max_diff_window * NBINS_TOTAL * 8)
+        self.shm_lag_history_p11 = shared_memory.SharedMemory(
+            create=True, size=self.max_diff_window * NBINS_TOTAL * 8)
+        self.shm_lag_history_p01 = shared_memory.SharedMemory(
+            create=True, size=self.max_diff_window * NBINS_TOTAL * 8)
+        
+        self.lag_history_p00 = np.ndarray(
+            (self.max_diff_window, NBINS_TOTAL), dtype=np.float64, 
+            buffer=self.shm_lag_history_p00.buf)
+        self.lag_history_p11 = np.ndarray(
+            (self.max_diff_window, NBINS_TOTAL), dtype=np.float64, 
+            buffer=self.shm_lag_history_p11.buf)
+        self.lag_history_p01 = np.ndarray(
+            (self.max_diff_window, NBINS_TOTAL), dtype=np.float64, 
+            buffer=self.shm_lag_history_p01.buf)
+        
+        # Initialize history buffers
+        self.lag_history_p00.fill(0)
+        self.lag_history_p11.fill(0)
+        self.lag_history_p01.fill(0)
+        
+        # History position and count
+        self.lag_history_pos = 0
+        self.lag_history_count = 0
+        
+        # Running difference waterfall buffers (separate from raw data)
+        self.shm_lag_diff_wf_p00 = shared_memory.SharedMemory(
+            create=True, size=wf_size)
+        self.shm_lag_diff_wf_p11 = shared_memory.SharedMemory(
+            create=True, size=wf_size)
+        self.shm_lag_diff_wf_p01 = shared_memory.SharedMemory(
+            create=True, size=wf_size)
+        
+        self.lag_diff_wf_p00 = np.ndarray(
+            (waterfall_len, NBINS_TOTAL), dtype=np.float64, 
+            buffer=self.shm_lag_diff_wf_p00.buf)
+        self.lag_diff_wf_p11 = np.ndarray(
+            (waterfall_len, NBINS_TOTAL), dtype=np.float64, 
+            buffer=self.shm_lag_diff_wf_p11.buf)
+        self.lag_diff_wf_p01 = np.ndarray(
+            (waterfall_len, NBINS_TOTAL), dtype=np.float64, 
+            buffer=self.shm_lag_diff_wf_p01.buf)
+        
+        # Initialize running difference arrays
+        self.lag_diff_wf_p00.fill(0)
+        self.lag_diff_wf_p11.fill(0)
+        self.lag_diff_wf_p01.fill(0)
+        
         # Fine lag data (8192 positive lag bins - half of 16384)
         n_fine_lags = 8192
         # Time domain samples - allocate for max frames we might average
@@ -1753,11 +1870,13 @@ class SharedDataBuffers:
         
     def cleanup(self):
         """Clean up shared memory."""
-        # Add radar lag and delay/centroid buffers to cleanup
+        # Add all shared memory buffers to cleanup including lag history and diff buffers
         for shm in [self.shm_p00, self.shm_p11, self.shm_p01_real, self.shm_p01_imag,
                     self.shm_wf_p00, self.shm_wf_p11, self.shm_wf_p01_real, self.shm_wf_p01_imag,
                     self.shm_lag_p00, self.shm_lag_p11, self.shm_lag_p01_mag, self.shm_lag_p01_phase,
                     self.shm_lag_wf_p00, self.shm_lag_wf_p11, self.shm_lag_wf_p01_mag, self.shm_lag_wf_p01_phase,
+                    self.shm_lag_history_p00, self.shm_lag_history_p11, self.shm_lag_history_p01,
+                    self.shm_lag_diff_wf_p00, self.shm_lag_diff_wf_p11, self.shm_lag_diff_wf_p01,
                     self.shm_fine_lag_p00, self.shm_fine_lag_p11, self.shm_fine_lag_p01,
                     self.shm_fine_lag_wf_p00, self.shm_fine_lag_wf_p11, self.shm_fine_lag_wf_p01,
                     self.shm_fine_lag_diff_wf_p00, self.shm_fine_lag_diff_wf_p11, self.shm_fine_lag_diff_wf_p01,
@@ -2381,16 +2500,47 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         
         self.plots = {}
         self.plot_widgets = {}  # Store the plot widgets for log mode control
+        self.plot_selectors = {}  # Store the product selectors
         colors = pg.colormap.get("tab10", "matplotlib").getColors()
 
-        # --- P00 Plot ---
+        # Generate product options for selectors
+        product_options = []
+        for i in range(NCHAN):
+            for j in range(i, NCHAN):
+                if i == j:
+                    product_options.append(f"ADC{i} Auto")
+                else:
+                    product_options.append(f"ADC{i}/{j} Cross")
+
+        # --- Top Left Plot (Default P00) ---
         p00_widget = QtWidgets.QWidget()
         p00_layout = QtWidgets.QVBoxLayout(p00_widget)
-        p00_cb = QtWidgets.QCheckBox("ADC0 Auto")
+        
+        # Control bar with checkbox and selectors
+        p00_control = QtWidgets.QHBoxLayout()
+        p00_cb = QtWidgets.QCheckBox("Plot 1")
         p00_cb.setChecked(True)
         self.plot_checkboxes["s_p00"] = p00_cb
+        
+        p00_selector = QtWidgets.QComboBox()
+        p00_selector.addItems(product_options)
+        p00_selector.setCurrentText("ADC0 Auto")
+        p00_selector.currentTextChanged.connect(lambda text: self._update_plot_product(0, text))
+        self.plot_selectors[0] = p00_selector
+        
+        p00_component = QtWidgets.QComboBox()
+        p00_component.addItems(["Magnitude", "Real", "Imaginary", "Phase"])
+        p00_component.setCurrentText("Magnitude")
+        p00_component.currentTextChanged.connect(lambda text: self._update_plot_component(0, text))
+        self.plot_selectors['0_component'] = p00_component
+        
+        p00_control.addWidget(p00_cb)
+        p00_control.addWidget(p00_selector)
+        p00_control.addWidget(p00_component)
+        p00_control.addStretch()
+        
         p00_plot = pg.PlotWidget()
-        p00_layout.addWidget(p00_cb)
+        p00_layout.addLayout(p00_control)
         p00_layout.addWidget(p00_plot)
         self.plots[(0,0)] = p00_plot.plot(pen=colors[0], name='|amp|')
         self.plot_widgets[(0,0)] = p00_plot  # Store the widget
@@ -2401,14 +2551,35 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         # Connect checkbox to hide/show the widget
         p00_cb.stateChanged.connect(lambda state, w=p00_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
-        # --- P01 Abs Plot ---
+        # --- Bottom Left Plot (Default P01 Abs) ---
         p01_abs_widget = QtWidgets.QWidget()
         p01_abs_layout = QtWidgets.QVBoxLayout(p01_abs_widget)
-        p01_abs_cb = QtWidgets.QCheckBox("ADC0/1 Cross |Amp|")
+        
+        # Control bar
+        p01_abs_control = QtWidgets.QHBoxLayout()
+        p01_abs_cb = QtWidgets.QCheckBox("Plot 2")
         p01_abs_cb.setChecked(True)
         self.plot_checkboxes["s_p01_abs"] = p01_abs_cb
+        
+        p01_abs_selector = QtWidgets.QComboBox()
+        p01_abs_selector.addItems(product_options)
+        p01_abs_selector.setCurrentText("ADC0/1 Cross")
+        p01_abs_selector.currentTextChanged.connect(lambda text: self._update_plot_product(1, text))
+        self.plot_selectors[1] = p01_abs_selector
+        
+        p01_abs_component = QtWidgets.QComboBox()
+        p01_abs_component.addItems(["Magnitude", "Real", "Imaginary", "Phase"])
+        p01_abs_component.setCurrentText("Magnitude")
+        p01_abs_component.currentTextChanged.connect(lambda text: self._update_plot_component(1, text))
+        self.plot_selectors['1_component'] = p01_abs_component
+        
+        p01_abs_control.addWidget(p01_abs_cb)
+        p01_abs_control.addWidget(p01_abs_selector)
+        p01_abs_control.addWidget(p01_abs_component)
+        p01_abs_control.addStretch()
+        
         p01_abs_plot = pg.PlotWidget()
-        p01_abs_layout.addWidget(p01_abs_cb)
+        p01_abs_layout.addLayout(p01_abs_control)
         p01_abs_layout.addWidget(p01_abs_plot)
         self.plots[(0,1,'abs')] = p01_abs_plot.plot(pen=colors[1], name='|amp|')
         self.plot_widgets[(0,1,'abs')] = p01_abs_plot  # Store the widget
@@ -2419,14 +2590,35 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         # Connect checkbox to hide/show the widget
         p01_abs_cb.stateChanged.connect(lambda state, w=p01_abs_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
-        # --- P01 Real Plot ---
+        # --- Bottom Right Plot (Default P01 Real) ---
         p01_real_widget = QtWidgets.QWidget()
         p01_real_layout = QtWidgets.QVBoxLayout(p01_real_widget)
-        p01_real_cb = QtWidgets.QCheckBox("ADC0/1 Cross Real")
+        
+        # Control bar
+        p01_real_control = QtWidgets.QHBoxLayout()
+        p01_real_cb = QtWidgets.QCheckBox("Plot 3")
         p01_real_cb.setChecked(True)
         self.plot_checkboxes["s_p01_real"] = p01_real_cb
+        
+        p01_real_selector = QtWidgets.QComboBox()
+        p01_real_selector.addItems(product_options)
+        p01_real_selector.setCurrentText("ADC0/1 Cross")
+        p01_real_selector.currentTextChanged.connect(lambda text: self._update_plot_product(2, text))
+        self.plot_selectors[2] = p01_real_selector
+        
+        p01_real_component = QtWidgets.QComboBox()
+        p01_real_component.addItems(["Real", "Imaginary", "Magnitude", "Phase"])
+        p01_real_component.setCurrentText("Real")
+        p01_real_component.currentTextChanged.connect(lambda text: self._update_plot_component(2, text))
+        self.plot_selectors['2_component'] = p01_real_component
+        
+        p01_real_control.addWidget(p01_real_cb)
+        p01_real_control.addWidget(p01_real_selector)
+        p01_real_control.addWidget(p01_real_component)
+        p01_real_control.addStretch()
+        
         p01_real_plot = pg.PlotWidget()
-        p01_real_layout.addWidget(p01_real_cb)
+        p01_real_layout.addLayout(p01_real_control)
         p01_real_layout.addWidget(p01_real_plot)
         self.plots[(0,1,'real')] = p01_real_plot.plot(pen=colors[2], name='real')
         self.plot_widgets[(0,1,'real')] = p01_real_plot  # Store the widget
@@ -2438,14 +2630,35 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         # Connect checkbox to hide/show the widget
         p01_real_cb.stateChanged.connect(lambda state, w=p01_real_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
-        # --- P11 Plot ---
+        # --- Top Right Plot (Default P11) ---
         p11_widget = QtWidgets.QWidget()
         p11_layout = QtWidgets.QVBoxLayout(p11_widget)
-        p11_cb = QtWidgets.QCheckBox("ADC1 Auto")
+        
+        # Control bar with checkbox and selectors
+        p11_control = QtWidgets.QHBoxLayout()
+        p11_cb = QtWidgets.QCheckBox("Plot 4")
         p11_cb.setChecked(True)
         self.plot_checkboxes["s_p11"] = p11_cb
+        
+        p11_selector = QtWidgets.QComboBox()
+        p11_selector.addItems(product_options)
+        p11_selector.setCurrentText("ADC1 Auto")
+        p11_selector.currentTextChanged.connect(lambda text: self._update_plot_product(3, text))
+        self.plot_selectors[3] = p11_selector
+        
+        p11_component = QtWidgets.QComboBox()
+        p11_component.addItems(["Magnitude", "Real", "Imaginary", "Phase"])
+        p11_component.setCurrentText("Magnitude")
+        p11_component.currentTextChanged.connect(lambda text: self._update_plot_component(3, text))
+        self.plot_selectors['3_component'] = p11_component
+        
+        p11_control.addWidget(p11_cb)
+        p11_control.addWidget(p11_selector)
+        p11_control.addWidget(p11_component)
+        p11_control.addStretch()
+        
         p11_plot = pg.PlotWidget()
-        p11_layout.addWidget(p11_cb)
+        p11_layout.addLayout(p11_control)
         p11_layout.addWidget(p11_plot)
         self.plots[(1,1)] = p11_plot.plot(pen=colors[3], name='|amp|')
         self.plot_widgets[(1,1)] = p11_plot  # Store the widget
@@ -2455,6 +2668,75 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         layout.addWidget(p11_widget, 0, 1)
         # Connect checkbox to hide/show the widget
         p11_cb.stateChanged.connect(lambda state, w=p11_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
+        
+        # Store current plot configurations
+        self.plot_configs = {
+            0: {'product': (0, 0), 'component': 'magnitude'},
+            1: {'product': (0, 1), 'component': 'magnitude'},
+            2: {'product': (0, 1), 'component': 'real'},
+            3: {'product': (1, 1), 'component': 'magnitude'}
+        }
+    
+    def _update_plot_product(self, plot_idx: int, product_text: str) -> None:
+        """Update which product a plot displays based on selector text."""
+        # Parse the product text (e.g., "ADC0 Auto" or "ADC0/1 Cross")
+        if "Auto" in product_text:
+            # Auto-correlation (e.g., "ADC0 Auto")
+            adc_num = int(product_text.split("ADC")[1].split()[0])
+            product = (adc_num, adc_num)
+        else:
+            # Cross-correlation (e.g., "ADC0/1 Cross")
+            parts = product_text.split("/")
+            adc1 = int(parts[0].split("ADC")[1])
+            adc2 = int(parts[1].split()[0])
+            product = (adc1, adc2)
+        
+        # Update configuration
+        self.plot_configs[plot_idx]['product'] = product
+        
+        # Update the product indices in config if this is one of the default plots
+        if plot_idx == 0:
+            # Find the index for this product in prod_map
+            idx = np.where((self.prod_map[:, 0] == product[0]) & (self.prod_map[:, 1] == product[1]))[0]
+            if len(idx) > 0:
+                self.config.idx00 = idx[0]
+        elif plot_idx == 3:
+            idx = np.where((self.prod_map[:, 0] == product[0]) & (self.prod_map[:, 1] == product[1]))[0]
+            if len(idx) > 0:
+                self.config.idx11 = idx[0]
+        elif plot_idx in [1, 2]:
+            idx = np.where((self.prod_map[:, 0] == product[0]) & (self.prod_map[:, 1] == product[1]))[0]
+            if len(idx) > 0:
+                self.config.idx01 = idx[0]
+        
+        print(f"Plot {plot_idx} now showing product {product}")
+    
+    def _update_plot_component(self, plot_idx: int, component_text: str) -> None:
+        """Update which component a plot displays (magnitude, real, imaginary, phase)."""
+        # Map friendly names to internal names
+        component_map = {
+            "Magnitude": "magnitude",
+            "Real": "real",
+            "Imaginary": "imaginary",
+            "Phase": "phase"
+        }
+        
+        component = component_map.get(component_text, "magnitude")
+        self.plot_configs[plot_idx]['component'] = component
+        
+        print(f"Plot {plot_idx} now showing {component}")
+
+    def _update_waterfall_product(self, waterfall_idx: int, product_text: str) -> None:
+        """Update which product a waterfall displays based on selector text."""
+        # Parse the product text (e.g., "ADC0 Auto" or "ADC0/1 Cross")
+        self.waterfall_configs[waterfall_idx]['product_text'] = product_text
+        print(f"Waterfall {waterfall_idx} now showing product {product_text}")
+    
+    def _update_waterfall_component(self, waterfall_idx: int, component_text: str) -> None:
+        """Update which component a waterfall displays (magnitude, real, imaginary, phase)."""
+        component = component_text.lower()
+        self.waterfall_configs[waterfall_idx]['component'] = component
+        print(f"Waterfall {waterfall_idx} now showing {component}")
 
     def _setup_waterfall_plots(self) -> None:
         """Set up the image views for the Waterfall tab."""
@@ -2467,18 +2749,56 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         # Use diverging colormap for cross-correlations
         coolwarm_cm = viridis_cm #pg.colormap.get('CET-D1')  # Blue-white-red diverging
 
-        titles = ["ADC0 Auto", "ADC1 Auto", "Cross-Corr Real", "Cross-Corr Phase"]
-        keys = ['p00', 'p11', 'p01_real', 'p01_phase']
+        # Generate product options for waterfall selectors
+        product_options = []
+        for i in range(NCHAN):
+            for j in range(i, NCHAN):
+                if i == j:
+                    product_options.append(f"ADC{i} Auto")
+                else:
+                    product_options.append(f"ADC{i}/{j} Cross")
+
+        # Default configurations for waterfall plots
+        default_configs = [
+            {"product": "ADC0 Auto", "component": "Magnitude", "title": "Waterfall 1"},
+            {"product": "ADC1 Auto", "component": "Magnitude", "title": "Waterfall 2"},
+            {"product": "ADC0/1 Cross", "component": "Real", "title": "Waterfall 3"},
+            {"product": "ADC0/1 Cross", "component": "Phase", "title": "Waterfall 4"}
+        ]
+
+        # Store waterfall configurations
+        self.waterfall_configs = {}
         
-        for i, (title, key) in enumerate(zip(titles, keys)):
+        for i, config in enumerate(default_configs):
             row, col = divmod(i, 2)
             
             container = QtWidgets.QWidget()
             container_layout = QtWidgets.QVBoxLayout(container)
             
-            cb = QtWidgets.QCheckBox(title)
+            # Control bar with checkbox and selectors
+            control_layout = QtWidgets.QHBoxLayout()
+            
+            cb = QtWidgets.QCheckBox(config["title"])
             cb.setChecked(True)
-            self.plot_checkboxes[f"wf_{key}"] = cb
+            plot_key = f"wf_{i}"
+            self.plot_checkboxes[plot_key] = cb
+            
+            # Product selector
+            product_selector = QtWidgets.QComboBox()
+            product_selector.addItems(product_options)
+            product_selector.setCurrentText(config["product"])
+            product_selector.currentTextChanged.connect(lambda text, idx=i: self._update_waterfall_product(idx, text))
+            
+            # Component selector
+            component_selector = QtWidgets.QComboBox()
+            component_selector.addItems(["Magnitude", "Real", "Imaginary", "Phase"])
+            component_selector.setCurrentText(config["component"])
+            component_selector.currentTextChanged.connect(lambda text, idx=i: self._update_waterfall_component(idx, text))
+            
+            control_layout.addWidget(cb)
+            control_layout.addWidget(product_selector)
+            control_layout.addWidget(component_selector)
+            control_layout.addStretch()
             
             # Use PlotWidget instead of ImageView for better performance
             plot = pg.PlotWidget()
@@ -2490,18 +2810,28 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Create an ImageItem
             img_item = pg.ImageItem()
             plot.addItem(img_item)
-            # Use diverging colormap for cross-correlations
-            if 'p01' in key:
+            # Use diverging colormap for cross-correlations and phases
+            if config["component"] in ["Real", "Imaginary", "Phase"]:
                 img_item.setLookupTable(coolwarm_cm.getLookupTable())
             else:
                 img_item.setLookupTable(viridis_cm.getLookupTable())
             
+            # Use index-based keys for waterfall plots
+            key = f"wf_{i}"
             self.waterfall_plots[key] = plot
             self.waterfall_images[key] = img_item
             self.waterfall_levels[key] = None  # Will be set on first data
             self.waterfall_level_update_counter[key] = 0
             
-            container_layout.addWidget(cb)
+            # Store configuration
+            self.waterfall_configs[i] = {
+                'product_text': config["product"],
+                'component': config["component"].lower(),
+                'product_selector': product_selector,
+                'component_selector': component_selector
+            }
+            
+            container_layout.addLayout(control_layout)
             container_layout.addWidget(plot)
             
             layout.addWidget(container, row, col)
@@ -2582,8 +2912,14 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.lag_waterfall_images = {}
         self.lag_waterfall_levels = {}
         self.lag_waterfall_level_update_counter = {}
+        self.lag_waterfall_colorbars = {}  # Store colorbars
         
+        # Get colormaps - viridis for normal, diverging for differences
         viridis_cm = pg.colormap.get('viridis')
+        # Light mode: CET-D1 (red-white-blue) for differences 
+        rdbu_light_cm = pg.colormap.get('CET-D1')  # Diverging colormap (white at zero)
+        # Dark mode: CET-D4 (red-black-blue) for differences
+        rdbu_dark_cm = pg.colormap.get('CET-D4')   # Dark diverging colormap (black at zero)
 
         # Only 3 plots now - no phase
         titles = ["ADC0 Auto Delay", "ADC1 Auto Delay", "Cross-Corr Delay"]
@@ -2603,8 +2939,11 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             self.plot_checkboxes[f"lag_wf_{key}"] = cb
             cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
+            # Create a GraphicsLayoutWidget to hold both plot and colorbar
+            graphics_layout = pg.GraphicsLayoutWidget()
             
-            plot = pg.PlotWidget()
+            # Add the plot
+            plot = graphics_layout.addPlot(row=0, col=0)
             plot.setLabel('left', 'Time')
             plot.setLabel('bottom', 'Distance', units='m')
             # Invert Y axis so 0 is at top (newest data)
@@ -2612,15 +2951,31 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             
             img_item = pg.ImageItem()
             plot.addItem(img_item)
-            img_item.setLookupTable(viridis_cm.getLookupTable())
+            
+            # Store all colormaps - we'll switch between them based on mode
+            img_item._viridis_lut = viridis_cm.getLookupTable()
+            img_item._rdbu_light_lut = rdbu_light_cm.getLookupTable()
+            img_item._rdbu_dark_lut = rdbu_dark_cm.getLookupTable()
+            img_item.setLookupTable(viridis_cm.getLookupTable())  # Start with viridis
+            
+            # Add colorbar
+            colorbar = pg.ColorBarItem(
+                values=(0, 1),  # Will be updated with actual data range
+                colorMap=viridis_cm,
+                width=20,
+                interactive=False
+            )
+            colorbar.setImageItem(img_item)
+            graphics_layout.addItem(colorbar, row=0, col=1)
             
             self.lag_waterfall_plots[key] = plot
             self.lag_waterfall_images[key] = img_item
+            self.lag_waterfall_colorbars[key] = colorbar
             self.lag_waterfall_levels[key] = None
             self.lag_waterfall_level_update_counter[key] = 0
             
             container_layout.addWidget(cb)
-            container_layout.addWidget(plot)
+            container_layout.addWidget(graphics_layout)
             
             layout.addWidget(container, row, col)
 
@@ -4146,72 +4501,215 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                 self._update_adc_status()
 
     def _update_spectra_plots(self) -> None:
-        """Update the line plots in the Spectra tab."""
+        """Update the line plots in the Spectra tab using dynamic product/component selection."""
         if not self.shared_buffers:
             return
         use_log_scale = self.log_scale_checkbox.isChecked()
         
-        # Update plot log modes based on checkbox
-        self.plot_widgets[(0,0)].setLogMode(y=use_log_scale)
-        self.plot_widgets[(1,1)].setLogMode(y=use_log_scale)
-        # For cross-correlation abs, use log scale if enabled
-        self.plot_widgets[(0,1,'abs')].setLogMode(y=use_log_scale)
-        # Real plot can use log scale if enabled (for symmetry log)
-        self.plot_widgets[(0,1,'real')].setLogMode(y=False)
+        # Build a dictionary of all available products from shared buffers
+        # This would need to be extended for full N^2 correlator support
+        # For now, we only have specific products available: p00, p11, p01
         
-        # Only update plots that are checked (using zone-adjusted frequency axis)
-        if self.plot_checkboxes["s_p00"].isChecked():
-            self.plots[(0,0)].setData(x=self.freq_axis, y=self.shared_buffers.p00)
+        # Helper function to get data for a specific product and component
+        def get_product_data(product, component):
+            """Get the data for a specific product and component."""
+            # For now, map to the available data
+            # In a full implementation, this would index into the complete correlation matrix
             
-        if self.plot_checkboxes["s_p11"].isChecked():
-            self.plots[(1,1)].setData(x=self.freq_axis, y=self.shared_buffers.p11)
-            
-        # Calculate complex visibility from real and imaginary parts
-        complex_vis = self.shared_buffers.p01_real + 1j * self.shared_buffers.p01_imag
-        
-        if self.plot_checkboxes["s_p01_abs"].isChecked():
-            # Calculate magnitude
-            abs_data = np.abs(complex_vis)
-            self.plots[(0,1,'abs')].setData(x=self.freq_axis, y=abs_data)
-            
-        if self.plot_checkboxes["s_p01_real"].isChecked():
-            # Show real part
-            real_data = self.shared_buffers.p01_real
-            
-            # Apply symmetric log transformation if log scale is enabled
-            if use_log_scale:
-                # Simple symmetric log transformation: sign * log(1 + |x|/C)
-                C = self.symlog_crossover_spinner.value()
-                sign_data = np.sign(real_data)
-                abs_data = np.abs(real_data)
-                # Apply symlog transformation
-                symlog_data = sign_data * np.log10(1 + abs_data / C)
-                self.plots[(0,1,'real')].setData(x=self.freq_axis, y=symlog_data)
-                # Update y-axis label to indicate symlog scale
-                self.plot_widgets[(0,1,'real')].setLabel('left', 'Real Part (symlog)')
+            if product == (0, 0):
+                # ADC0 auto-correlation
+                data = self.shared_buffers.p00
+                if component == 'magnitude':
+                    return np.abs(data)
+                elif component == 'real':
+                    return data  # Auto-correlations are real
+                elif component == 'imaginary':
+                    return np.zeros_like(data)  # Auto-correlations have no imaginary part
+                elif component == 'phase':
+                    return np.zeros_like(data)  # Auto-correlations have zero phase
+                    
+            elif product == (1, 1):
+                # ADC1 auto-correlation  
+                data = self.shared_buffers.p11
+                if component == 'magnitude':
+                    return np.abs(data)
+                elif component == 'real':
+                    return data  # Auto-correlations are real
+                elif component == 'imaginary':
+                    return np.zeros_like(data)
+                elif component == 'phase':
+                    return np.zeros_like(data)
+                    
+            elif product == (0, 1) or product == (1, 0):
+                # Cross-correlation
+                complex_data = self.shared_buffers.p01_real + 1j * self.shared_buffers.p01_imag
+                if component == 'magnitude':
+                    return np.abs(complex_data)
+                elif component == 'real':
+                    return self.shared_buffers.p01_real
+                elif component == 'imaginary':
+                    return self.shared_buffers.p01_imag
+                elif component == 'phase':
+                    return np.angle(complex_data)
+                    
             else:
-                self.plots[(0,1,'real')].setData(x=self.freq_axis, y=real_data)
-                # Reset y-axis label
-                self.plot_widgets[(0,1,'real')].setLabel('left', 'Real Part')
+                # Product not available in current data
+                return np.zeros(len(self.freq_axis))
+        
+        # Update each plot based on its configuration
+        for plot_idx in range(4):
+            # Get checkbox key based on plot index
+            if plot_idx == 0:
+                checkbox_key = "s_p00"
+                plot_key = (0, 0)
+            elif plot_idx == 1:
+                checkbox_key = "s_p01_abs"
+                plot_key = (0, 1, 'abs')
+            elif plot_idx == 2:
+                checkbox_key = "s_p01_real"
+                plot_key = (0, 1, 'real')
+            else:  # plot_idx == 3
+                checkbox_key = "s_p11"
+                plot_key = (1, 1)
+            
+            if not self.plot_checkboxes[checkbox_key].isChecked():
+                continue
+                
+            # Get configuration for this plot
+            config = self.plot_configs[plot_idx]
+            product = config['product']
+            component = config['component']
+            
+            # Get the data
+            data = get_product_data(product, component)
+            
+            # Get the plot widget
+            if plot_idx == 0:
+                plot_widget = self.plot_widgets[(0, 0)]
+                plot_line = self.plots[(0, 0)]
+            elif plot_idx == 1:
+                plot_widget = self.plot_widgets[(0, 1, 'abs')]
+                plot_line = self.plots[(0, 1, 'abs')]
+            elif plot_idx == 2:
+                plot_widget = self.plot_widgets[(0, 1, 'real')]
+                plot_line = self.plots[(0, 1, 'real')]
+            else:  # plot_idx == 3
+                plot_widget = self.plot_widgets[(1, 1)]
+                plot_line = self.plots[(1, 1)]
+            
+            # Apply log scale based on data type
+            is_auto_corr = (product[0] == product[1])
+            
+            if is_auto_corr or component == 'magnitude':
+                # Auto-correlations and magnitudes use regular log scale
+                plot_widget.setLogMode(y=use_log_scale)
+                plot_line.setData(x=self.freq_axis, y=data)
+                
+                # Update y-axis label
+                if component == 'magnitude':
+                    plot_widget.setLabel('left', 'Magnitude')
+                elif component == 'real':
+                    plot_widget.setLabel('left', 'Power')
+                    
+            elif component in ['real', 'imaginary']:
+                # Real/imaginary parts can use symlog
+                plot_widget.setLogMode(y=False)  # Symlog is applied to data, not axes
+                
+                if use_log_scale:
+                    # Apply symmetric log transformation
+                    C = self.symlog_crossover_spinner.value()
+                    sign_data = np.sign(data)
+                    abs_data = np.abs(data)
+                    symlog_data = sign_data * np.log10(1 + abs_data / C)
+                    plot_line.setData(x=self.freq_axis, y=symlog_data)
+                    plot_widget.setLabel('left', f'{component.capitalize()} (symlog)')
+                else:
+                    plot_line.setData(x=self.freq_axis, y=data)
+                    plot_widget.setLabel('left', component.capitalize())
+                    
+            elif component == 'phase':
+                # Phase doesn't use log scale
+                plot_widget.setLogMode(y=False)
+                plot_line.setData(x=self.freq_axis, y=data)
+                plot_widget.setLabel('left', 'Phase (radians)')
 
     def _update_waterfall_plots(self) -> None:
-        """Update the waterfall plots with new data."""
+        """Update the waterfall plots with new data using dynamic product/component selection."""
         if not self.shared_buffers:
             return
-        # Data is already in correct order with newest at top (index 0)
         
         # Calculate frequency axis
         freq_min = self.freq_axis[0]
         freq_max = self.freq_axis[-1]
         
-        # Helper function to update a waterfall plot
-        def update_waterfall(key, data, is_magnitude=True):
-            """Update a single waterfall plot with proper scaling and levels."""
-            if not self.plot_checkboxes[f"wf_{key}"].isChecked():
-                return
+        # Helper function to get waterfall data for a specific product and component
+        def get_waterfall_data(product_text, component):
+            """Get the waterfall data for a specific product and component."""
+            # Parse the product text to get the actual product
+            if "Auto" in product_text:
+                # Auto-correlation (e.g., "ADC0 Auto")
+                adc_num = int(product_text.split("ADC")[1].split()[0])
+                if adc_num == 0:
+                    base_data = self.shared_buffers.wf_p00
+                elif adc_num == 1:
+                    base_data = self.shared_buffers.wf_p11
+                else:
+                    # For other ADCs, return zeros (not currently available)
+                    return np.zeros((self.shared_buffers.waterfall_len, NBINS_TOTAL))
+                    
+                # Auto-correlations are real-valued
+                if component == 'magnitude':
+                    return np.abs(base_data)
+                elif component == 'real':
+                    return base_data
+                elif component == 'imaginary':
+                    return np.zeros_like(base_data)
+                elif component == 'phase':
+                    return np.zeros_like(base_data)
+            else:
+                # Cross-correlation (e.g., "ADC0/1 Cross")
+                parts = product_text.split("/")
+                adc1 = int(parts[0].split("ADC")[1])
+                adc2 = int(parts[1].split()[0])
                 
-            # Data is already ordered with newest at top
-            wf_data = data
+                # For now, only ADC0/1 cross-correlation is available
+                if (adc1, adc2) == (0, 1) or (adc1, adc2) == (1, 0):
+                    if component == 'magnitude':
+                        # Calculate magnitude from real and imaginary parts
+                        complex_wf = self.shared_buffers.wf_p01_real + 1j * self.shared_buffers.wf_p01_imag
+                        return np.abs(complex_wf)
+                    elif component == 'real':
+                        return self.shared_buffers.wf_p01_real
+                    elif component == 'imaginary':
+                        return self.shared_buffers.wf_p01_imag
+                    elif component == 'phase':
+                        # Calculate phase from real and imaginary parts
+                        complex_wf = self.shared_buffers.wf_p01_real + 1j * self.shared_buffers.wf_p01_imag
+                        return np.angle(complex_wf)
+                else:
+                    # Other cross-correlations not available yet
+                    return np.zeros((self.shared_buffers.waterfall_len, NBINS_TOTAL))
+            
+            # Fallback
+            return np.zeros((self.shared_buffers.waterfall_len, NBINS_TOTAL))
+        
+        # Update each waterfall plot based on its configuration
+        for waterfall_idx in range(4):
+            key = f"wf_{waterfall_idx}"
+            
+            if not self.plot_checkboxes[key].isChecked():
+                continue
+                
+            # Get configuration for this waterfall
+            config = self.waterfall_configs[waterfall_idx]
+            product_text = config['product_text']
+            component = config['component']
+            
+            # Get the data
+            wf_data = get_waterfall_data(product_text, component)
+            
+            # Determine if this is magnitude data for scaling purposes
+            is_magnitude = (component == 'magnitude')
             
             # Apply mean subtraction if enabled
             if self.mean_subtract_checkbox.isChecked():
@@ -4253,6 +4751,9 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                         vmax = 10**vmax_log
                     else:
                         vmin, vmax = 0, 1
+                elif component == 'phase':
+                    # Phase data ranges from -pi to pi
+                    vmin, vmax = -np.pi, np.pi
                 else:
                     # For real/imaginary data (cross-correlations)
                     if len(valid_data) > 0:
@@ -4281,7 +4782,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             img = self.waterfall_images[key]
             use_log_scale = self.log_scale_checkbox.isChecked()
             
-            if use_log_scale:
+            if use_log_scale and component != 'phase':
                 if is_magnitude:
                     # For power data, display on log scale
                     # Add small epsilon to avoid log(0)
@@ -4304,7 +4805,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                     # PyQtGraph expects levels between 0 and 1 for normalized data
                     img.setImage(normalized_data.T, autoLevels=False, levels=(0, 1))
             else:
-                # Linear scale
+                # Linear scale (or phase data which should always use linear scale)
                 img.setImage(wf_data.T, autoLevels=False, levels=self.waterfall_levels[key])
             
             # Set the scale to show frequency on x-axis and time on y-axis
@@ -4317,71 +4818,6 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                 plot.setLabel('bottom', 'Frequency', units='Hz')
                 plot.setLabel('left', 'Time (frames ago)')
                 img._labels_set = True  # Mark that labels have been set
-        
-        # Update each waterfall plot
-        update_waterfall('p00', self.shared_buffers.wf_p00, is_magnitude=True)
-        update_waterfall('p11', self.shared_buffers.wf_p11, is_magnitude=True)
-        update_waterfall('p01_real', self.shared_buffers.wf_p01_real, is_magnitude=False)
-        
-        # For phase waterfall, calculate phase from real and imaginary parts
-        if self.plot_checkboxes["wf_p01_phase"].isChecked():
-            # Data is already ordered with newest at top
-            wf_real = self.shared_buffers.wf_p01_real
-            wf_imag = self.shared_buffers.wf_p01_imag
-            
-            # Calculate phase from complex values
-            complex_wf = wf_real + 1j * wf_imag
-            phase_wf = np.angle(complex_wf)
-            
-            # Create a custom update for phase data
-            key = 'p01_phase'
-            wf_data = phase_wf
-            
-            # Apply mean subtraction if enabled
-            if self.mean_subtract_checkbox.isChecked():
-                frames_written = self.shared_buffers.frames_written
-                if frames_written > 0:
-                    populated_data = wf_data[-frames_written:] if frames_written < self.shared_buffers.waterfall_len else wf_data
-                    bin_means = np.mean(populated_data, axis=0, keepdims=True)
-                    wf_data = wf_data - bin_means
-            
-            # Update level counter
-            self.waterfall_level_update_counter[key] += 1
-            
-            # Get the scale update interval
-            scale_update_interval = self.scale_update_spinner.value()
-            
-            # Update levels for phase data, but only if color scale is not fixed
-            update_levels = (
-                self.waterfall_levels[key] is None or 
-                (not self.fix_color_scale_checkbox.isChecked() and 
-                 self.waterfall_level_update_counter[key] >= scale_update_interval)
-            )
-            
-            if update_levels:
-                valid_data = wf_data[np.isfinite(wf_data)]
-                if len(valid_data) > 0:
-                    # Phase data ranges from -pi to pi
-                    vmin, vmax = -np.pi, np.pi
-                else:
-                    vmin, vmax = -np.pi, np.pi
-                    
-                self.waterfall_levels[key] = (vmin, vmax)
-                self.waterfall_level_update_counter[key] = 0
-            
-            # Set image with fixed levels
-            img = self.waterfall_images[key]
-            
-            # Phase data should use linear scale
-            img.setImage(wf_data.T, autoLevels=False, levels=self.waterfall_levels[key])
-            
-            # Set the scale to show frequency on x-axis (only need to do once)
-            if not hasattr(img, '_scale_set'):
-                img.setRect(QtCore.QRectF(freq_min, 0, freq_max - freq_min, self.shared_buffers.waterfall_len))
-                img._scale_set = True
-                
-                plot = self.waterfall_plots[key]
-                plot.setLabel('bottom', 'Frequency', units='Hz')
 
     def _update_lag_spectra_plots(self) -> None:
         """Update the lag spectra line plots."""
@@ -4429,16 +4865,30 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         lag_max = self.lag_axis[-1]
         
         # Helper function to update a lag waterfall plot
-        def update_lag_waterfall(key, data, is_magnitude=True, positive_only=False):
+        def update_lag_waterfall(key, raw_data, is_magnitude=True, positive_only=False):
             """Update a single lag waterfall plot with proper scaling and levels."""
             plot_key = f"lag_wf_{key}"
             if not self.plot_checkboxes[plot_key].isChecked():
                 return
+            
+            # Choose which buffer to display based on running difference mode (like fine lag)
+            if self.running_diff_checkbox.isChecked():
+                # Use the pre-calculated difference buffer
+                if key == 'lag_p00':
+                    data = self.shared_buffers.lag_diff_wf_p00
+                elif key == 'lag_p11':
+                    data = self.shared_buffers.lag_diff_wf_p11
+                else:  # lag_p01_mag
+                    data = self.shared_buffers.lag_diff_wf_p01
+            else:
+                # Use the raw data buffer
+                data = raw_data
                 
             wf_data = get_ordered_waterfall(data, pos)
             
-            # Apply mean subtraction if enabled
-            if self.mean_subtract_checkbox.isChecked():
+            # Apply mean subtraction only if enabled AND not in running difference mode
+            if self.mean_subtract_checkbox.isChecked() and not self.running_diff_checkbox.isChecked():
+                # Original mean subtraction mode
                 frames_written = self.shared_buffers.lag_frames_written
                 if frames_written > 0:
                     populated_data = wf_data[-frames_written:] if frames_written < self.shared_buffers.waterfall_len else wf_data
@@ -4461,12 +4911,18 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             if update_levels:
                 # Calculate robust levels using percentiles
                 valid_data = wf_data[np.isfinite(wf_data)]
+                use_log_scale = self.log_scale_checkbox.isChecked()  # Define the variable
                 
                 if is_magnitude:
-                    # For magnitude data
+                    # For magnitude data - use full range like fine lag waterfall for sharp peaks
                     if len(valid_data) > 0:
-                        vmin = np.percentile(valid_data, 5)
-                        vmax = np.percentile(valid_data, 95)
+                        vmin = min(valid_data)  # Use full range instead of percentiles
+                        vmax = max(valid_data)  # This preserves sharp peak definition
+                        
+                        # For normalized data, ensure we don't go below 0 for log scale
+                        if use_log_scale:
+                            vmin = max(vmin, 1e-6)  # Prevent log of negative/zero
+                            vmax = max(vmax, vmin * 10)  # Ensure reasonable dynamic range
                     else:
                         vmin, vmax = 0, 1
                 else:
@@ -4482,11 +4938,30 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             
             # Set image with fixed levels
             img = self.lag_waterfall_images[key]
+            colorbar = self.lag_waterfall_colorbars[key]
             use_log_scale = self.log_scale_checkbox.isChecked()
             
-            if use_log_scale and is_magnitude:
+            # Switch colormap based on mode
+            if self.running_diff_checkbox.isChecked() or self.mean_subtract_checkbox.isChecked():
+                # Use diverging colormap for difference data
+                if self.dark_mode_colors_checkbox.isChecked():
+                    # Dark mode: use CET-D4 (black at zero)
+                    rdbu_cm = pg.colormap.get('CET-D4')
+                else:
+                    # Light mode: use CET-D1 (white at zero)
+                    rdbu_cm = pg.colormap.get('CET-D1')
+                
+                img.setLookupTable(rdbu_cm.getLookupTable())
+                colorbar.setColorMap(rdbu_cm)
+            else:
+                # Use viridis for normal data
+                viridis_cm = pg.colormap.get('viridis')
+                img.setLookupTable(viridis_cm.getLookupTable())
+                colorbar.setColorMap(viridis_cm)
+            
+            if use_log_scale and is_magnitude and not (self.running_diff_checkbox.isChecked() or self.mean_subtract_checkbox.isChecked()):
                 # For power data, display on log scale
-                # When mean subtraction is on, data can be negative, so clip to positive values
+                # Don't use log scale for difference data as it can be negative
                 epsilon = 1e-10
                 clipped_data = np.maximum(wf_data, epsilon)
                 log_wf_data = np.log10(clipped_data)
@@ -4496,9 +4971,14 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                 vmax_clipped = max(vmax, epsilon)
                 log_levels = (np.log10(vmin_clipped), np.log10(vmax_clipped))
                 img.setImage(log_wf_data.T, autoLevels=False, levels=log_levels)
+                # Update colorbar with log scale values
+                colorbar.setLevels((np.log10(vmin_clipped), np.log10(vmax_clipped)))
             else:
-                # Linear scale
+                # Linear scale (or difference mode which should always be linear)
                 img.setImage(wf_data.T, autoLevels=False, levels=self.lag_waterfall_levels[key])
+                # Update colorbar with actual data range
+                vmin, vmax = self.lag_waterfall_levels[key]
+                colorbar.setLevels((vmin, vmax))
             
             # Set the scale to show lag on x-axis (only need to do once)
             if not hasattr(img, '_scale_set'):
