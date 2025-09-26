@@ -607,9 +607,9 @@ class FineLagComputer(threading.Thread):
                     adc0_windowed = adc0_frame * window
                     adc1_windowed = adc1_frame * window
                     
-                    # Compute FFTs
-                    adc0_fft = np.fft.fft(adc0_windowed, n=n_fft)
-                    adc1_fft = np.fft.fft(adc1_windowed, n=n_fft)
+                    # Compute FFTs - use full FFT for complex cross-correlations
+                    adc0_fft = np.fft.fft(adc0_windowed, n=n_fft)  # 16384 bins
+                    adc1_fft = np.fft.fft(adc1_windowed, n=n_fft)  # 16384 bins
                     
                     # Compute power spectral density (PSD)
                     # This is the proper way to compute autocorrelation in frequency domain
@@ -633,6 +633,14 @@ class FineLagComputer(threading.Thread):
                     # Take the middle portion centered around zero lag
                     start_idx = (n_samples - n_lags_cross) // 2
                     lag_p01_complex = lag_p01_complex_shifted[start_idx:start_idx + n_lags_cross]
+                    
+                    # For the first frame, store the intermediate products
+                    if frame_idx == 0:
+                        # Store the first frame's intermediate FFT products for visualization
+                        # Only store unique frequency bins (0 to Nyquist) for display - 8193 bins
+                        first_adc0_fft = adc0_fft[:8193].copy()  # First half + Nyquist bin
+                        first_adc1_fft = adc1_fft[:8193].copy()  # First half + Nyquist bin
+                        first_cross_spectrum = cross_spectrum[:8193].copy()  # First half + Nyquist bin
                     
                     # Add to accumulator
                     lag_p00_sum += lag_p00_frame
@@ -679,6 +687,12 @@ class FineLagComputer(threading.Thread):
                     self.shared_buffers.fine_lag_p00[:] = lag_p00
                     self.shared_buffers.fine_lag_p11[:] = lag_p11
                     self.shared_buffers.fine_lag_p01[:] = lag_p01  # Cross-correlation magnitude
+                    
+                    # Store intermediate FFT products if we computed them (for frequency spectrum plots)
+                    if frames_actually_processed > 0 and 'first_adc0_fft' in locals():
+                        self.shared_buffers.fine_freq_adc0[:] = first_adc0_fft
+                        self.shared_buffers.fine_freq_adc1[:] = first_adc1_fft
+                        self.shared_buffers.fine_freq_cross[:] = first_cross_spectrum
                     
                     # Update history buffers for running difference mode
                     # Store in circular buffer at current position
@@ -1696,12 +1710,20 @@ class SharedDataBuffers:
         # Maximum 200 frames * 16384 samples/frame = 3,276,800 samples
         max_frames_for_display = 10
         n_time_samples = max_frames_for_display * 16384
+        # Frequency domain data (8193 frequency bins for real FFT - 0 to Nyquist)
+        n_fine_freq = 8193  # (16384 // 2) + 1 for rfft of real signals
+        
         self.shm_fine_lag_p00 = shared_memory.SharedMemory(create=True, size=n_fine_lags * 8)
         self.shm_fine_lag_p11 = shared_memory.SharedMemory(create=True, size=n_fine_lags * 8)
         self.shm_fine_lag_p01 = shared_memory.SharedMemory(create=True, size=n_fine_lags * 8)  # Cross-correlation
         self.shm_fine_lag_wf_p00 = shared_memory.SharedMemory(create=True, size=waterfall_len * n_fine_lags * 8)
         self.shm_fine_lag_wf_p11 = shared_memory.SharedMemory(create=True, size=waterfall_len * n_fine_lags * 8)
         self.shm_fine_lag_wf_p01 = shared_memory.SharedMemory(create=True, size=waterfall_len * n_fine_lags * 8)  # Cross-correlation waterfall
+        
+        # Frequency domain data for intermediate products
+        self.shm_fine_freq_adc0 = shared_memory.SharedMemory(create=True, size=n_fine_freq * 16)  # Complex128 = 16 bytes
+        self.shm_fine_freq_adc1 = shared_memory.SharedMemory(create=True, size=n_fine_freq * 16)  # Complex128 = 16 bytes
+        self.shm_fine_freq_cross = shared_memory.SharedMemory(create=True, size=n_fine_freq * 16)  # Complex128 = 16 bytes
         
         # Running difference waterfall buffers (separate from raw data)
         self.shm_fine_lag_diff_wf_p00 = shared_memory.SharedMemory(create=True, size=waterfall_len * n_fine_lags * 8)
@@ -1711,6 +1733,11 @@ class SharedDataBuffers:
         # Raw time domain data for fine lag
         self.shm_fine_time_adc0 = shared_memory.SharedMemory(create=True, size=n_time_samples * 8)
         self.shm_fine_time_adc1 = shared_memory.SharedMemory(create=True, size=n_time_samples * 8)
+        
+        # Frequency domain data for intermediate products
+        self.shm_fine_freq_adc0 = shared_memory.SharedMemory(create=True, size=n_fine_freq * 16)  # Complex128 = 16 bytes
+        self.shm_fine_freq_adc1 = shared_memory.SharedMemory(create=True, size=n_fine_freq * 16)  # Complex128 = 16 bytes
+        self.shm_fine_freq_cross = shared_memory.SharedMemory(create=True, size=n_fine_freq * 16)  # Complex128 = 16 bytes
         
         self.fine_lag_p00 = np.ndarray((n_fine_lags,), dtype=np.float64, buffer=self.shm_fine_lag_p00.buf)
         self.fine_lag_p11 = np.ndarray((n_fine_lags,), dtype=np.float64, buffer=self.shm_fine_lag_p11.buf)
@@ -1728,6 +1755,11 @@ class SharedDataBuffers:
         self.fine_time_adc0 = np.ndarray((n_time_samples,), dtype=np.float64, buffer=self.shm_fine_time_adc0.buf)
         self.fine_time_adc1 = np.ndarray((n_time_samples,), dtype=np.float64, buffer=self.shm_fine_time_adc1.buf)
         
+        # Frequency domain arrays for intermediate products
+        self.fine_freq_adc0 = np.ndarray((n_fine_freq,), dtype=np.complex128, buffer=self.shm_fine_freq_adc0.buf)
+        self.fine_freq_adc1 = np.ndarray((n_fine_freq,), dtype=np.complex128, buffer=self.shm_fine_freq_adc1.buf)
+        self.fine_freq_cross = np.ndarray((n_fine_freq,), dtype=np.complex128, buffer=self.shm_fine_freq_cross.buf)
+        
         # Initialize fine lag arrays
         self.fine_lag_p00.fill(0)
         self.fine_lag_p11.fill(0)
@@ -1737,6 +1769,11 @@ class SharedDataBuffers:
         self.fine_lag_wf_p01.fill(0)  # Cross-correlation waterfall
         self.fine_time_adc0.fill(0)
         self.fine_time_adc1.fill(0)
+        
+        # Initialize frequency domain arrays
+        self.fine_freq_adc0.fill(0)
+        self.fine_freq_adc1.fill(0)
+        self.fine_freq_cross.fill(0)
         
         # Initialize running difference arrays
         self.fine_lag_diff_wf_p00.fill(0)
@@ -1881,6 +1918,7 @@ class SharedDataBuffers:
                     self.shm_fine_lag_wf_p00, self.shm_fine_lag_wf_p11, self.shm_fine_lag_wf_p01,
                     self.shm_fine_lag_diff_wf_p00, self.shm_fine_lag_diff_wf_p11, self.shm_fine_lag_diff_wf_p01,
                     self.shm_fine_time_adc0, self.shm_fine_time_adc1,
+                    self.shm_fine_freq_adc0, self.shm_fine_freq_adc1, self.shm_fine_freq_cross,
                     self.shm_fine_lag_history_p00, self.shm_fine_lag_history_p11, self.shm_fine_lag_history_p01,
                     self.shm_super_fft_psd, self.shm_super_fft_wf_psd, self.shm_super_fft_time,
                     self.shm_radar_range, self.shm_radar_azimuth, self.shm_radar_elevation,
@@ -2738,6 +2776,21 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.waterfall_configs[waterfall_idx]['component'] = component
         print(f"Waterfall {waterfall_idx} now showing {component}")
 
+    def _update_fine_lag_plot_channel(self, plot_idx: int, channel_text: str) -> None:
+        """Update which channel a fine lag plot displays."""
+        self.fine_lag_plot_configs[plot_idx]['channel'] = channel_text
+        print(f"Fine lag plot {plot_idx} now showing channel {channel_text}")
+    
+    def _update_fine_lag_plot_type(self, plot_idx: int, plot_type_text: str) -> None:
+        """Update the plot type for a fine lag plot."""
+        self.fine_lag_plot_configs[plot_idx]['plot_type'] = plot_type_text
+        print(f"Fine lag plot {plot_idx} now showing {plot_type_text}")
+    
+    def _update_fine_lag_plot_component(self, plot_idx: int, component_text: str) -> None:
+        """Update which component a fine lag plot displays."""
+        self.fine_lag_plot_configs[plot_idx]['component'] = component_text
+        print(f"Fine lag plot {plot_idx} now showing component {component_text}")
+
     def _setup_waterfall_plots(self) -> None:
         """Set up the image views for the Waterfall tab."""
         layout = QtWidgets.QGridLayout(self.waterfall_tab)
@@ -2980,109 +3033,104 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             layout.addWidget(container, row, col)
 
     def _setup_fine_lag_spectra_plots(self) -> None:
-        """Set up the plots for the Fine Lag Spectra tab."""
+        """Set up the plots for the Fine Lag Spectra tab with dynamic selectors."""
         layout = QtWidgets.QGridLayout(self.fine_lag_spectra_tab)
         
         self.fine_lag_plots = {}
         self.fine_lag_plot_widgets = {}
-        self.fine_time_plots = {}  # Store time domain plots
-        self.fine_time_plot_widgets = {}  # Store time domain plot widgets
+        self.fine_lag_plot_selectors = {}  # Store selectors for fine lag plots
         colors = pg.colormap.get("tab10", "matplotlib").getColors()
 
-        # --- Fine Lag P00 Plot ---
-        fine_lag_p00_widget = QtWidgets.QWidget()
-        fine_lag_p00_layout = QtWidgets.QVBoxLayout(fine_lag_p00_widget)
-        fine_lag_p00_cb = QtWidgets.QCheckBox("ADC0 Fine Lag (Raw)")
-        fine_lag_p00_cb.setChecked(True)
-        self.plot_checkboxes["fine_lag_s_p00"] = fine_lag_p00_cb
-        fine_lag_p00_plot = pg.PlotWidget()
-        fine_lag_p00_layout.addWidget(fine_lag_p00_cb)
-        fine_lag_p00_layout.addWidget(fine_lag_p00_plot)
-        self.fine_lag_plots[(0,0)] = fine_lag_p00_plot.plot(pen=colors[0], name='autocorr')
-        self.fine_lag_plot_widgets[(0,0)] = fine_lag_p00_plot
-        fine_lag_p00_plot.showGrid(x=True, y=True)
-        fine_lag_p00_plot.setLabel('bottom', 'Distance', units='m')
-        fine_lag_p00_plot.setLabel('left', 'Normalized Autocorrelation')
-        fine_lag_p00_plot.addLegend()
-        layout.addWidget(fine_lag_p00_widget, 0, 0)
-        # Connect checkbox to hide/show the widget
-        fine_lag_p00_cb.stateChanged.connect(lambda state, w=fine_lag_p00_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
+        # Add phase unwrapping checkbox for fine lag mode
+        unwrap_layout = QtWidgets.QHBoxLayout()
+        self.fine_lag_unwrap_phase_checkbox = QtWidgets.QCheckBox("Unwrap Phase")
+        self.fine_lag_unwrap_phase_checkbox.setToolTip("Apply phase unwrapping to remove 2π discontinuities")
+        self.fine_lag_unwrap_phase_checkbox.setChecked(False)
+        unwrap_layout.addWidget(self.fine_lag_unwrap_phase_checkbox)
+        unwrap_layout.addStretch()
+        
+        # Add unwrap checkbox to the top of the layout
+        layout.addLayout(unwrap_layout, 0, 0, 1, 2)
 
-        # --- Fine Lag P11 Plot ---
-        fine_lag_p11_widget = QtWidgets.QWidget()
-        fine_lag_p11_layout = QtWidgets.QVBoxLayout(fine_lag_p11_widget)
-        fine_lag_p11_cb = QtWidgets.QCheckBox("ADC1 Fine Lag (Raw)")
-        fine_lag_p11_cb.setChecked(True)
-        self.plot_checkboxes["fine_lag_s_p11"] = fine_lag_p11_cb
-        fine_lag_p11_plot = pg.PlotWidget()
-        fine_lag_p11_layout.addWidget(fine_lag_p11_cb)
-        fine_lag_p11_layout.addWidget(fine_lag_p11_plot)
-        self.fine_lag_plots[(1,1)] = fine_lag_p11_plot.plot(pen=colors[3], name='autocorr')
-        self.fine_lag_plot_widgets[(1,1)] = fine_lag_p11_plot
-        fine_lag_p11_plot.showGrid(x=True, y=True)
-        fine_lag_p11_plot.setLabel('bottom', 'Distance', units='m')
-        fine_lag_p11_plot.setLabel('left', 'Normalized Autocorrelation')
-        fine_lag_p11_plot.addLegend()
-        layout.addWidget(fine_lag_p11_widget, 0, 1)
-        # Connect checkbox to hide/show the widget
-        fine_lag_p11_cb.stateChanged.connect(lambda state, w=fine_lag_p11_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
+        # Default configurations for fine lag plots
+        default_configs = [
+            {"channel": "ADC0", "plot_type": "Lag Spectrum", "component": "Magnitude", "title": "ADC0 Plot"},
+            {"channel": "ADC1", "plot_type": "Lag Spectrum", "component": "Magnitude", "title": "ADC1 Plot"},
+            {"channel": "Cross", "plot_type": "Lag Spectrum", "component": "Magnitude", "title": "Cross Plot"},
+            {"channel": "ADC0", "plot_type": "Time Domain", "component": "Real", "title": "Time Plot"}
+        ]
+
+        # Store fine lag plot configurations
+        self.fine_lag_plot_configs = {}
         
-        # --- Fine Lag P01 Plot (Cross-correlation) ---
-        fine_lag_p01_widget = QtWidgets.QWidget()
-        fine_lag_p01_layout = QtWidgets.QVBoxLayout(fine_lag_p01_widget)
-        fine_lag_p01_cb = QtWidgets.QCheckBox("ADC0/1 Cross-correlation")
-        fine_lag_p01_cb.setChecked(True)
-        self.plot_checkboxes["fine_lag_s_p01"] = fine_lag_p01_cb
-        fine_lag_p01_plot = pg.PlotWidget()
-        fine_lag_p01_layout.addWidget(fine_lag_p01_cb)
-        fine_lag_p01_layout.addWidget(fine_lag_p01_plot)
-        self.fine_lag_plots[(0,1)] = fine_lag_p01_plot.plot(pen=colors[1], name='cross-corr')
-        self.fine_lag_plot_widgets[(0,1)] = fine_lag_p01_plot
-        fine_lag_p01_plot.showGrid(x=True, y=True)
-        fine_lag_p01_plot.setLabel('bottom', 'Distance', units='m')
-        fine_lag_p01_plot.setLabel('left', 'Normalized Cross-correlation')
-        fine_lag_p01_plot.addLegend()
-        layout.addWidget(fine_lag_p01_widget, 1, 0, 1, 2)  # Span both columns
-        # Connect checkbox to hide/show the widget
-        fine_lag_p01_cb.stateChanged.connect(lambda state, w=fine_lag_p01_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
-        
-        # --- Time Domain ADC0 Plot ---
-        time_adc0_widget = QtWidgets.QWidget()
-        time_adc0_layout = QtWidgets.QVBoxLayout(time_adc0_widget)
-        time_adc0_cb = QtWidgets.QCheckBox("ADC0 Time Domain")
-        time_adc0_cb.setChecked(True)
-        self.plot_checkboxes["fine_time_adc0"] = time_adc0_cb
-        time_adc0_plot = pg.PlotWidget()
-        time_adc0_layout.addWidget(time_adc0_cb)
-        time_adc0_layout.addWidget(time_adc0_plot)
-        self.fine_time_plots[0] = time_adc0_plot.plot(pen=colors[0], name='ADC0')
-        self.fine_time_plot_widgets[0] = time_adc0_plot
-        time_adc0_plot.showGrid(x=True, y=True)
-        time_adc0_plot.setLabel('bottom', 'Time', units='μs')
-        time_adc0_plot.setLabel('left', 'Amplitude')
-        time_adc0_plot.addLegend()
-        layout.addWidget(time_adc0_widget, 2, 0)
-        # Connect checkbox to hide/show the widget
-        time_adc0_cb.stateChanged.connect(lambda state, w=time_adc0_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
-        
-        # --- Time Domain ADC1 Plot ---
-        time_adc1_widget = QtWidgets.QWidget()
-        time_adc1_layout = QtWidgets.QVBoxLayout(time_adc1_widget)
-        time_adc1_cb = QtWidgets.QCheckBox("ADC1 Time Domain")
-        time_adc1_cb.setChecked(True)
-        self.plot_checkboxes["fine_time_adc1"] = time_adc1_cb
-        time_adc1_plot = pg.PlotWidget()
-        time_adc1_layout.addWidget(time_adc1_cb)
-        time_adc1_layout.addWidget(time_adc1_plot)
-        self.fine_time_plots[1] = time_adc1_plot.plot(pen=colors[3], name='ADC1')
-        self.fine_time_plot_widgets[1] = time_adc1_plot
-        time_adc1_plot.showGrid(x=True, y=True)
-        time_adc1_plot.setLabel('bottom', 'Time', units='μs')
-        time_adc1_plot.setLabel('left', 'Amplitude')
-        time_adc1_plot.addLegend()
-        layout.addWidget(time_adc1_widget, 2, 1)
-        # Connect checkbox to hide/show the widget
-        time_adc1_cb.stateChanged.connect(lambda state, w=time_adc1_widget: w.setVisible(state == QtCore.Qt.CheckState.Checked))
+        for i, config in enumerate(default_configs):
+            if i < 3:
+                row, col = 1, i % 3  # Put first 3 plots in row 1
+            else:
+                row, col = 2, 0  # Put 4th plot in row 2
+            
+            container = QtWidgets.QWidget()
+            container_layout = QtWidgets.QVBoxLayout(container)
+            
+            # Control bar with checkbox and selectors
+            control_layout = QtWidgets.QHBoxLayout()
+            
+            cb = QtWidgets.QCheckBox(config["title"])
+            cb.setChecked(True)
+            plot_key = f"fine_lag_plot_{i}"
+            self.plot_checkboxes[plot_key] = cb
+            
+            # Channel selector
+            channel_selector = QtWidgets.QComboBox()
+            channel_selector.addItems(["ADC0", "ADC1", "Cross"])
+            channel_selector.setCurrentText(config["channel"])
+            channel_selector.currentTextChanged.connect(lambda text, idx=i: self._update_fine_lag_plot_channel(idx, text))
+            
+            # Plot type selector  
+            plot_type_selector = QtWidgets.QComboBox()
+            plot_type_selector.addItems(["Time Domain", "Frequency Spectrum", "Lag Spectrum"])
+            plot_type_selector.setCurrentText(config["plot_type"])
+            plot_type_selector.currentTextChanged.connect(lambda text, idx=i: self._update_fine_lag_plot_type(idx, text))
+            
+            # Component selector
+            component_selector = QtWidgets.QComboBox()
+            component_selector.addItems(["Magnitude", "Real", "Imaginary", "Phase"])
+            component_selector.setCurrentText(config["component"])
+            component_selector.currentTextChanged.connect(lambda text, idx=i: self._update_fine_lag_plot_component(idx, text))
+            
+            control_layout.addWidget(cb)
+            control_layout.addWidget(channel_selector)
+            control_layout.addWidget(plot_type_selector)
+            control_layout.addWidget(component_selector)
+            control_layout.addStretch()
+            
+            # Create the plot widget
+            plot = pg.PlotWidget()
+            plot.showGrid(x=True, y=True)
+            plot.addLegend()
+            
+            container_layout.addLayout(control_layout)
+            container_layout.addWidget(plot)
+            
+            # Store configuration and plot references
+            self.fine_lag_plot_configs[i] = {
+                'channel': config["channel"],
+                'plot_type': config["plot_type"],
+                'component': config["component"],
+                'channel_selector': channel_selector,
+                'plot_type_selector': plot_type_selector,
+                'component_selector': component_selector
+            }
+            
+            # Create plot line
+            plot_line = plot.plot(pen=colors[i % len(colors)], name=config["component"])
+            self.fine_lag_plots[i] = plot_line
+            self.fine_lag_plot_widgets[i] = plot
+            
+            layout.addWidget(container, row, col)
+            
+            # Connect checkbox to hide/show the container
+            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.CheckState.Checked))
 
     def _setup_fine_lag_waterfall_plots(self) -> None:
         """Set up the image views for the Fine Lag Waterfall tab."""
@@ -3796,6 +3844,21 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             self.super_fft_freq_axis = base_super_fft_freq_axis + FS_HZ
         else:
             self.super_fft_freq_axis = base_super_fft_freq_axis
+            
+        # Update fine lag frequency axis with Nyquist zone
+        n_fine_freq_bins = 8193
+        base_fine_freq_axis = np.linspace(0, FS_HZ/2, n_fine_freq_bins, endpoint=True)
+        
+        if zone == 1:
+            self.fine_freq_axis = base_fine_freq_axis
+        elif zone == 2:
+            # Zone 2: 1600 to 3200 MHz (reversed due to aliasing)
+            reversed_fine_freq_axis = base_fine_freq_axis[::-1]  # Reverse the frequency order
+            self.fine_freq_axis = reversed_fine_freq_axis + FS_HZ / 2
+        elif zone == 3:
+            self.fine_freq_axis = base_fine_freq_axis + FS_HZ
+        else:
+            self.fine_freq_axis = base_fine_freq_axis
     
     def _on_nyquist_zone_changed(self, index: int) -> None:
         """Handle Nyquist zone selection change."""
@@ -5011,41 +5074,156 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         # Phase is not used for delay spectra
 
     def _update_fine_lag_spectra_plots(self) -> None:
-        """Update the fine lag spectra line plots."""
+        """Update the fine lag spectra plots with dynamic data selection."""
         if not self.shared_buffers:
             return
         use_log_scale = self.log_scale_checkbox.isChecked()
+        unwrap_phase = self.fine_lag_unwrap_phase_checkbox.isChecked()
         
-        # Update plot log modes based on checkbox
-        # For normalized autocorrelation (0-1 range), log scale might not be ideal but respect user preference
-        self.fine_lag_plot_widgets[(0,0)].setLogMode(y=use_log_scale)
-        self.fine_lag_plot_widgets[(1,1)].setLogMode(y=use_log_scale)
-        self.fine_lag_plot_widgets[(0,1)].setLogMode(y=use_log_scale)
+        # Add fine frequency axis if not exists - use proper Nyquist range
+        if not hasattr(self, 'fine_freq_axis'):
+            # For real-valued signals, meaningful frequency content is 0 to FS_HZ/2
+            # FFT of 16384 real samples gives 8193 unique frequency bins (0 to Nyquist)
+            n_unique_bins = 8193  # (16384 // 2) + 1 for rfft
+            self.fine_freq_axis = np.linspace(0, FS_HZ/2, n_unique_bins, endpoint=True)
         
-        # Only update plots that are checked
-        if self.plot_checkboxes["fine_lag_s_p00"].isChecked():
-            self.fine_lag_plots[(0,0)].setData(x=self.fine_lag_axis, y=self.shared_buffers.fine_lag_p00)
+        # Helper function to get data for a specific channel, plot type, and component
+        def get_fine_lag_data(channel, plot_type, component):
+            """Get the data for a specific channel, plot type, and component."""
+            if plot_type == "Time Domain":
+                # Time domain data
+                n_samples = self.shared_buffers.fine_time_n_samples
+                x_axis = self.time_axis_us_full[:n_samples]
+                
+                if channel == "ADC0":
+                    data = self.shared_buffers.fine_time_adc0[:n_samples]
+                elif channel == "ADC1":
+                    data = self.shared_buffers.fine_time_adc1[:n_samples]
+                else:  # Cross
+                    # For cross-correlation in time domain, we don't have a meaningful representation
+                    data = np.zeros(n_samples)
+                
+                return x_axis, data
+                
+            elif plot_type == "Frequency Spectrum":
+                # Frequency domain data (intermediate FFT products)
+                x_axis = self.fine_freq_axis
+                
+                if channel == "ADC0":
+                    complex_data = self.shared_buffers.fine_freq_adc0
+                elif channel == "ADC1":
+                    complex_data = self.shared_buffers.fine_freq_adc1
+                elif channel == "Cross":
+                    complex_data = self.shared_buffers.fine_freq_cross
+                else:
+                    complex_data = np.zeros(len(self.fine_freq_axis), dtype=np.complex128)
+                
+                # Extract component
+                if component == "Magnitude":
+                    data = np.abs(complex_data)
+                elif component == "Real":
+                    data = complex_data.real
+                elif component == "Imaginary":
+                    data = complex_data.imag
+                elif component == "Phase":
+                    phase_data = np.angle(complex_data)
+                    data = np.unwrap(phase_data) if unwrap_phase else phase_data
+                else:
+                    data = np.abs(complex_data)
+                    
+                return x_axis, data
+                
+            elif plot_type == "Lag Spectrum":
+                # Lag domain data (existing)
+                x_axis = self.fine_lag_axis
+                
+                if channel == "ADC0":
+                    data = self.shared_buffers.fine_lag_p00
+                elif channel == "ADC1":
+                    data = self.shared_buffers.fine_lag_p11
+                elif channel == "Cross":
+                    data = self.shared_buffers.fine_lag_p01
+                else:
+                    data = np.zeros(len(self.fine_lag_axis))
+                    
+                return x_axis, data
             
-        if self.plot_checkboxes["fine_lag_s_p11"].isChecked():
-            self.fine_lag_plots[(1,1)].setData(x=self.fine_lag_axis, y=self.shared_buffers.fine_lag_p11)
-            
-        if self.plot_checkboxes["fine_lag_s_p01"].isChecked():
-            self.fine_lag_plots[(0,1)].setData(x=self.fine_lag_axis, y=self.shared_buffers.fine_lag_p01)
+            # Fallback
+            return np.arange(100), np.zeros(100)
         
-        # Update time domain plots
-        if self.plot_checkboxes["fine_time_adc0"].isChecked():
-            # Plot raw ADC0 time domain data - only the actual samples captured
-            n_samples = self.shared_buffers.fine_time_n_samples
-            time_axis = self.time_axis_us_full[:n_samples]
-            adc0_data = self.shared_buffers.fine_time_adc0[:n_samples]
-            self.fine_time_plots[0].setData(x=time_axis, y=adc0_data)
+        # Update each plot based on its configuration
+        for plot_idx in range(4):
+            plot_key = f"fine_lag_plot_{plot_idx}"
             
-        if self.plot_checkboxes["fine_time_adc1"].isChecked():
-            # Plot raw ADC1 time domain data - only the actual samples captured
-            n_samples = self.shared_buffers.fine_time_n_samples
-            time_axis = self.time_axis_us_full[:n_samples]
-            adc1_data = self.shared_buffers.fine_time_adc1[:n_samples]
-            self.fine_time_plots[1].setData(x=time_axis, y=adc1_data)
+            if not self.plot_checkboxes[plot_key].isChecked():
+                continue
+                
+            # Get configuration for this plot
+            config = self.fine_lag_plot_configs[plot_idx]
+            channel = config['channel']
+            plot_type = config['plot_type']
+            component = config['component']
+            
+            # Get the data and x-axis
+            x_axis, data = get_fine_lag_data(channel, plot_type, component)
+            
+            # Get the plot widget and line
+            plot_widget = self.fine_lag_plot_widgets[plot_idx]
+            plot_line = self.fine_lag_plots[plot_idx]
+            
+            # Apply log scale based on data type and component
+            is_magnitude = (component == "Magnitude")
+            is_time_domain = (plot_type == "Time Domain")
+            is_phase = (component == "Phase")
+            
+            if is_magnitude and not is_time_domain:
+                # Use log scale for frequency/lag magnitude data
+                plot_widget.setLogMode(y=use_log_scale)
+            else:
+                # Linear scale for time domain, phase, real/imaginary
+                plot_widget.setLogMode(y=False)
+                
+                # Apply symlog for real/imaginary frequency/lag data if log scale enabled
+                if use_log_scale and component in ['Real', 'Imaginary'] and not is_time_domain:
+                    C = self.symlog_crossover_spinner.value()
+                    sign_data = np.sign(data)
+                    abs_data = np.abs(data)
+                    symlog_data = sign_data * np.log10(1 + abs_data / C)
+                    plot_line.setData(x=x_axis, y=symlog_data)
+                    plot_widget.setLabel('left', f'{component} (symlog)')
+                    continue  # Skip the normal setData call below
+                else:
+                    plot_line.setData(x=x_axis, y=data)
+                    if is_phase:
+                        if unwrap_phase:
+                            plot_widget.setLabel('left', 'Unwrapped Phase (radians)')
+                        else:
+                            plot_widget.setLabel('left', 'Phase (radians)')
+                    else:
+                        plot_widget.setLabel('left', component)
+                    continue  # Skip the normal setData call below
+            
+            # Normal case - set data directly
+            plot_line.setData(x=x_axis, y=data)
+            
+            # Update axis labels based on plot type
+            if plot_type == "Time Domain":
+                plot_widget.setLabel('bottom', 'Time', units='μs')
+                plot_widget.setLabel('left', 'Amplitude')
+            elif plot_type == "Frequency Spectrum":
+                plot_widget.setLabel('bottom', 'Frequency', units='Hz')
+                if component == "Magnitude":
+                    plot_widget.setLabel('left', 'Magnitude')
+                elif component == "Phase":
+                    if unwrap_phase:
+                        plot_widget.setLabel('left', 'Unwrapped Phase (radians)')
+                    else:
+                        plot_widget.setLabel('left', 'Phase (radians)')
+                else:
+                    plot_widget.setLabel('left', component)
+            elif plot_type == "Lag Spectrum":
+                plot_widget.setLabel('bottom', 'Distance', units='m')
+                plot_widget.setLabel('left', 'Normalized Correlation')
 
     def _update_fine_lag_waterfall_plots(self) -> None:
         """Update the fine lag waterfall plots."""
