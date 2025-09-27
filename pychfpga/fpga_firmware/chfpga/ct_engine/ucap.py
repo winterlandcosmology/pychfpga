@@ -85,7 +85,7 @@ class UCAP(MMI):
             channels = [channels]
 
         if mode == 0:
-            if channels is not None or channels != list(range(8)):
+            if channels is not None and channels != list(range(8)):
                 raise RuntimeError('UCAP mode 0 can only capture channels 0-7, in that order')
         elif mode == 1:
             if len(channels) != 4:

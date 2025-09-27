@@ -138,10 +138,10 @@ class POCKET_CORRELATOR:
             print("✓ Network settings verified - ready for UDP data reception")
 
         ca = fpga_array.FPGAArray(hwm = hwm,
-                                  stderr_log_level = stderr_log_level,
-                                  prog = prog,
-                                  mode = 'corr8' # Always used corr8 for pocket correlator
-                                  )
+                                    stderr_log_level = stderr_log_level,
+                                    prog = prog,
+                                    mode = 'corr8' # Always used corr8 for pocket correlator
+                                    )
 
         # Define useful objects
         self.ca = ca
@@ -159,7 +159,7 @@ class POCKET_CORRELATOR:
         self.f = self.f_res*np.arange(self.NBINS) # an array containing the frequency bins
         self.bin_map = self.make_bin_map() # generate the frequency bin map (see the function description for details) 
         self.inv_bin_map = self.make_inv_bin_map() # generate the inverse frequency bin map (see the function description for details) 
-        
+
         for n in range(self.NPOLS):
 
             # Configure each FFT module
@@ -242,9 +242,11 @@ class POCKET_CORRELATOR:
     def read_adc_frames(self,
                         n_frames = 2,
                         data_source = 'adc',
+                        channels = list(np.arange(8)),
                         period = 0.02,
                         split = True,
-                        verbose = 0
+                        verbose = 0,
+                        **function_kwargs
                         ):
         """
         Read ADC frames using UCAP. By default, UCAP is in mode 0, meaning 2 frames for each ADC channel will be
@@ -255,11 +257,15 @@ class POCKET_CORRELATOR:
         n_frames : (int) Number of frames captured per function call. n_frames must be an even-valued integer, as UCAP only
         receives data in bursts of 16 frames. 
 
-        data_source : (str) The upstream source of data; can be either 'adc' or 'funcgen'.
+        data_source : (str) A string that sets whether real ADC data or data stored in the FUNCGEN buffer are sent out of the FUNCGEN.
 
             If 'adc', then real digitized data from the ADC will pass through the CHAN signal chain.
 
-            If 'funcgen', then FUNCGEN data pass through the CHAN signal chain.
+            Otherwise, the user can specify a desired function listed in pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py
+            Keyword arguments can be included (see below).
+
+        channels : (list) A list of the input channels (i.e., 0 for ADC1, 1 for ADC2, etc.) for which you'd like to recover data.
+        The default is to receive data from all channels [0, .., 7].
 
         period : (float) Time (in seconds) between captured bursts. 0.02 is the minimum recommended to not saturate the ethernet link. 
 
@@ -275,6 +281,9 @@ class POCKET_CORRELATOR:
                 axis 1: sample number, with all frames flattened
 
         verbose (int): Verbosity level. 0: no messages, 1: basic messages, 2: detailed messages
+
+        function_kwargs : (dict) Arguments for FUNCGEN functions passed to set_channelizer(). Used when data_source is not 'adc'.
+        See pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py for functions and their arguments.
 
         Returns
         -------
@@ -305,40 +314,55 @@ class POCKET_CORRELATOR:
         # get the number of captures needed    
         ncap = int(n_frames/n_frames_per_capture)
 
-        # Verify that 'data_source' has been specified correctly
-        valid_data_sources = ['adc', 'funcgen']
-        if data_source not in valid_data_sources:
-            raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
+        # # Verify that 'data_source' has been specified correctly
+        # valid_data_sources = ['adc', 'funcgen']
+        # if data_source not in valid_data_sources:
+        #     raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
 
         # Ensure UCAP is configured to receive channelizer data, not correlated data:
         if self.ucap.OUTPUT_SOURCE_SEL != 0:
             self.ucap.OUTPUT_SOURCE_SEL = 0
 
-        # Configure each channelizer
-        for n in range(self.NPOLS):
+        # for n in range(self.NPOLS):
 
-            if data_source == 'adc':
-                # Set the data source
-                self.i.chan[n].FUNCGEN.set_data_source(data_source)
+        #     if data_source == 'adc':
+        #         # Set the data source
+        #         self.i.chan[n].FUNCGEN.set_data_source(data_source)
 
-            elif data_source == 'funcgen':
-                # Don't set the data source, but verify that the function 
-                # specified is the one that is being used
-                current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
-                if current_data_source != 'buffer':
-                    raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
+        #     elif data_source == 'funcgen':
+        #         # Don't set the data source, but verify that the function 
+        #         # specified is the one that is being used
+        #         current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
+        #         if current_data_source != 'buffer':
+        #             raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
 
-            # Bypass the FFT
-            self.i.chan[n].FFT.BYPASS = 1
+        #     # Bypass the FFT
+        #     self.i.chan[n].FFT.BYPASS = 1
 
-            # Bypass the SCALER
-            self.i.chan[n].SCALER.BYPASS = 1
+        #     # Bypass the SCALER
+        #     self.i.chan[n].SCALER.BYPASS = 1
+
+        # Configure the channelizers
+        self.i.set_channelizer(data_source = data_source,
+                               function = None,
+                               # funcgen_left_shift=None,
+                               # funcgen_right_shift=None,
+                               channels = channels,
+                               **function_kwargs
+                               )
         
         # Start data capture, always setting the source to 'adc' (meaning that the data is
         # always captured at the output of the FUNCGEN module, no matter if it is real ADC 
-        # data, or a test pattern written to the buffer of the FUNCGEN... I know, confusing)
+        # data, or a test pattern written to the buffer of the FUNCGEN)
+        # self.i.start_data_capture(period = period, 
+        #                           source = 'adc'
+        #                           )
+
         self.i.start_data_capture(period = period, 
-                                  source = 'adc'
+                                  source = 'adc',
+                                  mode = self.ucap.MODE,
+                                  channels = channels,
+                                  select = True
                                   )
 
         # Capture data!
@@ -414,9 +438,12 @@ class POCKET_CORRELATOR:
                         n_frames = 2,
                         fft_bit_res = '32+32',
                         data_source = 'adc',
+                        channels = list(np.arange(8)),
+                        fft_bypass = False,
                         period = 0.02,
                         split = True,
-                        verbose = 0
+                        verbose = 0,
+                        **function_kwargs
                         ):
         """
         Read FFT frames using UCAP. By default, UCAP is in mode 0, meaning 2 frames for each ADC channel will be
@@ -443,11 +470,25 @@ class POCKET_CORRELATOR:
                 bins from different frames. Caution is therefore warranted in using this mode, though it is preferable to ]
                 recover the full FFT resolution.**
 
-        data_source : (str) The upstream source of data; can be either 'adc' or 'funcgen'.
+        data_source : (str) A string that sets whether real ADC data or data stored in the FUNCGEN buffer are sent out of the FUNCGEN.
 
             If 'adc', then real digitized data from the ADC will pass through the CHAN signal chain.
 
-            If 'funcgen', then FUNCGEN data pass through the CHAN signal chain.
+            Otherwise, the user can specify a desired function listed in pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py
+            Keyword arguments can be included (see below).
+
+        channels : (list) A list of the input channels (i.e., 0 for ADC1, 1 for ADC2, etc.) for which you'd like to recover data.
+        The default is to receive data from all channels [0, .., 7].
+
+        fft_bypass : (bool) Whether or not to bypass the FFT. Why include an option to bypass the FFT when you are requesting post-gain frames,
+        you might ask? Well, sometimes it is useful to use the FUNCGEN to create a simulated spectrum, in which case you wouldn't want 
+        the signal you have set in the FUNCGEN to propagate through the firmware FFT. 
+        
+            With the fft_bypass option, you have the power to create simulated FFT outputs for signal path validation.
+
+            If True, the FFT is bypassed.
+
+            If False, the FFT is not bypassed. Default.
 
         period : (float) Time (in seconds) between captured bursts. 0.02 is the minimum recommended to not saturate the ethernet link. 
 
@@ -463,6 +504,9 @@ class POCKET_CORRELATOR:
                 axis 1: sample number, with all frames flattened
 
         verbose (int): Verbosity level. 0: no messages, 1: basic messages, 2: detailed messages
+
+        function_kwargs : (dict) Arguments for FUNCGEN functions passed to set_channelizer(). Used when data_source is not 'adc'.
+        See pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py for functions and their arguments.
 
         Returns
         -------
@@ -491,45 +535,61 @@ class POCKET_CORRELATOR:
         # get the number of captures needed    
         ncap = int(n_frames/n_frames_per_capture)
 
-        # Verify that 'data_source' has been specified correctly
-        valid_data_sources = ['adc', 'funcgen']
-        if data_source not in valid_data_sources:
-            raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
+        # # Verify that 'data_source' has been specified correctly
+        # valid_data_sources = ['adc', 'funcgen']
+        # if data_source not in valid_data_sources:
+        #     raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
 
         # Ensure UCAP is configured to receive channelizer data, not correlated data:
         if self.ucap.OUTPUT_SOURCE_SEL != 0:
             self.ucap.OUTPUT_SOURCE_SEL = 0
 
-        # Configure each channelizer
-        for n in range(self.NPOLS):
+        # # Configure each channelizer
+        # for n in range(self.NPOLS):
 
-            if data_source == 'adc':
-                # Set the data source
-                self.i.chan[n].FUNCGEN.set_data_source(data_source)
+        #     if data_source == 'adc':
+        #         # Set the data source
+        #         self.i.chan[n].FUNCGEN.set_data_source(data_source)
 
-            elif data_source == 'funcgen':
-                # Don't set the data source, but verify that the function 
-                # specified is the one that is being used
-                current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
-                if current_data_source != 'buffer':
-                    raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
+        #     elif data_source == 'funcgen':
+        #         # Don't set the data source, but verify that the function 
+        #         # specified is the one that is being used
+        #         current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
+        #         if current_data_source != 'buffer':
+        #             raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
 
-            # Do not bypass the FFT
-            self.i.chan[n].FFT.BYPASS = 0
+        #     # Do not bypass the FFT
+        #     self.i.chan[n].FFT.BYPASS = 0
 
-            # Bypass the SCALER
-            self.i.chan[n].SCALER.BYPASS = 1
+        #     # Bypass the SCALER
+        #     self.i.chan[n].SCALER.BYPASS = 1
 
         if fft_bit_res == '16+16':
 
             # Set the SCALER data_type such that we can recover upper 16+16 MSBs of FFT
-            for m in range(self.NPOLS):
-                self.i.chan[m].SCALER.CAP_DATA_TYPE = 1 
+            # for m in range(self.NPOLS):
+            #     self.i.chan[m].SCALER.CAP_DATA_TYPE = 1 
+
+            # Configure the channelizers
+            self.i.set_channelizer(data_source = data_source,
+                                   # funcgen_left_shift=0,
+                                   # funcgen_right_shift=0,
+                                   fft_bypass = fft_bypass,
+                                   scaler_bypass = True,
+                                   scaler_cap_data_type = 1,
+                                   scaler_bypass_data_type = None,
+                                   channels = channels,
+                                   **function_kwargs
+                                   )
 
             # Start data capture (recall that we have bypassed the SCALER, but UCAP still
             # captures data from its output)
-            self.i.start_data_capture(period = 0.02, 
-                                      source = 'scaler' 
+            self.i.start_data_capture(period = period, 
+                                      source = 'scaler',
+                                      mode = self.ucap.MODE,
+                                      channels = channels, 
+                                      data_type = 1,
+                                      select = True
                                       )
 
             # Capture data!
@@ -542,14 +602,31 @@ class POCKET_CORRELATOR:
         elif fft_bit_res == '32+32':
 
             for n in range(ncap):
-                for m in range(self.NPOLS):
-                    # Capture even bins
-                    self.i.chan[m].SCALER.CAP_DATA_TYPE = 4 
+
+                # for m in range(self.NPOLS):
+                #     # Capture even bins
+                #     self.i.chan[m].SCALER.CAP_DATA_TYPE = 4 
+
+                # Configure the channelizers to get even FFT bins
+                self.i.set_channelizer(data_source = data_source,
+                                       # funcgen_left_shift=0,
+                                       # funcgen_right_shift=0,
+                                       fft_bypass = fft_bypass,
+                                       scaler_bypass = True,
+                                       scaler_cap_data_type = 4,
+                                       scaler_bypass_data_type = None,
+                                       channels = channels,
+                                       **function_kwargs
+                                       )
 
                 # Start data capture for even bins (recall that we have bypassed the SCALER, 
                 # but UCAP still captures data from the output of the SCALER)
                 self.i.start_data_capture(period = period, 
-                                          source = 'scaler'
+                                          source = 'scaler',
+                                          mode = self.ucap.MODE,
+                                          channels = channels, 
+                                          data_type = 4,
+                                          select = True
                                           )
 
                 # Capture data for even bins
@@ -559,14 +636,30 @@ class POCKET_CORRELATOR:
                                                                    verbose = verbose
                                                                    )
 
-                for m in range(self.NPOLS):
-                    # Capture odd bins
-                    self.i.chan[m].SCALER.CAP_DATA_TYPE = 5 
+                # for m in range(self.NPOLS):
+                #     # Capture odd bins
+                #     self.i.chan[m].SCALER.CAP_DATA_TYPE = 5 
+
+                # Configure the channelizers to get odd FFT bins
+                self.i.set_channelizer(data_source = data_source,
+                                       # funcgen_left_shift=0,
+                                       # funcgen_right_shift=0,
+                                       fft_bypass = fft_bypass,
+                                       scaler_bypass = True,
+                                       scaler_cap_data_type = 5,
+                                       scaler_bypass_data_type = None,
+                                       channels = channels,
+                                       **function_kwargs
+                                       )
 
                 # Start data capture for odd bins (recall that we have bypassed the SCALER, 
                 # but UCAP still captures data from the output of the SCALER)
                 self.i.start_data_capture(period = period, 
-                                          source = 'scaler'
+                                          source = 'scaler',
+                                          mode = self.ucap.MODE,
+                                          channels = channels, 
+                                          data_type = 5,
+                                          select = True
                                           )
 
                 # Capture data for odd bins
@@ -595,11 +688,15 @@ class POCKET_CORRELATOR:
     def compute_gains(self,
                       target = 1.5*np.sqrt(2), # default value borrowed from CHIME
                       n_fft_frames = 1000,
+                      data_source = 'adc',
+                      channels = list(np.arange(8)),
+                      fft_bypass = False,
                       bank = 0,
                       return_scaler_frames = False,
                       save_gains = False,
                       digital_gains_parent_path = None,
-                      digital_gains_dir_name = None
+                      digital_gains_dir_name = None,
+                      **function_kwargs
                       ):
         """
         Compute digital gains used to quantize FFT data into 4+4 bits with the SCALER. When floating point
@@ -644,6 +741,26 @@ class POCKET_CORRELATOR:
 
         n_fft_frames : (int) The number of FFT frames whose magnitudes are average when computing the digital gains.
 
+        data_source : (str) A string that sets whether real ADC data or data stored in the FUNCGEN buffer are sent out of the FUNCGEN.
+
+            If 'adc', then real digitized data from the ADC will pass through the CHAN signal chain.
+
+            Otherwise, the user can specify a desired function listed in pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py
+            Keyword arguments can be included (see below).
+
+        channels : (list) A list of the input channels (i.e., 0 for ADC1, 1 for ADC2, etc.) for which you'd like to recover data.
+        The default is to receive data from all channels [0, .., 7].
+
+        fft_bypass : (bool) Whether or not to bypass the FFT. Why include an option to bypass the FFT when you are requesting post-gain frames,
+        you might ask? Well, sometimes it is useful to use the FUNCGEN to create a simulated spectrum, in which case you wouldn't want 
+        the signal you have set in the FUNCGEN to propagate through the firmware FFT. 
+        
+            With the fft_bypass option, you have the power to create simulated FFT outputs for signal path validation.
+
+            If True, the FFT is bypassed.
+
+            If False, the FFT is not bypassed. Default.
+
         bank : (int) The FPGA has enough memory to store two sets of digital gains, each of which are stored in different "banks".
         The digital gains computed in a given call of compute_gains() will be written to the specified bank.
         Possible values are 0 or 1.
@@ -659,6 +776,9 @@ class POCKET_CORRELATOR:
 
         digital_gains_dir_name : (str) The directory in which the digital gains will be stored. This directory lives within
         the parent digital_gains_path directory. Only used if save_gains is True.
+
+        function_kwargs : (dict) Arguments for FUNCGEN functions passed to set_channelizer(). Used when data_source is not 'adc'.
+        See pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py for functions and their arguments.
 
         Returns
         -------
@@ -682,6 +802,10 @@ class POCKET_CORRELATOR:
         # New digital gain computation algorithm for bit-growth FFT.
         # =========================================================
 
+        # Helper array for reading individual bits of ADC_OR and ADC_OV flags
+        bitmask = 2**np.arange(8) # 8-bit bitmask for isolating values of individual bits
+        bitshifts = np.arange(0, 8)[::-1] # bitshifts to read values of bits as 1 or 0
+
         # Capture FFT data, ensuring that there are no ADC overrange 
         # or overvoltage flags raised such that the digital gains
         # are not biased
@@ -699,23 +823,35 @@ class POCKET_CORRELATOR:
                 # Capture FFT data
                 d_fft = self.read_fft_frames(n_frames = n_fft_frames,
                                              fft_bit_res = '32+32',
-                                             data_source = 'adc',
+                                             data_source = data_source,
+                                             fft_bypass = fft_bypass,
                                              period = 0.02,
                                              split = True,
-                                             verbose = 0
+                                             verbose = 0,
+                                             **function_kwargs
                                              )
         
                 # Check the ADC overrange and overvoltage flags
                 adc_or = self.i.GPIO.ADC_OR
                 adc_ov = self.i.GPIO.ADC_OV
 
+                # Create arrays to print the overrange/overflow status of individual ADCs,
+                # reversing the array so that the ADCs are indexed in ascending order from ADC1 to ADC8
+                adc_or_arr = np.array([(adc_or & bitmask[m]) >> m for m in bitshifts])[::-1]
+                adc_ov_arr = np.array([(adc_ov & bitmask[m]) >> m for m in bitshifts])[::-1]
+
                 print(f'Read {n_fft_frames} FFT frames')
-                print(f'ADC Overrange = {bin(adc_or).zfill(8)}')
-                print(f'ADC Overvoltage = {bin(adc_ov).zfill(8)}')
+                if adc_or != 0:
+                    print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_or_arr[n] != 0])
+                if adc_ov != 0:
+                    print(f'ADC overvoltages detected:', [f'ADC{n + 1}' for n in range(8) if adc_ov_arr[n] != 0])
+                # print(f'ADC Overrange = {bin(adc_or).zfill(8)}')
+                # print(f'ADC Overvoltage = {bin(adc_ov).zfill(8)}')
                 print('')
 
                 # Break loop if no flags are high
                 if adc_or == 0 and adc_ov == 0:
+                    print('No ADC overvoltage or overrange flags detected. Moving on to digital gain computation.')
                     break
 
                 # Otherwise, raise an exception
@@ -764,10 +900,14 @@ class POCKET_CORRELATOR:
         if return_scaler_frames:
             n_sclr_frames = n_fft_frames # capture the same number of frames
             d_sclr = self.read_scaler_frames(n_frames = n_sclr_frames,
-                                             data_source = 'adc',
+                                             data_source = data_source,
+                                             channels = channels,
+                                             fft_bypass = fft_bypass,
+                                             scaler_bypass = False,
                                              period = 0.02, 
                                              split = True,
-                                             verbose = 0
+                                             verbose = 0,
+                                             **function_kwargs
                                              )
 
         else:
@@ -870,9 +1010,12 @@ class POCKET_CORRELATOR:
     def read_post_gain_frames(self,
                               n_frames = 2,
                               data_source = 'adc',
+                              channels = list(np.arange(8)),
+                              fft_bypass = False,
                               period = 0.02,
                               split = True,
-                              verbose = 0
+                              verbose = 0,
+                              **function_kwargs
                               ):
         """
         Read "post-gain" FFT frames using UCAP. "Post-gain" FFT frames refer to the intermediate 48+48-bit value resulting from the 
@@ -893,11 +1036,25 @@ class POCKET_CORRELATOR:
         n_frames : (int) Number of frames captured per function call. n_frames must be an even-valued integer, as UCAP only
         receives data in bursts of 16 frames. 
 
-        data_source : (str) The upstream source of data; can be either 'adc' or 'funcgen'.
+        data_source : (str) A string that sets whether real ADC data or data stored in the FUNCGEN buffer are sent out of the FUNCGEN.
 
             If 'adc', then real digitized data from the ADC will pass through the CHAN signal chain.
 
-            If 'funcgen', then user-defined FUNCGEN data pass through the CHAN signal chain.
+            Otherwise, the user can specify a desired function listed in pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py
+            Keyword arguments can be included (see below).
+
+        channels : (list) A list of the input channels (i.e., 0 for ADC1, 1 for ADC2, etc.) for which you'd like to recover data.
+        The default is to receive data from all channels [0, .., 7].
+
+        fft_bypass : (bool) Whether or not to bypass the FFT. Why include an option to bypass the FFT when you are requesting post-gain frames,
+        you might ask? Well, sometimes it is useful to use the FUNCGEN to create a simulated spectrum, in which case you wouldn't want 
+        the signal you have set in the FUNCGEN to propagate through the firmware FFT. 
+        
+            With the fft_bypass option, you have the power to create simulated FFT outputs for signal path validation.
+
+            If True, the FFT is bypassed.
+
+            If False, the FFT is not bypassed. Default.
 
         period : (float) Time (in seconds) between captured bursts. 0.02 is the minimum recommended to not saturate the ethernet link. 
 
@@ -913,6 +1070,9 @@ class POCKET_CORRELATOR:
                 axis 1: sample number, with all frames flattened
 
         verbose (int): Verbosity level. 0: no messages, 1: basic messages, 2: detailed messages
+
+        function_kwargs : (dict) Arguments for FUNCGEN functions passed to set_channelizer(). Used when data_source is not 'adc'.
+        See pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py for functions and their arguments.
 
         Returns
         -------
@@ -940,57 +1100,77 @@ class POCKET_CORRELATOR:
         # get the number of captures needed    
         ncap = int(n_frames/n_frames_per_capture)
 
-        # Verify that 'data_source' has been specified correctly
-        valid_data_sources = ['adc', 'funcgen']
-        if data_source not in valid_data_sources:
-            raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
+        # # Verify that 'data_source' has been specified correctly
+        # valid_data_sources = ['adc', 'funcgen']
+        # if data_source not in valid_data_sources:
+        #     raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
 
         # Ensure UCAP is configured to receive channelizer data, not correlated data:
         if self.ucap.OUTPUT_SOURCE_SEL != 0:
             self.ucap.OUTPUT_SOURCE_SEL = 0
 
-        # Configure each channelizer
-        for n in range(self.NPOLS):
+        # # Configure each channelizer
+        # for n in range(self.NPOLS):
 
-            if data_source == 'adc':
-                # Set the data source
-                self.i.chan[n].FUNCGEN.set_data_source(data_source)
+        #     if data_source == 'adc':
+        #         # Set the data source
+        #         self.i.chan[n].FUNCGEN.set_data_source(data_source)
 
-            elif data_source == 'funcgen':
-                # Don't set the data source, but verify that the function 
-                # specified is the one that is being used
-                current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
-                if current_data_source != 'buffer':
-                    raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
+        #     elif data_source == 'funcgen':
+        #         # Don't set the data source, but verify that the function 
+        #         # specified is the one that is being used
+        #         current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
+        #         if current_data_source != 'buffer':
+        #             raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
 
-            # Do not bypass the FFT
-            self.i.chan[n].FFT.BYPASS = 0
+        #     # Do not bypass the FFT
+        #     self.i.chan[n].FFT.BYPASS = 0
 
-            # Bypass the SCALER, and set the mode so that we send the most significant 16+16 bits of the saturated post-gain FFT values
-            self.i.chan[n].SCALER.BYPASS = 1
-            self.i.chan[n].SCALER.CAP_DATA_TYPE = 2 
+        #     # Bypass the SCALER, and set the mode so that we send the most significant 16+16 bits of the saturated post-gain FFT values
+        #     self.i.chan[n].SCALER.BYPASS = 1
+        #     self.i.chan[n].SCALER.CAP_DATA_TYPE = 2 
+
+        # Configure the channelizers
+        self.i.set_channelizer(data_source = data_source,
+                               # funcgen_left_shift=0,
+                               # funcgen_right_shift=0,
+                               fft_bypass = fft_bypass,
+                               scaler_bypass = True,
+                               scaler_cap_data_type = 2,
+                               scaler_bypass_data_type = None,
+                               channels = channels,
+                               **function_kwargs
+                               )
 
         # Start data capture, grabbing data at the output of the
         # scaler, which has been bypassed.
-        pc.i.start_data_capture(period = period, 
-                                source = 'scaler'
-                                )
+        self.i.start_data_capture(period = period, 
+                                  source = 'scaler',
+                                  mode = self.ucap.MODE,
+                                  channels = channels, 
+                                  data_type = 2,
+                                  select = True
+                                  )
 
         # Capture data!
-        t, d_post_gain, c = pc.u_receiver.read_raw_frames(format = '16+16', 
-                                                          ncap = ncap, 
-                                                          split = True,
-                                                          verbose = 0
-                                                          )
+        t, d_post_gain, c = self.u_receiver.read_raw_frames(format = '16+16', 
+                                                            ncap = ncap, 
+                                                            split = True,
+                                                            verbose = 0
+                                                            )
 
         return d_post_gain[..., self.bin_map]
 
     def read_scaler_frames(self,
                            n_frames = 2,
                            data_source = 'adc',
+                           channels = list(np.arange(8)),
+                           fft_bypass = False,
+                           scaler_bypass = False,
                            period = 0.02, 
                            split = True,
-                           verbose = 0
+                           verbose = 0,
+                           **function_kwargs
                            ):
         """
         Read SCALER frames using UCAP. By default, UCAP is in mode 0, meaning 2 frames for each ADC channel will be
@@ -1003,11 +1183,34 @@ class POCKET_CORRELATOR:
         n_frames : (int) Number of frames captured per function call. n_frames must be an even-valued integer, as UCAP only
         receives data in bursts of 16 frames. 
 
-        data_source : (str) The upstream source of data; can be either 'adc' or 'funcgen'.
+        data_source : (str) A string that sets whether real ADC data or data stored in the FUNCGEN buffer are sent out of the FUNCGEN.
 
             If 'adc', then real digitized data from the ADC will pass through the CHAN signal chain.
 
-            If 'funcgen', then FUNCGEN data pass through the CHAN signal chain.
+            Otherwise, the user can specify a desired function listed in pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py
+            Keyword arguments can be included (see below).
+
+        channels : (list) A list of the input channels (i.e., 0 for ADC1, 1 for ADC2, etc.) for which you'd like to recover data.
+        The default is to receive data from all channels [0, .., 7].
+
+        fft_bypass : (bool) Whether or not to bypass the FFT. Why include an option to bypass the FFT when you are requesting post-gain frames,
+        you might ask? Well, sometimes it is useful to use the FUNCGEN to create a simulated spectrum, in which case you wouldn't want 
+        the signal you have set in the FUNCGEN to propagate through the firmware FFT. 
+        
+            With the fft_bypass option, you have the power to create simulated FFT outputs for signal path validation.
+
+            If True, the FFT is bypassed.
+
+            If False, the FFT is not bypassed. Default.
+
+        scaler_bypass : (bool) Whether or not to bypass the Scaler, similar to the fft_bypass argument.
+        
+            With the scaler_bypass option, you have the power to create simulated Scaler outputs for signal path validation when
+            combined with the fft_bypass option.
+
+            If True, the Scaler is bypassed.
+
+            If False, the Scaler is not bypassed. Default.
 
         period : (float) Time (in seconds) between captured bursts. 0.02 is the minimum recommended to not saturate the ethernet link. 
 
@@ -1023,6 +1226,9 @@ class POCKET_CORRELATOR:
                 axis 1: sample number, with all frames flattened
 
         verbose : (int) Verbosity level. 0: no messages, 1: basic messages, 2: detailed messages
+
+        function_kwargs : (dict) Arguments for FUNCGEN functions passed to set_channelizer(). Used when data_source is not 'adc'.
+        See pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py for functions and their arguments.
 
         Returns
         -------
@@ -1051,39 +1257,60 @@ class POCKET_CORRELATOR:
         # get the number of captures needed    
         ncap = int(n_frames/n_frames_per_capture)
 
-        # Verify that 'data_source' has been specified correctly
-        valid_data_sources = ['adc', 'funcgen']
-        if data_source not in valid_data_sources:
-            raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
+        # # Verify that 'data_source' has been specified correctly
+        # valid_data_sources = ['adc', 'funcgen']
+        # if data_source not in valid_data_sources:
+        #     raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
 
         # Ensure UCAP is configured to receive channelizer data, not correlated data:
         if self.ucap.OUTPUT_SOURCE_SEL != 0:
             self.ucap.OUTPUT_SOURCE_SEL = 0
 
-        # Configure each channelizer
-        for n in range(self.NPOLS):
+        # # Configure each channelizer
+        # for n in range(self.NPOLS):
 
-            if data_source == 'adc':
-                # Set the data source
-                self.i.chan[n].FUNCGEN.set_data_source(data_source)
+        #     if data_source == 'adc':
+        #         # Set the data source
+        #         self.i.chan[n].FUNCGEN.set_data_source(data_source)
 
-            elif data_source == 'funcgen':
-                # Don't set the data source, but verify that the function 
-                # specified is the one that is being used
-                current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
-                if current_data_source != 'buffer':
-                    raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
+        #     elif data_source == 'funcgen':
+        #         # Don't set the data source, but verify that the function 
+        #         # specified is the one that is being used
+        #         current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
+        #         if current_data_source != 'buffer':
+        #             raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
 
-            # Do not bypass the FFT
-            self.i.chan[n].FFT.BYPASS = 0
+        #     # Do not bypass the FFT
+        #     self.i.chan[n].FFT.BYPASS = 0
 
-            # Do not bypass the SCALER, and set the mode so that we read 4+4-bit SCALER data
-            self.i.chan[n].SCALER.BYPASS = 0
-            self.i.chan[n].SCALER.CAP_DATA_TYPE = 2 # Main scaler output
+        #     # Do not bypass the SCALER, and set the mode so that we read 4+4-bit SCALER data
+        #     self.i.chan[n].SCALER.BYPASS = 0
+        #     self.i.chan[n].SCALER.CAP_DATA_TYPE = 2 # Main scaler output
+
+        # Configure the channelizers
+        self.i.set_channelizer(data_source = data_source,
+                               # funcgen_left_shift=0,
+                               # funcgen_right_shift=0,
+                               fft_bypass = fft_bypass,
+                               scaler_bypass = scaler_bypass,
+                               scaler_cap_data_type = 0,
+                               scaler_bypass_data_type = None,
+                               channels = channels,
+                               scaler_eight_bit = False,
+                               scaler_rounding_mode = 2,
+                               symmetric_saturation = True,
+                               zero_on_sat = False,
+                               #  offset_binary_encoding=None,
+                               **function_kwargs
+                               )
 
         # Start data capture, always setting the source to 'scaler'
         self.i.start_data_capture(period = period, 
-                                  source = 'scaler'
+                                  source = 'scaler',
+                                  mode = self.ucap.MODE,
+                                  channels = channels, 
+                                  data_type = 0,
+                                  select = True
                                   )
 
         # Capture data!
@@ -1190,6 +1417,8 @@ class POCKET_CORRELATOR:
 
     def read_corr_frames(self,
                          data_source = 'adc',
+                         fft_bypass = False,
+                         scaler_bypass = False,
                          n_software_frames = 1,
                          number_of_results = 1,
                          flush = True,
@@ -1200,7 +1429,8 @@ class POCKET_CORRELATOR:
                          corr_is_configured = False,
                          autocorr_only = 0,
                          no_accum = 0,
-                         n_firmware_frames = 16384 - 1
+                         n_firmware_frames = 16384 - 1,
+                         **function_kwargs
                          ):
         """
         Read correlated and accumulated frames. Correlation is always performed in real-time in the FPGA.
@@ -1218,12 +1448,32 @@ class POCKET_CORRELATOR:
 
         Parameters
         ----------
-        data_source : (str) The upstream source of data; can be either 'adc' or 'funcgen'.
+        data_source : (str) A string that sets whether real ADC data or data stored in the FUNCGEN buffer are sent out of the FUNCGEN.
 
             If 'adc', then real digitized data from the ADC will pass through the CHAN signal chain.
 
-            If 'funcgen', then FUNCGEN data pass through the CHAN signal chain.
+            Otherwise, the user can specify a desired function listed in pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py
+            Keyword arguments can be included (see below).
 
+        fft_bypass : (bool) Whether or not to bypass the FFT. Why include an option to bypass the FFT when you are requesting post-gain frames,
+        you might ask? Well, sometimes it is useful to use the FUNCGEN to create a simulated spectrum, in which case you wouldn't want 
+        the signal you have set in the FUNCGEN to propagate through the firmware FFT. 
+        
+            With the fft_bypass option, you have the power to create simulated FFT outputs for signal path validation.
+
+            If True, the FFT is bypassed.
+
+            If False, the FFT is not bypassed. Default.
+
+        scaler_bypass : (bool) Whether or not to bypass the Scaler, similar to the fft_bypass argument.
+        
+            With the scaler_bypass option, you have the power to create simulated Scaler outputs for signal path validation when
+            combined with the fft_bypass option.
+
+            If True, the Scaler is bypassed.
+
+            If False, the Scaler is not bypassed. Default.
+            
         n_software_frames : (int) The number of pre-integrated firmware frames to integrate in Python.
         Increasing this value increases the total integration time.
 
@@ -1270,6 +1520,9 @@ class POCKET_CORRELATOR:
             16384 - 1: recommended
             32768 - 1: maximum
 
+        function_kwargs : (dict) Arguments for FUNCGEN functions passed to set_channelizer(). Used when data_source is not 'adc'.
+        See pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py for functions and their arguments.
+
         Returns
         -------
         t1 : (float) A rough timestamp using time.time(). 
@@ -1300,37 +1553,54 @@ class POCKET_CORRELATOR:
         if n_software_frames > 1:
             raise ValueError(f'{n_software_frames} software frames requested. More than one software frame is untrusted in this commit.')
 
-        # Verify that 'data_source' has been specified correctly
-        valid_data_sources = ['adc', 'funcgen']
-        if data_source not in valid_data_sources:
-            raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
+        # # Verify that 'data_source' has been specified correctly
+        # valid_data_sources = ['adc', 'funcgen']
+        # if data_source not in valid_data_sources:
+        #     raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
 
         # Ensure UCAP is configured to receive correlated data, not channelizer data:
         if self.ucap.OUTPUT_SOURCE_SEL != 1:
             self.ucap.OUTPUT_SOURCE_SEL = 1
 
-        # Configure each channelizer
-        for n in range(self.NPOLS):
+        # # Configure each channelizer
+        # for n in range(self.NPOLS):
 
-            if data_source == 'adc':
-                # Set the data source
-                self.i.chan[n].FUNCGEN.set_data_source(data_source)
+        #     if data_source == 'adc':
+        #         # Set the data source
+        #         self.i.chan[n].FUNCGEN.set_data_source(data_source)
 
-            elif data_source == 'funcgen':
-                # Don't set the data source, but verify that the function 
-                # specified is the one that is being used
-                current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
-                if current_data_source != 'buffer':
-                    raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
+        #     elif data_source == 'funcgen':
+        #         # Don't set the data source, but verify that the function 
+        #         # specified is the one that is being used
+        #         current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
+        #         if current_data_source != 'buffer':
+        #             raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
 
-            # Do not bypass the FFT
-            self.i.chan[n].FFT.BYPASS = 0
+        #     # Do not bypass the FFT
+        #     self.i.chan[n].FFT.BYPASS = 0
 
-            # Do not bypass the SCALER, and set the mode so that we read 4+4-bit SCALER data.
-            # Note that we need to set the DATA_TYPE control byte rather than the CAP_DATA_TYPE
-            # control byte now that we want to configure the data type being sent to the correlator.
-            self.i.chan[n].SCALER.BYPASS = 0
-            self.i.chan[n].SCALER.DATA_TYPE = 0 # Send 4-bit scaler values
+        #     # Do not bypass the SCALER, and set the mode so that we read 4+4-bit SCALER data.
+        #     # Note that we need to set the DATA_TYPE control byte rather than the CAP_DATA_TYPE
+        #     # control byte now that we want to configure the data type being sent to the correlator.
+        #     self.i.chan[n].SCALER.BYPASS = 0
+        #     self.i.chan[n].SCALER.DATA_TYPE = 0 # Send 4-bit scaler values
+
+        # Configure the channelizers
+        self.i.set_channelizer(data_source = data_source,
+                               # funcgen_left_shift=0,
+                               # funcgen_right_shift=0,
+                               fft_bypass = fft_bypass,
+                               scaler_bypass = scaler_bypass,
+                               scaler_cap_data_type = 0,
+                               scaler_bypass_data_type = None,
+                               channels = list(np.arange(8)), # Configure all 8 ADCs by default
+                               scaler_eight_bit = False,
+                               scaler_rounding_mode = 2,
+                               symmetric_saturation = True,
+                               zero_on_sat = False,
+                               #  offset_binary_encoding=None,
+                               **function_kwargs
+                               )
 
         # Configure correlator if it has not been done so
         if not self.corr_is_configured:
@@ -1358,7 +1628,8 @@ class POCKET_CORRELATOR:
         # for correlating 2048 frequency bins
         d_corr = d_corr.reshape(number_of_results, self.corr_receiver.NCORR*self.corr_receiver.NBINS_PER_STREAM, self.corr_receiver.NPROD)
         count = count.reshape(number_of_results, self.corr_receiver.NCORR*self.corr_receiver.NBINS_PER_STREAM)
-        
+        sat = sat.reshape(number_of_results, self.corr_receiver.NCORR*self.corr_receiver.NBINS_PER_STREAM, self.corr_receiver.NPROD)
+
         # Apply the bin map when returning the array
         return t1, d_corr[:, self.bin_map], count[:, self.bin_map], sat
 
@@ -1436,6 +1707,9 @@ class POCKET_CORRELATOR:
         A method for computing and storing visibility data for a small interferometer. 
 
         Keep in mind that the default UCAP mode is 0, meaning that bursts of ADC and FFT data have 2 frames per input channel.
+
+        observe() is only used with the channelizers configured to capture real data from each ADC. The channelizer is configured
+        automatically when this function is called.
 
         Parameters
         ----------
@@ -1569,6 +1843,9 @@ class POCKET_CORRELATOR:
             print('')
             self.compute_gains(target = gain_target,
                                n_fft_frames = n_fft_frames_for_gain_comp, 
+                               data_source = 'adc', # Always read real ADC with the observe method() 
+                               channels = list(np.arange(8)), # Always read from all ADC channels
+                               fft_bypass = False, # Do not bypass the FFT
                                bank = 0,
                                return_scaler_frames = False,
                                save_gains = True,
@@ -1619,7 +1896,7 @@ class POCKET_CORRELATOR:
                                 n_firmware_frames = n_firmware_frames
                                 )
 
-        print(self.corr.status()) # print corr configuration status
+        # print(self.corr.status()) # print corr configuration status
 
         # ===========
         # Capture and write data
@@ -1713,6 +1990,8 @@ class POCKET_CORRELATOR:
                                                  split = True,
                                                  verbose = 0
                                                  )
+                    
+                    print('Done!')
 
                     # Write to file
                     dset_adc[...] = d_adc
@@ -1733,6 +2012,8 @@ class POCKET_CORRELATOR:
                                                  split = True,
                                                  verbose = 0
                                                  )
+                    
+                    print('Done!')
 
                     # Write to file
                     dset_fft[...] = d_fft
@@ -1774,12 +2055,14 @@ class POCKET_CORRELATOR:
                         
                     # Capture correlated data (note that many default arguments are used here)
                     t, vis, counts, sat = self.read_corr_frames(data_source = 'adc',
+                                                                fft_bypass = False,
+                                                                scaler_bypass = False,
                                                                 n_software_frames = n_software_frames,
                                                                 number_of_results = 1,
-                                                                flush = flush,
+                                                                flush = True, # flush,
                                                                 corr_is_configured = self.corr_is_configured
                                                                 )
-
+                    
                     t_buf[n] = t
                     vis_buf[n] = vis[0] # vis is a 3D array even if we only request 1 result
                     counts_buf[n] = counts[0] # counts is 2D, but 0 axis has length of just 1
@@ -1822,9 +2105,22 @@ class POCKET_CORRELATOR:
                     # Correlator stats
                     corr_overrun_buf[n] = self.corr.OVERRUN
 
+                    # Create arrays to print the overrange/overflow status of individual ADCs,
+                    # reversing the array so that the ADCs are indexed in ascending order from ADC1 to ADC8
+                    adc_or_arr = np.array([(adc_overrange_buf[n] & bitmask[m]) >> m for m in bitshifts])[::-1]
+                    adc_ov_arr = np.array([(adc_overvoltage_buf[n] & bitmask[m]) >> m for m in bitshifts])[::-1]
+
                     # Print some statistics:
-                    print(f'ADC Overranges: {bin(adc_overrange_buf[n])[2:].zfill(8)}')
-                    print(f'ADC Overvoltage: {bin(adc_overvoltage_buf[n])[2:].zfill(8)}')
+                    if adc_overrange_raw != 0:
+                        print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_or_arr[n] != 0])
+                    else:
+                        print('No ADC overranges detected')
+                    if adc_overvoltage_raw != 0:
+                        print(f'ADC overvoltages detected:', [f'ADC{n + 1}' for n in range(8) if adc_ov_arr[n] != 0])
+                    else:
+                        print('No ADC overvoltages detected')
+                    # print(f'ADC Overranges: {bin(adc_overrange_buf[n])[2:].zfill(8)}')
+                    # print(f'ADC Overvoltage: {bin(adc_overvoltage_buf[n])[2:].zfill(8)}')
                     print(f'FFT Overflows: {fft_overflows_buf[n]}')
                     print(f'Scaler Overflows: {scaler_overflows_buf[n]}')
                     print(f'Correlator Overruns: {corr_overrun_buf[n]}')
