@@ -145,6 +145,9 @@ class CorrelatorConfig:
     idx01: int = 0
     waterfall_len: int = DEFAULT_WATERFALL_LEN
     frames_to_average: int = DEFAULT_FRAMES_TO_AVERAGE
+    # Frequency range for lag computation (in Hz)
+    lag_freq_start_hz: float = 0.0  # Default to full band
+    lag_freq_end_hz: float = FS_HZ / 2  # Default to full band (0 to 1600 MHz)
 
 class LagSpectraComputer(threading.Thread):
     """
@@ -166,6 +169,9 @@ class LagSpectraComputer(threading.Thread):
         self.lag_p00_buffer = np.zeros(NBINS_TOTAL, dtype=np.float64)
         self.lag_p11_buffer = np.zeros(NBINS_TOTAL, dtype=np.float64)
         self.lag_p01_complex_buffer = np.zeros(NBINS_TOTAL, dtype=np.complex128)
+        
+        # Pre-compute Hann window to match fine lag mode processing
+        self.window = np.hanning(NBINS_TOTAL)
         
         # Performance tracking
         self.frames_processed = 0
@@ -201,11 +207,56 @@ class LagSpectraComputer(threading.Thread):
         try:
             # Copy visibility data with minimal lock time
             with self.shared_buffers.lock:
-                self.vis_p00_buffer[:] = self.shared_buffers.p00
-                self.vis_p11_buffer[:] = self.shared_buffers.p11
-                # Create complex visibility
-                self.vis_p01_complex_buffer.real = self.shared_buffers.p01_real
-                self.vis_p01_complex_buffer.imag = self.shared_buffers.p01_imag
+                self.vis_p00_buffer[:] = np.abs(self.shared_buffers.p00)  # Use magnitude for autocorrelations
+                self.vis_p11_buffer[:] = np.abs(self.shared_buffers.p11)  # Use magnitude for autocorrelations
+                self.vis_p01_complex_buffer[:] = self.shared_buffers.p01  # Complex directly
+            
+            # Remove DC offset to match fine lag mode processing
+            self.vis_p00_buffer -= np.mean(self.vis_p00_buffer)
+            self.vis_p11_buffer -= np.mean(self.vis_p11_buffer)
+            self.vis_p01_complex_buffer -= np.mean(self.vis_p01_complex_buffer)
+            
+            # Apply Hann window to reduce spectral leakage (matches fine lag mode)
+            self.vis_p00_buffer = self.vis_p00_buffer * self.window
+            self.vis_p11_buffer = self.vis_p11_buffer * self.window
+            self.vis_p01_complex_buffer = self.vis_p01_complex_buffer * self.window
+            
+            # Apply frequency range selection if different from full band
+            # Get frequency range from config (will be set by GUI)
+            # This is passed through shared_buffers since LagSpectraComputer doesn't have direct access to config
+            if hasattr(self.shared_buffers, 'gui_instance') and self.shared_buffers.gui_instance:
+                gui = self.shared_buffers.gui_instance
+                freq_start = gui.config.lag_freq_start_hz
+                freq_end = gui.config.lag_freq_end_hz
+                nyquist_zone = self.shared_buffers.current_nyquist_zone
+                
+                # Check if we're using a frequency subset
+                is_full_band = (freq_start == 0 and freq_end == FS_HZ / 2)
+                
+                if not is_full_band:
+                    # Convert frequency range to correlator bin indices
+                    start_bin = gui._freq_to_correlator_bin_index(freq_start, nyquist_zone)
+                    end_bin = gui._freq_to_correlator_bin_index(freq_end, nyquist_zone)
+                    
+                    # Ensure start < end (accounting for Nyquist zone reversal)
+                    if start_bin > end_bin:
+                        start_bin, end_bin = end_bin, start_bin
+                    
+                    # Create masked visibility buffers (zero out excluded bins)
+                    # For correlator data, we work with all 8192 bins
+                    vis_p00_masked = np.zeros_like(self.vis_p00_buffer)
+                    vis_p11_masked = np.zeros_like(self.vis_p11_buffer)
+                    vis_p01_masked = np.zeros_like(self.vis_p01_complex_buffer)
+                    
+                    # Copy only the selected frequency range
+                    vis_p00_masked[start_bin:end_bin] = self.vis_p00_buffer[start_bin:end_bin]
+                    vis_p11_masked[start_bin:end_bin] = self.vis_p11_buffer[start_bin:end_bin]
+                    vis_p01_masked[start_bin:end_bin] = self.vis_p01_complex_buffer[start_bin:end_bin]
+                    
+                    # Use masked buffers for computation
+                    self.vis_p00_buffer = vis_p00_masked
+                    self.vis_p11_buffer = vis_p11_masked
+                    self.vis_p01_complex_buffer = vis_p01_masked
                 
             # # Apply windowing to reduce edge artifacts and spectral leakage
             # # This is critical for proper lag spectrum computation from channelized data
@@ -242,8 +293,8 @@ class LagSpectraComputer(threading.Thread):
                 phase_coherence = np.std(phase_gradient)
                 
                 # Check if we have meaningful complex data
-                imag_power = np.mean(np.abs(self.shared_buffers.p01_imag)**2)
-                real_power = np.mean(np.abs(self.shared_buffers.p01_real)**2)
+                imag_power = np.mean(np.abs(self.shared_buffers.p01.imag)**2)
+                real_power = np.mean(np.abs(self.shared_buffers.p01.real)**2)
                 power_ratio = real_power / imag_power if imag_power > 0 else np.inf
                 
                 # Check phase statistics
@@ -611,10 +662,50 @@ class FineLagComputer(threading.Thread):
                     adc0_fft = np.fft.fft(adc0_windowed, n=n_fft)  # 16384 bins
                     adc1_fft = np.fft.fft(adc1_windowed, n=n_fft)  # 16384 bins
                     
-                    # Compute power spectral density (PSD)
-                    # This is the proper way to compute autocorrelation in frequency domain
-                    psd0 = adc0_fft * np.conj(adc0_fft)
-                    psd1 = adc1_fft * np.conj(adc1_fft)
+                    # Apply frequency range selection if different from full band
+                    freq_start = self.config.lag_freq_start_hz
+                    freq_end = self.config.lag_freq_end_hz
+                    nyquist_zone = self.shared_buffers.current_nyquist_zone if hasattr(self.shared_buffers, 'current_nyquist_zone') else 1
+                    
+                    # Check if we're using a frequency subset
+                    is_full_band = (freq_start == 0 and freq_end == FS_HZ / 2)
+                    
+                    if not is_full_band:
+                        # Convert frequency range to bin indices
+                        # For fine lag (16384-point FFT), use the helper function
+                        start_bin = self.shared_buffers.gui_instance._freq_to_fine_lag_bin_index(freq_start, nyquist_zone, n_fft) if hasattr(self.shared_buffers, 'gui_instance') else int((freq_start / FS_HZ) * n_fft)
+                        end_bin = self.shared_buffers.gui_instance._freq_to_fine_lag_bin_index(freq_end, nyquist_zone, n_fft) if hasattr(self.shared_buffers, 'gui_instance') else int((freq_end / FS_HZ) * n_fft)
+                        
+                        # Ensure start < end (accounting for Nyquist zone reversal)
+                        if start_bin > end_bin:
+                            start_bin, end_bin = end_bin, start_bin
+                        
+                        # Create masked FFT (zero out excluded bins)
+                        adc0_fft_masked = np.zeros_like(adc0_fft)
+                        adc1_fft_masked = np.zeros_like(adc1_fft)
+                        
+                        adc0_fft_masked[start_bin:end_bin] = adc0_fft[start_bin:end_bin]
+                        adc1_fft_masked[start_bin:end_bin] = adc1_fft[start_bin:end_bin]
+                        
+                        # Also zero the mirror frequencies (for negative frequencies)
+                        # For real signals, FFT has conjugate symmetry
+                        mirror_start = n_fft - end_bin
+                        mirror_end = n_fft - start_bin
+                        if mirror_start >= 0 and mirror_end <= n_fft:
+                            adc0_fft_masked[mirror_start:mirror_end] = adc0_fft[mirror_start:mirror_end]
+                            adc1_fft_masked[mirror_start:mirror_end] = adc1_fft[mirror_start:mirror_end]
+                        
+                        # Use masked FFTs for computation
+                        adc0_fft_for_lag = adc0_fft_masked
+                        adc1_fft_for_lag = adc1_fft_masked
+                    else:
+                        # Use full FFT
+                        adc0_fft_for_lag = adc0_fft
+                        adc1_fft_for_lag = adc1_fft
+                    
+                    # Compute power spectral density (PSD) using potentially masked FFTs
+                    psd0 = adc0_fft_for_lag * np.conj(adc0_fft_for_lag)
+                    psd1 = adc1_fft_for_lag * np.conj(adc1_fft_for_lag)
                     
                     # Take IFFT to get autocorrelation in lag domain
                     # Only keep positive lags since autocorrelation is symmetric
@@ -626,7 +717,7 @@ class FineLagComputer(threading.Thread):
                     lag_p11_frame = np.abs(lag_p11_complex.real)
                     
                     # Compute cross-correlation - include both positive and negative lags
-                    cross_spectrum = adc0_fft * np.conj(adc1_fft)
+                    cross_spectrum = adc0_fft_for_lag * np.conj(adc1_fft_for_lag)
                     lag_p01_complex_full = np.fft.ifft(cross_spectrum)
                     # Apply fftshift to center zero lag and take middle n_lags_cross points
                     lag_p01_complex_shifted = np.fft.fftshift(lag_p01_complex_full)
@@ -1574,18 +1665,20 @@ class SharedDataBuffers:
         self.archiver = None  # Will be set to DataArchiver instance
         self.archive_path = "./archives"
         
-        # Create shared memory for current frame data
-        self.shm_p00 = shared_memory.SharedMemory(create=True, size=NBINS_TOTAL * 8)
-        self.shm_p11 = shared_memory.SharedMemory(create=True, size=NBINS_TOTAL * 8)
-        self.shm_p01_real = shared_memory.SharedMemory(create=True, size=NBINS_TOTAL * 8)
-        self.shm_p01_imag = shared_memory.SharedMemory(create=True, size=NBINS_TOTAL * 8)
+        # GUI reference for frequency conversion
+        self.gui_instance = None  # Will be set to PeriscopeCorrelator instance
+        self.current_nyquist_zone = 1  # Default to Zone 1
         
-        # Create shared memory for waterfall data
-        wf_size = waterfall_len * NBINS_TOTAL * 8
+        # Create shared memory for current frame data (all as complex128)
+        self.shm_p00 = shared_memory.SharedMemory(create=True, size=NBINS_TOTAL * 16)  # complex128 = 16 bytes
+        self.shm_p11 = shared_memory.SharedMemory(create=True, size=NBINS_TOTAL * 16)
+        self.shm_p01 = shared_memory.SharedMemory(create=True, size=NBINS_TOTAL * 16)
+        
+        # Create shared memory for waterfall data (all as complex128)
+        wf_size = waterfall_len * NBINS_TOTAL * 16  # complex128 = 16 bytes
         self.shm_wf_p00 = shared_memory.SharedMemory(create=True, size=wf_size)
         self.shm_wf_p11 = shared_memory.SharedMemory(create=True, size=wf_size)
-        self.shm_wf_p01_real = shared_memory.SharedMemory(create=True, size=wf_size)
-        self.shm_wf_p01_imag = shared_memory.SharedMemory(create=True, size=wf_size)
+        self.shm_wf_p01 = shared_memory.SharedMemory(create=True, size=wf_size)
         
         # Create shared memory for lag spectra data
         self.shm_lag_p00 = shared_memory.SharedMemory(create=True, size=NBINS_TOTAL * 8)
@@ -1599,16 +1692,14 @@ class SharedDataBuffers:
         self.shm_lag_wf_p01_mag = shared_memory.SharedMemory(create=True, size=wf_size)
         self.shm_lag_wf_p01_phase = shared_memory.SharedMemory(create=True, size=wf_size)
         
-        # Create NumPy arrays backed by shared memory
-        self.p00 = np.ndarray((NBINS_TOTAL,), dtype=np.float64, buffer=self.shm_p00.buf)
-        self.p11 = np.ndarray((NBINS_TOTAL,), dtype=np.float64, buffer=self.shm_p11.buf)
-        self.p01_real = np.ndarray((NBINS_TOTAL,), dtype=np.float64, buffer=self.shm_p01_real.buf)
-        self.p01_imag = np.ndarray((NBINS_TOTAL,), dtype=np.float64, buffer=self.shm_p01_imag.buf)
+        # Create NumPy arrays backed by shared memory (all as complex128)
+        self.p00 = np.ndarray((NBINS_TOTAL,), dtype=np.complex128, buffer=self.shm_p00.buf)
+        self.p11 = np.ndarray((NBINS_TOTAL,), dtype=np.complex128, buffer=self.shm_p11.buf)
+        self.p01 = np.ndarray((NBINS_TOTAL,), dtype=np.complex128, buffer=self.shm_p01.buf)
         
-        self.wf_p00 = np.ndarray((waterfall_len, NBINS_TOTAL), dtype=np.float64, buffer=self.shm_wf_p00.buf)
-        self.wf_p11 = np.ndarray((waterfall_len, NBINS_TOTAL), dtype=np.float64, buffer=self.shm_wf_p11.buf)
-        self.wf_p01_real = np.ndarray((waterfall_len, NBINS_TOTAL), dtype=np.float64, buffer=self.shm_wf_p01_real.buf)
-        self.wf_p01_imag = np.ndarray((waterfall_len, NBINS_TOTAL), dtype=np.float64, buffer=self.shm_wf_p01_imag.buf)
+        self.wf_p00 = np.ndarray((waterfall_len, NBINS_TOTAL), dtype=np.complex128, buffer=self.shm_wf_p00.buf)
+        self.wf_p11 = np.ndarray((waterfall_len, NBINS_TOTAL), dtype=np.complex128, buffer=self.shm_wf_p11.buf)
+        self.wf_p01 = np.ndarray((waterfall_len, NBINS_TOTAL), dtype=np.complex128, buffer=self.shm_wf_p01.buf)
         
         # Create NumPy arrays for lag spectra
         self.lag_p00 = np.ndarray((NBINS_TOTAL,), dtype=np.float64, buffer=self.shm_lag_p00.buf)
@@ -1621,15 +1712,13 @@ class SharedDataBuffers:
         self.lag_wf_p01_mag = np.ndarray((waterfall_len, NBINS_TOTAL), dtype=np.float64, buffer=self.shm_lag_wf_p01_mag.buf)
         self.lag_wf_p01_phase = np.ndarray((waterfall_len, NBINS_TOTAL), dtype=np.float64, buffer=self.shm_lag_wf_p01_phase.buf)
         
-        # Initialize arrays
+        # Initialize arrays (all complex)
         self.p00.fill(0)
         self.p11.fill(0)
-        self.p01_real.fill(0)
-        self.p01_imag.fill(0)
+        self.p01.fill(0)
         self.wf_p00.fill(0)
         self.wf_p11.fill(0)
-        self.wf_p01_real.fill(0)
-        self.wf_p01_imag.fill(0)
+        self.wf_p01.fill(0)
         
         self.lag_p00.fill(0)
         self.lag_p11.fill(0)
@@ -1908,8 +1997,8 @@ class SharedDataBuffers:
     def cleanup(self):
         """Clean up shared memory."""
         # Add all shared memory buffers to cleanup including lag history and diff buffers
-        for shm in [self.shm_p00, self.shm_p11, self.shm_p01_real, self.shm_p01_imag,
-                    self.shm_wf_p00, self.shm_wf_p11, self.shm_wf_p01_real, self.shm_wf_p01_imag,
+        for shm in [self.shm_p00, self.shm_p11, self.shm_p01,
+                    self.shm_wf_p00, self.shm_wf_p11, self.shm_wf_p01,
                     self.shm_lag_p00, self.shm_lag_p11, self.shm_lag_p01_mag, self.shm_lag_p01_phase,
                     self.shm_lag_wf_p00, self.shm_lag_wf_p11, self.shm_lag_wf_p01_mag, self.shm_lag_wf_p01_phase,
                     self.shm_lag_history_p00, self.shm_lag_history_p11, self.shm_lag_history_p01,
@@ -1948,6 +2037,21 @@ class UDPReceiver(threading.Thread):
         self.raw_frame = np.zeros((NBINS_TOTAL, NPROD), dtype=np.complex128)
         self.temp32_real = np.empty((NPROD,), dtype=np.int32)
         self.temp32_imag = np.empty((NPROD,), dtype=np.int32)
+        
+        # Frame averaging buffers
+        self.frames_accumulated = 0
+        self.p00_accumulator = np.zeros(NBINS_TOTAL, dtype=np.complex128)
+        self.p11_accumulator = np.zeros(NBINS_TOTAL, dtype=np.complex128)
+        self.p01_accumulator = np.zeros(NBINS_TOTAL, dtype=np.complex128)
+        
+        # Pre-calculate FFT bin remapping (matches reference code)
+        # The correlator outputs data in 4 lanes of 2048 bins each
+        # fft_bins[lane, clk] gives the correct index in the 8192-element output array
+        self.fft_bins = np.array([
+            [2048*((lane - (clk & 0b11)) & 0b11) + clk 
+             for clk in range(2048)] 
+            for lane in range(4)
+        ])
         
         # Batch processing buffers
         self.batch_size = 64  # Process packets in batches
@@ -2043,10 +2147,7 @@ class UDPReceiver(threading.Thread):
             self._process_complete_frame()
 
     def _decode_frame_data(self, bin_idx: int, data: np.ndarray):
-        """Decode the complex data from the raw packet format."""
-        # For now, always use the working path that properly handles sign extension
-        # The Numba optimization has issues with sign extension on bit shifts
-        
+        """Decode the complex data from the raw packet format and apply bin remapping."""
         # Ensure proper sign extension by viewing as signed int32
         h_signed = data['h'].view(np.int32)
         l_signed = data['l'].view(np.int32)
@@ -2057,8 +2158,15 @@ class UDPReceiver(threading.Thread):
         # Extract imaginary part (bits 17:0)
         self.temp32_imag[:] = (l_signed << 14) >> 14
         
-        # Combine into complex values
-        self.raw_frame[bin_idx] = self.temp32_real + 1j * self.temp32_imag
+        # Decode stream_id to lane and clock
+        lane = bin_idx // 2048  # Which lane (0-3)
+        clk = bin_idx % 2048     # Position within lane (0-2047)
+        
+        # Apply the FFT bin remapping
+        remapped_idx = self.fft_bins[lane, clk]
+        
+        # Store at the remapped index
+        self.raw_frame[remapped_idx] = self.temp32_real + 1j * self.temp32_imag
 
     def _process_complete_frame(self):
         """Process completed frame and update shared buffers."""
@@ -2070,32 +2178,28 @@ class UDPReceiver(threading.Thread):
         if self.config.gain_factor is not None:
             normalized_frame *= self.config.gain_factor
 
-        # Extract the data for current frame (outside the lock)
-        p00_data = np.abs(normalized_frame[:, self.config.idx00])
-        p11_data = np.abs(normalized_frame[:, self.config.idx11])
-        p01_real_data = normalized_frame[:, self.config.idx01].real
-        p01_imag_data = normalized_frame[:, self.config.idx01].imag
+        # Extract complex data directly
+        p00_data = normalized_frame[:, self.config.idx00]
+        p11_data = normalized_frame[:, self.config.idx11]
+        p01_data = normalized_frame[:, self.config.idx01]
 
         # Update shared memory buffers with minimal lock time
         with self.shared_buffers.lock:
-            # Update current frame data
+            # Store complex values directly
             self.shared_buffers.p00[:] = p00_data
             self.shared_buffers.p11[:] = p11_data
-            self.shared_buffers.p01_real[:] = p01_real_data
-            self.shared_buffers.p01_imag[:] = p01_imag_data
+            self.shared_buffers.p01[:] = p01_data
             
             # Update waterfall - shift existing data down and insert new at top
             # Roll the arrays down by 1 to make room at position 0
             self.shared_buffers.wf_p00[1:] = self.shared_buffers.wf_p00[:-1]
             self.shared_buffers.wf_p11[1:] = self.shared_buffers.wf_p11[:-1]
-            self.shared_buffers.wf_p01_real[1:] = self.shared_buffers.wf_p01_real[:-1]
-            self.shared_buffers.wf_p01_imag[1:] = self.shared_buffers.wf_p01_imag[:-1]
+            self.shared_buffers.wf_p01[1:] = self.shared_buffers.wf_p01[:-1]
             
             # Write new data at position 0 (top)
             self.shared_buffers.wf_p00[0] = p00_data
             self.shared_buffers.wf_p11[0] = p11_data
-            self.shared_buffers.wf_p01_real[0] = p01_real_data
-            self.shared_buffers.wf_p01_imag[0] = p01_imag_data
+            self.shared_buffers.wf_p01[0] = p01_data
             
             # Update frames written counter
             self.shared_buffers.frames_written = min(self.shared_buffers.frames_written + 1, self.shared_buffers.waterfall_len)
@@ -2246,7 +2350,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
 
     def _build_toolbar(self) -> None:
         """Build the top toolbar with connection and control widgets."""
-        # Main toolbar container with two rows
+        # Main toolbar container with three rows
         toolbar_container = QtWidgets.QVBoxLayout()
         
         # First row - Connection and configuration controls
@@ -2299,7 +2403,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         toolbar_row1.addWidget(self.apply_waterfall_len_button)
         toolbar_row1.addStretch(1)
         
-        # Second row - Display and computation controls
+        # Second row - Display and visualization controls
         toolbar_row2 = QtWidgets.QHBoxLayout()
         
         self.scale_update_spinner = QtWidgets.QSpinBox()
@@ -2355,6 +2459,66 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.viewbox_mode_checkbox.setToolTip("Enable matplotlib-style box zoom (click and drag to zoom)")
         self.viewbox_mode_checkbox.setChecked(False)
         self.viewbox_mode_checkbox.stateChanged.connect(self._toggle_viewbox_mode)
+        
+        # Phase unwrapping checkbox for correlator plots
+        self.unwrap_correlator_phase_checkbox = QtWidgets.QCheckBox("Unwrap Correlator Phase")
+        self.unwrap_correlator_phase_checkbox.setToolTip("Apply phase unwrapping to correlator phase plots")
+        self.unwrap_correlator_phase_checkbox.setChecked(False)
+        
+        # Nyquist zone selector
+        self.nyquist_zone_combo = QtWidgets.QComboBox()
+        self.nyquist_zone_combo.addItems(["Zone 1 (0-1600 MHz)", "Zone 2 (1600-3200 MHz)", "Zone 3 (3200-4800 MHz)"])
+        self.nyquist_zone_combo.setCurrentIndex(0)  # Default to Zone 1
+        self.nyquist_zone_combo.setToolTip("Select Nyquist zone for frequency axis display")
+        self.nyquist_zone_combo.currentIndexChanged.connect(self._on_nyquist_zone_changed)
+        
+        # Lag frequency range controls
+        self.lag_freq_start_spinner = QtWidgets.QDoubleSpinBox()
+        self.lag_freq_start_spinner.setRange(0.0, 1600.0)  # Will be updated based on Nyquist zone
+        self.lag_freq_start_spinner.setSingleStep(10.0)
+        self.lag_freq_start_spinner.setValue(0.0)
+        self.lag_freq_start_spinner.setDecimals(1)
+        self.lag_freq_start_spinner.setSuffix(" MHz")
+        self.lag_freq_start_spinner.setPrefix("Lag Start: ")
+        self.lag_freq_start_spinner.setToolTip("Start frequency for lag computation (excludes lower frequencies)")
+        self.lag_freq_start_spinner.valueChanged.connect(self._on_lag_freq_range_changed)
+        
+        self.lag_freq_end_spinner = QtWidgets.QDoubleSpinBox()
+        self.lag_freq_end_spinner.setRange(0.0, 1600.0)  # Will be updated based on Nyquist zone
+        self.lag_freq_end_spinner.setSingleStep(10.0)
+        self.lag_freq_end_spinner.setValue(1600.0)
+        self.lag_freq_end_spinner.setDecimals(1)
+        self.lag_freq_end_spinner.setSuffix(" MHz")
+        self.lag_freq_end_spinner.setPrefix("End: ")
+        self.lag_freq_end_spinner.setToolTip("End frequency for lag computation (excludes higher frequencies)")
+        self.lag_freq_end_spinner.valueChanged.connect(self._on_lag_freq_range_changed)
+        
+        self.lag_freq_reset_button = QtWidgets.QPushButton("Reset Lag Range")
+        self.lag_freq_reset_button.setToolTip("Reset lag frequency range to full band for current Nyquist zone")
+        self.lag_freq_reset_button.clicked.connect(self._reset_lag_freq_range)
+        
+        # Add widgets to second row
+        toolbar_row2.addWidget(self.scale_update_spinner)
+        toolbar_row2.addWidget(self.mean_subtract_checkbox)
+        toolbar_row2.addWidget(self.running_diff_checkbox)
+        toolbar_row2.addWidget(self.diff_window_spinner)
+        toolbar_row2.addWidget(self.fix_color_scale_checkbox)
+        toolbar_row2.addWidget(self.dark_mode_colors_checkbox)
+        toolbar_row2.addWidget(self.log_scale_checkbox)
+        toolbar_row2.addWidget(self.symlog_crossover_spinner)
+        toolbar_row2.addWidget(self.viewbox_mode_checkbox)
+        toolbar_row2.addWidget(self.unwrap_correlator_phase_checkbox)
+        toolbar_row2.addSpacing(20)
+        toolbar_row2.addWidget(QtWidgets.QLabel("Nyquist Zone:"))
+        toolbar_row2.addWidget(self.nyquist_zone_combo)
+        toolbar_row2.addSpacing(10)
+        toolbar_row2.addWidget(self.lag_freq_start_spinner)
+        toolbar_row2.addWidget(self.lag_freq_end_spinner)
+        toolbar_row2.addWidget(self.lag_freq_reset_button)
+        toolbar_row2.addStretch(1)
+        
+        # Third row - Mode controls and advanced features
+        toolbar_row3 = QtWidgets.QHBoxLayout()
         
         # Tab computation controls
         self.enable_spectra_checkbox = QtWidgets.QCheckBox("Enable Spectra")
@@ -2419,18 +2583,6 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         self.radar_threshold_spinner.valueChanged.connect(self._update_radar_threshold)
         self.radar_threshold_spinner.setEnabled(False)  # Disabled until radar mode active
         
-        # Nyquist zone selector
-        self.nyquist_zone_combo = QtWidgets.QComboBox()
-        self.nyquist_zone_combo.addItems(["Zone 1 (0-1600 MHz)", "Zone 2 (1600-3200 MHz)", "Zone 3 (3200-4800 MHz)"])
-        self.nyquist_zone_combo.setCurrentIndex(0)  # Default to Zone 1
-        self.nyquist_zone_combo.setToolTip("Select Nyquist zone for frequency axis display")
-        self.nyquist_zone_combo.currentIndexChanged.connect(self._on_nyquist_zone_changed)
-
-        # Restore all plots button
-        self.restore_plots_button = QtWidgets.QPushButton("Restore All Plots")
-        self.restore_plots_button.setToolTip("Show all hidden plots")
-        self.restore_plots_button.clicked.connect(self._restore_all_plots)
-
         # Archive controls
         self.archive_checkbox = QtWidgets.QCheckBox("Enable Archiving")
         self.archive_checkbox.setToolTip("Archive data to HDF5 file")
@@ -2444,40 +2596,35 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
 
         self.archive_status_label = QtWidgets.QLabel("Not Recording")
         self.archive_status_label.setStyleSheet("color: gray;")
-
-        # Add widgets to second row
-        toolbar_row2.addWidget(self.scale_update_spinner)
-        toolbar_row2.addWidget(self.mean_subtract_checkbox)
-        toolbar_row2.addWidget(self.running_diff_checkbox)
-        toolbar_row2.addWidget(self.diff_window_spinner)
-        toolbar_row2.addWidget(self.fix_color_scale_checkbox)
-        toolbar_row2.addWidget(self.dark_mode_colors_checkbox)
-        toolbar_row2.addWidget(self.log_scale_checkbox)
-        toolbar_row2.addWidget(self.symlog_crossover_spinner)
-        toolbar_row2.addWidget(self.viewbox_mode_checkbox)
-        toolbar_row2.addSpacing(20)
-        toolbar_row2.addWidget(QtWidgets.QLabel("Nyquist Zone:"))
-        toolbar_row2.addWidget(self.nyquist_zone_combo)
-        toolbar_row2.addSpacing(20)
-        toolbar_row2.addWidget(self.enable_lag_checkbox)
-        toolbar_row2.addWidget(self.frames_to_average_spinner)
-        toolbar_row2.addSpacing(20)
-        toolbar_row2.addWidget(self.fine_lag_mode_button)
-        toolbar_row2.addWidget(self.fine_lag_avg_spinner)
-        toolbar_row2.addWidget(self.super_fft_mode_button)
-        toolbar_row2.addWidget(self.radar_mode_button)
-        toolbar_row2.addWidget(self.radar_threshold_spinner)
-        toolbar_row2.addSpacing(20)
-        toolbar_row2.addWidget(self.archive_checkbox)
-        toolbar_row2.addWidget(self.archive_path_button)
-        toolbar_row2.addWidget(self.archive_status_label)
-        toolbar_row2.addSpacing(20)
-        toolbar_row2.addWidget(self.restore_plots_button)
-        toolbar_row2.addStretch(1)
         
-        # Add both rows to the toolbar container
+        # Restore all plots button
+        self.restore_plots_button = QtWidgets.QPushButton("Restore All Plots")
+        self.restore_plots_button.setToolTip("Show all hidden plots")
+        self.restore_plots_button.clicked.connect(self._restore_all_plots)
+
+        # Add widgets to third row
+        toolbar_row3.addWidget(self.enable_lag_checkbox)
+        toolbar_row3.addWidget(self.frames_to_average_spinner)
+        toolbar_row3.addSpacing(20)
+        toolbar_row3.addWidget(self.fine_lag_mode_button)
+        toolbar_row3.addWidget(self.fine_lag_avg_spinner)
+        toolbar_row3.addWidget(self.super_fft_mode_button)
+        toolbar_row3.addSpacing(20)
+        toolbar_row3.addWidget(self.radar_mode_button)
+        toolbar_row3.addWidget(self.radar_threshold_spinner)
+        toolbar_row3.addSpacing(20)
+        toolbar_row3.addWidget(self.archive_checkbox)
+        toolbar_row3.addWidget(self.archive_path_button)
+        toolbar_row3.addWidget(self.archive_status_label)
+        toolbar_row3.addSpacing(20)
+        toolbar_row3.addWidget(self.restore_plots_button)
+        toolbar_row3.addStretch(1)
+        
+        # Add all three rows to the toolbar container
+        # Add all three rows to the toolbar container
         toolbar_container.addLayout(toolbar_row1)
         toolbar_container.addLayout(toolbar_row2)
+        toolbar_container.addLayout(toolbar_row3)
         
         # Add a separator line between toolbar and plots
         separator = QtWidgets.QFrame()
@@ -3694,9 +3841,13 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             self.status_label.setText("Gain calibration successful.")
             print("Gains computed successfully.")
         except Exception as e:
+            import traceback
+            tb_str = traceback.format_exc()
             print(f"Gain calibration failed: {e}")
+            print("Full traceback:")
+            print(tb_str)
             self.status_label.setText(f"Gain calibration failed: {e}")
-            QtWidgets.QMessageBox.critical(self, "Calibration Error", str(e))
+            QtWidgets.QMessageBox.critical(self, "Calibration Error", f"{str(e)}\n\nSee console for full traceback")
 
     def configure_correlator(self) -> None:
         """Configure the correlator and start the data stream."""
@@ -3709,6 +3860,25 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             self.config.waterfall_len = self.waterfall_len_spinner.value()
             
             self.pocket_correlator.configure_corr(autocorr_only=0, no_accum=0, n_firmware_frames=self.config.n_firmware_frames - 1)
+            
+            # Configure the channelizer for correlator streaming
+            # After calibrate_gains(), the SCALER is left bypassed, so we need to re-enable it
+            print("Configuring channelizer for correlator streaming...")
+            for n in range(8):  # All 8 channels
+                # Ensure FFT is enabled (should already be from calibrate)
+                if self.pocket_correlator.i.chan[n].FFT.BYPASS:
+                    self.pocket_correlator.i.chan[n].FFT.BYPASS = 0
+                
+                # Enable SCALER (was bypassed during gain calibration)
+                if self.pocket_correlator.i.chan[n].SCALER.BYPASS:
+                    self.pocket_correlator.i.chan[n].SCALER.BYPASS = 0
+                
+                # Set SCALER to send 4-bit values to correlator
+                self.pocket_correlator.i.chan[n].SCALER.DATA_TYPE = 0
+                
+                # Ensure data source is ADC (should already be set)
+                self.pocket_correlator.i.chan[n].FUNCGEN.set_data_source('adc')
+            
             if self.pocket_correlator.ucap.OUTPUT_SOURCE_SEL != 1:
                 print("Setting UCAP output source to Correlator (1)...")
                 self.pocket_correlator.ucap.OUTPUT_SOURCE_SEL = 1
@@ -3718,6 +3888,10 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             
             # Create shared memory buffers
             self.shared_buffers = SharedDataBuffers(waterfall_len=self.config.waterfall_len)
+            
+            # Set GUI reference and Nyquist zone in shared buffers
+            self.shared_buffers.gui_instance = self
+            self.shared_buffers.current_nyquist_zone = self.current_nyquist_zone
             
             # Create and start receiver thread
             self.receiver_thread = UDPReceiver(sock, self.shared_buffers, self.packet_dtype, self.config, self.pocket_correlator)
@@ -3868,16 +4042,192 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         # Update frequency axes
         self._update_all_frequency_axes(zone)
         
-        # Update status
+        # Update Nyquist zone in shared buffers if they exist
+        if self.shared_buffers:
+            self.shared_buffers.current_nyquist_zone = zone
+        
+        # Update lag frequency range spinner limits based on Nyquist zone
         zone_ranges = {
+            1: (0.0, 1600.0),
+            2: (1600.0, 3200.0),
+            3: (3200.0, 4800.0)
+        }
+        min_freq, max_freq = zone_ranges[zone]
+        
+        # Block signals while updating to avoid triggering callbacks
+        self.lag_freq_start_spinner.blockSignals(True)
+        self.lag_freq_end_spinner.blockSignals(True)
+        
+        self.lag_freq_start_spinner.setRange(min_freq, max_freq)
+        self.lag_freq_end_spinner.setRange(min_freq, max_freq)
+        
+        # Reset to full range for new zone
+        self.lag_freq_start_spinner.setValue(min_freq)
+        self.lag_freq_end_spinner.setValue(max_freq)
+        
+        # Unblock signals
+        self.lag_freq_start_spinner.blockSignals(False)
+        self.lag_freq_end_spinner.blockSignals(False)
+        
+        # Update config
+        self.config.lag_freq_start_hz = min_freq * 1e6  # Convert MHz to Hz
+        self.config.lag_freq_end_hz = max_freq * 1e6  # Convert MHz to Hz
+        
+        # Update status
+        zone_range_text = {
             1: "0-1600 MHz",
             2: "1600-3200 MHz", 
             3: "3200-4800 MHz"
         }
-        self.status_label.setText(f"Nyquist Zone {zone} selected ({zone_ranges[zone]})")
+        self.status_label.setText(f"Nyquist Zone {zone} selected ({zone_range_text[zone]})")
         
         # Force plot updates by triggering a refresh
         self._update_plots()
+    
+    def _on_lag_freq_range_changed(self, value: float) -> None:
+        """Handle lag frequency range spinner changes."""
+        # Get current values in MHz
+        start_mhz = self.lag_freq_start_spinner.value()
+        end_mhz = self.lag_freq_end_spinner.value()
+        
+        # Validate that start < end
+        if start_mhz >= end_mhz:
+            # Adjust the other spinner to maintain valid range
+            sender = self.sender()
+            if sender == self.lag_freq_start_spinner:
+                # User changed start, adjust end to be at least 10 MHz higher
+                new_end = start_mhz + 10.0
+                # Get the maximum allowed value
+                max_allowed = self.lag_freq_end_spinner.maximum()
+                if new_end <= max_allowed:
+                    self.lag_freq_end_spinner.blockSignals(True)
+                    self.lag_freq_end_spinner.setValue(new_end)
+                    self.lag_freq_end_spinner.blockSignals(False)
+                    end_mhz = new_end
+                else:
+                    # Can't adjust end, revert start
+                    self.lag_freq_start_spinner.blockSignals(True)
+                    self.lag_freq_start_spinner.setValue(end_mhz - 10.0)
+                    self.lag_freq_start_spinner.blockSignals(False)
+                    return
+            else:
+                # User changed end, adjust start to be at least 10 MHz lower
+                new_start = end_mhz - 10.0
+                # Get the minimum allowed value
+                min_allowed = self.lag_freq_start_spinner.minimum()
+                if new_start >= min_allowed:
+                    self.lag_freq_start_spinner.blockSignals(True)
+                    self.lag_freq_start_spinner.setValue(new_start)
+                    self.lag_freq_start_spinner.blockSignals(False)
+                    start_mhz = new_start
+                else:
+                    # Can't adjust start, revert end
+                    self.lag_freq_end_spinner.blockSignals(True)
+                    self.lag_freq_end_spinner.setValue(start_mhz + 10.0)
+                    self.lag_freq_end_spinner.blockSignals(False)
+                    return
+        
+        # Update config (convert MHz to Hz)
+        self.config.lag_freq_start_hz = start_mhz * 1e6
+        self.config.lag_freq_end_hz = end_mhz * 1e6
+        
+        # Calculate bandwidth and resolution
+        bandwidth_mhz = end_mhz - start_mhz
+        print(f"Lag frequency range set to: {start_mhz:.1f} - {end_mhz:.1f} MHz (BW: {bandwidth_mhz:.1f} MHz)")
+    
+    def _reset_lag_freq_range(self) -> None:
+        """Reset lag frequency range to full band for current Nyquist zone."""
+        zone = self.current_nyquist_zone
+        zone_ranges = {
+            1: (0.0, 1600.0),
+            2: (1600.0, 3200.0),
+            3: (3200.0, 4800.0)
+        }
+        min_freq, max_freq = zone_ranges[zone]
+        
+        # Block signals to avoid unnecessary callbacks
+        self.lag_freq_start_spinner.blockSignals(True)
+        self.lag_freq_end_spinner.blockSignals(True)
+        
+        self.lag_freq_start_spinner.setValue(min_freq)
+        self.lag_freq_end_spinner.setValue(max_freq)
+        
+        self.lag_freq_start_spinner.blockSignals(False)
+        self.lag_freq_end_spinner.blockSignals(False)
+        
+        # Update config
+        self.config.lag_freq_start_hz = min_freq * 1e6
+        self.config.lag_freq_end_hz = max_freq * 1e6
+        
+        print(f"Lag frequency range reset to full band: {min_freq:.1f} - {max_freq:.1f} MHz")
+        self.status_label.setText("Lag range reset to full band")
+    
+    def _freq_to_correlator_bin_index(self, freq_hz: float, nyquist_zone: int) -> int:
+        """Convert frequency in Hz to correlator bin index, accounting for Nyquist zone.
+        
+        Args:
+            freq_hz: Frequency in Hz
+            nyquist_zone: Nyquist zone number (1, 2, or 3)
+            
+        Returns:
+            Bin index (0 to NBINS_TOTAL-1)
+        """
+        # For the correlator, bins are distributed across the Nyquist zones differently
+        # The channelizer decimates by M_FACTOR, so each bin represents a narrower freq range
+        freq_bin_width = FS_HZ / M_FACTOR  # ~195.3125 kHz per bin
+        
+        if nyquist_zone == 1:
+            # Zone 1: 0 to 1600 MHz maps directly to bins 0-8191
+            # freq_hz should be in range [0, FS_HZ/2]
+            bin_idx = int((freq_hz / freq_bin_width))
+        elif nyquist_zone == 2:
+            # Zone 2: 1600 to 3200 MHz maps to bins 8191-0 (reversed due to aliasing)
+            # First normalize to 0-1600 MHz range
+            freq_offset = freq_hz - FS_HZ / 2
+            # Then map to bins in reverse order
+            bin_idx = NBINS_TOTAL - 1 - int((freq_offset / freq_bin_width))
+        elif nyquist_zone == 3:
+            # Zone 3: 3200 to 4800 MHz maps to bins 0-8191
+            freq_offset = freq_hz - FS_HZ
+            bin_idx = int((freq_offset / freq_bin_width))
+        else:
+            # Invalid zone, default to zone 1
+            bin_idx = int((freq_hz / freq_bin_width))
+        
+        # Clamp to valid range
+        return np.clip(bin_idx, 0, NBINS_TOTAL - 1)
+    
+    def _freq_to_fine_lag_bin_index(self, freq_hz: float, nyquist_zone: int, n_fft_bins: int = 16384) -> int:
+        """Convert frequency in Hz to fine lag FFT bin index, accounting for Nyquist zone.
+        
+        Args:
+            freq_hz: Frequency in Hz  
+            nyquist_zone: Nyquist zone number (1, 2, or 3)
+            n_fft_bins: Number of FFT bins (16384 for fine lag mode)
+            
+        Returns:
+            Bin index (0 to n_fft_bins-1)
+        """
+        # For fine lag mode (raw ADC), bins span full Nyquist bandwidth
+        freq_bin_width = FS_HZ / n_fft_bins  # ~195.3125 kHz per bin for 16384-point FFT
+        
+        if nyquist_zone == 1:
+            # Zone 1: 0 to 1600 MHz maps directly to bins 0-8191 (first half)
+            bin_idx = int((freq_hz / freq_bin_width))
+        elif nyquist_zone == 2:
+            # Zone 2: 1600 to 3200 MHz maps to bins 8191-0 (reversed)
+            freq_offset = freq_hz - FS_HZ / 2
+            # Map to second half of FFT bins, reversed
+            bin_idx = n_fft_bins - 1 - int((freq_offset / freq_bin_width))
+        elif nyquist_zone == 3:
+            # Zone 3: 3200 to 4800 MHz maps to bins 0-8191 (first half again)
+            freq_offset = freq_hz - FS_HZ
+            bin_idx = int((freq_offset / freq_bin_width))
+        else:
+            bin_idx = int((freq_hz / freq_bin_width))
+        
+        # Clamp to valid range
+        return np.clip(bin_idx, 0, n_fft_bins - 1)
 
     def _precalculate_indices(self) -> None:
         """Pre-calculate the indices for the products to be plotted."""
@@ -3988,8 +4338,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             with old_buffers.lock:
                 self.shared_buffers.p00[:] = old_buffers.p00
                 self.shared_buffers.p11[:] = old_buffers.p11
-                self.shared_buffers.p01_real[:] = old_buffers.p01_real
-                self.shared_buffers.p01_imag[:] = old_buffers.p01_imag
+                self.shared_buffers.p01[:] = old_buffers.p01
             
         # Update all threads with new buffers
         if self.receiver_thread:
@@ -4139,6 +4488,9 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             if not self.shared_buffers:
                 waterfall_len = self.waterfall_len_spinner.value()
                 self.shared_buffers = SharedDataBuffers(waterfall_len=waterfall_len)
+                # Set GUI reference and Nyquist zone
+                self.shared_buffers.gui_instance = self
+                self.shared_buffers.current_nyquist_zone = self.current_nyquist_zone
             
             # Create and start fine lag computer if needed
             if not self.fine_lag_computer_thread:
@@ -4604,16 +4956,21 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                     return np.zeros_like(data)
                     
             elif product == (0, 1) or product == (1, 0):
-                # Cross-correlation
-                complex_data = self.shared_buffers.p01_real + 1j * self.shared_buffers.p01_imag
+                # Cross-correlation - now stored as complex
+                complex_data = self.shared_buffers.p01
                 if component == 'magnitude':
                     return np.abs(complex_data)
                 elif component == 'real':
-                    return self.shared_buffers.p01_real
+                    return complex_data.real
                 elif component == 'imaginary':
-                    return self.shared_buffers.p01_imag
+                    return complex_data.imag
                 elif component == 'phase':
-                    return np.angle(complex_data)
+                    phase_data = np.angle(complex_data)
+                    # Apply unwrapping if checkbox is checked
+                    if self.unwrap_correlator_phase_checkbox.isChecked():
+                        return np.unwrap(phase_data)
+                    else:
+                        return phase_data
                     
             else:
                 # Product not available in current data
@@ -4694,7 +5051,11 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                 # Phase doesn't use log scale
                 plot_widget.setLogMode(y=False)
                 plot_line.setData(x=self.freq_axis, y=data)
-                plot_widget.setLabel('left', 'Phase (radians)')
+                # Update label based on unwrap status
+                if self.unwrap_correlator_phase_checkbox.isChecked():
+                    plot_widget.setLabel('left', 'Unwrapped Phase (radians)')
+                else:
+                    plot_widget.setLabel('left', 'Phase (radians)')
 
     def _update_waterfall_plots(self) -> None:
         """Update the waterfall plots with new data using dynamic product/component selection."""
@@ -4737,18 +5098,24 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
                 
                 # For now, only ADC0/1 cross-correlation is available
                 if (adc1, adc2) == (0, 1) or (adc1, adc2) == (1, 0):
+                    complex_wf = self.shared_buffers.wf_p01
                     if component == 'magnitude':
-                        # Calculate magnitude from real and imaginary parts
-                        complex_wf = self.shared_buffers.wf_p01_real + 1j * self.shared_buffers.wf_p01_imag
                         return np.abs(complex_wf)
                     elif component == 'real':
-                        return self.shared_buffers.wf_p01_real
+                        return complex_wf.real
                     elif component == 'imaginary':
-                        return self.shared_buffers.wf_p01_imag
+                        return complex_wf.imag
                     elif component == 'phase':
-                        # Calculate phase from real and imaginary parts
-                        complex_wf = self.shared_buffers.wf_p01_real + 1j * self.shared_buffers.wf_p01_imag
-                        return np.angle(complex_wf)
+                        # Apply unwrapping per time slice if checkbox is checked
+                        phase_wf = np.angle(complex_wf)
+                        if self.unwrap_correlator_phase_checkbox.isChecked():
+                            # Unwrap each row (time slice) independently
+                            unwrapped_phase_wf = np.zeros_like(phase_wf)
+                            for i in range(phase_wf.shape[0]):
+                                unwrapped_phase_wf[i] = np.unwrap(phase_wf[i])
+                            return unwrapped_phase_wf
+                        else:
+                            return phase_wf
                 else:
                     # Other cross-correlations not available yet
                     return np.zeros((self.shared_buffers.waterfall_len, NBINS_TOTAL))
