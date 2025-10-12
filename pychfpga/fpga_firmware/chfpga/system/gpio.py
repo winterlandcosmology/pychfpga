@@ -227,7 +227,7 @@ class GPIO(MMI):
         self.USER_BITS = value
 
     USER_OUTPUT_SOURCE_TABLE = {
-        'sync': 0,  # User-generated SYNC signal (sunc_out)
+        'sync_out': 0,  # User-generated SYNC signal (sync_out)
         'pps': 1,  # 1 PPS signal from the IRIG-B decoder (pps_out)
         'pwm': 2,  # Output from the frame-based pwm generator (pwm_out)
         'irigb_trig': 3,  # (not irigb_before_target)

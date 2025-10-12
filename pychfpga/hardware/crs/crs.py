@@ -439,10 +439,10 @@ class CRS(Motherboard):
                     disp.update()
                     break
                 except OSError as e:
-                    self.logger.warn(f'{self!r}: Error Initializing CRS display on trial {trial}. Error is: {e!r}')
+                    # self.logger.warn(f'{self!r}: Error Initializing CRS display on trial {trial}. Error is: {e!r}')
                     await asyncio.sleep(0.01)
             else:
-                self.logger.warn(f'{self!r}: Failed Initializing CRS display')
+                self.logger.warn(f'{self!r}: Failed Initializing CRS display after {trial} trials')
                 self.display = None
 
 

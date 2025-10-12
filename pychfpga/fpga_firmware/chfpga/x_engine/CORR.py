@@ -110,6 +110,13 @@ class CORR(MMIRouter):
         for corr in self.corr:
             corr.status()
 
+    def get_params(self):
+            return Namespace(
+                number_of_correlators=self.fpga.NUMBER_OF_CORRELATORS,  # hard coded in firmware
+                number_of_correlated_inputs=self.fpga.NUMBER_OF_INPUTS_TO_CORRELATE,  # hard coded in firmware
+                number_of_bins_per_frame=self.fpga.CROSSBAR.BIN_SEL[0].NUMBER_OF_SELECTED_WORDS  # depends on crossbar configuration
+                )
+
     def start_correlator(
             self,
             integration_period=16384,

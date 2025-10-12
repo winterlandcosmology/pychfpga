@@ -51,7 +51,7 @@ class UCAP(MMI):
         self.USER_STREAM_ID = self.fpga.slot or 0
 
     DATA_SOURCE_TABLE = {
-        'adc': 0,
+        'funcgen': 0,
         'scaler': 255} # 255: set data source for all 8 channels (11111111 = 255 for unsigned 8-bit bin)
 
     def set_data_capture(self, source, mode=0, channels=None, periods=[195312,195312], select=False):
@@ -78,16 +78,21 @@ class UCAP(MMI):
             if source in self.DATA_SOURCE_TABLE:
                 source = self.DATA_SOURCE_TABLE[source]
             else:
-                ValueError(f'Unknown data capture source \'{source}\'. Valid sources are {self.DATA_SOURCE_TABLE.keys()}')
+                valid_sources = ', '.join(self.DATA_SOURCE_TABLE)
+                raise ValueError(f"Unknown data capture source '{source}'. Valid sources are {valid_sources}")
         self.SOURCE_SEL = source
 
         if isinstance(channels, int):
             channels = [channels]
 
         if mode == 0:
-            if channels is not None and channels != list(range(8)):
+           if channels is None:
+                channels = list(range(8))
+            if channels != list(range(8)):
                 raise RuntimeError('UCAP mode 0 can only capture channels 0-7, in that order')
         elif mode == 1:
+            if channels is None:
+                channels = list(range(4))
             if len(channels) != 4:
                 raise RuntimeError('UCAP mode 1 can only capture 4 channels')
             self.CH0 = channels[0]
@@ -95,11 +100,15 @@ class UCAP(MMI):
             self.CH2 = channels[2]
             self.CH3 = channels[3]
         elif mode == 2 :
+            if channels is None:
+                channels = list(range(2))
             if len(channels) != 2:
                 raise RuntimeError('UCAP mode 2 can only capture 2 channels')
             self.CH0 = channels[0]
             self.CH1 = channels[1]
         elif mode == 3:
+            if channels is None:
+                channels = list(range(1))
             if len(channels) != 1:
                 raise RuntimeError('UCAP mode 3 can only capture 1 channel')
             self.CH0 = channels[0]
@@ -442,6 +451,8 @@ class RawFrameReceiver(object):
 
         if format == "16":
             data = data.view('>i2')
+        elif format == "14":
+            data = data.view('>i2') >> 2
         elif format == "16+16":
             data = data.view('>i2')
             data = data[:, :, ::2] + 1j*data[:, :, 1::2]
@@ -449,6 +460,9 @@ class RawFrameReceiver(object):
             data = data.view('>i4')
         elif format == "32+32":
             data = data.view('>i4')
+            data = data[:, :, ::2] + 1j*data[:, :, 1::2]
+        elif format == "64+64":
+            data = data.view('>i8')
             data = data[:, :, ::2] + 1j*data[:, :, 1::2]
         elif format == '8':
             pass

@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 """Implements the interface to the REFCLK FPGA module.
 
 .. History:

@@ -103,12 +103,8 @@ class SCALER(MMI):
             self.BYPASS = 0
         else:
             self.BYPASS = 1
-        # self.BYPASS = 1
-        # self.SHIFT_LEFT = 10
         self.SHIFT_LEFT = 31
-        # self.USE_GAIN_TABLE = 1
         self.USE_OFFSET_BINARY = 1
-        # self.set_fixed_gain(1)
         self.set_gain_table(1)
         self.SATURATE_ON_MINUS_7 = 1
         self.STATS_CAPTURE = 1
@@ -117,12 +113,13 @@ class SCALER(MMI):
 
     CAPTURE_DATA_TYPES = {
         'out': 0, # same as main data output
-        'raw_fft': 1, # MSB of the raw FFT values\n"
-        'gain_fft': 2, # MSB of post-gain FFT value with saturation\n"
-        '4bit_fft': 3, # 4+4 bit scaled values\n"
-        '2res_even': 4, # Even bins of raw FFT with twice the bit width\n"
-        '2res_odd': 5, # Odd bins of raw FFT with twice the bit width\n"
-     }
+        'fft': 1, # MSBs of the raw FFT values\n"
+        'fft_gain': 2, # MSBs of post-gain FFT value with saturation\n"
+        'fft_4bit': 3, # 4+4 bit scaled values\n"
+        'fft_2x': 4, # Dual resolution FFT
+        'fft_4x': 5, # Quad resolution FFT
+    }
+
     def set_capture_data_type(self, data_type):
         if data_type in self.CAPTURE_DATA_TYPES:
             self.CAP_DATA_TYPE = self.CAPTURE_DATA_TYPES[data_type]
