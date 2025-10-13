@@ -86,7 +86,7 @@ class UCAP(MMI):
             channels = [channels]
 
         if mode == 0:
-           if channels is None:
+            if channels is None:
                 channels = list(range(8))
             if channels != list(range(8)):
                 raise RuntimeError('UCAP mode 0 can only capture channels 0-7, in that order')
@@ -413,6 +413,7 @@ class RawFrameReceiver(object):
         ts = np.zeros((ncap,), dtype=np.uint64)
         ts_dict = {} # {timestamp:n, ...): keeps track of the known timestamps and associated capture slots
         n = 0 # current capture slot
+        sid = []
         last_timestamp = None
         while n < ncap + 1: # process packets until we have checked ncap+1 timestamps to make sure we have all the data for ncap timestamps
             # Get some packets until a new timestamp, timeout, or buffer full
@@ -432,6 +433,7 @@ class RawFrameReceiver(object):
                     if n < ncap:
                         ts[n] = timestamp
                 if n < ncap:
+                    sid.append(self.buf_stream_id[i])
                     bix = sid_map.get(self.buf_stream_id[i] & 0xFFF, None)
                     subframe = self.buf_subframe[i] & 0x3
                     frame = (self.buf_stream_id[i] >> 12) & 0x0F

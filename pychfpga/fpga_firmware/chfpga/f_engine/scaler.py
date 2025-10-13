@@ -53,12 +53,12 @@ class SCALER(MMI):
                                 "   BYPASS=1, DATA_TYPE=3: Send (1+0j) if Im has a positive saturation and (0+1j) if it has a negative saturation\n"
                                 )
     CAP_DATA_TYPE         = BitField(CONTROL, 0x0A, 0, width=3, doc=" Selects the source of the capture data port.\n"
-                                "   0: Main scaler output\n"
+                                "   0, Same as main data output\n"
                                 "   1: MSB of the raw FFT values\n"
                                 "   2: MSB of post-gain FFT value with saturation\n"
                                 "   3: 4+4 bit scaled values\n"
-                                "   4: Even bins of raw FFT with twice the bit width\n"
-                                "   5: Odd bins of raw FFT with twice the bit width\n"
+                                "   4: Dual resolution FFT with automatic switching between even and odd bins. Odd bins are send on odd frames, even bins on even frames\n"
+                                "   5: Quad resolution FFT with automatic switching between even and odd bins. Odd bins are send on odd frames, even bins on even frames\n"
                                 )
 
     STATS_READY            = BitField(STATUS, 0x00, 7, doc="Indicates that new stats results are ready")

@@ -241,7 +241,7 @@ class POCKET_CORRELATOR:
 
     def read_adc_frames(self,
                         n_frames = 2,
-                        data_source = 'adc',
+                        # data_source = 'adc',
                         channels = list(np.arange(8)),
                         period = 0.02,
                         split = True,
@@ -343,7 +343,7 @@ class POCKET_CORRELATOR:
         #     self.i.chan[n].SCALER.BYPASS = 1
 
         # Configure the channelizers
-        self.i.set_channelizer(data_source = data_source,
+        self.i.set_channelizer(# data_source = data_source,
                                function = None,
                                # funcgen_left_shift=None,
                                # funcgen_right_shift=None,
@@ -359,7 +359,7 @@ class POCKET_CORRELATOR:
         #                           )
 
         self.i.start_data_capture(period = period, 
-                                  source = 'adc',
+                                  source = 'funcgen', # 'adc',
                                   mode = self.ucap.MODE,
                                   channels = channels,
                                   select = True
