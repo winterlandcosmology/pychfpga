@@ -21,3 +21,5 @@ out_*/
 *.egg-info
 .ipynb_checkpoints
 corr16tests
+.idea
+.vscode
