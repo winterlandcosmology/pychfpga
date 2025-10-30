@@ -1803,6 +1803,7 @@ class POCKET_CORRELATOR:
                 dset_SCALER_OVERFLOWS = stats_grp.create_dataset('scaler_overflows', (n_vis_per_file, self.NPOLS), dtype = int)
                 dset_SCALER_STATS_READY = stats_grp.create_dataset('scaler_stats_ready', (n_vis_per_file, self.NPOLS), dtype = int)
                 dset_CORR_OVERRUN = stats_grp.create_dataset('corr_overrun', (n_vis_per_file, ), dtype = int)
+                dset_TEMPERATURE = stats_grp.create_dataset('temperature', (n_vis_per_file, ), dtype = np.float64)
 
                 # Make numpy buffers for statistics
                 frame_count_buf = np.zeros((n_vis_per_file, self.NPOLS), dtype = int)
@@ -1813,6 +1814,7 @@ class POCKET_CORRELATOR:
                 scaler_overflows_buf = np.zeros((n_vis_per_file, self.NPOLS), dtype = int)
                 scaler_stats_ready_buf = np.zeros((n_vis_per_file, self.NPOLS), dtype = int)
                 corr_overrun_buf = np.zeros(n_vis_per_file, dtype = int)
+                temperature_buf = np.zeros(n_vis_per_file, dtype = np.float64)
 
                 if capture_adc_bursts:
                     # Capture ADC data. Note: a single capture for all 8 pols in mode 0 is equal to
@@ -1944,6 +1946,9 @@ class POCKET_CORRELATOR:
                     # Correlator stats
                     corr_overrun_buf[n] = self.corr.OVERRUN
 
+                    # FPGA die temperature
+                    temperature_buf[n] = self.i.get_temperatures()['FPGA_core']
+
                     # Create arrays to print the overrange/overflow status of individual ADCs,
                     # reversing the array so that the ADCs are indexed in ascending order from ADC1 to ADC8
                     adc_or_arr = np.array([(adc_overrange_buf[n] & bitmask[m]) >> m for m in bitshifts])[::-1]
@@ -1963,6 +1968,7 @@ class POCKET_CORRELATOR:
                     print(f'FFT Overflows: {fft_overflows_buf[n]}')
                     print(f'Scaler Overflows: {scaler_overflows_buf[n]}')
                     print(f'Correlator Overruns: {corr_overrun_buf[n]}')
+                    print(f'FPGA Die Temperature: {temperature_buf[n]} C')
 
                 # Once the loop is complete, write the numpy buffers to disk
                 print('')
@@ -1984,6 +1990,7 @@ class POCKET_CORRELATOR:
                 dset_SCALER_OVERFLOWS[...] = scaler_overflows_buf
                 dset_SCALER_STATS_READY[...] = scaler_stats_ready_buf
                 dset_CORR_OVERRUN[...] = corr_overrun_buf
+                dset_TEMPERATURE[...] = temperature_buf
 
                 print('Data written!')
 
@@ -2016,6 +2023,7 @@ class POCKET_CORRELATOR:
             dset_SCALER_OVERFLOWS[...] = scaler_overflows_buf
             dset_SCALER_STATS_READY[...] = scaler_stats_ready_buf
             dset_CORR_OVERRUN[...] = corr_overrun_buf
+            dset_TEMPERATURE[...] = temperature_buf
 
             print('Done!')
             print('')
