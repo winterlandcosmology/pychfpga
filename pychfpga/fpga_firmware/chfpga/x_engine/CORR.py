@@ -80,6 +80,9 @@ class CORR(MMIRouter):
 
     ROUTER_PORT_NUMBER_WIDTH = 4
 
+    REQUIRES_OFFSET_BINARY_ENCODING = True
+    BIT_WIDTH = 4
+
     def __init__(self, *, router, router_port, verbose=0):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)

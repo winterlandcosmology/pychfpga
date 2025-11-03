@@ -58,6 +58,13 @@ class FFT(MMI):
         # Set the FFT Pipeline delay.
         self.PIPELINE_DELAY = self.fpga.FFT_LATENCY
 
+        info = FFT_INFO[self.FFT_TYPE]
+        self.n_lanes = info['bins_per_word']
+        self.n_bins = info['samples_per_frame'] // 2
+        self.n_bins_per_lane = self.n_bins // self.n_lanes
+        self.is_scrambled = not info['unscrambled']
+        self.is_rotated = self.ROTATE_BINS
+
         # For the CRS, the pipeline delay is not yet measured at this point, and is not measured even if we pulse SOFT_RESET.
         # So we can't check if it is right until the pipeline is running. This is why we disable the check below
         # if self.PIPELINE_DELAY != self.MEASURED_PIPELINE_DELAY:
@@ -70,9 +77,19 @@ class FFT(MMI):
         self.OVERFLOW_RESET = 1
         self.OVERFLOW_RESET = 0
 
-    def get_bin_map(self, flatten=False):
+    def get_bin_map(self, flatten=False, reverse=False):
         """ Returns an array providing the bin number sent on every clock by every FFT output lane.
 
+        Note that the map changes  during operation if BYPASS is changed.
+
+        If BYPASS=1, the map is simply bin_number=real_sample_number//2 = complex_sample_number.
+
+
+        Parameters:
+
+            flatten (bool): If True, the map will be flatten, lane being the fast axis, then bin index.
+
+            reverse (bool): If True, returns the list of index at which each bin can be found. `flatten` is ignored.
 
         Returns:
 
@@ -80,22 +97,26 @@ class FFT(MMI):
                 by each output lane of the FFT. Each column (bins=x[:,clk]) represents the bins
                 emitted on one clock.
         """
-        info = FFT_INFO[self.FFT_TYPE]
-
-        n_lanes = info['bins_per_word']
-        n_bins = info['samples_per_frame'] // 2
-        n_bins_per_lane = n_bins // n_lanes
-        unscrambled = info['unscrambled']
-        rotate = self.ROTATE_BINS
         # Compute bin numbers at the output of the FFT, including bin rotation.
         # We split the data into 4 lanes since the FFT outputs 4 numbers per clock.
         # fft_bins = np.array([[n_bins_per_lane*((lane - (rotate*clk & 0b11)) & 0b11) + clk for clk in range(n_bins_per_lane)] for lane in range(n_lanes)])
 
-        # bins coming out straight out of the CASPER FFT
-        bins = np.arange(n_bins).reshape((n_lanes, -1), order='F' if unscrambled else 'C')
-        if rotate:
-            bins -= (np.arange(n_bins_per_lane) * n_bins_per_lane) % n_bins
-        return bins.flatten(order='F') if flatten else bins
+        if self.BYPASS:
+            bins = np.arange(self.n_bins).reshape((self.n_lanes, -1), order='F')
+        else:
+            # bins coming out straight out of the CASPER FFT
+            bins = np.arange(self.n_bins).reshape((self.n_lanes, -1), order='C' if self.is_scrambled else 'F')
+            if self.is_rotated:
+                bins = (bins - np.arange(self.n_bins_per_lane) * self.n_bins_per_lane) % self.n_bins
+
+        fbins = bins.flatten(order='F')
+
+        if reverse:
+            rbins = np.empty(self.n_bins, dtype=np.intp)
+            rbins[fbins] = np.arange(self.n_bins)
+            return rbins
+
+        return fbins if flatten else bins
 
     def status(self):
         """ Displays the status of the data capture module"""

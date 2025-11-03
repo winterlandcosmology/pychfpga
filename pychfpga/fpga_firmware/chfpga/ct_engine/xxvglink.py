@@ -131,9 +131,10 @@ class GTY(MMI):
 
     RXHEADER      = BitField(STATUS, 5, 6, width=2, doc='Debug')
     RXGEARBOXSLIP = BitField(STATUS, 5, 5, doc='Debug')
+    RXPRBSLOCKED  = BitField(STATUS, 5, 3, doc='GTY Output to indicate that the RX PRBS checker has been error free. Is reset by RXPRBSCNTRESET.')
     RXBUFSTATUS   = BitField(STATUS, 5, 0, width=3)
 
-    RXMONITOR     = BitField(STATUS, 6, 0, width=7, doc='Debug')
+    RXMONITOR     = BitField(STATUS, 6, 0, width=8, doc='Reserved port according to the GTY manuals. Not clear what this does.')
     RXDATA        = BitField(STATUS, 10, 0, width=32)
 
     # ERR_CTR       = BitField(STATUS, 10, 0, width=32)
@@ -476,8 +477,8 @@ class XXVGLinkCore(MMI):
         router_port = 1
 
         # Instantiate QUAD objects
-        self.logger.info(f'{self!r}: Instantiating {self.NUMBER_OF_QUADS} QPLLs')
-        print(f'{self!r}: Instantiating {self.NUMBER_OF_QUADS} QPLLs and {self.NUMBER_OF_LINKS} GTYs, XXVGLINK base addr={self.base_address:06x}, width={self.address_width}')
+        self.logger.info(f'{self!r}: Instantiating {self.NUMBER_OF_QUADS} QPLLs and {self.NUMBER_OF_LINKS} GTYs, XXVGLINK base addr={self.base_address:06x}, width={self.address_width}')
+        self.logger.debug(f'{self!r}: Instantiating {self.NUMBER_OF_QUADS} QPLLs ')
         self.qpll = []
         for j in range(self.NUMBER_OF_QUADS):
             self.qpll.append(QPLL(router=xxvgl_router, router_port=router_port, instance_number=j))
@@ -573,6 +574,7 @@ class XXVGLinkArray(XXVGLinkCore):
     BYPASS_PCB_SHUFFLE  = BitField(CONTROL, 5, 0, doc='')
     BYPASS_QSFP_SHUFFLE = BitField(CONTROL, 5, 1, doc='')
 
+    LANE_MON_EN       = BitField(CONTROL, 6, 6, doc='When True, allows RXCLK_MON_WORD and TXCLK_MON_WORD to update. Disable during register reads.')
     LANE_MON_SRC      = BitField(CONTROL, 6, 4, width=2, doc='Selects source of data being monitored for selected lane (TXCLK domain: 0=TX, 1=RX, RXCLK domain: no effect, always RX FIFO IN)')
     LANE_MON_TYPE      = BitField(CONTROL, 6, 0, width=4, doc='Selects type of data being monitored for selected lane (0: word counter, 1: packet length, 2: current packet length, 3: min packet length, 4: max packet length, 5: error counter, 6: FIFO overflow counter)')
 

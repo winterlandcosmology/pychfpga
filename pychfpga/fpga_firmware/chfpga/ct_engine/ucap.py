@@ -9,10 +9,13 @@ import logging
 import asyncio
 import socket
 import time
+import __main__
+
+import numpy as np
+
+from pychfpga.common.udp_packet_receiver import UDPPacketReceiver
 
 from ..mmi import MMI, BitField, CONTROL, STATUS
-import numpy as np
-import __main__
 
 
 
@@ -48,7 +51,8 @@ class UCAP(MMI):
 
     def init(self):
         """ Initializes UCAP module"""
-        self.USER_STREAM_ID = self.fpga.slot or 0
+        slot = self.fpga.slot
+        self.USER_STREAM_ID = slot-1 if slot else 0
 
     DATA_SOURCE_TABLE = {
         'funcgen': 0,
@@ -59,7 +63,14 @@ class UCAP(MMI):
 
         Parameters:
 
-            source (str): Source to use
+            source (str): Source to use. The source string represents where the tata is tapped in
+                the channelizer pipeline:
+
+                - 'funcgen': The captured data is taken at the output of the function generator module
+                  (which can be configured to pass the ADC data or internally-generated waveforms)
+                - 'scaler': The captured data is taken from the capture output port (not the main
+                  output) of the scaler. The scaler can be configured to output various signals on this
+                  port (scaled/unscaled raw FFT data, overflow flags etc.)
 
             mode (int): capture mode to use
 
@@ -171,8 +182,8 @@ class UCAP(MMI):
 
         return b[:64, 5:]
 
-    def get_data_receiver(self, sock=None, buffer_length=256):
-        return RawFrameReceiver(sock or self.fpga.get_data_socket(), buffer_length=buffer_length)
+    def get_data_receiver(self, packet_receiver):
+        return RawFrameReceiver(packet_receiver)
 
 class RawFrameReceiver(object):
     """
@@ -214,10 +225,10 @@ class RawFrameReceiver(object):
         watch -cd -n .5 "cat /proc/net/udp"
     """
 
-    def __init__(self, socket, buffer_length=256):
+    def __init__(self, packet_receiver):
 
-        self.socket = socket
-        self.NPACKETS = buffer_length
+        self.pr = packet_receiver
+        # self.NPACKETS = buffer_length
         self.FRAME_SIZE = 16384*2 # bytes
         self.DATA_SIZE = self.FRAME_SIZE // 4
         # self.ignore_packet_size = ignore_packet_size
@@ -236,13 +247,13 @@ class RawFrameReceiver(object):
 
         # Pre-allocate buffers
         # Buffer in which recv_into() will put the data directly
-        self.buf = np.zeros((self.NPACKETS, self.PACKET_SIZE), dtype=np.int8)  # can use empty(), but the uninitialized data can be confusing for debugging
+        # self.buf = np.zeros((self.NPACKETS, self.PACKET_SIZE), dtype=np.int8)  # can use empty(), but the uninitialized data can be confusing for debugging
         self.n = 0  # buffer write index
         self.last_ts = None  # timestamp of the last packet written in the buffer
 
         # Various views of the buffer to allow quick and easy access to the packet contents
 
-        self.buf_struct = self.buf.view(self.packet_dtype)[:,0]
+        self.buf_struct = self.pr.buf[:,:self.PACKET_SIZE].view(self.packet_dtype)[:,0]
 
         self.buf_cookie = self.buf_struct['header']['cookie'][:, 0]
         self.buf_stream_id = self.buf_struct['header']['stream_id'][:, 0]
@@ -257,22 +268,7 @@ class RawFrameReceiver(object):
         FRAMES_PER_CHANNEL_MAX = 16
         self.cookie = cookie = 0xa0
 
-    def flush(self, timeout, verbose=0):
-            # Read packets until timeout
-            flushed = 0
-            self.socket.settimeout(timeout)
-            while True:
-                try:
-                    s = self.socket.recv_into(self.buf[0])
-                    flushed += 1
-                    if verbose >=2:
-                        print(f'flushing packet len={s} cookie=0x{self.buf_cookie[0]:02x} ts={self.buf_ts[0] & self.ts_mask}')
 
-                except socket.timeout:
-                    break
-            # We assume the buffer might have overflowed and contains partial
-            # timestamp. We flush until we gen a new timestamp.
-            return flushed
     def wait_for_new_timestamp(self, cookie, timeout, verbose=0):
             self.socket.settimeout(timeout)
             flushed = 0
@@ -297,39 +293,39 @@ class RawFrameReceiver(object):
                     continue
             return flushed
 
-    def receive_packets(self, cookie, verbose=0):
-        """ Receive some packets into the buffer until there is a timeout or the buffer is full
-        """
-        n = self.n # current packet number
-        last_ts = None
-        while n < self.NPACKETS:
-            try:
-                s = self.socket.recv_into(self.buf[n])
-                # check if the packet has the right cookie
-                if verbose >= 2:
-                    print(f'got packet len={s} cookie=0x{self.buf_cookie[n]:02x} ts={self.buf_ts[n] & self.ts_mask}')
-                if self.buf_cookie[n] & 0xfe != cookie: # ignore packets with wrong cookie
-                    continue
+    # def receive_packets(self, cookie, verbose=0):
+    #     """ Receive some packets into the buffer until there is a timeout or the buffer is full
+    #     """
+    #     n = self.n # current packet number
+    #     last_ts = None
+    #     while n < self.NPACKETS:
+    #         try:
+    #             s = self.socket.recv_into(self.buf[n])
+    #             # check if the packet has the right cookie
+    #             if verbose >= 2:
+    #                 print(f'got packet len={s} cookie=0x{self.buf_cookie[n]:02x} ts={self.buf_ts[n] & self.ts_mask}')
+    #             if self.buf_cookie[n] & 0xfe != cookie: # ignore packets with wrong cookie
+    #                 continue
 
-                # Ignore packets that don't have the right length
-                if s != self.PACKET_SIZE:
-                    continue
-                ts = self.buf_ts[n] & self.ts_mask
-                if verbose >=2:
-                    print(f'ts={ts}, last_ts={self.last_ts}, sid={self.buf_stream_id[n]:04x}')
-                n += 1
-                if last_ts is None: # if we don't have a last timestamp, initialize it and continue
-                    self.last_ts = ts
-                elif ts != last_ts: # if we have a new timestamp, exit
-                    break
-            except socket.timeout:  # we have a timeout, so we probably have time to process data
-                print('timeout')
-                continue
-        # we get here if there is a timeout, a timestamp change, or if the buffer is full
-        if verbose:
-            print(f'got {n} packets, delta_ts={ts-self.last_ts}')
-        self.n = n
-        return n
+    #             # Ignore packets that don't have the right length
+    #             if s != self.PACKET_SIZE:
+    #                 continue
+    #             ts = self.buf_ts[n] & self.ts_mask
+    #             if verbose >=2:
+    #                 print(f'ts={ts}, last_ts={self.last_ts}, sid={self.buf_stream_id[n]:04x}')
+    #             n += 1
+    #             if last_ts is None: # if we don't have a last timestamp, initialize it and continue
+    #                 self.last_ts = ts
+    #             elif ts != last_ts: # if we have a new timestamp, exit
+    #                 break
+    #         except socket.timeout:  # we have a timeout, so we probably have time to process data
+    #             print('timeout')
+    #             continue
+    #     # we get here if there is a timeout, a timestamp change, or if the buffer is full
+    #     if verbose:
+    #         print(f'got {n} packets, delta_ts={ts-self.last_ts}')
+    #     self.n = n
+    #     return n
 
     def read_raw_frames(
             self,
@@ -385,30 +381,26 @@ class RawFrameReceiver(object):
         sid_map = {sid:ix for ix, sid in enumerate(stream_ids)}
 
         if flush:
-            flushed = self.flush(flush_timeout, verbose=verbose)
+            flushed = self.pr.flush(flush_timeout, verbose=verbose)
             if verbose >=1:
                 print(f'Flushed {flushed} packets while emptying UDP buffers')
             self.last_ts = None
-            flushed = self.wait_for_new_timestamp(self.cookie, data_timeout, verbose=verbose)
-            if verbose:
-                print(f'Skipped {flushed} packets while waiting for a fresh timestamp')
-        self.socket.settimeout(data_timeout)
+            # flushed = self.wait_for_new_timestamp(self.cookie, data_timeout, verbose=verbose)
+            # if verbose:
+            #     print(f'Skipped {flushed} packets while waiting for a fresh timestamp')
+        self.pr.settimeout(data_timeout)
 
-        if not self.n:
-            raise RuntimeError('There is no initial data in the buffer. Run with Flush=True first')
+        # if not self.n:
+        #     raise RuntimeError('There is no initial data in the buffer. Run with Flush=True first')
         return_multiple_captures = ncap is not None
         ncap = ncap or 1
 
-        # Determine the capture mode based in the first packet in the buffer
-        mode = (self.buf_subframe[0] >> 2) & 0x3
-        frames_per_channel = 2 * 2**(mode)
+        mode = None
         nchan = len(sid_map)  # number of captured channels
-        if verbose:
-            print(f"mode={mode}, {nchan} channel(s), {frames_per_channel} frames per channel, {ncap} captures")
 
         # Allocate destination buffer
 
-        data = np.zeros((nchan, ncap, self.FRAME_SIZE*frames_per_channel), dtype=np.int8)
+        data = np.zeros((nchan, ncap, self.FRAME_SIZE*16), dtype=np.int8)
         data_count = np.zeros((nchan, ncap), dtype=np.uint16)
         ts = np.zeros((ncap,), dtype=np.uint64)
         ts_dict = {} # {timestamp:n, ...): keeps track of the known timestamps and associated capture slots
@@ -417,7 +409,22 @@ class RawFrameReceiver(object):
         last_timestamp = None
         while n < ncap + 1: # process packets until we have checked ncap+1 timestamps to make sure we have all the data for ncap timestamps
             # Get some packets until a new timestamp, timeout, or buffer full
-            npkts = self.receive_packets(cookie=self.cookie, verbose=verbose)
+            npkts = self.pr.get_packets(verbose=verbose)
+
+            if not npkts:
+                continue
+
+            (buf_ix, ) = np.where(self.buf_cookie[:npkts] & 0xFE == self.cookie)
+
+            if not buf_ix.size:
+                continue
+
+            if not mode:
+                # Determine the capture mode based in the first packet in the buffer
+                mode = (self.buf_subframe[0] >> 2) & 0x3
+                frames_per_channel = 2 * 2**(mode)
+                if verbose:
+                    print(f"mode={mode}, {nchan} channel(s), {frames_per_channel} frames per channel, {ncap} captures")
 
             if verbose >=2:
                 print(f'sf={self.buf_subframe[:self.n]}')
@@ -453,21 +460,38 @@ class RawFrameReceiver(object):
 
         if format == "16":
             data = data.view('>i2')
+            if split:
+                data = data.reshape((nchan, ncap*frames_per_channel,-1))
         elif format == "14":
             data = data.view('>i2') >> 2
+            if split:
+                data = data.reshape((nchan, ncap*frames_per_channel,-1))
         elif format == "16+16":
             data = data.view('>i2')
             data = data[:, :, ::2] + 1j*data[:, :, 1::2]
+            data = data.reshape((nchan, ncap*frames_per_channel,-1))
         elif format == "32":
             data = data.view('>i4')
+            if split:
+                data = data.reshape((nchan, ncap*frames_per_channel,-1))
         elif format == "32+32":
             data = data.view('>i4')
             data = data[:, :, ::2] + 1j*data[:, :, 1::2]
+            data = data.reshape((nchan, ncap*frames_per_channel,-1))
+        elif format == "32+32d":
+            data = data.view('>i4')
+            data = data[:, :, ::2] + 1j*data[:, :, 1::2]
+            data = data.reshape((nchan, ncap*frames_per_channel,-1)) # split
+            s = data.shape
+            data = data.reshape(s[0],-1,2,s[2]).reshape(s[0],-1,s[2]*2, order='F')
+
         elif format == "64+64":
             data = data.view('>i8')
             data = data[:, :, ::2] + 1j*data[:, :, 1::2]
+            data = data.reshape((nchan, ncap*frames_per_channel,-1))
         elif format == '8':
-            pass
+            if split:
+                data = data.reshape((nchan, ncap*frames_per_channel,-1))
         else:
             raise ValueError(f'Invalid format "{format}"')
             
