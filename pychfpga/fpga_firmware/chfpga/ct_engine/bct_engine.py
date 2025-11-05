@@ -74,24 +74,22 @@ class BCTEngine(MMIRouter):
             self.logger.debug(f'{self!r}: ===     Instantiating 1st CROSSBAR (Programmable)')
             self.CROSSBAR = chan_crossbar.ChanCrossbar(router=self, router_port='CB1')
 
-            if self.fpga.NUMBER_OF_BP_SHUFFLE_LANES:
-                self.logger.debug(f'{self!r}: ===     Instantiating Backplane shuffle subsystem')
-                self.BP_SHUFFLE = shuffle.Shuffle(router=self, router_port='SHUFFLE')
+            self.logger.debug(f'{self!r}: ===     Instantiating Backplane shuffle subsystem')
+            self.BP_SHUFFLE = shuffle.Shuffle(router=self, router_port='SHUFFLE')
 
-            if self.fpga.NUMBER_OF_BP_SHUFFLE_LANES and self.NUMBER_OF_GPU_LINKS:
-                self.logger.debug(f'{self!r}: ===     Instantiating 2nd CROSSBAR')
-                self.CROSSBAR2 = shuffle_crossbar.ShuffleCrossbar(
-                    router=self,
-                    router_port='CB2',
-                    crossbar_level=2,
-                    number_of_bin_sel=2)  # CROSSBAR block
+            self.logger.debug(f'{self!r}: ===     Instantiating 2nd CROSSBAR')
+            self.CROSSBAR2 = shuffle_crossbar.ShuffleCrossbar(
+                router=self,
+                router_port='CB2',
+                crossbar_level=2,
+                number_of_bin_sel=2)  # CROSSBAR block
 
-                self.logger.debug(f'{self!r}: ===     Instantiating 3rd CROSSBAR')
-                self.CROSSBAR3 = shuffle_crossbar.ShuffleCrossbar(
-                    router = self,
-                    router_port='CB3',
-                    crossbar_level=3,
-                    number_of_bin_sel=8)  # CROSSBAR block
+            self.logger.debug(f'{self!r}: ===     Instantiating 3rd CROSSBAR')
+            self.CROSSBAR3 = shuffle_crossbar.ShuffleCrossbar(
+                router = self,
+                router_port='CB3',
+                crossbar_level=3,
+                number_of_bin_sel=8)  # CROSSBAR block
         else:
             raise RuntimeError("BCT-type Corner turn engine only supports CT_LEVEL of 1 or 3. Received CT_LEVEL={CT_LEVEL}")
 

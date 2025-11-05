@@ -123,7 +123,6 @@ class GPIO(MMI):
     ADC_PLL_LOCK0              = BitField(STATUS, 33, 6,  doc='Lock status of the ADC PLL in FMC0')
     ADC_PLL_LOCK1              = BitField(STATUS, 33, 7,  doc='Lock status of the ADC PLL in FMC1')
     CMD_RPLY_PACKET_COUNTERS   = BitField(STATUS, 35, 0, width=16, doc='Number of reply packets received since last FPGA configuration. MSB=Commands, LSB=Replies')
-    NUMBER_OF_BP_SHUFFLE_LANES = BitField(STATUS, 36, 0, width=8, doc='Number of backplane links (including the direct internal link)')
     EXTRA_IO                   = BitField(STATUS, 37, 0, width=8, doc='Various input IO signals provided by the platform. Used to QC the board.')
     ADC_CM_OV                  = BitField(STATUS, 38, 0, width=8, doc='ADC common-mode overvoltage flag')
     ADC_CM_OV                  = BitField(STATUS, 39, 0, width=8, doc='ADC common-mode undervoltage flag')

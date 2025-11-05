@@ -34,15 +34,15 @@ class FPGAFirmware():
     #     cls.bitstream.load_bitstream()  # reload bitstream if it has changed
     #     return cls.bitstream
 
-    @classmethod
-    def get_modes_for_platform(cls, platform_name):
-        """ Returns a list of valid firmware operational modes for the specified platform.
-        """
+    # @classmethod
+    # def get_modes_for_platform(cls, platform_name):
+    #     """ Returns a list of valid firmware operational modes for the specified platform.
+    #     """
 
-        return [mode for (fw_cls_name, fw_cls) in cls._class_registry.items()
-                    for (pf_name, fw_name, modes), pf_info in fw_cls.PLATFORM_SUPPORT.items()
-                    for mode in modes
-                    if pf_name == platform_name]
+    #     return [mode for (fw_cls_name, fw_cls) in cls._class_registry.items()
+    #                 for (pf_name, fw_name, modes), pf_info in fw_cls.PLATFORM_SUPPORT.items()
+    #                 for mode in modes
+    #                 if pf_name == platform_name]
 
     @classmethod
     def get_firmware(cls, platform_name, mode, bitfile_override=None, folder_override=None):
@@ -62,7 +62,7 @@ class FPGAFirmware():
                 listed in the PLATFORM_SUPPORT table of the target firmware class. The match is case
                 sensitive.
 
-            bitfile_override (str): 
+            bitfile_override (str):
 
                - If `bitfile_override` is a path pointing to a file, that bitsteam file will will be loaded.
 
@@ -96,18 +96,17 @@ class FPGAFirmware():
         """
 
         # find all the firmware classes and platform info that match the specified platform name
-        # We only need one, but having them all is useful to show them to the user in case of error. 
+        # We only need one, but having them all is useful to show them to the user in case of error.
         pf_modes = {mode: (fw_cls, pf_info)
                     for (fw_cls_name, fw_cls) in cls._class_registry.items()
-                    for (pf_name, fw_name, modes), pf_info in fw_cls.PLATFORM_SUPPORT.items()
-                    for mode in modes
-                    if pf_name == platform_name}
+                    for pf_info in fw_cls.PLATFORM_SUPPORT  # (pf_name, fw_name, modes)
+                    for mode in pf_info['modes']
+                    if pf_info['platform'] == platform_name}
         # find all the firmware class and platform info that matches the target mode
-        # There should normally be only one match.  
+        # There should normally be only one match.
         fw = [(fw_cls, pf_info.copy())
                     for pf_mode, (fw_cls, pf_info) in pf_modes.items()
-                    if mode ==  pf_mode]
-
+                    if pf_mode == mode]
 
         if not fw:
             raise RuntimeError(f'Could not find firmware for mode {mode} for platform {platform_name}. Available modes are {",".join(pf_modes)}')

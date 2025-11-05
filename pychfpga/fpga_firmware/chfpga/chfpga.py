@@ -127,16 +127,19 @@ class chFPGA(FPGAFirmware):
     # to expect when we monitor the ADC clock with the frequency counter.This could be independent from the
     # procrssing clock. For the CRS, the processing clock is Fs/8 and the monitoring clock is Fs/16. For the
     # IceBoard, it's both fs/4. (fs=sampling frequency)
-    PLATFORM_SUPPORT = { # (platform_model, firmware_config, modes): {firmware_filename: <fw_fn>, <other platform parameters>}
-        ("MGK7MB", "chFPGA", ("shuffle16", "shuffle128", "shuffle256", "shuffle512", "chan8", "chan4")): dict(firmware_url='chfpga_ice_ct.bit', sampling_frequency=800e6, processing_frequency=200e6, adc_clock_divider=4),
-        ("MGK7MB", "siFPGA", ("corr16",)): dict(firmware_url='chfpga_ice_corr16.bit', sampling_frequency=800e6, processing_frequency = 200e6, adc_clock_divider=4),
-        ("MGK7MB", "chordFPGA", ("chord16",)): dict(firmware_url='chordFPGA_MGK7MB_Rev2.bit', sampling_frequency=1200e6, processing_frequency = 300e6),
-        ("ZCU111", "siFPGA", ("corr4", "corr8")): dict(firmware_url='sifpga_zcu111_wrapper.bit', sampling_frequency=3000e6, processing_frequency = 375e6, adc_clock_divider=16),
-        ("ZCU111", "chFPGA", ("chan8",)): dict(firmware_url='chfpga_zcu111.bit', sampling_frequency=3000e6, processing_frequency = 375e6, adc_clock_divider=16),
-        ("CRS",    "siFPGA", ("corr4","corr8")): dict(firmware_url='chfpga_crs_corr8.bit', sampling_frequency=3200e6, processing_frequency = 3200e6/8, adc_clock_divider=32),
-        ("CRS",    "siFPGA", ("corr32", "corr64")): dict(firmware_url='chfpga_crs_corr64.bit', sampling_frequency=3200e6, processing_frequency = 3200e6/8, adc_clock_divider=32),
-        ("CRS",    "chFPGA", ("chan8", "shuffle8")): dict(firmware_url='chfpga_crs_ct.bit', sampling_frequency=3200e6, processing_frequency = 3200e6/8, adc_clock_divider=32),
-    }
+    PLATFORM_SUPPORT = ( # [ {"platform":<platform_model>, "modes":<supported_modes>, "firmware_url":<firmware filename_or_url>, <other platform key-value parameters>}, ...]
+        dict(platform="MGK7MB", modes=("shuffle16", "shuffle128",
+                                       "shuffle256", "shuffle512",
+                                       "chan8", "chan4"),    firmware_url='chfpga_ice_ct.bit',         sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4),
+        dict(platform="MGK7MB", modes=("corr16",),           firmware_url='chfpga_ice_corr16.bit',     sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4),
+        dict(platform="MGK7MB", modes=("chord16",),          firmware_url='chordFPGA_MGK7MB_Rev2.bit', sampling_frequency=1200e6, processing_frequency=300e6),
+        dict(platform="ZCU111", modes=("corr4", "corr8"),    firmware_url='sifpga_zcu111_wrapper.bit', sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16),
+        dict(platform="ZCU111", modes=("chan8",),            firmware_url='chfpga_zcu111.bit',         sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16),
+        dict(platform="CRS",    modes=("corr4","corr8"),     firmware_url='chfpga_crs_corr8.bit',      sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
+        dict(platform="CRS",    modes=("corr32",),           firmware_url='chfpga_crs_corr64.bit',     sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
+        dict(platform="CRS",    modes=("corr64",),           firmware_url='chfpga_crs_corr64.bit',     sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
+        dict(platform="CRS",    modes=("chan8", "shuffle8"), firmware_url='chfpga_crs_ct.bit',         sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
+    )
 
     FFT_INFO = fft.FFT_INFO
 
@@ -760,7 +763,6 @@ class chFPGA(FPGAFirmware):
             # CT-Engine type (CT_TYPE) is defined by lookup table based on the platform
             self.NUMBER_OF_CROSSBAR_INPUTS = self.GPIO.NUMBER_OF_CROSSBAR_INPUTS
             self.NUMBER_OF_CROSSBAR1_OUTPUTS = self.GPIO.NUMBER_OF_CROSSBAR1_OUTPUTS
-            self.NUMBER_OF_BP_SHUFFLE_LANES = self.GPIO.NUMBER_OF_BP_SHUFFLE_LANES
 
             # Get Real-time data offload link configuration info
             # GPU_LINK_TYPE is defined by lookup table based on the platform
