@@ -2776,7 +2776,7 @@ class chFPGA(FPGAFirmware):
             self.set_gains(gain=gains, postscaler=postscaler, channels=channels)
 
         if offset_binary_encoding is not None:
-            self.set_offset_binary_encoding(offset=offset_binary_encoding, channels=channels, sync=False)
+            self.set_offset_binary_encoding(offset=offset_binary_encoding, channels=channels) # , sync=False)
 
         if local_sync:
             self.sync()
