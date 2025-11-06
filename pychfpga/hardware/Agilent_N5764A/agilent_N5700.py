@@ -84,6 +84,7 @@ class agilent_N5700(GPIB.GPIB):
             'FAULT': A fault has occured
         """
         failmode = int(self.query_float('STAT:QUES:COND?'))
+        print(failmode)
         if failmode != 0:
             state = 'FAULT'
         else:
