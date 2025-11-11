@@ -288,10 +288,10 @@ class UCorn(MMI):
         # Compute the masks indicating which bins can be written with live data
         # We set the write-enable bit to '1' on every bin except the sactificial bins (those used for storing ethernet headers)
         self.sacrificial_bins = sacrificial_bins
-        write_mask = np.full(8192/8, 0xFF, dtype=np.uint8) # 1 bit per bin, 8 bits per byte x 1024 bytes = 8192 bins
+        write_mask = np.full(8192//8, 0xFF, dtype=np.uint8) # 1 bit per bin, 8 bits per byte x 1024 bytes = 8192 bins
         for b in self.sacrificial_bins:
             write_mask[b//8] &=  ~ (1 << (b % 8))
-        write_mask_buffer(0, write_mask)
+        self.write_mask_buffer(0, write_mask)
 
         bins_total = sum(len(b) for t,b in playlist)
         self.logger.info(f'{self!r}: Total data rate: {1*(bins_total*16*8+64)*8*3200e6/16384/16/1e9} Gbps')
