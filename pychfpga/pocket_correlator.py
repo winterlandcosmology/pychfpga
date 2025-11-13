@@ -1850,6 +1850,17 @@ class POCKET_CORRELATOR:
                     # Write to file
                     dset_adc[...] = d_adc
 
+                    # Print the RMS power for each ADC
+                    rms_voltage_LSBs = np.array([np.sqrt((1/(d_adc.shape[1]*d_adc.shape[2]))*np.sum(d_adc[n].flatten()**2)) for n in range(8)])
+                    rms_voltage_V = rms_voltage_LSBs*(1/2**14)
+                    rms_power_lin = rms_voltage_V**2/100
+                    rms_power_dBm = 10*np.log10(rms_power_lin/1e-3)
+
+                    print('')
+                    print('ADC RMS power:')
+                    for n in range(8):
+                        print(f'ADC{n + 1}: {np.round(rms_power_dBm[n], 2)} dBm')
+
                 if capture_fft_bursts:
                     # Capture FFT data. Note: a single capture for all 8 pols in mode 0 is equal to
                     # 16384 samples * 16 frames per capture * (32+32) bit per sample / 8 bits per byte / 1e6 B per MB = 2.097152 MB of data.
