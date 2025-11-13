@@ -1,20 +1,21 @@
 import numpy as np
 import os
 import h5py
+import datetime
 from pychfpga.fpga_array import FPGAArray
 
 # =============================
 # Connect to a single CRS board  
 hwm = 'crs 0041'
-ca = fpga_array.FPGAArray(hwm = hwm,
-                          stderr_log_level = 'debug',
-                          prog = 2,
-                          mode = 'shuffle8'
-                          )
+ca = FPGAArray(hwm = hwm,
+               stderr_log_level = 'debug',
+               prog = 2,
+               mode = 'shuffle8'
+               )
 
-print('')
-print('Firmware timestamp:')
-print(await ca.ib[0].get_fpga_firmware_timestamp())
+#print('')
+#print('Firmware timestamp:')
+#print(await ca.ib[0].get_fpga_firmware_timestamp())
 
 # =============================
 # Instantiate variables
@@ -63,8 +64,12 @@ inv_bin_map = make_inv_bin_map()
 # =============================
 # Read FFT data to compute digital gains
 n_fft_frames = 1000
+print('Capturing FFT data for digital gain computation')
 
+ctr = 0
 while True:
+
+    print('Trial ', ctr)
 
     # Reset the ADC overrange and overvoltage flags
     i.GPIO.ADC_OR_CLEAR = 2**8 - 1
