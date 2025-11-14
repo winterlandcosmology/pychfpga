@@ -1856,6 +1856,7 @@ class POCKET_CORRELATOR:
                     dset_fft = f.create_dataset('fft', (self.NPOLS, n_fft_frames_per_file, self.NBINS), dtype = np.complex128) 
                     
                     # Capture bursts
+                    print('')
                     print(f'Capturing {n_fft_frames_per_file} FFT frames...')
                     d_fft = self.read_fft_frames(n_frames = n_fft_frames_per_file,
                                                  fft_bit_res = '32+32',
@@ -1899,21 +1900,37 @@ class POCKET_CORRELATOR:
                         # Scaler stats reset
                         self.i.chan[m].SCALER.STATS_CAPTURE = 1
 
-                    # Capture data, filling the NumPy buffer on each iteration
-                    if n == 0:
-                        flush = True # Not very pythonic, but flush on first capture
-                    else:
-                        flush = False # Otherwise, no flush
+                    # Capture data, filling the NumPy buffer on each iteration, flush on first capture
+                    flush = True if n == 0 else False
+
+                    try:
                         
-                    # Capture correlated data (note that many default arguments are used here)
-                    t, vis, counts, sat = self.read_corr_frames(data_source = 'adc',
-                                                                fft_bypass = False,
-                                                                scaler_bypass = False,
-                                                                n_software_frames = n_software_frames,
-                                                                number_of_results = 1,
-                                                                flush = flush,
-                                                                corr_is_configured = self.corr_is_configured
-                                                                )
+                        # Capture correlated data (note that many default arguments are used here)
+                        t, vis, counts, sat = self.read_corr_frames(data_source = 'adc',
+                                                                    fft_bypass = False,
+                                                                    scaler_bypass = False,
+                                                                    n_software_frames = n_software_frames,
+                                                                    number_of_results = 1,
+                                                                    flush = flush,
+                                                                    corr_is_configured = self.corr_is_configured
+                                                                    )
+
+                    except RuntimeError as e:
+                        print('Caught an error while capturing correlated data')
+                        print(f'RuntimeError: {e}')
+
+                        # Try capturing data again, this time flushing the buffer
+                        t, vis, counts, sat = self.read_corr_frames(data_source = 'adc',
+                                                                    fft_bypass = False,
+                                                                    scaler_bypass = False,
+                                                                    n_software_frames = n_software_frames,
+                                                                    number_of_results = 1,
+                                                                    flush = True,
+                                                                    corr_is_configured = self.corr_is_configured
+                                                                    )
+
+                    # Reset the early timestamp error flag after capturing new data
+                    early_timestamp_error = False
                     
                     t_buf[n] = t
                     vis_buf[n] = vis[0] # vis is a 3D array even if we only request 1 result
