@@ -807,6 +807,7 @@ class FPGAMaster(object):
             capture_filename=None,
             capture_duration=None,
             capture_n_inputs=None,
+            autocorr_only=None,
             capture_elements_per_file=None):
         """
         Instructs the raw_acq server to start storing raw data in HDF5 files
@@ -840,6 +841,7 @@ class FPGAMaster(object):
         capture_duration = capture_duration or conf.hdf5_capture_duration
         capture_elements_per_file = capture_elements_per_file or conf.hdf5_capture_elements_per_file
         capture_n_inputs = capture_n_inputs or conf.hdf5_capture_n_inputs
+        autocorr_only = autocorr_only or conf.autocorr_only
         software_integration_period = conf.software_integration_period
 
         if not (conf.enable and capture_duration is not None):
@@ -850,16 +852,18 @@ class FPGAMaster(object):
 
 
         self.log.info(
-            f'{self!r}: Starting HDF5 data capture for {capture_duration} '
+            f'{self!r}: Starting corr HDF5 data capture for {capture_duration} '
             f'seconds (0 = infinite)')
 
         self.log.debug(
             f'{self!r}: firmware integ={self.corr_firmware_integration_period}, corr_params={corr_params}')
+        self.log.debug(f'{self!r}: Number of servers to iterate over: {len(self.raw_acq)}')
         await asyncio.gather(*[server.start_corr_hdf5(
             base_dir=capture_folder,
             base_filename=capture_filename,
             capture_duration=capture_duration,
             capture_n_inputs=capture_n_inputs,
+            autocorr_only=autocorr_only,
             elements_per_file=capture_elements_per_file,
             software_integration_period=software_integration_period,
             firmware_integration_period=self.corr_firmware_integration_period, # also for time computation only

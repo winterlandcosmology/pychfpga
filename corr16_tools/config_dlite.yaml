@@ -430,7 +430,6 @@ UAPISHKA:
             # 16384 -> 0.04194304 s -> 42 ms
               # 16384: 41.943 ms, 23.842 frames/s. 135 Mbit/s/board
             software_integration_period: 250
-            autocorr_only: false  # if true, sends only the autocorrelation products
             # The following parameters can be changed each time a capture is started
             n_inputs: 16 # Number of inputs channels to be correlated (from 0 to n_inputs-1)
             hdf5_capture_folder: '%(run_folder)s/corr/%(hdf5_start_time)s'
@@ -439,6 +438,7 @@ UAPISHKA:
 #            hdf5_capture_elements_per_file: 256 # 256 elements=7Mbytes
             hdf5_capture_elements_per_file: 8 # 256 elements=7Mbytes
             hdf5_capture_n_inputs: 16
+            autocorr_only: false  # if true, sends only the autocorrelation products
 #    gps:
 #        servers:
 #            gpss:
