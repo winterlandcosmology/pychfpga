@@ -113,7 +113,7 @@ class TestFuncgen:
         xr.insert_plot()
         plt.close()
         if test:
-            assert np.array_equal(data, expected_data)
+            np.testing.assert_array_equal(data, expected_data)
 
     def test_udp_buffers_size(self):
         logger = self.get_logger()
@@ -280,7 +280,7 @@ class TestFuncgen:
             _, data, _ = receiver.read_raw_frames(format='16', split = True)
         else:
             _, data, _ = receiver.read_raw_frames()
-        assert not np.array_equal(data[0], data[1])
+        assert not np.testing.assert_array_equal(data[0], data[1])
 
     # @pytest.mark.funcgen_noise_gen
     # def test_lfsr_output(self, xr):
@@ -326,7 +326,7 @@ class TestFuncgen:
         success_proportion = np.sum(p_val_l >= p_val_threshold) / len(self.seeds)
         print(f"Number of successful pvals (greater than 0.01): {np.sum(p_val_l >= p_val_threshold)}")
         print(f"Percentage of successful runs: {success_proportion * 100}%")
-        assert success_proportion >= (p - 3 * math.sqrt(p * (1 - p) / len(self.seeds))) and success_proportion <= (p + 3 * math.sqrt(p * (1 - p) / len(self.seeds)))
+        assert (p - 3 * math.sqrt(p * (1 - p) / len(self.seeds))) <= success_proportion <= (p + 3 * math.sqrt(p * (1 - p) / len(self.seeds)))
 
     def noise_data_process(self, data, bits_per_sample):
         """
@@ -513,20 +513,19 @@ class TestFuncgen:
         logger = self.get_logger()
         data = self._set_capture_funcgen(
             "word_ctr_buffer_flags",
-            period=None, 
+            period=None,
             frames_per_burst=frames_per_burst, 
-            number_of_bursts=number_of_bursts, 
+            number_of_bursts=number_of_bursts,
             burst_period_in_frames=burst_period_in_frames
-        ).astype(self.FG_DTYPE)
-        receiver = self.board.get_data_receiver()
-        ts, data, _ = receiver.read_raw_frames(format='16', split=True, ncap=number_of_bursts)
-        print(ts)
+        )
+
         words_per_frame = self.SAMPLES_PER_FRAME // self.board.SAMPLES_PER_WORD
         words_per_burst = words_per_frame * frames_per_burst
         words_per_cap = words_per_burst * number_of_bursts
 
         #process data to get word count and frame count
         packed_samples = np.zeros(len(data) // self.board.SAMPLES_PER_WORD, dtype = np.uint32)
+
         print(f"{packed_samples.shape=}")
         if self.PLATFORM == "CRS":
             #For CRS, the 32 LSBs of each word contains is split into frame counter (word[31:11]) and word counter (word[10:0])            
@@ -537,15 +536,18 @@ class TestFuncgen:
             frame_counter_mask = 0x1FFFFF
             word_bits = 11
         else:
+            data = data.astype("u1")
             #For ICE, each sample is split into frame counter (sample[31:8]) and word counter (sample[7:0])
             for i in range(len(packed_samples)):
                 packed_samples[i] = sum(int(data[self.board.SAMPLES_PER_WORD * i + w]) << (self.board.ADC_BITS_PER_SAMPLE * (self.board.SAMPLES_PER_WORD - w - 1)) for w in range(self.board.SAMPLES_PER_WORD))
-            word_counter_mask = 0xFF #11 LSBs
-            frame_counter_mask = 0xFFFFFF
-            word_bits = 8    
-        #Process bits for word counter
-        frame_count = (packed_samples >> word_bits ) & frame_counter_mask
+            word_counter_mask = 0x1FF #9 LSBs
+            frame_counter_mask = 0x7FFFFF
+            word_bits = 9
+        # packed_samples = data.view(np.int32)
+
         #Process bits for frame counter
+        frame_count = np.bitwise_and((packed_samples >> word_bits), frame_counter_mask)
+        #Process bits for word counter
         word_count = np.bitwise_and(packed_samples, word_counter_mask)
 
         cn = (np.arange(words_per_cap) // (frames_per_burst * words_per_frame)) * burst_period_in_frames
