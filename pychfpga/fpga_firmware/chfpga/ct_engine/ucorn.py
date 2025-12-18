@@ -141,7 +141,7 @@ class UCorn(MMI):
 
         Parameters:
 
-            target (any): key used to lookup ``self.targets`` for the destination address of a packet.
+            target (dict or key): dict containing the target information, or key used to lookup ``self.targets`` for that information.
 
             dest_bin (int): Index of bin whose memory space will be used to store the packet header
 
@@ -243,17 +243,22 @@ class UCorn(MMI):
         self.set_bin_data(bin=dest_bin, data=header)
 
 
-    def set_playlist(self, playlist=((0,[1]),), verbose=0):
+    def set_playlist(self, playlist=((0,[1]),), sacrificial_bins = list(range(128)), verbose=0):
         """ Configure the playlist buffer to send the selected bins
 
         Parameters:
 
-            bins (list): List of ``(target_id, bin_list)`` tuples describing the bin numbers to send to each
+            bins (list): List of ``(target, bin_list)`` tuples describing the bin numbers to send to each
                 target, where:
 
-                - ``target_id`` (int): key describing the destination IP address. Used to index the ``self.targets`` dict.
+                - ``target`` (dick or key): Dict containing the information on the destination for
+                  the packet, or key allowing to lookup self.targets to get that information..
 
                 - ``bin_list`` (list): list of integers describing the bin numbers (0 - 8191) to be sent.
+
+            sacrificial_bins (list): list of bins that wil lbe used to store Ethernet headers and
+                not actual bin data. The bin used to store the header of the first target is in
+                sacrifcial_bin[0], the header of the next target is in sacrifcial_bin[1] etc.
 
         The playlist buffer is an array of 16-bit words describing which bins to send:
 
@@ -279,6 +284,14 @@ class UCorn(MMI):
         RFI etc.).
 
         """
+
+        # Compute the masks indicating which bins can be written with live data
+        # We set the write-enable bit to '1' on every bin except the sactificial bins (those used for storing ethernet headers)
+        self.sacrificial_bins = sacrificial_bins
+        write_mask = np.full(8192/8, 0xFF, dtype=np.uint8) # 1 bit per bin, 8 bits per byte x 1024 bytes = 8192 bins
+        for b in self.sacrificial_bins:
+            write_mask[b//8] &=  ~ (1 << (b % 8))
+        write_mask_buffer(0, write_mask)
 
         bins_total = sum(len(b) for t,b in playlist)
         self.logger.info(f'{self!r}: Total data rate: {1*(bins_total*16*8+64)*8*3200e6/16384/16/1e9} Gbps')
@@ -348,8 +361,22 @@ class UCorn(MMI):
 
         """
         self.RAM_SEL = 1  # select the playlist buffer
+        self.RAM_BANK = 0  # select the playlist buffer
         self.write_ram(addr, data)
 
+    def write_mask_buffer(self, addr, data):
+        """ Write data to the mask buffer
+
+        Parameters:
+
+            addr (int): byte address into the mask buffer
+
+            data (bytes): data to write
+
+        """
+        self.RAM_SEL = 1  # select the playlist buffer
+        self.RAM_BANK = 1  # select the playlist buffer
+        self.write_ram(addr, data)
 
     def set_data_width(self, width):
     #     """

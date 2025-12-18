@@ -26,22 +26,9 @@ class CT2Regs(MMI):
     ALIGN_MON_SOURCE = BitField(CONTROL, 1, 4, width=4, doc='Select the information shown on the ALIGN_WORD')
     ALIGN_MON_LANE = BitField(CONTROL, 1, 0, width=4, doc='Select the lane from which info is shown on ALIGN_WORD')
     ALIGN_SOF_WINDOW = BitField(CONTROL, 2, 0, width=8, doc='Maximum allowable clock delays between the start of lane 0 and the other lanes before a lane is tagged as invalid')
-    ALIGN_IGNORE_LANE = BitField(CONTROL, 4, 0, width=16, doc='A 1 indicates that a lane should not be waited for')
     LANE_MAP_BYTE0 = BitField(CONTROL, 5, 0, width=8,  doc='Remap the lanes before sending them to the other boards ')
     LANE_POSTMAP_BYTE0 = BitField(CONTROL, 7, 0, width=8,  doc='Remap the lanes after receiving them from the other boards ')
-    # CMAC_SYS_RESET      = BitField(CONTROL, 0, 2, doc='When 1, The CMAC is reset.')
-    # CORE_TX_RESET      = BitField(CONTROL, 0, 3, doc='When 1, The 100G Cor elogic is reset.')
-    # TEST_PACKET_ENABLE  = BitField(CONTROL, 0, 7, doc='When 1, the test packet generator is enabled')
-    # TEST_PACKET_WORDS  = BitField(CONTROL, 1, 0, width=8, doc='Number of 32-byte words in the UDP packets in addition to the 22 bytes payload header')
-    # TEST_PACKET_PERIOD  = BitField(CONTROL, 3, 0, width=16, doc='Time between packets in  322MHz clocks periods')
-    # CAPTURE_BYTE_NUMBER = BitField(CONTROL, 5, 0, width=16, doc='Index of byte to capture')
-    # STATUS0            = BitField(STATUS, 0, 0, width=8, doc='various status bits')
     ALIGN_MON_WORD           = BitField(STATUS, 2, 0, width=16, doc='ALIGN monitoring word, selected by ALIGN_MON_SOURCE and ALIGN_MON_LANE')
-    # OUT_FRAME_CTR           = BitField(STATUS, 2, 0, width=8, doc='Counts the number of framesgoing out to the CMAC.')
-    # PACKET_LENGTH           = BitField(STATUS, 4, 0, width=16, doc='length of incoming packets')
-    # CAPTURE_BYTE           = BitField(STATUS, 5, 0, width=8, doc='Captured byte')
-    # DATA_FIFO_OVERFLOW  = BitField(STATUS, 2+2, 0, width=8, doc='Indicates if the data FIFO has overflows on the last 8 GPU links. Bit 0 is for lane 0.')
-    # FRAME_FIFO_OVERFLOW = BitField(STATUS, 2+3, 0, width=8, doc='Indicates if the frame header FIFO has overflows on the last 8 GPU links. Bit 0 is for lane 0.')
 
     NUMBER_OF_CT2_INPUTS = 4
     NUMBER_OF_CT2_OUTPUTS = 4
@@ -66,18 +53,32 @@ class CT2Regs(MMI):
             lane_map_bytes[i//2] |= (lane & 0x0F) << (((i+1) % 2) * 4)
         self.write(self.get_addr('LANE_POSTMAP_BYTE0'), lane_map_bytes)
 
-        print(f'{self!r}: CT2 Lane pre-shuffle map is {premap} and post-shuffle map is {postmap}')
+        self.logger.debug(f'{self!r}: CT2 Lane pre-shuffle map is {premap} and post-shuffle map is {postmap}')
 
     def init(self):
         # Compute a lane map so input lane x goes to slot x
-        rx_slot = tx_slot = (self.fpga.slot-1) % 4
+        rx_slot = tx_slot = (self.fpga.slot - 1) % 4
+        sub_bp = (self.fpga.slot - 1) // 4
+        # Compute pre-shuffle lane map to ensure that bins go to the correct slots
         lane_premap = [self.fpga.mb.TX_TO_RX_LANE_MAP[(tx_slot, bp_tx_lane)][0] for bp_tx_lane in range(self.NUMBER_OF_CT2_INPUTS)]
-        lane_postmap = [self.fpga.mb.RX_TO_TX_LANE_MAP[(rx_slot, bp_rx_lane)][0] for bp_rx_lane in range(self.NUMBER_OF_CT2_OUTPUTS)]
+        # Compute post-shuffle lane map to ensure that channels are stacked together in the right order
+        lane_postmap = [self.fpga.mb.SLOT_TO_LANE_MAP[(ss, rx_slot)][1] for ss in range(self.NUMBER_OF_CT2_OUTPUTS)]
 
         self.set_lane_map(lane_premap, lane_postmap);
 
 class CT3Regs(MMI):
-    pass
+
+    ALIGN_MON_RESET   = BitField(CONTROL, 0, 7, doc='Resets the ALIGN monitoring statistics')
+    SLOT_GROUP        = BitField(CONTROL, 0, 6, doc='The slot group (i.e. sub-backplane) to which the board belongs. Is used by CT_LEVEL=3 to direct bins to the right destination ')
+    ZERO_DATA_ON_LANE_ERROR = BitField(CONTROL, 0, 5, doc='When 1, data is zeroed on invalid lanes')
+    ALIGN_MON_SOURCE  = BitField(CONTROL, 1, 4, width=4, doc='Select the information shown on the ALIGN_WORD')
+    ALIGN_MON_LANE    = BitField(CONTROL, 1, 0, width=4, doc='Select the lane from which info is shown on ALIGN_WORD')
+    RST_STATUS        = BitField(STATUS, 0, 0, doc='Reset line state')
+    ALIGN_MON_WORD    = BitField(STATUS, 2, 0, width=16, doc='ALIGN monitoring word, selected by ALIGN_MON_SOURCE and ALIGN_MON_LANE')
+
+    def init(self):
+        self.SLOT_GROUP =  (self.fpga.slot - 1) // 4
+        self.ZERO_DATA_ON_LANE_ERROR = 1
 
 class UCTEngine(MMIRouter):
     """
@@ -127,6 +128,9 @@ class UCTEngine(MMIRouter):
         if self.CT_LEVEL >=2:
             self.CT2.init()
 
+        if self.CT_LEVEL >=3:
+            self.CT3.init()
+
     def capture_bytes(self, N=64, fmt='hex'):
         """ Captures N bytes
         """
@@ -145,7 +149,7 @@ class UCTEngine(MMIRouter):
         """
         Enable link.
         """
-        self.logger.warn('{self!r}: set_enable()  is not implemented on UltraCT. Command is ignored. ')
+        self.logger.warn(f'{self!r}: set_enable()  is not implemented on UltraCT. Command is ignored. ')
 
     # def reset(self):
     #     """ Resets the UDP/MAC stack, the SGMII interface and the GTX """
@@ -180,7 +184,7 @@ class UCTEngine(MMIRouter):
 
     def set_frames_per_packet(self, frames):
         if frames != 1:
-            self.logger.warn(f'{self!r}: CT engine only supports packaging 16 frame per packet. {frames} frames are not supported')
+            self.logger.warn(f'{self!r}: CT engine only outputs 1 frame per packet. {frames} frames/packet are not supported.')
 
     def get_frames_per_packet(self):
         return 1

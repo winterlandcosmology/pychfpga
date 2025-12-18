@@ -103,17 +103,31 @@ class SCALER(MMI):
             self.BYPASS = 0
         else:
             self.BYPASS = 1
-        # self.BYPASS = 1
-        # self.SHIFT_LEFT = 10
         self.SHIFT_LEFT = 31
-        # self.USE_GAIN_TABLE = 1
         self.USE_OFFSET_BINARY = 1
-        # self.set_fixed_gain(1)
         self.set_gain_table(1)
         self.SATURATE_ON_MINUS_7 = 1
         self.STATS_CAPTURE = 1
         self.STATS_FRAME_COUNT = int(800e6 / 2048 * 30)
 
+
+    CAPTURE_DATA_TYPES = {
+        'out': 0, # same as main data output
+        'fft': 1, # MSBs of the raw FFT values\n"
+        'fft_gain': 2, # MSBs of post-gain FFT value with saturation\n"
+        'fft_4bit': 3, # 4+4 bit scaled values\n"
+        'fft_2x': 4, # Dual resolution FFT
+        'fft_4x': 5, # Quad resolution FFT
+    }
+
+    def set_capture_data_type(self, data_type):
+        if data_type in self.CAPTURE_DATA_TYPES:
+            self.CAP_DATA_TYPE = self.CAPTURE_DATA_TYPES[data_type]
+        elif data_type in self.CAPTURE_DATA_TYPES.values():
+            self.CAP_DATA_TYPE = data_type
+        else:
+            valid_values = [f'{v}:{k}' for k,v in self.CAPTURE_DATA_TYPES.items()]
+            raise RuntimeError(f"Invalid capture data type. Valid values are {', '.join(valid_values)}")
 
     def set_page(self, page):
         self.WRITE_COEFF_BANK_A = page & 0b1111

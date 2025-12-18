@@ -80,6 +80,9 @@ class CORR(MMIRouter):
 
     ROUTER_PORT_NUMBER_WIDTH = 4
 
+    REQUIRES_OFFSET_BINARY_ENCODING = True
+    BIT_WIDTH = 4
+
     def __init__(self, *, router, router_port, verbose=0):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
@@ -109,6 +112,13 @@ class CORR(MMIRouter):
         """ Displays the status of all correlators"""
         for corr in self.corr:
             corr.status()
+
+    def get_params(self):
+            return Namespace(
+                number_of_correlators=self.fpga.NUMBER_OF_CORRELATORS,  # hard coded in firmware
+                number_of_correlated_inputs=self.fpga.NUMBER_OF_INPUTS_TO_CORRELATE,  # hard coded in firmware
+                number_of_bins_per_frame=self.fpga.CROSSBAR.BIN_SEL[0].NUMBER_OF_SELECTED_WORDS  # depends on crossbar configuration
+                )
 
     def start_correlator(
             self,

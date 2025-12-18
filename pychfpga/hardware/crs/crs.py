@@ -1,4 +1,4 @@
-""" Defines the class to operate the ZCU111.
+""" Defines the class to operate the CRS.
 """
 # Standard Python packages
 import logging
@@ -90,7 +90,12 @@ class CRS(Motherboard):
      (2,0): (2,0),    (2, 1): (3, 1),   (2, 2): (1, 2),   (2, 3): (0, 2),
      (3,0): (3,0),    (3, 1): (2, 1),   (3, 2): (1, 1),   (3, 3): (0, 1)}
     RX_TO_TX_LANE_MAP = {rx:tx for tx,rx in TX_TO_RX_LANE_MAP.items()}
+    # (Tx_slot, Rx_slot): (tx_lane, rx_lane)
+    SLOT_TO_LANE_MAP = {(ss,ds):(sl,dl) for (ss,sl),(ds,dl) in TX_TO_RX_LANE_MAP.items()}
     # ---------------
+
+    REFCLK_BP = 1
+    REFCLK_MB_SMA = 2
 
     def __init__(self, hostname=None, serial=None, slot=None, subarray=None, **kwargs):
         super().__init__(
@@ -436,10 +441,10 @@ class CRS(Motherboard):
                     disp.update()
                     break
                 except OSError as e:
-                    self.logger.warn(f'{self!r}: Error Initializing CRS display on trial {trial}. Error is: {e!r}')
+                    # self.logger.warn(f'{self!r}: Error Initializing CRS display on trial {trial}. Error is: {e!r}')
                     await asyncio.sleep(0.01)
             else:
-                self.logger.warn(f'{self!r}: Failed Initializing CRS display')
+                self.logger.warn(f'{self!r}: Failed Initializing CRS display after {trial} trials')
                 self.display = None
 
 
