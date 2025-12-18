@@ -40,10 +40,10 @@ from pychfpga.hardware.interfaces import TCPipe_BSB_MMI, FPGAMmi
 
 from pychfpga.fpga_firmware import FPGAFirmware
 
-from .chFPGA_receiver import chFPGA_receiver
 from .f_engine.scaler import SCALER
 # Memory-mapped interface
 from .mmi import MMI, MMIRouter
+from .raw_frame_receiver import RawFrameReceiver
 
 # FPGA subsystems handlers
 from .system import spi
@@ -55,7 +55,7 @@ from .system import refclk
 
 # FPGA Channelizer (F-Engine)
 from .f_engine import chan
-from .f_engine import prober  # needed to access RawFrameReceiver
+from .f_engine import prober
 
 # FPGA Corner-turn Engine
 
@@ -3132,29 +3132,14 @@ class chFPGA(FPGAFirmware):
         else:
             raise RuntimeError("Stop data capture only implemented on prober and ucap currently")
 
-    def get_data_receiver(self, verbose=1, threaded=False):
-        self.logger.debug(f'{self!r}: Creating data receiver')
-        if self.recv:
-            return self.recv
-        if threaded:
-            # Old threaded data receiver
-            if self.CAPTURE_TYPE != "PROBER":
-                raise RuntimeError('The old threaded receiver is supported only by PROBER')
-            chFPGA_config = run_async(self.get_config_async(basic=True))  # get only the info needed to start the receiver
-            self.recv = chFPGA_receiver(chFPGA_config, verbose=verbose)
-            self.logger.debug('Started data receiver threads on %s:%i' % (self.recv.host_ip, self.recv.port_number))
-            run_async(self.set_local_data_port_number_async(self.recv.port_number))
-        elif self.CAPTURE_TYPE == "PROBER":
-            sock = self.get_data_socket()
-            self.recv = prober.RawFrameReceiver(sock)
-        elif self.CAPTURE_TYPE == "UCAP":
-            sock = self.get_data_socket()
-            self.recv = self.UCAP.get_data_receiver(sock)
-            self.logger.debug(f'{self!r}: UCAP data receiver created on socket {sock}, ({self._data_socket.getsockname()})')
+    def get_data_receiver(self, verbose=1, buffer_length=256):
+        if not self.recv:
+            self.logger.debug(f'{self!r}: Creating data receiver')
+            self.recv = RawFrameReceiver(self.get_data_socket(), buffer_length=buffer_length, platform_id=self.PLATFORM_ID)
         else:
-            raise RuntimeError("Unknown capture engine type")
-
+            self.logger.debug(f'{self!r}: Fetching existing data receiver')
         return self.recv
+
 
     def get_data_socket(self, port_number=None):
         """
