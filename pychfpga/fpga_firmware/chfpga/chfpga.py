@@ -5040,15 +5040,15 @@ class chFPGA(FPGAFirmware):
 
 
 
-    def get_correlator_params(self):
-        """ Returns the correlator geometry and configuration
+    # def get_correlator_params(self):
+    #     """ Returns the correlator geometry and configuration
 
-        Notes:
+    #     Notes:
 
-            - start_correlator() must have been called before for some software-configurable
-                parameters to be updated.
-        """
-        return self.CORR.get_params()
+    #         - start_correlator() must have been called before for some software-configurable
+    #             parameters to be updated.
+    #     """
+    #     return self.CORR.get_params()
 
     def start_correlator(
             self,

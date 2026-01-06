@@ -73,13 +73,6 @@ class UCORR(MMI):
         print(f' Firmware integration period: {self.INTEGRATION_PERIOD} frames')
         print(f' Overrun in one of the cores: {self.OVERRUN}')
 
-    def get_params(self):
-            return Namespace(
-                number_of_correlators=self.fpga.NUMBER_OF_CORRELATORS,  # hard coded in firmware
-                number_of_correlated_inputs=self.fpga.NUMBER_OF_INPUTS_TO_CORRELATE,  # hard coded in firmware
-                number_of_bins_per_frame=self.fpga.FRAME_LENGTH // 2  # CT engine always sends all bins in corr8
-                # fft_bypass = get_common_chan_attr('FFT','BYPASS')
-                )
 
     def get_config(self):
         """ Return a dict containing the essential information required to receive and assemble correlator packets.
