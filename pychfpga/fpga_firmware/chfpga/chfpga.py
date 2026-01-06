@@ -69,7 +69,7 @@ from .ct_engine import ucap
 
 # FPGA Correlator (X-Engine)
 from .x_engine import CORR, UCORR  # Correlators (if implemented in firmware)
-
+from ...common.udp_packet_receiver import UDPPacketReceiver
 
 # Default ADC delays
 ADC_DELAYS_MGK7MB_REV2_MGAC08_REV2 = {
@@ -3070,10 +3070,14 @@ class chFPGA(FPGAFirmware):
         else:
             raise RuntimeError("Stop data capture only implemented on prober and ucap currently")
 
-    def get_data_receiver(self, verbose=1, buffer_length=256, port_number=None):
+    def get_data_receiver(self, verbose=1, n_packets=None, port_number=None):
         if not self.recv:
+            pr_kwargs = {}
+            if n_packets is not None:
+                pr_kwargs["n_packets"] = n_packets
             self.logger.debug(f'{self!r}: Creating data receiver')
-            self.recv = RawFrameReceiver(self.get_data_socket(port_number=port_number), buffer_length=buffer_length, platform_id=self.PLATFORM_ID)
+            pr = UDPPacketReceiver(self.get_data_socket(port_number=port_number), **pr_kwargs)
+            self.recv = RawFrameReceiver(pr, platform_id=self.PLATFORM_ID, verbose=verbose)
         else:
             self.logger.debug(f'{self!r}: Fetching existing data receiver')
         return self.recv
@@ -3199,7 +3203,7 @@ class chFPGA(FPGAFirmware):
             channels=None,
             source='scaler',
             select=False,
-            data_type=0,
+            data_type=None,
             sync=1,
             verbose=1,
             burst_period_in_seconds=None,
@@ -3293,6 +3297,19 @@ class chFPGA(FPGAFirmware):
         # round the burst period to an integer multiple of burst_period_frame_rounding
         burst_period_in_frames = (int(burst_period_in_frames) // burst_period_frame_rounding) * burst_period_frame_rounding
 
+        if channels is None:
+            if self.PLATFORM_ID == self._PLATFORM_ID_CRS:
+                self.logger.info(f"The channels are not specified for data capture. "
+                                    f"Defaulting to [0, ..., 7] for CRS board.")
+                channels = list(range(8))
+            elif self.PLATFORM_ID == self._PLATFORM_ID_MGK7MB_REV2:
+                self.logger.info(f"The channels are not specified for data capture. "
+                                    f"Defaulting to [0, ..., 15] for ICE board Rev2.")
+                channels = list(range(16))
+            else:
+                raise NotImplementedError(f"The channels are not specified for data capture. "
+                                          f"Default channels are not implemented for {self.PLATFORM_ID=}")
+
         if verbose:
             self.logger.debug(
                 f'{self!r}: Configuring channelizer {channels} to capture '
@@ -3307,6 +3324,11 @@ class chFPGA(FPGAFirmware):
                     ch.SCALER.set_capture_data_type(data_type)
             else:
                 raise RuntimeError(f"'data_type' can be specified only for source='scaler'")
+        else:
+            if source == 'scaler':
+                self.logger.warning(f"data_type not specified for scaler capture. Defaulting to 0.")
+                for ch in self.chan:
+                    ch.SCALER.set_capture_data_type(0)
 
         # stop data from going into the PROBER and MASTER to minimize the risk
         # of malformed packets and unstable communications

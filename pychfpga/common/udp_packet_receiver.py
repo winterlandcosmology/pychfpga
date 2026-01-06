@@ -19,7 +19,7 @@ class UDPPacketReceiver:
 
         self.socket = socket
         self.n_packets = n_packets
-        self.max_packet_size = max_packet_size;
+        self.max_packet_size = max_packet_size
         self.verbose = verbose
 
         self.buf = np.zeros((n_packets, max_packet_size), dtype=np.uint8)
