@@ -87,12 +87,9 @@ class GPIO(MMI):
     USER_MUX_SOURCE1           = BitField(CONTROL, 49, 0, width=4, doc='Selects which signal is sent to the Motherboard FPGA LED1 and Backplane SMA output.')
     USER_MUX_SOURCE2           = BitField(CONTROL, 49, 4, width=4, doc='Selects which signal is sent to the Motherboard SMA-B and FPGA LED2 output.')
 
-    # USER_BIT0                  = BitField(CONTROL, 50, 7, doc='Control the USER_BIT0 signal that can be routed to any user outputs')  # *** are bit0 and bit1 inverted?
-    # USER_BIT1                  = BitField(CONTROL, 50, 6, doc='Control the USER_BIT1 signal that can be routed to any user outputs')
     USER_BITS                  = BitField(CONTROL, 50, 6, width=2, doc='Control the USER_BIT signals that can be routed to any user outputs')
-    IRIG_DELAY_RESET           = BitField(CONTROL, 50, 5, doc='Loads the IRIG signal delay value into the delay block')
-    IRIG_DELAY_RESET           = BitField(CONTROL, 50, 5, doc='Loads the IRIG signal delay value into the delay block')
-    IRIGB_DELAY                = BitField(CONTROL, 50, 0, width=5, doc='IRIG-B signal delay')
+    # IRIG_DELAY_RESET           = BitField(CONTROL, 50, 5, doc='Loads the IRIG signal delay value into the delay block')
+    # IRIGB_DELAY                = BitField(CONTROL, 50, 0, width=5, doc='IRIG-B signal delay')
 
     TIMESTAMP_VALID            = BitField(STATUS, 0, 7, doc='Timestamp data valid (i.e. can be read)')
     MMI_COOKIE                 = BitField(STATUS, 0, 0, width=7, doc='Firmware cookie (BSB-MMI access only), should be 0x42')
