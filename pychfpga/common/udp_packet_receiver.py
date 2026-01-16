@@ -22,8 +22,7 @@ class UDPPacketReceiver:
         self.max_packet_size = max_packet_size
         self.verbose = verbose
 
-
-        self.buf = np.zeros((self.n_packets, max_packet_size), dtype=np.uint8)
+        self.buf = np.zeros((self.n_packets, self.max_packet_size), dtype=np.uint8)
         self.pkt_len = np.zeros((self.n_packets,), dtype=np.uint32) # packet length. 0= unused slot.
         self.n_stored = 0  # number of packets currently stored in the buffer
 
@@ -59,17 +58,17 @@ class UDPPacketReceiver:
                 nbytes, addr = self.sock.recvfrom_into(self.buf[n])
                 self.pkt_len[n] = nbytes
                 if verbose >= 3:
-                    print(f"get_packets: got raw packet {n:03d} from {addr}, len={nbytes}: {self.buf[n,:26].tobytes().hex(':')}")
+                    print(f"receive_packets: got raw packet {n:03d} from {addr}, len={nbytes}: {self.buf[n,:26].tobytes().hex(':')}")
                 n += 1
             except socket.timeout:  # we have a timeout, so we probably have time to process data
                 if not n:
                     continue
                 if verbose >= 3:
-                    print(f'get_packets: timeout')
+                    print(f'receive_packets: timeout')
                 break
         # we get here if there is a timeout or if the buffer is full
         if verbose >= 2:
-            print(f'get_packets: Returning {n} packets')
+            print(f'receive_packets: Returning {n} packets')
         self.n_stored = n
         return n
 

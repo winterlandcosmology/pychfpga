@@ -44,7 +44,7 @@ from .chFPGA_receiver import chFPGA_receiver
 from .f_engine.scaler import SCALER
 # Memory-mapped interface
 from .mmi import MMI, MMIRouter
-from .raw_frame_receiver import RawFrameReceiver
+from ...common import RawFrameReceiver
 
 # FPGA subsystems handlers
 from .system import spi
@@ -3070,14 +3070,27 @@ class chFPGA(FPGAFirmware):
         else:
             raise RuntimeError("Stop data capture only implemented on prober and ucap currently")
 
-    def get_data_receiver(self, verbose=1, n_packets=None, port_number=None):
+    def get_data_receiver(self, pr: UDPPacketReceiver = None, pr_buf_size=None, port_number=None, **kwargs):
+        """
+        Returns a RawFrameReceiver object; kwargs are passed
+        """
         if not self.recv:
-            pr_kwargs = {}
-            if n_packets is not None:
-                pr_kwargs["n_packets"] = n_packets
-            self.logger.debug(f'{self!r}: Creating data receiver')
-            pr = UDPPacketReceiver(self.get_data_socket(port_number=port_number), **pr_kwargs)
-            self.recv = RawFrameReceiver(pr, platform_id=self.PLATFORM_ID, verbose=verbose)
+            if not isinstance(pr, UDPPacketReceiver):
+                pr_kwargs = {}
+                if pr_buf_size is not None:
+                    pr_kwargs["buf_size"] = pr_buf_size
+                pr_kwargs["verbose"] = kwargs.get("verbose", 1)
+
+                self.logger.debug(f'{self!r}: Creating data receiver')
+                pr = UDPPacketReceiver(self.get_data_socket(port_number=port_number), **pr_kwargs)
+
+            self.recv = RawFrameReceiver(
+                pr,
+                bytes_per_sample=self.ADC_BYTES_PER_SAMPLE,
+                samples_per_frame=self.ADC_SAMPLES_PER_FRAME,
+                platform_id=self.PLATFORM_ID,
+                **kwargs,
+            )
         else:
             self.logger.debug(f'{self!r}: Fetching existing data receiver')
         return self.recv

@@ -1,4 +1,4 @@
-from typing import Iterator, Optional, Sequence, Tuple
+from typing import Iterator, Optional, Sequence, Tuple, List
 
 from .udp_packet_receiver import UDPPacketReceiver
 
@@ -16,22 +16,24 @@ class RawDataProcessor(object):
 
     PACKET_COOKIE = 0xA0
     PACKET_COOKIE_MASK = 0xFE
-    def __init__(self, packet_receiver: UDPPacketReceiver, bytes_per_sample: int, samples_per_frame: int,
-                 format: str = '8', stream_ids: Optional[Sequence[int]] = None, split_channels: bool = True,
-                 ring_buffer_size: int = 3, platform_id: Optional[str] = None, target_mode: Optional[int] = None,
+    def __init__(self, packet_receiver: UDPPacketReceiver, platform_id: str, bytes_per_sample: int, samples_per_frame: int,
+                 format: str = '8', stream_ids: Optional[Sequence[int]] = None, split_frames: bool = True,
+                 ring_buffer_size: int = 3, target_mode: Optional[int] = None,
                  verbose: int = 0) -> None:
         """
         Initialize the processor and precompute views into the UDP receiver buffer.
 
         Parameters:
             packet_receiver (UDPPacketReceiver): UDPPacketReceiver instance providing the packet ring buffer.
+            platform_id (str): Platform identifier used to select constants and layout.
             bytes_per_sample (int): Bytes per ADC sample.
             samples_per_frame (int): ADC samples per frame.
             format (str): Output format string (e.g., "8", "14", "16", "32", "64", with optional "+").
             stream_ids (Optional[Sequence[int]]): Stream IDs to accept; defaults are platform-specific.
-            split_channels (bool): If True, format output into per-channel arrays.
+            split_frames (bool): If True, formats output so the last data dimension is split into two:
+                                 (..., FRAMES_PER_BURST, NBYTES_PER_BURST // FRAMES_PER_BURST)
             ring_buffer_size (int): Number of timestamp slots held in the internal ring buffer.
-            platform_id (Optional[str]): Platform identifier used to select constants and layout.
+            target_mode (Optional[int]): Target mode selector for CRS boards (0-3); not used on ICE.
             verbose (int): Verbosity level (0 quiet, 1 basic, 2 detailed, 3 debug).
         """
         self.pr = packet_receiver
@@ -126,7 +128,7 @@ class RawDataProcessor(object):
         self.six_map[self.stream_ids] = np.arange(self.NCHAN)
 
         self.TS_EMPTY = np.uint64(0xFFFFFFFFFFFFFFFF)
-        self.ts_list = np.full(self.TS_SLOTS, self.TS_EMPTY, dtype=np.uint64)
+        self.ts_array = np.full(self.TS_SLOTS, self.TS_EMPTY, dtype=np.uint64)
 
         self.raw_data = np.zeros((self.TS_SLOTS, self.NCHAN, self.FRAMES_PER_BURST * self.BYTES_PER_FRAME),
                                  dtype=np.int8)
@@ -134,7 +136,7 @@ class RawDataProcessor(object):
         self.raw_data_count = np.zeros((self.TS_SLOTS, self.NCHAN), dtype=np.int64)
         self.raw_data_complete = np.zeros((self.TS_SLOTS, self.NCHAN), dtype=np.uint8)
 
-        self.configure_output(format=format, split_channels=split_channels)
+        self.configure_output(format=format, split_frames=split_frames)
 
         # Variables with ybuf_ prefix are dedicated to temporarily hold the yielded data. The generators will then
         # yield a read-only view of these buffers.
@@ -195,7 +197,7 @@ class RawDataProcessor(object):
         if verbose >= 2:
             print(f"get_data_iter: found {bix.size} packets matching the cookie and packet size")
 
-        valid_ts = self.ts_list[self.ts_list != self.TS_EMPTY]
+        valid_ts = self.ts_array[self.ts_array != self.TS_EMPTY]
         min_ts = valid_ts.min() if valid_ts.size else np.uint64(0)
 
         # mode filter
@@ -254,11 +256,11 @@ class RawDataProcessor(object):
         for ts, s, count in zip(ts_unique, starts, counts):
             tix = bix[s:s + count]
         # for ts in np.unique(self.pkt_ts[bix]):
-            if ts not in self.ts_list: # if timestamp is not in the list, add it
+            if ts not in self.ts_array: # if timestamp is not in the list, add it
                 next_slot = (self._write_slot + 1) % self.TS_SLOTS
 
                 if next_slot == self._read_slot:
-                    if self.ts_list[next_slot] != self.TS_EMPTY:
+                    if self.ts_array[next_slot] != self.TS_EMPTY:
                         if verbose >= 3:
                             print(f"get_data_iter: force yielding slot {next_slot} to free the buffer")
                         # Yield incomplete data to free space
@@ -271,10 +273,10 @@ class RawDataProcessor(object):
                         self._read_slot = (self._read_slot + 1) % self.TS_SLOTS
 
                 # invariant check
-                if self.ts_list[next_slot] != self.TS_EMPTY:
+                if self.ts_array[next_slot] != self.TS_EMPTY:
                     raise RuntimeError(
                         "Ring invariant broken: next write slot is occupied. "
-                        "This should never happen; investigate pointer/ts_list invariants."
+                        "This should never happen; investigate pointer/ts_array invariants."
                     )
 
                 if self.raw_data_complete[next_slot].any() or self.raw_data_count[next_slot].any():
@@ -283,11 +285,11 @@ class RawDataProcessor(object):
 
                 self._write_slot = next_slot
                 dest_slot = next_slot
-                self.ts_list[dest_slot] = ts
+                self.ts_array[dest_slot] = ts
 
             else:
                 # timestamp already exist, add new data to it.
-                dest_slot_arr = np.flatnonzero(self.ts_list == ts)
+                dest_slot_arr = np.flatnonzero(self.ts_array == ts)
 
                 if dest_slot_arr.size != 1:
                     raise RuntimeError(f"Timestamp {int(ts)} maps to {dest_slot_arr.size} slots (expected 1).")
@@ -320,7 +322,7 @@ class RawDataProcessor(object):
                     if verbose >= 3:
                         print(f"get_data_iter: Reached the current write_slot. Stopping.")
                     break
-                elif self.ts_list[self._read_slot] == self.TS_EMPTY:
+                elif self.ts_array[self._read_slot] == self.TS_EMPTY:
                     if verbose >= 3:
                         print(f"get_data_iter: Current read_slot {self._read_slot} is empty, advancing index.")
                     self._read_slot = (self._read_slot + 1) % self.TS_SLOTS
@@ -345,7 +347,7 @@ class RawDataProcessor(object):
         it can be reused.
         """
         verbose = verbose or self.verbose
-        ts = self.ts_list[self._read_slot]
+        ts = self.ts_array[self._read_slot]
         data_count = self.raw_data_count[self._read_slot]
 
         raw_data_view = self.raw_data[self._read_slot].view()
@@ -359,19 +361,22 @@ class RawDataProcessor(object):
         self._read_slot = (self._read_slot + 1) % self.TS_SLOTS
 
         # mark slot as empty for future allocations
-        self.ts_list[old_read_slot] = self.TS_EMPTY
+        self.ts_array[old_read_slot] = self.TS_EMPTY
         self.raw_data_count[old_read_slot, :].fill(0)
         self.raw_data_complete[old_read_slot, :].fill(0)
 
         yield ts, ybuf_data_view, data_count
 
 
-    def _allocate_ybuf_data(self) -> np.ndarray:
+    def _allocate_ybuf_data(self, ncap: int = 1) -> np.ndarray:
         """
         Allocate the reusable formatted output buffer for the current format.
 
         The output shape and dtype are derived from raw_data and the format
         specifier, minimizing allocations during streaming.
+
+        Parameters:
+            ncap (int): if ncap > 1, another axis is added in front to accommodate multiple data captures
         """
         # Discard the first dimension which is ring buffer slot index
         fmt_data_shape = list(self.raw_data.shape[1:])
@@ -391,11 +396,13 @@ class RawDataProcessor(object):
             else:
                 fmt_dtype = np.complex64
 
+        if ncap > 1:
+            fmt_data_shape.insert(0, ncap)
 
         return np.empty(shape=fmt_data_shape, dtype=fmt_dtype)
 
 
-    def configure_output(self, format: Optional[str] = None, split_channels: Optional[bool] = None) -> None:
+    def configure_output(self, format: Optional[str] = None, split_frames: Optional[bool] = None) -> None:
         """
         Update output formatting options.
 
@@ -405,15 +412,15 @@ class RawDataProcessor(object):
 
         Parameters:
             format (Optional[str]): Format string to set; None keeps current.
-            split_channels (Optional[bool]): Whether to split channels; None keeps current.
+            split_frames (Optional[bool]): Whether to split frames in the output; None keeps current.
         """
         need_realloc = False
         if format is not None and format != getattr(self, "format", None):
             self.format = format
             need_realloc = True
 
-        if split_channels is not None:
-            self.split_channels = split_channels
+        if split_frames is not None:
+            self.split_frames = split_frames
 
         if need_realloc or not hasattr(self, "ybuf_data"):
             self.ybuf_data = self._allocate_ybuf_data()
@@ -425,7 +432,7 @@ class RawDataProcessor(object):
 
         The method reinterprets the raw byte stream according to self.format,
         handles complex interleaving for "+" formats, and optionally reshapes
-        into per-channel views when split_channels is enabled.
+        into per-channel views when split_frames is enabled.
 
         Parameters:
             data (np.ndarray): Raw byte view from a ring buffer slot.
@@ -456,13 +463,10 @@ class RawDataProcessor(object):
             out[...] = data[:]
 
         out_view = out.view()
-        if self.split_channels:
+        if self.split_frames:
             # Change shape of the view by assigning the shape directly. If reshaping requires copying data, then
             # numpy will throw an error. That means the algorithm has failed and should be fixed.
-            if self.FRAMES_PER_BURST > 1:
-                out_view.shape = (self.NCHAN, self.FRAMES_PER_BURST, out.shape[-1] // self.FRAMES_PER_BURST)
-            else:
-                out_view.shape = (self.NCHAN, out.shape[-1])
+            out_view.shape = (self.NCHAN, self.FRAMES_PER_BURST, out.shape[-1] // self.FRAMES_PER_BURST)
 
         # TODO: 32+32d should be explained and reworked under the current implementation
         # if self.format == "32+32d":
@@ -472,3 +476,22 @@ class RawDataProcessor(object):
 
         out_view.setflags(write=False)
         return out_view
+
+    def flush(self, flush_timeout) -> None:
+        """Flush UDP packets and reset the internal ring buffer state.
+
+        This clears any partially received data so the next read starts from a
+        clean timestamp slot.
+
+        Parameters:
+            flush_timeout (Optional[float]): Timeout used while flushing the UDP socket.
+        """
+        self.pr.flush(flush_timeout)
+        if self.verbose >=2:
+            print('Flushing RawDataProcessor ring buffer')
+        self.ts_array.fill(self.TS_EMPTY)
+        self.raw_data.fill(0)
+        self.raw_data_count.fill(0)
+        self.raw_data_complete.fill(0)
+        self._read_slot = 0
+        self._write_slot = 0
