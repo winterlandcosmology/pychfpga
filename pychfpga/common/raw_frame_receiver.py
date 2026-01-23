@@ -93,6 +93,10 @@ class RawFrameReceiver(RawDataProcessor):
 
         Returns:
             Tuple[np.ndarray, np.ndarray, np.ndarray]: Timestamps, raw frame data, and per-channel counts.
+                                                       Return shapes:
+                                                       ts: (ncap)
+                                                       data: (ncap, nchannels, nframes_per_cap, nsamples_per_frame)
+                                                       data_count: (ncap, nchannels)
         """
 
         # Pre-Allocate memory to store processed data

@@ -222,6 +222,10 @@ class RawDataProcessor(object):
 
         if verbose >= 2:
             print(f"get_data_iter: {bix.size} left after filtering valid frame and subframe indices")
+
+        # Updating bix_mask after filtering bix
+        bix_mask.fill(False)
+        bix_mask[bix] = True
         #
         # if verbose >= 3:
         #     for bi in bix:
@@ -355,17 +359,17 @@ class RawDataProcessor(object):
         ybuf_data_view = self._format_data_array(raw_data_view)
 
         if verbose >= 2:
-            print(f'Yielding {self.raw_data_count[self._read_slot, :]} packets')
+            print(f'Yielding {self.raw_data_count[self._read_slot]} packets')
 
         old_read_slot = self._read_slot
         self._read_slot = (self._read_slot + 1) % self.TS_SLOTS
+
+        yield ts, ybuf_data_view, data_count
 
         # mark slot as empty for future allocations
         self.ts_array[old_read_slot] = self.TS_EMPTY
         self.raw_data_count[old_read_slot, :].fill(0)
         self.raw_data_complete[old_read_slot, :].fill(0)
-
-        yield ts, ybuf_data_view, data_count
 
 
     def _allocate_ybuf_data(self, ncap: int = 1) -> np.ndarray:
@@ -477,7 +481,7 @@ class RawDataProcessor(object):
         out_view.setflags(write=False)
         return out_view
 
-    def flush(self, flush_timeout) -> None:
+    def flush(self, flush_timeout: Optional[float] = None) -> None:
         """Flush UDP packets and reset the internal ring buffer state.
 
         This clears any partially received data so the next read starts from a
@@ -486,7 +490,10 @@ class RawDataProcessor(object):
         Parameters:
             flush_timeout (Optional[float]): Timeout used while flushing the UDP socket.
         """
-        self.pr.flush(flush_timeout)
+        flush_kwargs = {}
+        if flush_timeout is not None:
+            flush_kwargs["timeout"] = flush_timeout
+        self.pr.flush(**flush_kwargs)
         if self.verbose >=2:
             print('Flushing RawDataProcessor ring buffer')
         self.ts_array.fill(self.TS_EMPTY)

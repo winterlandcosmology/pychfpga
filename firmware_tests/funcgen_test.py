@@ -176,35 +176,39 @@ class TestFuncgen:
         self.board.start_data_capture(period=1)
         receiver = self.board.get_data_receiver()
         logger.debug("Reading raw frames")
-        _, _, count = receiver.read_raw_frames()
-        logger.info(f"Expected {len(count)} packages, received {len([p for p in count if p])}.")
-        assert all(count), "Missing packages from ICE board. Check connection and system configuration."
+        ts, data, count = receiver.read_raw_frames(1)
+        logger.info(f"Expected {len(count[0])} packages, received {np.sum(count[0])}.")
+        assert np.all(count[0]), (f"Missing packages from ICE board. Received {count[0]} packets (per channel). "
+                               f"Check connection and system configuration.")
 
-    def _set_capture_funcgen(self, source: str, period: float = 1, frames_per_burst: int = 2, number_of_bursts: int = 1, burst_period_in_frames=None, flatten = True, **func_kwargs):
+    def _set_capture_funcgen(self, source: str, period: float = 1, frames_per_burst: int = 2, number_of_bursts: int = 1, burst_period_in_frames=None, flatten_frames = True, **func_kwargs):
         """
         Set funcgen to specified data output and capture outcoming data within specified period.
         """
         logger = self.get_logger()
         logger.debug("Starting data capture from FUNCGEN")
-        self.board.start_data_capture(period=period, source='adc', frames_per_burst = frames_per_burst, number_of_bursts = number_of_bursts, burst_period_in_frames=burst_period_in_frames)
+        self.board.start_data_capture(period=period, source='funcgen', frames_per_burst = frames_per_burst, number_of_bursts = number_of_bursts, burst_period_in_frames=burst_period_in_frames)
         logger.debug(f"Setting data source to {source.upper()}")
         self.board.set_channelizer(data_source=source, fft_bypass=1, scaler_bypass=1, **func_kwargs)
         logger.debug("Initializing data receiver")
-        receiver = self.board.get_data_receiver()
-        if self.PLATFORM == "CRS":
-            #ucap
-            _, data, _ = receiver.read_raw_frames(format='16', split=True, ncap=number_of_bursts)
-        else:
-            #prober
-            number_of_frames = frames_per_burst * number_of_bursts
-            _, data, _ = receiver.read_raw_frames(number_of_frames=number_of_frames)
-        data = data[0].flatten() >> self.FG_LSHIFT if flatten else data[0] >> self.FG_LSHIFT
+        fmt = "8" if self.PLATFORM == "ICE" else "16"
+        receiver = self.board.get_data_receiver(format=fmt, split=True, verbose=2)
+
+
+        #Returns data in shape (ncap, nchannels, nframes_per_cap, nsamples)
+        _, data, _ = receiver.read_raw_frames(ncap=number_of_bursts)
+        logger.info(f"Received {len(data)} packets from FUNCGEN")
+        if flatten_frames:
+            # flattens nframes_per burst and nsamples_per_frame so the last dimension now unites all the samples for
+            # the burst
+            data = data.reshape(*data.shape[:-2], -1)
+        data = data >> self.FG_LSHIFT
         return data
 
     @pytest.mark.funcgen_patterns
     def test_funcgen_ramp(self, xr):
         expected_data = (np.arange(self.SAMPLES_PER_FRAME) - self.Nvalues / 2) % self.Nvalues - self.Nvalues / 2
-        data = self._set_capture_funcgen('ramp', flatten=False)[0] #first frame
+        data = self._set_capture_funcgen('ramp', flatten_frames=True)[0, 0] # First burst, first channel
         self.plot_and_test(xr, 
             data, 
             expected_data, 
@@ -215,7 +219,7 @@ class TestFuncgen:
     def test_funcgen_sin(self, xr):
         sin_freq = 1
         expected_data = (np.sin(np.arange(self.SAMPLES_PER_FRAME) * 2 * np.pi / self.SAMPLES_PER_FRAME * sin_freq) * 127).astype(self.FG_DTYPE_SIGNED)
-        data = self._set_capture_funcgen('sin', freq=sin_freq, ampl=127, flatten=False)[0] #first frame
+        data = self._set_capture_funcgen('sin', freq=sin_freq, ampl=127, flatten_frames=True)[0, 0] # First burst, first channel
         self.plot_and_test(xr, 
             data, 
             expected_data, 
@@ -225,7 +229,7 @@ class TestFuncgen:
     @pytest.mark.funcgen_patterns
     def test_funcgen_arb(self, xr):
         expected_data = np.ones(self.SAMPLES_PER_FRAME)
-        data = self._set_capture_funcgen('arb', data=expected_data, flatten=False)[0] #first frame
+        data = self._set_capture_funcgen('arb', data=expected_data, flatten_frames=True)[0, 0] # First burst, first channel
         logger = self.get_logger()
         self.plot_and_test(xr, 
             data, 
@@ -237,7 +241,7 @@ class TestFuncgen:
     def test_funcgen_const(self, xr):
         a = 13
         expected_data = np.full(self.SAMPLES_PER_FRAME, a, self.FG_DTYPE).astype(self.FG_DTYPE_SIGNED)
-        data = self._set_capture_funcgen('a', a=a, flatten=False)[0] #first frame
+        data = self._set_capture_funcgen('a', a=a, flatten_frames=True)[0, 0] # First burst, first channel
         self.plot_and_test(xr, 
             data, 
             expected_data, 
@@ -249,7 +253,7 @@ class TestFuncgen:
         a = 0 
         b = 42
         expected_data = np.tile(np.array((a, b), self.FG_DTYPE), self.SAMPLES_PER_FRAME // 2).astype(self.FG_DTYPE_SIGNED)
-        data = self._set_capture_funcgen('ab', a=a, b=b, flatten=False)[0] #first frame
+        data = self._set_capture_funcgen('ab', a=a, b=b, flatten_frames=True)[0, 0] # First burst, first channel
         self.plot_and_test(xr, 
             data, 
             expected_data, 
@@ -259,7 +263,7 @@ class TestFuncgen:
     @pytest.mark.funcgen_patterns
     def test_funcgen_real_ramp(self, xr):
         expected_data = np.ravel([(i,0) for i in range(self.SAMPLES_PER_FRAME//2)]).astype(self.FG_DTYPE_SIGNED)
-        data = self._set_capture_funcgen('real_ramp', flatten=False)[0] #first frame
+        data = self._set_capture_funcgen('real_ramp', flatten_frames=True)[0, 0] # First burst, first channel
         self.plot_and_test(xr, 
             data, 
             expected_data, 

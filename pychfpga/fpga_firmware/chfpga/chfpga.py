@@ -3080,6 +3080,7 @@ class chFPGA(FPGAFirmware):
                 if pr_buf_size is not None:
                     pr_kwargs["buf_size"] = pr_buf_size
                 pr_kwargs["verbose"] = kwargs.get("verbose", 1)
+                pr_kwargs["report_pkt_len_me"] = kwargs.pop("report_pkt_len_me", 0)
 
                 self.logger.debug(f'{self!r}: Creating data receiver')
                 pr = UDPPacketReceiver(self.get_data_socket(port_number=port_number), **pr_kwargs)

@@ -15,12 +15,13 @@ class UDPPacketReceiver:
             max_packet_size (int): Maximum expected UDP payload length
     """
 
-    def __init__(self, sock, buf_size=2048, max_packet_size=9000, verbose=1):
+    def __init__(self, sock, buf_size=2048, max_packet_size=9000, verbose=1, report_pkt_len_me: int = 0):
 
         self.sock = sock
         self.n_packets = buf_size
         self.max_packet_size = max_packet_size
         self.verbose = verbose
+        self.report_pkt_len_me = report_pkt_len_me
 
         self.buf = np.zeros((self.n_packets, self.max_packet_size), dtype=np.uint8)
         self.pkt_len = np.zeros((self.n_packets,), dtype=np.uint32) # packet length. 0= unused slot.
@@ -57,7 +58,7 @@ class UDPPacketReceiver:
             try:
                 nbytes, addr = self.sock.recvfrom_into(self.buf[n])
                 self.pkt_len[n] = nbytes
-                if verbose >= 3:
+                if verbose >= 3 and self.pkt_len[n] > self.report_pkt_len_me:
                     print(f"receive_packets: got raw packet {n:03d} from {addr}, len={nbytes}: {self.buf[n,:26].tobytes().hex(':')}")
                 n += 1
             except socket.timeout:  # we have a timeout, so we probably have time to process data

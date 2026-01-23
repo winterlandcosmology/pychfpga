@@ -121,7 +121,7 @@ errors-only = true
         # test-specific packages
         "pyserial", # (tested with 0.0.97 on Ubuntu) for memtest
         "pyftdi", # (tested with 0.53.3 on Ubuntu) tested with for PLL programming. Newer versions have another interface
-
+        "pytest-asyncio", # Needed for MTU test in firmware tests
         ]
 
 [project.scripts]
