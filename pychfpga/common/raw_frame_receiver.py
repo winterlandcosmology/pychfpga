@@ -40,7 +40,7 @@ class RawFrameReceiver(RawDataProcessor):
         """
 
         Parameters:
-            ncap (int): Number of frames to capture.
+            ncap (int): Number of data bursts to capture.
             flush (bool): If True, flush UDP buffers and internal ring state before capture.
             flush_timeout (Optional[int]): Timeout used while flushing the UDP socket.
             data_timeout (Optional[int]): Socket timeout while waiting for packets.
@@ -83,12 +83,13 @@ class RawFrameReceiver(RawDataProcessor):
                         print(f"read_raw_frames_iter:  {n_yielded=} >= {ncap=}. Breaking the loop.")
                     return
 
-    def read_raw_frames(self, ncap: int = 1, **kwargs: Any) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def read_raw_frames(self, ncap: int = 1, split_frames: bool = False, **kwargs: Any) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Read a fixed number of raw frames into preallocated arrays.
 
         Parameters:
             ncap (int): Number of frames to capture.
+            split_frames (bool): Split the data into data frames defined in firmware (tied to specified data format)
             **kwargs (Any): Arguments forwarded to read_raw_frames_iter (e.g., flush, auto_receive, verbose, etc.)
 
         Returns:
@@ -98,15 +99,19 @@ class RawFrameReceiver(RawDataProcessor):
                                                        data: (ncap, nchannels, nframes_per_cap, nsamples_per_frame)
                                                        data_count: (ncap, nchannels)
         """
-
         # Pre-Allocate memory to store processed data
         data = self._allocate_ybuf_data(ncap=ncap)
         data_view = data.view()
-        if self.split_frames:
-            data_view.shape = (ncap, self.NCHAN, self.FRAMES_PER_BURST, data_view.shape[-1] // self.FRAMES_PER_BURST)
-        ts = np.empty(shape=(ncap,), dtype=self.ts_array.dtype)
-        data_count = np.empty((ncap, self.NCHAN), dtype=self.raw_data_count.dtype)
+        # if self.split_frames:
+        #     data_view.shape = (self.NCHAN, ncap * self.PKT_FRAMES_PER_BURST, data_view.shape[-1] // self.PKT_FRAMES_PER_BURST)
+        ts = np.empty((self.NCHAN, ncap * self.PKT_FRAMES_PER_BURST), dtype=self.ts_array.dtype)
+        # data_count shows "number of received packets per channel per burst", it doesn't really make sense for separate frames
+        data_count = np.empty(shape=(self.NCHAN, ncap), dtype=self.raw_data_count.dtype)
 
         for i, (ts_, data_, data_count_) in enumerate(self.read_raw_frames_iter(ncap=ncap, **kwargs)):
-            ts[i], data_view[i], data_count[i] = ts_, data_, data_count_
+            lo, hi = i * self.PKT_FRAMES_PER_BURST, (i + 1) * self.PKT_FRAMES_PER_BURST
+            ts[:, lo:hi], data_view[:, lo:hi, ...], data_count[:, i] = ts_, data_, data_count_
+        if not split_frames:
+            # By default yielded data has frames split
+            data_view.shape = (*data_view.shape[:-2], data_view.shape[-2] * data_view.shape[-1])
         return ts, data_view, data_count

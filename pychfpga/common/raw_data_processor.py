@@ -16,12 +16,19 @@ class RawDataProcessor(object):
 
     PACKET_COOKIE = 0xA0
     PACKET_COOKIE_MASK = 0xFE
+    ALLOWED_FORMATS = ["8", "14", "16", "32", "64", "32+32", "64+64"]
     def __init__(self, packet_receiver: UDPPacketReceiver, platform_id: str, bytes_per_sample: int, samples_per_frame: int,
-                 format: str = '8', stream_ids: Optional[Sequence[int]] = None, split_frames: bool = True,
+                 format: str = '8', stream_ids: Optional[Sequence[int]] = None,
                  ring_buffer_size: int = 3, target_mode: Optional[int] = None,
                  verbose: int = 0) -> None:
         """
         Initialize the processor and precompute views into the UDP receiver buffer.
+
+        The yielded data always have dimensions (NCHAN, NCAP*NFRAMES, NSAMPLES). NFRAMES here mean firmware frames,
+        not packet frames. Packet frames are 2048 bytes long by default, but some firmware capture modes need multiple
+        packets to send a single data frame, say, a full resolution scaler capture. Therefore, the NFRAMES depends on
+        the specified format. If you need continious data, for example, multiple FFT frames in a row with dimension
+        (NCHAN, NCAP*NFRAMES, NSAMPLES) – reshape the data, i.e. out_array.reshape((out_array.shape[0], -1)).
 
         Parameters:
             packet_receiver (UDPPacketReceiver): UDPPacketReceiver instance providing the packet ring buffer.
@@ -30,8 +37,6 @@ class RawDataProcessor(object):
             samples_per_frame (int): ADC samples per frame.
             format (str): Output format string (e.g., "8", "14", "16", "32", "64", with optional "+").
             stream_ids (Optional[Sequence[int]]): Stream IDs to accept; defaults are platform-specific.
-            split_frames (bool): If True, formats output so the last data dimension is split into two:
-                                 (..., FRAMES_PER_BURST, NBYTES_PER_BURST // FRAMES_PER_BURST)
             ring_buffer_size (int): Number of timestamp slots held in the internal ring buffer.
             target_mode (Optional[int]): Target mode selector for CRS boards (0-3); not used on ICE.
             verbose (int): Verbosity level (0 quiet, 1 basic, 2 detailed, 3 debug).
@@ -45,7 +50,7 @@ class RawDataProcessor(object):
         if stream_ids and not (isinstance(stream_ids, list) or isinstance(stream_ids, np.ndarray)):
             raise TypeError('stream_ids must be a list or numpy array')
 
-        # TODO: double check all the constants and shapes for CRS board
+        # TODO: double check all the constants and shapes for CRS board. Should I inherit PKT_FRAMES_PER_BURST? Frames and subframes may not make sense anymore
 
         self.PLATFORM_ID = platform_id
         self.BYTES_PER_SAMPLE = bytes_per_sample
@@ -53,7 +58,7 @@ class RawDataProcessor(object):
         if platform_id == self._chfpga._PLATFORM_ID_CRS:
             self.stream_ids = stream_ids or np.arange(8)
             self.NUMBER_OF_SUBFRAMES = 4
-            self.FRAMES_PER_BURST = 2
+            self.PKT_FRAMES_PER_BURST = 2
             if target_mode:
                 raise ValueError(f"target_mode parameter is required for CRS boards (PLATFORM_ID: {self.PLATFORM_ID }). Please spesify the mode in range 0-3.")
             if 0 <= target_mode < 4:
@@ -63,7 +68,7 @@ class RawDataProcessor(object):
         elif platform_id == self._chfpga._PLATFORM_ID_MGK7MB_REV2:
             self.stream_ids = stream_ids or np.arange(16)
             self.NUMBER_OF_SUBFRAMES = 1
-            self.FRAMES_PER_BURST = 1
+            self.PKT_FRAMES_PER_BURST = 1
             if target_mode:
                 raise ValueError(f"target_mode parameter is not applicable to the ICE board (PLATFORM_ID: {self.PLATFORM_ID })")
             self.TARGET_MODE = 0
@@ -130,13 +135,13 @@ class RawDataProcessor(object):
         self.TS_EMPTY = np.uint64(0xFFFFFFFFFFFFFFFF)
         self.ts_array = np.full(self.TS_SLOTS, self.TS_EMPTY, dtype=np.uint64)
 
-        self.raw_data = np.zeros((self.TS_SLOTS, self.NCHAN, self.FRAMES_PER_BURST * self.BYTES_PER_FRAME),
+        self.raw_data = np.zeros((self.TS_SLOTS, self.NCHAN, self.PKT_FRAMES_PER_BURST * self.BYTES_PER_FRAME),
                                  dtype=np.int8)
 
         self.raw_data_count = np.zeros((self.TS_SLOTS, self.NCHAN), dtype=np.int64)
         self.raw_data_complete = np.zeros((self.TS_SLOTS, self.NCHAN), dtype=np.uint8)
 
-        self.configure_output(format=format, split_frames=split_frames)
+        self.configure_output(format=format)
 
         # Variables with ybuf_ prefix are dedicated to temporarily hold the yielded data. The generators will then
         # yield a read-only view of these buffers.
@@ -215,7 +220,7 @@ class RawDataProcessor(object):
             print(f"get_data_iter: {bix.size} left after filtering stream IDs")
 
         bix = bix[
-            (self.pkt_frame[bix] < self.FRAMES_PER_BURST) &
+            (self.pkt_frame[bix] < self.PKT_FRAMES_PER_BURST) &
             (self.pkt_subframe[bix] < self.NUMBER_OF_SUBFRAMES)
             ]
 
@@ -312,7 +317,7 @@ class RawDataProcessor(object):
             self.raw_data[dest_slot, _si[:, None], _off[:, None] + subframe_ix] = self.buf_data[tix]
 
             self.raw_data_count[dest_slot, :] += np.bincount(self.pkt_six[tix], minlength=self.NCHAN)
-            self.raw_data_complete[dest_slot, :] = self.raw_data_count[dest_slot, :] == self.FRAMES_PER_BURST * self.NUMBER_OF_SUBFRAMES
+            self.raw_data_complete[dest_slot, :] = self.raw_data_count[dest_slot, :] == self.PKT_FRAMES_PER_BURST * self.NUMBER_OF_SUBFRAMES
 
             # We yield all the complete slots, but only in order, otherwise it would break the FIFO concept.
             # If the raw_data at self._read_index is not complete, we stop yielding, even if there are compete slots
@@ -383,30 +388,34 @@ class RawDataProcessor(object):
             ncap (int): if ncap > 1, another axis is added in front to accommodate multiple data captures
         """
         # Discard the first dimension which is ring buffer slot index
-        fmt_data_shape = list(self.raw_data.shape[1:])
+        fmt_data_shape = list(self.raw_data.shape[1:]) # removing timestamp dimension
         fmt_dtype = self.raw_data.dtype
 
+        # TODO: confirm if frame number calculation is ok
+        nframes = self.PKT_FRAMES_PER_BURST
         if self.format.startswith("14") or self.format.startswith("16"):
             fmt_data_shape[-1] = fmt_data_shape[-1] // 2
+            nframes = self.PKT_FRAMES_PER_BURST // 2
         elif self.format.startswith("32"):
             fmt_data_shape[-1] = fmt_data_shape[-1] // 4
+            nframes = self.PKT_FRAMES_PER_BURST // 4
         elif self.format.startswith("64"):
             fmt_data_shape[-1] = fmt_data_shape[-1] // 8
-
+            nframes = self.PKT_FRAMES_PER_BURST // 8
         if '+' in self.format:
             fmt_data_shape[-1] = fmt_data_shape[-1] // 2
+            nframes = nframes // 2
             if self.format.startswith("64"):
                 fmt_dtype = np.complex128
             else:
                 fmt_dtype = np.complex64
 
-        if ncap > 1:
-            fmt_data_shape.insert(0, ncap)
+        fmt_data_shape = (*fmt_data_shape[:-1], ncap * nframes, fmt_data_shape[-1] // nframes)
 
         return np.empty(shape=fmt_data_shape, dtype=fmt_dtype)
 
 
-    def configure_output(self, format: Optional[str] = None, split_frames: Optional[bool] = None) -> None:
+    def configure_output(self, format: Optional[str] = None) -> None:
         """
         Update output formatting options.
 
@@ -416,15 +425,13 @@ class RawDataProcessor(object):
 
         Parameters:
             format (Optional[str]): Format string to set; None keeps current.
-            split_frames (Optional[bool]): Whether to split frames in the output; None keeps current.
         """
         need_realloc = False
         if format is not None and format != getattr(self, "format", None):
+            if format not in self.ALLOWED_FORMATS:
+                raise ValueError(f"Format {format} is not supported. Allowed formats: {self.ALLOWED_FORMATS}")
             self.format = format
             need_realloc = True
-
-        if split_frames is not None:
-            self.split_frames = split_frames
 
         if need_realloc or not hasattr(self, "ybuf_data"):
             self.ybuf_data = self._allocate_ybuf_data()
@@ -435,8 +442,7 @@ class RawDataProcessor(object):
         Format a raw data view into the preallocated output buffer.
 
         The method reinterprets the raw byte stream according to self.format,
-        handles complex interleaving for "+" formats, and optionally reshapes
-        into per-channel views when split_frames is enabled.
+        handles complex interleaving for "+" formats.
 
         Parameters:
             data (np.ndarray): Raw byte view from a ring buffer slot.
@@ -446,31 +452,36 @@ class RawDataProcessor(object):
         """
         # Assumes self.ybuf_data was preallocated using self._allocate_ybuf_data and has correct shape and dtype
         out = self.ybuf_data
+        out_view = out.view()
 
-        if self.format.startswith("14"):
-            data = data.view('>i2')
+        if self.format.startswith("8"):
+            data_view = data.view('>i1')
+        elif self.format.startswith("14"):
+            data_view = data.view('>i2')
         elif self.format.startswith("16"):
-            data = data.view('>i2')
+            data_view = data.view('>i2')
         elif self.format.startswith("32"):
-            data = data.view('>i4')
+            data_view = data.view('>i4')
         elif self.format.startswith("64"):
-            data = data.view('>i8')
+            data_view = data.view('>i8')
+        else:
+            raise NotImplementedError(f"Data formatting not implemented for format {self.format}")
 
+        # Splitting the last dimension into firmware defined frames and samples. Will raise an error if data copy
+        # is required
+        data_view.shape = out.shape
+
+        # Writing into ybuf
         if '+' in self.format:
             # Assumes out is complex type
-            out.real[...] = data[..., ::2]
-            out.imag[...] = data[..., 1::2]
+            out.real[...] = data_view[..., ::2]
+            out.imag[...] = data_view[..., 1::2]
         elif self.format.startswith("14"):
             # There is no 14+14 format
-            np.right_shift(data.view('>i2'), 2, out=out)
+            np.right_shift(data_view, 2, out=out)
         else:
-            out[...] = data[:]
+            out[...] = data_view[:]
 
-        out_view = out.view()
-        if self.split_frames:
-            # Change shape of the view by assigning the shape directly. If reshaping requires copying data, then
-            # numpy will throw an error. That means the algorithm has failed and should be fixed.
-            out_view.shape = (self.NCHAN, self.FRAMES_PER_BURST, out.shape[-1] // self.FRAMES_PER_BURST)
 
         # TODO: 32+32d should be explained and reworked under the current implementation
         # if self.format == "32+32d":
@@ -478,6 +489,7 @@ class RawDataProcessor(object):
         #     s = data.shape
         #     data = data.reshape(s[0], -1, 2, s[2]).reshape(s[0], -1, s[2] * 2, order='F')
 
+        # Allows multiple instances read yielded data without risk of modification
         out_view.setflags(write=False)
         return out_view
 
