@@ -26,7 +26,6 @@ class CT2Regs(MMI):
     ALIGN_MON_SOURCE = BitField(CONTROL, 1, 4, width=4, doc='Select the information shown on the ALIGN_WORD')
     ALIGN_MON_LANE = BitField(CONTROL, 1, 0, width=4, doc='Select the lane from which info is shown on ALIGN_WORD')
     ALIGN_SOF_WINDOW = BitField(CONTROL, 2, 0, width=8, doc='Maximum allowable clock delays between the start of lane 0 and the other lanes before a lane is tagged as invalid')
-    ALIGN_IGNORE_LANE = BitField(CONTROL, 4, 0, width=16, doc='A 1 indicates that a lane should not be waited for')
     LANE_MAP_BYTE0 = BitField(CONTROL, 5, 0, width=8,  doc='Remap the lanes before sending them to the other boards ')
     LANE_POSTMAP_BYTE0 = BitField(CONTROL, 7, 0, width=8,  doc='Remap the lanes after receiving them from the other boards ')
     ALIGN_MON_WORD           = BitField(STATUS, 2, 0, width=16, doc='ALIGN monitoring word, selected by ALIGN_MON_SOURCE and ALIGN_MON_LANE')
@@ -68,7 +67,18 @@ class CT2Regs(MMI):
         self.set_lane_map(lane_premap, lane_postmap);
 
 class CT3Regs(MMI):
-    pass
+
+    ALIGN_MON_RESET   = BitField(CONTROL, 0, 7, doc='Resets the ALIGN monitoring statistics')
+    SLOT_GROUP        = BitField(CONTROL, 0, 6, doc='The slot group (i.e. sub-backplane) to which the board belongs. Is used by CT_LEVEL=3 to direct bins to the right destination ')
+    ZERO_DATA_ON_LANE_ERROR = BitField(CONTROL, 0, 5, doc='When 1, data is zeroed on invalid lanes')
+    ALIGN_MON_SOURCE  = BitField(CONTROL, 1, 4, width=4, doc='Select the information shown on the ALIGN_WORD')
+    ALIGN_MON_LANE    = BitField(CONTROL, 1, 0, width=4, doc='Select the lane from which info is shown on ALIGN_WORD')
+    RST_STATUS        = BitField(STATUS, 0, 0, doc='Reset line state')
+    ALIGN_MON_WORD    = BitField(STATUS, 2, 0, width=16, doc='ALIGN monitoring word, selected by ALIGN_MON_SOURCE and ALIGN_MON_LANE')
+
+    def init(self):
+        self.SLOT_GROUP =  (self.fpga.slot - 1) // 4
+        self.ZERO_DATA_ON_LANE_ERROR = 1
 
 class UCTEngine(MMIRouter):
     """
@@ -117,6 +127,9 @@ class UCTEngine(MMIRouter):
 
         if self.CT_LEVEL >=2:
             self.CT2.init()
+
+        if self.CT_LEVEL >=3:
+            self.CT3.init()
 
     def capture_bytes(self, N=64, fmt='hex'):
         """ Captures N bytes

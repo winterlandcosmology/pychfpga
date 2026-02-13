@@ -1796,7 +1796,7 @@ class FPGAArray(object):
             self.ib.CROSSBAR3.reset_stats()
             # Sync was performed by init_corner_turn()
 
-        elif mode in ('corr16', 'corr8', 'corr32', 'corr4'):
+        elif mode in ('corr4', 'corr8', 'corr16', 'corr32', 'corr64'):
             #if not all(self.ib.CORR):
             #    raise RuntimeError(f'Mode {mode} requires all boards to have a firmware correlator engine')
             bin_map = self.get_corner_turn_bin_map(
@@ -3091,7 +3091,7 @@ class FPGAArray(object):
             socket.socket(): a UDP socket.
         """
         # get socket from one board in the array
-        sock = self.ib[0].get_data_socket(port_number=None)
+        sock = self.ib[0].get_data_socket(port_number=port_number)
         for b in self.ib:
             b.set_data_socket(sock)
         return sock
@@ -3172,16 +3172,18 @@ class FPGAArray(object):
             UCorrFrameReceiver instance
         """
 
-        def select_func():
+        def select_func(cr):
             for b in self.ib:
                 b.CORR.select()
-        def config_func():
-            return self.ib[0].CORR.get_config()
 
+            corr_config = self.ib[0].CORR.get_config()
+            cr.update_config(corr_config)
+
+        corr_config = self.ib[0].CORR.get_config()
 
         if not self.corr_recv:
             pr = self.get_packet_receiver(port_number=port_number)
-            self.corr_recv = self.ib[0].CORR.get_corr_receiver(packet_receiver=pr, config=config_func(), select_func=select_func)
+            self.corr_recv = self.ib[0].CORR.get_corr_receiver(packet_receiver=pr, config=corr_config, pre_func=select_func)
         return self.corr_recv
 
 
