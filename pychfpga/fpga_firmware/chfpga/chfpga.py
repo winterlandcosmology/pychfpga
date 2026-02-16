@@ -2968,10 +2968,11 @@ class chFPGA(FPGAFirmware):
             adc_board.ADC.set_test_mode(test_mode=mode_value, adc_mode=sampling_mode, bandwidth=bandwidth)
 
         # Set the capture period for all specified channels
-        for ch in channels:
-            chan = self.chan[ch]
-            # Set the period so we are ready to capture data correctly after the SYNC resets the CAPTURE logic
-            chan.ADCDAQ.CAPTURE2_PERIOD = capture_period
+        if self.HAS_ADCDAQ:
+            for ch in channels:
+                chan = self.chan[ch]
+                # Set the period so we are ready to capture data correctly after the SYNC resets the CAPTURE logic
+                chan.ADCDAQ.CAPTURE2_PERIOD = capture_period
 
         # self.current_ADC_mode = mode_value
         if sync:

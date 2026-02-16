@@ -2943,7 +2943,7 @@ class FPGAArray(object):
         if sync:
             self.sync()
 
-    async def set_channelizers_async(channels=None, local_sync=None, sync=True, **kwargs):
+    async def set_channelizers_async(self, channels=None, local_sync=None, sync=True, **kwargs):
         """
         Configures all channelizers in the array.
 

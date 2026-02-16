@@ -1127,8 +1127,11 @@ class FPGAMaster(object):
         # Set-up raw_acq servers to receive data from the boards specified in
         # the config. This will set-up the FPGA data transmission ports.
         # self.log.info("Sending configuration to raw_acq server(s)")
-        self.log.info("Starting raw_acq servers")
-        await self.start_raw_acq_servers()
+        if conf.raw_acq.enable:
+            self.log.info("Starting raw_acq servers")
+            await self.start_raw_acq_servers()
+        else:
+            self.log.info('raw_acq disabled. Not starting any raw_acq servers.')
 
 
         # Setup noise injection for normal operation
