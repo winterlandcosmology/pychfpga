@@ -1,0 +1,121 @@
+# CRS Crate commissioning tests
+#
+# model_number required to run the tests (generate data folder name, configure EEPROM etc.). 
+model_number: 'CRS_crate'
+
+fpga_bit_file: '../../pychfpga/fpga_firmware/bitstreams/chfpga_crs_ct.bit'
+
+instruments:
+  psu: {'ip': '192.168.88.218', 'timeout': 1}
+?: &default_fpga_array # Shouldn't really be used
+    iceboards: 0047
+    mdns_delay: 1
+
+##################################################
+test_results_folder: '~/test_results'  # relative to this config file's folder. "~" is allowed.
+#test_results_folder_uses_git: false
+#xml_test_results_pathname: "~/test_results"  # not needed for a pure menu
+##################################################
+
+
+test_list:
+    # This list all the tests that will be done by the test software, in the proper order
+    # path is the argument given to nose to find the test fucntion, in the form of module_path:function or module_path:class.method
+    # This path is also the path used by XReport to identify tests results, with the exception that the semicolon ':' is replaced by a dot '.'
+    ps:      {description: 'Power supply connection test',  path: 'f_engine_tests.py::TestPreDeploymentCrate::test_ps_connection',  required: yes, require_serial_number: yes, dependencies: null}
+    init:    {description: 'Crate initialization test',     path: 'f_engine_tests.py::TestPreDeploymentCrate::test_init',           required: yes, require_serial_number: yes, dependencies: null}
+    bperr:   {description: 'Backplane error test',          path: 'f_engine_tests.py::TestPreDeploymentCrate::test_bperr',          required: yes, require_serial_number: yes, dependencies: null}
+    sync:    {description: 'Sync test',                     path: 'f_engine_tests.py::TestPreDeploymentCrate::test_sync',           required: yes, require_serial_number: yes, dependencies: null}
+    clock:   {description: 'ADC clock test',                path: 'f_engine_tests.py::TestPreDeploymentCrate::test_adc_clocks',     required: yes, require_serial_number: yes, dependencies: null}
+    cycle:   {description: 'Power cycle test',              path: 'f_engine_tests.py::TestPreDeploymentCrate::test_power_cycle',    required: yes, require_serial_number: yes, dependencies: null}
+    network: {description: 'Network connection test',       path: 'f_engine_tests.py::TestPreDeploymentCrate::test_network',        required: yes, require_serial_number: yes, dependencies: null}
+    ramp:    {description: 'Crate level ramp test',         path: 'f_engine_tests.py::TestPreDeploymentCrate::test_crate_ramp',     required: yes, require_serial_number: yes, dependencies: null}
+
+menu:
+    # The menu item will match the user input to either the 'key' field or to the regular expression 'regex'. The matching dictionary is returned.
+    # If a regular expression is given, string parameters are replaced by string_param.format(regex_matched_group_list), i.e. '{0}' is replaced by the first matched group etc. The 'key' and 'regex' fields are excluded from this conversion.
+    # Entry types are:
+    #  test: a test to run. test_tag refers to the test to run in test_list (defined above). A regex entry will be added to match the tets tag and tets path. The description will be taken from the test description if none is provided here.
+    #  exit: exit the menu
+    #  text: do nothing. The description is shown in the menu if there is one.
+    #  board_info: Sets the current board model and serial number. The serial number can be extracted from string parsed by the regex
+    #
+    - { description: "Start by entering the crate's serial number, then select a test or range of tests (e.g. 2-4).",     type: text}
+    - { key: '0',                    action: run_test, test_tag: ps}
+    - { key: '1',                    action: run_test, test_tag: init}
+    - { key: '2',                    action: run_test, test_tag: bperr}
+    - { key: '3',                    action: run_test, test_tag: sync}
+    - { key: '4',                    action: run_test, test_tag: clock}
+    - { key: '5',                    action: run_test, test_tag: cycle}
+    - { key: '6',                    action: run_test, test_tag: network}
+    - { key: '7',                    action: run_test, test_tag: ramp}
+    - { key: 'S',                    action: push,    description: 'Send all new test results data to McGill'}
+    - { key: 'R',                    action: summary, description: 'Generate summary of all tests'           }
+    - { key: 'Q',                    action: exit,    description: 'Exit'                                    }
+    - { regex: '(0\d{2})', model: 'CRS_crate', serial: '{0}', next_key: '0'}  
+    - { regex: '\d+\-\d+', action: run_range, input: '{0}'} # regex to select a range of options
+
+##################################
+# Test-specific parameters
+##################################
+f_engine_tests:
+  global_settings:
+    eth_interface: 'enp6s0' # Name of ethernet interface on which the crate is connected. Used to check jumbo frames.
+    ps_t_sleep: 10 # Time in seconds to let the power supply sleep upon power cycle to allow crate to boot
+    fpga_array_params:
+      hwm: 'crs 80:1 79:2 104:3 88:4 83:5 78:6 81:7 74:8 71:9 89:10 75:11 94:12 96:13 92:14 77:15 72:16'
+      stderr_log_level: 'info'
+      prog: 2
+      mode: 'shuffle8'
+      sync_method: 'irigb'
+      mdns_timeout: 40
+
+
+  ps_connection_test:
+    n_ps_cycles: 50  
+    on_time: 60 # s
+    off_time: 10 # s
+        
+  crate_init:
+
+  backplane_err:
+    n_checks: 10
+    t_sleep: 1
+
+  sync_test:
+    n_syncs: 100
+
+  network_test:
+    n_cycles: 10
+    t_cycle: 5
+    fpga_array_params:
+      hwm: 'bp16 29:0' # McGill kitchen test rack
+
+      stderr_log_level: 'info'
+      prog: 0
+      open: 0
+      #mode: 'shuffle128' # only for KKO F-Engine
+      ignore_missing_boards: False # only for KKO F-Engine
+      mode: 'shuffle256' # All else
+      sync_method: 'local'
+      mdns_timeout: 20
+
+  clock_test:
+    integration_period: 0.001
+    n_clock_checks: 10
+    n_cycles: 5
+    powerup_delay: 5
+
+  p_cycle_test:
+    # n_cycles: 20 
+    n_cycles: 100 
+    percent_accept: 0.05 #0.01
+    t_cycle: 10  #time in seconds
+
+  power_clock_test:
+    n_cycles: 100 
+    percent_accept: 0.05 #0.01
+    t_cycle: 10  #time in seconds
+
+  ramp_test:
+    n_checks: 1
