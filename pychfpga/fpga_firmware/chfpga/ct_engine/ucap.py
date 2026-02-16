@@ -297,21 +297,21 @@ class RawDataProcessor(object):
         if config is None:
             return
 
-        stream_ids_updated = set_params('stream_ids')
+        stream_ids_updated = set_param('stream_ids')
         self.format = '16'
         self.target_mode = 0
         self.frames_per_burst = 2 << self.target_mode  # for CRS
 
 
         if stream_ids_updated:
-            self.stream_ids = stream_ids
-            self.nchan = len(stream_ids)  # number of stream IDs (channels) to capture
+            self.stream_ids = stream_ids_updated
+            self.nchan = len(self.stream_ids)  # number of stream IDs (channels) to capture
             self.six_map = np.full((1<<12, ), -1, dtype=np.int32) # maps a stream ID into a stream index, default of -1 means invalid stream ID
-            self.six_map[stream_ids] = np.arange(nchan)
-            self.ts_list = np.zeros((nchan,), dtype=np.uint64)  # timestamp for each storage slot
+            self.six_map[self.stream_ids] = np.arange(self.nchan)
+            self.ts_list = np.zeros((self.nchan,), dtype=np.uint64)  # timestamp for each storage slot
 
             self.raw_data = np.zeros((self.TS_SLOTS, self.nchan, self.BYTES_PER_FRAME * self.frames_per_burst), dtype=np.int8)
-            self.data_count = np.zeros((self.TS_SLOTS, nchan), dtype=np.uint16)
+            self.data_count = np.zeros((self.TS_SLOTS, self.nchan), dtype=np.uint16)
 
 
 
@@ -415,7 +415,7 @@ class RawDataProcessor(object):
         rs = self.read_slot
         self.read_slot = (self.read_slot + 1) % self.TS_SLOTS
         if verbose:
-            for i in range(nchan):
+            for i in range(self.nchan):
                 print(f'Chan {i}: {data_count[i].sum()} packets')
 
         # if ncap > 1 and verbose:
@@ -450,43 +450,43 @@ class RawDataProcessor(object):
         split = 0
 
         frames_per_channel = data.shape[-1]//self.BYTES_PER_FRAME
-        ncap = data.shape[0] if len(data.shape) > 2 else 1:
+        ncap = data.shape[0] if len(data.shape) > 2 else 1
 
         if self.format == '8':
             if split:
-                data = data.reshape((nchan, ncap*frames_per_channel,-1))
+                data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
         elif self.format == "14":
             data = data.view('>i2') >> 2
             if split:
-                data = data.reshape((nchan, ncap*frames_per_channel,-1))
+                data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
         elif self.format == "16":
             data = self.raw_data.view('>i2')
             if split:
-                data = data.reshape((nchan, ncap*frames_per_channel,-1))
+                data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
         elif self.format == "32":
             data = data.view('>i4')
             if split:
-                data = data.reshape((nchan, ncap*frames_per_channel,-1))
+                data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
 
         elif self.format == "16+16":
             data = data.view('>i2')
             data = data[:, :, ::2] + 1j*data[:, :, 1::2]
-            data = data.reshape((nchan, ncap*frames_per_channel,-1))
+            data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
         elif self.format == "32+32":
             data = data.view('>i4')
             data = data[:, :, ::2] + 1j*data[:, :, 1::2]
-            data = data.reshape((nchan, ncap*frames_per_channel,-1))
+            data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
         elif self.format == "32+32d":
             data = data.view('>i4')
             data = data[:, :, ::2] + 1j*data[:, :, 1::2]
-            data = data.reshape((nchan, ncap*frames_per_channel,-1)) # split
+            data = data.reshape((self.nchan, ncap*frames_per_channel,-1)) # split
             s = data.shape
             data = data.reshape(s[0],-1,2,s[2]).reshape(s[0],-1,s[2]*2, order='F')
 
         elif self.format == "64+64":
             data = data.view('>i8')
             data = data[:, :, ::2] + 1j*data[:, :, 1::2]
-            data = data.reshape((nchan, ncap*frames_per_channel,-1))
+            data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
         else:
             raise ValueError(f'Invalid format "{self.format}"')
 
@@ -498,7 +498,7 @@ class RawDataProcessor(object):
             data_counts = np.empty((n,), dtype=np.int32)
             nsamples = self.SAMPLES_PER_FRAME * self.frames_per_burst
             # data_counts = np.empty((n, self.NBINS, self.NPROD), dtype=np.int32)
-            formats = dict(
+            formats = {
                 '8': (1, '>i1'),
                 '14': (2, '>i2'),
                 '16': (2, '>i2'),
@@ -507,7 +507,7 @@ class RawDataProcessor(object):
                 '16+16': (4, np.complex64),
                 '32+32': (8, np.complex64),
                 '64+64': (16, np.complex128),
-                )
+            }
 
             nbytes,dtype = formats[self.format]
             nvalues = self.SAMPLES_PER_FRAME * self.frames_per_burst * self.BYTES_PER_SAMPLE // nbytes
