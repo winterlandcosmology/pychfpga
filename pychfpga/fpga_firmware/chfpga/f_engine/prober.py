@@ -121,6 +121,11 @@ class PROBER(MMI):
                 MHz=524.288 us. The maximum delay is therefore 524.288 us * 65535 =
                 34.36 s.
         """
+        if not 1 <= int(frames_per_burst) <= 4:
+            raise ValueError(
+                f"frames_per_burst must be in range [1, 4] for PROBER hardware (2-bit BURST_LENGTH), "
+                f"got {frames_per_burst}."
+            )
 
         # frame_period=1.0/850e6*self.ant.frame_length
         # burst_period=int(period/frame_period)

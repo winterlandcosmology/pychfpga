@@ -20,7 +20,7 @@ class RawDataProcessor(object):
     def __init__(self, packet_receiver: UDPPacketReceiver, platform_id: str, bytes_per_sample: int, samples_per_frame: int,
                  format: str = '8', stream_ids: Optional[Sequence[int]] = None,
                  ring_buffer_size: int = 3, target_mode: Optional[int] = None,
-                 verbose: int = 0) -> None:
+                 verbose: int = 0, pkt_frames_per_burst: Optional[int] = None) -> None:
         """
         Initialize the processor and precompute views into the UDP receiver buffer.
 
@@ -40,6 +40,8 @@ class RawDataProcessor(object):
             ring_buffer_size (int): Number of timestamp slots held in the internal ring buffer.
             target_mode (Optional[int]): Target mode selector for CRS boards (0-3); not used on ICE.
             verbose (int): Verbosity level (0 quiet, 1 basic, 2 detailed, 3 debug).
+            pkt_frames_per_burst (Optional[int]): Number of packet frames expected per burst in PROBER mode.
+                This is only used on ICE boards. If None, defaults to 1 for backward compatibility.
         """
         self.pr = packet_receiver
         self.verbose = verbose
@@ -68,7 +70,14 @@ class RawDataProcessor(object):
         elif platform_id == self._chfpga._PLATFORM_ID_MGK7MB_REV2:
             self.stream_ids = stream_ids or np.arange(16)
             self.NUMBER_OF_SUBFRAMES = 1
-            self.PKT_FRAMES_PER_BURST = 1
+            if pkt_frames_per_burst is None:
+                self.PKT_FRAMES_PER_BURST = 1
+            else:
+                if not 1 <= int(pkt_frames_per_burst) <= 4:
+                    raise ValueError(
+                        f"pkt_frames_per_burst must be in range [1, 4] for ICE boards, got {pkt_frames_per_burst}."
+                    )
+                self.PKT_FRAMES_PER_BURST = int(pkt_frames_per_burst)
             if target_mode:
                 raise ValueError(f"target_mode parameter is not applicable to the ICE board (PLATFORM_ID: {self.PLATFORM_ID })")
             self.TARGET_MODE = 0
@@ -190,9 +199,9 @@ class RawDataProcessor(object):
         np.bitwise_and(self.buf_ts, self.ts_mask, out=self.pkt_ts, where=bix_mask)
         # stream_id
         np.bitwise_and(self.buf_frame_stream_id, self.sid_mask, out=self.pkt_stream_id, where=bix_mask)
-        # frame
-        np.right_shift(self.buf_frame_stream_id, 8, out=self.pkt_frame, where=bix_mask)
-        np.bitwise_and(self.pkt_frame, 0xFF, out=self.pkt_frame, where=bix_mask)
+        # frame index is encoded in the upper nibble of header byte 1 (STREAM_ID[15:12]).
+        np.right_shift(self.buf_frame_number, 4, out=self.pkt_frame, where=bix_mask)
+        np.bitwise_and(self.pkt_frame, 0x0F, out=self.pkt_frame, where=bix_mask)
         # mode
         np.right_shift(self.buf_mode_subframe, 2, out=self.pkt_mode, where=bix_mask)
         np.bitwise_and(self.pkt_mode, 0x3, out=self.pkt_mode, where=bix_mask)

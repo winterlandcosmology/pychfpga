@@ -310,6 +310,7 @@ class chFPGA(FPGAFirmware):
         self._FMC_present = []  # indicates if the FMC board is present. If not, the modules will act accordingly.
         self._last_init_time = None
         self.recv = None # raw data capture receiver object
+        self._capture_pkt_frames_per_burst = None
         self.corr_recv = None # correlator data receiver object
         self.mmi = None
 
@@ -3074,6 +3075,23 @@ class chFPGA(FPGAFirmware):
         """
         Returns a RawFrameReceiver object; kwargs are passed
         """
+        desired_pkt_frames = kwargs.get("pkt_frames_per_burst")
+        if desired_pkt_frames is None and self.CAPTURE_TYPE == "PROBER":
+            desired_pkt_frames = self._capture_pkt_frames_per_burst
+            if desired_pkt_frames is not None:
+                kwargs["pkt_frames_per_burst"] = desired_pkt_frames
+
+        if self.recv and desired_pkt_frames is not None:
+            current_pkt_frames = getattr(self.recv, "PKT_FRAMES_PER_BURST", None)
+            if current_pkt_frames != desired_pkt_frames:
+                self.logger.debug(
+                    f"{self!r}: Recreating data receiver because pkt_frames_per_burst changed "
+                    f"from {current_pkt_frames} to {desired_pkt_frames}"
+                )
+                if pr is None:
+                    pr = self.recv.pr
+                self.recv = None
+
         if not self.recv:
             if not isinstance(pr, UDPPacketReceiver):
                 pr_kwargs = {}
@@ -3353,8 +3371,10 @@ class chFPGA(FPGAFirmware):
 
         if self.CAPTURE_TYPE == 'UCAP':
             self.UCAP.set_data_capture(source=source, mode=mode, channels=channels, select=select, periods=[burst_period_in_frames-1, burst_period_in_frames-1])
+            self._capture_pkt_frames_per_burst = None
 
         elif self.CAPTURE_TYPE =='PROBER':
+            self._capture_pkt_frames_per_burst = frames_per_burst
 
             frames_per_second = frames_per_burst * 1.0 / self.FRAME_PERIOD / burst_period_in_frames
             packet_size_in_bits = (self.FRAME_LENGTH + 10 + 42) * 8  # 10 header bytes, 42 Ethernet/IP/UDP overhead
