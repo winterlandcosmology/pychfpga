@@ -3409,7 +3409,8 @@ class chFPGA(FPGAFirmware):
         **kwargs
             Forwarded to ``RawFrameReceiver``. Common user-facing knobs:
             ``stream_ids``, ``format``, ``verbose``, ``ring_buffer_size``,
-            ``decode_strict``. Engine/profile kwargs are injected internally.
+            ``decode_strict``, ``ignore_first_burst``. Engine/profile kwargs
+            are injected internally.
         """
         self._init_capture_state_tracking()
 

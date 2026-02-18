@@ -10,8 +10,9 @@ from .udp_packet_receiver import UDPPacketReceiver
 class RawFrameReceiver(RawDataProcessor):
     """Convenience wrapper around :class:`RawDataProcessor` for burst reads."""
 
-    def __init__(self, packet_receiver: UDPPacketReceiver, platform_id: str, bytes_per_sample: int, 
+    def __init__(self, packet_receiver: UDPPacketReceiver, platform_id: str, bytes_per_sample: int,
                  samples_per_frame: int, target_mode: Optional[int] = None, verbose: int = 0,
+                 ignore_first_burst: bool = True,
                  **kwargs: Any) -> None:
         """
         Initialize the raw frame receiver.
@@ -23,6 +24,9 @@ class RawFrameReceiver(RawDataProcessor):
             samples_per_frame (int): ADC samples per frame.
             target_mode (Optional[int]): Target mode override for platform-specific packet layout.
             verbose (int): Verbosity level (0 quiet, 1 basic, 2 detailed, 3 debug).
+            ignore_first_burst (bool): If True (default), the first yielded burst is skipped
+                only when its timestamp is exactly 0. This handles known startup behavior
+                where the first post-reconfiguration burst can be incomplete.
             **kwargs (Any): Additional parameters forwarded to RawDataProcessor
                 (e.g., format, stream_ids, ring_buffer_size, capture_engine,
                 effective_decode_profile, decode_strict, pkt_frames_per_burst).
@@ -36,9 +40,11 @@ class RawFrameReceiver(RawDataProcessor):
             verbose=verbose,
             **kwargs,
         )
+        self.ignore_first_burst = bool(ignore_first_burst)
 
     def read_raw_frames_iter(self, ncap: int = 1, flush: bool = True, flush_timeout: Optional[int] = None,
-                             data_timeout: Optional[int] = None, auto_receive: bool = True, **kwargs: Any) -> Generator[
+                             data_timeout: Optional[int] = None, auto_receive: bool = True,
+                             ignore_first_burst: Optional[bool] = None, **kwargs: Any) -> Generator[
         Tuple[int, ndarray, ndarray], None, None]:
         """
         Yield ``ncap`` bursts as ``(timestamp, data, data_count)`` tuples.
@@ -52,6 +58,9 @@ class RawFrameReceiver(RawDataProcessor):
                                  if you want multiple RawFrameReceiver objects to read from the same UDPPacketReceiver
                                  buffer. In that case you would need to call UDPPacketReceiver.receive_packets()
                                  manually.
+            ignore_first_burst (Optional[bool]): Per-call override for the instance setting.
+                When enabled, only the first candidate burst is checked, and it is discarded
+                only if its timestamp equals zero.
             **kwargs (Any): Arguments forwarded to ``get_data_iter`` (e.g., verbose).
 
         Returns:
@@ -67,6 +76,8 @@ class RawFrameReceiver(RawDataProcessor):
             self.pr.settimeout(data_timeout)
 
         n_yielded = 0
+        effective_ignore_first_burst = self.ignore_first_burst if ignore_first_burst is None else bool(ignore_first_burst)
+        first_candidate_checked = False
 
         while n_yielded < ncap:
             if auto_receive:
@@ -76,6 +87,12 @@ class RawFrameReceiver(RawDataProcessor):
             if not self.pr.n_packets:
                 continue
             for ts_, data_, data_count_ in self.get_data_iter(**kwargs):
+                if effective_ignore_first_burst and not first_candidate_checked:
+                    first_candidate_checked = True
+                    if int(ts_) == 0:
+                        if self.verbose >= 3:
+                            print("read_raw_frames_iter: discarding first burst because ts == 0")
+                        continue
                 yield ts_, data_, data_count_
                 if self.verbose >= 3:
                     print(f"read_raw_frames_iter: yielded ts = {ts_}")
@@ -95,7 +112,8 @@ class RawFrameReceiver(RawDataProcessor):
             ncap (int): Number of frames to capture.
             split_frames (bool): Keep logical frames split along axis ``-2``.
                                  If False, that axis is flattened into samples.
-            **kwargs (Any): Arguments forwarded to read_raw_frames_iter (e.g., flush, auto_receive, verbose, etc.)
+            **kwargs (Any): Arguments forwarded to read_raw_frames_iter
+                (e.g., flush, auto_receive, ignore_first_burst, verbose, etc.)
 
         Returns:
             Tuple[np.ndarray, np.ndarray, np.ndarray]: Timestamps, raw frame data, and per-channel counts.
