@@ -8,6 +8,8 @@ from .raw_data_processor import RawDataProcessor
 from .udp_packet_receiver import UDPPacketReceiver
 
 class RawFrameReceiver(RawDataProcessor):
+    """Convenience wrapper around :class:`RawDataProcessor` for burst reads."""
+
     def __init__(self, packet_receiver: UDPPacketReceiver, platform_id: str, bytes_per_sample: int, 
                  samples_per_frame: int, target_mode: Optional[int] = None, verbose: int = 0,
                  **kwargs: Any) -> None:
@@ -22,7 +24,8 @@ class RawFrameReceiver(RawDataProcessor):
             target_mode (Optional[int]): Target mode override for platform-specific packet layout.
             verbose (int): Verbosity level (0 quiet, 1 basic, 2 detailed, 3 debug).
             **kwargs (Any): Additional parameters forwarded to RawDataProcessor
-                (e.g., format, stream_ids, split_frames, ring_buffer_size).
+                (e.g., format, stream_ids, ring_buffer_size, capture_engine,
+                effective_decode_profile, decode_strict, pkt_frames_per_burst).
         """
         super().__init__(
             packet_receiver,
@@ -38,6 +41,7 @@ class RawFrameReceiver(RawDataProcessor):
                              data_timeout: Optional[int] = None, auto_receive: bool = True, **kwargs: Any) -> Generator[
         Tuple[int, ndarray, ndarray], None, None]:
         """
+        Yield ``ncap`` bursts as ``(timestamp, data, data_count)`` tuples.
 
         Parameters:
             ncap (int): Number of data bursts to capture.
@@ -48,7 +52,7 @@ class RawFrameReceiver(RawDataProcessor):
                                  if you want multiple RawFrameReceiver objects to read from the same UDPPacketReceiver
                                  buffer. In that case you would need to call UDPPacketReceiver.receive_packets()
                                  manually.
-            **kwargs (Any): Arguments forwarded to get_data_iter (e.g., verbose).
+            **kwargs (Any): Arguments forwarded to ``get_data_iter`` (e.g., verbose).
 
         Returns:
             Generator[Tuple[uint64, np.ndarray, np.ndarray]]: Yields timestamp, data, and per-channel counts.
@@ -89,7 +93,8 @@ class RawFrameReceiver(RawDataProcessor):
 
         Parameters:
             ncap (int): Number of frames to capture.
-            split_frames (bool): Split the data into data frames defined in firmware (tied to specified data format)
+            split_frames (bool): Keep logical frames split along axis ``-2``.
+                                 If False, that axis is flattened into samples.
             **kwargs (Any): Arguments forwarded to read_raw_frames_iter (e.g., flush, auto_receive, verbose, etc.)
 
         Returns:
@@ -102,14 +107,13 @@ class RawFrameReceiver(RawDataProcessor):
         # Pre-Allocate memory to store processed data
         data = self._allocate_ybuf_data(ncap=ncap)
         data_view = data.view()
-        # if self.split_frames:
-        #     data_view.shape = (self.NCHAN, ncap * self.PKT_FRAMES_PER_BURST, data_view.shape[-1] // self.PKT_FRAMES_PER_BURST)
-        ts = np.empty((self.NCHAN, ncap * self.PKT_FRAMES_PER_BURST), dtype=self.ts_array.dtype)
+        frames_per_burst = getattr(self, "LOGICAL_FRAMES_PER_BURST", self.PKT_FRAMES_PER_BURST)
+        ts = np.empty((self.NCHAN, ncap * frames_per_burst), dtype=self.ts_array.dtype)
         # data_count shows "number of received packets per channel per burst", it doesn't really make sense for separate frames
         data_count = np.empty(shape=(self.NCHAN, ncap), dtype=self.raw_data_count.dtype)
 
         for i, (ts_, data_, data_count_) in enumerate(self.read_raw_frames_iter(ncap=ncap, **kwargs)):
-            lo, hi = i * self.PKT_FRAMES_PER_BURST, (i + 1) * self.PKT_FRAMES_PER_BURST
+            lo, hi = i * frames_per_burst, (i + 1) * frames_per_burst
             ts[:, lo:hi], data_view[:, lo:hi, ...], data_count[:, i] = ts_, data_, data_count_
         if not split_frames:
             # By default yielded data has frames split

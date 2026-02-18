@@ -93,7 +93,7 @@ class PROBER(MMI):
         """ Returns the interval between data capture bursts. The period is specified in number of frames. This method is used because the property does not yet handle multi-byte values well."""
         return [self.PERIOD0, self.PERIOD1]
 
-    def config_capture(self, frames_per_burst=1, burst_period=100, number_of_bursts=0, offset=0, send_delay=0):
+    def config_capture(self, frames_per_burst=1, burst_period=100, offset=0, send_delay=0):
         """
         Configure the capture of data frames for transmisssion over the ethernet link.
 
@@ -103,10 +103,6 @@ class PROBER(MMI):
                 burst (default=1)
 
             burst_period (int): delay between bursts in seconds
-
-            number_of_bursts (int): number of bursts to send. '0' means that
-                bursts are sent continuously as long as frames are tagged for
-                capture at the source . Default is '0'.
 
             offset (int): sets how many frames are skipped before the capture
                 starts. The actual number of skipped frames is `offset` x 256.

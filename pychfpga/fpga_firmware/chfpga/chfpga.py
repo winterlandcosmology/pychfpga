@@ -22,7 +22,8 @@ import socket
 import __main__
 import asyncio
 import traceback
-from typing import List, Literal
+from dataclasses import asdict, dataclass, field
+from typing import Dict, List, Literal, Optional, Sequence, Tuple
 
 # PyPi external packages
 import numpy as np
@@ -104,6 +105,89 @@ class chFPGA_config(object):
     """
     def __str__(self):
         return '\n'.join(['%s = %s' % (key, repr(value)) for (key, value) in sorted(vars(self).items())])
+
+
+@dataclass
+class ChannelCaptureState:
+    """
+    Host-side capture settings tracked per channelizer.
+
+    This state is updated by setter calls (channelizer/funcgen/scaler/capture)
+    and is used to derive an :class:`EffectiveDecodeProfile`.
+    """
+    channel: int
+    stream_id: int
+    data_source: str = "funcgen"
+    funcgen_source: str = "adc"
+    funcgen_left_shift: int = 0
+    funcgen_right_shift: int = 0
+    fft_bypass: bool = False
+    scaler_bypass: bool = False
+    scaler_bypass_data_type: int = 0
+    scaler_cap_data_type: int = 0
+    prober_sub_period: int = 23
+
+
+@dataclass
+class CaptureRunState:
+    """
+    Capture-session settings controlled by ``start_data_capture()``.
+
+    These fields describe run-time transport context (engine, active channels,
+    burst frame count, UCAP mode) independent of per-channel DSP settings.
+    """
+    capture_engine: str = "PROBER"
+    source: str = "scaler"
+    channels: Tuple[int, ...] = field(default_factory=tuple)
+    pkt_frames_per_burst: int = 1
+    ucap_mode: int = 0
+    ucap_select: bool = False
+
+
+@dataclass(frozen=True)
+class EffectiveDecodeProfile:
+    """
+    Derived decode settings consumed by ``RawDataProcessor``.
+
+    Field intent:
+    - transport: ``capture_engine``, ``target_mode``, ``number_of_subframes``
+    - burst geometry: ``pkt_frames_per_burst``, ``packets_per_logical_frame``,
+      ``logical_frames_per_burst``
+    - source/mode: ``source``, ``scaler_cap_data_type``, ``decode_transform``
+    - output defaults: ``default_format``, ``fft_bins_per_word``
+    - strictness: ``decode_strict`` controls layout completeness checks.
+    """
+    capture_engine: str
+    source: str
+    channel: int
+    stream_id: int
+    scaler_cap_data_type: Optional[int]
+    pkt_frames_per_burst: int
+    packets_per_logical_frame: int
+    logical_frames_per_burst: int
+    number_of_subframes: int
+    target_mode: Optional[int]
+    decode_transform: str
+    default_format: str
+    fft_bins_per_word: int
+    decode_strict: bool = True
+
+    def receiver_signature(self) -> Tuple:
+        """Signature used to detect incompatible receiver reuse."""
+        return (
+            self.capture_engine,
+            self.source,
+            self.scaler_cap_data_type,
+            self.pkt_frames_per_burst,
+            self.packets_per_logical_frame,
+            self.logical_frames_per_burst,
+            self.number_of_subframes,
+            self.target_mode,
+            self.decode_transform,
+            self.default_format,
+            self.fft_bins_per_word,
+            self.decode_strict,
+        )
 
 
 class chFPGA(FPGAFirmware):
@@ -311,6 +395,10 @@ class chFPGA(FPGAFirmware):
         self._last_init_time = None
         self.recv = None # raw data capture receiver object
         self._capture_pkt_frames_per_burst = None
+        self._capture_run_state = CaptureRunState()
+        self._channel_capture_state: Dict[int, ChannelCaptureState] = {}
+        self._effective_decode_profiles: Dict[int, EffectiveDecodeProfile] = {}
+        self._receiver_profile_signature: Optional[Tuple] = None
         self.corr_recv = None # correlator data receiver object
         self.mmi = None
 
@@ -847,6 +935,7 @@ class chFPGA(FPGAFirmware):
             # Instantiate a channelizer for for each input
             self.chan = chan.ChanArray(router = self.top_router, router_port = 'CHAN')
             self.CHAN_FMC_NUMBER = [i // 8 for i in range(self.NUMBER_OF_CHANNELIZERS)]
+            self._init_capture_state_tracking()
 
             await asyncio.sleep(0)
 
@@ -1201,6 +1290,7 @@ class chFPGA(FPGAFirmware):
 
 
         self._last_init_time = time.time()
+        self.refresh_capture_state_from_hardware()
 
         # Create a data socket. The socket will be cached for future use. This also sets the destination address/port for data streams in the FPGA.
         # self.get_data_socket()
@@ -2451,6 +2541,228 @@ class chFPGA(FPGAFirmware):
         else:
             return [self.chan[ch] for ch in channels]
 
+    def _normalize_channels(self, channels=None):
+        if channels is None:
+            return list(self.default_channels)
+        if isinstance(channels, int):
+            return [channels]
+        return list(channels)
+
+    def _read_default_stream_id(self, channel):
+        if self.CAPTURE_TYPE == "PROBER" and channel in self.chan and self.chan[channel].PROBER is not None:
+            try:
+                return int(self.chan[channel].PROBER.STREAM_ID)
+            except Exception:
+                pass
+        return int(channel)
+
+    def _init_capture_state_tracking(self):
+        if not hasattr(self, "chan"):
+            return
+        for channel in self.get_channels():
+            if channel not in self._channel_capture_state:
+                self._channel_capture_state[channel] = ChannelCaptureState(
+                    channel=channel,
+                    stream_id=self._read_default_stream_id(channel),
+                )
+        stale_channels = set(self._channel_capture_state).difference(self.get_channels())
+        for channel in stale_channels:
+            self._channel_capture_state.pop(channel, None)
+            self._effective_decode_profiles.pop(channel, None)
+        if not self._capture_run_state.channels:
+            self._capture_run_state.channels = tuple(self.default_channels)
+        self._capture_run_state.capture_engine = self.CAPTURE_TYPE
+        self._capture_run_state.pkt_frames_per_burst = int(self._capture_pkt_frames_per_burst or 1)
+        self._recompute_effective_decode_profiles()
+
+    @staticmethod
+    def _ucap_mode_to_pkt_frames(mode: int) -> int:
+        mode_to_frames = {0: 2, 1: 4, 2: 8, 3: 16}
+        if mode not in mode_to_frames:
+            raise ValueError(f"Invalid UCAP mode {mode}. Expected mode in range [0, 3].")
+        return mode_to_frames[mode]
+
+    def _get_fft_bins_per_word(self) -> int:
+        fft_info = self.FFT_INFO.get(self.FFT_TYPE, {})
+        return int(fft_info.get("bins_per_word") or 1)
+
+    @staticmethod
+    def _scaler_packets_per_logical_frame(cap_data_type: Optional[int], fft_bins_per_word: int) -> Tuple[int, str]:
+        if cap_data_type == 4:
+            return 2, "scaler_mode4"
+        if cap_data_type == 5:
+            return 2 * max(1, int(fft_bins_per_word)), "scaler_mode5"
+        if cap_data_type == 6:
+            return 1, "scaler_mode6"
+        if cap_data_type == 7:
+            return 1, "unsupported"
+        return 1, "identity"
+
+    def _default_capture_format(self, source: str, cap_data_type: Optional[int]) -> str:
+        adc_format = {1: "8", 2: "16", 4: "32", 8: "64"}.get(int(self.ADC_BYTES_PER_SAMPLE), "8")
+        if source != "scaler":
+            return adc_format
+        if self.PLATFORM_ID == self._PLATFORM_ID_MGK7MB_REV2:
+            if cap_data_type == 4:
+                return "16"
+            if cap_data_type == 5:
+                return "32"
+            return "8"
+        if self.PLATFORM_ID == self._PLATFORM_ID_CRS:
+            if cap_data_type == 4:
+                return "32"
+            if cap_data_type == 5:
+                return "32"
+            return "16"
+        return adc_format
+
+    @staticmethod
+    def _normalize_scaler_cap_data_type(data_type):
+        if data_type is None:
+            return None
+        if isinstance(data_type, str):
+            if data_type not in SCALER.CAPTURE_DATA_TYPES:
+                valid = ", ".join(sorted(SCALER.CAPTURE_DATA_TYPES.keys()))
+                raise ValueError(f"Unknown scaler capture data type '{data_type}'. Valid names: {valid}.")
+            return int(SCALER.CAPTURE_DATA_TYPES[data_type])
+        return int(data_type)
+
+    def _update_channel_capture_state(self, channels=None, **updates):
+        self._init_capture_state_tracking()
+        target_channels = self._normalize_channels(channels)
+        for channel in target_channels:
+            state = self._channel_capture_state[channel]
+            for key, value in updates.items():
+                if value is not None:
+                    setattr(state, key, value)
+        self._recompute_effective_decode_profiles(target_channels)
+
+    def _update_capture_run_state(self, **updates):
+        self._init_capture_state_tracking()
+        for key, value in updates.items():
+            if value is not None:
+                setattr(self._capture_run_state, key, value)
+        target_channels = self._capture_run_state.channels or tuple(self.default_channels)
+        self._recompute_effective_decode_profiles(list(target_channels))
+
+    def _recompute_effective_decode_profiles(self, channels=None):
+        if not hasattr(self, "chan"):
+            return
+        target_channels = self._normalize_channels(channels)
+
+        capture_engine = self._capture_run_state.capture_engine or self.CAPTURE_TYPE
+        source = self._capture_run_state.source or "scaler"
+
+        if capture_engine == "UCAP":
+            target_mode = int(self._capture_run_state.ucap_mode)
+            pkt_frames_per_burst = self._ucap_mode_to_pkt_frames(target_mode)
+            number_of_subframes = 4
+        else:
+            target_mode = 0
+            pkt_frames_per_burst = int(self._capture_run_state.pkt_frames_per_burst or 1)
+            number_of_subframes = 1
+
+        fft_bins_per_word = self._get_fft_bins_per_word()
+        for channel in target_channels:
+            state = self._channel_capture_state[channel]
+            cap_data_type = int(state.scaler_cap_data_type) if source == "scaler" else None
+            packets_per_logical_frame, decode_transform = self._scaler_packets_per_logical_frame(
+                cap_data_type,
+                fft_bins_per_word=fft_bins_per_word,
+            ) if source == "scaler" else (1, "identity")
+            logical_frames_per_burst = pkt_frames_per_burst // packets_per_logical_frame
+            self._effective_decode_profiles[channel] = EffectiveDecodeProfile(
+                capture_engine=capture_engine,
+                source=source,
+                channel=channel,
+                stream_id=int(state.stream_id),
+                scaler_cap_data_type=cap_data_type,
+                pkt_frames_per_burst=pkt_frames_per_burst,
+                packets_per_logical_frame=packets_per_logical_frame,
+                logical_frames_per_burst=logical_frames_per_burst,
+                number_of_subframes=number_of_subframes,
+                target_mode=target_mode,
+                decode_transform=decode_transform,
+                default_format=self._default_capture_format(source=source, cap_data_type=cap_data_type),
+                fft_bins_per_word=fft_bins_per_word,
+                decode_strict=True,
+            )
+
+    def _resolve_receiver_channels(self, stream_ids=None):
+        self._init_capture_state_tracking()
+        if stream_ids is None:
+            return list(self._capture_run_state.channels or tuple(self.default_channels))
+
+        if isinstance(stream_ids, (int, np.integer)):
+            stream_ids = [int(stream_ids)]
+
+        sid_to_channel = {
+            int(state.stream_id): channel
+            for channel, state in self._channel_capture_state.items()
+        }
+        channels = []
+        unresolved = []
+        for stream_id in list(stream_ids):
+            sid = int(stream_id)
+            channel = sid_to_channel.get(sid)
+            if channel is None and 0 <= sid < self.NUMBER_OF_CHANNELIZERS:
+                channel = sid
+            if channel is None:
+                unresolved.append(sid)
+            else:
+                channels.append(channel)
+        if unresolved:
+            raise ValueError(
+                f"Unable to map stream IDs {unresolved} to known channels. "
+                f"Known stream IDs are {sorted(sid_to_channel.keys())}."
+            )
+
+        seen = set()
+        unique_channels = []
+        for channel in channels:
+            if channel not in seen:
+                unique_channels.append(channel)
+                seen.add(channel)
+        return unique_channels
+
+    def _get_uniform_receiver_profile(self, stream_ids=None):
+        channels = self._resolve_receiver_channels(stream_ids=stream_ids)
+        profiles = [self._effective_decode_profiles[ch] for ch in channels]
+        if not profiles:
+            raise RuntimeError("No decode profiles available for selected channels.")
+
+        signature = profiles[0].receiver_signature()
+        mismatched = [p.channel for p in profiles if p.receiver_signature() != signature]
+        if mismatched:
+            raise ValueError(
+                f"Selected stream IDs span different decode profiles. "
+                f"Use separate receivers for channel groups. Mismatched channels: {mismatched}"
+            )
+        return profiles[0]
+
+    def refresh_capture_state_from_hardware(self, channels=None):
+        """Optional debug helper to reconcile tracked state from hardware registers."""
+        self._init_capture_state_tracking()
+        target_channels = self._normalize_channels(channels)
+        for channel in target_channels:
+            chan = self.chan[channel]
+            state = self._channel_capture_state[channel]
+            if chan.PROBER is not None:
+                state.stream_id = int(chan.PROBER.STREAM_ID)
+                state.data_source = "scaler" if int(chan.PROBER.SOURCE_SEL) else "funcgen"
+                state.prober_sub_period = int(chan.PROBER.SUB_PERIOD)
+            state.scaler_cap_data_type = int(chan.SCALER.CAP_DATA_TYPE)
+            state.scaler_bypass = bool(chan.SCALER.BYPASS)
+            state.scaler_bypass_data_type = int(chan.SCALER.DATA_TYPE)
+            state.fft_bypass = bool(chan.FFT.BYPASS)
+            state.funcgen_source = chan.FUNCGEN.get_data_source()
+            state.funcgen_left_shift = int(chan.FUNCGEN.LEFT_SHIFT)
+            state.funcgen_right_shift = int(chan.FUNCGEN.RIGHT_SHIFT)
+        if self.CAPTURE_TYPE == "UCAP":
+            self._capture_run_state.ucap_mode = int(self.UCAP.MODE)
+            self._capture_run_state.source = "scaler" if int(self.UCAP.SOURCE_SEL) == 255 else "funcgen"
+        self._recompute_effective_decode_profiles(target_channels)
+
 
 
     def get_string_id(self):
@@ -2890,6 +3202,12 @@ class chFPGA(FPGAFirmware):
             chan.FUNCGEN.set_data_source(function, **kwargs)
         if reset_chan:
             self.set_chan_reset(0)  # Release reset
+        self._update_channel_capture_state(
+            channels,
+            funcgen_source=function,
+            funcgen_left_shift=None if left_shift is None else int(left_shift),
+            funcgen_right_shift=None if right_shift is None else int(right_shift),
+        )
 
     # set_funcgen_function = set_funcgen # for backwards compatibility
 
@@ -3073,20 +3391,54 @@ class chFPGA(FPGAFirmware):
 
     def get_data_receiver(self, pr: UDPPacketReceiver = None, pr_buf_size=None, port_number=None, **kwargs):
         """
-        Returns a RawFrameReceiver object; kwargs are passed
-        """
-        desired_pkt_frames = kwargs.get("pkt_frames_per_burst")
-        if desired_pkt_frames is None and self.CAPTURE_TYPE == "PROBER":
-            desired_pkt_frames = self._capture_pkt_frames_per_burst
-            if desired_pkt_frames is not None:
-                kwargs["pkt_frames_per_burst"] = desired_pkt_frames
+        Return a ``RawFrameReceiver`` configured from current capture context.
 
-        if self.recv and desired_pkt_frames is not None:
+        The receiver configuration is derived from the current effective decode
+        profile for selected ``stream_ids`` (or all default streams when not
+        specified). The method will recreate an existing receiver when profile
+        signature changes.
+
+        Parameters
+        ----------
+        pr
+            Existing packet receiver instance. If omitted, one is created.
+        pr_buf_size
+            Optional UDP packet receiver buffer size (when ``pr`` is created).
+        port_number
+            UDP port override for the data socket.
+        **kwargs
+            Forwarded to ``RawFrameReceiver``. Common user-facing knobs:
+            ``stream_ids``, ``format``, ``verbose``, ``ring_buffer_size``,
+            ``decode_strict``. Engine/profile kwargs are injected internally.
+        """
+        self._init_capture_state_tracking()
+
+        profile = self._get_uniform_receiver_profile(stream_ids=kwargs.get("stream_ids"))
+
+        if kwargs.get("format") is None:
+            kwargs["format"] = profile.default_format
+
+        desired_pkt_frames = kwargs.get("pkt_frames_per_burst", profile.pkt_frames_per_burst)
+        kwargs["pkt_frames_per_burst"] = desired_pkt_frames
+        kwargs["capture_engine"] = profile.capture_engine
+        kwargs["effective_decode_profile"] = asdict(profile)
+        profile_signature = (
+            profile.receiver_signature(),
+            int(desired_pkt_frames),
+            kwargs.get("format"),
+        )
+
+        if profile.capture_engine == "UCAP":
+            kwargs.setdefault("target_mode", profile.target_mode)
+
+        if self.recv:
             current_pkt_frames = getattr(self.recv, "PKT_FRAMES_PER_BURST", None)
-            if current_pkt_frames != desired_pkt_frames:
+            current_profile_signature = getattr(self.recv, "decode_profile_signature", None)
+            if current_pkt_frames != desired_pkt_frames or current_profile_signature != profile_signature:
                 self.logger.debug(
-                    f"{self!r}: Recreating data receiver because pkt_frames_per_burst changed "
-                    f"from {current_pkt_frames} to {desired_pkt_frames}"
+                    f"{self!r}: Recreating data receiver due to capture context change "
+                    f"(pkt_frames {current_pkt_frames}->{desired_pkt_frames}, "
+                    f"profile {current_profile_signature}->{profile_signature})."
                 )
                 if pr is None:
                     pr = self.recv.pr
@@ -3110,6 +3462,8 @@ class chFPGA(FPGAFirmware):
                 platform_id=self.PLATFORM_ID,
                 **kwargs,
             )
+            self.recv.decode_profile_signature = profile_signature
+            self._receiver_profile_signature = profile_signature
         else:
             self.logger.debug(f'{self!r}: Fetching existing data receiver')
         return self.recv
@@ -3224,14 +3578,17 @@ class chFPGA(FPGAFirmware):
         elif not isinstance(stream_ids, dict):
             raise TypeError('parameter must be a list, a dict or an integer')
 
+        self._init_capture_state_tracking()
         for ch, stream_id in stream_ids.items():
             self.chan[ch].PROBER.STREAM_ID = stream_id
+            if ch in self._channel_capture_state:
+                self._channel_capture_state[ch].stream_id = int(stream_id)
+        self._recompute_effective_decode_profiles(stream_ids.keys())
 
     def start_data_capture(
             self,
             period=None,
             frames_per_burst=1,
-            number_of_bursts=0,
             channels=None,
             source='scaler',
             select=False,
@@ -3260,10 +3617,6 @@ class chFPGA(FPGAFirmware):
             burst_period_in_frames (int): Number of frames between captured bursts - 1 second corresponds to approximately 39 000 frames.
 
             burst_period_frame_rounding (int): rounds burst period to an integer multiple of `burst_period_frame_rounding`.
-
-            number_of_bursts (int): (PROBER only) Number of bursts to send, after which the FPGA stops sending
-                data. If `number_of_bursts` =0, the transmission continues indefinitely, until
-                stopped by `stop_data_capture()`.
 
             frames_per_burst (int): (PROBER only) Number of frames to send in a single burst. Default is 1.
                 Limited by buffer space in the FPGA. This field is ignored if the UCAP capture
@@ -3309,8 +3662,8 @@ class chFPGA(FPGAFirmware):
                 - 2: captures 8 contiguous frames from the first 2 channels listed in ``channels``.
                 - 3: captures 16 contiguous frames from the first channel listed in ``channels``.
 
-        Data is sent as N bursts (`number_of_bursts`) of M frames (`frames_per_burst`) . If
-        `number_of_bursts` is zero or not specified, burst transmission is continuous.
+        Data is sent as periodic bursts of M frames (`frames_per_burst`) and continues
+        until stopped by ``stop_data_capture()``.
 
         Burst repetition rate is set either as a period specified in seconds (`period` or
         `burst_period_in_seconds`) or as a number of frames (`burst_period_in_frames`).
@@ -3349,18 +3702,22 @@ class chFPGA(FPGAFirmware):
                 f'with first frame offset of {offset} frames ({offset * self.FRAME_PERIOD * 1000:.3f} ms)'
                 f'and a send delay factor of {send_delay} ({send_delay * 65536 / 125e6 * 1000:.3f} ms).')
 
+        self._init_capture_state_tracking()
 
         if data_type is not None:
             if source == 'scaler':
-                for ch in self.chan:
-                    ch.SCALER.set_capture_data_type(data_type)
+                normalized_cap_type = self._normalize_scaler_cap_data_type(data_type)
+                for ch in channels:
+                    self.chan[ch].SCALER.set_capture_data_type(data_type)
+                self._update_channel_capture_state(channels, scaler_cap_data_type=normalized_cap_type)
             else:
                 raise RuntimeError(f"'data_type' can be specified only for source='scaler'")
         else:
             if source == 'scaler':
                 self.logger.warning(f"data_type not specified for scaler capture. Defaulting to 0.")
-                for ch in self.chan:
-                    ch.SCALER.set_capture_data_type(0)
+                for ch in channels:
+                    self.chan[ch].SCALER.set_capture_data_type(0)
+                self._update_channel_capture_state(channels, scaler_cap_data_type=0)
 
         # stop data from going into the PROBER and MASTER to minimize the risk
         # of malformed packets and unstable communications
@@ -3372,9 +3729,25 @@ class chFPGA(FPGAFirmware):
         if self.CAPTURE_TYPE == 'UCAP':
             self.UCAP.set_data_capture(source=source, mode=mode, channels=channels, select=select, periods=[burst_period_in_frames-1, burst_period_in_frames-1])
             self._capture_pkt_frames_per_burst = None
+            self._update_capture_run_state(
+                capture_engine="UCAP",
+                source=source,
+                channels=tuple(channels),
+                ucap_mode=int(mode),
+                ucap_select=bool(select),
+                pkt_frames_per_burst=self._ucap_mode_to_pkt_frames(int(mode)),
+            )
 
         elif self.CAPTURE_TYPE =='PROBER':
             self._capture_pkt_frames_per_burst = frames_per_burst
+            self._update_capture_run_state(
+                capture_engine="PROBER",
+                source=source,
+                channels=tuple(channels),
+                ucap_mode=0,
+                ucap_select=False,
+                pkt_frames_per_burst=int(frames_per_burst),
+            )
 
             frames_per_second = frames_per_burst * 1.0 / self.FRAME_PERIOD / burst_period_in_frames
             packet_size_in_bits = (self.FRAME_LENGTH + 10 + 42) * 8  # 10 header bytes, 42 Ethernet/IP/UDP overhead
@@ -3400,13 +3773,14 @@ class chFPGA(FPGAFirmware):
                 chan.PROBER.config_capture(
                     frames_per_burst=frames_per_burst,
                     burst_period=burst_period_in_frames,
-                    number_of_bursts=number_of_bursts,
                     offset=offset,
                     send_delay=send_delay)
                 ch = chan.chan_number
                 action = ('Disabling', 'Enabling')[ch in channels]
                 self.logger.debug(f'{self!r}: {action} raw data capture on channel {ch}')
                 chan.PROBER.RESET = 0
+
+            self._update_channel_capture_state(channels, data_source=source, prober_sub_period=23)
 
         # ** line below no longer supported by firmware *** enables data transmission if continuous mode is selected
         self.set_trig(1)
@@ -3446,6 +3820,8 @@ class chFPGA(FPGAFirmware):
         for chan in self.get_channelizers(channels):
             chan.PROBER.set_data_source(source)
             chan.PROBER.SUB_PERIOD = sub_period
+        self._update_channel_capture_state(channels, data_source=source, prober_sub_period=int(sub_period))
+        self._update_capture_run_state(source=source, channels=tuple(channels))
 
     def set_fft_bypass(self, bypass_mode, channels=None):
         """
@@ -3471,6 +3847,8 @@ class chFPGA(FPGAFirmware):
                 configured_channels.add(ch)
         channels_str = ', '.join([str(i) for i in configured_channels])
         self.logger.debug(f'{self!r}: Setting FFT bypass mode to {bool(bypass_mode)} for channel {channels_str}')
+        if configured_channels:
+            self._update_channel_capture_state(list(configured_channels), fft_bypass=bool(bypass_mode))
         # self.reset()
         # self.sync()
 
@@ -3523,16 +3901,24 @@ class chFPGA(FPGAFirmware):
             for ch in channels:
                 self.chan[ch].SCALER.DATA_TYPE = 0
                 self.chan[ch].SCALER.BYPASS = False
+            self._update_channel_capture_state(channels, scaler_bypass=False, scaler_bypass_data_type=0)
         elif bypass_data_type is not None:
             self.logger.debug(f'Setting scaler output data type to {bypass_data_type} for channel {channels}')
             for ch in channels:
                 self.chan[ch].SCALER.DATA_TYPE = bypass_data_type
                 self.chan[ch].SCALER.BYPASS = True
+            self._update_channel_capture_state(
+                channels,
+                scaler_bypass=True,
+                scaler_bypass_data_type=int(bypass_data_type),
+            )
 
         if cap_data_type is not None:
+            normalized_cap_type = self._normalize_scaler_cap_data_type(cap_data_type)
             self.logger.debug(f'Setting scaler capture data type to {cap_data_type} for channel {channels}')
             for ch in channels:
                 self.chan[ch].SCALER.CAP_DATA_TYPE = cap_data_type
+            self._update_channel_capture_state(channels, scaler_cap_data_type=normalized_cap_type)
 
 
 
