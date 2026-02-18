@@ -25,3 +25,5 @@ out_*/
 .vscode/
 .idea/
 corr16tests/
+fw_test_results/
+xreport.xml
