@@ -144,7 +144,6 @@ class PROBER(MMI):
 
         self.BURST_LENGTH = frames_per_burst - 1 # BURST_LENGTH actually specifies the number of additional frames in the firmware
         self.set_burst_period(burst_period, burst_period)
-        # self.BURST_NUMBER = number_of_bursts
         self.OFFSET = offset
         self.SEND_DELAY = send_delay
 
@@ -211,10 +210,6 @@ class PROBER(MMI):
         """ Displays the status of the data capture module"""
         print('-------------- CHAN[%i] data capture --------------' % self.instance_number)
         print(' Capture frame(%s) every %s frames' % (self.BURST_LENGTH, self.get_burst_period()), end=' ')
-        # if self.BURST_NUMBER:
-        #     print 'for %i bursts' % self.BURST_NUMBER
-        # else:
-        #     print 'continuously while the frames are tagged for capture at the source'
 
 
 

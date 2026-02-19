@@ -3421,6 +3421,8 @@ class chFPGA(FPGAFirmware):
 
         desired_pkt_frames = kwargs.get("pkt_frames_per_burst", profile.pkt_frames_per_burst)
         kwargs["pkt_frames_per_burst"] = desired_pkt_frames
+        desired_ignore_first_burst = bool(kwargs.get("ignore_first_burst", True))
+        kwargs["ignore_first_burst"] = desired_ignore_first_burst
         kwargs["capture_engine"] = profile.capture_engine
         kwargs["effective_decode_profile"] = asdict(profile)
         profile_signature = (

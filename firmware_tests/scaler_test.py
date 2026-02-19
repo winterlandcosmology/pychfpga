@@ -59,6 +59,8 @@ def unsplit_imag(array):
     '''
     Turns an array of N real numbers into an array of N/2 complex numbers, interpreting every other element as the the imaginary component.
     '''
+    if array.size % 2:
+        raise ValueError(f"Cannot unsplit odd-length array of size {array.size} into complex samples.")
     return (array[::2] + array[1::2]*1j).astype(np.complex64)
 
 def split_imag(array):
@@ -78,7 +80,7 @@ class TestScaler:
     def get_widths(_, test_config):
         platform = test_config.platform
         if platform not in platforms.keys():
-            print(f'{platform} not recognised as a possible platform')
+            raise ValueError(f'{platform} not recognised as a possible platform')
         widths = NameSpace(platforms[platform])
         widths.PLATFORM = platform[:3] # Either ICE or CRS
         widths.MIN_INPUT, widths.MAX_INPUT = -2**(widths.INPUT_WIDTH-1), 2**(widths.INPUT_WIDTH-1)-1
@@ -136,7 +138,7 @@ class TestScaler:
         self.data.NUM_CHANNELIZERS = len(self.board.chan) #currently unused
         conn_logger_name = FPGAArray.__name__.rsplit('.', 1)[0] if '.' in __name__ else ''
         self.logger = logging.getLogger(conn_logger_name) #store logger in xr for future use
-        self.logger.setLevel(xr.config.test_config.loglevelconn)
+        self.logger.setLevel(xr.config.test_config.logleveltest)
         self.plot_dir = Path('plots/')
         #check that fifo overflow doesn't go high either before or after test
         for ch in self.board.chan:
@@ -152,7 +154,7 @@ class TestScaler:
         self.board.set_channelizer(
             fft_bypass=True,
             scaler_bypass=False,
-            scaler_out_data_type=0,
+            scaler_bypass_data_type=0,
             scaler_cap_data_type=0,
             offset_binary_encoding=False,
             scaler_eight_bit=self.data.CAPTURE_WIDTH > 4 and self.data.PLATFORM == 'ICE', #TODO: generalise these for other platforms
@@ -190,6 +192,7 @@ class TestScaler:
             return np.stack((reals, cmplx), axis=1).reshape(-1) #interleave the real and complex arrays
         elif func == 'arb': #user-provided data buffer
             return kwargs.get('data', np.zeros(samples))
+        raise ValueError(f"Unknown data generation function '{func}'")
 
     def get_test_param(self, test_name, param_name, default):
         '''
@@ -198,39 +201,60 @@ class TestScaler:
         params = self.test_config.get(test_name, {}) #we have access to test_config since setup has been run 
         return params.get(param_name, default)
 
-    def _set_capture_scaler(self, func, double=False, read=True, get_flags=False, **func_kwargs):
+    def _set_capture_scaler(self, func, double=False, read=True, get_flags=False, cap_data_type=None, **func_kwargs):
         '''
         Sets the function generator to output a specific set of values and then captures data from the scaler.
         '''
+        logger = self.get_logger()
         source = self.gen_data(func, samples=self.data.NUM_SAMPLES, **func_kwargs) #setup has already been run, so self.data has been set
         self.board.set_data_source(source='arb', data=source)
-        self.board.start_data_capture(period=0.01, source='scaler')
+        if cap_data_type is None:
+            cap_data_type = int(self.board.chan[0].SCALER.CAP_DATA_TYPE)
+        self.board.start_data_capture(period=0.01, source='scaler', data_type=cap_data_type)
         if not read:
+            logger.debug(
+                "_set_capture_scaler(read=False): func=%s cap_data_type=%s source_shape=%s",
+                func,
+                cap_data_type,
+                source.shape,
+            )
             return source, source
-        receiver = self.board.get_data_receiver()
-        if self.data.PLATFORM == 'ICE':
-            if double:
-                _, data, _ = receiver.read_raw_frames_double_resolution(verbose=False)
+        logger.debug("Initializing data receiver")
+        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        ts, data, count = receiver.read_raw_frames(ncap=1, split_frames=False)
+
+        logger.debug(
+            "_set_capture_scaler: func=%s double=%s get_flags=%s cap_data_type=%s ts_shape=%s data_shape=%s count_shape=%s",
+            func,
+            double,
+            get_flags,
+            cap_data_type,
+            ts.shape,
+            data.shape,
+            count.shape,
+        )
+
+        if get_flags:
+            if self.data.READOUT_SHIFT > 0:
+                flags = data & (2 ** self.data.READOUT_SHIFT - 1)
             else:
-                _, data, _ = receiver.read_raw_frames(verbose=False)
-            if get_flags:
-                return source, data & (2**self.data.READOUT_SHIFT-1)
-            return source, data // (2**self.data.READOUT_SHIFT)
-        #TODO: add capture mode for ucap
-        else:
-            if double:
-                pytest.skip("Double resolution not supported on UCAP yet")
-            else:
-                 _, data, _ = receiver.read_raw_frames(format='16', split = True, verbose=False)
-            if get_flags:
-                raise Exception("Flag feature not implemented on UCAP")
-            return source, data // (2**self.data.READOUT_SHIFT)
+                raise RuntimeError("Cannot extract scaler flags when READOUT_SHIFT is 0.")
+            logger.debug("_set_capture_scaler: flags_first16=%s", flags[0][:16])
+            return source, flags
+
+        if self.data.READOUT_SHIFT > 0:
+            data = data // (2 ** self.data.READOUT_SHIFT)
+
+        logger.debug("_set_capture_scaler: received_first16=%s", data[0][:16])
+        if double:
+            logger.debug("_set_capture_scaler: double=True (decoded through capture profile)")
+        return source, data
 
     def plot_and_test(self, xr, data, ref_data, title, **kwargs):
         test_name = title[:title.find('(')] #up to position of first bracket
         parameters  = title[title.find('('):]
         xr.header(test_name)
-        assert(np.equal(data[0], data).all(), "Not all channels are equal")
+        assert np.equal(data[0], data).all(), "Not all channels are equal"
         print(f'Parameters: {parameters}')
         residuals = data[0] - ref_data
         print("Creating plots")
@@ -246,11 +270,31 @@ class TestScaler:
     @pytest.mark.scaler
     def test_all_zeroes(self, setup_scaler, xr):
         '''
-        Set all gains to 0 and tests if output is uniformly 0 when provided with a ramp as an input.
+        Verify that zero digital gain forces scaler output to zero for the full input range.
+
+        The test programs the channelizer to capture scaler output (capture mode 0), feeds a
+        full-range ramp into FUNCGEN in FFT-bypass mode, and checks that the received scaler
+        stream is exactly zero on every sample.
         '''
+        logger = self.get_logger()
         self.board.set_gains(0)
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+
+        source = self.gen_data('ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        self.board.set_data_source(source='arb', data=source)
+        self.board.start_data_capture(period=0.01, source='scaler', data_type=0)
+        receiver = self.board.get_data_receiver(verbose=2)
+        _, data, _ = receiver.read_raw_frames(ncap=1, split_frames=False)
+
         ref_data = source * 0
+        logger.debug(
+            "test_all_zeroes: source_shape=%s data_shape=%s ref_shape=%s",
+            source.shape,
+            data.shape,
+            ref_data.shape,
+        )
+        logger.debug("test_all_zeroes: received_first16=%s", data[0][:16])
+        logger.debug("test_all_zeroes: reference_first16=%s", ref_data[:16])
+
         self.plot_and_test(xr, data, ref_data, 'All zeroes')
 
 
@@ -259,41 +303,86 @@ class TestScaler:
     @pytest.mark.parametrize('use_prerounding', (False, True))
     def test_all_ones(self, postscaler, symmetric_saturation, use_prerounding, setup_scaler, xr):
         '''
-        Sets all gains to 1 and tests if the output is merely a shifted and truncated copy of the input, which is a ramp.
+        Verify unity gain path for a full-range ramp with optional pre-rounding capture.
 
         Parameters:
-            
             postscaler (int): postscaler(s) to employ with this test
-            
+
             symmetric_saturation (bool): whether or not to employ symmetric saturation 
 
-            use_prerounding (bool): if True, tests cap_data_type 2 (output is extracted directly after scaling) thereby bypassing symmetric saturation
+            use_prerounding (bool): if True, capture mode 2 is used (post-gain, pre-rounding
+                data), which bypasses the final symmetric-saturation behavior in the reference.
         '''
-        if use_prerounding:
-            self.board.set_scaler_output_modes(cap_data_type=2) #capture data right after multiplication
-        else:
-            self.board.set_scaler_output_modes(cap_data_type=0)
+        logger = self.get_logger()
+        cap_data_type = 2 if use_prerounding else 0
+
+        self.board.set_scaler_output_modes(cap_data_type=cap_data_type)
         self.board.set_scaler_rounding_mode(0)
         self.board.set_gains(1, postscaler=postscaler)
-        xr.data.board.set_symmetric_saturation(symmetric_saturation)
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        self.board.set_symmetric_saturation(symmetric_saturation)
+
+        source = self.gen_data('ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        self.board.set_data_source(source='arb', data=source)
+        self.board.start_data_capture(period=0.01, source='scaler', data_type=cap_data_type)
+        receiver = self.board.get_data_receiver(verbose=2)
+        _, data, _ = receiver.read_raw_frames(ncap=1, split_frames=False)
+        data = data // (2 ** self.data.READOUT_SHIFT)
+
         ref_data = np.clip(source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT + (symmetric_saturation and not use_prerounding), self.data.MAX_OUTPUT)
+        logger.debug(
+            "test_all_ones: cap_data_type=%s postscaler=%s symmetric_saturation=%s use_prerounding=%s",
+            cap_data_type,
+            postscaler,
+            symmetric_saturation,
+            use_prerounding,
+        )
+        logger.debug(
+            "test_all_ones: source_shape=%s data_shape=%s ref_shape=%s",
+            source.shape,
+            data.shape,
+            ref_data.shape,
+        )
+        logger.debug("test_all_ones: received_first16=%s", data[0][:16])
+        logger.debug("test_all_ones: reference_first16=%s", ref_data[:16])
+
         self.plot_and_test(xr, data, ref_data, f'All ones (postscaler={postscaler}, symmetric_saturation={symmetric_saturation}, use pre-rounding={use_prerounding})')
 
     @pytest.mark.scaler
     def test_alternating_gain(self, period, setup_scaler, xr):
         '''
-        Tests that the gains are being applied to the correct bin by setting the gains uniformly to 0, save for each periodth gain, which is set to 1. This ensures that the gains are properly aligned with the bins.
-        The input is a periodic ramp, so it covers the range multiple times per frame instead of just once. This ensures that adjacent inputs are never equal,
-        
+        Verify per-bin gain alignment using a periodic sparse gain mask.
+
+        The gain table is set to zeros except every `period`-th bin, which is set to 1.
+        The input is a periodic ramp to avoid long flat segments, so misalignment between
+        gain-bin indexing and input-bin ordering is visible in the captured output.
+
         Parameters:
             period (int): period in number of bins of the pattern
         '''
+        logger = self.get_logger()
         gains = np.tile([*np.repeat(0, period - 1), 1], self.data.NUM_SAMPLES//(2 * period))
         gains = np.append(gains, (np.repeat(0, self.data.NUM_SAMPLES//2 - gains.size)))
-        xr.data.board.set_gains(gains, self.data.MAPPING_POSTSCALER)
-        source, data = self._set_capture_scaler('periodic_ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        self.board.set_gains(gains, self.data.MAPPING_POSTSCALER)
+
+        source = self.gen_data('periodic_ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        self.board.set_data_source(source='arb', data=source)
+        self.board.start_data_capture(period=0.01, source='scaler', data_type=0)
+        receiver = self.board.get_data_receiver(verbose=2)
+        ts, data, count = receiver.read_raw_frames(ncap=1, split_frames=False)
+        data = data // (2 ** self.data.READOUT_SHIFT)
+
         ref_data = np.clip(source * np.repeat(gains, 2) * 2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
+        logger.debug(
+            "test_alternating_gain: period=%s ts_shape=%s data_shape=%s count_shape=%s",
+            period,
+            ts.shape,
+            data.shape,
+            count.shape,
+        )
+        logger.debug("test_alternating_gain: gains_first32=%s", gains[:32])
+        logger.debug("test_alternating_gain: received_first16=%s", data[0][:16])
+        logger.debug("test_alternating_gain: reference_first16=%s", ref_data[:16])
+
         self.plot_and_test(xr, data, ref_data, f'Alternating gain (period={period})')
         
 
@@ -310,7 +399,12 @@ class TestScaler:
             gain (int): gains(s) to employ across all bins with this test
 
             force_float_gains (bool): if True, performs this test with the postscaler explicitly incorporated into the floating point gain, instead of seperately as a common log gain
+
+        Notes:
+            Uses scaler capture mode 0 and the current raw-frame API (`ncap`, `split_frames`)
+            so the received stream is compared directly against the integer reference model.
         '''
+        logger = self.get_logger()
         if force_float_gains:
             if any(chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
                 pytest.skip("Platform does not support floating point gains")
@@ -320,8 +414,32 @@ class TestScaler:
             self.board.set_gains(gain, postscaler=postscaler)
             assert(all(ch.SCALER.USE_FLOAT_GAINS == False for ch in self.board.chan))
         self.board.set_symmetric_saturation(symmetric_saturation)
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+
+        source = self.gen_data('ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        self.board.set_data_source(source='arb', data=source)
+        self.board.start_data_capture(period=0.01, source='scaler', data_type=0)
+        receiver = self.board.get_data_receiver(verbose=2)
+        ts, data, count = receiver.read_raw_frames(ncap=1, split_frames=False)
+        data = data // (2 ** self.data.READOUT_SHIFT)
+
         ref_data = np.clip(gain * source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT + symmetric_saturation, self.data.MAX_OUTPUT)
+        logger.debug(
+            "test_constant_gain: postscaler=%s gain=%s force_float_gains=%s symmetric_saturation=%s",
+            postscaler,
+            gain,
+            force_float_gains,
+            symmetric_saturation,
+        )
+        logger.debug(
+            "test_constant_gain: ts_shape=%s data_shape=%s count_shape=%s source_shape=%s ref_shape=%s",
+            ts.shape,
+            data.shape,
+            count.shape,
+            source.shape,
+            ref_data.shape,
+        )
+        logger.debug("test_constant_gain: received_first16=%s", data[0][:16])
+        logger.debug("test_constant_gain: reference_first16=%s", ref_data[:16])
         self.plot_and_test(xr, data, ref_data, f'Constant gain (postscaler={postscaler}, gain={gain}, symmetric saturation={symmetric_saturation}, force_float_gains={force_float_gains})')
         
 
@@ -329,12 +447,21 @@ class TestScaler:
     def test_ramp_gains(self, setup_scaler, xr):
         '''
         Sets the gains to a periodic ramp betwen gain_min and gain_max and ensures that they are correctly applied to the input bins
+
+        Notes:
+            Uses `_set_capture_scaler` with the current raw-frame capture API and the
+            currently configured scaler capture mode.
         '''
+        logger = self.get_logger()
         gains = self.gen_data('periodic_ramp', min=self.get_test_param('ramp_gains', 'gain_min', 0), max=self.get_test_param('ramp_gains', 'gain_max', 8), samples=512)
         gains = np.concatenate((gains, gains[::-1]))
         self.board.set_gains(gains, self.data.MAPPING_POSTSCALER)
         source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
         ref_data  = np.clip(np.repeat(gains, 2) * source * 2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
+        logger.debug("test_ramp_gains: gains_shape=%s source_shape=%s data_shape=%s ref_shape=%s", gains.shape, source.shape, data.shape, ref_data.shape)
+        logger.debug("test_ramp_gains: gains_first32=%s", gains[:32])
+        logger.debug("test_ramp_gains: received_first16=%s", data[0][:16])
+        logger.debug("test_ramp_gains: reference_first16=%s", ref_data[:16])
         self.plot_and_test(xr, data, ref_data, f'Ramp gains')
         
 
@@ -343,16 +470,34 @@ class TestScaler:
     def test_alternating_complex_gains(self, setup_scaler, xr):
         '''
         Alternates the gains between 1+0j and 0+1j. The test ensures not only that the gains are aligned, but that complex multiplier is working and multiplies the correct coefficients together,
+
+        Notes:
+            Uses capture mode 0 through `_set_capture_scaler` and compares the full
+            interleaved Re/Im stream against the host-side complex reference model.
         '''
+        logger = self.get_logger()
 
         if any(not chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
             pytest.skip("Platform does not support complex gains")
         #alternate between 1+0j and 0+1j
-        gains = np.tile((1+0j, 0+1j), 1024//2)
+        nfreq = self.data.NUM_SAMPLES // 2
+        gains = np.tile((1+0j, 0+1j), (nfreq + 1) // 2)[:nfreq]
         self.board.set_gains(gains, self.data.MAPPING_POSTSCALER)
-        split_source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        split_source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
         source = unsplit_imag(split_source)
         ref_data = np.clip(split_imag(gains * source) * 2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
+        logger.debug(
+            "test_alternating_complex_gains: nfreq=%s gains_shape=%s split_source_shape=%s source_shape=%s data_shape=%s ref_shape=%s",
+            nfreq,
+            gains.shape,
+            split_source.shape,
+            source.shape,
+            data.shape,
+            ref_data.shape,
+        )
+        logger.debug("test_alternating_complex_gains: gains_first16=%s", gains[:16])
+        logger.debug("test_alternating_complex_gains: received_first16=%s", data[0][:16])
+        logger.debug("test_alternating_complex_gains: reference_first16=%s", ref_data[:16])
         self.plot_and_test(xr, data, ref_data, 'Alternating complex gains', split_complex=True)
         
 
@@ -365,19 +510,51 @@ class TestScaler:
         
         Parameters:
             use_4bit_cap_mode (bool): if True, tests cap_data_type 3, which produces the same data as the normal scaler output even if the science output is set to another mode
+
+        Notes:
+            Uses `_set_capture_scaler` with explicit capture mode selection to verify
+            both normal capture mode (0) and 4-bit mirror capture mode (3).
         '''
+        logger = self.get_logger()
         if any(not chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
             pytest.skip("Platform does not support complex gains")
         if use_4bit_cap_mode:
-            self.board.set_scaler_output_modes(bypass=True, out_data_type=2, cap_data_type=3) #should generate same data as normal scaler output, even when output is outputting something else
+            cap_data_type = 3
+            self.board.set_scaler_output_modes(
+                bypass=True,
+                bypass_data_type=2,
+                cap_data_type=cap_data_type,
+            ) # should generate same data as normal scaler output, even when output is outputting something else
         else:
-            self.board.set_scaler_output_modes(bypass=False, out_data_type=0, cap_data_type=0)
-        split_gains = self.gen_data('complex_ramp', min=0, max=32, samples=2048)
-        gains = unsplit_imag(split_gains) #collapse 2048 real numbers into 1024 complex ones to be sent to FPGA
+            cap_data_type = 0
+            self.board.set_scaler_output_modes(bypass=False, cap_data_type=cap_data_type)
+        nfreq = int(self.board.NUMBER_OF_FREQUENCY_BINS)
+        split_gains = self.gen_data('complex_ramp', min=0, max=32, samples=2 * nfreq)
+        gains = unsplit_imag(split_gains) #collapse interleaved real/imag values into complex coefficients
         self.board.set_gains(gains, self.data.MAPPING_POSTSCALER)
-        split_source, data = self._set_capture_scaler('ramp', min=self.data.MIN_OUTPUT, max=self.data.MAX_OUTPUT)
+        split_source, data = self._set_capture_scaler(
+            'ramp',
+            min=self.data.MIN_OUTPUT,
+            max=self.data.MAX_OUTPUT,
+            cap_data_type=cap_data_type,
+        )
         source = unsplit_imag(split_source) #collapse back to complex numbers
         ref_data = np.clip(split_imag(gains * source) * 2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
+        logger.debug(
+            "test_periodic_complex_gains: use_4bit_cap_mode=%s cap_data_type=%s nfreq=%s split_gains_shape=%s gains_shape=%s split_source_shape=%s source_shape=%s data_shape=%s ref_shape=%s",
+            use_4bit_cap_mode,
+            cap_data_type,
+            nfreq,
+            split_gains.shape,
+            gains.shape,
+            split_source.shape,
+            source.shape,
+            data.shape,
+            ref_data.shape,
+        )
+        logger.debug("test_periodic_complex_gains: gains_first16=%s", gains[:16])
+        logger.debug("test_periodic_complex_gains: received_first16=%s", data[0][:16])
+        logger.debug("test_periodic_complex_gains: reference_first16=%s", ref_data[:16])
         self.plot_and_test(xr, data, ref_data, f'Periodic complex gains (use 4bit capture mode={use_4bit_cap_mode})', split_complex=True)
         
 
@@ -386,20 +563,41 @@ class TestScaler:
     def test_uniform_common_log_gain(self, setup_scaler, xr):
         '''
         Ensures floating point gains are properly calculated by setting all gains to a uniform power of 2 and ensures this is all moved to the common log gain. It does this test via manually inspecting the common log gain as well as by inspecting the scaling of the input.
+
+        Notes:
+            Uses `_set_capture_scaler` in capture mode 0 and checks both register-level
+            state (`USE_FLOAT_GAINS`, `SHIFT_LEFT`) and data-path output consistency.
         '''
+        logger = self.get_logger()
         if any(chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
             pytest.skip("Platform does not support floating point gains")
-        self.board.set_gains(np.ones(1024) * 2**self.data.MAPPING_POSTSCALER) #since postscaler=None, should automatically detect common factor
-        logger = self.get_logger()
+        nfreq = int(self.board.NUMBER_OF_FREQUENCY_BINS)
+        target_gain = 2 ** self.data.MAPPING_POSTSCALER
+        self.board.set_gains(np.ones(nfreq) * target_gain) #since postscaler=None, should automatically detect common factor
+        expected_shift_left = self.data.MAPPING_POSTSCALER - 10
+        logger.debug(
+            "test_uniform_common_log_gain: nfreq=%s target_gain=%s expected_shift_left=%s",
+            nfreq,
+            target_gain,
+            expected_shift_left,
+        )
         for ch in range(len(self.board.chan)):
             if not self.board.chan[ch].SCALER.USE_FLOAT_GAINS:
                 logger.error(f'Floating point gains not enabled in channel {ch}')
                 assert(False)
-            if not self.board.chan[ch].SCALER.SHIFT_LEFT == self.data.MAPPING_POSTSCALER - 10:
+            if not self.board.chan[ch].SCALER.SHIFT_LEFT == expected_shift_left:
                 logger.error(f'Common log gain incorrectly set to {self.board.chan[ch].SCALER.SHIFT_LEFT} in channel {ch}')
                 assert(False)
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
         ref_data = np.clip(source *  2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
+        logger.debug(
+            "test_uniform_common_log_gain: source_shape=%s data_shape=%s ref_shape=%s",
+            source.shape,
+            data.shape,
+            ref_data.shape,
+        )
+        logger.debug("test_uniform_common_log_gain: received_first16=%s", data[0][:16])
+        logger.debug("test_uniform_common_log_gain: reference_first16=%s", ref_data[:16])
         self.plot_and_test(xr, data, ref_data, 'Uniform common log gain')
         
 
@@ -408,26 +606,51 @@ class TestScaler:
     def test_common_log_gain(self, setup_scaler, xr):
         '''
         Similar to the test above, except the gains are first initialised to a random value within their range and then multiply them by a common power of 2. Tis ensures that the common log gain can correctly be exracted from an arbitray set of gains and the two sources of the left shiftnae
+
+        Notes:
+            Uses a deterministic minimum gain term so the expected extracted common
+            log gain is well defined for any valid `common_log_gain` setting.
         '''
-        common_log_gain = self.test_config.get('common_log_gain', 10)
+        logger = self.get_logger()
+        common_log_gain = int(self.test_config.get('common_log_gain', 10))
         if any(chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
             pytest.skip("Platform does not support floating point gains")
-        gains = np.random.randint(0, 2**11, 1024) * 2**np.random.randint(0, 2**5 - common_log_gain, 1024) #11 bits linear, 5 bits log
-        gains = gains.astype(np.float64)
+        if common_log_gain < 0 or common_log_gain > 31:
+            pytest.skip(f"common_log_gain={common_log_gain} is outside supported range [0, 31]")
+        nfreq = int(self.board.NUMBER_OF_FREQUENCY_BINS)
+        extra_log_max = 31 - common_log_gain
+        rand_lin = np.random.randint(1, 2**11, nfreq)
+        rand_log = np.random.randint(0, extra_log_max + 1, nfreq) if extra_log_max > 0 else np.zeros(nfreq, dtype=np.int64)
+        gains = rand_lin.astype(np.float64) * 2**rand_log
         gains *= 2**common_log_gain
-        gains[0] = 1 #ensure there is no common log gain by chance
+        gains[0] = float(2**common_log_gain) #pin minimum exponent so expected common log gain is deterministic
+        expected_shift_left = max(common_log_gain - 10, 0)
+        logger.debug(
+            "test_common_log_gain: common_log_gain=%s expected_shift_left=%s nfreq=%s gains_first16=%s",
+            common_log_gain,
+            expected_shift_left,
+            nfreq,
+            gains[:16],
+        )
         self.board.set_gains(gains)
-        logger = self.get_logger()
         for ch in range(len(self.board.chan)):
             if not self.board.chan[ch].SCALER.USE_FLOAT_GAINS:
                 logger.error(f'Floating point gains not enabled in channel {ch}')
                 assert(False)
-            if not self.board.chan[ch].SCALER.SHIFT_LEFT == common_log_gain - 10:
+            if not self.board.chan[ch].SCALER.SHIFT_LEFT == expected_shift_left:
                 logger.error(f'Common log gain incorrectly set to {self.board.chan[ch].SCALER.SHIFT_LEFT} in channel {ch}')
                 assert(False)
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
         ref_data = np.clip(np.repeat(gains, 2) * source // 2**self.data.IDENTITY_POSTSCALER, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
-        self.plot_and_test(xr, data, ref_data, 'Periodic complex gains (use 4bit capture mode={use_4bit_cap_mode})')
+        logger.debug(
+            "test_common_log_gain: source_shape=%s data_shape=%s ref_shape=%s",
+            source.shape,
+            data.shape,
+            ref_data.shape,
+        )
+        logger.debug("test_common_log_gain: received_first16=%s", data[0][:16])
+        logger.debug("test_common_log_gain: reference_first16=%s", ref_data[:16])
+        self.plot_and_test(xr, data, ref_data, f'Common log gain (common_log_gain={common_log_gain})')
         
 
     @pytest.mark.scaler
@@ -435,15 +658,39 @@ class TestScaler:
     def test_ramp_float_gains(self, setup_scaler, xr):
         '''
         Sets the gains to range over many possible linear gains for each of a variety of log gains. This ensures that the multiplication with the floating-point gain does not contain any bugs that surface only with specific vkalues and also provides a good visualisation of the floating-point format.
+
+        Notes:
+            Uses `_set_capture_scaler` in capture mode 0 and sizes gain vectors from
+            the active firmware frequency-bin count.
         '''
+        logger = self.get_logger()
         if any(chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
             pytest.skip("Platform does not support floating point gains")
-        log_gains = self.gen_data('ramp', min=self.data.IDENTITY_POSTSCALER-11, max=self.data.IDENTITY_POSTSCALER+4, samples=1024)
-        lin_gains = self.gen_data('periodic_ramp', min=0, max=2**6-1, samples=1024) * 2**4
+        nfreq = int(self.board.NUMBER_OF_FREQUENCY_BINS)
+        log_gains = self.gen_data('ramp', min=self.data.IDENTITY_POSTSCALER-11, max=self.data.IDENTITY_POSTSCALER+4, samples=nfreq)
+        lin_gains = self.gen_data('periodic_ramp', min=1, max=2**6-1, samples=nfreq) * 2**4
         gains = lin_gains * 2**log_gains
+        logger.debug(
+            "test_ramp_float_gains: nfreq=%s log_gains_shape=%s lin_gains_shape=%s gains_shape=%s",
+            nfreq,
+            log_gains.shape,
+            lin_gains.shape,
+            gains.shape,
+        )
+        logger.debug("test_ramp_float_gains: log_gains_first16=%s", log_gains[:16])
+        logger.debug("test_ramp_float_gains: lin_gains_first16=%s", lin_gains[:16])
+        logger.debug("test_ramp_float_gains: gains_first16=%s", gains[:16])
         self.board.set_gains(gains)
-        source, data = self._set_capture_scaler('a', a=1)
+        source, data = self._set_capture_scaler('a', a=1, cap_data_type=0)
         ref_data = np.clip((source * np.repeat(gains, 2)) * 2**self.data.IMPLICIT_SHIFT // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
+        logger.debug(
+            "test_ramp_float_gains: source_shape=%s data_shape=%s ref_shape=%s",
+            source.shape,
+            data.shape,
+            ref_data.shape,
+        )
+        logger.debug("test_ramp_float_gains: received_first16=%s", data[0][:16])
+        logger.debug("test_ramp_float_gains: reference_first16=%s", ref_data[:16])
         self.plot_and_test(xr, data, ref_data, 'Ramp float gains')
         
 
@@ -464,19 +711,28 @@ class TestScaler:
             rounding_mode (int): rounding mode (truncate, normal, or convergent) to test
 
             use_prerounding (bool): if True, tests cap_data_type 2 by capturing data directly after scaling and therefore before rounding and ensures no rounding is performed
+
+        Notes:
+            Uses explicit scaler capture mode selection (`cap_data_type` 0 or 2)
+            and validates host-side rounding thresholds against the captured stream.
         '''
-        if use_prerounding:
-            self.board.set_scaler_output_modes(cap_data_type=2)
-        else:
-            self.board.set_scaler_output_modes(cap_data_type=0)
+        logger = self.get_logger()
+        cap_data_type = 2 if use_prerounding else 0
+        self.board.set_scaler_output_modes(cap_data_type=cap_data_type)
         max_val = 2**(self.data.INPUT_WIDTH - num_fractional_bits - 1) - 1
         min_val = -max_val - 1
         if value < min_val or value > max_val:
             pytest.skip(f"Cannot fit {value} into input bits with {num_fractional_bits} fractional bits")
         value = np.clip(value, min_val, max_val)
-        self.board.set_gains((1, self.data.IDENTITY_POSTSCALER-num_fractional_bits))
+        postscaler = self.data.IDENTITY_POSTSCALER - num_fractional_bits
+        self.board.set_gains(1, postscaler=postscaler)
         self.board.set_scaler_rounding_mode(rounding_mode)
-        source, data = self._set_capture_scaler('ramp', min=(value * 2**num_fractional_bits), max=((value + 1) * 2**num_fractional_bits - 1))
+        source, data = self._set_capture_scaler(
+            'ramp',
+            min=(value * 2**num_fractional_bits),
+            max=((value + 1) * 2**num_fractional_bits - 1),
+            cap_data_type=cap_data_type,
+        )
         bottom = abs(source % (2**num_fractional_bits))
         if use_prerounding: #pre-rounding data is equivalent to truncated data
             round_up = np.zeros(source.size)
@@ -485,9 +741,29 @@ class TestScaler:
         elif rounding_mode == 2:
             round_up = (bottom > 2**(num_fractional_bits - 1)) | ((bottom == 2**(num_fractional_bits - 1)) & (value % 2 == 1))
         else:
-            self.get_logger().error(f"Unrecognised rounding mode {rounding_mode} selected")
+            raise ValueError(f"Unrecognised rounding mode {rounding_mode} selected")
         ref_data = np.clip(value + round_up, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
-        self.plot_and_test(xr, data, ref_data, f'Rounding (value={value}, # of fractional bits={num_fractional_bits}, rounding mode={self.ROUNDING_MODES[rounding_mode]}, use pre-rounding data={use_prerounding}]')
+        logger.debug(
+            "test_rounding: value=%s num_fractional_bits=%s rounding_mode=%s use_prerounding=%s cap_data_type=%s postscaler=%s",
+            value,
+            num_fractional_bits,
+            rounding_mode,
+            use_prerounding,
+            cap_data_type,
+            postscaler,
+        )
+        logger.debug(
+            "test_rounding: source_shape=%s data_shape=%s ref_shape=%s bottom_shape=%s",
+            source.shape,
+            data.shape,
+            ref_data.shape,
+            bottom.shape,
+        )
+        logger.debug("test_rounding: bottom_first16=%s", bottom[:16])
+        logger.debug("test_rounding: round_up_first16=%s", round_up[:16])
+        logger.debug("test_rounding: received_first16=%s", data[0][:16])
+        logger.debug("test_rounding: reference_first16=%s", ref_data[:16])
+        self.plot_and_test(xr, data, ref_data, f'Rounding (value={value}, # of fractional bits={num_fractional_bits}, rounding mode={self.ROUNDING_MODES[rounding_mode]}, use pre-rounding data={use_prerounding})')
         
 
     @pytest.mark.scaler
@@ -509,36 +785,69 @@ class TestScaler:
             force_float_gains (bool): if True, performs this test with the postscaler explicitly incorporated into the floating point gain, instead of seperately as a common log gain
 
             use_4bit_cap_mode (bool): if True, tests cap_data_type 3, which produces the same data as the normal scaler output even if the science output is set to another mode
+
+        Notes:
+            Uses explicit capture mode routing (0 or 3) and validates the
+            round-then-saturate path for cases where rounding causes saturation.
         '''
+        logger = self.get_logger()
         if use_4bit_cap_mode:
-            self.board.set_scaler_output_modes(bypass=True, out_data_type=2, cap_data_type=3) #should generate same data as normal scaler output, even when output is outputting something else
+            cap_data_type = 3
+            self.board.set_scaler_output_modes(
+                bypass=True,
+                bypass_data_type=2,
+                cap_data_type=cap_data_type,
+            ) #should generate same data as normal scaler output, even when output is outputting something else
         else:
-            self.board.set_scaler_output_modes(bypass=False, out_data_type=0, cap_data_type=0)
+            cap_data_type = 0
+            self.board.set_scaler_output_modes(bypass=False, cap_data_type=cap_data_type)
         #ensure we can saturate with this number of fractional bits
         if self.data.INPUT_WIDTH - num_fractional_bits <= self.data.CAPTURE_WIDTH:
             pytest.skip(f"input is insufficently wide to allow saturation to occur while leaving {num_fractional_bits} fractional bits")
         self.board.set_scaler_rounding_mode(rounding_mode)
         self.board.set_symmetric_saturation(symmetric_saturation)
         #set postscaler #minimum value to get saturations even with no rounding
+        postscaler = self.data.IDENTITY_POSTSCALER - num_fractional_bits
         if force_float_gains:
             if any(chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
                 pytest.skip("Platform does not support floating point gains")
-            self.board.set_gains(2**(self.data.IDENTITY_POSTSCALER-num_fractional_bits))
+            self.board.set_gains(2**postscaler)
             assert(all(ch.SCALER.USE_FLOAT_GAINS == True for ch in self.board.chan))
         else:
-            self.board.set_gains(1, postscaler=self.data.IDENTITY_POSTSCALER-num_fractional_bits)
+            self.board.set_gains(1, postscaler=postscaler)
             assert(all(ch.SCALER.USE_FLOAT_GAINS == False for ch in self.board.chan))
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
-        ref_data = source * 2**self.data.IMPLICIT_SHIFT * 2**(self.data.IDENTITY_POSTSCALER-num_fractional_bits)  // 2**self.data.SCALER_SHIFT
+        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=cap_data_type)
+        ref_data = source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler  // 2**self.data.SCALER_SHIFT
         bottom = abs(source % (2**num_fractional_bits))
         if rounding_mode == 1:
             round_up = bottom >= 2**(num_fractional_bits - 1)
         elif rounding_mode == 2:
             round_up = (bottom > 2**(num_fractional_bits - 1)) | ((bottom == 2**(num_fractional_bits - 1)) & (ref_data % 2 == 1))
         else:
-            round_up = np.zeros(2048)
+            raise ValueError(f"Unrecognised rounding mode {rounding_mode} selected")
         ref_data += round_up
         ref_data = np.clip(ref_data, self.data.MIN_OUTPUT + symmetric_saturation, self.data.MAX_OUTPUT)
+        logger.debug(
+            "test_post_rounding_saturation: rounding_mode=%s symmetric_saturation=%s num_fractional_bits=%s force_float_gains=%s use_4bit_cap_mode=%s cap_data_type=%s postscaler=%s",
+            rounding_mode,
+            symmetric_saturation,
+            num_fractional_bits,
+            force_float_gains,
+            use_4bit_cap_mode,
+            cap_data_type,
+            postscaler,
+        )
+        logger.debug(
+            "test_post_rounding_saturation: source_shape=%s data_shape=%s ref_shape=%s bottom_shape=%s",
+            source.shape,
+            data.shape,
+            ref_data.shape,
+            bottom.shape,
+        )
+        logger.debug("test_post_rounding_saturation: bottom_first16=%s", bottom[:16])
+        logger.debug("test_post_rounding_saturation: round_up_first16=%s", round_up[:16])
+        logger.debug("test_post_rounding_saturation: received_first16=%s", data[0][:16])
+        logger.debug("test_post_rounding_saturation: reference_first16=%s", ref_data[:16])
         self.plot_and_test(xr, data, ref_data, f'Post-rounding Saturation (# of fractional bits={num_fractional_bits}, symmetric saturation={symmetric_saturation}, rounding_mode={self.ROUNDING_MODES[rounding_mode]}, force float gains={force_float_gains}, use 4bit capture method={use_4bit_cap_mode})')
         
 
@@ -550,17 +859,42 @@ class TestScaler:
         
         Parameters:
             symmetric_saturation (bool): whether or not to employ symmetric saturation 
+
+        Notes:
+            Uses capture mode 0 via `_set_capture_scaler` and validates that
+            overflow in either component zeros both Re/Im outputs for that bin pair.
         '''
+        logger = self.get_logger()
         self.board.set_gains(1, self.data.IDENTITY_POSTSCALER + 1)
         self.board.set_zero_on_sat(True)
         self.board.set_symmetric_saturation(symmetric_saturation)
-        source, data = self._set_capture_scaler(func='complex_ramp', min=self.data.MIN_OUTPUT//2 - 1, max=self.data.MAX_OUTPUT//2 + 1)
-        self.board.set_zero_on_sat(False)
-        self.board.set_symmetric_saturation(False)
+        try:
+            source, data = self._set_capture_scaler(
+                func='complex_ramp',
+                min=self.data.MIN_OUTPUT//2 - 1,
+                max=self.data.MAX_OUTPUT//2 + 1,
+                cap_data_type=0,
+            )
+        finally:
+            self.board.set_zero_on_sat(False)
+            self.board.set_symmetric_saturation(False)
         mask = (source*2 < (self.data.MIN_OUTPUT + symmetric_saturation)) | (source*2 > self.data.MAX_OUTPUT)
         mask = np.repeat(mask[::2] | mask[1::2], 2) #spill from Re or Im into pair
         ref_data = source * 2
         ref_data[mask] = 0
+        logger.debug(
+            "test_zero_on_sat: symmetric_saturation=%s source_shape=%s data_shape=%s ref_shape=%s mask_shape=%s mask_true=%s",
+            symmetric_saturation,
+            source.shape,
+            data.shape,
+            ref_data.shape,
+            mask.shape,
+            int(np.count_nonzero(mask)),
+        )
+        logger.debug("test_zero_on_sat: source_first16=%s", source[:16])
+        logger.debug("test_zero_on_sat: mask_first16=%s", mask[:16])
+        logger.debug("test_zero_on_sat: received_first16=%s", data[0][:16])
+        logger.debug("test_zero_on_sat: reference_first16=%s", ref_data[:16])
         self.plot_and_test(xr, data, ref_data, f'Zero on saturation (symmetric saturation={bool(symmetric_saturation)})', split_complex=True)
         
 
@@ -572,14 +906,46 @@ class TestScaler:
         
         Parameters:
             postscaler (int): postscaler(s) to employ with this test
+
+        Notes:
+            Uses scaler capture mode 0 and validates host-side offset-binary mapping
+            of the signed clipped scaler output.
         '''
+        logger = self.get_logger()
         self.board.set_gains(1, postscaler)
+        required_offset = bool(self.board.CORR.REQUIRES_OFFSET_BINARY_ENCODING) if self.board.CORR else False
+        previous_offset = bool(self.board.chan[0].SCALER.USE_OFFSET_BINARY)
+        if self.board.CORR and not required_offset:
+            pytest.skip("Current correlator mode requires 2's-complement output; offset-binary cannot be enabled.")
         self.board.set_offset_binary_encoding(True)
-        source, data = self._set_capture_scaler(func='ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
-        ref_data = np.clip(source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
-        sign = (ref_data >= 0) * 2 - 1
-        ref_data -= sign * (self.data.MAX_OUTPUT + 1)
-        self.plot_and_test(xr, data, ref_data, f'Offset encoding (postscaler={postscaler})')
+        try:
+            source, data = self._set_capture_scaler(func='ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
+            source_i = source.astype(np.int64)
+            ref_data = source_i * (2 ** self.data.IMPLICIT_SHIFT) * (2 ** postscaler)
+            ref_data //= 2 ** self.data.SCALER_SHIFT
+            ref_data = np.clip(ref_data, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT).astype(np.int64)
+
+            # Convert signed two's-complement codes to offset-binary and interpret
+            # them back as signed values, matching capture decode semantics.
+            modulus = 2 ** self.data.CAPTURE_WIDTH
+            half = modulus // 2
+            twos_unsigned = (ref_data + modulus) % modulus
+            offset_unsigned = twos_unsigned ^ half
+            ref_data = np.where(offset_unsigned >= half, offset_unsigned - modulus, offset_unsigned).astype(np.int64)
+            logger.debug(
+                "test_offset_encoding: postscaler=%s source_shape=%s data_shape=%s ref_shape=%s",
+                postscaler,
+                source.shape,
+                data.shape,
+                ref_data.shape,
+            )
+            logger.debug("test_offset_encoding: source_first16=%s", source[:16])
+            logger.debug("test_offset_encoding: received_first16=%s", data[0][:16])
+            logger.debug("test_offset_encoding: reference_first16=%s", ref_data[:16])
+            self.plot_and_test(xr, data, ref_data, f'Offset encoding (postscaler={postscaler})')
+        finally:
+            restore_offset = required_offset if self.board.CORR else previous_offset
+            self.board.set_offset_binary_encoding(restore_offset)
         
 
 
@@ -595,26 +961,47 @@ class TestScaler:
             postscaler (int): postscaler(s) to employ with this test
             
             out_mode (int): Output mode to employ. Either 1, 2, or 3
+
+        Notes:
+            Uses scaler bypass output modes with capture mode 0 and validates the
+            overflow/underflow flag mapping against host-computed saturation events.
         '''
-        self.board.set_scaler_output_modes(bypass=True, out_data_type=out_mode)
+        logger = self.get_logger()
+        cap_data_type = 0
+        self.board.set_scaler_output_modes(bypass=True, bypass_data_type=out_mode, cap_data_type=cap_data_type)
         self.board.set_gains(1, postscaler)
         self.board.set_symmetric_saturation(symmetric_saturation)
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=cap_data_type)
+        source_i = source.astype(np.int64)
         if self.data.CAPTURE_WIDTH > 4: #even in 8bit mode, the 1 is placed in the 4th bit, so need to correct for that
             data //= 16
+        scaled = source_i * 2**self.data.IMPLICIT_SHIFT * 2**postscaler // 2**self.data.SCALER_SHIFT
         #only checks re saturation
         if out_mode == 1:
-            out = source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler // 2**self.data.SCALER_SHIFT
-            ref_data = (out < self.data.MIN_OUTPUT + symmetric_saturation) | (out > self.data.MAX_OUTPUT)
-            ref_data[::2] = ref_data[1::2] #spread from imag to re
-            ref_data[1::2] = 0  #zero out imag
+            overflow = (scaled < self.data.MIN_OUTPUT + symmetric_saturation) | (scaled > self.data.MAX_OUTPUT)
+            pair_overflow = overflow[::2] | overflow[1::2]
+            ref_data = np.zeros(source.size, dtype=np.int64)
+            ref_data[::2] = pair_overflow.astype(np.int64)  # zero out imag
         else:
-            comp = (source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler // 2**self.data.SCALER_SHIFT)[out_mode-2::2] #either real or im depending on mode
+            comp = scaled[out_mode-2::2] #either real or im depending on mode
             underflow = comp < self.data.MIN_OUTPUT + symmetric_saturation
             overflow = comp > self.data.MAX_OUTPUT
-            ref_data = np.zeros(2048)
-            ref_data[::2] = overflow
-            ref_data[1::2] = underflow
+            ref_data = np.zeros(source.size, dtype=np.int64)
+            ref_data[::2] = overflow.astype(np.int64)
+            ref_data[1::2] = underflow.astype(np.int64)
+        logger.debug(
+            "test_overflow_detection: postscaler=%s out_mode=%s symmetric_saturation=%s cap_data_type=%s source_shape=%s data_shape=%s ref_shape=%s",
+            postscaler,
+            out_mode,
+            symmetric_saturation,
+            cap_data_type,
+            source.shape,
+            data.shape,
+            ref_data.shape,
+        )
+        logger.debug("test_overflow_detection: scaled_first16=%s", scaled[:16])
+        logger.debug("test_overflow_detection: received_first16=%s", data[0][:16])
+        logger.debug("test_overflow_detection: reference_first16=%s", ref_data[:16])
         self.plot_and_test(xr, data, ref_data, f'Overflow detection (postscaler={postscaler}, mode={out_mode}, symmetric_saturation={symmetric_saturation})', split_complex=True)
         
 
@@ -830,13 +1217,14 @@ class TestScaler:
 
     def sat_percent(self, postscaler: int, symmetric_saturation: bool):
         '''
-        Returns the percentage of inputs that are expected to saturate the scaler when the log gain is set to postscaler and symmetric saturation is set to symmetric_saturation, assuming a uniform distribution over all possible 8 bit inputs.
+        Returns the percentage of inputs that are expected to saturate the scaler when the log gain is set to postscaler and symmetric saturation is set to symmetric_saturation, assuming a uniform distribution over all possible input values for the active platform.
         '''
         count = 0
-        for v in range(-128, 128):
+        nvals = self.data.MAX_INPUT - self.data.MIN_INPUT + 1
+        for v in range(self.data.MIN_INPUT, self.data.MAX_INPUT + 1):
             out = v * 2.0**(postscaler + self.data.IMPLICIT_SHIFT - self.data.SCALER_SHIFT)
-            count += (out >= self.data.MAX_OUTPUT) or (out <= self.data.MIN_OUTPUT + symmetric_saturation)
-        return count / 256
+            count += (out > self.data.MAX_OUTPUT) or (out < self.data.MIN_OUTPUT + symmetric_saturation)
+        return count / nvals
 
     @pytest.mark.scaler
     @pytest.mark.statistical
