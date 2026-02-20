@@ -5,7 +5,7 @@ connection_config:
 
 test_config:
     loglevelconn: "INFO"   # Log level during connection to the board
-    logleveltest: "DEBUG"   # Log level during tests
+    logleveltest: "INFO"   # Log level during tests
     loglevelrecv: 1        # 0-3
     conn_scope: "class"     # Select "function" to re-establish connection for each test or
                             # "class" if you want to reuse connection.

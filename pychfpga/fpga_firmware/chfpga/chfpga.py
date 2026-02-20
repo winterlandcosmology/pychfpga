@@ -3934,8 +3934,8 @@ class chFPGA(FPGAFirmware):
             channels (list of int): channels to reset. if None, the default channel list (all channels) is used.
         """
         for ch in channels or self.default_channels:
-            self.chan[ch].SCALER.OVERFLOW_RESET = 1
-            self.chan[ch].SCALER.OVERFLOW_RESET = 0
+            self.chan[ch].SCALER.CHAN_FIFO_OVERFLOW_RESET = 1
+            self.chan[ch].SCALER.CHAN_FIFO_OVERFLOW_RESET = 0
 
 
     def set_global_trigger(self, trigger_state):
