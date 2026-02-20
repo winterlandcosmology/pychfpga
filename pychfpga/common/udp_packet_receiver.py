@@ -15,16 +15,18 @@ class UDPPacketReceiver:
             max_packet_size (int): Maximum expected UDP payload length
     """
 
-    def __init__(self, socket, n_packets=2048, max_packet_size=9000, verbose=1):
+    def __init__(self, sock, buf_size=2048, max_packet_size=9000, verbose=1, report_pkt_len_me: int = 0):
 
-        self.socket = socket
-        self.n_packets = n_packets
-        self.max_packet_size = max_packet_size;
+        self.sock = sock
+        self.n_packets = buf_size
+        self.max_packet_size = max_packet_size
         self.verbose = verbose
+        self.report_pkt_len_me = report_pkt_len_me
 
-        self.buf = np.zeros((n_packets, max_packet_size), dtype=np.uint8)
-        self.pkt_len = np.zeros((n_packets,), dtype=np.uint32) # packet length. 0= unused slot.
-        self.n = 0  # number of packets currently stored in the buffer
+        self.buf = np.zeros((self.n_packets, self.max_packet_size), dtype=np.uint8)
+        self.pkt_len = np.zeros((self.n_packets,), dtype=np.uint32) # packet length. 0= unused slot.
+        self.n_stored = 0  # number of packets currently stored in the buffer
+
 
     def settimeout(self, timeout):
         """ Sets the timeout on the socket
@@ -34,7 +36,7 @@ class UDPPacketReceiver:
             timeout (float): timeout in seconds
 
         """
-        self.socket.settimeout(timeout)
+        self.sock.settimeout(timeout)
 
     def gettimeout(self):
         """ Returns the current timeout on the socket
@@ -44,31 +46,31 @@ class UDPPacketReceiver:
             float: current timeout in seconds
 
         """
-        return self.socket.gettimeout()
+        return self.sock.gettimeout()
 
-    def get_packets(self, verbose=0):
+    def receive_packets(self, verbose=0):
         """ Receive some packets into the buffer until there is a timeout or the buffer is full
         """
         verbose = max(verbose, self.verbose)
-        # n = self.n # current packet number
         n = 0
         # last_ts = None
         while n < self.n_packets:
             try:
-                s = self.pkt_len[n] = self.socket.recv_into(self.buf[n])
-                if verbose >= 3:
-                    print(f"get_packets: got raw packet {n:03d}, len={s}: {self.buf[n,:16].tobytes().hex(':')}")
+                nbytes, addr = self.sock.recvfrom_into(self.buf[n])
+                self.pkt_len[n] = nbytes
+                if verbose >= 3 and self.pkt_len[n] > self.report_pkt_len_me:
+                    print(f"receive_packets: got raw packet {n:03d} from {addr}, len={nbytes}: {self.buf[n,:26].tobytes().hex(':')}")
                 n += 1
             except socket.timeout:  # we have a timeout, so we probably have time to process data
                 if not n:
                     continue
                 if verbose >= 3:
-                    print(f'get_packets: timeout')
+                    print(f'receive_packets: timeout')
                 break
         # we get here if there is a timeout or if the buffer is full
         if verbose >= 2:
-            print(f'get_packets: Returning {n} packets')
-        self.n = n
+            print(f'receive_packets: Returning {n} packets')
+        self.n_stored = n
         return n
 
 
@@ -81,13 +83,13 @@ class UDPPacketReceiver:
         flushed_packets = 0
         t0 = time.time()
         # Read packets until timeout
-        self.socket.settimeout(timeout)
+        self.sock.settimeout(timeout)
         # self.socket.setblocking(1)
         if verbose >=2:
             print('Flushing UDP buffer')
         while time.time() - t0 < max_flush_time:  # give up after some time
             try:
-                s = self.socket.recv_into(self.buf[0])
+                s = self.sock.recv_into(self.buf[0])
                 flushed_packets += 1
                 if verbose >=2:
                     print(f"flushing packet Starting with {self.buf[0][:10].tobytes().hex(':')}")

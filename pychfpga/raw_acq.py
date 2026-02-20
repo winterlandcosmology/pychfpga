@@ -2432,6 +2432,7 @@ class CorrPacketProcessor(object):
                         base_filename=None,
                         capture_duration=60,
                         capture_n_inputs=4,
+                        autocorr_only=False,
                         elements_per_file=256,
                         software_integration_period=100,
                         firmware_integration_period=100,
@@ -2464,7 +2465,7 @@ class CorrPacketProcessor(object):
         base_dir = base_dir or '%(run_folder)s/corr'
         base_filename = base_filename or '%(elapsed_seconds)08d_%(file_number)04d.h5'
 
-        self.n_inputs = capture_n_inputs
+        self.capture_n_inputs = capture_n_inputs
         self.elements_per_file = elements_per_file
 
         self.hdf5_start_time = time.time()  # used to keep track of how long the disk capture has been running
@@ -2494,7 +2495,8 @@ class CorrPacketProcessor(object):
             self.hdf5_file = HDF5CorrWriter(base_dir=self.hdf5_base_dir,
                                             filename=base_filename,
                                             elements_per_file=self.elements_per_file,
-                                            n_inputs=self.n_inputs,
+                                            capture_n_inputs=self.capture_n_inputs,
+                                            autocorr_only=autocorr_only,
                                             # correlator geometry
                                             number_of_correlators = number_of_correlators,
                                             number_of_correlated_inputs = number_of_correlated_inputs,
@@ -2527,11 +2529,17 @@ class CorrPacketProcessor(object):
 
 class HDF5CorrWriter(object):
     """ Object representing a HDF5 file containing N-squared correlation data
+    capture_n_inputs - can either be an int or an array of integers. If int, only the N first channels will be saved. 
+                       With an array you can specify arbitrary channels to be saved. Examples:
+                       capture_n_inputs = 4 -- saves autocorrelations and crosscorelations of channels A1, A2, A3 and A4
+                       capture_n_inputs = [0, 7, 9] -- saves autocorrelations and crosscorelations of channels A1, A8 and B2
+    autocorr_only - if True, only saves autocorrelation products
     """
     def __init__(self,
                  base_dir='.',
                  filename='%(file_number)04d',
-                 n_inputs=16,
+                 capture_n_inputs=16,
+                 autocorr_only = False,
                  elements_per_file=256,
                  n_freq_bins=1024,
 
@@ -2547,7 +2555,8 @@ class HDF5CorrWriter(object):
 
         self.filename = filename
         self.base_dir = base_dir
-        self.n_inputs = n_inputs
+        self.capture_n_inputs = capture_n_inputs
+        self.autocorr_only = autocorr_only
         self.elements_per_file = elements_per_file
         self.n_freq_bins = n_freq_bins
         self.sample_freq = sample_freq
@@ -2560,10 +2569,32 @@ class HDF5CorrWriter(object):
 
         # Compute the index arrays that will build the product vector from the
         # raw correlator data for the desired inputs
-        (i, j) = np.triu_indices(self.n_inputs)
-        self.prod_axis = np.array(list(zip(i, j)), dtype=self.prod_dtype)
-        self.n_prod = len(i)
+        sel_cfg = self.capture_n_inputs
+        self.log.debug(f'{self!r}: Starting HDF5CorrWriter. Capturing inputs/number of inpits: {self.capture_n_inputs}')
 
+        if isinstance(sel_cfg, int):
+            sel = np.arange(sel_cfg, dtype=int)
+        elif isinstance(sel_cfg, (list, tuple, np.ndarray)):
+            sel = np.asarray(sel_cfg, dtype=int)
+        else:
+            raise ValueError("capture_n_inputs must be int or a 1D list/array of ints")
+
+        if autocorr_only:
+            i0, j0 = np.diag_indices(sel.size)
+        else:
+            i0, j0 = np.triu_indices(sel.size)
+
+        i = sel[i0]
+        j = sel[j0]
+
+        self.prod_axis = np.array(list(zip(i, j)), dtype=self.prod_dtype)
+        self.log.debug(f'{self!r}: prod_axis: {self.prod_axis}')
+
+
+        # Map to extract only subset of selected indices from all correlation products returned by firmware
+        prod_idx_map = i * number_of_correlated_inputs - (i * (i - 1)) // 2 + (j - i)
+
+        self.n_prod = len(i)
 
         # Pre-compute the matrix that will be used to re-index the raw data
         # vectors from the correlator into an easy-to-index matrix format.
@@ -2572,7 +2603,7 @@ class HDF5CorrWriter(object):
         print(f'HDF5: getting correlator mapping matrix for N={number_of_correlated_inputs}, Nbins={number_of_bins_per_frame}, Ncorr={number_of_correlators}')
         _, self.raw_to_vector_map  =  CORR.get_raw_corr_map(N=number_of_correlated_inputs, Nbins=number_of_bins_per_frame, Ncorr=number_of_correlators)
         # self.raw_to_vector_map = self.raw_to_vector_map[..., i, j]  # keep only a subset of the inputs to save to disk
-        self.raw_to_vector_map = self.raw_to_vector_map[..., :self.n_prod]  # keep only a subset of the inputs to save to disk
+        self.raw_to_vector_map = self.raw_to_vector_map[..., prod_idx_map]  # keep only a subset of the inputs to save to disk
 
         print(f'raw_to-vector_map={self.raw_to_vector_map}')
 
@@ -2589,6 +2620,7 @@ class HDF5CorrWriter(object):
 
     def start_new_hdf5_file(self):
         self.close()
+        self.log.debug(f'{self!r}: Starting new HDF5 File')
         fields = dict(
             file_number=self.file_number,
             elapsed_seconds=time.time() - self.start_time)
@@ -2649,7 +2681,7 @@ class HDF5CorrWriter(object):
         self.n = 0
 
     def write(self, uid, integ_number, fpga_frame_number, irigb_time, raw_data, counts, saturations):
-
+        self.log.debug(f'{self!r}: Writing data to the file')
         n1 = self.n
         self.n += 1
         self.n_total += 1
@@ -2683,15 +2715,19 @@ class HDF5CorrWriter(object):
 
         if self.n >= self.elements_per_file:
             self.start_new_hdf5_file()
+        self.log.debug(f'{self!r}: Data write succeded')
 
     def close(self):
+        self.log.debug(f'{self!r}: Closing file')
         if self.f:
             # self.snapshot_index_map.resize((self.n,))
             # self.snapshot_index_map[:] = np.arange(self.n) + self.n_total
             self.log.info(f'{self!r}: Closing HDF5 file {self.current_filename}')
             self.f.close()
+            self.log.debug(f'{self!r}: Closed the HDF5 file')
             try:
                 os.remove(self.lock_filename)
+                self.log.debug(f'{self!r}: Removed file lock')
                 # os.rename(self.lock_filename, self.filename)
             except OSError:
                 self.log.error(
@@ -2848,6 +2884,7 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
                               base_filename=None,
                               capture_duration=0,
                               capture_n_inputs=4,
+                              autocorr_only=False,
                               elements_per_file=256,
                               software_integration_period=100,
                               firmware_integration_period=1,
@@ -2856,11 +2893,13 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
                               number_of_correlated_inputs= None,  # has to be provided
                               number_of_bins_per_frame=None,  # has to be provided
                               ):
+        self.log.debug(f'{self!r}: Starting correlator data capture (calling receiver.corr_packet_processor.start_corr_hdf5)')
         self.receiver.corr_packet_processor.start_corr_hdf5(
             base_dir=base_dir,
             base_filename=base_filename,
             capture_duration=capture_duration,
             capture_n_inputs=capture_n_inputs,
+            autocorr_only=autocorr_only,
             elements_per_file=elements_per_file,
             firmware_integration_period=firmware_integration_period,
             software_integration_period=software_integration_period,
@@ -3040,6 +3079,7 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
             capture_duration=0,
             elements_per_file=2048 * 64,
             capture_n_inputs=4,
+            autocorr_only=False,
             software_integration_period=1,
             firmware_integration_period=1,
             frame0_irigb_time=0,
@@ -3047,14 +3087,15 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
             number_of_correlated_inputs= None,  # has to be provided
             number_of_bins_per_frame=None,  # has to be provided
             ):
-
+        self.log.debug(f'{self!r}: Triggered start_corr_hdf5, posting start-corr-hdf5 endpoint')
         result = await self.post(
             'start-corr-hdf5',
             base_dir=base_dir,
             base_filename=base_filename,
             capture_duration=capture_duration,
-            elements_per_file=elements_per_file,
             capture_n_inputs=capture_n_inputs,
+            autocorr_only=autocorr_only,
+            elements_per_file=elements_per_file,
             software_integration_period=software_integration_period,
             firmware_integration_period=firmware_integration_period,
             frame0_irigb_time=frame0_irigb_time,

@@ -173,7 +173,7 @@ class FUNCGEN(MMI):
         }
 
     # List the arguments used by the functions so we can validate those even if we don't call the function
-    FUNCTION_ARGS = ('overflow_buffer', 'buffer', 'data', 'a', 'b', 'freq', 'seed', 'freq_test_bins')
+    FUNCTION_ARGS = ('overflow_buffer', 'buffer', 'data', 'a', 'b', 'freq', 'seed', 'freq_test_bins', 'ampl')
 
     buffer_cache = None
 

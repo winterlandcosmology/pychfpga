@@ -812,36 +812,39 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
             skip_partial_integs=True,
             config = None,
             verbose=0):
-        """ Generator that continuously retreives UDP packets and yields processed correlator data when they are ready.
+        """ Generator that receives UDP packets, accumulates them into integration
+        windows, and yields completed correlator results as soon as each window
+        is complete.
+
+        The loop pulls batches of packets from the UDP receiver, decodes them
+        into integration slots via ``get_data_iter``, and yields each completed
+        (data, counts, sats) tuple. Optional flushing and alignment allow you to
+        discard partial integrations and start on a clean boundary.
 
         Parameters:
 
 
-            number_of_results (int): Number of results to yields back. If None or zero, the generator never ends.
+            number_of_results (int): Number of results to yield. If None or zero, the generator runs indefinitely.
 
-            soft_integ_period (int): Number of correlator frames to
-                accumulate in software. A software frame will always be
-                aligned to a multiple of soft_integ_period.
+            soft_integ_period (int): Number of hardware frames to accumulate in
+                software before yielding a result. Results are aligned to
+                multiples of ``soft_integ_period`` when alignment is enabled.
 
+            flush (bool): If True, drain the UDP buffer before starting capture.
+                Use True on the first call in a burst series and False on
+                subsequent calls to avoid losing in-flight packets.
 
-            flush (bool): if True, the UDP buffers will be emptied before data is captured. For
-                multiple acquisitions, set to True on the first call and False on the subsequent
-                ones to allow lossless  acquisition.
+            align (bool): If True, discard the first partial integration so the
+                first yielded result starts on a clean integration boundary.
+                This is forced on when ``flush`` is True.
 
-            align (bool): if True, a partial first integration will be dropped. Align is automatically set if Flush is set.
+            data_timeout (float): Socket timeout while waiting for packets. Set
+                to slightly less than the expected inter-burst gap so the
+                buffer can be processed promptly; too large delays processing
+                until the buffer fills.
 
-            data_timeout (float): Maximum amount of time to wait for data before starting
-                processing. Should be matched to a dead time between data set transmission to be
-                effective. If too large, the data will be processed only when the buffer is full.
-
-            flush_timeout (float): Maximum amount of time to wait for packets before deciding there
-                is no more data in the buffer. Must be smaller than the gap between data packets,
-                otherwise it will never stop flushing.
-
-
-
-            out (tuple): (data, data_counts, data_sats)  tuple providing the ndarrays into which data will be stored.
-                if None, the results will be yielded as they come.
+            flush_timeout (float): Socket timeout used while flushing. Must be
+                shorter than the gap between packet bursts so flushing stops.
 
             verbose (int): verbosity level. 0=Quiet, 1=basic info, 2=detailed info, 3 = debugging info
         """
@@ -910,4 +913,3 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
         for i, (d,c,s) in enumerate(self.read_corr_data_iter(number_of_results=number_of_results, **kwargs)):
             data[i], counts[i], sats[i] = d, c, s
         return (data, counts, sats)
-

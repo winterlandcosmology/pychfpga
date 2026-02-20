@@ -23,3 +23,7 @@ out_*/
 *.egg-info
 .ipynb_checkpoints
 .vscode/
+.idea/
+corr16tests/
+fw_test_results/
+xreport.xml
