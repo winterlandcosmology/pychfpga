@@ -40,8 +40,13 @@ class UCAP(MMI):
     OVERRUN          = BitField(STATUS, 0, 1, doc='1 when data transmission request was performed before the previous transmission was completed. Sticky flag.')
     RST_MON          = BitField(STATUS, 0, 2, doc='debug')
     USER_RST_MON     = BitField(STATUS, 0, 3, doc='debug')
-    PERIOD_CTR       = BitField(STATUS, 1, 0, width=8, doc='debug')
-    SOURCE_SEL_IN    = BitField(STATUS, 2, 0, width=8, doc='debug')
+    SINK_TREADY      = BitField(STATUS, 0, 4, doc='debug')
+    FIFO_FULL        = BitField(STATUS, 0, 4, doc='debug')
+
+
+    IN_FRAME_CTR     = BitField(STATUS, 1, 0, width=8, doc='debug')
+    OUT_FRAME_CTR    = BitField(STATUS, 2, 0, width=8, doc='debug')
+    M_CLK_CTR        = BitField(STATUS, 3, 0, width=8, doc='debug')
 
     def __init__(self, *, router, router_port, verbose=0):
         self.verbose = verbose
@@ -447,7 +452,7 @@ class RawDataProcessor(object):
         split = 0
 
         frames_per_channel = data.shape[-1]//self.BYTES_PER_FRAME
-        ncap = data.shape[0] if len(data.shape) > 2 else 1:
+        ncap = data.shape[0] if len(data.shape) > 2 else 1
 
         if self.format == '8':
             if split:
@@ -489,28 +494,28 @@ class RawDataProcessor(object):
 
         return data
 
-    def create_data_set(self, n):
-            # Allocate memory to store reordered data
-            data_sats = np.empty((n, self.NBINS, self.NPROD), dtype=np.complex64)
-            data_counts = np.empty((n,), dtype=np.int32)
-            nsamples = self.SAMPLES_PER_FRAME * self.frames_per_burst
-            # data_counts = np.empty((n, self.NBINS, self.NPROD), dtype=np.int32)
-            formats = dict(
-                '8': (1, '>i1'),
-                '14': (2, '>i2'),
-                '16': (2, '>i2'),
-                '32': (4, '>i4'),
-                '64': (8, '>i8'),
-                '16+16': (4, np.complex64),
-                '32+32': (8, np.complex64),
-                '64+64': (16, np.complex128),
-                )
+    # def create_data_set(self, n):
+    #         # Allocate memory to store reordered data
+    #         data_sats = np.empty((n, self.NBINS, self.NPROD), dtype=np.complex64)
+    #         data_counts = np.empty((n,), dtype=np.int32)
+    #         nsamples = self.SAMPLES_PER_FRAME * self.frames_per_burst
+    #         # data_counts = np.empty((n, self.NBINS, self.NPROD), dtype=np.int32)
+    #         formats = dict(
+    #             '8': (1, '>i1'),
+    #             '14': (2, '>i2'),
+    #             '16': (2, '>i2'),
+    #             '32': (4, '>i4'),
+    #             '64': (8, '>i8'),
+    #             '16+16': (4, np.complex64),
+    #             '32+32': (8, np.complex64),
+    #             '64+64': (16, np.complex128),
+    #             )
 
-            nbytes,dtype = formats[self.format]
-            nvalues = self.SAMPLES_PER_FRAME * self.frames_per_burst * self.BYTES_PER_SAMPLE // nbytes
-            data = np.empty((self.nchan, n, nvalues), dtype=dtype)
+    #         nbytes,dtype = formats[self.format]
+    #         nvalues = self.SAMPLES_PER_FRAME * self.frames_per_burst * self.BYTES_PER_SAMPLE // nbytes
+    #         data = np.empty((self.nchan, n, nvalues), dtype=dtype)
 
-            return (data, data_counts, data_sats)
+    #         return (data, data_counts, data_sats)
 
 
 
