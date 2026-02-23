@@ -48,7 +48,7 @@ class iic_dummy:
 
 
 class CRS(Motherboard):
-    """ Provide the basic code needed to operate the ZCU111
+    """ Provide the basic code needed to operate the CRS
 
 
     If is assumed that the board is running the bridge software.
@@ -239,23 +239,6 @@ class CRS(Motherboard):
         }
 
 
-        return
-        self.logger.info(f'Initializing Voltage/current monitor chips')
-        for name, info in self.i2c1_ina231_list.items():
-            d = info['device']
-            d.init(r_shunt=info['rshunt'], i_typ=info['imax'], avg=3)
-
-
-
-
-
-        # Print board voltages/currents
-        # The delay of programming the PLL is sufficient to allow the first voltage average to refresh
-        # await asyncio.sleep(1)
-        for name, info in self.i2c1_ina231_list.items():
-            d = info['device']
-            self.logger.info(f'Rail {name}: Vbus={d.get_bus_voltage():.3f}V, I={d.get_current():.3f}A, P={d.get_power():.1f}W')
-
     def get_power_supply_status(self):
         """ Return the voltage, current and power use by each power supply rail """
         status = {}
@@ -400,7 +383,8 @@ class CRS(Motherboard):
         # self.fpga = self.firmware(self)
         await self.fpga.open_async()
 
-
+        # Initialize hardware devices after FPGA is open
+        await self.open_hw_async()
 
         self.fpga.GPIO.PLL_SYNC=0
         await asyncio.sleep(0.5)  # test: wait for the PLL1 to stabilize before we sync. SYNC Won't work if OSCOUT is not stable vs REFCLK.
@@ -474,6 +458,104 @@ class CRS(Motherboard):
 
     def is_open(self):
         return self._is_open
+
+    async def open_hw_async(self):
+        """ Initialize objects to access the CRS hardware
+
+        Creates all the objects needed to interface the CRS I2C devices.
+
+        I2C access is done through the TCPipe_I2C interface object, which must be defined and shall provide the following methods:
+
+            - i2c_set_port(...) # Port number 0 (connected to the FPGA I2C switch) is used for all accesses
+            - i2c_write_read(...) # FPGA I2C engine
+
+        Exceptions:
+
+            - An AssertionError will be raised if the self.iic object is not defined
+        """
+        self.logger.debug('%r: Initializing CRS hardware' % self)
+        assert self.iic, "I2C interface is not initialized"
+
+        # -------------------
+        # Motherboard EEPROM
+        # -------------------
+        self.logger.debug('%r: Instantiating Motherboard EEPROM managers' % self)
+        self._i2c1_eeprom_data = eeprom(self.iic, address=0x57, bus_name=(self.i2c1_switch0, 0), address_width=7, max_read_length=255, max_write_length=8, write_page_size=8)
+        self._i2c1_eeprom_serial = eeprom(self.iic, address=0x5F, bus_name=(self.i2c1_switch0, 0), address_width=8, max_read_length=255)
+
+        # -------------------
+        # I2C IO Expanders
+        # -------------------
+        self.logger.debug('%r: Instantiating I2C GPIO manager' % self)
+        
+        # Initialize QSFP GPIO expanders
+        self.i2c1_gpio0.init(cfg0_def=0b11110010, out0_default=0b11110111)
+        self.i2c1_gpios = GPIO(gpio_table={
+            # name : (io_expander_object, byte, LSB bit, width)
+            'QSFP_ModPrsL': (self.i2c1_gpio0, 0, 1, 1),
+            'QSFP_ResetL': (self.i2c1_gpio0, 0, 2, 1),
+            'QSFP_IntL': (self.i2c1_gpio0, 0, 4, 1),
+            'QSFP_LPMode': (self.i2c1_gpio0, 0, 3, 1),
+            'QSFP_ModSelL': (self.i2c1_gpio0, 0, 0, 1),
+        })
+
+        # -------------------
+        # QSFP Module
+        # -------------------
+        self.logger.debug('%r: Instantiating QSFP manager' % self)
+        self.i2c1_qsfp = qsfp(self.iic, bus_name=(self.i2c1_switch1, 0), gpio_prefix='QSFP_', gpio=self.i2c1_gpios, address=0x50)
+
+        # -------------------
+        # Temperature Sensors
+        # -------------------
+        self.logger.debug('%r: Instantiating temperature sensors' % self)
+        temp_sensors = [
+            ('5v0', self.i2c1_tmp421_5v0),
+            ('3v3', self.i2c1_tmp421_3v3),
+            ('2v5', self.i2c1_tmp421_2v5),
+            ('1v8', self.i2c1_tmp421_1v8),
+            ('1v2a', self.i2c1_tmp421_1v2a),
+            ('1v4', self.i2c1_tmp421_1v4),
+            ('1v2b', self.i2c1_tmp421_1v2b),
+            ('pll', self.i2c0_tmp421_pll),
+        ]
+        
+        for sensor_name, sensor in temp_sensors:
+            try:
+                # Initialize temperature sensor
+                sensor.init()
+                self.logger.debug(f'{self!r}: Initialized temperature sensor {sensor_name}')
+            except Exception as e:
+                self.logger.warning(f'{self!r}: Error initializing temperature sensor {sensor_name}: {e}')
+
+        # -------------------
+        # Power Monitors (INA231)
+        # -------------------
+        self.logger.debug('%r: Instantiating power monitors' % self)
+        
+        for name, info in self.i2c1_ina231_list.items():
+            try:
+                d = info['device']
+                # Initialize power monitor with proper parameters
+                d.init(r_shunt=info['rshunt'], i_typ=info['imax'], tol_i=0.2, avg=3)
+                self.logger.info(f'{self!r}: Initialized power monitor for rail {name}')
+            except Exception as e:
+                self.logger.warning(f'{self!r}: Error initializing power monitor for rail {name}: {e}')
+
+        # -------------------
+        # Backplane devices
+        # -------------------
+        self.logger.debug('%r: Instantiating backplane devices' % self)
+        try:
+            self.i2c0_bp_eeprom_data = eeprom(self.iic, address=0x50, bus_name=0, address_width=7, max_read_length=255, max_write_length=8, write_page_size=8)
+            self.i2c0_bp_eeprom_serial = eeprom(self.iic, address=0x58, bus_name=0, address_width=8, max_read_length=255)
+            self.i2c0_bp_tmp421 = tmp421(self.iic, address=0x4E, port=0)
+            self.i2c0_bp_gpio = pca6524(self.iic, address=0x22, port=0)
+            self.logger.debug(f'{self!r}: Initialized backplane devices')
+        except Exception as e:
+            self.logger.warning(f'{self!r}: Error initializing backplane devices: {e}')
+
+        self.logger.info(f'{self!r}: CRS hardware initialization complete')
 
     def is_fmc_present(self, slot):
         return False
@@ -608,9 +690,6 @@ class CRS(Motherboard):
 
         self.fpga = fw_cls(self, mode=firmware_mode, **fw_params)
 
-    # Mezzanine management
-
-
     async def get_fpga_bitstream_crc_async(self):
         """ Return the signature of the firmware currently configured in the
         FPGA.
@@ -718,7 +797,7 @@ class CRS(Motherboard):
     #################################
 
     async def get_metrics_async(self):
-        """ Get the motherboard hardware monitoring information.
+        """ Get the CRS hardware monitoring information.
 
         Returns:
             a :class:`Metrics` object.
@@ -726,7 +805,105 @@ class CRS(Motherboard):
 
         metrics = await super().get_metrics_async()
 
-        # Add ZCU111 monitoring data to metrics here
+        # Add CRS-specific power monitoring data
+        try:
+            for name, info in self.i2c1_ina231_list.items():
+                d = info['device']
+                voltage = d.get_bus_voltage()
+                current = d.get_current()
+                power = d.get_power()
+                shunt_voltage = d.get_shunt_voltage()
+                
+                # Add individual rail metrics
+                metrics.add('crs_power_voltage', voltage, rail=name)
+                metrics.add('crs_power_current', current, rail=name)
+                metrics.add('crs_power_consumption', power, rail=name)
+                metrics.add('crs_power_shunt_voltage', shunt_voltage, rail=name)
+        except Exception as e:
+            self.logger.warning(f'{self!r}: Error reading power metrics: {e}')
+
+        # Add temperature metrics (explicitly requested)
+        try:
+            # Temperature sensors for power rails
+            temp_sensors = [
+                ('5v0', self.i2c1_tmp421_5v0),
+                ('3v3', self.i2c1_tmp421_3v3),
+                ('2v5', self.i2c1_tmp421_2v5),
+                ('1v8', self.i2c1_tmp421_1v8),
+                ('1v2a', self.i2c1_tmp421_1v2a),
+                ('1v4', self.i2c1_tmp421_1v4),
+                ('1v2b', self.i2c1_tmp421_1v2b),
+                ('pll', self.i2c0_tmp421_pll),
+            ]
+            
+            for sensor_name, sensor in temp_sensors:
+                try:
+                    temperature = sensor.get_temperature()
+                    metrics.add('crs_temperature', temperature, sensor=sensor_name)
+                except Exception as e:
+                    self.logger.warning(f'{self!r}: Error reading temperature sensor {sensor_name}: {e}')
+            
+            # FPGA core temperature
+            if self.fpga and hasattr(self.fpga, 'SYSMON'):
+                try:
+                    fpga_temp = self.fpga.SYSMON.temperature()
+                    metrics.add('crs_temperature', fpga_temp, sensor='fpga_core')
+                except Exception as e:
+                    self.logger.warning(f'{self!r}: Error reading FPGA core temperature: {e}')
+                    
+        except Exception as e:
+            self.logger.warning(f'{self!r}: Error reading temperature metrics: {e}')
+
+        # Add PLL status and reference clock information
+        try:
+            if hasattr(self, 'pll') and self.pll:
+                active_input = self.pll.get_active_clkin()
+                active_input_name = 'None' if active_input is None else self.PLL_INPUT_NAMES[active_input]
+                metrics.add('crs_pll_active_input', active_input, input_name=active_input_name)
+                
+                # PLL reference clock status
+                if hasattr(self, 'input_reference'):
+                    metrics.add('crs_pll_reference', self.input_reference)
+        except Exception as e:
+            self.logger.warning(f'{self!r}: Error reading PLL metrics: {e}')
+
+        # Add QSFP status
+        try:
+            if hasattr(self, 'i2c1_qsfp') and self.i2c1_qsfp:
+                qsfp_present = self.i2c1_qsfp.is_present()
+                metrics.add('crs_qsfp_present', int(qsfp_present))
+        except Exception as e:
+            self.logger.warning(f'{self!r}: Error reading QSFP metrics: {e}')
+
+        # Add GPIO states for QSFP control
+        try:
+            if hasattr(self, 'i2c1_gpios') and self.i2c1_gpios:
+                gpio_states = self.i2c1_gpios.read_all()
+                for gpio_name, state in gpio_states.items():
+                    metrics.add('crs_gpio_state', int(state), gpio=gpio_name)
+        except Exception as e:
+            self.logger.warning(f'{self!r}: Error reading GPIO metrics: {e}')
 
         return metrics
+
+    async def get_total_power_async(self):
+        """ Return the total power used by this board.
+
+        This reads power only from the 'vbp' (backplane voltage) rail,
+        which represents the total board consumption.
+
+        Returns:
+            Total power in watts as a float.
+        """
+        try:
+            # Get power from the backplane voltage rail (vbp)
+            # This represents the total power consumption of the board
+            vbp_info = self.i2c1_ina231_list['vbp']
+            d = vbp_info['device']
+            total_power = d.get_power()
+            return total_power
+            
+        except Exception as e:
+            self.logger.error(f'{self!r}: Error reading vbp power: {e}')
+            return None
 
