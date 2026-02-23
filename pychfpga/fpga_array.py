@@ -4571,9 +4571,10 @@ class FPGAArray(object):
         """
 
         for ib in self.ib:
-            for cb in [ib.CROSSBAR, ib.CROSSBAR2, ib.CROSSBAR3]:
-                if cb:  # make sure the crossbar exists in this firmware
-                    cb.reset_stats()
+            if ib.CROSSBAR & ib.CROSSBAR2 & ib.CROSSBAR3: # make sure the crossbar exists in this firmware
+                for cb in [ib.CROSSBAR, ib.CROSSBAR2, ib.CROSSBAR3]:
+                    if cb: 
+                        cb.reset_stats()
 
     def reset_bp_shuffle_stats(self):
         """ Reset error statistics for the backplane shuffle.
