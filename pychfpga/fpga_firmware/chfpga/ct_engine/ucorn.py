@@ -83,10 +83,16 @@ class UCorn(MMI):
 
         """
 
+        first_bin = 300*8192//1600 # 1536
+        last_bin= 1500*8192//1600  # Last bin is excluded
+        number_of_bins = last_bin - first_bin
+        number_of_packets = 128
+        bins_per_packet = number_of_bins // number_of_packets
+
         self.TX_RESET = 1 # put the module in reset state
         self.RX_MASK_LOW_BINS = 1 # prevent F-ENgine data to be written in the first bins, as these are used for storing packet headers.
 
-        # Trigger-based, test packet transmission configuration
+        # # Trigger-based, test packet transmission configuration
         # self.RX_WRITE_EN = 0  # Do not allow F-Engine data wo be written - we will write test patterns manually into the data buffers.
         # self.TX_TRIG_SEL = 1  # enable period-based transmission trigger
         # self.TX_ENABLE = 1 # enable packet transmission
@@ -94,22 +100,10 @@ class UCorn(MMI):
         # self.TX_INSERT_TIMESTAMP = 1  # insert the timestamp at the appropriate place in the payload header
         # self.TX_OVERRIDE_DATA = 0 # Do not override the output data (for low level debugging)
 
-        # CHORD packet transmission configuration
-        self.RX_WRITE_EN = 1 # allow the buffer to be written with real data from the channelizers
-        self.TX_TRIG_SEL = 0 # do not do trigger-based sending. send data at the native clock rate instead.
-        self.TX_TOGGLE_BANK = 1 # bank toggling must be enabled with 1 since we'll be reading and writing at the same time
-        self.TX_INSERT_TIMESTAMP = 1  # insert the timestamp at the appropriate place in the payload header
-
         # # program data for one bin
         # self.set_bin_data(bin=1, frame=0, data=np.arange(8*16, dtype=np.uint8))
 
-        first_bin = 300*8192//1600 # 1536
-        last_bin= 1500*8192//1600  # Last bin is excluded
-        number_of_bins = last_bin - first_bin
-        number_of_packets = 128
-        bins_per_packet = number_of_bins // number_of_packets
-
-        # Old version
+        # # Old version
         # self.playlist = [
         #     (dict(dest_mac_addr=f"01:23:34:67:89:{i+1:02X}",
         #           dest_ip_addr=f"10.88.0.{i+1}",
@@ -118,6 +112,12 @@ class UCorn(MMI):
         #     for i in range(number_of_packets)]
         # # Set the playlist to send data from that bin
         # self.set_playlist(playlist=self.playlist)
+
+        # CHORD packet transmission configuration
+        self.RX_WRITE_EN = 1 # allow the buffer to be written with real data from the channelizers
+        self.TX_TRIG_SEL = 0 # do not do trigger-based sending. send data at the native clock rate instead.
+        self.TX_TOGGLE_BANK = 1 # bank toggling must be enabled with 1 since we'll be reading and writing at the same time
+        self.TX_INSERT_TIMESTAMP = 1  # insert the timestamp at the appropriate place in the payload header
 
         # CHORD packet transmission
         playlist = [(dict(dest_mac_addr=f"01:23:34:67:89:{(n % 16):02X}",
@@ -128,7 +128,7 @@ class UCorn(MMI):
                      for n in range(number_of_packets)]
         
         # Set the playlist to send data
-        # self.set_playlist(playlist = playlist) # , sacrificial_bins = bin_map[np.arange(128)])
+        self.set_playlist(playlist = playlist) # , sacrificial_bins = bin_map[np.arange(128)])
 
         self.TX_RESET = 0 # take the module out of reset. Packet transmisison starts.
 
@@ -307,9 +307,9 @@ class UCorn(MMI):
         # Compute the masks indicating which bins can be written with live data
         # We set the write-enable bit to '1' on every bin except the sactificial bins (those used for storing ethernet headers)
         self.sacrificial_bins = sacrificial_bins
-        write_mask = np.full(8192//8, 0xFF) # , dtype=np.uint8) # 1 bit per bin, 8 bits per byte x 1024 bytes = 8192 bins
+        write_mask = np.full(8192//8, 0xFF, dtype=np.uint8) # 1 bit per bin, 8 bits per byte x 1024 bytes = 8192 bins
         for b in self.sacrificial_bins:
-            write_mask[b//8] &=  ~ (1 << (b % 8))
+            write_mask[b//8] &=  ~ (1 << (np.uint8(b) % 8))
         self.write_mask_buffer(0, write_mask)
 
         bins_total = sum(len(b) for t,b in playlist)
