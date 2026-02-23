@@ -975,7 +975,7 @@ class FPGAMaster(object):
 
         # Give a more meaningful error if the user did not provide a valid config file
         if not hasattr(conf, 'corr_name'):
-            raise RuntimeError('CHIME master configuration data does not define the correlator name. Was the correct object selected in the configuration file (i.e. config.yaml:object)')
+            raise RuntimeError('Master configuration data does not define the correlator name. Was the correct object selected in the configuration file (i.e. config.yaml:object)')
 
         self.corr_name = conf.corr_name
 
@@ -1162,9 +1162,12 @@ class FPGAMaster(object):
                 f"Corr_config={corr_config!r}, "
                 f"enable={corr_config.enable if corr_config else 'none'}")
 
-        # Start raw_data capture
-        self.log.info("Starting baseline raw data data capture")
-        await self.start_fpga_raw_data_transmission(sync=False)
+        if conf.raw_acq.enable:
+            # Start raw_data capture
+            self.log.info("Starting baseline raw data data capture")
+            await self.start_fpga_raw_data_transmission(sync=False)
+        else:
+            self.log.info("raw_acq disabled. Not starting baseline raw data data capture")
 
         self.log.info("Synchronizing the array...")
         self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% This is the last SYNC %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
@@ -1183,8 +1186,9 @@ class FPGAMaster(object):
         # Clear errors accumulated during start and initialization
         self.log.info("Resetting FPGA statistics counters")
         self.reset_fpga_stats()
-        self.reset_crossbar_stats()
-        self.reset_bp_shuffle_stats()
+        if ca.mode in ['shuffle16', 'shuffle128', 'shuffle256', 'shuffle512']: # FIXME. Temporary hack to bypass crossbar and bp_shuffle stats for CRS platform.
+            self.reset_crossbar_stats()
+            self.reset_bp_shuffle_stats()
 
 
 
@@ -1196,16 +1200,17 @@ class FPGAMaster(object):
 
 
         # Initialize the digital gain hdf5 writer
-        self.log.info(f"{self!r}: Initializing HDF5 gain archive reader/writer")
-        self.initialize_gain_hdf5()
+        if self.config.raw_acq.enable:
+            self.log.info(f"{self!r}: Initializing HDF5 gain archive reader/writer")
+            self.initialize_gain_hdf5()
 
         # Load most recent gains from archive into gain bank #0
         if conf.fpga.load_initial_gains and self.gain_hdf5:
             await self.load_gains(update_id=None, bank=0, when='now')
 
-
         # Compute new gains if requested
-        await self.compute_gains(**conf.fpga.compute_gains)
+        if self.config.fpga.compute_gains.enable:
+            await self.compute_gains(**conf.fpga.compute_gains)
 
         # self.log.info("Waiting for 2 seconds")
         # await asyncio.sleep(2)
@@ -1217,8 +1222,9 @@ class FPGAMaster(object):
 
 
         # Start storage of raw_data received by the raw_acq server in HDF5 files
-        self.log.info("Starting Raw data HDF5 data capture")
-        await self.start_hdf5_capture()
+        if self.config.raw_acq.enable:
+            self.log.info("Starting Raw data HDF5 data capture")
+            await self.start_hdf5_capture()
 
         # Start correlator data capture
         if corr_config and corr_config.enable:
