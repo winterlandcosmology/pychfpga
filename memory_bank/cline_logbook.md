@@ -4,53 +4,6 @@ This is a running log of development work done with Cline on the pychfpga projec
 
 ---
 
-## September 1 4, 2025 - Nyquist Zone Switching Implementation
-
-### Task: Add Nyquist Zone Support to Periscope Correlator
-
-**Objective**: Enable the periscope correlator app to display data from different Nyquist zones (Zone 1: 0-1600 MHz, Zone 2: 1600-3200 MHz, Zone 3: 3200-4800 MHz) by adding a GUI control that updates plot frequency axes without changing data processing.
-
-**Implementation Details**:
-
-#### Nyquist Zone Frequency Ranges
-Based on sampling rate of 3200 MHz (FS_HZ = 3.2 GHz):
-- **Zone 1**: 0 MHz to 1600 MHz (first Nyquist zone)
-- **Zone 2**: 1600 MHz to 3200 MHz (second Nyquist zone, aliased/reversed)
-- **Zone 3**: 3200 MHz to 4800 MHz (third Nyquist zone)
-
-#### Changes Made to `pychfpga/apps/periscope_correlator/app.py`:
-
-1. **Added Nyquist Zone Selector UI**:
-   - Added combo box in toolbar with zone options
-   - Connected to `_on_nyquist_zone_changed()` handler
-
-2. **Implemented Frequency Axis Calculation**:
-   - `_calculate_frequency_axis(zone)` method handles zone-specific frequency mapping
-   - Zone 2 properly handles frequency reversal due to aliasing
-   - Zone 3 shifts frequency range appropriately
-
-3. **Dynamic Frequency Updates**:
-   - `_update_all_frequency_axes(zone)` updates both regular and super FFT axes
-   - `current_nyquist_zone` tracks active zone
-   - All plot methods use zone-adjusted frequency axes
-
-4. **Real-time Zone Switching**:
-   - Immediate plot updates when zone changes
-   - No impact on data capture or signal processing
-   - Status bar feedback for user confirmation
-
-**Key Features**:
-- ✅ GUI control for zone selection
-- ✅ Proper frequency axis calculation for all zones
-- ✅ Real-time plot updates without data processing changes
-- ✅ Support for all plot types (spectra, waterfall, lag, super FFT)
-- ✅ Correct handling of Zone 2 aliasing (frequency reversal)
-
-**Files Modified**:
-- `pychfpga/apps/periscope_correlator/app.py` - Main implementation
-
----
-
 ## August 21, 2025 - Network Settings Verification Integration
 
 ### Task: Integrate Network Configuration Verification
@@ -163,3 +116,167 @@ This integration provides:
 - Code follows existing project patterns and conventions
 - Comprehensive error handling and user feedback implemented
 - Both command-line and GUI applications supported appropriately
+
+--
+
+## September 1 4, 2025 - Nyquist Zone Switching Implementation
+
+### Task: Add Nyquist Zone Support to Periscope Correlator
+
+**Objective**: Enable the periscope correlator app to display data from different Nyquist zones (Zone 1: 0-1600 MHz, Zone 2: 1600-3200 MHz, Zone 3: 3200-4800 MHz) by adding a GUI control that updates plot frequency axes without changing data processing.
+
+**Implementation Details**:
+
+#### Nyquist Zone Frequency Ranges
+Based on sampling rate of 3200 MHz (FS_HZ = 3.2 GHz):
+- **Zone 1**: 0 MHz to 1600 MHz (first Nyquist zone)
+- **Zone 2**: 1600 MHz to 3200 MHz (second Nyquist zone, aliased/reversed)
+- **Zone 3**: 3200 MHz to 4800 MHz (third Nyquist zone)
+
+#### Changes Made to `pychfpga/apps/periscope_correlator/app.py`:
+
+1. **Added Nyquist Zone Selector UI**:
+   - Added combo box in toolbar with zone options
+   - Connected to `_on_nyquist_zone_changed()` handler
+
+2. **Implemented Frequency Axis Calculation**:
+   - `_calculate_frequency_axis(zone)` method handles zone-specific frequency mapping
+   - Zone 2 properly handles frequency reversal due to aliasing
+   - Zone 3 shifts frequency range appropriately
+
+3. **Dynamic Frequency Updates**:
+   - `_update_all_frequency_axes(zone)` updates both regular and super FFT axes
+   - `current_nyquist_zone` tracks active zone
+   - All plot methods use zone-adjusted frequency axes
+
+4. **Real-time Zone Switching**:
+   - Immediate plot updates when zone changes
+   - No impact on data capture or signal processing
+   - Status bar feedback for user confirmation
+
+**Key Features**:
+- ✅ GUI control for zone selection
+- ✅ Proper frequency axis calculation for all zones
+- ✅ Real-time plot updates without data processing changes
+- ✅ Support for all plot types (spectra, waterfall, lag, super FFT)
+- ✅ Correct handling of Zone 2 aliasing (frequency reversal)
+
+**Files Modified**:
+- `pychfpga/apps/periscope_correlator/app.py` - Main implementation
+
+---
+
+
+## February 22, 2026 - CRS FPGA Metrics Implementation
+
+### Task: Add FPGA Metrics Support to CRS Platform
+
+**Objective**: Complete the FPGA metrics implementation for the CRS platform by implementing the `get_metrics_async()` method and `get_total_power()` method to provide comprehensive hardware monitoring data.
+
+**Current State Analysis**:
+- CRS class has extensive I2C device setup with power monitoring sensors (ina231_list)
+- Hardware monitoring infrastructure is in place but metrics methods are incomplete
+- `get_metrics_async()` method exists but only calls parent class without adding CRS-specific data
+- `get_total_power()` method is missing entirely
+
+**Implementation Plan**:
+
+#### Complete Hardware Monitoring (FPGA Metrics)
+
+**Key Components to Implement**:
+
+1. **Complete `get_metrics_async()` method**:
+   - Add CRS-specific power rail monitoring from `i2c1_ina231_list`
+   - **Include temperature sensor data** 
+   - Add PLL status and reference clock information
+   - Include FPGA core temperature from `self.fpga.SYSMON.temperature()`
+   - Add QSFP status and GPIO information
+
+2. **Implement `get_total_power()` method**:
+   - Calculate total power consumption from all monitored rails
+   - Sum power from all entries in `i2c1_ina231_list`
+   - Return total power in watts as float
+
+3. **Enhanced Metrics Categories**:
+   - **Power Metrics**: Individual rail voltages, currents, and power consumption
+   - **Temperature Metrics**: Board temperatures from tmp421 sensors
+   - **FPGA Metrics**: Core temperature, PLL status, reference clock selection
+   - **Interface Metrics**: QSFP presence, GPIO states
+
+**Technical Details**:
+
+**Power Monitoring Infrastructure**:
+```python
+# Existing power sensor configuration in CRS class
+self.i2c1_ina231_list = {
+    'vbp': dict(device=self.i2c1_ina231_vbp, rshunt=0.01, imax=10),
+    '0v85a': dict(device=self.i2c1_ina231_0v85a, rshunt=0.01, imax=40),
+    '0v85b': dict(device=self.i2c1_ina231_0v85b, rshunt=0.01, imax=40),
+    '5v0': dict(device=self.i2c1_ina231_5v0, rshunt=0.01, imax=16),
+    '3v3': dict(device=self.i2c1_ina231_3v3, rshunt=0.01, imax=16),
+    '2v5': dict(device=self.i2c1_ina231_2v5, rshunt=0.01, imax=16),
+    '1v8': dict(device=self.i2c1_ina231_1v8, rshunt=0.01, imax=16),
+    '1v2a': dict(device=self.i2c1_ina231_1v2a, rshunt=0.01, imax=16),
+    '1v4': dict(device=self.i2c1_ina231_1v4, rshunt=0.01, imax=16),
+    '1v2b': dict(device=self.i2c1_ina231_1v2b, rshunt=0.01, imax=16),
+}
+```
+
+**Expected Metrics Output**:
+- Individual rail metrics: voltage, current, power, shunt voltage
+- Total system power consumption
+- Temperature readings from multiple sensors
+- FPGA core temperature
+- PLL reference clock status
+- QSFP module presence and status
+
+**Integration Points**:
+- Metrics will integrate with existing pychfpga monitoring infrastructure
+- Compatible with existing Metrics class from `wtl.metrics`
+- Will work with fpga_array and fpga_master for system-wide monitoring
+
+**Files to Modify**:
+- `pychfpga/hardware/crs/crs.py` - Complete metrics implementation
+
+### Task: Complete FPGA Metrics Support for CRS Platform
+
+**Objective**: Implement comprehensive FPGA metrics support for the CRS platform including `get_metrics_async()` method, `get_total_power_async()` method, and hardware initialization.
+
+**Status**: ✅ **COMPLETED**
+
+**Implementation Summary**:
+
+#### 1. Core Methods Implemented
+- **`get_metrics_async()`**: Comprehensive hardware monitoring including power rails, temperature sensors, PLL status, QSFP status, and GPIO states
+- **`get_total_power_async()`**: Reads from 'vbp' rail only (backplane voltage) for accurate total power measurement
+- **`open_hw_async()`**: Complete I2C device initialization for all sensors and interfaces
+
+#### 2. Hardware Monitoring Coverage
+- **Power**: All 10 power rails with voltage, current, power, and shunt voltage
+- **Temperature**: 8 temperature sensors plus FPGA core temperature
+- **PLL**: Active input tracking and reference clock information  
+- **QSFP**: Module presence and control signals
+- **GPIO**: QSFP control interface states
+
+#### 3. Test Suite Features
+- **Hardware-required testing**: Absolutely requires powered CRS board
+- **Error tracking system**: Collects and reports temperature sensor errors at test end
+- **Fixed argument parsing**: Works with ipython usage (`-- --serial` syntax)
+- **Comprehensive verification**: Tests all hardware components
+
+#### 4. Problem Resolution
+- **Solved**: "AttributeError: 'ina230' object has no attribute 'current_lsb'" by proper I2C device initialization
+
+#### 5. Files Modified
+- `pychfpga/hardware/crs/crs.py`: Added hardware initialization and metrics methods
+- `tests/crs_fpga_master_tests/test_crs_metrics.py`: Complete rewrite with error tracking
+
+#### 6. Current Status
+✅ **FPGA die temperature and total power complete**
+⚠️ **Individual temperature sensors**: individual temperatures of i2c devices reporting errors, needs to be debugged
+⚠️ **Next Step**: Integrate with `fpga_master.py` and test system-wide monitoring
+
+**Usage**:
+```bash
+# Test with hardware
+python3 tests/crs_fpga_master_tests/test_crs_metrics.py --serial 0080
