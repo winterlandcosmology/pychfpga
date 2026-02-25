@@ -1291,7 +1291,7 @@ class chFPGA(FPGAFirmware):
 
     # Bitstream management
 
-    async def get_fpga_core_cookie(self):
+    async def bccore_cookie(self):
         """ Return the core FPGA firmware cookie. Should always be 0xBEEFFACE.
 
         The cookie is obtained from a core register via the MMI interface.
@@ -1413,8 +1413,6 @@ class chFPGA(FPGAFirmware):
     async def clear_fpga_udp_errors(self, force=False, no_reset=False, max_trials=3):
         """ Attempts to clear the FPGA UDP communication errors.
 
-        IceBoard only.
-
         Parameters:
 
             force (bool): If True, the UDP stack is reset whether of not the
@@ -1427,7 +1425,9 @@ class chFPGA(FPGAFirmware):
 
         trial = 1
         while True:
-            if force or self.mmi.error_counter > 40:
+            # Check error counter - handle both FPGAMmi (has error_counter) and TCPipe_BSB_MMI (has recv_counter)
+            error_count = getattr(self.mmi, 'error_counter', 0) if hasattr(self.mmi, 'error_counter') else 0
+            if force or error_count > 40:
                 self.logger.warning(f'{self!r}: Resetting FPGA UDP stack (trial #{trial}/{max_trials})')
 
                 if not no_reset:
@@ -1460,7 +1460,9 @@ class chFPGA(FPGAFirmware):
                             f'after {trial} FPGA UDP stack reset. Retrying...')
                     trial += 1
                 finally:
-                    self.mmi.error_counter = 0
+                    # Reset error counter if it exists
+                    if hasattr(self.mmi, 'error_counter'):
+                        self.mmi.error_counter = 0
                     self.logger.debug(f'{self!r}: Finished to attempt clearing FPGA UDP errors.')
             else:
                 break
@@ -2502,7 +2504,11 @@ class chFPGA(FPGAFirmware):
 
         if channels is None:
             channels = self.get_channels()
-        return [self.chan[ch].PROBER.get_stream_id() for ch in channels]
+
+        if self.CAPTURE_TYPE == 'PROBER':
+            return [self.chan[ch].PROBER.get_stream_id() for ch in channels]
+        elif self.CAPTURE_TYPE == "UCAP":
+            return self.UCAP.get_stream_ids(channels = channels)
 
     def get_stream_id(self, channel):
         """ Return the stream_id of a specified channel.
@@ -2511,7 +2517,10 @@ class chFPGA(FPGAFirmware):
             int: the stream IDs
         """
 
-        return self.chan[channel].PROBER.get_stream_id()
+        if self.CAPTURE_TYPE == 'PROBER':
+            return self.chan[channel].PROBER.get_stream_id()
+        elif self.CAPTURE_TYPE == "UCAP":
+            return self.UCAP.get_stream_id(channel = channel)
 
     def get_stream_id_map(self):
         """ Return the stream_ids of every channel of the board, indexed by channel_id.
@@ -2522,9 +2531,10 @@ class chFPGA(FPGAFirmware):
             tuple.
         """
 
-        return {self.get_id(ch): chan.PROBER.get_stream_id() for ch, chan in self.chan.items()}
-
-
+        if self.CAPTURE_TYPE == 'PROBER':
+            return {self.get_id(ch): chan.PROBER.get_stream_id() for ch, chan in self.chan.items()}
+        elif self.CAPTURE_TYPE == "UCAP":
+            return {self.get_id(ch): self.UCAP.get_stream_id(channel = ch) for ch in range(self.NUMBER_OF_CHANNELIZERS)}
 
     async def get_config_async(self, basic=False):
         """
@@ -4933,13 +4943,39 @@ class chFPGA(FPGAFirmware):
 
         """
         res = {}
-        res['FPGA_core'] = self.SYSMON.temperature()
-        for mezz_number, mezz in self.mezzanine.items():
-            for (adc_number, adc) in enumerate(mezz.ADC):
-                res['FMC%i ADC%i' % (mezz_number - 1, adc_number)] = adc.get_temperature()
+        if hasattr(self, 'SYSMON') and self.SYSMON:
+            res['FPGA_core'] = self.SYSMON.temperature()
+        if hasattr(self, 'mezzanine') and self.mezzanine:
+            for mezz_number, mezz in self.mezzanine.items():
+                for (adc_number, adc) in enumerate(mezz.ADC):
+                    res['FMC%i ADC%i' % (mezz_number - 1, adc_number)] = adc.get_temperature()
         return res
 
+    async def get_fpga_core_temperature_metrics(self):
+        """ Get the FPGA core temperature and wrap it in a Metrics object.
 
+        Returns:
+            a :class:`Metrics` object containing the FPGA core temperature.
+        """
+        metrics = Metrics(
+            type='GAUGE',
+            slot=(self.slot or 0) - 1,
+            id=self.get_string_id(),
+            crate_id=self.crate.get_string_id() if self.crate else None,
+            crate_number=self.crate.crate_number if self.crate else None)
+        
+        try:
+            # Get temperatures from the firmware
+            temperatures = self.get_temperatures()
+            
+            # Extract FPGA core temperature
+            if isinstance(temperatures, dict) and 'FPGA_core' in temperatures:
+                metrics.add('fpga_core_temperature', temperatures['FPGA_core'])
+                
+        except Exception as e:
+            self.logger.error(f'{self!r}: Error getting FPGA core temperature: {e}')
+            
+        return metrics
 
     def reset_gpu_links(self):
         """ Resets the GPU links.
@@ -4949,10 +4985,8 @@ class chFPGA(FPGAFirmware):
         self.GPU.reset()
 
 
-
-
     async def get_bp_shuffle_metrics_async(self, reset=True):
-        if not self.is_open() or not self.BP_SHUFFLE:
+        if not self.is_open() or not hasattr(self, 'BP_SHUFFLE') or not self.BP_SHUFFLE:
             return Metrics()
         try:
             await self.clear_fpga_udp_errors()
@@ -5021,9 +5055,20 @@ class chFPGA(FPGAFirmware):
         try:
             # await self.check_command_count(reset=True)
             await self.clear_fpga_udp_errors()
-            for cb in [self.CROSSBAR, self.CROSSBAR2, self.CROSSBAR3]:
-                if cb:  # make sure the crossbar is in this firmware
-                    metrics += await cb.get_metrics(reset=reset)
+            # Check for crossbar objects in the corner-turn engine
+            if self.CT:
+                # Try to get crossbar objects from the corner-turn engine
+                crossbars = []
+                if hasattr(self.CT, 'CROSSBAR'):
+                    crossbars.append(self.CT.CROSSBAR)
+                if hasattr(self.CT, 'CROSSBAR2'):
+                    crossbars.append(self.CT.CROSSBAR2)
+                if hasattr(self.CT, 'CROSSBAR3'):
+                    crossbars.append(self.CT.CROSSBAR3)
+                
+                for cb in crossbars:
+                    if cb:  # make sure the crossbar is in this firmware
+                        metrics += await cb.get_metrics(reset=reset)
         except IOError as e:
             self.logger.error('%r: Error getting FPGA crossbar metrics. Error is %r\n\n%s' % (self, e, traceback.format_exc()))
         except Exception as e:
