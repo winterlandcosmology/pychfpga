@@ -169,6 +169,30 @@ async def test_crs_metrics_with_hardware(serial='001'):
     except Exception as e:
         raise Exception(f'get_metrics_async() test failed: {e}')
     
+    # Test the new _get_motherboard_metrics_async() method that returns (info, metrics)
+    print('Testing _get_motherboard_metrics_async() with hardware...')
+    try:
+        info, metrics = await crs_board._get_motherboard_metrics_async()
+        print('✓ _get_motherboard_metrics_async() returns (info, metrics) tuple')
+        
+        # Test info dict
+        if isinstance(info, dict):
+            print('✓ Info is a dictionary')
+            print(f'  Info contains {len(info)} entries:')
+            for key, value in info.items():
+                print(f'    {key}: {value}')
+        else:
+            print(f'⚠ Info is not a dictionary: {type(info)}')
+        
+        # Test metrics object
+        if isinstance(metrics, Metrics):
+            print('✓ Metrics is a Metrics object')
+        else:
+            print(f'⚠ Metrics is not a Metrics object: {type(metrics)}')
+            
+    except Exception as e:
+        raise Exception(f'_get_motherboard_metrics_async() test failed: {e}')
+    
     print()
     
     # Test power supply status
