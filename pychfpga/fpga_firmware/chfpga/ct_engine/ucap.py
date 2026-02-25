@@ -52,11 +52,32 @@ class UCAP(MMI):
     def init(self):
         """ Initializes UCAP module"""
         slot = self.fpga.slot
-        self.USER_STREAM_ID = slot-1 if slot else 0
+        crate = self.fpga.crate_number if self.fpga.crate else 0
+
+        self.USER_STREAM_ID = (crate << 4) | (slot-1 if slot else 0)
 
     DATA_SOURCE_TABLE = {
         'funcgen': 0,
         'scaler': 255} # 255: set data source for all 8 channels (11111111 = 255 for unsigned 8-bit bin)
+    
+    def get_stream_ids(self, channels = None):
+        """Return the stream_ids for the requested channels. Default is all channels. """
+
+        if channels is None:
+            channels = range(self.fpga.NUMBER_OF_CHANNELIZERS)
+
+        if min(channels) < 0 or max(channels) > self.fpga.NUMBER_OF_CHANNELIZERS:
+            raise ValueError(f'Requested stream_id for channels {channels}, but there are {self.fpga.NUMBER_OF_CHANNELIZERS} channelizers. Valid values are {list(range(self.fpga.NUMBER_OF_CHANNELIZERS))}')
+
+        return [(self.USER_STREAM_ID << 4) + ch for ch in channels]
+    
+    def get_stream_id(self, channel = None):
+        """Return the stream_ids for the requested channels. Default is all channels. """
+
+        if channel < 0 or channel > self.fpga.NUMBER_OF_CHANNELIZERS:
+            raise ValueError(f'Requested stream_id for channel {channel}, but there are {self.fpga.NUMBER_OF_CHANNELIZERS} channelizers. Valid values are {list(range(self.fpga.NUMBER_OF_CHANNELIZERS))}')
+
+        return (self.USER_STREAM_ID << int(np.log2(self.fpga.NUMBER_OF_CHANNELIZERS))) + channel
 
     def set_data_capture(self, source, mode=0, channels=None, periods=[195312,195312], select=False):
         """ Selects the source of the data to be captured (FUNCGEN or SCALER). Optionally enables streaming the captured data instead of the correlator data.
