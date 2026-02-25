@@ -796,19 +796,25 @@ class CRS(Motherboard):
     # Metrics
     #################################
 
-    async def get_metrics_async(self):
+    async def _get_motherboard_metrics_async(self):
         """ Get the CRS hardware monitoring information.
 
         Returns:
-            a :class:`Metrics` object.
+            A (info, metrics) tuple, where:
+
+                ``info`` is a dict containing the status information in the format ``{metric_name:value,
+                ...}`` where both ``metric_name`` and ``value`` are strings.
+
+                ``metrics`` is a Metrics object containing the same status information.
         """
 
+        info = dict()
         metrics = await super().get_metrics_async()
 
         # Add CRS-specific power monitoring data
         try:
-            for name, info in self.i2c1_ina231_list.items():
-                d = info['device']
+            for name, info_dict in self.i2c1_ina231_list.items():
+                d = info_dict['device']
                 voltage = d.get_bus_voltage()
                 current = d.get_current()
                 power = d.get_power()
@@ -819,6 +825,9 @@ class CRS(Motherboard):
                 metrics.add('crs_power_current', current, rail=name)
                 metrics.add('crs_power_consumption', power, rail=name)
                 metrics.add('crs_power_shunt_voltage', shunt_voltage, rail=name)
+                
+                # Add to info dict with string formatting
+                info[f'CRS {name.upper()} Power'] = f'{voltage:.2f}V@{current:.3f}A'
         except Exception as e:
             self.logger.warning(f'{self!r}: Error reading power metrics: {e}')
 
@@ -838,18 +847,18 @@ class CRS(Motherboard):
             
             for sensor_name, sensor in temp_sensors:
                 try:
-                    temperature = sensor.get_temperature()
+                    # get_temperature() returns a tuple (local_temp, remote_temp, remote_fault)
+                    # We'll use the local temperature (first element)
+                    temp_tuple = sensor.get_temperature()
+                    if isinstance(temp_tuple, tuple):
+                        temperature = temp_tuple[0]  # Use local temperature
+                    else:
+                        temperature = temp_tuple  # In case it returns a single value
+                    
                     metrics.add('crs_temperature', temperature, sensor=sensor_name)
+                    info[f'CRS {sensor_name.upper()} Temp'] = f'{temperature:.1f}°C'
                 except Exception as e:
                     self.logger.warning(f'{self!r}: Error reading temperature sensor {sensor_name}: {e}')
-            
-            # FPGA core temperature
-            if self.fpga and hasattr(self.fpga, 'SYSMON'):
-                try:
-                    fpga_temp = self.fpga.SYSMON.temperature()
-                    metrics.add('crs_temperature', fpga_temp, sensor='fpga_core')
-                except Exception as e:
-                    self.logger.warning(f'{self!r}: Error reading FPGA core temperature: {e}')
                     
         except Exception as e:
             self.logger.warning(f'{self!r}: Error reading temperature metrics: {e}')
@@ -860,10 +869,12 @@ class CRS(Motherboard):
                 active_input = self.pll.get_active_clkin()
                 active_input_name = 'None' if active_input is None else self.PLL_INPUT_NAMES[active_input]
                 metrics.add('crs_pll_active_input', active_input, input_name=active_input_name)
+                info['CRS PLL Active Input'] = active_input_name
                 
                 # PLL reference clock status
                 if hasattr(self, 'input_reference'):
                     metrics.add('crs_pll_reference', self.input_reference)
+                    info['CRS PLL Reference'] = str(self.input_reference)
         except Exception as e:
             self.logger.warning(f'{self!r}: Error reading PLL metrics: {e}')
 
@@ -872,6 +883,7 @@ class CRS(Motherboard):
             if hasattr(self, 'i2c1_qsfp') and self.i2c1_qsfp:
                 qsfp_present = self.i2c1_qsfp.is_present()
                 metrics.add('crs_qsfp_present', int(qsfp_present))
+                info['CRS QSFP Present'] = 'Yes' if qsfp_present else 'No'
         except Exception as e:
             self.logger.warning(f'{self!r}: Error reading QSFP metrics: {e}')
 
@@ -881,9 +893,23 @@ class CRS(Motherboard):
                 gpio_states = self.i2c1_gpios.read_all()
                 for gpio_name, state in gpio_states.items():
                     metrics.add('crs_gpio_state', int(state), gpio=gpio_name)
+                    info[f'CRS {gpio_name}'] = 'High' if state else 'Low'
         except Exception as e:
             self.logger.warning(f'{self!r}: Error reading GPIO metrics: {e}')
 
+        return (info, metrics)
+    
+    async def get_metrics_async(self):
+        """ Get the CRS hardware monitoring information.
+
+        Returns:
+            a :class:`Metrics` object containing the IceBoard monitoring information.
+        """
+        try:
+            _, metrics = await self._get_motherboard_metrics_async()
+        except Exception as e:
+            self.logger.error('%r: Error getting CRS hardware metrics. Error is %r' % (self, e))
+            metrics = Metrics()
         return metrics
 
     async def get_total_power_async(self):
