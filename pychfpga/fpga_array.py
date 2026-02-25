@@ -5040,13 +5040,13 @@ class FPGAArray(object):
             A :class:`Metrics` object.
         """
 
-        # IceCrate metrics
+        # Crate metrics
         self.logger.debug(f'{self!r}: Getting Motherboard backplane hardware metrics')
         for ic in self.ic:
             slot, ib = list(ic.slot.items())[0]
             metrics += await ib.get_backplane_metrics_async()
 
-        # IceBoard metrics
+        # Motherboard metrics
         self.logger.debug(f'{self!r}: Getting Motherboard temperature & power supply metrics')
         m = await asyncio.gather(*[ib.get_metrics_async() for ib in self.ib])
         metrics += m
@@ -5064,13 +5064,14 @@ class FPGAArray(object):
             A :class:`Metrics` object.
         """
 
-        # Shuffle status
         self.logger.debug(f'{self!r}: Getting corner-turn links metrics (over FPGA UDP link)')
         metrics += await asyncio.gather(*[ib.get_bp_shuffle_metrics_async(reset=reset) for ib in self.ib])
         self.logger.debug(f'{self!r}: Getting corner-turn crossbars metrics (over FPGA UDP link)')
         metrics += await asyncio.gather(*[ib.get_crossbar_metrics_async(reset=False) for ib in self.ib])
-        self.logger.debug(f'{self!r}: Getting channelizer metrics (over FPGA UDP link)')
-        metrics += await asyncio.gather(*[ib.get_channelizer_metrics_async(reset=reset) for ib in self.ib])
+        # self.logger.debug(f'{self!r}: Getting channelizer metrics (over FPGA UDP link)')
+        # metrics += await asyncio.gather(*[ib.get_channelizer_metrics_async(reset=reset) for ib in self.ib])
+        self.logger.debug(f'{self!r}: Getting FPGA core temperature metrics (over FPGA UDP link)')
+        metrics += await asyncio.gather(*[ib.get_fpga_core_temperature_metrics() for ib in self.ib])
         self.logger.debug(f'{self!r}: Finished gathering FPGA/backplane metrics')
 
         # Backplane GTX
