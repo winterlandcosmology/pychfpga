@@ -279,4 +279,88 @@ self.i2c1_ina231_list = {
 **Usage**:
 ```bash
 # Test with hardware
-python3 tests/crs_fpga_master_tests/test_crs_metrics.py --serial 0080
+python3 tests/crs_fpga_master_tests/test_crs_metrics.py --serial 0080 
+
+---
+
+## February 23, 2026 - CRS Metrics Integration Planning
+
+### Task: Integrate CRS Metrics into FPGA Master
+
+**Objective**: Integrate the existing CRS platform metrics into the fpga_master monitoring system by creating a unified metrics API that combines CRS hardware monitoring with existing FPGA firmware metrics.
+
+**Current State**:
+- CRS platform has comprehensive hardware monitoring implemented in `crs.py`
+- `get_metrics_async()` method provides power, temperature, PLL, and QSFP metrics
+- `get_total_power_async()` method provides total power consumption
+- Need to integrate with existing `fpga_array.py` and `fpga_master.py` metrics collection
+
+**Implementation Plan**:
+1. **Update CRS metrics pattern**: Modify `_get_motherboard_metrics_async()` to return `(info, metrics)` tuple like iceboard.py
+2. **Create CRS metrics API**: Add `get_crs_metrics_async()` method to `chfpga.py` following existing patterns
+3. **Integrate with fpga_array**: Modify `get_fpga_metrics_async()` to include CRS metrics collection
+4. **System-wide exposure**: Ensure metrics are accessible through existing fpga_master endpoints
+
+**Key Integration Points**:
+- CRS metrics will be accessible through existing fpga_master monitoring endpoints
+- Platform detection with helpful debugging error messages
+- Backward compatibility with non-CRS platforms
+- Comprehensive hardware monitoring including power, temperature, PLL status, and QSFP status
+
+**Files to Modify**:
+- `pychfpga/hardware/crs/crs.py` - Update metrics pattern
+- `pychfpga/fpga_firmware/chfpga/chfpga.py` - Add CRS metrics API
+- `pychfpga/fpga_array.py` - Integrate CRS metrics collection
+
+**Expected Outcome**: Complete system-wide monitoring that provides both FPGA firmware status and CRS hardware platform health through unified metrics endpoints.
+
+---
+
+## February 23, 2026 - CRS Metrics Implementation & FPGA Error Fixes
+
+### Task: Complete CRS Metrics Integration and Fix FPGA Attribute Errors
+
+**Objective**: Implement comprehensive CRS metrics API in chfpga.py and fix critical AttributeError issues in FPGA communication methods.
+
+**Implementation Summary**:
+
+#### 1. CRS Metrics API Implementation
+- **Added `get_crs_metrics_async()` method** to `chfpga.py` following existing patterns
+- **Platform detection** with helpful error messages for debugging
+- **ARM-based metrics collection** separate from firmware-dependent metrics
+- **Two-tier metrics system**: ARM-only metrics (always available) and firmware metrics (when FPGA programmed). Fixed the issues from yesterday where all CRS metrics were going to be published together, which was incorrect. Now the split between ARM and FPGA metrics is cleaner.
+- **Integration with fpga_array.py** via modified `get_fpga_metrics_async()` method
+
+#### 2. FPGA Error Fixes
+- **Fixed `clear_fpga_udp_errors()` method**: Added support for both FPGAMmi (has `error_counter`) and TCPipe_BSB_MMI (has `recv_counter`)
+- **Fixed `get_crossbar_metrics_async()` method**: Corrected crossbar object access from `self.CROSSBAR` to `self.CT.CROSSBAR` (corner-turn engine)
+- **Enhanced error handling** with proper try-catch blocks and logging
+
+#### 3. Test Suite Updates
+- **Updated `test_crs_metrics.py`** to work with new `(info, metrics)` tuple format
+- **Added comprehensive error tracking** for temperature sensor debugging
+- **Fixed argument parsing** for ipython usage (`-- --serial` syntax)
+
+#### 4. Key Features Implemented
+- **Comprehensive hardware monitoring**: Power rails, temperature sensors, PLL status, QSFP status
+- **FPGA firmware metrics**: Core temperature, UDP communication errors, crossbar metrics
+- **System-wide integration**: Metrics accessible through existing fpga_master endpoints
+- **Backward compatibility**: Non-CRS platforms unaffected
+
+#### 5. Files Modified
+- `pychfpga/fpga_firmware/chfpga/chfpga.py`: Added CRS metrics API and fixed FPGA errors
+- `pychfpga/fpga_array.py`: Integrated CRS metrics collection
+- `pychfpga/hardware/crs/crs.py`: Updated metrics pattern to return `(info, metrics)` tuple
+- `tests/crs_fpga_master_tests/test_crs_metrics.py`: Updated test format and error tracking
+
+#### 5. Current Status
+✅ **CRS metrics API complete and FPGA errors fixed**
+**Next Steps**: Test integration with fpga_master and verify system-wide monitoring functionality
+**Metrics that need to be added**: Need to introduce ADC (e.g., overrange and overvoltage from GPIO) metrics
+
+**Usage**:
+```python
+# CRS metrics accessible through existing fpga_master endpoints
+metrics = await fpga_master.get_metrics_async()
+# Returns comprehensive hardware and firmware monitoring data
+```
