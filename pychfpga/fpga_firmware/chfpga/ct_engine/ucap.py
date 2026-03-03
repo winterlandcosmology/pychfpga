@@ -206,8 +206,8 @@ class UCAP(MMI):
     # def get_data_receiver(self, packet_receiver):
     #     return RawFrameReceiver(packet_receiver)
 
-    def get_data_receiver(self, sock=None, buffer_length=256):
-        return RawFrameReceiver(sock or self.fpga.get_data_socket(), buffer_length=buffer_length)
+    def get_data_receiver(self, sock=None): #, buffer_length=256):
+        return RawFrameReceiver(sock or self.fpga.get_data_socket()) # , buffer_length=buffer_length)
 
 class RawDataProcessor(object):
 
