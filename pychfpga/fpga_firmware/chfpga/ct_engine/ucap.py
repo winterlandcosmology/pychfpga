@@ -203,11 +203,11 @@ class UCAP(MMI):
 
         return b[:64, 5:]
 
-    # def get_data_receiver(self, packet_receiver):
-    #     return RawFrameReceiver(packet_receiver)
+    def get_data_receiver(self, packet_receiver):
+        return RawFrameReceiver(packet_receiver)
 
-    def get_data_receiver(self, sock=None): #, buffer_length=256):
-        return RawFrameReceiver(sock or self.fpga.get_data_socket()) # , buffer_length=buffer_length)
+    # def get_data_receiver(self, sock=None): #, buffer_length=256):
+    #     return RawFrameReceiver(sock or self.fpga.get_data_socket()) # , buffer_length=buffer_length)
 
 class RawDataProcessor(object):
 
@@ -228,8 +228,12 @@ class RawDataProcessor(object):
         # self.prod_map = None
         # self.firmware_integ_period = None
 
+        self.target_mode = 0
+        self.frames_per_burst = 2 << self.target_mode  # for CRS
+
         self.BYTES_PER_SAMPLE = 2 # CRS
         self.SAMPLES_PER_FRAME = 16384
+        self.NBINS = self.SAMPLES_PER_FRAME // 2
         self.BYTES_PER_FRAME = self.SAMPLES_PER_FRAME * self.BYTES_PER_SAMPLE # bytes
         self.NUMBER_OF_SUBFRAMES = 4
         self.BYTES_PER_SUBFRAME = self.BYTES_PER_FRAME // self.NUMBER_OF_SUBFRAMES # bytes
@@ -320,9 +324,8 @@ class RawDataProcessor(object):
 
         stream_ids_updated = set_param('stream_ids')
         self.format = '16'
-        self.target_mode = 0
-        self.frames_per_burst = 2 << self.target_mode  # for CRS
-
+        # self.target_mode = 0
+        # self.frames_per_burst = 2 << self.target_mode  # for CRS
 
         if stream_ids_updated:
             self.stream_ids = stream_ids_updated
@@ -515,7 +518,7 @@ class RawDataProcessor(object):
 
     def create_data_set(self, n):
             # Allocate memory to store reordered data
-            data_sats = np.empty((n, self.NBINS, self.NPROD), dtype=np.complex64)
+            # data_sats = np.empty((n, self.NBINS, self.NPROD), dtype=np.complex64)
             data_counts = np.empty((n,), dtype=np.int32)
             nsamples = self.SAMPLES_PER_FRAME * self.frames_per_burst
             # data_counts = np.empty((n, self.NBINS, self.NPROD), dtype=np.int32)
@@ -532,7 +535,9 @@ class RawDataProcessor(object):
 
             nbytes,dtype = formats[self.format]
             nvalues = self.SAMPLES_PER_FRAME * self.frames_per_burst * self.BYTES_PER_SAMPLE // nbytes
+
             data = np.empty((self.nchan, n, nvalues), dtype=dtype)
+            data_sats = np.empty((self.nchan, n, nvalues), dtype=np.complex64)
 
             return (data, data_counts, data_sats)
 
@@ -706,7 +711,7 @@ class RawFrameReceiver(RawDataProcessor):
 
         # Pre-Allocate memory to store processed data
         data, counts, sats = self.create_data_set(ncap)
-        for i, (d,c,s) in enumerate(self.read_corr_data_iter(ncap=ncap, **kwargs)):
+        for i, (d,c,s) in enumerate(self.read_corr_data_iter(ncap=ncap, format=kwargs.get('format', '16'), **kwargs)):
             data[i], counts[i], sats[i] = d, c, s
         return (data, counts, sats)
 

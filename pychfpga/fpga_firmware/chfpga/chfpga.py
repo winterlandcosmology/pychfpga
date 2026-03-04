@@ -3095,8 +3095,10 @@ class chFPGA(FPGAFirmware):
             sock = self.get_data_socket(port_number=port_number)
             self.recv = prober.RawFrameReceiver(sock)
         elif self.CAPTURE_TYPE == "UCAP":
+            from pychfpga.common.udp_packet_receiver import UDPPacketReceiver
             sock = self.get_data_socket(port_number=port_number)
-            self.recv = self.UCAP.get_data_receiver(sock)
+            packet_receiver = UDPPacketReceiver(sock)
+            self.recv = self.UCAP.get_data_receiver(packet_receiver)
             self.logger.debug(f'{self!r}: UCAP data receiver created on socket {sock}, ({self._data_socket.getsockname()})')
         else:
             raise RuntimeError("Unknown capture engine type")
