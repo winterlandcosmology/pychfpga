@@ -61,19 +61,20 @@ menu:
 f_engine_tests:
   global_settings:
     eth_interface: 'enp6s0' # Name of ethernet interface on which the crate is connected. Used to check jumbo frames.
-    ps_t_sleep: 10 # Time in seconds to let the power supply sleep upon power cycle to allow crate to boot
+    ps_t_sleep: 20 # Time in seconds to let the power supply sleep upon power cycle to allow crate to boot
     fpga_array_params:
       hwm: 'crs 80:1 79:2 104:3 88:4 83:5 78:6 81:7 74:8 71:9 89:10 75:11 94:12 96:13 92:14 77:15 72:16'
       stderr_log_level: 'info'
       prog: 2
       mode: 'shuffle8'
       sync_method: 'irigb'
+      sync_source: 'bp_trig'
       mdns_timeout: 40
 
 
   ps_connection_test:
-    n_ps_cycles: 50  
-    on_time: 60 # s
+    n_ps_cycles: 5  
+    on_time: 10 # s
     off_time: 10 # s
         
   crate_init:
