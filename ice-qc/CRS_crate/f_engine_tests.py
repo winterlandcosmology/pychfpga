@@ -47,6 +47,7 @@ class TestUtils:
         try:
             self.psu = PSUController(hostname = psu_ip)
             status = self.psu.status()
+            print(f'PSU status: {status}')
 
         except Exception as e:
             print(f'Failed to connect to {psu_ip}: ', e)
@@ -66,24 +67,21 @@ class TestUtils:
              if not self.psu:
                  self.psu = self.connect_psu()
 
-            # # FIXME
-            #  # Check if power supply is on:
-            #  # CHECK OUTPUT HERE
-            #  psu_on = self.psu
+             # Check if power supply is on:
+             psu_on = self.psu.status()['output_on']
 
-            # # FIXME
-            #  if ps_status == 'ON' or ps_status == 'OK':
-            #     print(f'Power supply is {ps_status}')
-            #     # Turning off power supply
-            #     print(f'Turning off power supply...')
-            #     self.psu.set_output(state=False) # Force power cycle if power supply is on
-            #     ps_status = self.psu.status()['status']
-            #     print(f'Power supply is now {ps_status}')
-            #     time.sleep(5) # Give it a few seconds before turning back on
+             if psu_on:
+                print(f'Power supply is ON')
+                # Turning off power supply
+                print(f'Turning off power supply...')
+                self.psu.control_power(state = False) # Force power cycle if power supply is on
+                psu_on = self.psu.status()['output_on']
+                if not psu_on:
+                    print(f'Power supply is now OFF')
+                time.sleep(5) # Give it a few seconds before turning back on
                 
-            # # FIXME
-            #  else:
-            #      print(f'Power supply is {ps_status}')
+             else:
+                 print(f'Power supply is OFF')
 
              # Turn power supply back on:
              print(f'Turning on power supply...')
@@ -97,10 +95,10 @@ class TestUtils:
         # Program the crate
         fpga_array_params = self.cfg.f_engine_tests.global_settings.fpga_array_params
         ca = fpga_array.FPGAArray(**fpga_array_params)
-        ic = ca.ic[0]
-        # set crate model and serial number
-        self.model = ic.part_number
-        self.serial = ic.serial
+        # ic = ca.ic[0]
+        # # set crate model and serial number
+        # self.model = ic.part_number
+        # self.serial = ic.serial
 
         if ca.ib:
             return ca
@@ -181,20 +179,20 @@ class TestPreDeploymentCrate(TestUtils):
         try:
 
             for n in range(n_ps_cycles):
-                
-                # Connect to PSU
-                self.psu = self.connect_psu()
 
                 print('\n*******************************')
                 print(f'Cycle {n+1}/{n_ps_cycles}')
                 print('*******************************')
+
+                # Connect to PSU
+                self.psu = self.connect_psu()
      
                 print('--------------------------------------------')
                 print(f'Turning ON power supply')
                 print(f'Wait {on_time} seconds')
 
                 # Turn on PSU
-                self.psu.set_output(state=True)
+                self.psu.control_power(state = True)
 
                 # Keep PSU on for on_time seconds
                 time.sleep(on_time)
@@ -202,6 +200,7 @@ class TestPreDeploymentCrate(TestUtils):
                 # Check PSU status
                 try:
                     ps_status = self.psu.status()
+                    print(f'PSU status: {ps_status}')
                 except Exception as e:
                     print(e)
                     turn_ON_errs.append(f'cycle {n+1}: {e}')
@@ -211,7 +210,7 @@ class TestPreDeploymentCrate(TestUtils):
                 print(f'Wait {off_time} seconds')
 
                 # Turn off PSU
-                self.psu.set_output(state=False)
+                self.psu.control_power(state = False)
 
                 # Keep PSU off for off_time seconds
                 time.sleep(off_time)
@@ -219,6 +218,7 @@ class TestPreDeploymentCrate(TestUtils):
                 # Check PSU status
                 try:
                     ps_status = self.psu.status()
+                    print(f'PSU status: {ps_status}')
                 except Exception as e:
                     turn_OFF_errs.append(f'cycle {n+1}: {e}')
                 print('--------------------------------------------')
