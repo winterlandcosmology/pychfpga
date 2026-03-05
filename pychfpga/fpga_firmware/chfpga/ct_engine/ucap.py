@@ -305,6 +305,8 @@ class RawDataProcessor(object):
                   and CMAC (complex number index within a packet). The array can be provided as a numpy ndarray or a series of
                   nested lists that convert to the desired 4-dimensional array so it can be sent as a serialized object.
                 - firmware_integration (int): Number of frames integrated in firmware.
+                - stream_ids (list): List of stream IDs to capture
+                - format (str): Data format ('8', '16', '32', etc.)
 
         Notes:
 
@@ -314,7 +316,7 @@ class RawDataProcessor(object):
 
         def set_param(name):
             if (v := config.get(name)) is not None:
-                if force or (np.all(v != getattr(self, name)) if isinstance(v, np.ndarray) else v != getattr(self, name)):
+                if force or (not hasattr(self, name) or (np.all(v != getattr(self, name)) if isinstance(v, np.ndarray) else v != getattr(self, name))):
                     setattr(self, name, v)
                     return True
             return False
@@ -323,9 +325,11 @@ class RawDataProcessor(object):
             return
 
         stream_ids_updated = set_param('stream_ids')
-        self.format = '16'
-        # self.target_mode = 0
-        # self.frames_per_burst = 2 << self.target_mode  # for CRS
+        format_updated = set_param('format')
+        
+        # Set default format if not provided
+        if not hasattr(self, 'format') or format_updated:
+            self.format = config.get('format', '16')
 
         if stream_ids_updated:
             self.stream_ids = stream_ids_updated
@@ -393,10 +397,10 @@ class RawDataProcessor(object):
 
         # Of those, select the buffer indices that have valid stream IDs and valid timestamps
         self.ts[bix] = self.buf_ts[bix] & self.ts_mask
-        self.stream_id[bix] = self.buf_frame_stream_id[bix] & 0x0FFF
+        self.stream_ids[bix] = self.buf_frame_stream_id[bix] & 0x0FFF
         self.mode[bix] = (self.buf_subframe[bix] >> 2) & 0x3
         min_ts = min(self.ts_list)
-        bix = buf_ix[(self.six_map[self.buf_stream_id[bix]] >= 0) &
+        bix = buf_ix[(self.six_map[self.stream_ids[bix]] >= 0) &
                      (self.ts[bix] >= min_ts) &
                      (self.mode == self.target_mode)
                      ] # just keep bin indices that have valid stream IDs and valid timestamps
@@ -516,7 +520,7 @@ class RawDataProcessor(object):
 
         return data
 
-    def create_data_set(self, n):
+    def create_data_set(self, n, format):
             # Allocate memory to store reordered data
             # data_sats = np.empty((n, self.NBINS, self.NPROD), dtype=np.complex64)
             data_counts = np.empty((n,), dtype=np.int32)
@@ -533,7 +537,7 @@ class RawDataProcessor(object):
                 '64+64': (16, np.complex128),
             }
 
-            nbytes,dtype = formats[self.format]
+            nbytes,dtype = formats[format]
             nvalues = self.SAMPLES_PER_FRAME * self.frames_per_burst * self.BYTES_PER_SAMPLE // nbytes
 
             data = np.empty((self.nchan, n, nvalues), dtype=dtype)
@@ -679,7 +683,7 @@ class RawFrameReceiver(RawDataProcessor):
                     return
             align = False
 
-    def read_raw_frames(self, ncap=1, **kwargs):
+    def read_raw_frames(self, ncap=1, format='16', **kwargs):
         """ Allocate a data set and capture correlator data into it.
 
         Parameters:
@@ -709,9 +713,21 @@ class RawFrameReceiver(RawDataProcessor):
             verbose (int): verbosity level. 0=Quiet, 1=basic info, 2=detailed info, 3 = debugging info
         """
 
+        # Update the processor configuration with format and stream_ids if provided
+        config = kwargs.get('config', {})
+        if 'stream_ids' in kwargs:
+            config['stream_ids'] = kwargs['stream_ids']
+        if 'format' in kwargs:
+            config['format'] = kwargs['format']
+        elif format:
+            config['format'] = format
+        
+        if config:
+            self.update_config(config)
+
         # Pre-Allocate memory to store processed data
-        data, counts, sats = self.create_data_set(ncap)
-        for i, (d,c,s) in enumerate(self.read_corr_data_iter(ncap=ncap, format=kwargs.get('format', '16'), **kwargs)):
+        data, counts, sats = self.create_data_set(ncap, format)
+        for i, (d,c,s) in enumerate(self.read_corr_data_iter(ncap=ncap, **kwargs)):
             data[i], counts[i], sats[i] = d, c, s
         return (data, counts, sats)
 
