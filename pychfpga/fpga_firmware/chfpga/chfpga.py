@@ -4600,6 +4600,16 @@ class chFPGA(FPGAFirmware):
             if (Glog is None) and (postscaler is not None):
                 Glog = postscaler
 
+            if np.all(Glin.imag == 0.) == True:
+                # If the gain is purely real, recover only the real part and convert to float
+                Glin = Glin.real.astype(float)
+
+            if Glog == -1:
+                # A Glog of -1 indicates that floating point gains were used,
+                # and we can therefore set Glog to None so that the gains are set 
+                # in floating point mode.
+                Glog = None
+
             # Process each channel
             for ch in channel_list:
                 # Ignore channels not in the `channels` parameters
@@ -4614,9 +4624,12 @@ class chFPGA(FPGAFirmware):
 
                 if use_fixed_gain:
                     raise DeprecatedError(f'Fix gain feature is deprecated. Set the table to a constant value instead.')
+                
+                self.logger.debug(f'Slot {self.slot}, channel {ch}: Glin = {Glin}, Glog = {Glog}')
 
                 self.chan[ch].SCALER.set_gain_table(Glin, bank=bank, gain_timestamp=timestamp_value, log_gain=Glog)
                 configured_channels.add(ch)
+
         self.logger.debug(f"{self!r}: Setting scaler gains for channel {', '.join(str(i) for i in configured_channels)}")
 
         if when is not None:
@@ -4641,14 +4654,30 @@ class chFPGA(FPGAFirmware):
             list of gains for each channelizer, in the format::
                  [[channel_number, [linear_gain_table, log gain]], ...]
 
-                 ``linear_gain_table`` is an array of 1024 complex values.
+                 ``linear_gain_table`` is an array of NBIN complex values.
                  ``log gain`` is an integer.
         """
         gain_list = []
         for chan in self.get_channelizers():
-            glog = chan.SCALER.SHIFT_LEFT
+
+            fp_gains_enabled = chan.SCALER.USE_FLOAT_GAINS
+
             glin = chan.SCALER.get_gain_table(bank=bank, use_cache=True)
+
+            if fp_gains_enabled:
+                '''
+                Floating-point gain convention: glin corresponds to the full gain, and the "log" part is returned as -1
+                to signify that floating-point gains are used (i.e., the full gain is represented by glin, and it is not
+                necessary to use glog).
+                '''
+                self.logger.debug(f'Floating point gains enabled on slot {self.slot}, channel {chan.chan_number}')
+                glog = -1
+
+            else:
+                glog = chan.SCALER.SHIFT_LEFT
+
             gain_list.append([chan.chan_number, [glin, glog]])
+
         return gain_list
 
     def get_gain_timestamps(self, bank=0):
