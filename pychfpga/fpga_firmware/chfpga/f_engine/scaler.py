@@ -143,7 +143,7 @@ class SCALER(MMI):
 
             gain_list: gains to set:
 
-                - if `gain_list` is a 1024-element list or ndarray, the numeric gains therein are
+                - if `gain_list` is an NBIN-element list or ndarray, the numeric gains therein are
                   applied to each bin.
 
                 - if `gains_list` is a scalar int, float or complex numbers, all bins are set to that
@@ -284,6 +284,13 @@ class SCALER(MMI):
                 # for ix in range(256):  # there are 256 coefficients per page (2 bytes per coeff = 512 bytes total per page)
                 #     g = struct.unpack('<hh', page_table[2 * ix: 2 * ix + 2])
                 gain_table.append(page_table.tolist())
+
+        if self.USE_FLOAT_GAINS:
+            # Additional processing to return floating point gains as a single value for each frequency bin
+            gain_table = (np.array(gain_table) & 0xFFFF).flatten() # Full 16-bit value, meaningless without being processed
+            gain_mant = (gain_table & 0x7FF).astype(int) # Lower 11 bits, linear (mantissa) component
+            gain_exp = ((gain_table >> 11) + self.SHIFT_LEFT).astype(int) # Upper 5 bits, logarithmic (exponential) component, plus common log component
+            gain_table = gain_mant * 2 ** gain_exp # Full gain can be expressed as a single value 
 
         return gain_table
 
