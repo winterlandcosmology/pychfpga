@@ -205,349 +205,8 @@ class UCAP(MMI):
 
     def get_data_receiver(self, packet_receiver):
         return RawFrameReceiver(packet_receiver)
-
-    # def get_data_receiver(self, sock=None): #, buffer_length=256):
-    #     return RawFrameReceiver(sock or self.fpga.get_data_socket()) # , buffer_length=buffer_length)
-
-class RawDataProcessor(object):
-
-    PACKET_COOKIE = 0xA0
-    PACKET_COOKIE_MASK = 0xFE
-    NBYTES_PER_HEADER = 10 # Number of bytes in the UDP payload header
-    NBYTES_PER_PROD = 5  # Number of bytes used to store each complex correlator product ( (18+18) bits = 36 bits, 5 bytes = 40 bits)
-
-    def __init__(self, buf, config=None, verbose=1):
-
-
-        self.verbose = verbose
-        # Define numpy data types that will be used to parse the correlator packets
-        self.buf = buf
-        # self.NCHAN = None
-        # self.NCLK = None
-        # self.bin_map = None
-        # self.prod_map = None
-        # self.firmware_integ_period = None
-
-        self.target_mode = 0
-        self.frames_per_burst = 2 << self.target_mode  # for CRS
-
-        self.BYTES_PER_SAMPLE = 2 # CRS
-        self.SAMPLES_PER_FRAME = 16384
-        self.NBINS = self.SAMPLES_PER_FRAME // 2
-        self.BYTES_PER_FRAME = self.SAMPLES_PER_FRAME * self.BYTES_PER_SAMPLE # bytes
-        self.NUMBER_OF_SUBFRAMES = 4
-        self.BYTES_PER_SUBFRAME = self.BYTES_PER_FRAME // self.NUMBER_OF_SUBFRAMES # bytes
-        # self.ignore_packet_size = ignore_packet_size
-        # Define numpy data types that will be used to efficiently parse the data
-
-        self.header_dtype = np.dtype(dict(
-            names=['cookie', 'stream_id', 'source_crate', 'slot_chan', 'subframe', 'ts'],
-            offsets=[0, 1, 1, 2, 3, 2],
-            formats=['u1', '>u2', 'u1', 'u1', 'u1', '>u8']))
-
-        self.packet_dtype = np.dtype([
-            ('header', self.header_dtype, (1, )),
-            ('data', np.int8, (self.BYTES_PER_SUBFRAME, ))])
-
-        self.PACKET_SIZE = self.packet_dtype.itemsize
-
-        # Pre-allocate buffers
-        # Buffer in which recv_into() will put the data directly
-        # self.buf = np.zeros((self.NPACKETS, self.PACKET_SIZE), dtype=np.int8)  # can use empty(), but the uninitialized data can be confusing for debugging
-        self.n = 0  # buffer write index
-        self.last_ts = None  # timestamp of the last packet written in the buffer
-
-        # Various views of the buffer to allow quick and easy access to the packet contents
-
-        self.buf_struct = self.pr.buf[:,:self.PACKET_SIZE].view(self.packet_dtype)[:,0]
-
-        self.buf_cookie = self.buf_struct['header']['cookie'][:, 0]
-        self.buf_frame_stream_id = self.buf_struct['header']['stream_id'][:, 0]
-        # self.buf_source_crate = self.buf_struct['header']['source_crate'][:, 0]
-        self.buf_slot_chan = self.buf_struct['header']['slot_chan'][:, 0]
-        self.buf_subframe = self.buf_struct['header']['subframe'][:, 0]
-        self.buf_ts = self.buf_struct['header']['ts'][:, 0]
-        self.buf_ts_dirty = self.buf_struct['header']['ts'][:, 0]
-        self.buf_data = self.buf_struct['data']
-        self.ts_mask = np.uint64(0xFFFFFFFFFFFF)  # just keep the last 48 bits
-        self.ts_map = {}  # Maps timestamp to storage slot
-        NPACKETS = self.pr.buf.shape[0]
-        self.buf_stream_id = np.empty((NPACKETS,), dtype=np.int32)
-        self.buf_frame = np.empty((NPACKETS,), dtype=np.int32)
-        self.TS_SLOTS = 3
-        ts_dict = {} # {timestamp:n, ...): keeps track of the known timestamps and associated capture slots
-
-
-        self.update_config(config)
-
-    def update_config(self, config, force=False):
-        """ Update the correlator receiver configuration
-
-
-        `update_config` needs to be called at least once before we start processing packets. It will
-        allocate processing buffers based on the correlator configuration. There is some logic to
-        reallocate these buffers only if dependent parameters have changed.
-
-        Parameters:
-
-            config (dict): dict containing the configuration of the correlator. Any of the following
-                keys can be provided in an update_config call, and multiple calls can be made, but all of them must have been
-                provided before data is being processed.
-
-                - NCHAN (int): Number of input channels that are beiing correlated together. Sets the number of products.
-                - NCLK (int): Number of clock cycles used to compute one set of products. This sets how many packets are set by bin.
-                - bin_map (numpy.ndarray or list): Array of dimensions [NBINSET, NCORR, NPROD_PER_CMAC, NCMAC] that
-                  describe the bin numbers for a specific bin set, correlator, bin/clock (packet index for each correlator)
-                  and CMAC (complex number index within a packet). The array can be provided as a numpy ndarray or a series of
-                  nested lists that convert to the desired 4-dimensional array so it can be sent as a serialized object.
-                - prod_map (numpy.ndarray or list): Array of dimensions [NCORR, NPROD_PER_CMAC, NCMAC] that
-                  describe the normalized product index for data from a specific correlator, bin/clock (packet index for each correlator)
-                  and CMAC (complex number index within a packet). The array can be provided as a numpy ndarray or a series of
-                  nested lists that convert to the desired 4-dimensional array so it can be sent as a serialized object.
-                - firmware_integration (int): Number of frames integrated in firmware.
-                - stream_ids (list): List of stream IDs to capture
-                - format (str): Data format ('8', '16', '32', etc.)
-
-        Notes:
-
-            -
-
-        """
-
-        def set_param(name):
-            if (v := config.get(name)) is not None:
-                if force or (not hasattr(self, name) or (np.all(v != getattr(self, name)) if isinstance(v, np.ndarray) else v != getattr(self, name))):
-                    setattr(self, name, v)
-                    return True
-            return False
-
-        if config is None:
-            return
-
-        stream_ids_updated = set_param('stream_ids')
-        format_updated = set_param('format')
-        
-        # Set default format if not provided
-        if not hasattr(self, 'format') or format_updated:
-            self.format = config.get('format', '16')
-
-        if stream_ids_updated:
-            self.stream_ids = stream_ids_updated
-            self.nchan = len(self.stream_ids)  # number of stream IDs (channels) to capture
-            self.six_map = np.full((1<<12, ), -1, dtype=np.int32) # maps a stream ID into a stream index, default of -1 means invalid stream ID
-            self.six_map[self.stream_ids] = np.arange(self.nchan)
-            self.ts_list = np.zeros((self.nchan,), dtype=np.uint64)  # timestamp for each storage slot
-
-            self.raw_data = np.zeros((self.TS_SLOTS, self.nchan, self.BYTES_PER_FRAME * self.frames_per_burst), dtype=np.int8)
-            self.data_count = np.zeros((self.TS_SLOTS, self.nchan), dtype=np.uint16)
-
-
-
-    def get_data_iter(
-            self,
-            n,
-            format='8',
-            split = False,
-            config = None,
-            verbose=0
-            ):
-        """
-        Returns a generator that yields the raw data resulting from processing `n` lines in the packet buffer.
-
-        Parameters:
-
-            n (int): Number of entries (packets) to process in the buffer
-
-
-            skip_first_integ (bool): if True, the first integration will be dropped if it is missing any data.
-
-            skip_partial_integs (bool): If True, any integration that is missing data will be dropped
-
-
-            select (bool): If True, the firmware will configure to stream the correlator data if needed.
-
-            out (tuple): (data, data_counts, data_sats)  tuple providing the ndarrays into which data will be stored.
-                if None, the results will be yielded as they come.
-
-            verbose (int): verbosity level. 0=Quiet, 1=basic info, 2=detailed info, 3 = debugging info
-        """
-        self.verbose = verbose
-
-        if not self.config_ready():
-            raise RuntimeError('Configuration parameters are missing')
-
-
-        if config is not None:
-            self.update_config(config)
-
-        self.skip_partial_integs = skip_partial_integs
-
-        if not n:
-            return
-
-
-        # self.expected_packets_per_ts = self.nchan * 16
-        # self.skip_next_integ = skip_first_integ
-        # self.n = 0 # number of processed packets
-
-        # Select the buffer index that have the right cookie
-        (bix, ) = np.where(self.buf_cookie[:npkts] & self.PACKET_COOKIE_MASK == self.PACKET_COOKIE)
-        if not bix.size:
-            return
-
-        # Of those, select the buffer indices that have valid stream IDs and valid timestamps
-        self.ts[bix] = self.buf_ts[bix] & self.ts_mask
-        self.stream_ids[bix] = self.buf_frame_stream_id[bix] & 0x0FFF
-        self.mode[bix] = (self.buf_subframe[bix] >> 2) & 0x3
-        min_ts = min(self.ts_list)
-        bix = buf_ix[(self.six_map[self.stream_ids[bix]] >= 0) &
-                     (self.ts[bix] >= min_ts) &
-                     (self.mode == self.target_mode)
-                     ] # just keep bin indices that have valid stream IDs and valid timestamps
-        if not bix.size:
-            return
-
-        # Extract header information
-        self.frame[bix] = (self.buf_frame_stream_id[bix] >> 12) & 0xF
-        self.subframe[bix] = self.buf_subframe[bix] & 0x3
-        self.six[bix] = self.six_map[self.stream_ids[bix]]  # get stream index from stream id
-
-
-        # Process data by timestamp groups
-        for ts in np.unique(ts):
-            if ts not in self.ts_list: # if timestamp is not in the list, add it
-                dest_slot = (self.write_slot + 1) % self.TS_SLOTS
-                if dest_slot == self.read_slot: # FIFO is full, send data to make room
-                    yield from self.yield_ts()
-            else: # timestamp already exist, add new data to it.
-                dest_slot = self.ts_list.index(ts)
-
-            tix = bix[self.ts[bix] == ts] # select buf indices with matching timestamps
-            x = self.frame[tix] * self.BYTES_PER_FRAME + self.subframe[tix] * self.BYTES_PER_SUBFRAME
-            self.raw_data[dest_slot, self.six[tix], x:x + self.BYTES_PER_SUBFRAME] = self.buf_data[tix]
-            self.ts_list[dest_slot] = ts
-            self.raw_data_count[dest_slot] += len(tix)
-            # self.raw_mode[dest_slot] = self.mode[tix[0]]
-            self.raw_data_complete[dest_slot] = self.raw_data_count[dest_slot] == self.nchan * self.frames_per_burst * self.NUMBER_OF_SUBFRAMES
-
-            # Immediately send data if we have full sets
-            for i in range(self.TS_SLOTS):
-                if any(self.raw_data_complete):
-                    yield from self.yield_data()
-
-    def yield_ts(self, bix, ts):
-        """
-        """
-        if self.write_slot == self.read_slot:  # if ring buffer is empty
-            return
-        rs = self.read_slot
-        self.read_slot = (self.read_slot + 1) % self.TS_SLOTS
-        if verbose:
-            for i in range(self.nchan):
-                print(f'Chan {i}: {data_count[i].sum()} packets')
-
-        # if ncap > 1 and verbose:
-        #     print(f'Timestamp differences: {set(np.diff(ts))}')
-
-        self.frames_per_channel = 2 << self.raw_mode[rs]
-
-        ts = self.raw_ts[rs]
-        data = self.raw_data[rs]
-        data_count = self.raw_data_count[rs]
-
-        data = self.convert_data(data)
-
-        yield ts, data, data_count
-
-
-
-
-    # def clear_integ_slot(self, slice_=slice(None)):
-    #     """ Clear the integration slot(s)
-    #     Parameters:
-    #         slice_ (slice): Slice object indicating which slots to clear. If not specified, all slots are cleared.
-
-    #     """
-    #     self.total_count[slice_] = 0
-    #     self.acc_re[slice_] = 0
-    #     self.acc_im[slice_] = 0
-    #     self.sat[slice_] = 0
-    #     # self.count[slice_] = 0
-
-    def convert_data_set(self, data):
-        split = 0
-
-        frames_per_channel = data.shape[-1]//self.BYTES_PER_FRAME
-        ncap = data.shape[0] if len(data.shape) > 2 else 1
-
-        if self.format == '8':
-            if split:
-                data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
-        elif self.format == "14":
-            data = data.view('>i2') >> 2
-            if split:
-                data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
-        elif self.format == "16":
-            data = self.raw_data.view('>i2')
-            if split:
-                data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
-        elif self.format == "32":
-            data = data.view('>i4')
-            if split:
-                data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
-
-        elif self.format == "16+16":
-            data = data.view('>i2')
-            data = data[:, :, ::2] + 1j*data[:, :, 1::2]
-            data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
-        elif self.format == "32+32":
-            data = data.view('>i4')
-            data = data[:, :, ::2] + 1j*data[:, :, 1::2]
-            data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
-        elif self.format == "32+32d":
-            data = data.view('>i4')
-            data = data[:, :, ::2] + 1j*data[:, :, 1::2]
-            data = data.reshape((self.nchan, ncap*frames_per_channel,-1)) # split
-            s = data.shape
-            data = data.reshape(s[0],-1,2,s[2]).reshape(s[0],-1,s[2]*2, order='F')
-
-        elif self.format == "64+64":
-            data = data.view('>i8')
-            data = data[:, :, ::2] + 1j*data[:, :, 1::2]
-            data = data.reshape((self.nchan, ncap*frames_per_channel,-1))
-        else:
-            raise ValueError(f'Invalid format "{self.format}"')
-
-        return data
-
-    def create_data_set(self, n, format):
-            # Allocate memory to store reordered data
-            # data_sats = np.empty((n, self.NBINS, self.NPROD), dtype=np.complex64)
-            data_counts = np.empty((n,), dtype=np.int32)
-            nsamples = self.SAMPLES_PER_FRAME * self.frames_per_burst
-            # data_counts = np.empty((n, self.NBINS, self.NPROD), dtype=np.int32)
-            formats = {
-                '8': (1, '>i1'),
-                '14': (2, '>i2'),
-                '16': (2, '>i2'),
-                '32': (4, '>i4'),
-                '64': (8, '>i8'),
-                '16+16': (4, np.complex64),
-                '32+32': (8, np.complex64),
-                '64+64': (16, np.complex128),
-            }
-
-            nbytes,dtype = formats[format]
-            nvalues = self.SAMPLES_PER_FRAME * self.frames_per_burst * self.BYTES_PER_SAMPLE // nbytes
-
-            data = np.empty((self.nchan, n, nvalues), dtype=dtype)
-            data_sats = np.empty((self.nchan, n, nvalues), dtype=np.complex64)
-
-            return (data, data_counts, data_sats)
-
-
-
-class RawFrameReceiver(RawDataProcessor):
+    
+class RawFrameReceiver(object):
     """
     Pure Python socket receiver to capture the raw ADC or FFT data from the FPGA.
 
@@ -587,147 +246,277 @@ class RawFrameReceiver(RawDataProcessor):
         watch -cd -n .5 "cat /proc/net/udp"
     """
 
-    def __init__(self, packet_receiver, config=None):
+    def __init__(self, packet_receiver):
 
         self.pr = packet_receiver
-        super().__init__(buf=self.pr.buf, config=config)
+        # self.NPACKETS = buffer_length
+        self.FRAME_SIZE = 16384*2 # bytes
+        self.DATA_SIZE = self.FRAME_SIZE // 4
+        # self.ignore_packet_size = ignore_packet_size
+        # Define numpy data types that will be used to efficiently parse the data
 
-    def flush(self, timeout, verbose=0):
-            # Read packets until timeout
-            flushed = 0
+        self.header_dtype = np.dtype(dict(
+            names=['cookie', 'stream_id', 'source_crate', 'slot_chan', 'subframe', 'ts'],
+            offsets=[0, 1, 1, 2, 3, 2],
+            formats=['u1', '>u2', 'u1', 'u1', 'u1', '>u8']))
+
+        self.packet_dtype = np.dtype([
+            ('header', self.header_dtype, (1, )),
+            ('data', np.int8, (self.DATA_SIZE, ))])
+
+        self.PACKET_SIZE = self.packet_dtype.itemsize
+
+        # Pre-allocate buffers
+        # Buffer in which recv_into() will put the data directly
+        # self.buf = np.zeros((self.NPACKETS, self.PACKET_SIZE), dtype=np.int8)  # can use empty(), but the uninitialized data can be confusing for debugging
+        self.n = 0  # buffer write index
+        self.last_ts = None  # timestamp of the last packet written in the buffer
+
+        # Various views of the buffer to allow quick and easy access to the packet contents
+
+        self.buf_struct = self.pr.buf[:,:self.PACKET_SIZE].view(self.packet_dtype)[:,0]
+
+        self.buf_cookie = self.buf_struct['header']['cookie'][:, 0]
+        self.buf_stream_id = self.buf_struct['header']['stream_id'][:, 0]
+        # self.buf_source_crate = self.buf_struct['header']['source_crate'][:, 0]
+        self.buf_slot_chan = self.buf_struct['header']['slot_chan'][:, 0]
+        self.buf_subframe = self.buf_struct['header']['subframe'][:, 0]
+        self.buf_ts = self.buf_struct['header']['ts'][:, 0]
+        self.buf_ts_dirty = self.buf_struct['header']['ts'][:, 0]
+        self.buf_data = self.buf_struct['data']
+        self.ts_mask = np.uint64(0xFFFFFFFFFFFF)  # just keep the last 48 bits
+        NCHAN_MAX = 8
+        FRAMES_PER_CHANNEL_MAX = 16
+        self.cookie = cookie = 0xa0
+
+
+    def wait_for_new_timestamp(self, cookie, timeout, verbose=0):
             self.socket.settimeout(timeout)
+            flushed = 0
             while True:
                 try:
                     s = self.socket.recv_into(self.buf[0])
                     flushed += 1
-                    if verbose >=2:
-                        print(f'flushing packet len={s} cookie=0x{self.buf_cookie[0]:02x} ts={self.buf_ts[0] & self.ts_mask}')
-
-                except socket.timeout:
+                    if self.buf_cookie[0] & 0xfe != cookie:
+                        continue
+                    ts = self.buf_ts[0] & self.ts_mask
+                    if self.last_ts is None:
+                        self.last_ts = ts
+                        continue
+                    if self.last_ts == ts:
+                        if verbose >=2:
+                            print(f'skipping packet len={s} cookie=0x{self.buf_cookie[0]:02x} ts={ts}')
+                        continue
+                    self.last_ts = ts
+                    self.n = 1
                     break
-            # We assume the buffer might have overflowed and contains partial
-            # timestamp. We flush until we gen a new timestamp.
+                except socket.timeout:
+                    continue
             return flushed
 
-    def read_corr_data_iter(
+    # def receive_packets(self, cookie, verbose=0):
+    #     """ Receive some packets into the buffer until there is a timeout or the buffer is full
+    #     """
+    #     n = self.n # current packet number
+    #     last_ts = None
+    #     while n < self.NPACKETS:
+    #         try:
+    #             s = self.socket.recv_into(self.buf[n])
+    #             # check if the packet has the right cookie
+    #             if verbose >= 2:
+    #                 print(f'got packet len={s} cookie=0x{self.buf_cookie[n]:02x} ts={self.buf_ts[n] & self.ts_mask}')
+    #             if self.buf_cookie[n] & 0xfe != cookie: # ignore packets with wrong cookie
+    #                 continue
+
+    #             # Ignore packets that don't have the right length
+    #             if s != self.PACKET_SIZE:
+    #                 continue
+    #             ts = self.buf_ts[n] & self.ts_mask
+    #             if verbose >=2:
+    #                 print(f'ts={ts}, last_ts={self.last_ts}, sid={self.buf_stream_id[n]:04x}')
+    #             n += 1
+    #             if last_ts is None: # if we don't have a last timestamp, initialize it and continue
+    #                 self.last_ts = ts
+    #             elif ts != last_ts: # if we have a new timestamp, exit
+    #                 break
+    #         except socket.timeout:  # we have a timeout, so we probably have time to process data
+    #             print('timeout')
+    #             continue
+    #     # we get here if there is a timeout, a timestamp change, or if the buffer is full
+    #     if verbose:
+    #         print(f'got {n} packets, delta_ts={ts-self.last_ts}')
+    #     self.n = n
+    #     return n
+
+    def read_raw_frames(
             self,
-            number_of_results = None,
-            soft_integ_period=1,
-            flush=None,
-            align=False,
-            data_timeout=0.1,
+            stream_ids=range(8),
+            flush=True,
+            data_timeout=1,
             flush_timeout=0.001,
-            skip_partial_integs=True,
-            config = None,
+            format='8',
+            ncap = None,
+            split = False,
             verbose=0):
-        """ Generator that continuously retreives UDP packets and yields processed correlator data when they are ready.
+        """ Capture raw data frames sent by UCAP.
 
         Parameters:
 
+            stream_ids (list of int): List of channels to capture
 
-            number_of_results (int): Number of results to yields back. If None or zero, the generator never ends.
+            flush (bool): If True, the UDP buffer will be emptied and capture will be realigned to the next full new timestamp.
 
-            soft_integ_period (int): Number of correlator frames to
-                accumulate in software. A software frame will always be
-                aligned to a multiple of soft_integ_period.
+            data_timeout (float): Amount of time (in seconds) to wait for data. Does not affect the data capture,
+                but a value larger that the max amount of time we expect to reasonably wait for data
+                packets will be slightly more efficient.
+
+            flush_timeout (float): Amount of time (in seconds) to wait until we decide there are no
+                longer packets in the UDP buffers. Must be smaller than the time between packets,
+                otherwise the buffer will never be emptied. number_of_frames (int): number of frames
+                to capture for each channel.
+
+            format (str): output data format:
+
+                '8': return the data as array of bytes (int8)
+                '16': return the data as array of 16-bit signed integers. Use when capturing the output of the FUNCGEN.
+                '16+16': return the data as an array of (16+16) bit complex numbers. Use for data at the output of the SCALER (unless the FFT is bypassed)
+
+            ncap (int): Number of bursts to capture
+
+            verbose (int): verbosity level. 0: no messages, 1: basic messages, 2: detailed messages
+
+        Returns:
+         (timestamp, data, count) tuple where:
+
+            timestamp (int): timestamp of the captured packet
+
+            data (ndarray): Nc*Ns array, where Nc is the number of channels, and Ns is the number of
+                samples. Ns depends on the capture mode used by UCAP (it is determined from the
+                packet contents)
+
+            count (ndarray): number of packets received for each channel
 
 
-            flush (bool): if True, the UDP buffers will be emptied before data is captured. For
-                multiple acquisitions, set to True on the first call and False on the subsequent
-                ones to allow lossless  acquisition.
-
-            align (bool): if True, a partial first integration will be dropped. Align is automatically set if Flush is set.
-
-            data_timeout (float): Maximum amount of time to wait for data before starting
-                processing. Should be matched to a dead time between data set transmission to be
-                effective. If too large, the data will be processed only when the buffer is full.
-
-            flush_timeout (float): Maximum amount of time to wait for packets before deciding there
-                is no more data in the buffer. Must be smaller than the gap between data packets,
-                otherwise it will never stop flushing.
-
-
-
-            out (tuple): (data, data_counts, data_sats)  tuple providing the ndarrays into which data will be stored.
-                if None, the results will be yielded as they come.
-
-            verbose (int): verbosity level. 0=Quiet, 1=basic info, 2=detailed info, 3 = debugging info
+        use flush=true is we expect the UDP buffer to contain old data tht needs to be discarded.
         """
-        # self.verbose = verbose
-        # self.soft_integ_period = soft_integ_period,
-        # self.skip_partial_integs = skip_partial_integs,
+        sid_map = {sid:ix for ix, sid in enumerate(stream_ids)}
 
-        if self.pre_func:
-            self.pre_func(self)
-
-        # Flush the UDP buffer by reading data until we timeout. We assume
-        # here that we can read the data fast enough to empty the buffer and
-        # that no new will come  for the timeout period.
         if flush:
-            self.pr.flush(flush_timeout)
-            self.clear_integ_slot() # clear ALL integration slots
-            align = True
-            self.current_integ = None
-
+            flushed = self.pr.flush(flush_timeout, verbose=verbose)
+            if verbose >=1:
+                print(f'Flushed {flushed} packets while emptying UDP buffers')
+            self.last_ts = None
+            # flushed = self.wait_for_new_timestamp(self.cookie, data_timeout, verbose=verbose)
+            # if verbose:
+            #     print(f'Skipped {flushed} packets while waiting for a fresh timestamp')
         self.pr.settimeout(data_timeout)
-        n = 0  # number of results sent
-        while True:
+
+        # if not self.n:
+        #     raise RuntimeError('There is no initial data in the buffer. Run with Flush=True first')
+        return_multiple_captures = ncap is not None
+        ncap = ncap or 1
+
+        mode = None
+        nchan = len(sid_map)  # number of captured channels
+
+        # Allocate destination buffer
+
+        data = np.zeros((nchan, ncap, self.FRAME_SIZE*16), dtype=np.int8)
+        data_count = np.zeros((nchan, ncap), dtype=np.uint16)
+        ts = np.zeros((ncap,), dtype=np.uint64)
+        ts_dict = {} # {timestamp:n, ...): keeps track of the known timestamps and associated capture slots
+        n = 0 # current capture slot
+        last_timestamp = None
+        while n < ncap + 1: # process packets until we have checked ncap+1 timestamps to make sure we have all the data for ncap timestamps
             # Get some packets until a new timestamp, timeout, or buffer full
-            if not (npkts := self.pr.get_packets(verbose=verbose)):
+            npkts = self.pr.get_packets(verbose=verbose)
+
+            if not npkts:
                 continue
-            # Extract and yield all possible data from the buffer
-            for d,c,s in self.get_data_iter(n=npkts, skip_first_integ=align, soft_integ_period = soft_integ_period, skip_partial_integs = skip_partial_integs, verbose=verbose):
-                yield d,c,s
-                n += 1
-                if n >= number_of_results:
-                    return
-            align = False
 
-    def read_raw_frames(self, ncap=1, format='16', **kwargs):
-        """ Allocate a data set and capture correlator data into it.
+            (buf_ix, ) = np.where(self.buf_cookie[:npkts] & 0xFE == self.cookie)
 
-        Parameters:
+            if not buf_ix.size:
+                continue
 
+            if mode is None:
+                # Determine the capture mode based in the first packet in the buffer
+                mode = (self.buf_subframe[0] >> 2) & 0x3
+                frames_per_channel = int(2 * 2**(mode))
+                if verbose:
+                    print(f"mode={mode}, {nchan} channel(s), {frames_per_channel} frames per channel, {ncap} captures")
 
-            soft_integ_period (int): Number of correlator frames to
-                accumulate in software. A software frame will always be
-                aligned to a multiple of soft_integ_period.
+            if verbose >=2:
+                print(f'sf={self.buf_subframe[:self.n]}')
 
+            t0 = time.time()
+            for i in range(npkts):
+                timestamp = self.buf_ts[i] & self.ts_mask
+                if timestamp != last_timestamp:  # update n only when the timestamp changes to minimize slow lookups
+                    last_timestamp = timestamp
+                    n = ts_dict.setdefault(timestamp, len(ts_dict)) # get existing slot if timestamp exists, otherwise create next slot
+                    if verbose:
+                        print(f'Switching to slot {n} at timestamp {timestamp}')
+                    if n < ncap:
+                        ts[n] = timestamp
+                if n < ncap:
+                    bix = sid_map.get(self.buf_stream_id[i] & 0xFFF, None)
+                    subframe = int(self.buf_subframe[i] & 0x3)
+                    frame = int((self.buf_stream_id[i] >> 12) & 0x0F)
+                    if verbose >= 3:
+                        print(f'sid = {self.buf_stream_id[i] & 0xFFF:03x}, Ch={bix}, frame={frame}, subframe={subframe}')
+                    if bix is not None:
+                        x = frame * self.FRAME_SIZE + subframe * self.DATA_SIZE
+                        data[bix, n, x:x+self.DATA_SIZE] = self.buf_data[i]
+                        data_count[bix, n] += 1
+            self.n = 0
+        if verbose:
+            for i in range(nchan):
+                print(f'Chan {i}: {data_count[i].sum()-ncap*16*4 or "no"} missing packets')
 
-            ncap (int): Number of software-integrated frames to
-                acquire and return.
+        if ncap > 1 and verbose:
+            print(f'Timestamp differences: {set(np.diff(ts))}')
 
+        data = data[:,:, :self.FRAME_SIZE*frames_per_channel]
 
-            flush (bool): if True, the UDP buffers will be emptied before data is captured. For
-                multiple acquisitions, set to True on the first call and False on the subsequent
-                ones to allow lossless  acquisition.
+        if format == "16":
+            data = data.view('>i2')
+            if split:
+                data = data.reshape((nchan, ncap*frames_per_channel,-1))
+        elif format == "14":
+            data = data.view('>i2') >> 2
+            if split:
+                data = data.reshape((nchan, ncap*frames_per_channel,-1))
+        elif format == "16+16":
+            data = data.view('>i2')
+            data = data[:, :, ::2] + 1j*data[:, :, 1::2]
+            data = data.reshape((nchan, ncap*frames_per_channel,-1))
+        elif format == "32":
+            data = data.view('>i4')
+            if split:
+                data = data.reshape((nchan, ncap*frames_per_channel,-1))
+        elif format == "32+32":
+            data = data.view('>i4')
+            data = data[:, :, ::2] + 1j*data[:, :, 1::2]
+            data = data.reshape((nchan, ncap*frames_per_channel,-1))
+        elif format == "32+32d":
+            data = data.view('>i4')
+            data = data[:, :, ::2] + 1j*data[:, :, 1::2]
+            data = data.reshape((nchan, ncap*frames_per_channel,-1)) # split
+            s = data.shape
+            data = data.reshape(s[0],-1,2,s[2]).reshape(s[0],-1,s[2]*2, order='F')
 
-            data_timeout (float): Maximum amount of time to wait for data before starting
-                processing. Should be matched to a dead time between data set transmission to be
-                effective. If too large, the data will be processed only when the buffer is full.
+        elif format == "64+64":
+            data = data.view('>i8')
+            data = data[:, :, ::2] + 1j*data[:, :, 1::2]
+            data = data.reshape((nchan, ncap*frames_per_channel,-1))
+        elif format == '8':
+            if split:
+                data = data.reshape((nchan, ncap*frames_per_channel,-1))
+        else:
+            raise ValueError(f'Invalid format "{format}"')
 
-            flush_timeout (float): Maximum amount of time to wait for packets before deciding there
-                is no more data in the buffer. Must be smaller than the gap between data packets,
-                otherwise it will never stop flushing.
-
-            verbose (int): verbosity level. 0=Quiet, 1=basic info, 2=detailed info, 3 = debugging info
-        """
-
-        # Update the processor configuration with format and stream_ids if provided
-        config = kwargs.get('config', {})
-        if 'stream_ids' in kwargs:
-            config['stream_ids'] = kwargs['stream_ids']
-        if 'format' in kwargs:
-            config['format'] = kwargs['format']
-        elif format:
-            config['format'] = format
-        
-        if config:
-            self.update_config(config)
-
-        # Pre-Allocate memory to store processed data
-        data, counts, sats = self.create_data_set(ncap, format)
-        for i, (d,c,s) in enumerate(self.read_corr_data_iter(ncap=ncap, **kwargs)):
-            data[i], counts[i], sats[i] = d, c, s
-        return (data, counts, sats)
-
+        if return_multiple_captures:
+            return ts, data, data_count
+        else:
+            return ts, data[:,0], data_count[:,0]
