@@ -1060,9 +1060,9 @@ class FPGAMaster(object):
         conf = self.config  # shortcut to shorten the code below
         fpga_array_params = conf.fpga.fpga_array_params
 
-        #Define some FPGA-related system constants
+        # Define some FPGA-related system constants
         self.SAMPLING_FREQUENCY = float(fpga_array_params.samp_freq) * 1e6  # frequency in Hz
-        self.SAMPLES_PER_FRAME = 2048
+        self.SAMPLES_PER_FRAME = fpga_array_params.samples_per_frame
         self.SECONDS_PER_FRAME = self.SAMPLES_PER_FRAME / self.SAMPLING_FREQUENCY
 
         self.log.info(f"Sampling frequency is {self.SAMPLING_FREQUENCY / 1e6:.3f} MHz.")
@@ -1202,6 +1202,9 @@ class FPGAMaster(object):
         # Initialize the digital gain hdf5 writer
         if self.config.raw_acq.enable:
             self.log.info(f"{self!r}: Initializing HDF5 gain archive reader/writer")
+
+        # Initialize gain HDF5 file
+        if not self.gain_hdf5:
             self.initialize_gain_hdf5()
 
         # Load most recent gains from archive into gain bank #0
@@ -1469,13 +1472,24 @@ class FPGAMaster(object):
         axis_dtypes = {axis_name:axis_dtype['dtype'] for axis_name, axis_dtype in digital_gain.DigitalGainArchive._axes.items()}
 
         # Create frequency axis
-        freq = self.SAMPLING_FREQUENCY - np.fft.fftfreq(self.SAMPLES_PER_FRAME, 1.0 / self.SAMPLING_FREQUENCY)
-        freq = 1e-6 * freq[0: self.SAMPLES_PER_FRAME // 2]
+        PLATFORM_ID = self.fpgas.ib[0].GPIO.PLATFORM_ID
+        if PLATFORM_ID not in [4, 5]: 
+            # ICE
+            freq = self.SAMPLING_FREQUENCY - np.fft.fftfreq(self.SAMPLES_PER_FRAME, 1.0 / self.SAMPLING_FREQUENCY)
+            freq = 1e-6 * freq[0: self.SAMPLES_PER_FRAME // 2]
+        elif PLATFORM_ID == 4:
+            # ZCU111
+            raise NotImplementedError("Gain HDF5 initialization for ZCU111 not supported.")
+        elif PLATFORM_ID == 5: # FIXME: temporary hack to access the PLATFORM_ID to deteremine frequency bins. Should be more human readable and not go into GPIO.
+            # CRS
+            self.log.info(f"{self!r}: Made it under CRS")
+            f_res = self.SAMPLING_FREQUENCY / self.SAMPLES_PER_FRAME
+            freq = 1e-6 * np.arange(0, self.SAMPLING_FREQUENCY/2, f_res)
+
         freq = np.array(list(zip(freq, [np.median(np.abs(np.diff(freq)))] * freq.size)),
                         dtype=axis_dtypes['freq'])
 
         # Create input axis
-
         if self.config.input_reorder:
             # If we already have a channel_id to channel SN map,
             # use it. We assume that the map contains all the channels IDs
@@ -1489,10 +1503,8 @@ class FPGAMaster(object):
             sid_to_sn_map = [(sid, self._chan_id_to_serial_number(sid_to_cid_map.get(sid,(0,0,0)))) for sid in range(max_sid+1)]
             inputs = np.array(sid_to_sn_map, dtype=axis_dtypes['input'])
 
-            # inputs = np.array([(stream_id, self._chan_id_to_serial_number(chan_id))
-            #                    for chan_id, stream_id in sorted(self.fpgas.get_stream_id_map().items(), key=lambda x:x[1])],
-            #                   dtype=axis_dtypes['input'])
-        # self.log.debug(f'{self!r}: Created input axis as {inputs} with dtypes {inputs.dtype}')
+        self.log.info(f"{self!r}: inputs {inputs}")
+
         # Expand some strings
         hdf5_conf = self.config.fpga.gain_hdf5.copy()
         hdf5_conf['output_dir'] = self.expand_path(hdf5_conf.get('output_dir', '.'))
