@@ -93,9 +93,28 @@ class ArchiveInspector:
                 
                 # Mode-specific info
                 if self.info['mode'] == 'fine_lag':
-                    print(f"ADC data shape:   {first_capture['adc0'].shape}")
-                    print(f"Lag points:       {len(first_capture['lag_p00'])}")
+                    n_ch = first_capture.get('n_channels', 2)
+                    print(f"Channels:         {n_ch}")
+                    print(f"UCAP mode:        {first_capture.get('ucap_mode', 'unknown')}")
                     print(f"Frames averaged:  {first_capture.get('frames_averaged', 'unknown')}")
+                    if 'adc0' in first_capture:
+                        print(f"ADC data shape:   {first_capture['adc0'].shape}")
+                    if 'lags' in first_capture:
+                        n_lags_products = len(first_capture['lags'])
+                        auto_keys = [k for k in first_capture['lags'] if isinstance(k, tuple) and k[0] == k[1]]
+                        cross_keys = [k for k in first_capture['lags'] if isinstance(k, tuple) and k[0] != k[1]]
+                        print(f"Lag products:     {n_lags_products} ({len(auto_keys)} auto + {len(cross_keys)} cross)")
+                        sample_lag = next(iter(first_capture['lags'].values()))
+                        print(f"Lag points:       {len(sample_lag)}")
+                    elif 'lag_p00' in first_capture:
+                        print(f"Lag points:       {len(first_capture['lag_p00'])}")
+                    if 'ffts' in first_capture:
+                        print(f"FFT channels:     {len(first_capture['ffts'])}")
+                        sample_fft = next(iter(first_capture['ffts'].values()))
+                        print(f"FFT bins:         {len(sample_fft)}")
+                    if 'config' in first_capture:
+                        cfg = first_capture['config']
+                        print(f"Nyquist zones:    {cfg['nyquist_zones']}")
                     
                 elif self.info['mode'] == 'super_fft':
                     print(f"ADC data shape:   {first_capture['adc0'].shape}")
@@ -141,76 +160,61 @@ class ArchiveInspector:
     
     def _plot_fine_lag_capture(self, capture: Dict[str, Any], index: int, timestamp: datetime, 
                               save_path: Optional[str], show: bool):
-        """Plot Fine Lag mode capture."""
-        fig, axes = plt.subplots(2, 3, figsize=(15, 10))
-        fig.suptitle(f'Fine Lag Mode - Capture {index} - {timestamp.strftime("%Y-%m-%d %H:%M:%S")}')
-        
-        # Calculate axes
-        n_samples = capture['adc0'].shape[-1]
-        time_axis_us = np.arange(n_samples * capture['adc0'].shape[0]) / self.FS_HZ * 1e6
-        
-        # Fine lag axis (8192 points, centered around zero)
-        fine_lag_samples = np.arange(8192) - 8192 // 2
-        fine_lag_time_s = fine_lag_samples / self.FS_HZ
-        fine_lag_axis_m = fine_lag_time_s * self.c_m_per_s / 2
-        
-        # Plot raw ADC time domain data
-        adc0_flat = capture['adc0'].flatten()
-        adc1_flat = capture['adc1'].flatten()
-        
-        axes[0, 0].plot(time_axis_us[:len(adc0_flat)], adc0_flat, 'b-', alpha=0.7, linewidth=0.5)
-        axes[0, 0].set_title('ADC0 Time Domain')
-        axes[0, 0].set_xlabel('Time (μs)')
-        axes[0, 0].set_ylabel('Amplitude')
-        axes[0, 0].grid(True, alpha=0.3)
-        
-        axes[0, 1].plot(time_axis_us[:len(adc1_flat)], adc1_flat, 'r-', alpha=0.7, linewidth=0.5)
-        axes[0, 1].set_title('ADC1 Time Domain')
-        axes[0, 1].set_xlabel('Time (μs)')
-        axes[0, 1].set_ylabel('Amplitude')
-        axes[0, 1].grid(True, alpha=0.3)
-        
-        # Plot lag spectra
-        axes[1, 0].plot(fine_lag_axis_m, capture['lag_p00'], 'b-', linewidth=1.5, label='ADC0 Autocorr')
-        axes[1, 0].set_title('ADC0 Autocorrelation')
-        axes[1, 0].set_xlabel('Distance (m)')
-        axes[1, 0].set_ylabel('Normalized Correlation')
-        axes[1, 0].grid(True, alpha=0.3)
-        axes[1, 0].set_yscale('log')
-        
-        axes[1, 1].plot(fine_lag_axis_m, capture['lag_p11'], 'r-', linewidth=1.5, label='ADC1 Autocorr')
-        axes[1, 1].set_title('ADC1 Autocorrelation')
-        axes[1, 1].set_xlabel('Distance (m)')
-        axes[1, 1].set_ylabel('Normalized Correlation')
-        axes[1, 1].grid(True, alpha=0.3)
-        axes[1, 1].set_yscale('log')
-        
-        axes[1, 2].plot(fine_lag_axis_m, capture['lag_p01'], 'g-', linewidth=1.5, label='Cross-correlation')
-        axes[1, 2].set_title('ADC0/1 Cross-correlation')
-        axes[1, 2].set_xlabel('Distance (m)')
-        axes[1, 2].set_ylabel('Normalized Correlation')
-        axes[1, 2].grid(True, alpha=0.3)
-        axes[1, 2].set_yscale('log')
-        
-        # Add metadata text
-        metadata_text = f"Frames averaged: {capture.get('frames_averaged', 'unknown')}\n"
-        metadata_text += f"Resolution: {(fine_lag_axis_m[1] - fine_lag_axis_m[0]) * 100:.2f} cm"
-        axes[0, 2].text(0.1, 0.5, metadata_text, transform=axes[0, 2].transAxes, 
-                        fontsize=12, verticalalignment='center',
-                        bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray", alpha=0.5))
-        axes[0, 2].set_title('Metadata')
-        axes[0, 2].axis('off')
-        
-        plt.tight_layout()
-        
+        """Plot Fine Lag mode capture — all 8 channels TOD + FFT + lag spectra."""
+        n_ch = capture.get('n_channels', 2)
+        has_ffts = 'ffts' in capture
+        has_lags = 'lags' in capture
+
+        # --- Page 1: 8-channel TOD (4x2) ---
+        fig1, axes1 = plt.subplots(2, 4, figsize=(20, 8))
+        fig1.suptitle(f'Fine Lag — Time Domain — Capture {index} — {timestamp.strftime("%Y-%m-%d %H:%M:%S")}')
+        colors = plt.cm.tab10(np.linspace(0, 1, 10))
+        for ch in range(min(n_ch, 8)):
+            ax = axes1[ch // 4, ch % 4]
+            key = f'adc{ch}'
+            if key in capture:
+                adc_flat = capture[key].flatten()
+                t_us = np.arange(len(adc_flat)) / self.FS_HZ * 1e6
+                ax.plot(t_us, adc_flat, color=colors[ch], alpha=0.7, linewidth=0.5)
+            ax.set_title(f'ADC {ch}')
+            ax.set_xlabel('Time (μs)')
+            ax.set_ylabel('Amplitude')
+            ax.grid(True, alpha=0.3)
+        fig1.tight_layout()
+
+        # --- Page 2: 8-channel FFT (4x2) ---
+        fig2 = None
+        if has_ffts:
+            fig2, axes2 = plt.subplots(2, 4, figsize=(20, 8))
+            fig2.suptitle(f'Fine Lag — FFT Power — Capture {index} — {timestamp.strftime("%Y-%m-%d %H:%M:%S")}')
+            for ch in range(min(n_ch, 8)):
+                ax = axes2[ch // 4, ch % 4]
+                if ch in capture['ffts']:
+                    fft_data = capture['ffts'][ch]
+                    freq_mhz = np.linspace(0, self.FS_HZ / 2, len(fft_data)) / 1e6
+                    ax.plot(freq_mhz, fft_data, color=colors[ch], linewidth=0.8)
+                    ax.set_yscale('log')
+                ax.set_title(f'ADC {ch} FFT')
+                ax.set_xlabel('Frequency (MHz)')
+                ax.set_ylabel('Power')
+                ax.grid(True, alpha=0.3)
+            fig2.tight_layout()
+
+        # Page 3 intentionally omitted — lag spectra are shown in waterfalls
+        fig3 = None
+
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
             print(f"✓ Saved plot to {save_path}")
-        
+
         if show:
             plt.show()
         else:
-            return fig
+            # Return list of figures for PDF
+            figs = [fig1]
+            if fig2: figs.append(fig2)
+            if fig3: figs.append(fig3)
+            return figs
     
     def _plot_super_fft_capture(self, capture: Dict[str, Any], index: int, timestamp: datetime,
                                save_path: Optional[str], show: bool):
@@ -440,15 +444,14 @@ class ArchiveInspector:
         if save_path:
             # Create PDF report
             with PdfPages(save_path) as pdf:
-                # Create title page
-                fig, ax = plt.subplots(figsize=(8.5, 11))
+                # --- Title page ---
+                fig, ax = plt.subplots(figsize=(11, 8.5))
                 title_text = f"Periscope Correlator Archive Report\n\n"
                 title_text += f"File: {self.file_path.name}\n"
                 title_text += f"Mode: {self.info['mode'].upper()}\n"
                 title_text += f"Captures: {self.info['capture_count']}\n"
                 title_text += f"Session: {datetime.fromtimestamp(self.info['session_start'])}\n"
                 title_text += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                
                 ax.text(0.5, 0.5, title_text, transform=ax.transAxes,
                        fontsize=16, horizontalalignment='center', verticalalignment='center',
                        bbox=dict(boxstyle="round,pad=0.5", facecolor="lightblue", alpha=0.8))
@@ -456,12 +459,110 @@ class ArchiveInspector:
                 ax.set_title('Archive Summary Report', fontsize=20, pad=20)
                 pdf.savefig(fig, bbox_inches='tight')
                 plt.close(fig)
-                
-                # Generate plots for selected captures
+
+                # --- Individual capture pages ---
                 for i in indices:
-                    self.plot_capture(i, save_path=None, show=False)
-                    pdf.savefig(bbox_inches='tight')
-            
+                    result = self.plot_capture(i, save_path=None, show=False)
+                    # Handle multi-figure returns from 8-channel mode
+                    if isinstance(result, list):
+                        for fig_item in result:
+                            pdf.savefig(fig_item, bbox_inches='tight')
+                            plt.close(fig_item)
+                    else:
+                        pdf.savefig(bbox_inches='tight')
+                        plt.close('all')
+
+                # --- Waterfall pages (for fine_lag 8-channel mode) ---
+                if self.info['mode'] == 'fine_lag':
+                    n_cap = min(self.info['capture_count'], 1000)
+                    first = self.reader.get_capture(0)
+                    has_ffts = first and 'ffts' in first
+                    has_lags = first and 'lags' in first
+
+                    if has_ffts or has_lags:
+                        print(f"  Building waterfalls from {n_cap} captures...")
+                        # Load all captures once
+                        all_captures = []
+                        for ci in range(n_cap):
+                            cap = self.reader.get_capture(ci)
+                            if cap:
+                                all_captures.append(cap)
+                        nc = len(all_captures)
+
+                    # --- FFT waterfalls (4x2 = 8 channels) ---
+                    if has_ffts and nc > 0:
+                        n_fft_bins = len(next(iter(first['ffts'].values())))
+                        freq_mhz = np.linspace(0, self.FS_HZ / 2, n_fft_bins) / 1e6
+                        fig_fft, axes_fft = plt.subplots(2, 4, figsize=(24, 10))
+                        fig_fft.suptitle(f'FFT Power Waterfalls — All 8 Channels ({nc} captures)', fontsize=14)
+                        for ch in range(8):
+                            wf = np.zeros((nc, n_fft_bins))
+                            for ci, cap in enumerate(all_captures):
+                                if ch in cap.get('ffts', {}):
+                                    wf[ci] = cap['ffts'][ch]
+                            ax = axes_fft[ch // 4, ch % 4]
+                            wf_log = np.log10(np.maximum(wf, 1e-10))
+                            ax.imshow(wf_log, aspect='auto', origin='lower',
+                                     extent=[freq_mhz[0], freq_mhz[-1], 0, nc],
+                                     cmap='viridis')
+                            ax.set_title(f'ADC {ch}')
+                            ax.set_xlabel('Freq (MHz)')
+                            ax.set_ylabel('Capture')
+                        fig_fft.tight_layout()
+                        pdf.savefig(fig_fft, bbox_inches='tight')
+                        plt.close(fig_fft)
+
+                    # --- Lag auto-correlation waterfalls (4x2 = 8 autos) ---
+                    if has_lags and nc > 0:
+                        n_lags = 8192
+                        fine_lag_m = (np.arange(n_lags) - n_lags // 2) / self.FS_HZ * self.c_m_per_s / 2
+                        fig_auto, axes_auto = plt.subplots(2, 4, figsize=(24, 10))
+                        fig_auto.suptitle(f'Auto-Correlation Lag Waterfalls ({nc} captures)', fontsize=14)
+                        for ch in range(8):
+                            wf = np.zeros((nc, n_lags))
+                            for ci, cap in enumerate(all_captures):
+                                key = (ch, ch)
+                                if key in cap.get('lags', {}):
+                                    wf[ci] = cap['lags'][key]
+                            ax = axes_auto[ch // 4, ch % 4]
+                            wf_log = np.log10(np.maximum(wf, 1e-10))
+                            ax.imshow(wf_log, aspect='auto', origin='lower',
+                                     extent=[fine_lag_m[0], fine_lag_m[-1], 0, nc],
+                                     cmap='viridis')
+                            ax.set_title(f'p{ch}{ch} (auto)')
+                            ax.set_xlabel('Distance (m)')
+                            ax.set_ylabel('Capture')
+                        fig_auto.tight_layout()
+                        pdf.savefig(fig_auto, bbox_inches='tight')
+                        plt.close(fig_auto)
+
+                    # --- Selected cross-correlation waterfalls (p01..p07) ---
+                    if has_lags and nc > 0:
+                        cross_keys = [(0, j) for j in range(1, 8)]  # p01 through p07
+                        fig_cross, axes_cross = plt.subplots(2, 4, figsize=(24, 10))
+                        fig_cross.suptitle(f'Cross-Correlation Lag Waterfalls — ADC0 × ADC1-7 ({nc} captures)', fontsize=14)
+                        for idx, (i_ch, j_ch) in enumerate(cross_keys):
+                            if idx >= 8:
+                                break
+                            wf = np.zeros((nc, n_lags))
+                            for ci, cap in enumerate(all_captures):
+                                key = (i_ch, j_ch)
+                                if key in cap.get('lags', {}):
+                                    wf[ci] = cap['lags'][key]
+                            ax = axes_cross[idx // 4, idx % 4]
+                            wf_log = np.log10(np.maximum(wf, 1e-10))
+                            ax.imshow(wf_log, aspect='auto', origin='lower',
+                                     extent=[fine_lag_m[0], fine_lag_m[-1], 0, nc],
+                                     cmap='viridis')
+                            ax.set_title(f'p{i_ch}{j_ch}')
+                            ax.set_xlabel('Distance (m)')
+                            ax.set_ylabel('Capture')
+                        # Hide unused subplot
+                        axes_cross[1, 3].axis('off')
+                        fig_cross.tight_layout()
+                        pdf.savefig(fig_cross, bbox_inches='tight')
+                        plt.close(fig_cross)
+
             print(f"✓ Summary report saved to {save_path}")
         else:
             # Just show the plots

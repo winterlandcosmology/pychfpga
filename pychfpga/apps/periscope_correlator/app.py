@@ -429,550 +429,499 @@ class LagSpectraComputer(threading.Thread):
         self.running = False
 
 
+# --- Fine Lag Plot Options ---
+# Build combo box options for the 8-channel fine lag mode
+FINE_LAG_PLOT_OPTIONS = []
+for ch in range(8):
+    FINE_LAG_PLOT_OPTIONS.append(f"TOD: ADC {ch}")
+for ch in range(8):
+    FINE_LAG_PLOT_OPTIONS.append(f"FFT: ADC {ch}")
+for i in range(8):
+    for j in range(i, 8):
+        label = f"Lag: p{i}{j} (auto)" if i == j else f"Lag: p{i}{j}"
+        FINE_LAG_PLOT_OPTIONS.append(label)
+
+FINE_LAG_WATERFALL_OPTIONS = []
+for ch in range(8):
+    FINE_LAG_WATERFALL_OPTIONS.append(f"FFT: ADC {ch}")
+for i in range(8):
+    for j in range(i, 8):
+        label = f"Lag: p{i}{j} (auto)" if i == j else f"Lag: p{i}{j}"
+        FINE_LAG_WATERFALL_OPTIONS.append(label)
+
+FINE_LAG_SPECTRA_DEFAULTS = [
+    "TOD: ADC 0", "TOD: ADC 1", "TOD: ADC 2", "TOD: ADC 3",
+    "TOD: ADC 4", "TOD: ADC 5", "TOD: ADC 6", "TOD: ADC 7",
+]
+FINE_LAG_WATERFALL_DEFAULTS = ["FFT: ADC 0", "FFT: ADC 1", "Lag: p00 (auto)", "Lag: p01"]
+
+
+@dataclass
+class FineLagConfig:
+    """Configuration for 8-channel fine lag mode."""
+    # Per-ADC settings (length 8)
+    nyquist_zones: list = field(default_factory=lambda: [1]*8)
+    freq_mask_low_mhz: list = field(default_factory=lambda: [0.0]*8)
+    freq_mask_high_mhz: list = field(default_factory=lambda: [1600.0]*8)
+
+    # Global settings
+    frames_to_average: int = 1
+
+    # Fusion (placeholder)
+    fusion_enabled: bool = False
+    fusion_groups: list = field(default_factory=list)
+
+    # Derived constants
+    FS_HZ: float = 3.2e9
+    ZONE_BANDWIDTH_HZ: float = 1.6e9
+
+    def freq_axis_hz(self, adc_index: int) -> np.ndarray:
+        """Return frequency axis for a given ADC based on its Nyquist zone."""
+        zone = self.nyquist_zones[adc_index]
+        base = (zone - 1) * self.ZONE_BANDWIDTH_HZ
+        freqs = np.linspace(0, self.ZONE_BANDWIDTH_HZ, 16384, endpoint=False)
+        if zone % 2 == 0:
+            freqs = base + self.ZONE_BANDWIDTH_HZ - freqs
+        else:
+            freqs = base + freqs
+        return freqs
+
+
+class FineLagConfigDialog(QtWidgets.QDialog):
+    """Configuration dialog for 8-channel fine lag mode."""
+
+    def __init__(self, config: FineLagConfig, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Fine Lag Configuration")
+        self.setMinimumWidth(600)
+        self._config = config
+
+        main_layout = QtWidgets.QVBoxLayout(self)
+
+        # --- ADC Channel Settings ---
+        adc_group = QtWidgets.QGroupBox("ADC Channel Settings")
+        adc_layout = QtWidgets.QGridLayout(adc_group)
+        adc_layout.addWidget(QtWidgets.QLabel("ADC"), 0, 0)
+        adc_layout.addWidget(QtWidgets.QLabel("Nyquist Zone"), 0, 1)
+        adc_layout.addWidget(QtWidgets.QLabel("Mask Low (MHz)"), 0, 2)
+        adc_layout.addWidget(QtWidgets.QLabel("Mask High (MHz)"), 0, 3)
+
+        self.zone_combos = []
+        self.mask_low_spins = []
+        self.mask_high_spins = []
+
+        zone_options = ["Zone 1 (0-1600 MHz)", "Zone 2 (1600-3200 MHz)", "Zone 3 (3200-4800 MHz)", "Zone 4 (4800-6400 MHz)"]
+        zone_ranges = {1: (0.0, 1600.0), 2: (1600.0, 3200.0), 3: (3200.0, 4800.0), 4: (4800.0, 6400.0)}
+
+        for ch in range(8):
+            row = ch + 1
+            adc_layout.addWidget(QtWidgets.QLabel(f"ADC {ch}"), row, 0)
+
+            zone_combo = QtWidgets.QComboBox()
+            zone_combo.addItems(zone_options)
+            zone_combo.setCurrentIndex(config.nyquist_zones[ch] - 1)
+            zone_combo.currentIndexChanged.connect(lambda idx, c=ch: self._on_zone_changed(c, idx))
+            self.zone_combos.append(zone_combo)
+            adc_layout.addWidget(zone_combo, row, 1)
+
+            z = config.nyquist_zones[ch]
+            lo, hi = zone_ranges[z]
+
+            mask_low = QtWidgets.QDoubleSpinBox()
+            mask_low.setRange(lo, hi)
+            mask_low.setSingleStep(10.0)
+            mask_low.setDecimals(1)
+            mask_low.setValue(config.freq_mask_low_mhz[ch])
+            self.mask_low_spins.append(mask_low)
+            adc_layout.addWidget(mask_low, row, 2)
+
+            mask_high = QtWidgets.QDoubleSpinBox()
+            mask_high.setRange(lo, hi)
+            mask_high.setSingleStep(10.0)
+            mask_high.setDecimals(1)
+            mask_high.setValue(config.freq_mask_high_mhz[ch])
+            self.mask_high_spins.append(mask_high)
+            adc_layout.addWidget(mask_high, row, 3)
+
+        main_layout.addWidget(adc_group)
+
+        # --- Processing ---
+        proc_group = QtWidgets.QGroupBox("Processing")
+        proc_layout = QtWidgets.QHBoxLayout(proc_group)
+        proc_layout.addWidget(QtWidgets.QLabel("Frames to average:"))
+        self.avg_spin = QtWidgets.QSpinBox()
+        self.avg_spin.setRange(1, 100)
+        self.avg_spin.setValue(config.frames_to_average)
+        proc_layout.addWidget(self.avg_spin)
+        proc_layout.addStretch()
+        main_layout.addWidget(proc_group)
+
+        # --- Fusion placeholder ---
+        fusion_group = QtWidgets.QGroupBox("Bandwidth Fusion (future)")
+        fusion_layout = QtWidgets.QHBoxLayout(fusion_group)
+        fusion_cb = QtWidgets.QCheckBox("Enable fusion mode")
+        fusion_cb.setChecked(False)
+        fusion_cb.setEnabled(False)
+        fusion_layout.addWidget(fusion_cb)
+        fusion_layout.addStretch()
+        main_layout.addWidget(fusion_group)
+
+        # --- Buttons ---
+        btn_layout = QtWidgets.QHBoxLayout()
+        btn_layout.addStretch()
+        cancel_btn = QtWidgets.QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        apply_btn = QtWidgets.QPushButton("Apply")
+        apply_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(cancel_btn)
+        btn_layout.addWidget(apply_btn)
+        main_layout.addLayout(btn_layout)
+
+    def _on_zone_changed(self, ch: int, zone_idx: int):
+        """Update mask spin box ranges when zone changes."""
+        zone = zone_idx + 1
+        zone_ranges = {1: (0.0, 1600.0), 2: (1600.0, 3200.0), 3: (3200.0, 4800.0), 4: (4800.0, 6400.0)}
+        lo, hi = zone_ranges[zone]
+        self.mask_low_spins[ch].setRange(lo, hi)
+        self.mask_low_spins[ch].setValue(lo)
+        self.mask_high_spins[ch].setRange(lo, hi)
+        self.mask_high_spins[ch].setValue(hi)
+
+    def get_config(self) -> FineLagConfig:
+        """Read widget values and return updated config."""
+        return FineLagConfig(
+            nyquist_zones=[c.currentIndex() + 1 for c in self.zone_combos],
+            freq_mask_low_mhz=[s.value() for s in self.mask_low_spins],
+            freq_mask_high_mhz=[s.value() for s in self.mask_high_spins],
+            frames_to_average=self.avg_spin.value(),
+            fusion_enabled=False,
+            fusion_groups=[],
+        )
+
+
 class FineLagComputer(threading.Thread):
     """
-    A thread that captures raw ADC data and computes fine-resolution lag spectra.
-    Uses direct pocket_correlator calls to get raw ADC frames.
+    8-channel fine lag computer.  Uses UCAP mode 0 (all 8 ADC channels,
+    2 frames per channel) and computes:
+      - 8 TODs  (raw time-domain per channel)
+      - 8 FFTs  (power spectra per channel, with per-channel freq masking)
+      - 36 lag products  (8 autos + 28 cross-correlations)
+    Results are stored in ``shared_buffers.fine_lag_result`` as a dict
+    *and* written to the legacy p00/p11/p01 shared-memory arrays so the
+    existing GUI keeps working during the Phase-3/4/5 transition.
     """
-    def __init__(self, pocket_correlator: POCKET_CORRELATOR, shared_buffers: 'SharedDataBuffers', config: CorrelatorConfig):
+
+    N_CHANNELS = 8
+    N_SAMPLES = 16384       # samples per frame
+    N_LAGS = 8192           # positive-only lags (half of N_SAMPLES)
+
+    def __init__(self, pocket_correlator: POCKET_CORRELATOR,
+                 shared_buffers: 'SharedDataBuffers',
+                 config: CorrelatorConfig,
+                 fine_lag_config: 'FineLagConfig' = None):
         super().__init__(daemon=True)
         self.pc = pocket_correlator
         self.shared_buffers = shared_buffers
         self.config = config
+        self.fine_lag_config = fine_lag_config or FineLagConfig()
         self.running = True
         self.enabled = threading.Event()
-        
-        # Fine lag specific averaging setting
-        self.fine_lag_frames_to_average = 4  # Default to max for best SNR
-        
-        # UCAP mode configuration
-        self.ucap_mode = 1  # Default to mode 1 (4 channels, 4 frames)
-        self.max_frames_per_channel = 4  # Will be updated based on ucap_mode
-        
+
+        # UCAP mode — always 0 for 8-channel capture
+        self.ucap_mode = 0
+        self.max_frames_per_channel = 2
+
         # Performance tracking
         self.frames_processed = 0
         self.last_fps_time = time.time()
-        self.fps = 0
-        
-        # Frame validation statistics
+        self.fps = 0.0
+
+        # Frame validation stats
         self.total_frames_captured = 0
-        self.valid_frames_processed = 0
         self.frames_skipped = 0
-        self.last_stats_print_time = time.time()
-        
+
+        # Pre-compute Hann window (reused every frame)
+        self._window = np.hanning(self.N_SAMPLES)
+
+    # ------------------------------------------------------------------
+    # public helpers
+    # ------------------------------------------------------------------
     def set_enabled(self, enabled: bool):
-        """Enable or disable fine lag computation."""
         if enabled:
             self.enabled.set()
         else:
             self.enabled.clear()
-    
-    def set_frames_to_average(self, n_frames: int):
-        """Set the number of frames to average for fine lag mode."""
-        self.fine_lag_frames_to_average = min(n_frames, self.max_frames_per_channel)
-    
+
+    def set_frames_to_average(self, n: int):
+        """Not directly relevant for mode-0 (always 2 frames) but kept for API compat."""
+        pass  # mode 0 gives exactly 2 frames per channel per burst
+
+    def update_fine_lag_config(self, cfg: 'FineLagConfig'):
+        """Hot-swap the per-ADC config (thread-safe: the dict is read atomically)."""
+        self.fine_lag_config = cfg
+
+    # ------------------------------------------------------------------
+    # main loop
+    # ------------------------------------------------------------------
     def run(self):
-        """Main thread loop for computing fine lag spectra from raw ADC data."""
-        # Initial setup - detect best ucap_mode (try mode 1 first, fallback to mode 0)
-        try:
-            self.pc.set_ucap_mode(mode=1)  # Try 4-channel capture (4 frames per channel)
-            self.ucap_mode = 1
-            self.max_frames_per_channel = 4
-            print("Fine lag: Using ucap_mode=1 (4 channels, 4 frames per channel)")
-        except:
-            # Fallback to mode 0 if mode 1 not supported
-            self.pc.set_ucap_mode(mode=0)  # 8-channel capture (2 frames per channel)
-            self.ucap_mode = 0
-            self.max_frames_per_channel = 2
-            print("Fine lag: Falling back to ucap_mode=0 (8 channels, 2 frames per channel)")
-        
-        # TODO: When ucap_mode=2 is available, add support here:
-        # if ucap_mode_2_available:
-        #     self.pc.set_ucap_mode(mode=2)  # 2-channel capture (8 frames per channel)
-        #     self.ucap_mode = 2
-        #     self.max_frames_per_channel = 8
-        
-        # Do initial capture with flush=True to set everything up
-        if self.ucap_mode == 0:
-            n_frames_to_capture = max(2, self.fine_lag_frames_to_average)
-            n_frames_to_capture = ((n_frames_to_capture + 1) // 2) * 2  # Round to multiple of 2
-        elif self.ucap_mode == 1:
-            n_frames_to_capture = 4  # Always capture 4 frames in mode 1
-        else:  # ucap_mode == 2
-            n_frames_to_capture = 8  # Always capture 8 frames in mode 2
-        
-        d_adc = self.pc.read_adc_frames(n_frames=n_frames_to_capture, split=True, verbose=0)
-        
-        # Debug: check which channels have data on first capture
+        # Set UCAP mode 0 — 8 channels, 2 frames each
+        self.pc.set_ucap_mode(mode=0)
+        print("Fine lag: Using ucap_mode=0 (8 channels, 2 frames per channel)")
+
+        # Initial capture to prime the hardware
+        d_adc = self.pc.read_adc_frames(n_frames=2, split=True, verbose=0)
+
         debug_printed = False
-        
+
         while self.running:
             if not self.enabled.is_set():
                 time.sleep(0.1)
                 continue
-                
+
             try:
-                # Reset ADC flags before data capture
+                # --- reset / capture / check ADC flags ---
                 self._reset_adc_flags()
-                
-                # Determine frames to capture based on ucap_mode
-                if self.ucap_mode == 0:
-                    n_frames_to_capture = 2  # Mode 0 always captures 2 frames
-                    ncap = 1  # One capture gives 2 frames in mode 0
-                elif self.ucap_mode == 1:
-                    n_frames_to_capture = 4  # Mode 1 always captures 4 frames
-                    ncap = 1  # One capture gives 4 frames in mode 1
-                else:  # ucap_mode == 2
-                    n_frames_to_capture = 8  # Mode 2 always captures 8 frames
-                    ncap = 1  # One capture gives 8 frames in mode 2
-                
-                # Use a small flush to ensure we're synchronized to a new timestamp
-                # This is lighter than the full flush in read_adc_frames
+
                 t, d_adc, c = self.pc.u_receiver.read_raw_frames(
-                    format='16',
-                    ncap=ncap,
-                    split=True,
-                    verbose=0,
-                    flush=True,  # Light flush to ensure timestamp sync
-                    flush_timeout=0.0001  # Very short flush, just to sync
+                    format='16', ncap=1, split=True, verbose=0,
+                    flush=True, flush_timeout=0.0001,
                 )
-                
-                # Check ADC flags after data capture and skip if flags detected
+
                 if self._check_adc_flags():
-                    # ADC flags detected, skip this data and continue to next iteration
-                    continue
-                
-                # Shift to 14 bits (same as in read_adc_frames)
-                d_adc = d_adc >> 2
-                # d_adc shape: (8, n_frames, 16384)
-                
-                # Increment total frames captured counter
+                    continue  # ADC flags detected — skip
+
+                d_adc = d_adc >> 2  # shift to 14-bit
+                # d_adc shape: (8, n_frames_per_ch, 16384)
                 self.total_frames_captured += 1
-                
-                # Try to find ADC1 at a different channel if channel 1 is empty
-                adc1_ch_idx = 1  # Default assumption
-                
-                # Debug: Check which channels have data
+
                 if not debug_printed:
-                    print(f"Fine lag: Got ADC data shape: {d_adc.shape}")
-                    for ch in range(d_adc.shape[0]):
-                        ch_min = np.min(d_adc[ch])
-                        ch_max = np.max(d_adc[ch])
-                        ch_mean = np.mean(d_adc[ch])
-                        print(f"  Channel {ch}: range=[{ch_min:.1f}, {ch_max:.1f}], mean={ch_mean:.1f}")
+                    print(f"Fine lag 8ch: ADC data shape = {d_adc.shape}")
+                    for ch in range(min(d_adc.shape[0], 8)):
+                        print(f"  CH{ch}: range=[{np.min(d_adc[ch]):.0f}, {np.max(d_adc[ch]):.0f}]")
                     debug_printed = True
-                
-                # Process each frame separately and average for better SNR
-                n_samples = 16384  # Samples per frame
-                n_fft = n_samples  # Use same size - no zero padding
-                n_lags = n_samples // 2  # Only positive lags (0 to 8191) for autocorrelations
-                n_lags_cross = n_samples // 2  # For cross-correlation, we'll use fftshift to center around zero lag
-                
-                # Initialize accumulators for averaging
-                lag_p00_sum = np.zeros(n_lags)
-                lag_p11_sum = np.zeros(n_lags)
-                lag_p01_sum = np.zeros(n_lags_cross, dtype=np.complex128)  # Complex for cross-correlation
-                
-                # Process only the requested number of frames for averaging
-                frames_to_process = min(self.fine_lag_frames_to_average, d_adc.shape[1])
-                
-                # Check for missing data within frames
-                missing_data_detected = False
-                frames_actually_processed = 0  # Track how many frames passed validation
-                valid_frame_indices = []  # Track which frame indices passed validation
-                
-                for frame_idx in range(frames_to_process):
-                    # Get data for this frame
-                    adc0_frame = d_adc[0, frame_idx, :].astype(np.float64)  # 16384 samples
-                    adc1_frame = d_adc[adc1_ch_idx, frame_idx, :].astype(np.float64)  # Use the correct channel for ADC1
-                    
-                    # Check for gaps/missing data (consecutive zeros)
-                    # Look for runs of zeros that indicate missing data
-                    zero_threshold = 1.0  # Values below this are considered missing
-                    adc0_zeros = np.abs(adc0_frame) < zero_threshold
-                    adc1_zeros = np.abs(adc1_frame) < zero_threshold
-                    
-                    # Count consecutive zeros with more sophisticated detection
-                    def find_max_consecutive_zeros(zero_mask):
-                        """Find the maximum length of consecutive zeros in the data."""
-                        if not np.any(zero_mask):
-                            return 0, []
-                        # Find changes from non-zero to zero and vice versa
-                        changes = np.diff(np.concatenate(([False], zero_mask, [False])).astype(int))
-                        starts = np.where(changes == 1)[0]
-                        ends = np.where(changes == -1)[0]
-                        
-                        if len(starts) > 0 and len(ends) > 0:
-                            lengths = ends - starts
-                            max_length = np.max(lengths)
-                            # Also return all significant run lengths for debugging
-                            significant_runs = lengths[lengths > 100]
-                            return max_length, significant_runs
-                        return 0, []
-                    
-                    adc0_max_zeros, adc0_runs = find_max_consecutive_zeros(adc0_zeros)
-                    adc1_max_zeros, adc1_runs = find_max_consecutive_zeros(adc1_zeros)
-                    
-                    # New validation: reject frame if we find runs of zeros > 4000
-                    # These are likely blocks of missing data that are multiples of 4096
-                    critical_threshold = 4000
-                    
-                    if adc0_max_zeros > critical_threshold or adc1_max_zeros > critical_threshold:
-                        # Reject this entire frame for both ADCs
-                        self.frames_skipped += 1
-                        
-                        # Print detailed info
-                        percent_zeros_adc0 = np.sum(adc0_zeros) / len(adc0_frame) * 100
-                        percent_zeros_adc1 = np.sum(adc1_zeros) / len(adc1_frame) * 100
-                        
-                        print(f"Fine lag: REJECTING frame {self.total_frames_captured} due to large zero blocks:")
-                        print(f"  ADC0: max run = {adc0_max_zeros} zeros ({percent_zeros_adc0:.1f}% zeros total)")
-                        print(f"  ADC1: max run = {adc1_max_zeros} zeros ({percent_zeros_adc1:.1f}% zeros total)")
-                        
-                        # Show distribution of run lengths if there are multiple significant runs
-                        if len(adc0_runs) > 0:
-                            print(f"  ADC0 significant runs: {adc0_runs}")
-                        if len(adc1_runs) > 0:
-                            print(f"  ADC1 significant runs: {adc1_runs}")
-                        
-                        # Skip processing this frame entirely
-                        continue
-                    
-                    # If we have smaller gaps (more than 100 consecutive zeros), just flag it
-                    gap_threshold = 100
-                    if adc0_max_zeros > gap_threshold or adc1_max_zeros > gap_threshold:
-                        missing_data_detected = True
-                        if self.frames_processed < 10 or self.frames_processed % 100 == 0:
-                            percent_zeros_adc0 = np.sum(adc0_zeros) / len(adc0_frame) * 100
-                            percent_zeros_adc1 = np.sum(adc1_zeros) / len(adc1_frame) * 100
-                            print(f"Fine lag: Minor gaps in frame {self.total_frames_captured}, idx {frame_idx}:")
-                            print(f"  ADC0: {adc0_max_zeros} consecutive zeros ({percent_zeros_adc0:.1f}% zeros total)")
-                            print(f"  ADC1: {adc1_max_zeros} consecutive zeros ({percent_zeros_adc1:.1f}% zeros total)")
-                    
-                    # Remove DC offset to reduce artifacts
-                    adc0_frame -= np.mean(adc0_frame)
-                    adc1_frame -= np.mean(adc1_frame)
-                    
-                    # Apply Hann window to reduce spectral leakage
-                    window = np.hanning(n_samples)
-                    adc0_windowed = adc0_frame * window
-                    adc1_windowed = adc1_frame * window
-                    
-                    # Compute FFTs - use full FFT for complex cross-correlations
-                    adc0_fft = np.fft.fft(adc0_windowed, n=n_fft)  # 16384 bins
-                    adc1_fft = np.fft.fft(adc1_windowed, n=n_fft)  # 16384 bins
-                    
-                    # Apply frequency range selection if different from full band
-                    freq_start = self.config.lag_freq_start_hz
-                    freq_end = self.config.lag_freq_end_hz
-                    nyquist_zone = self.shared_buffers.current_nyquist_zone if hasattr(self.shared_buffers, 'current_nyquist_zone') else 1
-                    
-                    # Check if we're using a frequency subset
-                    is_full_band = (freq_start == 0 and freq_end == FS_HZ / 2)
-                    
-                    if not is_full_band:
-                        # Convert frequency range to bin indices
-                        # For fine lag (16384-point FFT), use the helper function
-                        start_bin = self.shared_buffers.gui_instance._freq_to_fine_lag_bin_index(freq_start, nyquist_zone, n_fft) if hasattr(self.shared_buffers, 'gui_instance') else int((freq_start / FS_HZ) * n_fft)
-                        end_bin = self.shared_buffers.gui_instance._freq_to_fine_lag_bin_index(freq_end, nyquist_zone, n_fft) if hasattr(self.shared_buffers, 'gui_instance') else int((freq_end / FS_HZ) * n_fft)
-                        
-                        # Ensure start < end (accounting for Nyquist zone reversal)
-                        if start_bin > end_bin:
-                            start_bin, end_bin = end_bin, start_bin
-                        
-                        # Create masked FFT (zero out excluded bins)
-                        adc0_fft_masked = np.zeros_like(adc0_fft)
-                        adc1_fft_masked = np.zeros_like(adc1_fft)
-                        
-                        adc0_fft_masked[start_bin:end_bin] = adc0_fft[start_bin:end_bin]
-                        adc1_fft_masked[start_bin:end_bin] = adc1_fft[start_bin:end_bin]
-                        
-                        # Also zero the mirror frequencies (for negative frequencies)
-                        # For real signals, FFT has conjugate symmetry
-                        mirror_start = n_fft - end_bin
-                        mirror_end = n_fft - start_bin
-                        if mirror_start >= 0 and mirror_end <= n_fft:
-                            adc0_fft_masked[mirror_start:mirror_end] = adc0_fft[mirror_start:mirror_end]
-                            adc1_fft_masked[mirror_start:mirror_end] = adc1_fft[mirror_start:mirror_end]
-                        
-                        # Use masked FFTs for computation
-                        adc0_fft_for_lag = adc0_fft_masked
-                        adc1_fft_for_lag = adc1_fft_masked
-                    else:
-                        # Use full FFT
-                        adc0_fft_for_lag = adc0_fft
-                        adc1_fft_for_lag = adc1_fft
-                    
-                    # Compute power spectral density (PSD) using potentially masked FFTs
-                    psd0 = adc0_fft_for_lag * np.conj(adc0_fft_for_lag)
-                    psd1 = adc1_fft_for_lag * np.conj(adc1_fft_for_lag)
-                    
-                    # Take IFFT to get autocorrelation in lag domain
-                    # Only keep positive lags since autocorrelation is symmetric
-                    lag_p00_complex = np.fft.ifft(psd0)[:n_lags]
-                    lag_p11_complex = np.fft.ifft(psd1)[:n_lags]
-                    
-                    # Take real part (should be real for autocorrelation) and ensure positive
-                    lag_p00_frame = np.abs(lag_p00_complex.real)
-                    lag_p11_frame = np.abs(lag_p11_complex.real)
-                    
-                    # Compute cross-correlation - include both positive and negative lags
-                    cross_spectrum = adc0_fft_for_lag * np.conj(adc1_fft_for_lag)
-                    lag_p01_complex_full = np.fft.ifft(cross_spectrum)
-                    # Apply fftshift to center zero lag and take middle n_lags_cross points
-                    lag_p01_complex_shifted = np.fft.fftshift(lag_p01_complex_full)
-                    # Take the middle portion centered around zero lag
-                    start_idx = (n_samples - n_lags_cross) // 2
-                    lag_p01_complex = lag_p01_complex_shifted[start_idx:start_idx + n_lags_cross]
-                    
-                    # For the first frame, store the intermediate products
-                    if frame_idx == 0:
-                        # Store the first frame's intermediate FFT products for visualization
-                        # Only store unique frequency bins (0 to Nyquist) for display - 8193 bins
-                        first_adc0_fft = adc0_fft[:8193].copy()  # First half + Nyquist bin
-                        first_adc1_fft = adc1_fft[:8193].copy()  # First half + Nyquist bin
-                        first_cross_spectrum = cross_spectrum[:8193].copy()  # First half + Nyquist bin
-                    
-                    # Add to accumulator
-                    lag_p00_sum += lag_p00_frame
-                    lag_p11_sum += lag_p11_frame
-                    lag_p01_sum += lag_p01_complex  # Keep complex for averaging
-                    
-                    # Increment counter of successfully processed frames
-                    frames_actually_processed += 1
-                    valid_frame_indices.append(frame_idx)  # Track this as a valid frame
-                
-                # Check if any frames were successfully processed
-                if frames_actually_processed == 0:
-                    # No valid frames in this capture, skip it entirely
-                    if self.frames_processed < 10 or self.frames_processed % 50 == 0:
-                        print(f"Fine lag: Skipping entire capture {self.total_frames_captured} - all frames rejected")
-                    time.sleep(0.01)  # Small delay before trying next capture
-                    continue
-                
-                # Average the results (using actual number of frames processed)
-                lag_p00 = lag_p00_sum / frames_actually_processed
-                lag_p11 = lag_p11_sum / frames_actually_processed
-                lag_p01_complex_avg = lag_p01_sum / frames_actually_processed
-                
-                # Take magnitude of cross-correlation
-                lag_p01 = np.abs(lag_p01_complex_avg)
-                
-                # Store zero-lag values before normalization for cross-correlation
-                lag_p00_zero = lag_p00[0]
-                lag_p11_zero = lag_p11[0]
-                
-                # Normalize autocorrelations by their zero-lag values
-                lag_p00 = lag_p00 / lag_p00_zero if lag_p00_zero > 0 else lag_p00
-                lag_p11 = lag_p11 / lag_p11_zero if lag_p11_zero > 0 else lag_p11
-                
-                # For cross-correlation, normalize by sqrt of zero-lag autocorrelations
-                # This gives proper correlation coefficient between -1 and +1
-                norm_factor = np.sqrt(lag_p00_zero * lag_p11_zero)
-                if norm_factor > 0:
-                    lag_p01 = lag_p01 / norm_factor
-                
-                # Update shared buffers with lag data
-                with self.shared_buffers.fine_lag_lock:
-                    # Store current lag spectra
-                    self.shared_buffers.fine_lag_p00[:] = lag_p00
-                    self.shared_buffers.fine_lag_p11[:] = lag_p11
-                    self.shared_buffers.fine_lag_p01[:] = lag_p01  # Cross-correlation magnitude
-                    
-                    # Store intermediate FFT products if we computed them (for frequency spectrum plots)
-                    if frames_actually_processed > 0 and 'first_adc0_fft' in locals():
-                        self.shared_buffers.fine_freq_adc0[:] = first_adc0_fft
-                        self.shared_buffers.fine_freq_adc1[:] = first_adc1_fft
-                        self.shared_buffers.fine_freq_cross[:] = first_cross_spectrum
-                    
-                    # Update history buffers for running difference mode
-                    # Store in circular buffer at current position
-                    hist_pos = self.shared_buffers.fine_lag_history_pos
-                    self.shared_buffers.fine_lag_history_p00[hist_pos] = lag_p00
-                    self.shared_buffers.fine_lag_history_p11[hist_pos] = lag_p11
-                    self.shared_buffers.fine_lag_history_p01[hist_pos] = lag_p01
-                    
-                    # Update history position and count
-                    self.shared_buffers.fine_lag_history_pos = (hist_pos + 1) % self.shared_buffers.max_diff_window
-                    self.shared_buffers.fine_lag_history_count = min(
-                        self.shared_buffers.fine_lag_history_count + 1,
-                        self.shared_buffers.max_diff_window
+
+                cfg = self.fine_lag_config
+                n_avg_bursts = max(1, cfg.frames_to_average)
+
+                # --- accumulate multiple bursts if requested ---
+                all_bursts = [d_adc]
+                for _ in range(n_avg_bursts - 1):
+                    self._reset_adc_flags()
+                    _, extra, _ = self.pc.u_receiver.read_raw_frames(
+                        format='16', ncap=1, split=True, verbose=0,
+                        flush=True, flush_timeout=0.0001,
                     )
-                    
-                    # Store raw time domain data (concatenate frames for display)
-                    # Limit to max frames that fit in the buffer
-                    max_frames_for_display = 10  # Buffer is sized for 10 frames max
-                    
-                    # Only concatenate VALID frames that passed validation
-                    valid_frames_to_display = valid_frame_indices[:max_frames_for_display]
-                    n_valid_frames_to_display = len(valid_frames_to_display)
-                    
-                    if n_valid_frames_to_display > 0:
-                        # Only concatenate the valid frames
-                        adc0_display = np.concatenate([d_adc[0, idx, :] for idx in valid_frames_to_display])
-                    else:
-                        # No valid frames to display
-                        adc0_display = np.zeros(16384)  # Show at least one frame of zeros
-                        n_valid_frames_to_display = 1
-                    
-                    # Try different channel indices for ADC1
-                    # Mode 0 might have ADC1 at a different index
-                    adc1_ch_idx = 1  # Default assumption
-                    
-                    # Concatenate frames for ADC1 display (only valid frames)
-                    if n_valid_frames_to_display > 0 and len(valid_frames_to_display) > 0:
-                        adc1_display = np.concatenate([d_adc[adc1_ch_idx, idx, :] for idx in valid_frames_to_display])
-                    else:
-                        adc1_display = np.zeros(16384)  # Show at least one frame of zeros
-                    
-                    # Only copy as much data as we have from valid frames
-                    n_samples_total = n_valid_frames_to_display * 16384
-                    self.shared_buffers.fine_time_adc0[:n_samples_total] = adc0_display
-                    self.shared_buffers.fine_time_adc1[:n_samples_total] = adc1_display
-                    
-                    # Store the actual number of samples for plotting
-                    self.shared_buffers.fine_time_n_samples = n_samples_total
-                    
-                    # # Debug info about what frames are being displayed
-                    # if self.frames_processed < 5 or self.frames_processed % 100 == 0:
-                    #     print(f"Fine lag: Displaying {n_valid_frames_to_display} valid frames out of {frames_to_process} processed")
-                    
-                    # # Debug info about what's being displayed
-                    # if self.frames_processed == 0:
-                    #     print(f"Fine lag: Displaying all {n_frames_captured} captured frames ({n_samples_total} samples) in time domain")
-                    
-                    # Update waterfall - shift existing data down and insert new at top
-                    # Roll the arrays down by 1 to make room at position 0
+                    if not self._check_adc_flags():
+                        all_bursts.append(extra >> 2)
+
+                # --- build per-channel concatenated time series ---
+                adc_data = {}  # ch -> (n_frames_total, 16384)
+                for ch in range(self.N_CHANNELS):
+                    adc_data[ch] = np.concatenate(
+                        [burst[ch] for burst in all_bursts], axis=0
+                    ).astype(np.float64)
+
+                # --- compute per-channel FFTs with masking ---
+                fft_complex = {}   # ch -> complex FFT array
+                fft_power = {}     # ch -> real power spectrum
+                n_fft = self.N_SAMPLES
+
+                for ch in range(self.N_CHANNELS):
+                    ts = adc_data[ch].ravel()
+                    ts = ts - np.mean(ts)  # DC removal
+                    windowed = ts[:n_fft] * self._window if len(ts) >= n_fft else ts * self._window[:len(ts)]
+                    F = np.fft.fft(windowed, n=n_fft)
+
+                    # per-channel frequency mask
+                    mask_lo_hz = cfg.freq_mask_low_mhz[ch] * 1e6
+                    mask_hi_hz = cfg.freq_mask_high_mhz[ch] * 1e6
+                    zone = cfg.nyquist_zones[ch]
+                    # Map physical freq to baseband bin index
+                    zone_base = (zone - 1) * cfg.ZONE_BANDWIDTH_HZ
+                    bb_lo = mask_lo_hz - zone_base
+                    bb_hi = mask_hi_hz - zone_base
+                    if zone % 2 == 0:
+                        # even zone is mirrored
+                        bb_lo, bb_hi = cfg.ZONE_BANDWIDTH_HZ - bb_hi, cfg.ZONE_BANDWIDTH_HZ - bb_lo
+                    bin_lo = max(0, int(bb_lo / FS_HZ * n_fft))
+                    bin_hi = min(n_fft // 2, int(bb_hi / FS_HZ * n_fft))
+
+                    # Check if mask is the full band
+                    is_full_band = (bin_lo <= 0 and bin_hi >= n_fft // 2)
+                    if not is_full_band:
+                        mask = np.zeros(n_fft, dtype=np.float64)
+                        mask[bin_lo:bin_hi] = 1.0
+                        # mirror for negative freqs
+                        mask[n_fft - bin_hi:n_fft - bin_lo] = 1.0
+                        F = F * mask
+
+                    fft_complex[ch] = F
+                    fft_power[ch] = np.abs(F[:n_fft // 2 + 1]) ** 2
+
+                # --- compute all 36 lag products ---
+                lags = {}
+                for i in range(self.N_CHANNELS):
+                    for j in range(i, self.N_CHANNELS):
+                        cross_spec = fft_complex[i] * np.conj(fft_complex[j])
+                        lag_full = np.fft.ifft(cross_spec)
+                        if i == j:
+                            # auto: positive lags only, real-valued, normalized
+                            lag_pos = np.abs(lag_full[:self.N_LAGS].real)
+                            zero_lag = lag_pos[0] if lag_pos[0] > 0 else 1.0
+                            lags[(i, j)] = lag_pos / zero_lag
+                        else:
+                            # cross: center around zero lag
+                            shifted = np.fft.fftshift(lag_full)
+                            start = (self.N_SAMPLES - self.N_LAGS) // 2
+                            lag_cross = np.abs(shifted[start:start + self.N_LAGS])
+                            # normalize by geometric mean of zero-lag autos
+                            zi = np.abs(np.fft.ifft(fft_complex[i] * np.conj(fft_complex[i]))[0].real)
+                            zj = np.abs(np.fft.ifft(fft_complex[j] * np.conj(fft_complex[j]))[0].real)
+                            norm = np.sqrt(zi * zj) if (zi > 0 and zj > 0) else 1.0
+                            lags[(i, j)] = lag_cross / norm
+
+                # --- package result dict ---
+                result = {
+                    'tods': adc_data,
+                    'ffts': fft_power,
+                    'fft_complex': fft_complex,
+                    'lags': lags,
+                    'timestamp': time.time(),
+                    'config': cfg,
+                    'n_bursts_averaged': len(all_bursts),
+                }
+
+                # --- update shared buffers ---
+                with self.shared_buffers.fine_lag_lock:
+                    # New-style: store full result dict
+                    self.shared_buffers.fine_lag_result = result
+
+                    # Legacy compat: write p00, p11, p01 to old shared-memory arrays
+                    if (0, 0) in lags and len(self.shared_buffers.fine_lag_p00) == self.N_LAGS:
+                        self.shared_buffers.fine_lag_p00[:] = lags[(0, 0)]
+                    if (1, 1) in lags and len(self.shared_buffers.fine_lag_p11) == self.N_LAGS:
+                        self.shared_buffers.fine_lag_p11[:] = lags[(1, 1)]
+                    if (0, 1) in lags and len(self.shared_buffers.fine_lag_p01) == self.N_LAGS:
+                        self.shared_buffers.fine_lag_p01[:] = lags[(0, 1)]
+
+                    # Legacy: time-domain display (ch0, ch1)
+                    n_disp = min(adc_data[0].size, len(self.shared_buffers.fine_time_adc0))
+                    self.shared_buffers.fine_time_adc0[:n_disp] = adc_data[0].ravel()[:n_disp]
+                    self.shared_buffers.fine_time_adc1[:n_disp] = adc_data[1].ravel()[:n_disp]
+                    self.shared_buffers.fine_time_n_samples = n_disp
+
+                    # Legacy: frequency domain display (ch0, ch1)
+                    n_freq = min(len(fft_complex[0][:8193]), len(self.shared_buffers.fine_freq_adc0))
+                    self.shared_buffers.fine_freq_adc0[:n_freq] = fft_complex[0][:n_freq]
+                    self.shared_buffers.fine_freq_adc1[:n_freq] = fft_complex[1][:n_freq]
+                    cross01 = fft_complex[0][:n_freq] * np.conj(fft_complex[1][:n_freq])
+                    self.shared_buffers.fine_freq_cross[:n_freq] = cross01
+
+                    # Legacy: waterfall (p00, p11, p01)
                     self.shared_buffers.fine_lag_wf_p00[1:] = self.shared_buffers.fine_lag_wf_p00[:-1]
                     self.shared_buffers.fine_lag_wf_p11[1:] = self.shared_buffers.fine_lag_wf_p11[:-1]
                     self.shared_buffers.fine_lag_wf_p01[1:] = self.shared_buffers.fine_lag_wf_p01[:-1]
-                    
-                    # Write new data at position 0 (top)
-                    self.shared_buffers.fine_lag_wf_p00[0] = lag_p00
-                    self.shared_buffers.fine_lag_wf_p11[0] = lag_p11
-                    self.shared_buffers.fine_lag_wf_p01[0] = lag_p01  # Cross-correlation waterfall
-                    
-                    # Calculate and store running difference if enabled
+                    self.shared_buffers.fine_lag_wf_p00[0] = lags.get((0, 0), np.zeros(self.N_LAGS))
+                    self.shared_buffers.fine_lag_wf_p11[0] = lags.get((1, 1), np.zeros(self.N_LAGS))
+                    self.shared_buffers.fine_lag_wf_p01[0] = lags.get((0, 1), np.zeros(self.N_LAGS))
+
+                    # Legacy: running-difference history
+                    hp = self.shared_buffers.fine_lag_history_pos
+                    self.shared_buffers.fine_lag_history_p00[hp] = lags.get((0, 0), np.zeros(self.N_LAGS))
+                    self.shared_buffers.fine_lag_history_p11[hp] = lags.get((1, 1), np.zeros(self.N_LAGS))
+                    self.shared_buffers.fine_lag_history_p01[hp] = lags.get((0, 1), np.zeros(self.N_LAGS))
+                    self.shared_buffers.fine_lag_history_pos = (hp + 1) % self.shared_buffers.max_diff_window
+                    self.shared_buffers.fine_lag_history_count = min(
+                        self.shared_buffers.fine_lag_history_count + 1,
+                        self.shared_buffers.max_diff_window,
+                    )
+
+                    # Legacy: running-difference waterfall
                     if self.shared_buffers.running_diff_enabled:
-                        window_size = self.shared_buffers.running_diff_window_size
-                        history_count = self.shared_buffers.fine_lag_history_count
-                        
-                        if history_count >= window_size:
-                            # Calculate moving average from the last window_size frames
-                            history_pos = self.shared_buffers.fine_lag_history_pos
-                            
-                            # Get indices for the last window_size frames
-                            indices = []
-                            for i in range(window_size):
-                                idx = (history_pos - 1 - i) % self.shared_buffers.max_diff_window
-                                if idx < history_count:  # Only use valid history entries
-                                    indices.append(idx)
-                            
-                            if len(indices) > 0:
-                                # Calculate moving averages
-                                moving_avg_p00 = np.mean(self.shared_buffers.fine_lag_history_p00[indices], axis=0)
-                                moving_avg_p11 = np.mean(self.shared_buffers.fine_lag_history_p11[indices], axis=0)
-                                moving_avg_p01 = np.mean(self.shared_buffers.fine_lag_history_p01[indices], axis=0)
-                                
-                                # Calculate differences and update diff waterfall buffers
-                                # Shift existing diff data down and insert new at top
-                                self.shared_buffers.fine_lag_diff_wf_p00[1:] = self.shared_buffers.fine_lag_diff_wf_p00[:-1]
-                                self.shared_buffers.fine_lag_diff_wf_p11[1:] = self.shared_buffers.fine_lag_diff_wf_p11[:-1]
-                                self.shared_buffers.fine_lag_diff_wf_p01[1:] = self.shared_buffers.fine_lag_diff_wf_p01[:-1]
-                                
-                                # Write new difference data at position 0 (top)
-                                self.shared_buffers.fine_lag_diff_wf_p00[0] = lag_p00 - moving_avg_p00
-                                self.shared_buffers.fine_lag_diff_wf_p11[0] = lag_p11 - moving_avg_p11
-                                self.shared_buffers.fine_lag_diff_wf_p01[0] = lag_p01 - moving_avg_p01
-                    
-                    # Update frames written counter
+                        ws = self.shared_buffers.running_diff_window_size
+                        hc = self.shared_buffers.fine_lag_history_count
+                        if hc >= ws:
+                            hp2 = self.shared_buffers.fine_lag_history_pos
+                            idxs = [(hp2 - 1 - k) % self.shared_buffers.max_diff_window for k in range(ws)]
+                            avg00 = np.mean(self.shared_buffers.fine_lag_history_p00[idxs], axis=0)
+                            avg11 = np.mean(self.shared_buffers.fine_lag_history_p11[idxs], axis=0)
+                            avg01 = np.mean(self.shared_buffers.fine_lag_history_p01[idxs], axis=0)
+                            self.shared_buffers.fine_lag_diff_wf_p00[1:] = self.shared_buffers.fine_lag_diff_wf_p00[:-1]
+                            self.shared_buffers.fine_lag_diff_wf_p11[1:] = self.shared_buffers.fine_lag_diff_wf_p11[:-1]
+                            self.shared_buffers.fine_lag_diff_wf_p01[1:] = self.shared_buffers.fine_lag_diff_wf_p01[:-1]
+                            self.shared_buffers.fine_lag_diff_wf_p00[0] = lags.get((0, 0), np.zeros(self.N_LAGS)) - avg00
+                            self.shared_buffers.fine_lag_diff_wf_p11[0] = lags.get((1, 1), np.zeros(self.N_LAGS)) - avg11
+                            self.shared_buffers.fine_lag_diff_wf_p01[0] = lags.get((0, 1), np.zeros(self.N_LAGS)) - avg01
+
                     self.shared_buffers.fine_lag_frames_written = min(
                         self.shared_buffers.fine_lag_frames_written + 1,
-                        self.shared_buffers.waterfall_len
+                        self.shared_buffers.waterfall_len,
                     )
-                
-                # Archive the frame if enabled
+
+                # --- archive (8-channel format) ---
                 if self.shared_buffers.archiving_enabled and self.shared_buffers.archiver:
                     archive_data = {
-                        'timestamp': time.time(),
-                        'adc0': d_adc[0, :frames_to_process, :],  # Raw ADC data
-                        'adc1': d_adc[adc1_ch_idx, :frames_to_process, :],
-                        'lag_p00': lag_p00,  # Processed lag spectra
-                        'lag_p11': lag_p11,
-                        'lag_p01': lag_p01,
-                        'frames_averaged': frames_actually_processed
+                        'timestamp': result['timestamp'],
+                        'tods': adc_data,
+                        'ffts': fft_power,
+                        'lags': lags,
+                        'config': cfg,
+                        'frames_averaged': len(all_bursts) * 2,
                     }
                     success = self.shared_buffers.archiver.archive_fine_lag_frame(archive_data)
                     if success:
-                        archiver_status = self.shared_buffers.archiver.get_status()
-                        frames_archived = archiver_status['frames_archived']
-                        if frames_archived % 50 == 0:  # Print every 50 successful archives
-                            print(f"FineLag: Archived frame {frames_archived} to file")
-                
-                # # Debug output
-                # if self.frames_processed % 20 == 0:  # Print every 20 frames
-                #     print(f"Fine lag: ADC0 max={np.max(lag_p00):.3f}, ADC1 max={np.max(lag_p11):.3f}, FPS={self.fps:.1f}")
-                    
-                # Update performance metrics
+                        st = self.shared_buffers.archiver.get_status()
+                        if st['frames_archived'] % 50 == 0:
+                            print(f"FineLag 8ch: Archived frame {st['frames_archived']}")
+
+                # --- FPS ---
                 self.frames_processed += 1
-                current_time = time.time()
-                time_delta = current_time - self.last_fps_time
-                if time_delta >= 1.0:
-                    self.fps = self.frames_processed / time_delta
-                    self.last_fps_time = current_time
+                now = time.time()
+                dt = now - self.last_fps_time
+                if dt >= 1.0:
+                    self.fps = self.frames_processed / dt
+                    self.last_fps_time = now
                     self.frames_processed = 0
-                    
-                # Small delay to avoid saturating (20 Hz update rate)
+
                 time.sleep(0.01)
-                
+
             except Exception as e:
-                print(f"Error in fine lag computation: {e}")
-                time.sleep(0.1)  # Wait a bit before retrying
-                
+                import traceback
+                print(f"Error in fine lag 8ch computation: {e}")
+                traceback.print_exc()
+                time.sleep(0.1)
+
+    # ------------------------------------------------------------------
+    # ADC flag helpers (unchanged)
+    # ------------------------------------------------------------------
     def _reset_adc_flags(self):
-        """Reset ADC overrange and overvoltage flags before data capture."""
         try:
-            # Reset flags for next capture 
-            self.pc.i.GPIO.ADC_OR_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
+            self.pc.i.GPIO.ADC_OR_CLEAR = 2**8 - 1
             self.pc.i.GPIO.ADC_OR_CLEAR = 0
-            self.pc.i.GPIO.ADC_OV_CLEAR = 2**8 - 1  # 255, i.e., 11111111 for all 8 pols
+            self.pc.i.GPIO.ADC_OV_CLEAR = 2**8 - 1
             self.pc.i.GPIO.ADC_OV_CLEAR = 0
         except Exception as e:
             print(f"Error resetting ADC flags: {e}")
 
     def _check_adc_flags(self):
-        """Check ADC overrange and overvoltage flags and update shared buffers."""
-
-        # Helper array for reading individual bits of ADC_OR and ADC_OV flags
-        bitmask = 2**np.arange(8) # 8-bit bitmask for isolating values of individual bits
-        bitshifts = np.arange(0, 8)[::-1] # bitshifts to read values of bits as 1 or 0
-                            
+        bitmask = 2 ** np.arange(8)
+        bitshifts = np.arange(0, 8)[::-1]
         try:
-            # Check the ADC overrange and overvoltage flags 
             adc_or = self.pc.i.GPIO.ADC_OR
             adc_ov = self.pc.i.GPIO.ADC_OV
-
-            # Create arrays to print the overrange/overflow status of individual ADCs,
-            # reversing the array so that the ADCs are indexed in ascending order from ADC1 to ADC8
             adc_or_arr = np.array([(adc_or & bitmask[m]) >> m for m in bitshifts])[::-1]
             adc_ov_arr = np.array([(adc_ov & bitmask[m]) >> m for m in bitshifts])[::-1]
-
-            # Update shared buffer counters
             self.shared_buffers.total_captures += 1
-            
-            # Count any overrange or overvoltage flags
             if adc_or != 0:
-                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_or_arr[n] != 0])
+                print('ADC overranges:', [f'ADC{n+1}' for n in range(8) if adc_or_arr[n]])
                 self.shared_buffers.adc_or_count += 1
             if adc_ov != 0:
-                print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_ov_arr[n] != 0])
+                print('ADC overvoltages:', [f'ADC{n+1}' for n in range(8) if adc_ov_arr[n]])
                 self.shared_buffers.adc_ov_count += 1
-                
         except Exception as e:
             print(f"Error checking ADC flags: {e}")
 
     def stop(self):
-        """Stop the thread."""
         self.running = False
 
 
@@ -1874,6 +1823,10 @@ class SharedDataBuffers:
         self.fine_lag_frames_written = 0
         self.fine_lag_lock = threading.Lock()
         
+        # 8-channel fine lag result dict (new-style, written by FineLagComputer)
+        # Contains: tods, ffts, fft_complex, lags, timestamp, config, n_bursts_averaged
+        self.fine_lag_result = None  # Will be set to a dict by FineLagComputer
+        
         # Track actual number of time domain samples being used
         self.fine_time_n_samples = 32768  # Default to 2 frames
         
@@ -2467,7 +2420,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         
         # Nyquist zone selector
         self.nyquist_zone_combo = QtWidgets.QComboBox()
-        self.nyquist_zone_combo.addItems(["Zone 1 (0-1600 MHz)", "Zone 2 (1600-3200 MHz)", "Zone 3 (3200-4800 MHz)"])
+        self.nyquist_zone_combo.addItems(["Zone 1 (0-1600 MHz)", "Zone 2 (1600-3200 MHz)", "Zone 3 (3200-4800 MHz)", "Zone 4 (4800-6400 MHz)"])
         self.nyquist_zone_combo.setCurrentIndex(0)  # Default to Zone 1
         self.nyquist_zone_combo.setToolTip("Select Nyquist zone for frequency axis display")
         self.nyquist_zone_combo.currentIndexChanged.connect(self._on_nyquist_zone_changed)
@@ -3180,177 +3133,152 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             layout.addWidget(container, row, col)
 
     def _setup_fine_lag_spectra_plots(self) -> None:
-        """Set up the plots for the Fine Lag Spectra tab with dynamic selectors."""
+        """Set up 2×2 grid of fine lag spectra plots with combo box selectors."""
         layout = QtWidgets.QGridLayout(self.fine_lag_spectra_tab)
-        
+
         self.fine_lag_plots = {}
         self.fine_lag_plot_widgets = {}
-        self.fine_lag_plot_selectors = {}  # Store selectors for fine lag plots
+        self.fine_lag_combos = {}
+        self.fine_lag_plot_configs = {}
         colors = pg.colormap.get("tab10", "matplotlib").getColors()
 
-        # Add phase unwrapping checkbox for fine lag mode
-        unwrap_layout = QtWidgets.QHBoxLayout()
+        # Top control bar
+        ctrl = QtWidgets.QHBoxLayout()
         self.fine_lag_unwrap_phase_checkbox = QtWidgets.QCheckBox("Unwrap Phase")
-        self.fine_lag_unwrap_phase_checkbox.setToolTip("Apply phase unwrapping to remove 2π discontinuities")
         self.fine_lag_unwrap_phase_checkbox.setChecked(False)
-        unwrap_layout.addWidget(self.fine_lag_unwrap_phase_checkbox)
-        unwrap_layout.addStretch()
-        
-        # Add unwrap checkbox to the top of the layout
-        layout.addLayout(unwrap_layout, 0, 0, 1, 2)
 
-        # Default configurations for fine lag plots
-        default_configs = [
-            {"channel": "ADC0", "plot_type": "Lag Spectrum", "component": "Magnitude", "title": "ADC0 Plot"},
-            {"channel": "ADC1", "plot_type": "Lag Spectrum", "component": "Magnitude", "title": "ADC1 Plot"},
-            {"channel": "Cross", "plot_type": "Lag Spectrum", "component": "Magnitude", "title": "Cross Plot"},
-            {"channel": "ADC0", "plot_type": "Time Domain", "component": "Real", "title": "Time Plot"}
-        ]
+        self.fine_lag_config_button = QtWidgets.QPushButton("⚙ Configure")
+        self.fine_lag_config_button.setToolTip("Open Fine Lag configuration dialog")
+        self.fine_lag_config_button.clicked.connect(self._open_fine_lag_config)
 
-        # Store fine lag plot configurations
-        self.fine_lag_plot_configs = {}
-        
-        for i, config in enumerate(default_configs):
-            if i < 3:
-                row, col = 1, i % 3  # Put first 3 plots in row 1
-            else:
-                row, col = 2, 0  # Put 4th plot in row 2
-            
+        ctrl.addWidget(self.fine_lag_config_button)
+        ctrl.addWidget(self.fine_lag_unwrap_phase_checkbox)
+        ctrl.addStretch()
+        layout.addLayout(ctrl, 0, 0, 1, 4)  # span all 4 columns
+
+        n_spectra_plots = len(FINE_LAG_SPECTRA_DEFAULTS)  # 8 plots
+        for idx in range(n_spectra_plots):
+            row = idx // 4 + 1  # 4 columns, offset for control bar
+            col = idx % 4
+
             container = QtWidgets.QWidget()
-            container_layout = QtWidgets.QVBoxLayout(container)
-            
-            # Control bar with checkbox and selectors
-            control_layout = QtWidgets.QHBoxLayout()
-            
-            cb = QtWidgets.QCheckBox(config["title"])
-            cb.setChecked(True)
-            plot_key = f"fine_lag_plot_{i}"
-            self.plot_checkboxes[plot_key] = cb
-            
-            # Channel selector
-            channel_selector = QtWidgets.QComboBox()
-            channel_selector.addItems(["ADC0", "ADC1", "Cross"])
-            channel_selector.setCurrentText(config["channel"])
-            channel_selector.currentTextChanged.connect(lambda text, idx=i: self._update_fine_lag_plot_channel(idx, text))
-            
-            # Plot type selector  
-            plot_type_selector = QtWidgets.QComboBox()
-            plot_type_selector.addItems(["Time Domain", "Frequency Spectrum", "Lag Spectrum"])
-            plot_type_selector.setCurrentText(config["plot_type"])
-            plot_type_selector.currentTextChanged.connect(lambda text, idx=i: self._update_fine_lag_plot_type(idx, text))
-            
-            # Component selector
-            component_selector = QtWidgets.QComboBox()
-            component_selector.addItems(["Magnitude", "Real", "Imaginary", "Phase"])
-            component_selector.setCurrentText(config["component"])
-            component_selector.currentTextChanged.connect(lambda text, idx=i: self._update_fine_lag_plot_component(idx, text))
-            
-            control_layout.addWidget(cb)
-            control_layout.addWidget(channel_selector)
-            control_layout.addWidget(plot_type_selector)
-            control_layout.addWidget(component_selector)
-            control_layout.addStretch()
-            
-            # Create the plot widget
+            clayout = QtWidgets.QVBoxLayout(container)
+
+            combo = QtWidgets.QComboBox()
+            combo.addItems(FINE_LAG_PLOT_OPTIONS)
+            combo.setCurrentText(FINE_LAG_SPECTRA_DEFAULTS[idx])
+            self.fine_lag_combos[idx] = combo
+
             plot = pg.PlotWidget()
             plot.showGrid(x=True, y=True)
-            plot.addLegend()
-            
-            container_layout.addLayout(control_layout)
-            container_layout.addWidget(plot)
-            
-            # Store configuration and plot references
-            self.fine_lag_plot_configs[i] = {
-                'channel': config["channel"],
-                'plot_type': config["plot_type"],
-                'component': config["component"],
-                'channel_selector': channel_selector,
-                'plot_type_selector': plot_type_selector,
-                'component_selector': component_selector
-            }
-            
-            # Create plot line
-            plot_line = plot.plot(pen=colors[i % len(colors)], name=config["component"])
-            self.fine_lag_plots[i] = plot_line
-            self.fine_lag_plot_widgets[i] = plot
-            
+
+            plot_line = plot.plot(pen=colors[idx % len(colors)])
+            self.fine_lag_plots[idx] = plot_line
+            self.fine_lag_plot_widgets[idx] = plot
+
+            cb_key = f"fine_lag_plot_{idx}"
+            cb = QtWidgets.QCheckBox(f"Plot {idx+1}")
+            cb.setChecked(True)
+            self.plot_checkboxes[cb_key] = cb
+            cb.stateChanged.connect(lambda st, w=container: w.setVisible(st == QtCore.Qt.CheckState.Checked))
+
+            h = QtWidgets.QHBoxLayout()
+            h.addWidget(cb)
+            h.addWidget(combo)
+            h.addStretch()
+            clayout.addLayout(h)
+            clayout.addWidget(plot)
+
             layout.addWidget(container, row, col)
-            
-            # Connect checkbox to hide/show the container
-            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.CheckState.Checked))
+
+    # helper opened by the ⚙ button
+    def _open_fine_lag_config(self):
+        cfg = getattr(self, '_fine_lag_config', FineLagConfig())
+        dlg = FineLagConfigDialog(cfg, parent=self)
+        if dlg.exec_() == QtWidgets.QDialog.Accepted:
+            self._fine_lag_config = dlg.get_config()
+            if self.fine_lag_computer_thread:
+                self.fine_lag_computer_thread.update_fine_lag_config(self._fine_lag_config)
+            print(f"Fine lag config updated: zones={self._fine_lag_config.nyquist_zones}")
 
     def _setup_fine_lag_waterfall_plots(self) -> None:
-        """Set up the image views for the Fine Lag Waterfall tab."""
+        """Set up 2×2 grid of fine lag waterfall plots with combo box selectors."""
         layout = QtWidgets.QGridLayout(self.fine_lag_waterfall_tab)
+
         self.fine_lag_waterfall_plots = {}
         self.fine_lag_waterfall_images = {}
         self.fine_lag_waterfall_levels = {}
         self.fine_lag_waterfall_level_update_counter = {}
-        self.fine_lag_waterfall_colorbars = {}  # Store colorbars
-        
-        # Get colormaps - viridis for normal, diverging for differences
+        self.fine_lag_waterfall_colorbars = {}
+        self.fine_lag_waterfall_combos = {}
+        self.fine_lag_waterfall_data = {}
+        self.fine_lag_waterfall_prev = {}
+
         viridis_cm = pg.colormap.get('viridis')
-        # Light mode: CET-D1 (red-white-blue) for differences 
-        rdbu_light_cm = pg.colormap.get('CET-D1')  # Diverging colormap (white at zero)
-        # Dark mode: CET-D4 (red-black-blue) for differences
-        rdbu_dark_cm = pg.colormap.get('CET-D4')   # Dark diverging colormap (black at zero)
-        
-        titles = ["ADC0 Fine Lag", "ADC1 Fine Lag", "Cross-Correlation"]
-        keys = ['fine_lag_p00', 'fine_lag_p11', 'fine_lag_p01']
-        
-        for i, (title, key) in enumerate(zip(titles, keys)):
-            if i < 2:
-                row, col = 0, i
-            else:
-                row, col = 1, 0  # Third plot on second row
-            
+        n_lags = 8192
+
+        for idx in range(4):
+            row, col = divmod(idx, 2)
+
             container = QtWidgets.QWidget()
-            container_layout = QtWidgets.QVBoxLayout(container)
-            
-            cb = QtWidgets.QCheckBox(title)
-            cb.setChecked(True)
-            cb.stateChanged.connect(lambda state, w=container: w.setVisible(state == QtCore.Qt.CheckState.Checked))
-            self.plot_checkboxes[f"fine_lag_wf_{key}"] = cb
-            
-            # Create a GraphicsLayoutWidget to hold both plot and colorbar
+            clayout = QtWidgets.QVBoxLayout(container)
+
+            combo = QtWidgets.QComboBox()
+            combo.addItems(FINE_LAG_WATERFALL_OPTIONS)
+            combo.setCurrentText(FINE_LAG_WATERFALL_DEFAULTS[idx])
+            # Reset waterfall history when selection changes
+            combo.currentTextChanged.connect(lambda text, i=idx: self._reset_fine_lag_waterfall(i))
+            self.fine_lag_waterfall_combos[idx] = combo
+
             graphics_layout = pg.GraphicsLayoutWidget()
-            
-            # Add the plot
             plot = graphics_layout.addPlot(row=0, col=0)
             plot.setLabel('left', 'Time')
             plot.setLabel('bottom', 'Distance', units='m')
-            # Invert Y axis so 0 is at top (newest data)
             plot.invertY(True)
-            
+
             img_item = pg.ImageItem()
             plot.addItem(img_item)
-            
-            # Store all colormaps - we'll switch between them based on mode
-            img_item._viridis_lut = viridis_cm.getLookupTable()
-            img_item._rdbu_light_lut = rdbu_light_cm.getLookupTable()
-            img_item._rdbu_dark_lut = rdbu_dark_cm.getLookupTable()
-            img_item.setLookupTable(viridis_cm.getLookupTable())  # Start with viridis
-            
-            # Add colorbar
-            colorbar = pg.ColorBarItem(
-                values=(0, 1),  # Will be updated with actual data range
-                colorMap=viridis_cm,
-                width=20,
-                interactive=False
-            )
+            img_item.setLookupTable(viridis_cm.getLookupTable())
+
+            colorbar = pg.ColorBarItem(values=(0, 1), colorMap=viridis_cm, width=20, interactive=False)
             colorbar.setImageItem(img_item)
             graphics_layout.addItem(colorbar, row=0, col=1)
-            
+
+            key = f"fine_lag_wf_{idx}"
             self.fine_lag_waterfall_plots[key] = plot
             self.fine_lag_waterfall_images[key] = img_item
             self.fine_lag_waterfall_colorbars[key] = colorbar
             self.fine_lag_waterfall_levels[key] = None
             self.fine_lag_waterfall_level_update_counter[key] = 0
-            
-            container_layout.addWidget(cb)
-            container_layout.addWidget(graphics_layout)
-            
+
+            # Per-slot waterfall history (reset on combo change)
+            wf_len = getattr(self, 'config', CorrelatorConfig()).waterfall_len
+            self.fine_lag_waterfall_data[idx] = np.zeros((wf_len, n_lags))
+            self.fine_lag_waterfall_prev[idx] = np.zeros(n_lags)
+
+            cb_key = f"fine_lag_wf_{idx}"
+            cb = QtWidgets.QCheckBox(f"Waterfall {idx+1}")
+            cb.setChecked(True)
+            self.plot_checkboxes[cb_key] = cb
+            cb.stateChanged.connect(lambda st, w=container: w.setVisible(st == QtCore.Qt.CheckState.Checked))
+
+            h = QtWidgets.QHBoxLayout()
+            h.addWidget(cb)
+            h.addWidget(combo)
+            h.addStretch()
+            clayout.addLayout(h)
+            clayout.addWidget(graphics_layout)
+
             layout.addWidget(container, row, col)
+
+    def _reset_fine_lag_waterfall(self, slot_idx: int):
+        """Clear waterfall history when combo box selection changes."""
+        n_lags = 8192
+        wf_len = self.shared_buffers.waterfall_len if self.shared_buffers else 250
+        self.fine_lag_waterfall_data[slot_idx] = np.zeros((wf_len, n_lags))
+        self.fine_lag_waterfall_prev[slot_idx] = np.zeros(n_lags)
+        key = f"fine_lag_wf_{slot_idx}"
+        self.fine_lag_waterfall_levels[key] = None
 
     def _setup_super_fft_spectra_plots(self) -> None:
         """Set up the plots for the Super FFT Spectra tab."""
@@ -3995,6 +3923,10 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         elif zone == 3:
             # Zone 3: 3200 to 4800 MHz
             return base_freq_axis + FS_HZ
+        elif zone == 4:
+            # Zone 4: 4800 to 6400 MHz (reversed due to aliasing, like Zone 2)
+            reversed_axis = base_freq_axis[::-1]
+            return reversed_axis + 3 * FS_HZ / 2
         else:
             print(f"Warning: Invalid Nyquist zone {zone}, defaulting to Zone 1")
             return base_freq_axis
@@ -4011,11 +3943,13 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         if zone == 1:
             self.super_fft_freq_axis = base_super_fft_freq_axis
         elif zone == 2:
-            # Zone 2: 1600 to 3200 MHz (reversed due to aliasing)
-            reversed_super_fft_axis = base_super_fft_freq_axis[::-1]  # Reverse the frequency order
+            reversed_super_fft_axis = base_super_fft_freq_axis[::-1]
             self.super_fft_freq_axis = reversed_super_fft_axis + FS_HZ / 2
         elif zone == 3:
             self.super_fft_freq_axis = base_super_fft_freq_axis + FS_HZ
+        elif zone == 4:
+            reversed_super_fft_axis = base_super_fft_freq_axis[::-1]
+            self.super_fft_freq_axis = reversed_super_fft_axis + 3 * FS_HZ / 2
         else:
             self.super_fft_freq_axis = base_super_fft_freq_axis
             
@@ -4026,11 +3960,13 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         if zone == 1:
             self.fine_freq_axis = base_fine_freq_axis
         elif zone == 2:
-            # Zone 2: 1600 to 3200 MHz (reversed due to aliasing)
-            reversed_fine_freq_axis = base_fine_freq_axis[::-1]  # Reverse the frequency order
+            reversed_fine_freq_axis = base_fine_freq_axis[::-1]
             self.fine_freq_axis = reversed_fine_freq_axis + FS_HZ / 2
         elif zone == 3:
             self.fine_freq_axis = base_fine_freq_axis + FS_HZ
+        elif zone == 4:
+            reversed_fine_freq_axis = base_fine_freq_axis[::-1]
+            self.fine_freq_axis = reversed_fine_freq_axis + 3 * FS_HZ / 2
         else:
             self.fine_freq_axis = base_fine_freq_axis
     
@@ -4050,7 +3986,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         zone_ranges = {
             1: (0.0, 1600.0),
             2: (1600.0, 3200.0),
-            3: (3200.0, 4800.0)
+            3: (3200.0, 4800.0),
+            4: (4800.0, 6400.0),
         }
         min_freq, max_freq = zone_ranges[zone]
         
@@ -4077,7 +4014,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         zone_range_text = {
             1: "0-1600 MHz",
             2: "1600-3200 MHz", 
-            3: "3200-4800 MHz"
+            3: "3200-4800 MHz",
+            4: "4800-6400 MHz",
         }
         self.status_label.setText(f"Nyquist Zone {zone} selected ({zone_range_text[zone]})")
         
@@ -4141,7 +4079,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         zone_ranges = {
             1: (0.0, 1600.0),
             2: (1600.0, 3200.0),
-            3: (3200.0, 4800.0)
+            3: (3200.0, 4800.0),
+            4: (4800.0, 6400.0),
         }
         min_freq, max_freq = zone_ranges[zone]
         
@@ -4190,8 +4129,10 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Zone 3: 3200 to 4800 MHz maps to bins 0-8191
             freq_offset = freq_hz - FS_HZ
             bin_idx = int((freq_offset / freq_bin_width))
+        elif nyquist_zone == 4:
+            freq_offset = freq_hz - 3 * FS_HZ / 2
+            bin_idx = NBINS_TOTAL - 1 - int((freq_offset / freq_bin_width))
         else:
-            # Invalid zone, default to zone 1
             bin_idx = int((freq_hz / freq_bin_width))
         
         # Clamp to valid range
@@ -4223,6 +4164,9 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Zone 3: 3200 to 4800 MHz maps to bins 0-8191 (first half again)
             freq_offset = freq_hz - FS_HZ
             bin_idx = int((freq_offset / freq_bin_width))
+        elif nyquist_zone == 4:
+            freq_offset = freq_hz - 3 * FS_HZ / 2
+            bin_idx = n_fft_bins - 1 - int((freq_offset / freq_bin_width))
         else:
             bin_idx = int((freq_hz / freq_bin_width))
         
@@ -5440,300 +5384,169 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
         update_lag_waterfall('lag_p01_mag', self.shared_buffers.lag_wf_p01_mag, is_magnitude=True, positive_only=False)
         # Phase is not used for delay spectra
 
+    def _get_fine_lag_product(self, result: dict, selection: str):
+        """Parse combo box text and return the corresponding data array from the result dict."""
+        if result is None:
+            return None
+        try:
+            if selection.startswith("TOD: ADC "):
+                ch = int(selection.split()[-1])
+                return result['tods'][ch].ravel()
+            elif selection.startswith("FFT: ADC "):
+                ch = int(selection.split()[-1])
+                return result['ffts'][ch]
+            elif selection.startswith("Lag: p"):
+                pstr = selection.split()[1]  # "p01" or "p00"
+                i, j = int(pstr[1]), int(pstr[2])
+                return result['lags'][(i, j)]
+        except (KeyError, IndexError, ValueError):
+            pass
+        return None
+
     def _update_fine_lag_spectra_plots(self) -> None:
-        """Update the fine lag spectra plots with dynamic data selection."""
+        """Update the 2×2 fine lag spectra plots from the new result dict."""
         if not self.shared_buffers:
             return
-        use_log_scale = self.log_scale_checkbox.isChecked()
-        unwrap_phase = self.fine_lag_unwrap_phase_checkbox.isChecked()
-        
-        # Add fine frequency axis if not exists - use proper Nyquist range
-        if not hasattr(self, 'fine_freq_axis'):
-            # For real-valued signals, meaningful frequency content is 0 to FS_HZ/2
-            # FFT of 16384 real samples gives 8193 unique frequency bins (0 to Nyquist)
-            n_unique_bins = 8193  # (16384 // 2) + 1 for rfft
-            self.fine_freq_axis = np.linspace(0, FS_HZ/2, n_unique_bins, endpoint=True)
-        
-        # Helper function to get data for a specific channel, plot type, and component
-        def get_fine_lag_data(channel, plot_type, component):
-            """Get the data for a specific channel, plot type, and component."""
-            if plot_type == "Time Domain":
-                # Time domain data
-                n_samples = self.shared_buffers.fine_time_n_samples
-                x_axis = self.time_axis_us_full[:n_samples]
-                
-                if channel == "ADC0":
-                    data = self.shared_buffers.fine_time_adc0[:n_samples]
-                elif channel == "ADC1":
-                    data = self.shared_buffers.fine_time_adc1[:n_samples]
-                else:  # Cross
-                    # For cross-correlation in time domain, we don't have a meaningful representation
-                    data = np.zeros(n_samples)
-                
-                return x_axis, data
-                
-            elif plot_type == "Frequency Spectrum":
-                # Frequency domain data (intermediate FFT products)
-                x_axis = self.fine_freq_axis
-                
-                if channel == "ADC0":
-                    complex_data = self.shared_buffers.fine_freq_adc0
-                elif channel == "ADC1":
-                    complex_data = self.shared_buffers.fine_freq_adc1
-                elif channel == "Cross":
-                    complex_data = self.shared_buffers.fine_freq_cross
-                else:
-                    complex_data = np.zeros(len(self.fine_freq_axis), dtype=np.complex128)
-                
-                # Extract component
-                if component == "Magnitude":
-                    data = np.abs(complex_data)
-                elif component == "Real":
-                    data = complex_data.real
-                elif component == "Imaginary":
-                    data = complex_data.imag
-                elif component == "Phase":
-                    phase_data = np.angle(complex_data)
-                    data = np.unwrap(phase_data) if unwrap_phase else phase_data
-                else:
-                    data = np.abs(complex_data)
-                    
-                return x_axis, data
-                
-            elif plot_type == "Lag Spectrum":
-                # Lag domain data (existing)
-                x_axis = self.fine_lag_axis
-                
-                if channel == "ADC0":
-                    data = self.shared_buffers.fine_lag_p00
-                elif channel == "ADC1":
-                    data = self.shared_buffers.fine_lag_p11
-                elif channel == "Cross":
-                    data = self.shared_buffers.fine_lag_p01
-                else:
-                    data = np.zeros(len(self.fine_lag_axis))
-                    
-                return x_axis, data
-            
-            # Fallback
-            return np.arange(100), np.zeros(100)
-        
-        # Update each plot based on its configuration
-        for plot_idx in range(4):
-            plot_key = f"fine_lag_plot_{plot_idx}"
-            
-            if not self.plot_checkboxes[plot_key].isChecked():
+        result = self.shared_buffers.fine_lag_result
+        if result is None:
+            return
+
+        n_plots = len(self.fine_lag_combos)
+        for idx in range(n_plots):
+            cb_key = f"fine_lag_plot_{idx}"
+            if cb_key not in self.plot_checkboxes or not self.plot_checkboxes[cb_key].isChecked():
                 continue
-                
-            # Get configuration for this plot
-            config = self.fine_lag_plot_configs[plot_idx]
-            channel = config['channel']
-            plot_type = config['plot_type']
-            component = config['component']
-            
-            # Get the data and x-axis
-            x_axis, data = get_fine_lag_data(channel, plot_type, component)
-            
-            # Get the plot widget and line
-            plot_widget = self.fine_lag_plot_widgets[plot_idx]
-            plot_line = self.fine_lag_plots[plot_idx]
-            
-            # Apply log scale based on data type and component
-            is_magnitude = (component == "Magnitude")
-            is_time_domain = (plot_type == "Time Domain")
-            is_phase = (component == "Phase")
-            
-            if is_magnitude and not is_time_domain:
-                # Use log scale for frequency/lag magnitude data
-                plot_widget.setLogMode(y=use_log_scale)
-            else:
-                # Linear scale for time domain, phase, real/imaginary
-                plot_widget.setLogMode(y=False)
-                
-                # Apply symlog for real/imaginary frequency/lag data if log scale enabled
-                if use_log_scale and component in ['Real', 'Imaginary'] and not is_time_domain:
-                    C = self.symlog_crossover_spinner.value()
-                    sign_data = np.sign(data)
-                    abs_data = np.abs(data)
-                    symlog_data = sign_data * np.log10(1 + abs_data / C)
-                    plot_line.setData(x=x_axis, y=symlog_data)
-                    plot_widget.setLabel('left', f'{component} (symlog)')
-                    continue  # Skip the normal setData call below
-                else:
-                    plot_line.setData(x=x_axis, y=data)
-                    if is_phase:
-                        if unwrap_phase:
-                            plot_widget.setLabel('left', 'Unwrapped Phase (radians)')
-                        else:
-                            plot_widget.setLabel('left', 'Phase (radians)')
-                    else:
-                        plot_widget.setLabel('left', component)
-                    continue  # Skip the normal setData call below
-            
-            # Normal case - set data directly
-            plot_line.setData(x=x_axis, y=data)
-            
-            # Update axis labels based on plot type
-            if plot_type == "Time Domain":
+
+            selection = self.fine_lag_combos[idx].currentText()
+            data = self._get_fine_lag_product(result, selection)
+            if data is None:
+                continue
+
+            plot_widget = self.fine_lag_plot_widgets[idx]
+            plot_line = self.fine_lag_plots[idx]
+
+            # Choose x-axis based on product type
+            if selection.startswith("TOD:"):
+                x = self.time_axis_us_full[:len(data)]
                 plot_widget.setLabel('bottom', 'Time', units='μs')
                 plot_widget.setLabel('left', 'Amplitude')
-            elif plot_type == "Frequency Spectrum":
+                plot_widget.setLogMode(y=False)
+            elif selection.startswith("FFT:"):
+                n = len(data)
+                x = np.linspace(0, FS_HZ / 2, n)
                 plot_widget.setLabel('bottom', 'Frequency', units='Hz')
-                if component == "Magnitude":
-                    plot_widget.setLabel('left', 'Magnitude')
-                elif component == "Phase":
-                    if unwrap_phase:
-                        plot_widget.setLabel('left', 'Unwrapped Phase (radians)')
-                    else:
-                        plot_widget.setLabel('left', 'Phase (radians)')
-                else:
-                    plot_widget.setLabel('left', component)
-            elif plot_type == "Lag Spectrum":
+                plot_widget.setLabel('left', 'Power')
+                plot_widget.setLogMode(y=self.log_scale_checkbox.isChecked())
+            elif selection.startswith("Lag:"):
+                x = self.fine_lag_axis if len(data) == len(self.fine_lag_axis) else np.arange(len(data))
                 plot_widget.setLabel('bottom', 'Distance', units='m')
                 plot_widget.setLabel('left', 'Normalized Correlation')
+                plot_widget.setLogMode(y=self.log_scale_checkbox.isChecked())
+            else:
+                x = np.arange(len(data))
+
+            plot_line.setData(x=x, y=data)
 
     def _update_fine_lag_waterfall_plots(self) -> None:
-        """Update the fine lag waterfall plots."""
+        """Update the 2×2 fine lag waterfall plots from the new result dict."""
         if not self.shared_buffers:
             return
-        # Get the current write position to properly display circular buffer
-        pos = self.shared_buffers.fine_lag_wf_write_pos
-        
-        # Create properly ordered views of the circular buffers
-        def get_ordered_waterfall(data, pos):
-            """Get waterfall data in correct time order."""
-            return np.vstack([data[pos:], data[:pos]])
-        
-        # Calculate fine lag axis range (in meters)
+        result = self.shared_buffers.fine_lag_result
+        if result is None:
+            return
+
         fine_lag_min = self.fine_lag_axis[0]
         fine_lag_max = self.fine_lag_axis[-1]
-        
-        # Get log scale setting
-        use_log_scale = self.log_scale_checkbox.isChecked()
-        
-        # Helper function to update a fine lag waterfall plot
-        def update_fine_lag_waterfall(key, raw_data):
-            """Update a single fine lag waterfall plot with proper scaling and levels."""
-            plot_key = f"fine_lag_wf_{key}"
-            if not self.plot_checkboxes[plot_key].isChecked():
-                return
-            
-            # Choose which buffer to display based on running difference mode
-            if self.running_diff_checkbox.isChecked():
-                # Use the pre-calculated difference buffer
-                if key == 'fine_lag_p00':
-                    data = self.shared_buffers.fine_lag_diff_wf_p00
-                elif key == 'fine_lag_p11':
-                    data = self.shared_buffers.fine_lag_diff_wf_p11
-                else:  # fine_lag_p01
-                    data = self.shared_buffers.fine_lag_diff_wf_p01
+        use_log = self.log_scale_checkbox.isChecked()
+        is_diff = self.running_diff_checkbox.isChecked()
+        viridis_cm = pg.colormap.get('viridis')
+
+        for idx in range(4):
+            cb_key = f"fine_lag_wf_{idx}"
+            if not self.plot_checkboxes[cb_key].isChecked():
+                continue
+
+            selection = self.fine_lag_waterfall_combos[idx].currentText()
+            data = self._get_fine_lag_product(result, selection)
+            if data is None:
+                continue
+
+            # Shift waterfall and append new row (truncate/pad to waterfall width)
+            wf = self.fine_lag_waterfall_data[idx]
+            n_wf_bins = wf.shape[1]
+            row = data[:n_wf_bins] if len(data) >= n_wf_bins else np.pad(data, (0, n_wf_bins - len(data)))
+            wf[1:] = wf[:-1]
+            if is_diff:
+                prev = self.fine_lag_waterfall_prev[idx]
+                wf[0] = row - prev[:n_wf_bins]
+                self.fine_lag_waterfall_prev[idx][:n_wf_bins] = row
             else:
-                # Use the raw data buffer
-                data = raw_data
-                
-            wf_data = get_ordered_waterfall(data, pos)
-            
-            # Apply mean subtraction only if enabled AND not in running difference mode
-            if self.mean_subtract_checkbox.isChecked() and not self.running_diff_checkbox.isChecked():
-                # Original mean subtraction mode
-                frames_written = self.shared_buffers.fine_lag_frames_written
-                if frames_written > 0:
-                    populated_data = wf_data[-frames_written:] if frames_written < self.shared_buffers.waterfall_len else wf_data
-                    bin_means = np.mean(populated_data, axis=0, keepdims=True)
-                    wf_data = wf_data - bin_means
-            
-            # Update level counter
-            self.fine_lag_waterfall_level_update_counter[key] += 1
-            
-            # Get the scale update interval from the spinner
-            scale_update_interval = self.scale_update_spinner.value()
-            
-            # Update levels every N frames or if not set, but only if color scale is not fixed
-            update_levels = (
-                self.fine_lag_waterfall_levels[key] is None or 
-                (not self.fix_color_scale_checkbox.isChecked() and 
-                 self.fine_lag_waterfall_level_update_counter[key] >= scale_update_interval)
-            )
-            
-            if update_levels:
-                self.fine_lag_waterfall_level_update_counter[key] = 0
-                # Calculate robust levels using percentiles
-                valid_data = wf_data[np.isfinite(wf_data)]
-                
-                # For normalized autocorrelation data
-                if len(valid_data) > 0:
-                    # Use percentiles for more robust scaling (like other waterfalls)
-                    vmin = min(valid_data) #np.percentile(valid_data, 5)
-                    vmax = max(valid_data) #np.percentile(valid_data, 95)
-                    
-                    # For normalized data, ensure we don't go below 0 for log scale
-                    if use_log_scale:
-                        vmin = max(vmin, 1e-6)  # Prevent log of negative/zero
-                        vmax = max(vmax, vmin * 10)  # Ensure reasonable dynamic range
-                else:
-                    vmin, vmax = 1e-6, 1
-                
-                self.fine_lag_waterfall_levels[key] = (vmin, vmax)
-                self.fine_lag_waterfall_level_update_counter[key] = 0
-            
-            # Set image with fixed levels
+                wf[0] = row
+
+            key = f"fine_lag_wf_{idx}"
             img = self.fine_lag_waterfall_images[key]
             colorbar = self.fine_lag_waterfall_colorbars[key]
-            
-            # Switch colormap based on mode
-            if self.running_diff_checkbox.isChecked() or self.mean_subtract_checkbox.isChecked():
-                # Use diverging colormap for difference data
-                if self.dark_mode_colors_checkbox.isChecked():
-                    # Dark mode: use CET-D4 (black at zero)
-                    rdbu_cm = pg.colormap.get('CET-D4')
+
+            # Update levels periodically
+            self.fine_lag_waterfall_level_update_counter[key] = self.fine_lag_waterfall_level_update_counter.get(key, 0) + 1
+            scale_interval = self.scale_update_spinner.value()
+            update_lvl = (
+                self.fine_lag_waterfall_levels[key] is None or
+                (not self.fix_color_scale_checkbox.isChecked() and
+                 self.fine_lag_waterfall_level_update_counter[key] >= scale_interval)
+            )
+            if update_lvl:
+                self.fine_lag_waterfall_level_update_counter[key] = 0
+                valid = wf[np.isfinite(wf)]
+                if len(valid) > 0:
+                    vmin, vmax = float(np.min(valid)), float(np.max(valid))
+                    if use_log and not is_diff:
+                        vmin = max(vmin, 1e-6)
+                        vmax = max(vmax, vmin * 10)
                 else:
-                    # Light mode: use CET-D1 (white at zero)
-                    rdbu_cm = pg.colormap.get('CET-D1')
-                
-                img.setLookupTable(rdbu_cm.getLookupTable())
-                colorbar.setColorMap(rdbu_cm)
+                    vmin, vmax = 1e-6, 1.0
+                self.fine_lag_waterfall_levels[key] = (vmin, vmax)
+
+            vmin, vmax = self.fine_lag_waterfall_levels[key]
+
+            if use_log and not is_diff:
+                eps = 1e-10
+                log_wf = np.log10(np.maximum(wf, eps))
+                log_lvl = (np.log10(max(vmin, eps)), np.log10(max(vmax, eps)))
+                img.setImage(log_wf.T, autoLevels=False, levels=log_lvl)
+                colorbar.setLevels(log_lvl)
             else:
-                # Use viridis for normal data
-                viridis_cm = pg.colormap.get('viridis')
+                img.setImage(wf.T, autoLevels=False, levels=(vmin, vmax))
+                colorbar.setLevels((vmin, vmax))
+
+            # Set axis rect once
+            if not hasattr(img, '_scale_set'):
+                n_bins = wf.shape[1]
+                wf_len = wf.shape[0]
+                # For FFT products, use freq axis; for lag products, use lag axis
+                if selection.startswith("FFT:"):
+                    x_min, x_max = 0, FS_HZ / 2
+                    plot = self.fine_lag_waterfall_plots[key]
+                    plot.setLabel('bottom', 'Frequency', units='Hz')
+                else:
+                    x_min, x_max = fine_lag_min, fine_lag_max
+                    plot = self.fine_lag_waterfall_plots[key]
+                    plot.setLabel('bottom', 'Distance', units='m')
+                img.setRect(QtCore.QRectF(x_min, 0, x_max - x_min, wf_len))
+                plot.setLabel('left', 'Time (frames ago)')
+                img._scale_set = True
+
+            # Colormap switching for diff mode
+            if is_diff:
+                if self.dark_mode_colors_checkbox.isChecked():
+                    cm = pg.colormap.get('CET-D4')
+                else:
+                    cm = pg.colormap.get('CET-D1')
+                img.setLookupTable(cm.getLookupTable())
+                colorbar.setColorMap(cm)
+            else:
                 img.setLookupTable(viridis_cm.getLookupTable())
                 colorbar.setColorMap(viridis_cm)
-            
-            if use_log_scale and not (self.running_diff_checkbox.isChecked() or self.mean_subtract_checkbox.isChecked()):
-                # For normalized autocorrelation data, use log scale to better visualize small values
-                # Don't use log scale for difference data as it can be negative
-                epsilon = 1e-10
-                clipped_data = np.maximum(wf_data, epsilon)
-                log_wf_data = np.log10(clipped_data)
-                vmin, vmax = self.fine_lag_waterfall_levels[key]
-                # Also clip the levels to avoid log of negative values
-                vmin_clipped = max(vmin, epsilon)
-                vmax_clipped = max(vmax, epsilon)
-                log_levels = (np.log10(vmin_clipped), np.log10(vmax_clipped))
-                img.setImage(log_wf_data.T, autoLevels=False, levels=log_levels)
-                # Update colorbar with log scale values
-                colorbar.setLevels((np.log10(vmin_clipped), np.log10(vmax_clipped)))
-            else:
-                # Linear scale (or difference mode which should always be linear)
-                img.setImage(wf_data.T, autoLevels=False, levels=self.fine_lag_waterfall_levels[key])
-                # Update colorbar with actual data range
-                vmin, vmax = self.fine_lag_waterfall_levels[key]
-                colorbar.setLevels((vmin, vmax))
-            
-            # Set the scale to show distance on x-axis (only need to do once)
-            if not hasattr(img, '_scale_set'):
-                # Set the image rectangle to map bins to distance
-                img.setRect(QtCore.QRectF(fine_lag_min, 0, fine_lag_max - fine_lag_min, self.shared_buffers.waterfall_len))
-                img._scale_set = True
-                
-                # Update plot labels
-                plot = self.fine_lag_waterfall_plots[key]
-                plot.setLabel('bottom', 'Distance', units='m')
-                plot.setLabel('left', 'Time (frames ago)')
-        
-        # Update fine lag waterfall plots
-        update_fine_lag_waterfall('fine_lag_p00', self.shared_buffers.fine_lag_wf_p00)
-        update_fine_lag_waterfall('fine_lag_p11', self.shared_buffers.fine_lag_wf_p11)
-        update_fine_lag_waterfall('fine_lag_p01', self.shared_buffers.fine_lag_wf_p01)
 
     def _update_super_fft_spectra_plots(self) -> None:
         """Update the super FFT spectra line plots."""

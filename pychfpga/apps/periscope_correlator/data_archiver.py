@@ -371,52 +371,94 @@ class DataArchiver:
             logger.error(f"Error writing {mode} frame: {e}")
     
     def _write_fine_lag_frame(self, data: Dict[str, Any]):
-        """Write fine lag mode frame to HDF5."""
+        """Write fine lag mode frame to HDF5.
+        
+        Supports both legacy 2-channel format (adc0/adc1, lag_p00/p11/p01)
+        and new 8-channel format (tods dict, lags dict, ffts dict).
+        """
         capture_idx = self.capture_counter.get('fine_lag', 0)
         capture_name = f"capture_{capture_idx:06d}"
-        
+
         captures_group = self.h5file['fine_lag']['captures']
         capture_group = captures_group.create_group(capture_name)
-        
+
         # Write timestamp
         capture_group.attrs['timestamp'] = data['timestamp']
-        
-        # Write raw ADC data
-        raw_adc_group = capture_group.create_group('raw_adc')
-        
-        # Store with compression
-        adc0_data = data['adc0'].astype(np.int16)  # Ensure int16 for space efficiency
-        adc1_data = data['adc1'].astype(np.int16)
-        
-        raw_adc_group.create_dataset(
-            'adc0', 
-            data=adc0_data,
-            compression=self.compression,
-            compression_opts=self.compression_level,
-            chunks=True
-        )
-        
-        raw_adc_group.create_dataset(
-            'adc1',
-            data=adc1_data,
-            compression=self.compression,
-            compression_opts=self.compression_level,
-            chunks=True
-        )
-        
-        # Write lag spectra
-        lag_group = capture_group.create_group('lag_spectra')
-        
-        for spec_name in ['p00', 'p11', 'p01']:
-            lag_group.create_dataset(
-                spec_name,
-                data=data[f'lag_{spec_name}'],
-                compression=self.compression,
-                compression_opts=self.compression_level
-            )
-        
-        # Store processing parameters
         capture_group.attrs['frames_averaged'] = data.get('frames_averaged', 1)
+
+        # Check if this is the new 8-channel format (has 'tods' key)
+        if 'tods' in data:
+            # --- New 8-channel format ---
+            capture_group.attrs['ucap_mode'] = 0
+            capture_group.attrs['n_channels'] = 8
+
+            # Write raw ADC data for all 8 channels
+            raw_adc_group = capture_group.create_group('raw_adc')
+            for ch in range(8):
+                if ch in data['tods']:
+                    raw_adc_group.create_dataset(
+                        f'adc{ch}',
+                        data=data['tods'][ch].astype(np.int16),
+                        compression=self.compression,
+                        compression_opts=self.compression_level,
+                        chunks=True
+                    )
+
+            # Write FFT power spectra for all 8 channels
+            if 'ffts' in data:
+                fft_group = capture_group.create_group('fft')
+                for ch in range(8):
+                    if ch in data['ffts']:
+                        fft_group.create_dataset(
+                            f'adc{ch}',
+                            data=data['ffts'][ch].astype(np.float32),
+                            compression=self.compression,
+                            compression_opts=self.compression_level
+                        )
+
+            # Write all 36 lag products
+            lag_group = capture_group.create_group('lag_spectra')
+            for (i, j), lag_data in data.get('lags', {}).items():
+                lag_group.create_dataset(
+                    f'p{i}{j}',
+                    data=lag_data.astype(np.float32),
+                    compression=self.compression,
+                    compression_opts=self.compression_level
+                )
+
+            # Write config if present
+            if 'config' in data and data['config'] is not None:
+                cfg = data['config']
+                config_group = capture_group.create_group('config')
+                config_group.attrs['nyquist_zones'] = getattr(cfg, 'nyquist_zones', [1]*8)
+                config_group.attrs['freq_mask_low_mhz'] = getattr(cfg, 'freq_mask_low_mhz', [0.0]*8)
+                config_group.attrs['freq_mask_high_mhz'] = getattr(cfg, 'freq_mask_high_mhz', [1600.0]*8)
+
+        else:
+            # --- Legacy 2-channel format ---
+            raw_adc_group = capture_group.create_group('raw_adc')
+
+            adc0_data = data['adc0'].astype(np.int16)
+            adc1_data = data['adc1'].astype(np.int16)
+
+            raw_adc_group.create_dataset(
+                'adc0', data=adc0_data,
+                compression=self.compression,
+                compression_opts=self.compression_level, chunks=True
+            )
+            raw_adc_group.create_dataset(
+                'adc1', data=adc1_data,
+                compression=self.compression,
+                compression_opts=self.compression_level, chunks=True
+            )
+
+            lag_group = capture_group.create_group('lag_spectra')
+            for spec_name in ['p00', 'p11', 'p01']:
+                lag_group.create_dataset(
+                    spec_name, data=data[f'lag_{spec_name}'],
+                    compression=self.compression,
+                    compression_opts=self.compression_level
+                )
         
         self.capture_counter['fine_lag'] = capture_idx + 1
     
@@ -615,16 +657,61 @@ class DataReader:
             return None
     
     def _extract_fine_lag_capture(self, group) -> Dict[str, Any]:
-        """Extract fine lag capture data."""
+        """Extract fine lag capture data (supports both legacy 2-ch and new 8-ch format)."""
         data = {
             'timestamp': group.attrs['timestamp'],
             'frames_averaged': group.attrs.get('frames_averaged', 1),
-            'adc0': np.array(group['raw_adc']['adc0']),
-            'adc1': np.array(group['raw_adc']['adc1']),
-            'lag_p00': np.array(group['lag_spectra']['p00']),
-            'lag_p11': np.array(group['lag_spectra']['p11']),
-            'lag_p01': np.array(group['lag_spectra']['p01'])
+            'ucap_mode': group.attrs.get('ucap_mode', -1),
+            'n_channels': group.attrs.get('n_channels', 2),
         }
+
+        # Detect new 8-channel format
+        is_8ch = data['n_channels'] == 8 or 'fft' in group
+
+        # --- Raw ADC ---
+        if 'raw_adc' in group:
+            for ch in range(8):
+                key = f'adc{ch}'
+                if key in group['raw_adc']:
+                    data[key] = np.array(group['raw_adc'][key])
+            # Legacy compat aliases
+            if 'adc0' not in data and 'adc0' in group['raw_adc']:
+                data['adc0'] = np.array(group['raw_adc']['adc0'])
+            if 'adc1' not in data and 'adc1' in group['raw_adc']:
+                data['adc1'] = np.array(group['raw_adc']['adc1'])
+
+        # --- FFT power spectra (new format only) ---
+        if 'fft' in group:
+            data['ffts'] = {}
+            for ch in range(8):
+                key = f'adc{ch}'
+                if key in group['fft']:
+                    data['ffts'][ch] = np.array(group['fft'][key])
+
+        # --- Lag spectra ---
+        if 'lag_spectra' in group:
+            data['lags'] = {}
+            for name in group['lag_spectra']:
+                ds = np.array(group['lag_spectra'][name])
+                # Parse "pIJ" to (I, J) tuple
+                if name.startswith('p') and len(name) == 3:
+                    i, j = int(name[1]), int(name[2])
+                    data['lags'][(i, j)] = ds
+                else:
+                    data['lags'][name] = ds
+            # Legacy compat aliases
+            data['lag_p00'] = data['lags'].get((0, 0), data['lags'].get('p00', np.zeros(8192)))
+            data['lag_p11'] = data['lags'].get((1, 1), data['lags'].get('p11', np.zeros(8192)))
+            data['lag_p01'] = data['lags'].get((0, 1), data['lags'].get('p01', np.zeros(8192)))
+
+        # --- Config (new format only) ---
+        if 'config' in group:
+            data['config'] = {
+                'nyquist_zones': np.array(group['config'].attrs.get('nyquist_zones', [1]*8)),
+                'freq_mask_low_mhz': np.array(group['config'].attrs.get('freq_mask_low_mhz', [0.0]*8)),
+                'freq_mask_high_mhz': np.array(group['config'].attrs.get('freq_mask_high_mhz', [1600.0]*8)),
+            }
+
         return data
     
     def _extract_super_fft_capture(self, group) -> Dict[str, Any]:
