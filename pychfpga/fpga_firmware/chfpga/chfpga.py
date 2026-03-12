@@ -4662,7 +4662,7 @@ class chFPGA(FPGAFirmware):
 
             fp_gains_enabled = chan.SCALER.USE_FLOAT_GAINS
 
-            glin = chan.SCALER.get_gain_table(bank=bank, use_cache=True)
+            glin = chan.SCALER.get_gain_table(bank=bank, use_cache=use_cache)
 
             if fp_gains_enabled:
                 '''
