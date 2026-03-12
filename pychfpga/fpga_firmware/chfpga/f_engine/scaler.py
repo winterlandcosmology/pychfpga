@@ -92,8 +92,6 @@ class SCALER(MMI):
         self.cached_gain_table = {}
         self.cached_gain_timestamp = {}
 
-        self.logger = logging.getLogger(__name__)
-
     def reset(self):
         """ Resets the SCALER module """
         self.pulse_bit('RESET')
