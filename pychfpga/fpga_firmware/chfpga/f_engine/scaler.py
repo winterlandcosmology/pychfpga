@@ -92,6 +92,8 @@ class SCALER(MMI):
         self.cached_gain_table = {}
         self.cached_gain_timestamp = {}
 
+        self.logger = logging.getLogger(__name__)
+
     def reset(self):
         """ Resets the SCALER module """
         self.pulse_bit('RESET')
@@ -227,7 +229,7 @@ class SCALER(MMI):
                     raise ValueError('All gains must be integers between 0 and 65535')
 
 
-            self.cached_gain_table[bank] = gains
+            self.cached_gain_table[bank] = gains.astype(float)
             self.cached_gain_timestamp[bank] = time.time() if gain_timestamp is None else gain_timestamp
 
             gain_string = gains.astype('<i2').tobytes()
@@ -288,9 +290,9 @@ class SCALER(MMI):
         if self.USE_FLOAT_GAINS:
             # Additional processing to return floating point gains as a single value for each frequency bin
             gain_table = (np.array(gain_table) & 0xFFFF).flatten() # Full 16-bit value, meaningless without being processed
-            gain_mant = (gain_table & 0x7FF).astype(int) # Lower 11 bits, linear (mantissa) component
-            gain_exp = ((gain_table >> 11) + self.SHIFT_LEFT).astype(int) # Upper 5 bits, logarithmic (exponential) component, plus common log component
-            gain_table = gain_mant * 2 ** gain_exp # Full gain can be expressed as a single value 
+            gain_mant = (gain_table & 0x7FF).astype(float) # Lower 11 bits, linear (mantissa) component
+            gain_exp = ((gain_table >> 11) + self.SHIFT_LEFT).astype(float) # Upper 5 bits, logarithmic (exponential) component, plus common log component
+            gain_table = gain_mant * 2**gain_exp # Full gain can be expressed as a single value 
 
         return gain_table
 
