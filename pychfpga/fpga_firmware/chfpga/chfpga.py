@@ -1259,8 +1259,8 @@ class chFPGA(FPGAFirmware):
         """
         # print(f'Reading core reg via MMI at {addr:03X}')
         if self.mmi:
-            self.logger.debug(f'{self!r}: self.mmi read {self.mmi.read(self.mmi._RAM_BASE_ADDR + addr, type='<u4', length=1).dtype}')
-            return int(self.mmi.read(self.mmi._RAM_BASE_ADDR + addr, type='<u4', length=1)) & 0xFFFFFFFF
+            # self.logger.debug(f'self.mmi read {self.mmi.read(self.mmi._RAM_BASE_ADDR + addr, type='<u4', length=1).dtype}')
+            return int(self.mmi.read(self.mmi._RAM_BASE_ADDR + addr, type='<u4', length=1)[0]) & 0xFFFFFFFF
         else:
             raise IOError('Attempted to read FPGA core registers before MMI is initialized')
 
@@ -1278,6 +1278,8 @@ class chFPGA(FPGAFirmware):
         """
         # print(f'Writing core reg via MMI at {addr:03X}')
         if self.mmi:
+            # self.logger.debug(f'value {value}')
+            # self.logger.debug(f'value type {value.dtype}')
             self.mmi.write(self.mmi._RAM_BASE_ADDR + addr, value.to_bytes(4, 'little'))
         else:
             raise IOError('Attempted to write FPGA core registers before MMI is initialized')
