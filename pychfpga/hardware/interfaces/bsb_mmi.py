@@ -60,6 +60,8 @@ class BSB_MMI:
         self.tx_buf = memoryview(bytearray(512+3)); # use memoryview so we can use zero-copy slices
         self.rx_buf = memoryview(bytearray(256)); # use memoryview so we can use zero-copy slices
         self.rx_command = bytearray(3); # for read commands
+    
+        self.error_counter = 0
 
     def _send_command(self, cmd, expected_reply_length, **kwargs):
         """ Send a read or write command to the FPGA and check the reply for the correct

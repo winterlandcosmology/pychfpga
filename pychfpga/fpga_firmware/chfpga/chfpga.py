@@ -1217,7 +1217,7 @@ class chFPGA(FPGAFirmware):
             err = any(abs(f - target_frequency) > 2.1e3 for f in freqs)
             msg = f'{self!r}: ADC output frequencies at stage {stage} are {[f/1e6 for f in freqs]} (check #{trial+1}) {"ERROR!" if err else ""}'
             if err:
-                self.logger.warn(msg)
+                self.logger.warning(msg)
                 self.adc_clk_err_ctr += 1
                 self.adc_clk_err_msgs.append(msg)
             else:
@@ -1259,6 +1259,7 @@ class chFPGA(FPGAFirmware):
         """
         # print(f'Reading core reg via MMI at {addr:03X}')
         if self.mmi:
+            self.logger.debug(f'{self!r}: self.mmi read {self.mmi.read(self.mmi._RAM_BASE_ADDR + addr, type='<u4', length=1).dtype}')
             return int(self.mmi.read(self.mmi._RAM_BASE_ADDR + addr, type='<u4', length=1)) & 0xFFFFFFFF
         else:
             raise IOError('Attempted to read FPGA core registers before MMI is initialized')
