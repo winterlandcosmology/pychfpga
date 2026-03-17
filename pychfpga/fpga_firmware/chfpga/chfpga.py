@@ -2111,6 +2111,15 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             return [self.chan[ch] for ch in channels]
 
     def _normalize_channels(self, channels=None):
+        """Normalize channel selectors into a concrete channel list.
+
+        This helper accepts ``None``, a single channel index, or any iterable
+        of channel indices and returns a plain ``list[int]``. Capture-state
+        helpers use one normalization path so callers can pass flexible
+        selectors without repeating type handling. ``None`` maps to
+        ``self.default_channels``, an ``int`` becomes a single-item list, and
+        other values are materialized with ``list()``.
+        """
         if channels is None:
             return list(self.default_channels)
         if isinstance(channels, int):
@@ -2118,6 +2127,14 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         return list(channels)
 
     def _read_default_stream_id(self, channel):
+        """Return the initial stream ID to track for a channel.
+
+        This method produces the host-side default ``stream_id`` for a
+        channelizer. ``ChannelCaptureState`` needs a stable stream ID before
+        explicit capture configuration runs so receiver profile derivation
+        stays valid. For PROBER capture it reads ``PROBER.STREAM_ID`` when
+        available; if that fails, it falls back to the channel number.
+        """
         if self.CAPTURE_TYPE == "PROBER" and channel in self.chan and self.chan[channel].PROBER is not None:
             try:
                 return int(self.chan[channel].PROBER.STREAM_ID)
@@ -2128,17 +2145,43 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
     @staticmethod
     def _ucap_mode_to_pkt_frames(mode: int) -> int:
+        """Map UCAP capture mode to packet frames per burst.
+
+        This converts UCAP ``mode`` (0..3) to the number of contiguous packet
+        frames the firmware emits per burst. Host decoding needs this burst
+        geometry to split packets into logical frames correctly. The mapping is
+        a fixed lookup table ``{0:2, 1:4, 2:8, 3:16}``, and out-of-range values
+        raise ``ValueError``.
+        """
         mode_to_frames = {0: 2, 1: 4, 2: 8, 3: 16}
         if mode not in mode_to_frames:
             raise ValueError(f"Invalid UCAP mode {mode}. Expected mode in range [0, 3].")
         return mode_to_frames[mode]
 
     def _get_fft_bins_per_word(self) -> int:
+        """Return the active FFT packing ratio (bins per scaler word).
+
+        This reads metadata for the configured ``FFT_TYPE`` and returns how
+        many FFT bins are packed into one scaler word. Scaler capture modes
+        with widened or strided payloads depend on this ratio to infer
+        packet-to-frame grouping. The value comes from
+        ``FFT_INFO[self.FFT_TYPE]['bins_per_word']`` and falls back to ``1``
+        when metadata is missing.
+        """
         fft_info = self.FFT_INFO.get(self.FFT_TYPE, {})
         return int(fft_info.get("bins_per_word") or 1)
 
     @staticmethod
     def _scaler_packets_per_logical_frame(cap_data_type: Optional[int], fft_bins_per_word: int) -> Tuple[int, str]:
+        """Derive scaler packet grouping and decode transform label.
+
+        This returns ``(packets_per_logical_frame, decode_transform)`` for a
+        scaler capture data type. Some scaler capture modes expand or split
+        payloads, so one logical frame can span multiple transport packets and
+        require a custom decode transform. The method applies mode-specific
+        rules (for example type 4 -> 2 packets and type 5 ->
+        ``2 * fft_bins_per_word``) and uses ``identity`` as the default.
+        """
         if cap_data_type == 4:
             return 2, "scaler_mode4"
         if cap_data_type == 5:
@@ -2150,6 +2193,15 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         return 1, "identity"
 
     def _default_capture_format(self, source: str, cap_data_type: Optional[int]) -> str:
+        """Select the default decoded sample width for host receivers.
+
+        This produces the fallback ``format`` used by ``get_data_receiver()``
+        when callers do not specify one. Different platforms and scaler capture
+        modes emit different sample widths, so centralizing this default helps
+        prevent decode mismatches. The logic starts from ADC byte width for
+        non-scaler sources and applies platform-specific scaler overrides keyed
+        by ``cap_data_type``.
+        """
         adc_format = {1: "8", 2: "16", 4: "32", 8: "64"}.get(int(self.ADC_BYTES_PER_SAMPLE), "8")
         if source != "scaler":
             return adc_format
@@ -2169,6 +2221,15 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
     @staticmethod
     def _normalize_scaler_cap_data_type(data_type):
+        """Normalize scaler capture data-type input to an integer code.
+
+        This accepts ``None``, symbolic mode names, or numeric values and
+        returns the canonical integer capture data type. Internal
+        state/profile signatures are stored as integers for stable comparisons
+        and deterministic receiver configuration. String inputs are validated
+        against ``SCALER.CAPTURE_DATA_TYPES`` and mapped to numeric values;
+        other non-``None`` values are cast with ``int()``.
+        """
         if data_type is None:
             return None
         if isinstance(data_type, str):
@@ -2188,6 +2249,15 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self._update_raw_capture_state(channels=target_channels)
 
     def _update_capture_run_state(self, **updates):
+        """Update global capture-session state and dependent profiles.
+
+        This applies non-``None`` updates to ``CaptureRunState`` fields such as
+        engine, source, channels, and UCAP mode. Run-time transport context
+        changes alter decoding requirements even when per-channel DSP settings
+        are unchanged. The method merges updates into tracked run state,
+        selects active channels from that state (or defaults), and recomputes
+        their decode profiles.
+        """
         self._init_capture_state_tracking()
         raw_capture = self.state.raw_capture
         for key, value in updates.items():
@@ -2351,6 +2421,15 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
 
     def _resolve_receiver_channels(self, stream_ids=None):
+        """Map requested stream IDs to channel numbers for profile lookup.
+
+        This resolves receiver selection input into an ordered, de-duplicated
+        list of channel indices. Public APIs select streams by ``stream_id``
+        while tracked decode profiles are keyed by channel number. The method
+        builds a ``stream_id -> channel`` map from tracked state, applies an
+        in-range fallback where ``stream_id == channel``, and raises if any
+        stream IDs cannot be resolved.
+        """
         self._init_capture_state_tracking()
         if stream_ids is None:
             return list(self.state.raw_capture.channels or tuple(self.default_channels))
@@ -3258,6 +3337,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 captured data instead of the auxiliary (correlator) data.
 
             data_type (str or int): If the data is from the scaler, indicates what type of data is to be captured.
+                For scaler capture modes 4/5 (multi-packet logical decode), one host logical frame is reconstructed
+                from packets produced by consecutive physical frames; it is not replayed from a single buffered frame.
 
             channels (list): list of channels for which the data capture will be enabled. Behavior differs depending on the capture engine:
 
@@ -3503,6 +3584,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 - 5: Output the input FFT data of the odd bins only, at double the bitwidth.
                 - 6: Output the raw scaled FFT data (see above) of the even bins only, at double the bitwidth.
                 - 7: Output the raw scaled FFT data (see above) of the odd bins only, at double the bitwidth.
+            For modes 4 and 5, one host logical frame is reconstructed from packets produced by consecutive
+            physical frames (not from a single fully buffered physical frame).
         '''
 
         if channels is None:
