@@ -1217,7 +1217,7 @@ class chFPGA(FPGAFirmware):
             err = any(abs(f - target_frequency) > 2.1e3 for f in freqs)
             msg = f'{self!r}: ADC output frequencies at stage {stage} are {[f/1e6 for f in freqs]} (check #{trial+1}) {"ERROR!" if err else ""}'
             if err:
-                self.logger.warn(msg)
+                self.logger.warning(msg)
                 self.adc_clk_err_ctr += 1
                 self.adc_clk_err_msgs.append(msg)
             else:
