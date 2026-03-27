@@ -894,6 +894,29 @@ class RawPacketProcessor(object):
         # pre-allocate data (channels x bins) for all ports,  for a single timestamp
         self.capture_data = np.zeros((self.NCHAN, self.DATA_SIZE), dtype=np.int8)
 
+        self.snapshot_lock = threading.RLock()
+        board_channel_numbers = {}
+        for crate, slot, chan in self.chan_ids:
+            board_channel_numbers.setdefault((int(crate), int(slot)), set()).add(int(chan))
+        self.board_channel_numbers = {
+            board: np.array(sorted(channel_numbers), dtype=np.int16)
+            for board, channel_numbers in board_channel_numbers.items()
+        }
+        self.board_channel_positions = {
+            board: {int(chan): ix for ix, chan in enumerate(channel_numbers.tolist())}
+            for board, channel_numbers in self.board_channel_numbers.items()
+        }
+        self.pending_adc_snapshots = {
+            board: dict(
+                timestamp=None,
+                mask=np.zeros(channel_numbers.size, dtype=bool),
+                data=np.zeros((channel_numbers.size, self.DATA_SIZE), dtype=np.int8),
+                counts=np.zeros(channel_numbers.size, dtype=np.uint32),
+            )
+            for board, channel_numbers in self.board_channel_numbers.items()
+        }
+        self.latest_adc_snapshots = {board: None for board in self.board_channel_numbers}
+
     def stop(self):
         if self.hdf5_file:
             self.stop_adc_hdf5()
@@ -906,6 +929,60 @@ class RawPacketProcessor(object):
         chan = stream_id & 0xF
 
         return crate, slot, chan
+
+    def _update_adc_snapshot_cache(self, buf_ix, ix, timestamp):
+        if not ix.size:
+            return
+
+        grouped_entries = {}
+        for packet_pos, channel_ix in enumerate(ix.tolist()):
+            crate, slot, chan = self.chan_ids[channel_ix]
+            grouped_entries.setdefault((int(crate), int(slot)), []).append((packet_pos, int(chan), channel_ix))
+
+        with self.snapshot_lock:
+            for board, entries in grouped_entries.items():
+                pending = self.pending_adc_snapshots.get(board)
+                board_positions = self.board_channel_positions.get(board)
+                if pending is None or board_positions is None:
+                    continue
+
+                if pending['timestamp'] != int(timestamp):
+                    pending['timestamp'] = int(timestamp)
+                    pending['mask'].fill(False)
+
+                for packet_pos, chan, channel_ix in entries:
+                    board_ix = board_positions.get(chan)
+                    if board_ix is None:
+                        continue
+                    pending['data'][board_ix] = self.buf_data[buf_ix[packet_pos]]
+                    pending['counts'][board_ix] = self.adc_frames[channel_ix]
+                    pending['mask'][board_ix] = True
+
+                if pending['mask'].all():
+                    self.latest_adc_snapshots[board] = dict(
+                        timestamp=int(timestamp),
+                        counts=pending['counts'].copy(),
+                        data=pending['data'].copy(),
+                    )
+
+    async def get_adc_snapshot_async(self, crate, slot):
+        board = (int(crate), int(slot))
+        with self.snapshot_lock:
+            if board not in self.latest_adc_snapshots:
+                raise RuntimeError(f'Board {board} is not assigned to this raw_acq receiver.')
+
+            snapshot = self.latest_adc_snapshots[board]
+            if snapshot is None:
+                return dict(crate=board[0], slot=board[1], has_data=False, timestamp=None, counts=[], data=[])
+
+            return dict(
+                crate=board[0],
+                slot=board[1],
+                has_data=True,
+                timestamp=int(snapshot['timestamp']),
+                counts=snapshot['counts'].tolist(),
+                data=snapshot['data'].tolist(),
+            )
 
     def process_packets(self):
         """ Process the packets in the buffer.
@@ -998,6 +1075,7 @@ class RawPacketProcessor(object):
 
             # keep track of how many packets we received for each channel. Useful to detect packet loss.
             self.adc_frames[ix] += 1
+            self._update_adc_snapshot_cache(bix, ix, self.buf_ts[bix[0]])
 
             t0 = time.time()
 
@@ -2862,6 +2940,12 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
         ts, ports, data = await self.receiver.raw_packet_processor.get_data()
         return dict(ts=ts.tolist(), ports=ports, data=data.tolist())
 
+    @endpoint('get-adc-snapshot')
+    async def get_adc_snapshot(self, crate, slot):
+        if not self.receiver or not self.receiver.is_running() or self.receiver.raw_packet_processor is None:
+            return dict(crate=int(crate), slot=int(slot), has_data=False, timestamp=None, counts=[], data=[])
+        return await self.receiver.raw_packet_processor.get_adc_snapshot_async(crate=crate, slot=slot)
+
     @endpoint('start-fft-rms')
     async def start_fft_rms(self, stream_ids=[], target_gain_bank=0, number_of_frames=100):
         self.log.info(f'{self!r}: received start_fft_rms command')
@@ -3029,6 +3113,9 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
         data = await self.get('get-packets')
         return data
 
+    async def get_adc_snapshot(self, crate, slot):
+        return await self.post('get-adc-snapshot', crate=int(crate), slot=int(slot))
+
     async def start_fft_rms(self, stream_ids=[], target_gain_bank=0, number_of_frames=100):
         await self.post(
             'start-fft-rms',
@@ -3191,5 +3278,3 @@ def main():
 
 if __name__ == '__main__':
     client, server = main()
-
-

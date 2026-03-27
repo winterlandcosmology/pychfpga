@@ -44,6 +44,14 @@ from pychfpga import calculate_gains # Gain computation engine
 from pychfpga import digital_gain  # Load/save gains from disk
 from pychfpga import __version__
 # from ps import PowerSupplyAsyncRESTClient
+from pychfpga.monitoring_tools.adc_monitor import DEFAULT_HOST as ADC_MONITOR_DEFAULT_HOST
+from pychfpga.monitoring_tools.adc_monitor import DEFAULT_POLL_INTERVAL_MS as ADC_MONITOR_DEFAULT_POLL_INTERVAL_MS
+from pychfpga.monitoring_tools.adc_monitor import DEFAULT_PORT as ADC_MONITOR_DEFAULT_PORT
+from pychfpga.monitoring_tools.adc_monitor import FpgaMasterAdcMonitor
+from pychfpga.monitoring_tools.adc_monitor import board_state_key as adc_monitor_board_key
+from pychfpga.monitoring_tools.adc_monitor import board_state_label as adc_monitor_board_label
+from pychfpga.monitoring_tools.adc_monitor import describe_board as describe_adc_monitor_board
+from pychfpga.monitoring_tools.adc_monitor import resolve_monitor_boards
 from pychfpga.raw_acq import RawAcqAsyncRESTClient
 
 
@@ -176,6 +184,7 @@ class FPGAMaster(object):
         # self.kotekan = None # Kotekan REST clients
         self.fpgas = None # fpga_array object
         self.power_supply_servers = None # power supply REST server
+        self.live_monitor = None
 
         self.PROGRAM = os.path.realpath(__file__) # absolute path name to this module
         self.startup_time = datetime.datetime.utcnow()
@@ -369,6 +378,111 @@ class FPGAMaster(object):
         # otherwise raw frames will not be synced across boards.
         if capture_period and sync:
             self.fpgas.sync()
+
+
+    def get_raw_acq_owner(self, board):
+        for server_name, boards in getattr(self, 'raw_acq_ibs', {}).items():
+            for candidate in boards:
+                if candidate is board:
+                    return server_name, self.raw_acq.get(server_name)
+        return None, None
+
+
+    async def start_live_monitor(self):
+        if self.live_monitor is not None:
+            return
+
+        live_monitor_conf = self.config.fpga.get('live_monitor', {})
+        if live_monitor_conf is None:
+            return
+
+        if isinstance(live_monitor_conf, bool):
+            live_monitor_conf = dict(enabled=live_monitor_conf)
+        elif not hasattr(live_monitor_conf, 'get'):
+            self.log.error(f'{self!r}: fpga.live_monitor must be a mapping or bool. Skipping live monitor startup.')
+            return
+
+        if not live_monitor_conf or not live_monitor_conf.get('enabled', False):
+            return
+
+        raw_data_capture_conf = self.config.fpga.get('raw_data_capture', {}) or {}
+        capture_source = raw_data_capture_conf.get('capture_source', None)
+        if capture_source != 'adc':
+            self.log.info(
+                f'{self!r}: Live ADC monitor requested, but raw_data_capture.capture_source={capture_source!r}. '
+                'Skipping live monitor startup.')
+            return
+
+        if live_monitor_conf.get('iceboard', None) not in (None, '', False):
+            self.log.info(
+                f'{self!r}: fpga.live_monitor.iceboard is ignored. '
+                'The live ADC monitor now follows fpga.fpga_array_params.hwm and exposes board switching in the web UI.')
+
+        boards = resolve_monitor_boards(self.fpgas)
+        if not boards:
+            self.log.info(f'{self!r}: Live ADC monitor requested, but no ICE boards are present in the selected FPGA array. Skipping startup.')
+            return
+
+        board_targets = []
+        missing_boards = []
+        for board in boards:
+            server_name, raw_acq_client = self.get_raw_acq_owner(board)
+            if raw_acq_client is None:
+                missing_boards.append(describe_adc_monitor_board(board))
+                continue
+
+            board_targets.append(dict(
+                key=adc_monitor_board_key(board),
+                label=adc_monitor_board_label(board),
+                board=board,
+                raw_acq_client=raw_acq_client,
+                server_name=server_name,
+            ))
+
+        for board_label in missing_boards:
+            self.log.error(
+                f'{self!r}: Live ADC monitor requested for {board_label}, '
+                'but no raw_acq server owns that board. Skipping that board.')
+
+        if not board_targets:
+            self.log.error(f'{self!r}: Live ADC monitor could not find any ICE boards with raw_acq ownership. Skipping startup.')
+            return
+
+        try:
+            host = live_monitor_conf.get('host', ADC_MONITOR_DEFAULT_HOST)
+            port = int(live_monitor_conf.get('port', ADC_MONITOR_DEFAULT_PORT))
+            poll_interval_ms = int(live_monitor_conf.get('poll_interval_ms', ADC_MONITOR_DEFAULT_POLL_INTERVAL_MS))
+            monitor = FpgaMasterAdcMonitor(
+                board_targets=board_targets,
+                host=host,
+                port=port,
+                poll_interval_ms=poll_interval_ms,
+            )
+            url = await monitor.start()
+        except Exception as exc:
+            self.log.error(f'{self!r}: Failed to start live ADC monitor: {exc}')
+            self.log.debug(traceback.format_exc())
+            return
+
+        self.live_monitor = monitor
+        self.log.info(
+            f'{self!r}: Live ADC monitor for {len(board_targets)} ICE board'
+            f"{'s' if len(board_targets) != 1 else ''} available at {url}")
+
+
+    async def stop_live_monitor(self):
+        monitor = self.live_monitor
+        if monitor is None:
+            return
+
+        self.live_monitor = None
+        try:
+            await monitor.stop()
+        except Exception as exc:
+            self.log.warning(f'{self!r}: Failed to stop live ADC monitor cleanly: {exc}')
+            self.log.debug(traceback.format_exc())
+        else:
+            self.log.info(f'{self!r}: Live ADC monitor stopped')
 
 
     async def set_fpga_data_capture(self, targets=None, capture_rate=23, source=None):
@@ -1226,6 +1340,8 @@ class FPGAMaster(object):
             self.log.info("Starting Correlator HDF5 data capture")
             await self.start_corr_hdf5_capture()
 
+        await self.start_live_monitor()
+
 
         # Finished with initialization.
         self.log.info("======================================================")
@@ -1330,9 +1446,8 @@ class FPGAMaster(object):
         if self.state == 'on':
             self.state = 'stopping'
             self.log.info("stopping acquisition")
+            await self.stop_live_monitor()
             self.iceboard_cb.stop()
-            log.stop_logging(self.logging_handlers) # remove the handlers that were created by setup_logging()
-            reap_cached_sockets()
 
             # Close interface to gain archive
             if self.gain_hdf5 is not None:
@@ -1344,7 +1459,10 @@ class FPGAMaster(object):
             while self.raw_acq:
                 server_name, server = self.raw_acq.popitem()
                 msg = await server.stop_raw_hdf5()
-                self.log.info(f'{sefl!r}: stopping hdf5 writing for {server_name}: {msg}')
+                self.log.info(f'{self!r}: stopping hdf5 writing for {server_name}: {msg}')
+
+            log.stop_logging(self.logging_handlers) # remove the handlers that were created by setup_logging()
+            reap_cached_sockets()
 
             self.start_time = None
             self.state = 'off'

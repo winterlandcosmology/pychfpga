@@ -103,6 +103,7 @@
         ]
 
 [project.scripts]
+    adc_monitor = "pychfpga.monitoring_tools.adc_monitor:main"
     fpga_master = "pychfpga.fpga_master:main"
     chime_gps = "pychfpga.gps:main"
     chime_raw_acq = "pychfpga.raw_acq:main"

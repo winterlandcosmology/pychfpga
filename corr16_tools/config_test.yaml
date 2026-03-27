@@ -327,7 +327,7 @@ TEST:
         <<: *default_fpga
         fpga_array_params:
             <<: *default_fpga_array_params
-            hwm: 'mb 257:1' # ID of the board used. Can also use a direct IP
+            hwm: 'mb 511:1' # ID of the board used. Can also use a direct IP
             mode: corr16  # shuffle 256 and 512 require crate numbers
             prog: 1
             sync_method: local #  distributed_time # <-- For R232. Change to --> sync_method: distributed_time <-- for D3A. #local_soft_trigger
@@ -379,6 +379,12 @@ TEST:
             capture_source: 'adc'
             baseline_capture_rate: 10  # Frame per second. 0 = disable.
             tmux_factor: 3
+
+        live_monitor:
+            enabled: True
+            host: '0.0.0.0'
+            port: 8000
+            poll_interval_ms: 500
 
         initial_gains:  # overwritten by load initial gains and compute gains if enabled
             - [['*'], [0.0, 20]]
@@ -434,7 +440,7 @@ TEST:
             n_inputs: 16 # Number of inputs channels to be correlated (from 0 to n_inputs-1). Don't change this number! The FPGA will still send zeros on the uncorellated channels
             hdf5_capture_folder: '%(run_folder)s/corr/%(hdf5_start_time)s'
             hdf5_capture_filename: '%(file_number)04d' #'data'
-            hdf5_capture_duration: 60 #300 # number of seconds during which data is captured. 0= forver (until stopped), null = Do not write hdf5 data start
+            hdf5_capture_duration: 0 #300 # number of seconds during which data is captured. 0= forver (until stopped), null = Do not write hdf5 data start
 #            hdf5_capture_elements_per_file: 256 # 256 elements=7Mbytes
             hdf5_capture_elements_per_file: 8 # 256 elements=7Mbytes
             # hdf5_capture_n_inputs can either be an int or an array of integers. If int, only the N first channels will be saved. 
@@ -471,7 +477,7 @@ TEST:
             # compute_gains_capture_rate: 15 # Number of frames per second to send when computing gains
             # hdf5_capture_rate: 15 #1 # number of frames per second to use when storing data to HDF5 files; 0= Donot capture hdf5 files
             hdf5_capture_refresh_time: 0 # in seconds
-            hdf5_capture_duration: null #300 # number of seconds during which data is captured. 0= forver (until stopped), null = Do not write hdf5 data start
+            hdf5_capture_duration: 0 #300 # number of seconds during which data is captured. 0= forver (until stopped), null = Do not write hdf5 data start
             hdf5_capture_folder: '{run_folder}/raw_acq/' #'raw_data'  # Don't use a leading / or the path will be absolute. Without leading /, Data will be saved in base_path/run_folder/capture_folder/timestamp_capture_filename/nnnnnn.h5
             hdf5_capture_filename: '{file_number:06d}' #'data'
             hdf5_capture_elements_per_file: 131072
