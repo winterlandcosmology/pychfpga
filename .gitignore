@@ -23,3 +23,8 @@ out_*/
 corr16tests
 .idea
 .vscode
+fw_test_results/*
+xreport.xml
+.env.docker
+docker-data/
+.env

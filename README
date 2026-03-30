@@ -238,24 +238,71 @@ To start the fpga_master server::
 Docker operation
 ================
 
+This repository includes a Raspberry Pi oriented Docker deployment that runs ``chime_raw_acq`` and ``fpga_master`` as separate containers from the same image. The FPGA configuration stays outside the image and is mounted into ``/config/fpga_config.yaml``. The ``fpga_master`` container waits for the IceBoard host to answer ICMP ping before starting.
 
-pychfpga is also available as a docker image, with all system and Python dependencies already installed.
+SSH build prerequisites
+-----------------------
 
+Private dependencies are fetched from Bitbucket during the image build. Set ``PYCHFPGA_SSH_KEY_PATH`` in the Docker env file to the absolute path of the private SSH key that has read access to this repository and the private ``wtl.*`` repositories.
 
-Build:
+The build helper enables Docker BuildKit automatically and passes that key to the Docker build with ``--ssh default=${PYCHFPGA_SSH_KEY_PATH}``. It also passes ``PYCHFPGA_VERSION`` as a build arg. When that variable is not set, the helper derives it from ``pychfpga/_version_scm.py`` and falls back to ``0+docker`` if needed. The Dockerfile installs ``git`` and ``openssh-client`` and preloads the Bitbucket host key so ``pip install .`` can resolve the private dependencies at build time.
 
-export DOCKER_BUILDKIT=1
-export BUILDKIT_PROGRESS=plain
-docker build --no-cache -t pychfpga:jfc_dev .
-
-Building the Docker Image
+Building the Docker image
 -------------------------
 
-In order to build the docker image for `pychfpga` you need to have access to ssh-identity with read permissions to this and other `wtl` repositories.
+Build the image locally from the repository root::
 
-- Environemt Parameter DOCKER_BUILDKIT=1 is required to be set, before the build.
-- In order to build the image execute the following command if the correct ssh-identity is already loaded into the `ssh-agent`
-	$ docker build -f Dockerfile -t chimefrb/pychfpga:latest --ssh github_ssh_key=$SSH_AUTH_SOCK .
-- Alternatively, if you have the private key, you can use:
-        $ docker build -f Dockerfile -t chimefrb/pychfpga:latest --ssh github_ssh_key=/path/to/id_rsa .
+    ./scripts/docker/build_image.sh
 
+The build helper reads ``.env.docker`` automatically when it exists. To use another env file, set ``PYCHFPGA_ENV_FILE`` before running it. The legacy ``./docker_build`` helper now forwards to the same script.
+
+Compose configuration
+---------------------
+
+The Compose deployment reads the following variables from an env file with the same keys as ``.env.docker.example``:
+
+- ``PYCHFPGA_IMAGE``: image tag to run
+- ``PYCHFPGA_DATA_DIR``: host folder mounted at ``/data``
+- ``PYCHFPGA_CONFIG_FILE``: external YAML config mounted read-only into the container
+- ``PYCHFPGA_CONFIG_NAME``: config object name passed to ``fpga_master``
+- ``PYCHFPGA_WAIT_HOSTS``: comma-separated IceBoard hostnames or IPs to ping before startup
+- ``PYCHFPGA_WAIT_PING_TIMEOUT``: timeout in seconds for each ping attempt
+- ``PYCHFPGA_WAIT_TIMEOUT``: optional timeout in seconds for the wait loop. Empty means wait forever.
+- ``PYCHFPGA_SSH_KEY_PATH``: absolute path to the SSH private key used during ``docker build``
+
+Keep ``raw_acq.servers.<name>.hostname: localhost`` and ``raw_acq.servers.<name>.port: 54322`` in the external YAML so ``fpga_master`` can reach ``raw_acq`` over host networking.
+
+The host system still needs the networking prerequisites described earlier in this README, including jumbo-frame MTU and UDP buffer tuning if raw packet capture is required.
+
+Running with Compose
+--------------------
+
+Create the local Compose env symlink once so plain ``docker compose`` commands pick up ``.env.docker`` automatically::
+
+    ln -snf .env.docker .env
+
+Validate the rendered configuration::
+
+    docker compose config
+
+Build and start both services::
+
+    docker compose up -d --build
+
+``raw_acq`` becomes healthy as soon as its REST server responds on ``http://127.0.0.1:54322/status``. ``fpga_master`` starts only after that service is healthy, then waits for the configured IceBoard hosts to answer ping before it launches.
+
+Monitoring the deployment
+-------------------------
+
+Useful host-side monitoring commands::
+
+    docker compose ps
+    docker compose logs -f raw_acq fpga_master
+    curl http://127.0.0.1:54322/status
+    curl http://127.0.0.1:54321/status
+    curl --compressed http://127.0.0.1:54321/get-monitoring-data
+
+Boot on Raspberry Pi
+--------------------
+
+The Compose file uses ``restart: unless-stopped`` for both services. If Docker itself is enabled at boot on the Raspberry Pi, the containers will come back automatically after a reboot. ``raw_acq`` starts immediately, and ``fpga_master`` waits in a 1-second loop until the configured IceBoard hosts answer ping before beginning FPGA initialization.
