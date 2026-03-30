@@ -1209,7 +1209,7 @@ class FPGAMaster(object):
 
         # Load most recent gains from archive into gain bank #0
         if conf.fpga.load_initial_gains and self.gain_hdf5:
-            await self.load_gains(update_id=None, bank=0, when='now')
+            await self.load_gains(update_id=None, bank=0, when='now') # update_id = None loads the most recent gains
 
         # Compute new gains if requested
         if self.config.fpga.compute_gains.enable:
@@ -1551,6 +1551,10 @@ class FPGAMaster(object):
             when=when,
             gain_timestamps=gain_timestamps)
 
+        # Instantiate gains_filename and gains_uid for REST server endpoint
+        self.gains_filename = self.gain_hdf5.reader.last_value.filename
+        self.gains_uid = uid
+
         # Return the unique identifier of the gains that were loaded
         return uid
 
@@ -1702,7 +1706,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         # self.port = port # port on which the web server will be run
         self.dummy = dummy
 
-        # Use a dummy CHIME Master object if dummy is True
+        # Use a dummy Master object if dummy is True
         FPGAMasterClass = DummyFPGAMaster if self.dummy else FPGAMaster
 
         self.fpga_master = FPGAMasterClass()
@@ -1726,10 +1730,10 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         self._gps_lock = asyncio.Lock()
 
     async def shutdown(self):
-        self.log.info('Shutting down CHIME Master')
+        self.log.info('Shutting down fpga_master')
         await self.fpga_master.stop()
         await asyncio.sleep(3)
-        self.log.info('CHIME Master is shut down')
+        self.log.info('fpga_master is shut down')
 
     def print_iceboard_info_callback(self):
         if self.fpga_master.fpgas:
@@ -1903,6 +1907,39 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             return dict(message="FPGA not ready")
         return await self.fpga_master.get_noise_injection_status(name)
 
+    @endpoint('get-current-gain-file')
+    async def get_current_gain_file(self):
+        """ REST endpoint to return the absolute path of the current digital gains file.
+
+        Returns: 
+
+            current_gain_file_info (dict):
+
+                current_gain_file: (str) the full file path to the current gains, including the name of the .h5 file
+                current_update_id: (str) the update id of the current gains
+
+        Example:
+
+            curl http://localhost:54321/current-gain-file
+        """
+        if not (self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas):
+            self.log.warning(f"{self!r}: FPGA array is not ready to accept command")
+            return dict(message="FPGA not ready")
+
+        try:
+            # Recover information on the current digital gains
+            # current_gain_file = self.gain_hdf5.reader.last_value.filename
+            # current_update_id = gain_hdf5.last_update_id
+
+            # self.gains_filename = self.gain_hdf5.reader.last_value.filename
+            # self.gains_uid = uid
+
+            return dict(current_gain_file = self.fpga_master.gains_filename, current_update_id = self.fpga_master.gains_uid)
+            
+        except Exception as e:
+            self.log.error(f'{self!r}: Error recovering current digital gains file path: {e}')
+            return {}
+    
     @endpoint('compute-gains')
     async def compute_gains(self, **params):
         """ REST endpoint to compute gains for desired channels.
@@ -2758,6 +2795,13 @@ class FPGAMasterAsyncRESTClient(AsyncRESTClient):
         """
         r = await self.get('stop')
         self.print_result(r)
+
+    async def get_current_gain_file(self):
+        """
+        Get information about the current digital gains file.
+        """
+        current_gain_info = await self.get('current-gain-file')
+        return current_gain_info
 
     async def get_frequency_map(self):
         """
