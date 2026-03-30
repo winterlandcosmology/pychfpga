@@ -2876,8 +2876,9 @@ class FPGAArray(object):
                     # for _ in range(30):
                     while any(self.ib.is_irigb_before_trigger_time_async()):
                         #     print(f'trig={any(self.ib.is_irigb_before_trigger_time_async())}, sync={self.ib.REFCLK.SYNC_CTR}')
+                        self.logger.debug(f'{time.time() - t0}, {max_delay + 1}')
                         if time.time() - t0 > max_delay + 1:
-                            raise RuntimeError('Timout while waiting for the IRIG-B-based SYNC to complete')
+                            raise RuntimeError('Timeout while waiting for the IRIG-B-based SYNC to complete')
                         time.sleep(0.1)
                     time.sleep(0.1) # make sure the sync sequence has time to finish
                 elif self.sync_method in self.LOCAL_SYNC_METHODS:

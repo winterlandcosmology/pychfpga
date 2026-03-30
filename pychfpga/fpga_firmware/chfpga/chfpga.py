@@ -14,7 +14,7 @@ import time
 import os
 import pickle
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import struct
 from calendar import timegm
 from functools import wraps
@@ -2178,8 +2178,6 @@ class chFPGA(FPGAFirmware):
                 self.logger.debug(f'{self!r}: Waiting for valid IRIG-B time. (recent={ts.recent}, HMS valid={hms_valid}, day valid={day_valid})')
                 await asyncio.sleep(0.1)  # wait a bit before rechecking time
 
-
-
         # check if the time is valid
         if not noerror:
             if not hms_valid:
@@ -2195,6 +2193,7 @@ class chFPGA(FPGAFirmware):
             datetime(ts.y + 2000, 1, 1) +
             timedelta(days=ts.d - 1, hours=ts.h, minutes=ts.m,
                       seconds=ts.s + 1, microseconds=ts.ss // 100))
+        
         # compute a timestamp, one second in the future
         # unix timestamp = seconds since 1 Jan 1970 UTC
         timestamp = timegm((ts.y + 2000, 1, ts.d, ts.h, ts.m, ts.s + 1))
@@ -2203,7 +2202,7 @@ class chFPGA(FPGAFirmware):
         # provide (not necessarily to the nanosecond)
         ts.time = ts.nano / 1e9
         # Compute an modified time structure (a tuple) that contains the time
-        # elements including fractional nicroseconds
+        # elements including fractional microseconds
         tt = time.gmtime(timestamp)
         ts.time_struct = [tt.tm_year, tt.tm_mon, tt.tm_mday, tt.tm_hour,
                           tt.tm_min, tt.tm_sec, (ts.nano % 1000000000) / 1000.0]
@@ -2220,10 +2219,81 @@ class chFPGA(FPGAFirmware):
                            dt.second, (ts.nano2 % 1000000000) / 1000.0]
         # ts.event_ctr = e0
 
+        # Validate that the different ways of computing 
+        # the times agree with each other
         if not (ts.nano == ts.nano2 and
-                ts.time == ts.time2 and
-                ts.time_struct == ts.time_struct2):
+            ts.time == ts.time2 and
+            ts.time_struct == ts.time_struct2):
             self.logger.error("%r: IRIGB time computation error" % self)
+
+        # # Last thing: apply an offset to correct for GPS rollover time
+        # # if a given GPS receiver has not had its firmware updated.
+        # # The GPS rollover time is 1024 weeks. Recall that epoch 0 ns = Jan. 1 1970 UTC
+        # # Start by defining the GPS epoch, Jan. 6 1980 UTC, with respect to UNIX epoch as a datetime object
+        # gps_t0_datetime_utc = datetime(year = 1980, month = 1, day = 6, tzinfo = timezone.utc)
+
+        # # Next, add a timedelta of n*1024, where n is an integer referring to the epoch we are in (1980, 1999, 2019, ...) 
+        # epochs = np.arange(5) # brings us to July 7, 2058
+        # gps_epochs_t0_datetime = [gps_t0_datetime_utc + timedelta(weeks = int(n*1024)) for n in epochs] # GPS time 0 for each epoch, datetime object
+        # gps_epochs_t0_s = [int(gps_epochs_t0_datetime[n].timestamp()) for n in epochs] # GPS time 0 for each epoch, seconds
+        
+        # # Finally, check the system time, and apply the offset to bring the IRIG-B time into the correct epoch
+        # # First, get the GPS epoch index for the system by determining the last epoch where the system time 
+        # # is greater than the epoch t0
+        # system_gps_epoch = int(np.where([ts.system_time > gps_epochs_t0_s[n] for n in epochs])[0][-1]) 
+
+        # # Next, get the GPS epoch index for the GPS receiver
+        # gps_receiver_gps_epoch = int(np.where([dt.timestamp() > gps_epochs_t0_s[n] for n in epochs])[0][-1])
+
+        # if gps_receiver_gps_epoch != system_gps_epoch:
+        #     # Iterate through and update each attribute of _IrigTimestamp accordingly
+        #     n_epochs_to_add = system_gps_epoch - gps_receiver_gps_epoch 
+
+        #     self.logger.debug('Difference in GPS epoch detected between GPS receiver and system. Correction needed.')
+        #     self.logger.debug(f'GPS receiver time before correction: {dt}')
+        #     self.logger.debug(f'System time: {datetime.fromtimestamp(ts.system_time)}')
+        #     self.logger.debug(f'GPS receiver\'s GPS epoch is {gps_receiver_gps_epoch} (starting at {gps_epochs_t0_datetime[gps_receiver_gps_epoch]}), but system\'s GPS epoch is {system_gps_epoch} (starting at {gps_epochs_t0_datetime[system_gps_epoch]}). Adding {n_epochs_to_add*1024} weeks to IRIG-B time.')
+            
+        #     if n_epochs_to_add < 0:
+        #         raise NotImplementedError('GPS receivers time-traveled from the future to the present not supported.')
+
+        #     # Start with the datetime object, to which we can simply add a timedelta 
+        #     ts.datetime = dt = ts.datetime + timedelta(weeks = n_epochs_to_add*1024)
+
+        #     # Then, use the datetime object to recover year, month, day, etc.
+        #     ts.y = dt.year
+        #     ts.d = dt.day
+        #     ts.h = dt.hour
+        #     ts.m = dt.minute
+        #     ts.s = dt.second
+            
+        #     # ts.ss and ts.pps don't need to be updated, 
+        #     # since we're only adding a number of weeks
+        #     # ts.pps
+        #     # ts.sbs
+
+        #     ts.time = dt.timestamp()
+        #     ts.nano = int(ts.time*1e9)
+        #     ts.time_struct = [dt.year, dt.month, dt.day, dt.hour, dt.minute,
+        #                       dt.second, (ts.nano2 % 1000000000) / 1000.0]
+
+        #     # We can assign the second time values to the first,
+        #     # since we already checked that they were the same 
+        #     # before adding the GPS epoch offset
+        #     ts.time2 = ts.time
+        #     ts.nano2 = ts.nano
+        #     ts.time_struct2 = ts.time_struct
+            
+        #     # # "straight binary seconds" since 00:00 on the current day (0-86399,
+        #     # # not BCD). Not necessarily supported by the GPS.
+        #     # ts.sbs = (w0 >> 8) & ((1 << 18) - 1)
+        #     # ts.source = (w1 >> 30) & ((1 << 2) - 1)
+        #     # ts.recent = (w1 >> 29) & 1
+        #     # ts.system_time = time.time()
+        #     # ts.refclk_counter = await self.fpga_core_reg_read_async(self._IRIGB_REFCLK_SAMPLE)
+
+        #     self.logger.debug(f'GPS receiver time after correction: {dt}')
+            
         return ts
 
     async def set_irigb_trigger_time_async(self, datetime_=None, delay=None):
