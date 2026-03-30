@@ -128,7 +128,7 @@ class UCorn(MMI):
                      for n in range(number_of_packets)]
         
         # Set the playlist to send data
-        # self.set_playlist(playlist = playlist) # , sacrificial_bins = bin_map[np.arange(128)])
+        self.set_playlist(playlist = playlist) # , sacrificial_bins = bin_map[np.arange(128)])
 
         self.TX_RESET = 0 # take the module out of reset. Packet transmisison starts.
 
