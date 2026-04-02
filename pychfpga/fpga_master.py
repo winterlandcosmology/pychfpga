@@ -1171,8 +1171,12 @@ class FPGAMaster(object):
 
         self.log.info("Synchronizing the array...")
         self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% This is the last SYNC %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-        self.log.debug(**conf.fpga.sync_params)
-        ca.sync(**conf.fpga.sync_params)  # synchronize all the boards in the array
+        if conf.fpga.sync_params.enable:
+            # Use config params
+            ca.sync(**conf.fpga.sync_params)
+        else:
+            # Use default params
+            ca.sync()
         self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Last SYNC is done %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 
         # save the time of frame0 after sync
