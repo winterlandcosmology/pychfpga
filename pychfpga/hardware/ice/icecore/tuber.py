@@ -752,6 +752,16 @@ atexit.register(sync_wrap(TuberObject._tuber_close_client_sessions_async))
 # requesting tab completion is not re-entrant and there are already tasks on
 # on this loop when we call our first run_async(), which then patches the
 # event loop to be reentrant.
-print(f'Enabling nested event loop on current loop ID {id(asyncio.get_event_loop())}')
-nest_asyncio.apply()
+# print(f'Enabling nested event loop on current loop ID {id(asyncio.get_event_loop())}')
+# nest_asyncio.apply()
+
+try:
+    loop = asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+print(f'Enabling nested event loop on current loop ID {id(loop)}')
+nest_asyncio.apply(loop)
+
 # # vim: sts=4 ts=4 sw=4 tw=78 smarttab expandtab

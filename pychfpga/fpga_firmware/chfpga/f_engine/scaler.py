@@ -138,12 +138,24 @@ class SCALER(MMI):
         """
         Sets the scaler's digital gain table for the specified bank.
 
+        NOTE: if using the CRS platform with bitgrowth FFT, the gain_list must correspond to the frequency mapping within the FPGA. If your gains are ordered
+        in standard order, i.e., in increasing frequency order, you must first apply the "inverse" bin map, which translates the nominal frequency bin ordering
+        to that used within the FPGA. 
+        
+        Here is an example of how you can do this, assuming the frequency axis of your gain array is the last axis:
 
+            inv_bin_map = ca.ib[0].chan[0].FFT.get_bin_map(flatten = True, reverse = False) # get the inverse bin map
+            gain_inv = gain[..., inv_bin_map]
+
+        Then, you can set the gain table in the FPGA using
+
+            ca.ib[0].chan[0].SCALER.set_gain_table(gain_inv) # And include other arguments as needed
+    
         Parameters:
 
             gain_list: gains to set:
 
-                - if `gain_list` is a 1024-element list or ndarray, the numeric gains therein are
+                - if `gain_list` is an NBIN-element list or ndarray, the numeric gains therein are
                   applied to each bin.
 
                 - if `gains_list` is a scalar int, float or complex numbers, all bins are set to that
@@ -204,35 +216,28 @@ class SCALER(MMI):
 
             if log_gain is None: # use floating point gains
                 self.USE_FLOAT_GAINS = 1
-                # self.SHIFT_LEFT = 0
                 glog = (np.floor(np.log2(gains))-10).astype(np.int32).clip(0,63)  #
                 glog_common = int(min(glog).clip(0, 31))
                 self.SHIFT_LEFT = glog_common
                 glog -= glog_common
-                # print(f'pre-gains {gains=}\n{glog=}\n{glog_common=}\n{glog + glog_common=}\n{2.0**(glog + glog_common)=}')
                 gains /= 2.0**(glog + glog_common)
-                # print(f'glog_common={glog_common}, {glog=}')
-                # print(f'{glog_common=}\n{glog[0]=}\nglin[0]={gains[0]}')
                 if any(gains < 0) or any(gains >= 2**11):
                     raise ValueError('Floating point gain mantissa exceeds 2**11')
                 if any(glog < 0) or any(glog >31):
                     raise ValueError(f'Floating point gain exponent of {max(glog)} exceeds 31 even after removal of the common exponent of {glog_common}')
 
                 gains = (glog.astype(np.uint16) << 11) | gains.astype(np.uint16)
-                # print(f"Gains = {[f'{g:04x}' for g in gains[:10]]}")
 
             else: # use linear + log gains
                 self.USE_FLOAT_GAINS = 0
                 if any(gains < 0) or any(gains > 65535) or any(gains != gains.astype('<u2')):
                     raise ValueError('All gains must be integers between 0 and 65535')
 
-
-            self.cached_gain_table[bank] = gains
+            self.cached_gain_table[bank] = gains.astype(float)
             self.cached_gain_timestamp[bank] = time.time() if gain_timestamp is None else gain_timestamp
 
             gain_string = gains.astype('<i2').tobytes()
 
-        # page_table = np.zeros(512, np.int8)
         n_pages = len(gain_string) // 512
         for page in range(n_pages):  # there are 8 pages of coefficients per bank
             self.set_page(page + bank*n_pages)
@@ -247,11 +252,22 @@ class SCALER(MMI):
 
             bank (int): bank number for which the gain is requested
 
+            use_cache (bool): if True, the gain table will be returned from the cache if it exists, without reading from the FPGA. If False, the gain table will be read from the FPGA. 
+
+                NOTE: if the CRS platform with bitgrowth FFT is used, the gain cache will correspond to the frequency bin ordering of the FPGA, and will require the user to 
+                apply the bin mapping transformation from fft.py to recover the gains in standard frequency ordering. 
+
         Returns:
 
-            Gain table, as a list of self.fpga.NUMBER_OF_FREQUENCY_BINS values. If ``self.USE_COMPLEX_GAINS == True``, we
+            gain_table (np.array): an array of self.fpga.NUMBER_OF_FREQUENCY_BINS values. If ``self.USE_COMPLEX_GAINS == True``, we
             have complex values, where the real and imaginary parts are 16 bit integers. If ``self.USE_COMPLEX_GAINS == False``,
             we just have real gains.
+
+            If self.USE_FLOAT_GAINS == True, floating point gains have been enabled, and extra processing is applied such that the user
+            is returned an array of gain values which corresponds to the *full* gain for that frequency bin, including the mantissa, exponent, and
+            common exponent components. Further, the returned gain_table is in the standard frequency bin ordering, i.e., in increasing frequency
+            ordering, rather than the FPGA's internal ordering for the bitgrowth FFT.
+
         """
         if use_cache and bank in self.cached_gain_table:
             return self.cached_gain_table[bank]
@@ -270,6 +286,8 @@ class SCALER(MMI):
                     g_imag, g_real = struct.unpack('<hh', page_table[4 * ix: 4 * ix + 4])
                     gain_table.append(g_real + 1j * g_imag)  # [bin] = g_real +1j*g_imag
 
+            gain_table = np.array(gain_table)
+
         else: # if not self.USE_COMPLEX_GAINS
             pages_per_bank = 32
             for page in range(32):  # there are 32 pages of coefficients per bank
@@ -284,6 +302,17 @@ class SCALER(MMI):
                 # for ix in range(256):  # there are 256 coefficients per page (2 bytes per coeff = 512 bytes total per page)
                 #     g = struct.unpack('<hh', page_table[2 * ix: 2 * ix + 2])
                 gain_table.append(page_table.tolist())
+
+        if self.USE_FLOAT_GAINS:
+            # Additional processing to return floating point gains as a single value for each frequency bin
+            gain_table = (np.array(gain_table) & 0xFFFF).flatten() # Full 16-bit value, meaningless without being processed
+            gain_mant = (gain_table & 0x7FF).astype(float) # Lower 11 bits, linear (mantissa) component
+            gain_exp = ((gain_table >> 11) + self.SHIFT_LEFT).astype(float) # Upper 5 bits, logarithmic (exponential) component, plus common log component
+            gain_table = gain_mant * 2**gain_exp # Full gain can be expressed as a single value 
+
+            # Get the bin map and apply to the gain_table (can be recovered from any channelizer)
+            bin_map = self.fpga.chan[0].FFT.get_bin_map(flatten=True, reverse=True)
+            gain_table = gain_table[bin_map]
 
         return gain_table
 

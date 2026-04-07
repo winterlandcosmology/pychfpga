@@ -48,6 +48,7 @@ class FFT(MMI):
     RESET_MON         = BitField(STATUS, 4, 5, doc="Monitors the reset line")
     def __init__(self, *, router, router_port, instance_number):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.config_id = 0  # Increases every time a configuration change is made
 
     def reset(self):
         self.pulse_bit('RESET')

@@ -1796,7 +1796,7 @@ class FPGAArray(object):
             self.ib.CROSSBAR3.reset_stats()
             # Sync was performed by init_corner_turn()
 
-        elif mode in ('corr16', 'corr8', 'corr32', 'corr4'):
+        elif mode in ('corr4', 'corr8', 'corr16', 'corr32', 'corr64'):
             #if not all(self.ib.CORR):
             #    raise RuntimeError(f'Mode {mode} requires all boards to have a firmware correlator engine')
             bin_map = self.get_corner_turn_bin_map(
@@ -2876,8 +2876,9 @@ class FPGAArray(object):
                     # for _ in range(30):
                     while any(self.ib.is_irigb_before_trigger_time_async()):
                         #     print(f'trig={any(self.ib.is_irigb_before_trigger_time_async())}, sync={self.ib.REFCLK.SYNC_CTR}')
+                        self.logger.debug(f'{time.time() - t0}, {max_delay + 1}')
                         if time.time() - t0 > max_delay + 1:
-                            raise RuntimeError('Timout while waiting for the IRIG-B-based SYNC to complete')
+                            raise RuntimeError('Timeout while waiting for the IRIG-B-based SYNC to complete')
                         time.sleep(0.1)
                     time.sleep(0.1) # make sure the sync sequence has time to finish
                 elif self.sync_method in self.LOCAL_SYNC_METHODS:
@@ -2943,7 +2944,7 @@ class FPGAArray(object):
         if sync:
             self.sync()
 
-    async def set_channelizers_async(channels=None, local_sync=None, sync=True, **kwargs):
+    async def set_channelizers_async(self, channels=None, local_sync=None, sync=True, **kwargs):
         """
         Configures all channelizers in the array.
 
@@ -3091,7 +3092,7 @@ class FPGAArray(object):
             socket.socket(): a UDP socket.
         """
         # get socket from one board in the array
-        sock = self.ib[0].get_data_socket(port_number=None)
+        sock = self.ib[0].get_data_socket(port_number=port_number)
         for b in self.ib:
             b.set_data_socket(sock)
         return sock
@@ -3172,16 +3173,18 @@ class FPGAArray(object):
             UCorrFrameReceiver instance
         """
 
-        def select_func():
+        def select_func(cr):
             for b in self.ib:
                 b.CORR.select()
-        def config_func():
-            return self.ib[0].CORR.get_config()
 
+            corr_config = self.ib[0].CORR.get_config()
+            cr.update_config(corr_config)
+
+        corr_config = self.ib[0].CORR.get_config()
 
         if not self.corr_recv:
             pr = self.get_packet_receiver(port_number=port_number)
-            self.corr_recv = self.ib[0].CORR.get_corr_receiver(packet_receiver=pr, config=config_func(), select_func=select_func)
+            self.corr_recv = self.ib[0].CORR.get_corr_receiver(packet_receiver=pr, config=corr_config, pre_func=select_func)
         return self.corr_recv
 
 
@@ -4569,9 +4572,10 @@ class FPGAArray(object):
         """
 
         for ib in self.ib:
-            for cb in [ib.CROSSBAR, ib.CROSSBAR2, ib.CROSSBAR3]:
-                if cb:  # make sure the crossbar exists in this firmware
-                    cb.reset_stats()
+            if ib.CROSSBAR & ib.CROSSBAR2 & ib.CROSSBAR3: # make sure the crossbar exists in this firmware
+                for cb in [ib.CROSSBAR, ib.CROSSBAR2, ib.CROSSBAR3]:
+                    if cb: 
+                        cb.reset_stats()
 
     def reset_bp_shuffle_stats(self):
         """ Reset error statistics for the backplane shuffle.
@@ -5037,13 +5041,13 @@ class FPGAArray(object):
             A :class:`Metrics` object.
         """
 
-        # IceCrate metrics
+        # Crate metrics
         self.logger.debug(f'{self!r}: Getting Motherboard backplane hardware metrics')
         for ic in self.ic:
             slot, ib = list(ic.slot.items())[0]
             metrics += await ib.get_backplane_metrics_async()
 
-        # IceBoard metrics
+        # Motherboard metrics
         self.logger.debug(f'{self!r}: Getting Motherboard temperature & power supply metrics')
         m = await asyncio.gather(*[ib.get_metrics_async() for ib in self.ib])
         metrics += m
@@ -5061,13 +5065,14 @@ class FPGAArray(object):
             A :class:`Metrics` object.
         """
 
-        # Shuffle status
         self.logger.debug(f'{self!r}: Getting corner-turn links metrics (over FPGA UDP link)')
         metrics += await asyncio.gather(*[ib.get_bp_shuffle_metrics_async(reset=reset) for ib in self.ib])
         self.logger.debug(f'{self!r}: Getting corner-turn crossbars metrics (over FPGA UDP link)')
         metrics += await asyncio.gather(*[ib.get_crossbar_metrics_async(reset=False) for ib in self.ib])
-        self.logger.debug(f'{self!r}: Getting channelizer metrics (over FPGA UDP link)')
-        metrics += await asyncio.gather(*[ib.get_channelizer_metrics_async(reset=reset) for ib in self.ib])
+        # self.logger.debug(f'{self!r}: Getting channelizer metrics (over FPGA UDP link)')
+        # metrics += await asyncio.gather(*[ib.get_channelizer_metrics_async(reset=reset) for ib in self.ib])
+        self.logger.debug(f'{self!r}: Getting FPGA core temperature metrics (over FPGA UDP link)')
+        metrics += await asyncio.gather(*[ib.get_fpga_core_temperature_metrics() for ib in self.ib])
         self.logger.debug(f'{self!r}: Finished gathering FPGA/backplane metrics')
 
         # Backplane GTX
