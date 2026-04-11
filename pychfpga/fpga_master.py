@@ -1716,8 +1716,8 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
 
         self.fpga_master = FPGAMasterClass()
         self.future = None
-        self.metrics = Metrics()
-        self.last_metrics_client = None
+        # latest_only=True: keep only the most recent value per metric+labels.
+        self.metrics = Metrics(latest_only=True)
         self.metrics_request_last_number_of_metrics = 0
         self.metrics_requests = 0
 
@@ -1828,6 +1828,26 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             result['start_result'] = None
         return result
 
+    @endpoint('config')
+    async def config(self):
+        """ Return the full configuration currently loaded in the FPGAMaster.
+
+        The configuration is set by the /start endpoint. If /start has not
+        yet been called, the returned value will be None.
+
+        Returns:
+
+            dict: The configuration that was passed to /start (served up as json).
+            None if no configuration is currently loaded.
+
+        Example:
+
+            curl http://localhost:54321/config
+        """
+        if self.fpga_master.config is None:
+            return None
+        return self.fpga_master.config.as_dict()
+
     @endpoint('stop')
     async def stop(self):
         #self.start_time = None
@@ -1912,8 +1932,8 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             return dict(message="FPGA not ready")
         return await self.fpga_master.get_noise_injection_status(name)
 
-    @endpoint('get-current-gain-file')
-    async def get_current_gain_file(self):
+    @endpoint('get-current-gain-filename')
+    async def get_current_gain_filename(self):
         """ REST endpoint to return the absolute path of the current digital gains file.
 
         Returns: 
@@ -1925,7 +1945,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
 
         Example:
 
-            curl http://localhost:54321/current-gain-file
+            curl http://localhost:54321/get-current-gain-filename
         """
         if not (self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas):
             self.log.warning(f"{self!r}: FPGA array is not ready to accept command")
@@ -1944,7 +1964,60 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         except Exception as e:
             self.log.error(f'{self!r}: Error recovering current digital gains file path: {e}')
             return {}
-    
+
+    @endpoint('get-current-gain-file')
+    async def get_current_gain_file(self):
+        """ REST endpoint that returns the current digital gains .h5 file over HTTP.
+
+        Returns the file contents themselves (not just the path). The original
+        filename is reported in the Content-Disposition header so clients using
+        `curl -OJ` (or equivalent) will save it under the same name.
+
+        Responses:
+
+            200 - application/octet-stream, body is the raw .h5 file bytes.
+                  Content-Disposition: attachment; filename="<basename>"
+
+            503 - FPGA array is not ready (state != 'on'). Body is a short
+                  plain-text message.
+
+            404 - No current gain file is set, or the referenced path does
+                  not exist on disk. Body is a short plain-text message.
+
+        Example:
+
+            curl -OJ http://localhost:54321/get-current-gain-file
+
+        Note:
+
+            The gain file is written to by the server as new gains are
+            loaded. A download taken concurrently with a write may observe
+            partially-flushed HDF5 state.
+        """
+        if not (self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas):
+            self.log.warning(f"{self!r}: FPGA array is not ready to accept command")
+            return aiohttp.web.Response(status=503, text='FPGA array is not ready')
+
+        path = self.fpga_master.gains_filename
+        if not path:
+            return aiohttp.web.Response(
+                status=404, text='No current gain file is set')
+        if not os.path.isfile(path):
+            self.log.error(f"{self!r}: Current gain file does not exist on disk: {path}")
+            return aiohttp.web.Response(
+                status=404, text=f'Current gain file does not exist on disk: {path}')
+
+        self.log.info(f"{self!r}: Serving gain file {path}")
+        with open(path, 'rb') as h:
+            body = h.read()
+        return aiohttp.web.Response(
+            body=body,
+            content_type='application/octet-stream',
+            headers={
+                'Content-Disposition': f'attachment; filename="{os.path.basename(path)}"',
+            },
+        )
+
     @endpoint('compute-gains')
     async def compute_gains(self, **params):
         """ REST endpoint to compute gains for desired channels.
@@ -2461,50 +2534,55 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             self.metrics.add('fpga_noise_injection_pwm_period', value=status['pwm_period'], ni_name=ni_name)
 
     @endpoint('get-monitoring-data')
-    async def get_monitoring_data(self, request):
-        """
-        Parameters:
-
-            request (aiohttp.web.Request): request object, automatically inserted by the call handler.
+    async def get_monitoring_data(self):
+        """ REST endpoint that returns the current metric values as a JSON dict.
 
         Returns:
 
-            Compressed set of metrics.
+            dict keyed by metric name, each value shaped as::
 
+                {
+                    "type": str or None,
+                    "doc":  str or None,
+                    "entries": [
+                        {"labels": {...}, "time": int_ms, "value": number},
+                        ...
+                    ],
+                }
+
+        Example:
+
+            curl http://localhost:54321/get-monitoring-data
         """
-        self.metrics_requests +=1
-        try:
-            t0 = time.time()
-            # metrics = self.metrics #  Metrics()
-            number_of_metrics = len(self.metrics)
-            # get IP address of the remote client initialing the HTTP request
-            client_ip = request.remote
-            self.log.debug(f'{self!r}: Received metrics request from {client_ip}')
-            if self.last_metrics_client and client_ip != self.last_metrics_client:
-                self.log.warning(
-                    f'{self!r}: A new client at {client_ip} is pulling metrics '
-                    f'from this server. Previous client was {self.last_metrics_client}')
-            self.last_metrics_client = client_ip
+        self.metrics_requests += 1
+        t0 = time.time()
 
-            metrics = self.metrics.pop()
-            response = aiohttp.web.Response(
-                body=metrics.get_gzip(),
-                headers={'Content-Encoding': 'gzip'})
+        snapshot = {}
+        for metric_name, metric in self.metrics.metrics.items():
+            entries = []
+            for label_set, time_entries in metric['entries'].items():
+                if not time_entries:
+                    continue
+                latest_time = max(time_entries)
+                entries.append(dict(
+                    labels=dict(label_set),
+                    time=latest_time,
+                    value=time_entries[latest_time],
+                ))
+            snapshot[metric_name] = dict(
+                type=metric['type'],
+                doc=metric['doc'],
+                entries=entries,
+            )
 
-            self.log.debug(f'{self!r}: Returning {number_of_metrics} FPGA metrics '
-                          f'(compression ratio {metrics.last_compression_ratio * 100:.1f}%)')
+        self.metrics_request_last_number_of_metrics = sum(
+            len(m['entries']) for m in snapshot.values())
+        self.log.debug(
+            f'{self!r}: Returning {len(snapshot)} metrics '
+            f'({self.metrics_request_last_number_of_metrics} entries) '
+            f'built in {time.time() - t0:.3f}s')
 
-            # handler.write(self.metrics.pop().get_gzip())
-            self.log.debug(
-                f'{self!r}: Metrics request took {time.time()-t0:.3f} seconds to execute')
-
-            self.metrics_request_last_number_of_metrics = number_of_metrics
-
-            return response
-
-        except Exception as e:
-            self.log.error(f'{self!r}: Exception in get-monitoring-data. Error is: {e!r}')
-            raise
+        return snapshot
 
 
     @endpoint('get-hw-map')
@@ -2794,6 +2872,16 @@ class FPGAMasterAsyncRESTClient(AsyncRESTClient):
         result = await self.get('status')
         return result
 
+    async def config(self):
+        """
+        Get the full configuration currently loaded in fpga_master.
+
+        Returns None if no configuration has been loaded (i.e. the server
+        is running but /start has not yet been called).
+        """
+        result = await self.get('config')
+        return result
+
     async def stop(self):
         """
         Stop fpga_master.
@@ -2801,11 +2889,11 @@ class FPGAMasterAsyncRESTClient(AsyncRESTClient):
         r = await self.get('stop')
         self.print_result(r)
 
-    async def get_current_gain_file(self):
+    async def get_current_gain_filename(self):
         """
         Get information about the current digital gains file.
         """
-        current_gain_info = await self.get('current-gain-file')
+        current_gain_info = await self.get('get-current-gain-filename')
         return current_gain_info
 
     async def get_frequency_map(self):
