@@ -202,7 +202,7 @@ class SCALER(MMI):
             if len(gains) != total_bins:
                 raise ValueError(f'Either a scalar gain or a {total_bins} element gain vector must be provided')
 
-            if log_gain is None: # use floating point gains
+            if log_gain is None or log_gain < 0: # use floating point gains
                 self.USE_FLOAT_GAINS = 1
                 # self.SHIFT_LEFT = 0
                 glog = (np.floor(np.log2(gains))-10).astype(np.int32).clip(0,63)  #
