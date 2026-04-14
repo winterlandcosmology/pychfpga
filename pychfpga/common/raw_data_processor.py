@@ -339,7 +339,7 @@ class RawDataProcessor(object):
 
         bix_mask = ((self.buf_cookie & self.PACKET_COOKIE_MASK) == self.PACKET_COOKIE) & (self.pr.pkt_len == self.PACKET_SIZE)
         bix = np.flatnonzero(bix_mask)
-
+        print(f'{bix_mask=}\n{bix=}')
         if not bix.size:
             return
 
@@ -393,8 +393,8 @@ class RawDataProcessor(object):
             return
 
         self.pkt_off[bix_mask] = (
-            self.pkt_frame[bix_mask] * self.BYTES_PER_FRAME
-            + self.pkt_subframe[bix_mask] * self.BYTES_PER_SUBFRAME
+            self.pkt_frame[bix_mask].astype(self.pkt_off.dtype) * self.BYTES_PER_FRAME
+            + self.pkt_subframe[bix_mask].astype(self.pkt_off.dtype) * self.BYTES_PER_SUBFRAME
         ).astype(self.pkt_off.dtype, copy=False)
 
         ts_vals = self.pkt_ts[bix_mask]
