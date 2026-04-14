@@ -348,7 +348,7 @@ class FPGAMmi(BSB_MMI):
     def broadcast_read(self, addr, type=np.dtype('>u8'), timeout=.5):
         """
         Reads memory-mapped object from multiple FPGAs through a broadcast
-        request.
+        request. For this method to work, `self` must be a FPGAMmi object that has been created with the broadcast IP address and port number.
 
         Returns a array of type 'type' containing the values that were
         returned by all FPGAs.
@@ -400,7 +400,7 @@ class FPGAMmi(BSB_MMI):
 
 
 
-def discover_fpgas(interface_ip_addr=None, source_subarrays=[0], timeout=0.1):
+def discover_fpgas(interface_ip_addr=None, timeout=0.1):
     """
     Get the serial numbers of all FPGA directly connected on the network (i.e.
     not accessed through the ARM processor)
@@ -417,25 +417,16 @@ def discover_fpgas(interface_ip_addr=None, source_subarrays=[0], timeout=0.1):
 
     logger = logging.getLogger(__name__)
 
-    if isinstance(source_subarrays, int):
-        source_subarrays = [source_subarrays]
+    logger.debug(f'Searching ICEBoards through interface {interface_ip_addr}')
 
-    serial_list = []
-    #  for if_addr in interface_ip:
-    for subarray in source_subarrays:
-        logger.debug(
-            'Searching ICEBoards on subarray %i through interface %s' %
-            (subarray, interface_ip_addr))
+    with FPGAMmi(
+            FPGAMmi.BROADCAST_IP_ADDR,
+            FPGAMmi._BROADCAST_BASE_PORT,
+            interface_ip_addr=interface_ip_addr) as mmi:
+        mmi.flush()
+        serials = mmi.broadcast_read(
+            chFPGA._FPGA_SERIAL_NUMBER_ADDR,
+            type=np.dtype('>u8'),
+            timeout=timeout)
 
-        with FPGAMmi(
-                FPGAMmi.BROADCAST_IP_ADDR,
-                FPGAMmi._BROADCAST_BASE_PORT + subarray,
-                interface_ip_addr=interface_ip_addr) as mmi:
-            mmi.flush()
-            serials = mmi.broadcast_read(
-                chFPGA._FPGA_SERIAL_NUMBER_ADDR,
-                type=np.dtype('>u8'),
-                timeout=timeout)
-        serial_list += serials
-
-    return serial_list
+    return serials
