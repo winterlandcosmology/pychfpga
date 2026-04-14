@@ -55,11 +55,17 @@ class UCAP(MMI):
     def init(self):
         """ Initializes UCAP module"""
         slot = self.fpga.slot
-        self.USER_STREAM_ID = slot-1 if slot else 0
+        crate = self.fpga.mb.get_crate_number(default=0)
+        self.USER_STREAM_ID = (crate << 4) | (slot-1 if slot else 0)
 
     DATA_SOURCE_TABLE = {
         'funcgen': 0,
         'scaler': 255} # 255: set data source for all 8 channels (11111111 = 255 for unsigned 8-bit bin)
+
+    def get_stream_ids(self):
+        """ Return the stream_ids of all channels.
+        """
+        return [self.USER_STREAM_ID<<4 + ch for ch in range(8)]
 
     def set_data_capture(self, source, mode=0, channels=None, periods=[195312,195312], select=False):
         """ Selects the source of the data to be captured (FUNCGEN or SCALER). Optionally enables streaming the captured data instead of the correlator data.
