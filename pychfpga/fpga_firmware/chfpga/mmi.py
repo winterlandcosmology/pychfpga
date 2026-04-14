@@ -286,7 +286,7 @@ class MMI(object):
         """
         if not 0 <= 2 * addr <= self.address_max:
             raise RuntimeError('%r: Invalid DRP address %i' % (self, addr))
-        return self.read(_RAM_BASE_ADDR + 2 * addr, type=np.dtype('<u2'), length=1)[0]
+        return int(self.read(_RAM_BASE_ADDR + 2 * addr, type=np.dtype('<u2'), length=1)[0])
 
     def read_ram(self, addr, type, length, **kwargs):
         """
