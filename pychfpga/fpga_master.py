@@ -2376,7 +2376,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             # Get iceboards and mezzanines
             for ib in self.fpga_master.fpgas.ib:
                 slot = ib.slot or 1
-                crate = ib.crate.crate_number or 0 if ib.crate else 0
+                crate = ib.get_crate_number(default=0)
                 hwm['FCC%02d%02d' % (crate, slot-1)] = (
                     [f'{ib.part_number}-{ib.serial}'] +
                     [f'{m.part_number}-{m.serial}' for m in ib.mezzanine.values()]
@@ -2550,7 +2550,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
                 ib.BP_SHUFFLE.set_tx_power(int(power), link_type)
                 self.log.info(
                     f'{self!r}: Set gtx power level of '
-                    f'FCC{ib.crate.crate_number:02d}{ib.slot-1:02d} (SN{ib.serial}) to {power}.')
+                    f'FCC{ib.get_crate_number(default=0):02d}{ib.slot-1:02d} (SN{ib.serial}) to {power}.')
 
             else:
                 self.fpga_master.fpgas.ib.BP_SHUFFLE.set_tx_power(int(power), link_type)

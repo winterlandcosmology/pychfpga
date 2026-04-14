@@ -205,7 +205,7 @@ async def mdns_discover(
                 # Add the backplane if it does not already exist
                 if bp_part_number and bp_serial:
                     bp_cls = Crate.get_class_by_ipmi_part_number(bp_part_number)
-                    crate_number = ib_obj.crate.crate_number if ib_obj.crate else None
+                    crate_number = ib_obj.get_crate_number()
                     bp_obj = bp_cls.get_unique_instance(new_class=bp_cls, serial=bp_serial, crate_number=crate_number)
                     ib_obj.update_instance(crate=bp_obj, slot=slot)
                     for tib in expected_ics:

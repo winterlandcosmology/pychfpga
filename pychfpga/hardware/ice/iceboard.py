@@ -515,7 +515,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
                 f"with part number '{part_number}'")
 
         if icecrate_class and update:
-            crate_number = self.crate.crate_number if self.crate else None
+            crate_number = self.get_crate_number()
             crate = Crate.get_unique_instance(new_class=icecrate_class, serial=serial, crate_number=crate_number)
             self.update_instance(crate=crate)  # update crate info and repr
             self.logger.debug(f"{self} now has crate {self.crate}")
@@ -680,7 +680,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         """
 
         info = dict()
-        crate_number = self.crate.crate_number if self.crate else None
+        crate_number = self.get_crate_number()
         crate_id = self.crate.get_string_id() if self.crate else None
         metrics = Metrics(crate_number=crate_number, crate_id=crate_id, type='GAUGE')
 

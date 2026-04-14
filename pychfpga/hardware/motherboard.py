@@ -315,8 +315,7 @@ class Motherboard(HardwareMap):
         hostname = hostname or self.hostname
         slot = slot if slot is not None else self.slot
         subarray = subarray if subarray is not None else self.subarray
-        crate_number = (crate_number if crate_number is not None
-                        else self.crate.crate_number if self.crate else None)
+        crate_number = self.get_crate_number()
         extra_args = {**self.extra_args, **kwargs}
         if new_class and self.__class__ is not new_class:
             self.logger.debug(f"update_instance: Creating new instance with {new_class.__name__}(serial={serial}, hostname={hostname}, slot={slot}, subarray={subarray}, **{extra_args})")
@@ -359,6 +358,28 @@ class Motherboard(HardwareMap):
     # *************************
     # Board identification
     # *************************
+
+    def get_crate_number(self, default=None):
+        """Return the numeric crate index for this board, or ``default`` if unknown.
+
+        The value comes from the attached :class:`Crate` instance (``self.crate.crate_number``).
+        If there is no crate, or the crate has no assigned number (``None``), this method
+        returns ``default``. That unifies the two cases so callers do not repeat
+        ``self.crate and self.crate.crate_number is not None`` checks.
+
+        Parameters:
+
+            default: Value to return when there is no :attr:`crate` or when
+                ``crate.crate_number`` is ``None``. Common choices are ``None`` (unknown /
+                omit from labels) or ``0`` (integer stream IDs, sorting keys).
+
+        Returns:
+
+            The configured crate number (typically ``int``), or ``default``.
+        """
+        if not self.crate or self.crate.crate_number is None:
+            return default
+        return self.crate.crate_number
 
     def get_id(self, lane=None, default_crate=None, default_slot=None, numeric_only=False):
         """ Returns a (crate, slot) tuple representing a unique IceBoard ID,
@@ -439,10 +460,10 @@ class Motherboard(HardwareMap):
 
         """
         if self.crate:  # if there is a crate/backplane, do not allow empty crate field but allow empty slot.
-            crate_number = self.crate.crate_number
+            crate_number = self.get_crate_number()
             if crate_number is None:  # if there is no valid crate number
                 if numeric_only:
-                    raise RuntimeError('The crate %s does not have a valid crate number' % self.crate)
+                    raise RuntimeError(f'The crate {self.crate} does not have a valid crate number')
                 crate_number = default_crate if default_crate is not None else self.crate.get_string_id()
 
             if self.slot:  # if there is a valid slot (not 0 or None)
@@ -493,8 +514,9 @@ class Motherboard(HardwareMap):
             - id=140529531550992 # nothing, last resort
 
         """
-        if self.crate and self.crate.crate_number is not None and self.slot:
-            return f"({self.crate.crate_number},{self.slot-1})"
+        cn = self.get_crate_number()
+        if self.crate and cn is not None and self.slot:
+            return f"({cn},{self.slot-1})"
         if self.crate and self.crate.part_number and self.crate.serial and self.slot:
             return f"({self.crate.part_number}_SN{self.crate.serial},{self.slot-1})"
         elif self.serial:
@@ -602,7 +624,7 @@ class Motherboard(HardwareMap):
             slot=(self.slot or 0) - 1,
             id=self.get_string_id(),
             crate_id=self.crate.get_string_id() if self.crate else None,
-            crate_number=self.crate.crate_number if self.crate else None)
+            crate_number=self.get_crate_number())
 
         return metrics
 
@@ -615,7 +637,7 @@ class Motherboard(HardwareMap):
         metrics = Metrics(
             type='GAUGE',
             crate_id=self.crate.get_string_id() if self.crate else None,
-            crate_number=self.crate.crate_number if self.crate else None)
+            crate_number=self.get_crate_number())
 
         return metrics
 

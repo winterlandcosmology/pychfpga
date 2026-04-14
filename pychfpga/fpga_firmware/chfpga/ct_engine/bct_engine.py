@@ -474,7 +474,7 @@ class BCTEngine(MMIRouter):
             # Bypassed. No channel reordering.
             cb3_lane_map = list(range(8))
             cb3_bypass = True
-            crate_number = self.crate.crate_number or 0 if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             cb3_bin_select_map = [[]] * number_of_cb3_bin_sel
 
             cb3_output_bins = 0  # debug
@@ -533,7 +533,7 @@ class BCTEngine(MMIRouter):
             cb3_lane_map = list(range(8))
             cb3_bin_select_map = []
             cb3_bypass = True
-            crate_number = self.crate.crate_number if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             stream_type = 0
 
         elif mode in ('shuffle16', 'chord16'):
@@ -624,7 +624,7 @@ class BCTEngine(MMIRouter):
             cb2_output_data_flags_words_per_bin = cb2_input_data_flags_words_per_bin
             cb2_output_frame_flags_words_per_frame = cb2_input_frame_flags_words_per_frame
 
-            crate_number = self.crate.crate_number or 0 if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             stream_type = 1
 
             #################################
@@ -745,7 +745,7 @@ class BCTEngine(MMIRouter):
             cb2_output_data_flags_words_per_bin = cb2_input_data_flags_words_per_bin
             cb2_output_frame_flags_words_per_frame = cb2_input_frame_flags_words_per_frame
 
-            crate_number = self.crate.crate_number or 0 if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             stream_type = 1
 
             #################################
@@ -918,7 +918,7 @@ class BCTEngine(MMIRouter):
                 cb2_input_frame_flags_words_per_frame * cb2_input_lanes_per_output_lane)
 
             cb2_output_bins = cb2_bins
-            crate_number = (self.crate.crate_number or 0) if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             stream_type = 2
 
             #################################
@@ -1059,7 +1059,7 @@ class BCTEngine(MMIRouter):
             # CB2 ALIGN
             # cb2_timeout_period = 0
 
-            crate_number = (self.crate.crate_number or 0) if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             stream_type = 3  # crossbar 3-level data
 
             # Input packet geometry
@@ -1320,7 +1320,7 @@ class BCTEngine(MMIRouter):
             #################################
             crate_shuffle_bypass = 1
 
-            crate_number = self.crate.crate_number if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             stream_type = 4
 
             cb2_input_bins = cb1_bins

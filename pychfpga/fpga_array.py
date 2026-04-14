@@ -730,7 +730,7 @@ class FPGAArray(object):
                     else:
                         missing_boards.append(
                             f"{ib.hostname} (SN{ib.serial or '????'}, "
-                            f"({ib.crate.crate_number if ib.crate else '?'},{ib.slot - 1 if ib.slot else '?'})")
+                            f"({ib.get_crate_number(default='?')},{ib.slot - 1 if ib.slot else '?'})")
                         self.logger.debug(f'{self!r}: Deleting {ib} from the YAML hardware map')
                         ib.delete_instance()
         else:
@@ -1028,7 +1028,7 @@ class FPGAArray(object):
 
         # Query the hardware map for all iceboards and icecrates
         # use outerjoin in case there is no crate
-        self.ib = sorted(self.hwm, key=lambda i: (i.crate.crate_number or 0 if i.crate else 0, i.slot or 0))
+        self.ib = sorted(self.hwm, key=lambda i: (i.get_crate_number(default=0), i.slot or 0))
         self.ic = sorted({i.crate for i in self.hwm if i.crate and i.crate.part_number},
                          key=lambda c: c.crate_number or 0)
 
@@ -1043,7 +1043,7 @@ class FPGAArray(object):
         self.logger.debug(f'New HWM={self.hwm}')
         for ib in self.hwm:
             crate_info = (f"{ib.crate}(serial={ib.crate.serial}, "
-                          f"crate_number={ib.crate.crate_number})"
+                          f"crate_number={ib.get_crate_number()})"
                           if ib.crate else None)
             self.logger.debug(f"{ib}, crate={crate_info}")
 

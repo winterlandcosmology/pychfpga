@@ -534,14 +534,14 @@ class chFPGA(FPGAFirmware):
         # Compute the local port number if requested (self.local_control_port_number
         # is None) and if possible (there is a slot and crate number)
         if self.local_control_port_number is None:
-            if not self.slot or not self.crate or self.crate.crate_number is None:
+            if not self.slot or self.mb.get_crate_number() is None:
                 self.local_control_port_number = 0
                 self.logger.debug(
                     f'{self!r}: Cannot use slot/crate_number-based UDP port number '
                     f'for UDP control channel. There is no slot or crate_number'
                     f' info. Using OS-assigned random port')
             else:
-                self.local_control_port_number = self._FPGA_CONTROL_BASE_PORT + 16*self.crate.crate_number + (self.slot-1)
+                self.local_control_port_number = self._FPGA_CONTROL_BASE_PORT + 16*self.mb.get_crate_number(0) + (self.slot-1)
                 # self.logger.info('%r: Replies will be sent to %s:%i'
                 #                  % (self, self.interface_ip_addr, self.local_control_port_number))
 
@@ -1482,7 +1482,7 @@ class chFPGA(FPGAFirmware):
             slot=(self.slot or 0) - 1,
             id=self.get_string_id(),
             crate_id=self.crate.get_string_id() if self.crate else None,
-            crate_number=self.crate.crate_number if self.crate else None)
+            crate_number=self.mb.get_crate_number())
 
         try:
             # await self.check_command_count_async(reset=True)
@@ -5400,7 +5400,7 @@ class chFPGA(FPGAFirmware):
             slot=(self.slot or 0) - 1,
             id=self.get_string_id(),
             crate_id=self.crate.get_string_id() if self.crate else None,
-            crate_number=self.crate.crate_number if self.crate else None)
+            crate_number=self.mb.get_crate_number())
 
         if not self.is_open():
             return metrics
