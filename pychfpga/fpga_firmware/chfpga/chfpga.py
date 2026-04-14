@@ -2816,8 +2816,13 @@ class chFPGA(FPGAFirmware):
 
         if channels is None:
             channels = self.get_channels()
-        return [self.chan[ch].PROBER.get_stream_id() for ch in channels]
-
+        if self.CAPTURE_TYPE == 'UCAP':
+            ucap_stream_ids = self.UCAP.get_stream_ids()
+            return [ucap_stream_ids[ch] for ch in channels] # only return stream IDs of specified channels
+        elif self.CAPTURE_TYPE == 'PROBER':
+            return [self.chan[ch].PROBER.get_stream_id() for ch in channels]
+        else:
+            raise ValueError(f"Invalid capture type: {self.CAPTURE_TYPE}")
     def get_stream_id(self, channel):
         """ Return the stream_id of a specified channel.
 
@@ -2825,7 +2830,12 @@ class chFPGA(FPGAFirmware):
             int: the stream IDs
         """
 
-        return self.chan[channel].PROBER.get_stream_id()
+        if self.CAPTURE_TYPE == 'UCAP':
+            return self.UCAP.get_stream_ids()[channel]
+        elif self.CAPTURE_TYPE == 'PROBER':
+            return self.chan[channel].PROBER.get_stream_id()
+        else:
+            raise ValueError(f"Invalid capture type: {self.CAPTURE_TYPE}")
 
     def get_stream_id_map(self):
         """ Return the stream_ids of every channel of the board, indexed by channel_id.
@@ -2836,7 +2846,13 @@ class chFPGA(FPGAFirmware):
             tuple.
         """
 
-        return {self.get_id(ch): chan.PROBER.get_stream_id() for ch, chan in self.chan.items()}
+        if self.CAPTURE_TYPE == 'UCAP':
+            ucap_stream_ids = self.UCAP.get_stream_ids()
+            return {self.get_id(ch): ucap_stream_ids[ch] for ch in self.chan}
+        elif self.CAPTURE_TYPE == 'PROBER':
+            return {self.get_id(ch): chan.PROBER.get_stream_id() for ch, chan in self.chan.items()}
+        else:
+            raise ValueError(f"Invalid capture type: {self.CAPTURE_TYPE}")
 
 
 
