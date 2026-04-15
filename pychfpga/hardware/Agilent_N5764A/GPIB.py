@@ -48,7 +48,7 @@ class GPIB(object):
                 if interface == 'dummy':
                         print("Using dummy instrument")
                 elif interface == 'lan':
-                        print("Initializing direct LAN Connection at IP address %s and GPIB address %i..." % (ip_addr, gpib_addr))
+                        print(f"Initializing direct LAN Connection at IP address {ip_addr} and GPIB address {int(gpib_addr)}...")
                         self.use_prologix = False
                         self.ip_addr = ip_addr
                         self.ip_port = ip_port
@@ -56,7 +56,7 @@ class GPIB(object):
                         self.sock.settimeout(timeout)
                         self.sock.connect((ip_addr, ip_port))
                 elif interface == 'eth':
-                        print("Initializing Connection to Prologix interface at IP address %s and GPIB address %i..." % (ip_addr, gpib_addr))
+                        print(f"Initializing Connection to Prologix interface at IP address {ip_addr} and GPIB address {int(gpib_addr)}...")
                         self.use_prologix = True
                         self.ip_addr = ip_addr
                         self.ip_port = 1234
@@ -64,7 +64,7 @@ class GPIB(object):
                         self.sock.settimeout(timeout)
                         self.sock.connect((self.ip_addr, self.ip_port))
                 elif interface == 'usb':
-                        print("Initializing Connection to Prologix interface over USB port %s..." % (usb_port))
+                        print(f"Initializing Connection to Prologix interface over USB port {usb_port}...")
                         self.use_prologix = True
                         self.ser = serial.Serial(usb_port, 921600, timeout=timeout) ##GPIB usb converter 57600
                         #serPort could be 'COM3' or '/dev/tty***' or '/dev/cu***'depending on windows/linux/osx
@@ -73,7 +73,7 @@ class GPIB(object):
                         self.ser.flushOutput()
                         self.ser.flushInput()
                 else:
-                        raise Exception('Unknown interface \'%s\' ' % interface)
+                        raise Exception(f'Unknown interface \'{interface}\' ')
 
                 try:
                         self.flush_interface()
@@ -82,7 +82,7 @@ class GPIB(object):
                             self.write("++auto 0\n") #disable automatic switching of the instrument into talk mode after a command is sent. We will send ++read commands manually.
                             self.write("++eoi 1\n") #send EOI signal at end of command
                             self.write("++eot_enable 0\n") #make sure the prologix does not add anything to the strings coming from the GPIB when the EOI is received. The USB interface had this enabled by default, which causes failure of the recognition of end-of-line
-                            self.write("++read_tmo_ms %i\n" % (self.adapter_timeout*1000)) #read timeout in milliseconds
+                            self.write(f"++read_tmo_ms {int(self.adapter_timeout * 1000)}\n") #read timeout in milliseconds
                             #self.write("++clr\r")
                             self.change_address(self.address)
                             print("Prologix adapter initialized.")
@@ -215,7 +215,7 @@ class GPIB(object):
                         data1 = self.recv()
                         data.append(data1)
                         if verbose:
-                                print('      Received %i bytes: %s...' % (len(data1), ''.join(data1[:128])))
+                                print(f"      Received {len(data1)} bytes: {''.join(data1[:128])}...")
                         if terminator == '':
                                 break
                         elif not len(data1):
@@ -267,7 +267,7 @@ class GPIB(object):
         def change_address(self, address):
              if self.use_prologix:
                  self.address = address
-                 self.write("++addr %i\r" % self.address)
+                 self.write(f"++addr {int(self.address)}\r")
 
         def set_gpib_terminator(self, terminator):
                 """
@@ -284,7 +284,7 @@ class GPIB(object):
 
                     if terminator not in terminator_codes:
                             raise Exception('Invalid termination code')
-                    self.write('++eos %i\n' % terminator_codes[terminator])
+                    self.write(f'++eos {int(terminator_codes[terminator])}\n')
 
         ###################################
         # Basic GPIB commands

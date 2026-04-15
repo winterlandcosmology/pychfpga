@@ -121,11 +121,11 @@ class FFT(MMI):
 
     def status(self):
         """ Displays the status of the data capture module"""
-        print('-------------- CHAN[%i].FFT STATUS --------------' % self.instance_number)
-        print(' FFT Bypass: %s' % (bool(self.BYPASS)))
-        print(' FFT SHIFT schedule: 0x%X' % (self.FFT_SHIFT))
-        print(' CASPER block pipeling delay: Measured=%i, set point=%i:  clocks' % (self.MEASURED_PIPELINE_DELAY, self.PIPELINE_DELAY))
-        print(' Number of FFT overflows: %i' % (self.OVERFLOW_COUNT))
+        print(f'-------------- CHAN[{int(self.instance_number)}].FFT STATUS --------------')
+        print(f' FFT Bypass: {bool(self.BYPASS)}')
+        print(f' FFT SHIFT schedule: 0x{self.FFT_SHIFT:X}')
+        print(f' CASPER block pipeling delay: Measured={int(self.MEASURED_PIPELINE_DELAY)}, set point={int(self.PIPELINE_DELAY)}:  clocks')
+        print(f' Number of FFT overflows: {int(self.OVERFLOW_COUNT)}')
 
     def pfb_fft(self, data, N=4):
         """

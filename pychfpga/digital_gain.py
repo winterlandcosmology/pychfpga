@@ -91,8 +91,7 @@ class DigitalGainArchive(Hdf5Archive):
                     dtype = self._axes[ax]['dtype']
                     self.axes[ax] = kwargs.pop(ax).astype(dtype)
                 else:
-                    ValueError("Must pass the axis %s as a keyword arg when initializing %s." %
-                               (ax, self))
+                    ValueError(f"Must pass the axis {ax} as a keyword arg when initializing {self}.")
 
         # Set parameters that specify output file format
         self.output_dir = output_dir or '.'
@@ -196,7 +195,7 @@ class DigitalGainArchive(Hdf5Archive):
         # Determine filename
         seconds_elapsed = smp - start_time
 
-        output_file = os.path.join(output_dir, "%08d.h5" % seconds_elapsed)
+        output_file = os.path.join(output_dir, f"{int(seconds_elapsed):08}.h5")
 
         return output_file
 

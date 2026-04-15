@@ -304,9 +304,9 @@ class SCALER(MMI):
 
     def status(self):
         """ Displays the status of the scaler module"""
-        print('-------------- CHAN[%i].SCALER STATUS --------------' % self.instance_number)
-        print(' SCALER Bypass: %s' % (bool(self.BYPASS)))
-        print(' Shift left: %i' % self.SHIFT_LEFT)
+        print(f'-------------- CHAN[{int(self.instance_number)}].SCALER STATUS --------------')
+        print(f' SCALER Bypass: {bool(self.BYPASS)}')
+        print(f' Shift left: {int(self.SHIFT_LEFT)}')
 
     def get_sim_output(self, scaler_input):
         bypass = self.BYPASS

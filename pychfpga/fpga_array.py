@@ -960,11 +960,7 @@ class FPGAArray(object):
             for ic in Crate.get_all_instances()}
         if any(missing_slots.values()):
             missing_slots_str = '\n'.join(
-                '    Crate #{number} ({model} SN{serial}): slots {slots}'.format(
-                    number=number,
-                    model=model,
-                    serial=serial,
-                    slots=', '.join(str(s) for s in slots))
+                f"    Crate #{number} ({model} SN{serial}): slots {', '.join((str(s) for s in slots))}"
                 for ((model, serial, number), slots) in missing_slots.items() if slots)
             message = f'{self!r}: The following slots are missing:\n{missing_slots_str}'
             if not ignore_missing_boards:
@@ -988,7 +984,7 @@ class FPGAArray(object):
         def get_mezz_name(ib, mezz_number):
             m = ib.mezzanine.get(mezz_number, None)
             # return '%s_SN%s' % (m.__ipmi_part_number__, m.serial) if m else '-'
-            return 'SN%s' % (m.serial) if m else '-'
+            return f'SN{m.serial}' if m else '-'
 
         ################################
         # Update generic Motherboard objects with firmware-specific ones
@@ -1291,9 +1287,9 @@ class FPGAArray(object):
                 sn = s[0]
                 cn = int(s[1])
             except ValueError:
-                raise ValueError('crate number is not an integer in entry %s' % string)
+                raise ValueError(f'crate number is not an integer in entry {string}')
         else:
-            raise RuntimeError('Multiple crate numbers were specified in entry:' % string)
+            raise RuntimeError('Multiple crate numbers were specified in entry:')
         # Check if a model number is specified
         s = sn.split('_')
         if len(s) == 1:
@@ -1305,8 +1301,7 @@ class FPGAArray(object):
             if sn.startswith('SN'):
                 sn = sn[2:]
         else:
-            raise RuntimeError("Crates model and serial number must be separated by one (and only one) "
-                               "underscore (e.g. MGK7BP16_023). Got '%s'" % sn)
+            raise RuntimeError(f"Crates model and serial number must be separated by one (and only one) underscore (e.g. MGK7BP16_023). Got '{sn}'")
 
         try:
             sn = int(sn)
@@ -1318,8 +1313,8 @@ class FPGAArray(object):
     @staticmethod
     def _build_crate_id(model, serial):
         if isinstance(serial, int):
-            serial = '%03i' % serial
-        return '%s_SN%s' % (model, serial)
+            serial = f'{int(serial):03}'
+        return f'{model}_SN{serial}'
 
     def print_flush(self):
         """ Make sure that the test sent previously to stdout shows immediately on the console.
@@ -1330,17 +1325,14 @@ class FPGAArray(object):
         """ Short string representing this object and suitable to use as a tag in a syslog entry"""
         ib = self.ib or self.hwm or []
         ic = self.ic or {b.crate for b in self.hwm if b.crate} or []
-        return '%s(%i_boards,%i_crates)' % (self.__class__.__name__, len(ib), len(ic))
+        return f'{self.__class__.__name__}({len(ib)}_boards,{len(ic)}_crates)'
 
     def get_hwm_info(self):
-        string = '%s object with the following hardware map:\n' % self.__class__.__name__
+        string = f'{self.__class__.__name__} object with the following hardware map:\n'
         for i in self.ib:
-            mezz = ['%s SN%s' % (m.part_number, m.serial) if m else 'None'
+            mezz = [f'{m.part_number} SN{m.serial}' if m else 'None'
                     for m in [i.mezzanine.get(1, None), i.mezzanine.get(2, None)]]
-            string += '   Crate SN%s, slot %2i: Motherboard SN%s at %s (ping =%s), Mezz1=%s, Mezz2=%s\n' % (
-                i.crate.serial if i.crate else None,
-                i.slot, i.serial, i.hostname,
-                i.ping(), mezz[0], mezz[1])
+            string += f'   Crate SN{i.crate.serial if i.crate else None}, slot {int(i.slot):2}: Motherboard SN{i.serial} at {i.hostname} (ping ={i.ping()}), Mezz1={mezz[0]}, Mezz2={mezz[1]}\n'
         return string
 
     def get_hwm(self):
@@ -1876,7 +1868,7 @@ class FPGAArray(object):
                              or not (0 <= slot <= 15)
                              or not (0 <= lane <= 7))]
         if bad_bad_links:
-            raise RuntimeError('The following bad links tuples are invalid: %s' % bad_bad_links)
+            raise RuntimeError(f'The following bad links tuples are invalid: {bad_bad_links}')
 
         # Process bin priority
         bin_priority = bin_priority or list(range(1024))
@@ -2034,7 +2026,7 @@ class FPGAArray(object):
             # We start by assigning the worst bins. We'll fill up the best bins after.
             nbad = Nbad[slot]
             if verbose:
-                print('**** Interation #%i, Slot %i (has %i unprocessable bins)' % (j, slot, nbad))
+                print(f'**** Interation #{int(j)}, Slot {int(slot)} (has {int(nbad)} unprocessable bins)')
 
             # Compute the number of remaining bins for each pattern (count() ignores masked entries)
             # It should normally be 128, 64 or 0
@@ -2067,7 +2059,7 @@ class FPGAArray(object):
             # wo = slot//2 # Select the pattern based on slot number: 28 lost bins with typical data
 
             if verbose:
-                print('slot %i GPUs cannot process %i bins, using pattern #%i' % (slot, Nbad[slot], wo))
+                print(f'slot {int(slot)} GPUs cannot process {int(Nbad[slot])} bins, using pattern #{int(wo)}')
 
             # Algorithmic check: check that there are bins available in this pattern.
             # This should always be true with this deterministic algorithm.
@@ -2408,7 +2400,7 @@ class FPGAArray(object):
             Nbins = 8
             bix_to_bin = lambda crate, slot, bix: (Nslot * bix) + slot
         else:
-            raise ValueError('Invalid shuffle mode %s' % mode)
+            raise ValueError(f'Invalid shuffle mode {mode}')
 
         # Number of freq. bins, crates (per crate pair), slots (per crate), links (per board)
         # (SHOULD BE ABLE TO GET THIS FROM FPGA ARRAY OBJECT)
@@ -3262,7 +3254,7 @@ class FPGAArray(object):
             elif board in self.ib.hostname:
                 return self.ib.get(hostname=board)
             else:
-                valid_serials = ','.join("'%s'" % ib.serial for ib in self.ib)
+                valid_serials = ','.join(f"'{ib.serial}'" for ib in self.ib)
                 raise RuntimeError(f'{self!r}: Invalid Board serial number {board}. '
                                    f'Valid serial numbers are {valid_serials}')
         elif isinstance(board, (tuple, list)) and len(board) == 2:
@@ -3361,12 +3353,11 @@ class FPGAArray(object):
                         elif lane_type == 'bp_qsfp':
                             valid_lanes = ib.BP.get_lane_numbers('qsfp')
                         else:
-                            raise AttributeError('Unknown lane type %s' % lane_type)
+                            raise AttributeError(f'Unknown lane type {lane_type}')
                         if lane_number is None:
                             lanes.update(valid_lanes)
                         elif lane_number not in valid_lanes:
-                            raise ValueError('Invalid lane number %s for lane type %s. Valid values are %s'
-                                             % (lane_number, lane_type, valid_lanes))
+                            raise ValueError(f'Invalid lane number {lane_number} for lane type {lane_type}. Valid values are {valid_lanes}')
                         else:
                             lanes.add(lane_number)
         if lane_type is None:
@@ -3964,7 +3955,7 @@ class FPGAArray(object):
         t = [(b.slot, b.serial, b.SYSMON.temperature()) for b in self.ib]
         t.sort()
         for (slot, serial_number, fpga_temp) in t:
-            print('Slot %2i (SN%s): FPGA %2.1f C' % (slot, serial_number, fpga_temp))
+            print(f'Slot {int(slot):2} (SN{serial_number}): FPGA {fpga_temp:2.1f} C')
 
     def set_adc_mask(self, value):
         for ib in self.ib:
@@ -3979,7 +3970,7 @@ class FPGAArray(object):
             for sensor in sensor_list:
                 (voltage, current, power) = b.hw.get_power(sensor)[sensor]
                 if voltage is not None:
-                    print('%0.1fV@%0.2fA=%0.1fW ' % (voltage, current, power), end=' ')
+                    print(f'{voltage:0.1f}V@{current:0.2f}A={power:0.1f}W ', end=' ')
                 else:
                     print('None                 ', end=' ')
             print()
@@ -4010,9 +4001,7 @@ class FPGAArray(object):
 
         # Check if the board are all on a single crate
         if len(set(array.crate)) != 1:
-            raise RuntimeError('Sorry, this method currently can work on only one crate. '
-                               'The currently active boards span multiple crates %s'
-                               % list(set(array.crate)))
+            raise RuntimeError(f'Sorry, this method currently can work on only one crate. The currently active boards span multiple crates {list(set(array.crate))}')
 
         active_slots = [ib.slot for ib in array]
         if len(set(active_slots)) != len(active_slots):
@@ -4078,35 +4067,31 @@ class FPGAArray(object):
                         break
 
                 if source_valid:
-                    print('Slot %2i Lane %2i is receiving data from Slot %2i Lane %2i '
-                          '(received word = 0x%08X, RXMONITOROUT= %x, DMONITOROUT=%x)'
-                          % (dest_slot, dest_lane, source_slot, source_lane, rxdata, g.RXMONITOR, g.DMONITOROUT))
-                    link_matrix[dest_slot][dest_lane] = 'S%02iL%02i' % (source_slot, source_lane)
+                    print(f'Slot {int(dest_slot):2} Lane {int(dest_lane):2} is receiving data from Slot {int(source_slot):2} Lane {int(source_lane):2} (received word = 0x{rxdata:08X}, RXMONITOROUT= {g.RXMONITOR:x}, DMONITOROUT={g.DMONITOROUT:x})')
+                    link_matrix[dest_slot][dest_lane] = f'S{int(source_slot):02}L{int(source_lane):02}'
                 elif maybe:
-                    print('Slot %2i Lane %2i is receiving some data but cannot determine source '
-                          '(received word = 0x%08X, RXMONITOROUT= %x, DMONITOROUT=%x)'
-                          % (dest_slot, dest_lane, rxdata, g.RXMONITOR, g.DMONITOROUT))
+                    print(f'Slot {int(dest_slot):2} Lane {int(dest_lane):2} is receiving some data but cannot determine source (received word = 0x{rxdata:08X}, RXMONITOROUT= {g.RXMONITOR:x}, DMONITOROUT={g.DMONITOROUT:x})')
                     link_matrix[dest_slot][dest_lane] = 'S??L??'
                 else:
                     link_matrix[dest_slot][dest_lane] = '  ()  '
 
                 if not source_valid or not source_present or source != expected_source:
                     if source_present:
-                        link_matrix[dest_slot][dest_lane] += '/S%sL%s  ' % expected_source
+                        link_matrix[dest_slot][dest_lane] += '/S{}L{}  '.format(*expected_source)
                     else:
-                        link_matrix[dest_slot][dest_lane] += '/(S%sL%s)' % expected_source
+                        link_matrix[dest_slot][dest_lane] += '/(S{}L{})'.format(*expected_source)
 
                 link_list.append((source, dest))
         if print_:
             # Print a slot map
-            print('Slot-> ' + ' '.join(['%-15i' % (slot + 1) for slot in range(16)]))
-            print('S/N -> ' + ' '.join(['%-15s' % (sn) for sn in serial_number]))
-            print('Lane   ' + ' '.join(['%-15s' % '----------' for x in range(16)]))
+            print('Slot-> ' + ' '.join([f'{int(slot + 1):<15d}' for slot in range(16)]))
+            print('S/N -> ' + ' '.join([f'{sn:15}' for sn in serial_number]))
+            print('Lane   ' + ' '.join([f'{"-" * 15:15}' for _ in range(16)]))
 
             for dest_lane in range(1, 16):
-                print('%6i ' % (dest_lane), end=' ')
+                print(f'{int(dest_lane):6} ', end=' ')
                 for dest_slot in range(1, 17):
-                    print('%-15s' % link_matrix[dest_slot][dest_lane], end=' ')
+                    print(f'{link_matrix[dest_slot][dest_lane]:15}', end=' ')
                 print()
 
         return link_list
@@ -4236,13 +4221,9 @@ class FPGAArray(object):
         link_map = {}
         for cable_id, link_ids in cable_to_link_map.items():
             if len(link_ids) == 1:
-                self.logger.warning('Only one end of a QSFP cable is connected; '
-                                    'Cable ID %s connects only to %s. The link will be ignored.'
-                                    % (cable_id, link_ids[0]))
+                self.logger.warning(f'Only one end of a QSFP cable is connected; Cable ID {cable_id} connects only to {link_ids[0]}. The link will be ignored.')
             elif len(link_ids) > 2:
-                raise RuntimeError('A QSFP cable connects to more than 2 links. '
-                                   'Something is wrong. Cable ID %s connects only to %s.'
-                                   % (cable_id, link_ids))
+                raise RuntimeError(f'A QSFP cable connects to more than 2 links. Something is wrong. Cable ID {cable_id} connects only to {link_ids}.')
             elif len(link_ids) == 2:
                 link_map[link_ids[0][1]] = link_ids[1][1]
                 link_map[link_ids[1][1]] = link_ids[0][1]
@@ -4407,13 +4388,13 @@ class FPGAArray(object):
             data = self.get_ber_vs_power(links=data, period=period, **kwargs)
 
         for link, (tx_power, ber) in data.items():
-            print('%20s %s' % (link, ','.join(['%6.1g' % b for b in ber])))
+            print(f"{link:>20} {','.join([f'{b:6.1g}' for b in ber])}")
         plt.figure(1)
         plt.clf()
 
         for link, (tx_power, ber) in sorted(data.items(), key=str):
-            plt.semilogy(tx_power, (np.array(ber) + 1e-12), label='Link %s' % (link,))
-        plt.title('BER of links as a function of TX power (period=%0.1f s)' % period)
+            plt.semilogy(tx_power, (np.array(ber) + 1e-12), label=f'Link {link}')
+        plt.title(f'BER of links as a function of TX power (period={period:0.1f} s)')
         plt.xlabel('TX power (0-15)')
         plt.ylabel('BER')
         leg = plt.legend(loc='best', fontsize='small', markerscale=3, framealpha=0.6, shadow=True)
@@ -4426,8 +4407,7 @@ class FPGAArray(object):
 
         for link in link_map:
             ((from_slot, from_lane), (to_slot, to_lane)) = link
-            print("###### running from slot %i lane %i to slot %i lane %i #######"
-                  % (from_slot, from_lane, to_slot, to_lane))
+            print(f"###### running from slot {int(from_slot)} lane {int(from_lane)} to slot {int(to_slot)} lane {int(to_lane)} #######")
             gtx = self.ib.get(slot=to_slot).BP_SHUFFLE.gtx[to_lane - 1]
             e = gtx.get_eye_diagram(list(range(-32, 32, h_step)), list(range(-127, 128, v_step)))
             eye_matrix[link] = e
@@ -4455,11 +4435,11 @@ class FPGAArray(object):
             # Bottom images
             a = ax[ix, 0]
             a.tick_params(labelsize=6)
-            a.set_ylabel("TX S%02i" % (slot), fontsize=10)
+            a.set_ylabel(f"TX S{int(slot):02}", fontsize=10)
             # Left images
             a = ax[len(slot_map) - 1, ix]
             a.tick_params(labelsize=6)
-            a.set_xlabel("RX S%02i" % (slot))
+            a.set_xlabel(f"RX S{int(slot):02}")
             plt.setp(a.xaxis.get_majorticklabels(), rotation=70)
             # Diagonal images
             a = ax[ix, ix]
@@ -4479,9 +4459,7 @@ class FPGAArray(object):
         if len(crate) == 1:
             crate = crate.pop()
         else:
-            raise RuntimeError('Sorry, this method currently can work on one and only one crate. '
-                               'The currently active boards either have no crates or span multiple crates %s'
-                               % list(set(slots.crate)))
+            raise RuntimeError(f'Sorry, this method currently can work on one and only one crate. The currently active boards either have no crates or span multiple crates {list(set(slots.crate))}')
 
         slot_range = list(range(1, 17))
         lane_range = list(range(16))
@@ -4540,10 +4518,10 @@ class FPGAArray(object):
                 data_expected = not ((comp_src[0] not in slots.keys()) or (dest_slot not in slots.keys()))
                 cell = ' ' if (cap_src and cap_src == comp_src and valid_src) or not data_expected else '!'
                 cell += ('------' if not cap_src or not data_expected
-                         else '--??--' if not valid_src else 'S%02iL%02i' % cap_src)
-                cell += '/S%02iL%02i' % comp_src
+                         else '--??--' if not valid_src else f'S{cap_src[0]:02d}L{cap_src[1]:02d}')
+                cell += f'/S{comp_src[0]:02d}L{comp_src[1]:02d}'
                 if frame_number is not None and data_expected and any(frame_number):
-                    cell += ' F=%02x' % frame_number[remapped_dest_lane]
+                    cell += f' F={frame_number[remapped_dest_lane]:02x}'
                 if data_expected:
                     if missing_frame[remapped_dest_lane]:
                         cell += '\n  MISSING FRAMES'
@@ -4552,15 +4530,15 @@ class FPGAArray(object):
                     if rx_fifo_overflow[remapped_dest_lane]:
                         cell += '\n  RX FIFO OVERFLOW'
                     if rx_errors[remapped_dest_lane]:
-                        cell += '\n  RX ERR = %i' % rx_errors[remapped_dest_lane]
+                        cell += f'\n  RX ERR = {int(rx_errors[remapped_dest_lane])}'
                     if rx_max_frame_length[remapped_dest_lane] != expected_bp_frame_size:
-                        cell += '\n  RX FRAME = %i Words' % rx_max_frame_length[remapped_dest_lane]
+                        cell += f'\n  RX FRAME = {int(rx_max_frame_length[remapped_dest_lane])} Words'
                 info[dest_slot][remapped_dest_lane] = cell
 
         print('Post-remap, crossbar2 bin selector input lane indentification')
 
         corner_label = 'Slot->\nS/N ->\n\\|/Lane'
-        col_labels = ['%i\n%s' % (slot_range[i], slot_labels[i]) for i in range(len(slot_range))]
+        col_labels = [f'{int(slot_range[i])}\n{slot_labels[i]}' for i in range(len(slot_range))]
         row_labels = lane_range
         self.print_table(info,
                          row_labels=row_labels, col_labels=col_labels, corner_label=corner_label,
@@ -4898,9 +4876,9 @@ class FPGAArray(object):
                 else:
                     break
 
-            line_format = ('| %%-%is' % row_labels_width
+            line_format = (f'| %-{int(row_labels_width)}s'
                            + ' | '
-                           + ' | '.join('%%-%is' % width for width in block_col_width)
+                           + ' | '.join(f'%-{int(width)}s' for width in block_col_width)
                            + ' |')
             line_sep_str = '+' + '+'.join(['-' * (width + 2) for width in [row_labels_width] + block_col_width]) + '+'
 
@@ -4980,9 +4958,9 @@ class FPGAArray(object):
         valid_crates = list({ib.crate: None for ib in iceboards if ib.crate and ib.crate.serial}.keys())
 
         for crate in valid_crates:
-            corner_label = '%s\nCrate #%s' % (crate.get_string_id(), crate.crate_number)
+            corner_label = f'{crate.get_string_id()}\nCrate #{crate.crate_number}'
             slot_range = list(range(1, crate.NUMBER_OF_SLOTS + 1))
-            col_labels = ['%i' % (s) for s in slot_range]
+            col_labels = [f'{int(s)}' for s in slot_range]
 
 
 
@@ -5012,11 +4990,11 @@ class FPGAArray(object):
     def print_iceboard_temperatures(self):
         sensor = self.ib[0].TEMPERATURE_SENSOR.MB_FPGA_DIE
         self.print_iceboard_table(
-            lambda ib: '%3.1f' % ib.get_motherboard_temperature(sensor),
+            lambda ib: f'{ib.get_motherboard_temperature(sensor):3.1f}',
             row_labels='FPGA Die Temp')
 
     def print_iceboard_power(self):
-        self.print_iceboard_table(lambda ib: '%0.1f' % ib.get_total_power())
+        self.print_iceboard_table(lambda ib: f'{ib.get_total_power():0.1f}')
 
     def reset_fpga_stats(self):
         """ Resets FFT overflow count for all boards in FPGA array.
@@ -5189,7 +5167,7 @@ class FPGAArray(object):
             while not finished:
                 time.sleep(abs(delay))
                 dt = time.time() - t0
-                print('At', time.asctime(), '(%s seconds since the method call)' % (datetime.timedelta(seconds=dt)))
+                print('At', time.asctime(), f'({datetime.timedelta(seconds=dt)} seconds since the method call)')
                 for i, ic in enumerate(icecrates):
                     err_map = [[None] * ic.NUMBER_OF_SLOTS for _ in range(ic.NUMBER_OF_SLOTS)]
                     # print  ic.slot.values()
@@ -5212,14 +5190,17 @@ class FPGAArray(object):
                             err_map[rx_lane_id[0] - 1][tx_lane[0] - 1] = (
                                 errs[lane] if errs[lane] else '!DET' if not det[lane] else '-')
                             # print '%s -> %s = %i' % (tx_lane, rx_lane_id, errs[lane])
-                    row_labels = ['Tx S%02i SN%s' % (ib.slot, ib.serial) for ib in ic.slot.values()]
-                    col_labels = ['Rx S%02i\nSN%s' % (ib.slot, ib.serial) for ib in ic.slot.values()]
-                    corner_label = '%s\nCrate #%s' % (ic.get_string_id(), ic.crate_number)
-                    print('    %s: %-10s %s %s' % (
-                        ic.get_string_id(),
-                        'No Frames!' if not worst_det else ('%i errors' % worst_err),
-                        '%s without errors' % datetime.timedelta(seconds=int(time_without_error[i])),
-                        'so far' if not has_errors[i] else ''))
+                    row_labels = [f'Tx S{int(ib.slot):02} SN{ib.serial}' for ib in ic.slot.values()]
+                    col_labels = [f'Rx S{int(ib.slot):02}\nSN{ib.serial}' for ib in ic.slot.values()]
+                    corner_label = f'{ic.get_string_id()}\nCrate #{ic.crate_number}'
+                    err_or_frames = (
+                        'No Frames!' if not worst_det else f'{worst_err} errors'
+                    )
+                    print(
+                        f'    {ic.get_string_id()}: {err_or_frames:<10} '
+                        f'{datetime.timedelta(seconds=int(time_without_error[i]))} without errors '
+                        f"{'so far' if not has_errors[i] else ''}"
+                    )
                     if verbose:
                         self.print_table(
                             err_map, row_labels=row_labels, col_labels=col_labels,
@@ -5236,10 +5217,10 @@ class FPGAArray(object):
                 for lane in range(16):
                     rx_lane = (slot, lane)
                     tx_lane = ic.get_matching_tx(rx_lane)
-                    err_map[rx_lane[0] - 1][tx_lane[0] - 1] = '%0.1f' % (ic.get_rx_net_length(rx_lane) / 1000)
-            row_labels = ['Tx S%02i SN%s' % (ib.slot, ib.serial) for ib in list(ic.slot.values())]
-            col_labels = ['Rx S%02i\nSN%s' % (ib.slot, ib.serial) for ib in list(ic.slot.values())]
-            corner_label = '%s\nCrate #%s' % (ic.get_string_id(), ic.crate_number)
+                    err_map[rx_lane[0] - 1][tx_lane[0] - 1] = f'{ic.get_rx_net_length(rx_lane) / 1000:0.1f}'
+            row_labels = [f'Tx S{int(ib.slot):02} SN{ib.serial}' for ib in list(ic.slot.values())]
+            col_labels = [f'Rx S{int(ib.slot):02}\nSN{ib.serial}' for ib in list(ic.slot.values())]
+            corner_label = f'{ic.get_string_id()}\nCrate #{ic.crate_number}'
             self.print_table(err_map, row_labels=row_labels, col_labels=col_labels, corner_label=corner_label)
 
     def print_iceboard_qsfp(self):
@@ -5266,7 +5247,7 @@ class FPGAArray(object):
             ts.append(self.HEADER_CAPTURE_DATA)
 
         for i in range(len(ts)):
-            print('Lane %02i: Stream ID=0x%02x, Frame = 0x%02x (delta = %i)' % (i, sid[i], ts[i], ts[i] - ts[0]))
+            print(f'Lane {int(i):02}: Stream ID=0x{sid[i]:02x}, Frame = 0x{ts[i]:02x} (delta = {int(ts[i] - ts[0])})')
 
     def plot_crate_temperatures(self, figure_number=1):
 
@@ -5282,7 +5263,7 @@ class FPGAArray(object):
             avg_temp = np.average(t)
             h = plt.plot(s, t, label=ic.get_string_id())
             plt.plot([min(s), max(s)], [avg_temp] * 2, ':', color=h[0].get_color(), lw=2)
-            print('%s: %fdegC' % (ic.get_string_id(), avg_temp))
+            print(f'{ic.get_string_id()}: {avg_temp:f}degC')
         plt.legend(loc='best')
         plt.xlabel('Slot number')
         plt.ylabel('FPGA Die temperature [degC]')
@@ -5318,7 +5299,7 @@ class FPGAArray(object):
         """
 
         for ib in self.ib:
-            freqs = ', '.join('{:7.3f}'.format(ib.FreqCtr.read_frequency(f'ADC_CLK{c}', gate_time=1e-3)/1e6) for c in (0,4,8,12))
+            freqs = ', '.join(f"{ib.FreqCtr.read_frequency(f'ADC_CLK{c}', gate_time=0.001) / 1000000.0:7.3f}" for c in (0,4,8,12))
             print(f'{ib!r}: {freqs}')
 
 
@@ -5685,7 +5666,7 @@ def create_fpga_array(args=None):
             ps_array.unlock()
             ps_array.power_cycle()
         else:
-            raise AttributeError("Invalid power supply state '%s'" % power)
+            raise AttributeError(f"Invalid power supply state '{power}'")
 
     #######################################
     # FPGA array

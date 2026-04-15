@@ -63,7 +63,7 @@ class Chan(MMIRouter):
     def __repr__(self):
         """ Return a string that represents this object and its parent object.
         """
-        return "%r.%s(%i)" % (self.fpga, self.__class__.__name__, self.chan_number)
+        return f"{self.fpga!r}.{self.__class__.__name__}({int(self.chan_number)})"
 
     def init(self, fmc_present):
 
@@ -131,7 +131,7 @@ class ChanArray(MMIRouter):
     def __repr__(self):
         """ Return a string that represents this object and its parent object.
         """
-        return "%r.%s" % (self.fpga, self.__class__.__name__)
+        return f"{self.fpga!r}.{self.__class__.__name__}"
 
     def __getitem__(self, key):
         """If the user indexes this object (chan[n] instead of chan) then return the channelizer instance"""
@@ -244,7 +244,7 @@ class ChanArray(MMIRouter):
                 sample_delay = adc_delay_table[ch]['sample_delay']
                 clock_delay = adc_delay_table[ch]['clock_delay']
                 if (tap_delays is not None and  any(bd is None or bd < 0 for bd in tap_delays)) or (sample_delay is not None and sample_delay < 0):
-                    self.logger.warning("%r: Skipping channel set_delay on channel %i since Invalid bit or sample delay detected in delay table entry" % (self, ch))
+                    self.logger.warning(f"{self!r}: Skipping channel set_delay on channel {int(ch)} since Invalid bit or sample delay detected in delay table entry")
                 else:
                     chan.ADCDAQ.set_delays((tap_delays, sample_delay, clock_delay))
 
@@ -285,7 +285,7 @@ class ChanArray(MMIRouter):
         elif width == 8:
             is_four_bits = 0
         else:
-            raise ValueError('Number of bits %i is invalid for the channelizers. Only 4 or 8 is allowed' % width)
+            raise ValueError(f'Number of bits {int(width)} is invalid for the channelizers. Only 4 or 8 is allowed')
 
         # Set the channelizer data width
         for ch in self.chan:
@@ -316,7 +316,7 @@ class ChanArray(MMIRouter):
         try:
             while 1:
                 for chan in self.chan:
-                    print('CH%i: %3i' % (chan.chan_number, chan.ADCDAQ.RAMP_ERR_CTR), end=' ')
+                    print(f'CH{int(chan.chan_number)}: {int(chan.ADCDAQ.RAMP_ERR_CTR):3}', end=' ')
                 print()
         except KeyboardInterrupt:
             pass

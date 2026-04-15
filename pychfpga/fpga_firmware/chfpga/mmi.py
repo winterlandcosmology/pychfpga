@@ -59,7 +59,7 @@ class BitField(object):
     def __init__(self, page, addr, bit, width=1, default=None, doc='No documentation available'):
 
         if page not in PAGE_OFFSET:
-            raise ValueError('Unknown page %i' % page)
+            raise ValueError(f'Unknown page {int(page)}')
 
         self.page = page
         self._addr = addr  # relative address of the last control byte within the page
@@ -251,8 +251,8 @@ class MMI(object):
 #            print 'setting ',name
             object.__setattr__(self, name, value)
         else:
-            print("Class '%s' is locked: cannot assign new attribute '%s'" % (self, name))
-            raise AttributeError("This instance of class '%s' is locked: cannot assign new attribute '%s'" % (self.__class__.__name__, name)) # 120623 JFC
+            print(f"Class '{self}' is locked: cannot assign new attribute '{name}'")
+            raise AttributeError(f"This instance of class '{self.__class__.__name__}' is locked: cannot assign new attribute '{name}'") # 120623 JFC
 
     def __getitem__(self, index):
         return self.read(index)
@@ -285,7 +285,7 @@ class MMI(object):
         register address.
         """
         if not 0 <= 2 * addr <= self.address_max:
-            raise RuntimeError('%r: Invalid DRP address %i' % (self, addr))
+            raise RuntimeError(f'{self!r}: Invalid DRP address {int(addr)}')
         return int(self.read(_RAM_BASE_ADDR + 2 * addr, type=np.dtype('<u2'), length=1)[0])
 
     def read_ram(self, addr, type, length, **kwargs):
@@ -293,7 +293,7 @@ class MMI(object):
         Reads an array of `length` bytes from address `addr` in the RAM space
         """
         if not 0 <= addr <= self.address_max:
-            raise RuntimeError('%r: Invalid RAM address %i' % (self, addr))
+            raise RuntimeError(f'{self!r}: Invalid RAM address {int(addr)}')
         return self.read(_RAM_BASE_ADDR + addr, type=type, length=length, **kwargs)
 
     def read_status(self, addr, type, length, **kwargs):
@@ -302,7 +302,7 @@ class MMI(object):
         """
 
         if not 0 <= addr <= 0x07F:
-            raise RuntimeError('%r: Invalid STATUS register address %i' % (self, addr))
+            raise RuntimeError(f'{self!r}: Invalid STATUS register address {int(addr)}')
         return self.read(_STATUS_BASE_ADDR + addr, type=type, length=length, **kwargs)
 
     def read_control(self, addr, type, length):
@@ -311,7 +311,7 @@ class MMI(object):
         """
 
         if not 0 <= addr <= 0x07F:
-            raise RuntimeError('%r: Invalid CONTROL register address %i' % (self, addr))
+            raise RuntimeError(f'{self!r}: Invalid CONTROL register address {int(addr)}')
         return self.read(_CONTROL_BASE_ADDR + addr, type=type, length=length)
 
     def read_bitfield(self, bitfield, verbose=0):
@@ -360,7 +360,7 @@ class MMI(object):
         """
 
         if not 0 <= addr <= self.address_max:
-            raise RuntimeError('%r: Invalid RAM address %i' % (self, addr))
+            raise RuntimeError(f'{self!r}: Invalid RAM address {int(addr)}')
         return self.write(_RAM_BASE_ADDR + addr, data, *args, **kwargs)
 
     def write_control(self, addr, data, *args, **kwargs):
@@ -377,7 +377,7 @@ class MMI(object):
 
         """
         if not 0 <= addr <= 0x07F:
-            raise RuntimeError('%r: Invalid CONTROL register address %i' % (self, addr))
+            raise RuntimeError(f'{self!r}: Invalid CONTROL register address {int(addr)}')
         return self.write(_CONTROL_BASE_ADDR + addr, data, *args, **kwargs)
 
 
@@ -397,9 +397,9 @@ class MMI(object):
             - The DRP values are stored as little endians
         """
         if not 0 <= 2 * addr <= self.address_max:
-            raise RuntimeError('%r: Invalid DRP address %i' % (self, addr))
+            raise RuntimeError(f'{self!r}: Invalid DRP address {int(addr)}')
         if not 0 <= data <= 65535:
-            raise AttributeError('%r: Invalid unsigned 16-bit DRP register value %i' % (self, data))
+            raise AttributeError(f'{self!r}: Invalid unsigned 16-bit DRP register value {int(data)}')
         return self.write(_RAM_BASE_ADDR + 2 * addr, bytes([data & 0xFF, (data >> 8) & 0xFF]))
 
     write_DRP = write_drp
@@ -426,10 +426,10 @@ class MMI(object):
         try:
             bitfield = getattr(type(self), bitfield_name)
             if not isinstance(bitfield, BitField):
-                raise TypeError("'%s' is not a Bitfield" % bitfield_name)
+                raise TypeError(f"'{bitfield_name}' is not a Bitfield")
             return bitfield
         except AttributeError:
-            raise AttributeError("The BitField '%s' is not defined" % bitfield_name)
+            raise AttributeError(f"The BitField '{bitfield_name}' is not defined")
 
     def get_addr(self, bitfield_name):
         """
@@ -477,7 +477,7 @@ class MMI(object):
                 if no_error:
                     return False
                 else:
-                    raise RuntimeError("Timeout exceeded while waiting for bitfield %s==%i" % (bitfield_name, target_value))
+                    raise RuntimeError(f"Timeout exceeded while waiting for bitfield {bitfield_name}=={int(target_value)}")
 
     def read_all_fields(
             self,
@@ -517,13 +517,13 @@ class MMI(object):
                              'page_name': ('CONTROL', 'STATUS', 'RAM', 'DRP')[bitfield.page],
                              'addr': bitfield._addr,
                              'bit' : bitfield.bit,
-                             'bit_range' : '%i' % bitfield.bit if bitfield.width<=1 else '%i:%i' % (bitfield.bit+bitfield.width-1, bitfield.bit),
+                             'bit_range' : f'{int(bitfield.bit)}' if bitfield.width<=1 else f'{int(bitfield.bit + bitfield.width - 1)}:{int(bitfield.bit)}',
                              'width' : bitfield.width,
                              'doc' : bitfield.doc,
                              'value': value,
-                             'bin_value': ('{0:0%ib}' % bitfield.width).format(value),
+                             'bin_value': f'{int(value):0{int(bitfield.width)}b}',
                             #  'hex_value': ('{0:0%iX}' % (bitfield.width + 3) // 4).format(value)
-                             'hex_value': ('{0:0%iX}' % (bitfield.width + 3)).format(value)
+                             'hex_value': f'{int(value):0{int(bitfield.width + 3)}X}'
                              }
                     yield entry
         table = list(entries())

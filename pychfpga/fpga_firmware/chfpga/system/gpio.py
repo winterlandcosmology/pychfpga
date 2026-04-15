@@ -153,7 +153,7 @@ class GPIO(MMI):
         year = (timestamp >> 17) & 0x3F
         month = (timestamp >> 23) & 0x0F
         day = (timestamp >> 27) & 0x1F
-        string = '%04i-%02i-%02i %02i:%02i:%02i' % (year + 2000, month, day, hour, minutes, seconds)
+        string = f'{int(year + 2000):04}-{int(month):02}-{int(day):02} {int(hour):02}:{int(minutes):02}:{int(seconds):02}'
         return string
 
     def set_global_trig(self, trigger_state):
@@ -184,8 +184,7 @@ class GPIO(MMI):
         every board will operate on a random offsets. The PWM generator is always reset by SYNC events.
         A system-wide SYNC will therefore make the PWM signal synchronized across all boards.
         """
-        self.logger.info('%r: Setting PWM generator to enable=%i, offset=%i, high_time=%i, period=%i' %
-                         (self, enable, offset, high_time, period))
+        self.logger.info(f'{self!r}: Setting PWM generator to enable={int(enable)}, offset={int(offset)}, high_time={int(high_time)}, period={int(period)}')
         self.PWM_OFFSET = offset
         self.PWM_HIGH_TIME = high_time - 1  # The actual high time is PWM_HIGH_TIME + 1
         self.PWM_PERIOD = period - 1  # The actual period is PWM_PERIOD + 1
@@ -268,11 +267,9 @@ class GPIO(MMI):
         valid values is shown.
         """
         if source not in self.USER_OUTPUT_SOURCE_TABLE:
-            raise AttributeError("Invalid source '%s'. Valid sources are %s." % (
-                source, ', '.join(list(self.USER_OUTPUT_SOURCE_TABLE.keys()))))
+            raise AttributeError(f"Invalid source '{source}'. Valid sources are {', '.join(list(self.USER_OUTPUT_SOURCE_TABLE.keys()))}.")
         if output not in self.USER_OUTPUTS:
-            raise AttributeError("Invalid output '%s'. Valid outputs are %s." % (
-                output, ', '.join(str(k) for k in list(self.USER_OUTPUTS.keys()))))
+            raise AttributeError(f"Invalid output '{output}'. Valid outputs are {', '.join((str(k) for k in list(self.USER_OUTPUTS.keys())))}.")
 
         self.write_bitfield(self.USER_OUTPUTS[output], self.USER_OUTPUT_SOURCE_TABLE[source])
 
@@ -280,8 +277,7 @@ class GPIO(MMI):
         """ Return the current user output source as a string """
 
         if output not in self.USER_OUTPUTS:
-            raise AttributeError("Invalid output '%s'. Valid outputs are %s." % (
-                output, ', '.join(str(k) for k in list(self.USER_OUTPUTS.keys()))))
+            raise AttributeError(f"Invalid output '{output}'. Valid outputs are {', '.join((str(k) for k in list(self.USER_OUTPUTS.keys())))}.")
 
         current_value = self.read_bitfield(self.USER_OUTPUTS[output])
 

@@ -218,7 +218,7 @@ class ZCU111(Motherboard):
         Returns a boolean indicating whether the board is responding to network queries.
         """
         # print(f'{self!r} Ping_async()')
-        self.logger.info('%r: Pinging %s' % (self, self.hostname))
+        self.logger.info(f'{self!r}: Pinging {self.hostname}')
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(timeout)
         loop = asyncio.get_event_loop()
@@ -227,7 +227,7 @@ class ZCU111(Motherboard):
             if_addr = s.getsockname()
             s.close()
         except (socket.timeout, Exception) as e:
-            self.log.warn('Could not establish a TCP connection with %s:%s. Error is:\n %s' % (addr[0], addr[1], e))
+            self.log.warn(f'Could not establish a TCP connection with {addr[0]}:{addr[1]}. Error is:\n {e}')
             return False
         return True
 

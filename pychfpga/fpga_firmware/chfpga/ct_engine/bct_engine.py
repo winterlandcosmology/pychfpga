@@ -398,14 +398,11 @@ class BCTEngine(MMIRouter):
         cb3_ignore_lane = 0
 
         if not (cb1_bin_indices is None or len(cb1_bin_indices) == number_of_cb1_bin_sel):
-            raise ValueError('1st crossbar bin map should have %i lists of bins. Ir currently has %i' % (
-                number_of_cb1_bin_sel, len(cb1_bin_indices)))
+            raise ValueError(f'1st crossbar bin map should have {int(number_of_cb1_bin_sel)} lists of bins. Ir currently has {len(cb1_bin_indices)}')
         if not (cb2_bin_indices is None or len(cb2_bin_indices) == number_of_cb2_bin_sel):
-            raise ValueError('2nd crossbar bin map should have %i lists of bins. Ir currently has %i' % (
-                number_of_cb2_bin_sel, len(cb2_bin_indices)))
+            raise ValueError(f'2nd crossbar bin map should have {int(number_of_cb2_bin_sel)} lists of bins. Ir currently has {len(cb2_bin_indices)}')
         if not (cb3_bin_indices is None or len(cb3_bin_indices) == number_of_cb3_bin_sel):
-            raise ValueError('3rd crossbar bin map should have %i lists of bins. Ir currently has %i' % (
-                number_of_cb3_bin_sel, len(cb3_bin_indices)))
+            raise ValueError(f'3rd crossbar bin map should have {int(number_of_cb3_bin_sel)} lists of bins. Ir currently has {len(cb3_bin_indices)}')
 
         def get_dest_slot_for_src_lane(src_lane):
             tx = (self.slot, src_lane)  # unique transmitter id (slot, lane)
@@ -1365,16 +1362,7 @@ class BCTEngine(MMIRouter):
         #   * (cb2_input_words_per_bin * cb2_bins* cb2_lanes + 1*cb2_bins*cb2_lanes/2 + cb2_lanes) * 4
 
         self.logger.debug(
-            '%r: Configuring crossbars 1 & 2 with frames_per_packet=%i, cb1_lanes=%s, cb1_bins=%i, '
-            'cb2_lanes=%s, cb2_bins=%i, cb2_bypass=%s, bp_shuffle_bypass=%s' % (
-                self,
-                frames_per_packet,
-                cb1_lanes,
-                cb1_bins,
-                cb2_lanes,
-                cb2_bins,
-                bool(cb2_bypass),
-                bool(bp_shuffle_bypass)))
+            f'{self!r}: Configuring crossbars 1 & 2 with frames_per_packet={int(frames_per_packet)}, cb1_lanes={cb1_lanes}, cb1_bins={int(cb1_bins)}, cb2_lanes={cb2_lanes}, cb2_bins={int(cb2_bins)}, cb2_bypass={bool(cb2_bypass)}, bp_shuffle_bypass={bool(bp_shuffle_bypass)}')
 
         # Put everything in reset
         self.fpga.set_chan_reset(1)

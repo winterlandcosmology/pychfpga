@@ -86,7 +86,7 @@ class FPGAMmi(BSB_MMI):
         # return '%r.%s(FPGA %s:%s, local %s:%s)' % (
         # self.parent, self.__class__.__name__, self.fpga_ip_addr,
         # self.fpga_port_number, self.interface_ip_addr, self.local_port_number)
-        return '%r.%s(%s)' % (self.parent, self.__class__.__name__, self.fpga_ip_addr)
+        return f'{self.parent!r}.{self.__class__.__name__}({self.fpga_ip_addr})'
 
     def open(self):
         """
@@ -149,9 +149,7 @@ class FPGAMmi(BSB_MMI):
 
         logger = logging.getLogger(__name__)
         logger.debug(
-            '%r: Broadcasting on port %i to configure FPGA S/N %016X '
-            'with address %s:%i' %
-            (self, chFPGA._BROADCAST_BASE_PORT, serial_number, ip_addr, port_number))
+            f'{self!r}: Broadcasting on port {int(chFPGA._BROADCAST_BASE_PORT)} to configure FPGA S/N {serial_number:016X} with address {ip_addr}:{int(port_number)}')
 
         # Build the array of bytes to fill the network configuration register
         # block
@@ -180,15 +178,12 @@ class FPGAMmi(BSB_MMI):
                 return
             else:
                 logger.debug(
-                    '%r: Networking configuration of FPGA S/N %016X with address %s:%i failed.'
-                    % (self, serial_number, ip_addr, port_number))
+                    f'{self!r}: Networking configuration of FPGA S/N {serial_number:016X} with address {ip_addr}:{int(port_number)} failed.')
                 trial += 1
         logger.debug(
-            '%r: Unable to configure FPGA S/N %016X with address %s:%i'
-            % (self, serial_number, ip_addr, port_number))
+            f'{self!r}: Unable to configure FPGA S/N {serial_number:016X} with address {ip_addr}:{int(port_number)}')
         raise FPGAMmiException(
-            '%r: Unable to configure FPGA S/N %016X with address %s:%i'
-            % (self, serial_number, ip_addr, port_number))
+            f'{self!r}: Unable to configure FPGA S/N {serial_number:016X} with address {ip_addr}:{int(port_number)}')
 
     def get_fpga_config(self, ip_addr, port_number,
                         timeout=0.1, number_of_trials=3):
@@ -296,9 +291,7 @@ class FPGAMmi(BSB_MMI):
                 # right command.
                 seq = data[0]  # received sequence number
                 if seq != self.send_counter & 0xff:
-                    error = ('Invalid sequence number from a read command. '
-                             'Got 0x%02x, expected 0x%02x.'
-                             % (seq, self.send_counter & 0xff))
+                    error = f'Invalid sequence number from a read command. Got 0x{seq:02x}, expected 0x{self.send_counter & 255:02x}.'
                     if resync:
                         self.send_counter = seq
                         error += ' Resynchronizing.'
@@ -316,15 +309,12 @@ class FPGAMmi(BSB_MMI):
                     #             "Resynchronizing and retrying to make sure."
                     # else:
                 elif len(data) != expected_reply_length + 1:
-                    error = "FPGA Read command returned %i bytes (0x%s) while %i were expected." % (
-                        len(data),
-                        ' '.join('%02X' % b for b in data),
-                        expected_reply_length + 1)
+                    error = f"FPGA Read command returned {len(data)} bytes (0x{' '.join((f'{b:02X}' for b in data))}) while {int(expected_reply_length + 1)} were expected."
 
                 has_timed_out = False
             except self.udp.TimeoutException:
                 self.set_timeout(self.get_timeout() * timeout_increase_factor)
-                error = '%r: Timeout during FPGA command.' % self
+                error = f'{self!r}: Timeout during FPGA command.'
                 has_timed_out = True
             if retry < 0:
                 return ''
@@ -335,10 +325,10 @@ class FPGAMmi(BSB_MMI):
             self.error_counter += 1
 
             if trial >= retry:
-                self.logger.error('%r: %s Raising exception after %i unsuccessful trials' % (self, error, trial))
-                raise IOError('%r: %s' % (self, error))
+                self.logger.error(f'{self!r}: {error} Raising exception after {int(trial)} unsuccessful trials')
+                raise IOError(f'{self!r}: {error}')
             else:
-                self.logger.warning('%r: %s This is trial %i/%i. Trying again' % (self, error, trial, retry))
+                self.logger.warning(f'{self!r}: {error} This is trial {int(trial)}/{int(retry)}. Trying again')
             trial += 1
         # We now have our data for this chunk
         self.set_timeout(old_timeout)
@@ -392,8 +382,7 @@ class FPGAMmi(BSB_MMI):
 
             if len(data) != read_length + 1:
                 raise FPGAMmiException(
-                    "%r: FPGA Read command returned %i bytes. %i were expected." %
-                    (self, len(data), read_length + 1))
+                    f"{self!r}: FPGA Read command returned {len(data)} bytes. {int(read_length + 1)} were expected.")
 
             dout.append(np.frombuffer(data[1:], dtype=type)[0])  # store received byte
         return dout

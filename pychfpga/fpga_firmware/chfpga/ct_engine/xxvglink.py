@@ -221,7 +221,7 @@ class GTY(MMI):
 
     def status(self):
         """ Displays the status of the GTY_CHANNEL"""
-        self.logger.info('--- GPU GTY CHANNEL %i ' % self.instance_number)
+        self.logger.info(f'--- GPU GTY CHANNEL {int(self.instance_number)} ')
 
     def get_rxdata(self):
         self.CAPTURE_ENABLE = 1
@@ -256,7 +256,7 @@ class GTY(MMI):
         'number_of_words' words are sampled randomly, so not all words in a packet may appear in the set.
         The values are resturned as a 8-digit hex value string.
         """
-        return set(['%08x' % self.get_rxdata() for x in range(number_of_words)])
+        return set([f'{self.get_rxdata():08x}' for x in range(number_of_words)])
 
 
 
@@ -348,14 +348,7 @@ class GTY(MMI):
                 self.ES_VERT_OFFSET = (abs(v_offset) & 0x7F) | (0x80 * (v_offset < 0)) | (0x100 * bool(ut_sign))
                 self.ES_HORZ_OFFSET = h_offset & 0xFFF
                 progress = (iv * nh + len(set(processed_ih))) / float(nh * nv - 1) * 100
-                print('%3.0f%% Vert offset %2i/%2i= %3i, Horiz offset %3i/%3i= %3i: ' % (
-                        progress,
-                        iv,
-                        nv-1,
-                        v_offset,
-                        ih,
-                        nh-1,
-                        h_offset), end=' ')
+                print(f'{progress:3.0f}% Vert offset {int(iv):2}/{int(nv - 1):2}= {int(v_offset):3}, Horiz offset {int(ih):3}/{int(nh - 1):3}= {int(h_offset):3}: ', end=' ')
 
                 while True:
                     self.ES_PRESCALE = prescale
@@ -367,7 +360,7 @@ class GTY(MMI):
                     error_count = self.ES_ERROR_COUNT
                     sample_count = self.ES_SAMPLE_COUNT
 
-                    print('(Prescale=%i => %i err / %i samples) ' % (prescale, error_count, sample_count), end=' ')
+                    print(f'(Prescale={int(prescale)} => {int(error_count)} err / {int(sample_count)} samples) ', end=' ')
                     if sample_count < 100:
                         if prescale == 0:
                             break
@@ -385,7 +378,7 @@ class GTY(MMI):
 
                 sample_count *= 2 ** (1 + prescale)
                 e = float(error_count) / float(sample_count)
-                print(' --- Got %i samples, %i errors, BER=%1.1e' % (sample_count, error_count, e))
+                print(f' --- Got {int(sample_count)} samples, {int(error_count)} errors, BER={e:1.1e}')
                 ber[ih, iv] = e
                 processed_ih.append(ih)
                 if dir == -1 and (ih == old_ih or ih == 0):
@@ -423,12 +416,7 @@ class GTY(MMI):
         plt.xlabel('Horizontal sampling offset')
         plt.ylabel('Vertical sampling offset')
         iceboard = eye_diag.gty.fpga
-        plt.title('Eye diagram for IceBoard SN%s (Icecrate %s SN%s Slot %i) Lane %i' % (
-            iceboard.serial,
-            iceboard.crate.__class__.__name__,
-            iceboard.crate.serial,
-            iceboard.slot,
-            eye_diag.gty.instance_number + 1))
+        plt.title(f'Eye diagram for IceBoard SN{iceboard.serial} (Icecrate {iceboard.crate.__class__.__name__} SN{iceboard.crate.serial} Slot {int(iceboard.slot)}) Lane {int(eye_diag.gty.instance_number + 1)}')
 
 class XXVGLRouter(MMIRouter):
     ROUTER_PORT_NUMBER_WIDTH = 4
@@ -513,17 +501,17 @@ class XXVGLinkCore(MMI):
 
         print('Common Bitfields')
         for (name, value) in self.read_all_fields():
-            print('    %s = %i, 0x%X, %s' % (name, value, value, bin(value)))
+            print(f'    {name} = {int(value)}, 0x{value:X}, {bin(value)}')
 
         for (i, qpll) in enumerate(self.qpll):
-            print('QPLL[%i] Bitfields' % i)
+            print(f'QPLL[{int(i)}] Bitfields')
             for (name, value) in qpll.read_all_fields():
-                print('    %s = %i, 0x%X, %s' % (name, value, value, bin(value)))
+                print(f'    {name} = {int(value)}, 0x{value:X}, {bin(value)}')
 
         for (i, gty) in enumerate(self.gty):
-            print('GTY[%i] Bitfields' % i)
+            print(f'GTY[{int(i)}] Bitfields')
             for (name, value) in gty.read_all_fields():
-                print('    %s = %i, 0x%X, %s' % (name, value, value, bin(value)))
+                print(f'    {name} = {int(value)}, 0x{value:X}, {bin(value)}')
 
 
 class XXVGLinkArray(XXVGLinkCore):
@@ -684,7 +672,7 @@ class XXVGLinkArray(XXVGLinkCore):
             List of integers.
         """
         if lane_group not in self.phys_lane_map:
-            raise ValueError('Invalid lane group name %s' % lane_group)
+            raise ValueError(f'Invalid lane group name {lane_group}')
         return self.phys_lane_map[lane_group]
 
     def get_lane_numbers(self, lane_group):
@@ -700,7 +688,7 @@ class XXVGLinkArray(XXVGLinkCore):
             List of integers.
         """
         if lane_group not in self.gty_map:
-            raise ValueError('Invalid lane group name %s' % lane_group)
+            raise ValueError(f'Invalid lane group name {lane_group}')
         if lane_group is None:
             raise ValueError('Logical lane numbers cannot be obtained for lane group "None": '
                              'the lane numbers are not unique')
@@ -724,7 +712,7 @@ class XXVGLinkArray(XXVGLinkCore):
             List of GTY instances. Returns None for internal data links.
         """
         if lane_group not in self.gty_map:
-            raise ValueError('Invalid lane group name %s' % lane_group)
+            raise ValueError(f'Invalid lane group name {lane_group}')
         gty_map = self.gty_map[lane_group]
         if lane is None:
             return gty_map
@@ -750,7 +738,7 @@ class XXVGLinkArray(XXVGLinkCore):
         """
 
         if lane_group not in self.gty_map:
-            raise ValueError('Invalid lane group name %s' % lane_group)
+            raise ValueError(f'Invalid lane group name {lane_group}')
         gty_map = self.gty_map[lane_group]
 
         if isinstance(power, int):
@@ -763,7 +751,7 @@ class XXVGLinkArray(XXVGLinkCore):
         for lane, pwr in power:
             gty = gty_map[lane]
             if not gty:
-                self.logger.warning('There is no GTY at the specified lane %i of group %s (it is a direct internal link)' % (lane, lane_group))
+                self.logger.warning(f'There is no GTY at the specified lane {int(lane)} of group {lane_group} (it is a direct internal link)')
             else:
                 gty.TXDIFFCTRL = pwr
 
@@ -789,8 +777,7 @@ class XXVGLinkArray(XXVGLinkCore):
         bitfields = []
         for name in names:
             if name not in self.RX_LANE_MONITOR_TABLE:
-                raise ValueError('Invalid lane monitor name. valid names are %s' %
-                        ','.join(self.RX_LANE_MONITOR_TABLE.keys()))
+                raise ValueError(f"Invalid lane monitor name. valid names are {','.join(self.RX_LANE_MONITOR_TABLE.keys())}")
             bitfields.append(self.get_bitfield(self.RX_LANE_MONITOR_TABLE[name]))
 
         # get monitoring results
@@ -884,18 +871,34 @@ class XXVGLinkArray(XXVGLinkCore):
         active_slots = set(self.fpga.crate.slot.keys())
         matching_gty_ids = [self.fpga.crate.get_matching_tx(gty_id) for gty_id in gty_ids]
 
-        print('%20s: %s' % ('XXVGLINK_Array Lane #', ' '.join('  L%2i ' % v for v in range(self.NUMBER_OF_LANES))))
-        print('%20s: %s' % ('--------------------', ' '+' '.join('------' for v in range(self.NUMBER_OF_LANES))))
-        print('%20s: %s' % ('GTY ID', ''.join('%7s' % ('(%i,%i)' % id_) for id_ in gty_ids)))
-        print('%20s: %s' % ('Matching GTY ID',
-                            ''.join('%7s' % ('(%i,%i)' % matching_id) for matching_id in matching_gty_ids)))
-        print('%20s: %s' % ('Matching GTY present',
-                            ' '.join(('%6s' % ('-N/A-', 'ok ')[matching_id[0] in active_slots])
-                                     for matching_id in matching_gty_ids)))
+        print(
+            f"{'XXVGLINK_Array Lane #':>20}: "
+            f"{' '.join(f'  L{v:2d} ' for v in range(self.NUMBER_OF_LANES))}"
+        )
+        print(f"{'--------------------':>20}: {' ' + ' '.join(('------' for v in range(self.NUMBER_OF_LANES)))}")
+        print(
+            f"{'GTY ID':>20}: "
+            f"{''.join(f'({id_[0]},{id_[1]})'.rjust(7) for id_ in gty_ids)}"
+        )
+        print(
+            f"{'Matching GTY ID':>20}: "
+            f"{''.join(f'({matching_id[0]},{matching_id[1]})'.rjust(7) for matching_id in matching_gty_ids)}"
+        )
+        print(
+            f"{'Matching GTY present':>20}: "
+            f"{' '.join(('-N/A-', 'ok ')[matching_id[0] in active_slots].rjust(6) for matching_id in matching_gty_ids)}"
+        )
         for name in self.RX_LANE_MONITOR_TABLE:
-            print('%20s: %s' % (name, ' '.join('%6i' % v for v in await self.get_rx_lane_monitor(name))))
-        print('%20s: %6s %s' % ('DMONITOR', 'N/A', ' '.join('%6i' % (g.DMONITOROUT & 0x7f) for g in self.gty)))
-        print('%20s: %6s %s' % ('BLOCK_LOCK', 'N/A', ' '.join('%6i' % g.BLOCK_LOCK for g in self.gty)))
+            vals = await self.get_rx_lane_monitor(name)
+            print(f"{name:>20}: {' '.join(f'{v:6d}' for v in vals)}")
+        print(
+            f"{'DMONITOR':>20}: {'N/A':>6} "
+            f"{' '.join(f'{(g.DMONITOROUT & 0x7f):6d}' for g in self.gty)}"
+        )
+        print(
+            f"{'BLOCK_LOCK':>20}: {'N/A':>6} "
+            f"{' '.join(f'{g.BLOCK_LOCK:6d}' for g in self.gty)}"
+        )
 
         if self.RESET_MON:
             print('WARNING: BP_SHUFFLE reset is active (areset=1)!')

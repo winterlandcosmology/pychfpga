@@ -60,7 +60,7 @@ class I2C(MMI):
         Selects on which FPGA I2C port the subsequents I2C transactions will be made.
         """
         if port_number < 0 or port_number > 1:
-            self.logger.error('%r: write_read: port number is out of range' % self)
+            self.logger.error(f'{self!r}: write_read: port number is out of range')
             raise ValueError()
         self.current_port = port_number
         # self.logger.debug("Setting FPGA I2C port to %i" % port_number)
@@ -102,11 +102,11 @@ class I2C(MMI):
         """
 
         if addr < 0 or addr > 0xFF:
-            self.logger.error('%r: write_read: I2C address is out of range' % self)
+            self.logger.error(f'{self!r}: write_read: I2C address is out of range')
             raise ValueError()
 
         if read_length < 0 or read_length > 4:
-            self.logger.error('%r: write_read: read_length is out of range' % self)
+            self.logger.error(f'{self!r}: write_read: read_length is out of range')
             raise ValueError()
 
         if data is None:
@@ -114,7 +114,7 @@ class I2C(MMI):
         else:
             write_length = len(data)
             if write_length > 3:
-                self.logger.error('%r: write_read: write length is out of range' % self)
+                self.logger.error(f'{self!r}: write_read: write length is out of range')
                 raise ValueError()
 
         # if verbose:
@@ -128,7 +128,7 @@ class I2C(MMI):
         done_ctr = self.DONE_CTR
 
         if start_ctr != done_ctr:
-            error_msg += '%r: write_read: start_ctr is different from done_ctr\n' % self
+            error_msg += f'{self!r}: write_read: start_ctr is different from done_ctr\n'
 
         trial = 0
         while True:
@@ -152,7 +152,7 @@ class I2C(MMI):
             done_ctr = (done_ctr + 1) % 16
 
             if self.DONE_CTR != done_ctr:
-                self.logger.warn('%r: write_read: Transaction is not completed yet!' % self)
+                self.logger.warn(f'{self!r}: write_read: Transaction is not completed yet!')
 
             # Get the data that was read back
             read_data = self.read_status(0x00, length=4, type=np.uint8).copy()
@@ -170,23 +170,10 @@ class I2C(MMI):
             print(f'I2C: trying again')
             trial += 1
             if trial > retry:
-                error_msg += '%r: write_read: communication error: did not receive correct ACK bits. ' \
-                             'Received 0x%02x, expected 0x%02x\n. ' % (self, ack, expected_ack)
+                error_msg += f'{self!r}: write_read: communication error: did not receive correct ACK bits. Received 0x{ack:02x}, expected 0x{expected_ack:02x}\n. '
                 break
             else:
-                self.logger.warn('write_read: communication error: did not receive correct ACK bits. '
-                                 'Received 0x%02x, expected 0x%02x\n. Start ctr: %i => %i, Done ctr: %i => %i, '
-                                 'Idle: %i => %i, Collisiotn=%i, timeout=%i. Retrying...' % (
-                                        ack,
-                                        expected_ack,
-                                        start_ctr,
-                                        self.START_CTR,
-                                        done_ctr,
-                                        self.DONE_CTR,
-                                        idle,
-                                        self.IDLE,
-                                        self.COLLISION,
-                                        self.TIMEOUT))
+                self.logger.warn(f'write_read: communication error: did not receive correct ACK bits. Received 0x{ack:02x}, expected 0x{expected_ack:02x}\n. Start ctr: {int(start_ctr)} => {int(self.START_CTR)}, Done ctr: {int(done_ctr)} => {int(self.DONE_CTR)}, Idle: {int(idle)} => {int(self.IDLE)}, Collisiotn={int(self.COLLISION)}, timeout={int(self.TIMEOUT)}. Retrying...')
 
             if verbose:
                 print(f'I2C: read_data 2 is  {read_data}')
@@ -195,11 +182,9 @@ class I2C(MMI):
 
         # Che
         if self.START_CTR != start_ctr:
-            error_msg += '%r: write_read: communication error: start_ctr do not match. ' \
-                         'Read %i, expected %i\n' % (self, self.START_CTR, start_ctr)
+            error_msg += f'{self!r}: write_read: communication error: start_ctr do not match. Read {int(self.START_CTR)}, expected {int(start_ctr)}\n'
         if self.DONE_CTR != done_ctr:
-            error_msg += '%r: write_read: communication error: done_ctr do not match. ' \
-                         'Read %i, expected %i\n' % (self, self.DONE_CTR, done_ctr)
+            error_msg += f'{self!r}: write_read: communication error: done_ctr do not match. Read {int(self.DONE_CTR)}, expected {int(done_ctr)}\n'
 
         # print 'I2C communication: ACK byte is 0x%02x' % ack
         read_data = read_data[-read_length:]
@@ -208,13 +193,7 @@ class I2C(MMI):
             print(f'I2C: read_data 4 is {read_data}')
         if error_msg:
             error_msg = (
-                '%r: write_read:  The following errors occured while '
-                'writing %i bytes and reading %i bytes on FPGA I2C '
-                'port %i at address 0x%02x with data [%s]\n %s' % (
-                    self, write_length, read_length,
-                    self.current_port, addr,
-                    ' '.join(hex(x) for x in read_data),
-                    error_msg))
+                f"{self!r}: write_read:  The following errors occured while writing {int(write_length)} bytes and reading {int(read_length)} bytes on FPGA I2C port {int(self.current_port)} at address 0x{addr:02x} with data [{' '.join((hex(x) for x in read_data))}]\n {error_msg}")
             if noerror:
                 self.logger.warning(error_msg)
             else:
@@ -243,9 +222,9 @@ class I2C(MMI):
 
     def status(self, verbose=0):
         # s=self.read(0x04,length=2)
-        self.logger.info('%r: Current selected port: %i' % (self, self.PORT))
-        self.logger.info('%r: Reset state: %i' % (self, self.RESET))
-        self.logger.info('%r: Force line SCK: %i, SDA: %i' % (self, self.FORCE_SCK, self.FORCE_SDA))
+        self.logger.info(f'{self!r}: Current selected port: {int(self.PORT)}')
+        self.logger.info(f'{self!r}: Reset state: {int(self.RESET)}')
+        self.logger.info(f'{self!r}: Force line SCK: {int(self.FORCE_SCK)}, SDA: {int(self.FORCE_SDA)}')
         # s=self.read(0x80,length=9)
         # print 'Read bytes:', hex(s[0:4])
         # print 'last state:', hex(s[4]>>4)

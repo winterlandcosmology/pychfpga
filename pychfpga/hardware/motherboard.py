@@ -470,7 +470,7 @@ class Motherboard(HardwareMap):
                 slot = self.slot - 1
             else:
                 if numeric_only:
-                    raise RuntimeError('The crate %s does not have a valid slot number' % self.crate)
+                    raise RuntimeError(f'The crate {self.crate} does not have a valid slot number')
                 slot = default_slot
 
         else:  # if there is no crate, allow empty crate but not an empty slot

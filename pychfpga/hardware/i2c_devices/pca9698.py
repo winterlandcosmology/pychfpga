@@ -167,10 +167,35 @@ class pca9698(object):
         return self.i2c.write_read(self.address, data=[register], read_length=1)[0]
 
     def write(self, byte, value, mask=0xff, select=True):
-        self.write_reg('OUT%i' % byte, value, mask=mask, select=select)
+        """Write data to the device.
+
+        Args:
+            byte (Any): Parameter value.
+            value (Any): Parameter value.
+            mask (Any): Parameter value.
+            select (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
+        self.write_reg(f'OUT{int(byte)}', value, mask=mask, select=select)
 
     def read(self, byte, select=True):
-        return self.read_reg('IN%i' % byte, select=select)
+        """Read data from the device.
+
+        Args:
+            byte (Any): Parameter value.
+            select (Any): Parameter value.
+
+        Returns:
+            Any: Returned value.
+        """
+        return self.read_reg(f'IN{int(byte)}', select=select)
 
     def is_present(self):
+        """Check whether the device is reachable on the bus.
+
+        Returns:
+            Any: Returned value.
+        """
         return self.i2c.is_present(self.address, self.port)

@@ -108,16 +108,10 @@ class Ccoll(object):
 
     def __repr__(self):
         if self._has_keys:
-            return '%s containing: {\n%s}' % (
-                type(self).__name__,
-                ',\n'.join('%s: %r' % (key, value) for
-                           (key, value) in self.items())
-                )
-        else:
-            return '%s containing: [\n%s]' % (
-                type(self).__name__,
-                ',\n'.join(['%r' % (value, ) for value in self])
-                )
+            body = ',\n'.join(f'{key!s}: {value!r}' for key, value in self.items())
+            return f'{type(self).__name__} containing: {{\n{body}\n}}'
+        body = ',\n'.join(f'{value!r}' for value in self)
+        return f'{type(self).__name__} containing: [\n{body}\n]'
 
     def __dir__(self):
         """Retrieve a list of interesting attributes."""
@@ -129,7 +123,7 @@ class Ccoll(object):
     # Mirror the main attributes of _proto if it is callable so we can mimic
     # its signature.
     __doc__ = property(lambda self: self._proto.__doc__ if callable(self._proto)
-                       else 'Collection of %s objects' % type(self._proto))
+                       else f'Collection of {type(self._proto)} objects')
     __class__ = property(lambda self: self._proto.__class__ if callable(self._proto) else Ccoll)
     __name__ = property(lambda self: self._proto.__name__ if callable(self._proto) else Ccoll.__name__)
     __func__ = property(lambda self: self._proto.__func__)
@@ -298,11 +292,9 @@ class Ccoll(object):
         attribute name, otherwise raise an exception"""
         attr_present = [hasattr(obj, name) for obj in self]
         if not any(attr_present):
-            raise AttributeError("Attribute %s does not exist on any element "
-                                 "of the current results" % name)
+            raise AttributeError(f"Attribute {name} does not exist on any element of the current results")
         elif not all(attr_present):
-            raise AttributeError("Attribute %s must exist on all elements "
-                                 "of the current results" % name)
+            raise AttributeError(f"Attribute {name} must exist on all elements of the current results")
 
 
 # vim: sts=4 ts=4 sw=4 tw=78 smarttab expandtab

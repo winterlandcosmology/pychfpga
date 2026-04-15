@@ -17,7 +17,7 @@ import importlib
 def hex(arg):
     """ Wrapper around the built-in hex function to allow hex conversion of arrays """
     if isinstance(arg, np.ndarray) or isinstance(arg, list) or isinstance(arg, tuple):
-        return '[%s]' % (' '.join(builtins.hex(a) for a in arg))
+        return f"[{' '.join((builtins.hex(a) for a in arg))}]"
     else:
         return builtins.hex(arg)
 
@@ -26,7 +26,7 @@ def reload_modules(module_list):
     """ Reload modules specified in the list."""
     log = logging.getLogger(__name__)
     for module in module_list:
-        log.debug('Reloading module %s' % (module.__name__))
+        log.debug(f'Reloading module {module.__name__}')
         importlib.reload(module)
 
 

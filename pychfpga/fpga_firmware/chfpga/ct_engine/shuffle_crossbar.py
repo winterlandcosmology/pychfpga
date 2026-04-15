@@ -142,7 +142,7 @@ class ShuffleCrossbar(MMI):
         elif width == 8:
             is_four_bits = 0
         else:
-            raise ValueError('Number of bits %i is invalid for the channelizers. Only 4 or 8 is allowed' % width)
+            raise ValueError(f'Number of bits {int(width)} is invalid for the channelizers. Only 4 or 8 is allowed')
 
         # Set the channelizer data width
         for bs in self.BIN_SEL:
@@ -192,7 +192,7 @@ class ShuffleCrossbar(MMI):
         """
 
         if len(lane_map) != self.NUMBER_OF_CROSSBAR_INPUTS:
-            raise TypeError('Lane map must be a list of %i values' % self.NUMBER_OF_CROSSBAR_INPUTS)
+            raise TypeError(f'Lane map must be a list of {int(self.NUMBER_OF_CROSSBAR_INPUTS)} values')
 
         lane_map_bytes = np.zeros(self.NUMBER_OF_CROSSBAR_INPUTS // 2, dtype=np.uint8)
         for i, lane in enumerate(lane_map):
@@ -348,8 +348,7 @@ class ShuffleCrossbar(MMI):
         bitfields = []
         for name in names:
             if name not in self.LANE_MONITOR_TABLE:
-                raise ValueError('Invalid lane monitor name. valid names are %s' %
-                                 ','.join(self.LANE_MONITOR_TABLE.keys()))
+                raise ValueError(f"Invalid lane monitor name. valid names are {','.join(self.LANE_MONITOR_TABLE.keys())}")
             bf = self.LANE_MONITOR_TABLE[name]
             if isinstance(bf, str):
                 bitfields.append(lambda cb, lane, name_=bf: cb.read_bitfield(name_))
@@ -477,31 +476,40 @@ class ShuffleCrossbar(MMI):
         frame_ref = frame_number[0]
         frame_number = [frame_number[lane] for lane in lane_map]
 
-        print('%25s: %s' % ('Monitor point', ' '.join('  L%2i ' % v for v in lane_range)))
-        print('%25s: %s' % ('--------------------', ' '+' '.join('------' for v in lane_range)))
-        print('%25s: %s' % ('Pre-map lane #', ' '.join(('%6i' % lane_map[lane] for lane in lane_range))))
+        print(f"{'Monitor point':>25}: {' '.join(f'  L{v:2d} ' for v in lane_range)}")
+        print(f"{'--------------------':>25}: {' ' + ' '.join(('------' for v in lane_range))}")
+        print(f"{'Pre-map lane #':>25}: {' '.join(f'{lane_map[lane]:6d}' for lane in lane_range)}")
         if self.fpga.slot is not None:
             gtx_ids = [(self.fpga.slot, lane_map[lane]) for lane in lane_range]
-            print('%25s: %s' % ('Rx Node ID', ''.join('%7s' % ('(%i,%i)' % id_) for id_ in gtx_ids)))
+            print(
+                f"{'Rx Node ID':>25}: "
+                f"{''.join(f'({id_[0]},{id_[1]})'.rjust(7) for id_ in gtx_ids)}"
+            )
             matching_gtx_ids = [self.fpga.crate.get_matching_tx(gtx_id) for gtx_id in gtx_ids]
-            print('%25s: %s' % (
-                'Matching GTX present',
-                ' '.join(('%6s' % ('-N/A-', 'ok ')[matching_id[0] in active_slots]) for matching_id in matching_gtx_ids)))
-            print('%25s: %s' % (
-                'Matching TX Node ID',
-                ''.join('%7s' % ('(%i,%i)' % matching_id) for matching_id in matching_gtx_ids)))
-        print('%25s: %s' % (
-            'Detected Stream ID',
-            ''.join('%7s' % ('(%i,%i)' % (((id_ >> 4) & 15) + 1, id_ & 15)) for id_ in stream_id)))
-        print('%25s: %s' % (
-            'RX Errors',
-            ' '.join('%6i' % rx_errors[lane_map[lane]] for lane in lane_range)))
-        print('%25s: %s' % (
-            'RX max frame len (words)',
-            ' '.join('%6i' % (rx_max_frame[lane_map[lane]] + 1) for lane in lane_range)))
-        print('%25s: %s' % (
-            'RX min frame len (words)',
-            ' '.join('%6i' % (rx_min_frame[lane_map[lane]] + 1) for lane in lane_range)))
+            print(
+                f"{'Matching GTX present':>25}: "
+                f"{' '.join(('-N/A-', 'ok ')[matching_id[0] in active_slots].rjust(6) for matching_id in matching_gtx_ids)}"
+            )
+            print(
+                f"{'Matching TX Node ID':>25}: "
+                f"{''.join(f'({matching_id[0]},{matching_id[1]})'.rjust(7) for matching_id in matching_gtx_ids)}"
+            )
+        print(
+            f"{'Detected Stream ID':>25}: "
+            f"{''.join(f'({((id_ >> 4) & 15) + 1},{id_ & 15})'.rjust(7) for id_ in stream_id)}"
+        )
+        print(
+            f"{'RX Errors':>25}: "
+            f"{' '.join(f'{rx_errors[lane_map[lane]]:6d}' for lane in lane_range)}"
+        )
+        print(
+            f"{'RX max frame len (words)':>25}: "
+            f"{' '.join(f'{rx_max_frame[lane_map[lane]] + 1:6d}' for lane in lane_range)}"
+        )
+        print(
+            f"{'RX min frame len (words)':>25}: "
+            f"{' '.join(f'{rx_min_frame[lane_map[lane]] + 1:6d}' for lane in lane_range)}"
+        )
         # input_detect = self.get_lane_monitor('INPUT_DETECT')
         # input_detect = [input_detect[lane] for lane in lane_map]
         # align_detect = self.get_lane_monitor('ALIGN_DETECT')
@@ -511,7 +519,10 @@ class ShuffleCrossbar(MMI):
         for name in ['MISSING_FRAME', 'BAD_FRAME_LENGTH', 'ALIGN_FIFO_OVERFLOW',
                      'DATA_TIMEOUT', 'BAD_TVALID', 'BAD_TLAST']:
             value = self.get_lane_monitor(name)
-            print('%25s: %s' % (name, ' '.join('%6s' % ('-', 'ERR!')[bool(value[lane])] for lane in lane_map)))
+            print(
+                f"{name:>25}: "
+                f"{' '.join(('-', 'ERR!')[bool(value[lane])].rjust(6) for lane in lane_map)}"
+            )
         input_frame_ctr = []
         align_frame_ctr = []
         delay = []
@@ -524,19 +535,19 @@ class ShuffleCrossbar(MMI):
             delay.append(self.DELAY_CAPTURE if lane < 8 else '-')
             fifo_count.append(self.FIFO_COUNT)
 
-        print('%25s: %s' % ('INPUT DELAY', ' '.join('%6s' % delay[lane] for lane in lane_map)))
-        print('%25s: %s' % ('INPUT_FRAME_CTR', ' '.join('%6i' % input_frame_ctr[lane] for lane in lane_map)))
-        print('%25s: %s' % ('ALIGN_FRAME_CTR', ' '.join('%6i' % align_frame_ctr[lane] for lane in lane_map)))
-        print('%25s: %s' % ('FIFO_TFIRST', ' '.join('%6i' % fifo_tfirst[lane] for lane in lane_map)))
-        print('%25s: %s' % ('FIFO_COUNT', ' '.join('%6i' % fifo_count[lane] for lane in lane_map)))
+        print(f"{'INPUT DELAY':>25}: {' '.join(f'{delay[lane]:>6}' for lane in lane_map)}")
+        print(f"{'INPUT_FRAME_CTR':>25}: {' '.join(f'{input_frame_ctr[lane]:6d}' for lane in lane_map)}")
+        print(f"{'ALIGN_FRAME_CTR':>25}: {' '.join(f'{align_frame_ctr[lane]:6d}' for lane in lane_map)}")
+        print(f"{'FIFO_TFIRST':>25}: {' '.join(f'{fifo_tfirst[lane]:6d}' for lane in lane_map)}")
+        print(f"{'FIFO_COUNT':>25}: {' '.join(f'{fifo_count[lane]:6d}' for lane in lane_map)}")
         output_frame_ctr = []
         for lane in range(self.NUMBER_OF_CROSSBAR_OUTPUTS):
             self.LANE_MONITOR_SEL = lane
             output_frame_ctr.append(self.OUTPUT_FRAME_CTR)
-        print('%25s: %s' % ('OUTPUT_FRAME_CTR', ' '.join('%6i' % v for v in output_frame_ctr)))
+        print(f"{'OUTPUT_FRAME_CTR':>25}: {' '.join(f'{v:6d}' for v in output_frame_ctr)}")
 
-        print('%25s: %s' % ('Frame #', ' '.join('%6i' % f for f in frame_number)))
-        print('%25s: %s' % ('Delta Frame #', ' '.join('%6i' % (f - frame_ref) for f in frame_number)))
+        print(f"{'Frame #':>25}: {' '.join(f'{f:6d}' for f in frame_number)}")
+        print(f"{'Delta Frame #':>25}: {' '.join(f'{(f - frame_ref):6d}' for f in frame_number)}")
 
     async def get_metrics(self, reset=True):
         """ Return the monitoring metrics for the 2nd and 3rd crossbar.
@@ -547,7 +558,7 @@ class ShuffleCrossbar(MMI):
             slot=(self.fpga.slot or 0) - 1,
             id=self.fpga.get_string_id(),
             type='GAUGE')
-        prefix = 'fpga_crossbar%i_' % self.crossbar_level
+        prefix = f'fpga_crossbar{int(self.crossbar_level)}_'
         # add ALIGN status flags
         bitfield_names = ['BAD_TLAST', 'BAD_TVALID', 'BAD_FRAME_LENGTH',
                           'MISSING_FRAME', 'ALIGN_FIFO_OVERFLOW', 'DATA_TIMEOUT']

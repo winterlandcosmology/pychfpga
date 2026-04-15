@@ -1,3 +1,5 @@
+"""Display drawing primitives shared by concrete display backends."""
+
 import time
 
 
@@ -7,6 +9,7 @@ from . import font
 
 
 class Display:
+    """Base class implementing a monochrome frame-buffer drawing API."""
     # Display geometry
     WIDTH = None
     HEIGHT = None
@@ -17,6 +20,11 @@ class Display:
     BLACK = 0
 
     def __init__(self):
+        """Initialize frame buffer, drawing state, and font defaults.
+
+        Returns:
+            None: No value is returned.
+        """
         # self.BYTES_PER_LINE = self.WIDTH * self.BYTES_PER_PIXEL
         self.fb = memoryview(bytearray(self.WIDTH * self.HEIGHT//8)) # frame buffer, 2 bytes per pixel
         # self.zeros = memoryview(bytearray(self.BYTES_PER_LINE)) # preallocate a line of zeros for efficiency
@@ -41,11 +49,24 @@ class Display:
         self.bg = self.BLACK
 
     def init(self):
+        """Initialize hardware-specific state in subclasses.
+
+        Returns:
+            None: No value is returned.
+        """
         # self.set_brightness(16)
         # self.clear()
         pass
 
     def set_brightness(self, brightness=16):
+        """Set display brightness level and cache current value.
+
+        Args:
+            brightness (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         if brightness == 16:
             self.last_time = time.time()
         if self.brightness == brightness:
@@ -61,9 +82,26 @@ class Display:
         raise NotImplementedError()
 
     def update(self, y0=None, y1=None):
+        """Push the selected frame-buffer region to the hardware display.
+
+        Args:
+            y0 (Any): Parameter value.
+            y1 (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self.write_frame_buffer(y0=y0, y1=y1)
 
     def clear(self, update=True):
+        """Clear frame buffer and optionally refresh the display.
+
+        Args:
+            update (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         for addr in range(len(self.fb)):
             self.fb[addr] = 0
         self.fb_y0 = 0
@@ -113,6 +151,16 @@ class Display:
         self.fb_y1 = max(self.fb_y1, y1)
 
     def set_pixel(self, x, y, color):
+        """Set a single pixel in the local frame buffer.
+
+        Args:
+            x (Any): Parameter value.
+            y (Any): Parameter value.
+            color (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         if x < 0 or x >= self.WIDTH or y < 0 or y >= self.HEIGHT-1:
             return
         addr = x + self.WIDTH*(y//8)
@@ -155,12 +203,28 @@ class Display:
     #         self.font_name = font_name
 
     def set_fg_color(self, color):
+        """Set current foreground color used by text rendering.
+
+        Args:
+            color (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         if isinstance(color, tuple):
             self.fg = self.encode_color(color)
         else:
             self.fg = color
 
     def set_bg_color(self, color):
+        """Set current background color used by text rendering.
+
+        Args:
+            color (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         if isinstance(color, tuple):
             self.bg = self.encode_color(color)
         else:
@@ -247,6 +311,16 @@ class Display:
             self.write_frame_buffer()
 
     def test_text(self,r=255, g=255, b=255):
+        """Run a legacy text drawing performance/debug smoke test.
+
+        Args:
+            r (Any): Parameter value.
+            g (Any): Parameter value.
+            b (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self.clear_frame_buffer()
         self.write_frame_buffer()
         t0 = time.ticks_ms()

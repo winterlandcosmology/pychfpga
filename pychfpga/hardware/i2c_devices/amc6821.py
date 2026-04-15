@@ -33,13 +33,27 @@ class AMC6821(object):
         self._address = address
 
     def open(self):
+        """Open or acquire access to the device.
+
+        Returns:
+            None: No value is returned.
+        """
         pass
 
     def close(self):
+        """Close or release access to the device.
+
+        Returns:
+            None: No value is returned.
+        """
         pass
 
     def init(self):
-        """Initializes the fan controller"""
+        """Initializes the fan controller
+
+        Returns:
+            None: No value is returned.
+        """
         # self.write('START', 1)
 
         # bit 7 : THERMOVIE : Thermistor Overtemp Interrupt Enable
@@ -64,12 +78,26 @@ class AMC6821(object):
         self._i2c.select_bus(self._bus_name)
 
     def is_present(self):
+        """Check whether the device is reachable on the bus.
+
+        Returns:
+            Any: Returned value.
+        """
         return self._i2c.is_present(self._address, self._bus_name)
 
     def read(self, name, select=True):
+        """Read data from the device.
+
+        Args:
+            name (Any): Parameter value.
+            select (Any): Parameter value.
+
+        Returns:
+            Any: Returned value.
+        """
         if isinstance(name, str):
             if name not in self.REGISTER_MAP:
-                raise RuntimeError("'%s'  is not a valid fan controller register name" % name)
+                raise RuntimeError(f"'{name}'  is not a valid fan controller register name")
             (register, bit, width) = self.REGISTER_MAP[name]
         else:
             (register, bit, width) = (name, 0, 8)
@@ -83,9 +111,19 @@ class AMC6821(object):
         return value
 
     def write(self, name, value, select=True):
+        """Write data to the device.
+
+        Args:
+            name (Any): Parameter value.
+            value (Any): Parameter value.
+            select (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         if isinstance(name, str):
             if name not in self.REGISTER_MAP:
-                raise ValueError("'%s'  is not a valid fan controller register name" % name)
+                raise ValueError(f"'{name}'  is not a valid fan controller register name")
             (register, bit, width) = self.REGISTER_MAP[name]
         else:
             (register, bit, width) = (name, 0, 8)
@@ -93,7 +131,7 @@ class AMC6821(object):
         if width == 1:
             value = bool(value)
         elif value < 0 or value >= (1 << width):
-            raise ValueError("%i is an invalid value for fan controller field value '%s'" % (value, name))
+            raise ValueError(f"{int(value)} is an invalid value for fan controller field value '{name}'")
 
         if select:
             self._i2c.select_bus(self._bus_name)
@@ -108,20 +146,51 @@ class AMC6821(object):
         self._i2c.select_bus('GPIO')    # close bus to fan controller i2c to avoid problems with the arm accessing it
 
     def set_control_mode(self, mode):
+        """Set control mode configuration.
+
+        Args:
+            mode (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self.write('FDRC', mode)
 
     def set_duty_cycle(self, duty):
+        """Set duty cycle configuration.
+
+        Args:
+            duty (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self.write('DutyCycle', int(duty/100.*255.))
 
     def get_local_temperature(self):
+        """Return local temperature value.
+
+        Returns:
+            Any: Returned value.
+        """
         return round(np.int16((self.read('LocalTempLSB') << 5)
                      + (self.read('LocalTempMSB') << 8)) / 256., 3)  # LSB must be read first
 
     def get_remote_temperature(self):
+        """Return remote temperature value.
+
+        Returns:
+            Any: Returned value.
+        """
         return round(np.int16((self.read('RemoteTempLSB') << 5)
                      + (self.read('RemoteTempMSB') << 8))/256., 3)  # LSB must be read first
 
     def get_fan_speed(self):
+        """Return fan speed value.
+
+        Returns:
+            Any: Returned value.
+        """
         return 100000*60/(self.read(0x08)+self.read(0x09)*256)  # returns fan speed in rpm
 
 

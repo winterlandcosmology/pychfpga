@@ -32,8 +32,8 @@ class agilent_N5700(GPIB.GPIB):
             if instrument_id_string in id_string:
 
                 if verbose:
-                    print('Connected to: %s' % instrument_name)
-                self.command('STATus:OPERation:ENABle %i' % 0x0500)  # We wish to know is in constant current or constant voltage mode
+                    print(f'Connected to: {instrument_name}')
+                self.command(f'STATus:OPERation:ENABle {int(1280)}')  # We wish to know is in constant current or constant voltage mode
                 self.instrument_model = instrument_code
                 self.instrument_name = instrument_name
                 break
@@ -111,7 +111,7 @@ class agilent_N5700(GPIB.GPIB):
             else:
                 raise GPIB.GPIBException('Unknown desired output power state')
 
-            self.command('OUTP:STAT %s' % state)
+            self.command(f'OUTP:STAT {state}')
             self.waituntilready()
             # self.command('*WAI')
 
@@ -136,7 +136,7 @@ class agilent_N5700(GPIB.GPIB):
             elif readonly:
                 raise RuntimeError('readonly = True - cannot change output voltage')
             else:
-                self.command('VOLT %s' % voltage)
+                self.command(f'VOLT {voltage}')
                 # self.command('*WAI')
                 self.waituntilready()
 
@@ -161,7 +161,7 @@ class agilent_N5700(GPIB.GPIB):
             elif readonly:
                 raise RuntimeError('readonly = True - cannot change current limit')
             else:
-                self.command('CURR %s' % current)
+                self.command(f'CURR {current}')
                 # self.command('*WAI')
                 self.waituntilready()
 
@@ -273,15 +273,15 @@ class agilent_N5700(GPIB.GPIB):
                 self.waituntilready()
 
             if uvl != None:
-                self.command('VOLT:LIM:LOW %s' % uvl)
+                self.command(f'VOLT:LIM:LOW {uvl}')
             if ovp != None:
-                self.command('VOLT:PROT %s' % ovp)
+                self.command(f'VOLT:PROT {ovp}')
             if ocp != None:
-                self.command('CURR:PROT:STAT %s' % int(bool(ocp)))
+                self.command(f'CURR:PROT:STAT {int(bool(ocp))}')
                 #Note that OCP is not the current limit, only behaviour on current limit (can be 0 or 1)
                 #With OCP active current switches to triggered current (by default and not changed by this program so far 0A)
             if ilim != None:
-                self.command('CURR %s' % ilim)
+                self.command(f'CURR {ilim}')
 
 
         elif uvl != None or ocp != None or ovp != None or ilim != None or clear!=None:  #Readonly is true and we're trying to change things

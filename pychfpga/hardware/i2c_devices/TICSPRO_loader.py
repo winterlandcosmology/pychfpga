@@ -1,3 +1,5 @@
+"""Helpers for parsing TICSPRO-generated register configuration files."""
+
 import os
 
 def load_pll_regs(filename="lmk04208_registers.tcs"):

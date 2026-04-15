@@ -40,7 +40,7 @@ class IceCrateBase:
 
 
     def __repr__(self):
-        return "%s(%r)" % (self.__class__.__name__, self.serial)
+        return f"{self.__class__.__name__}({self.serial!r})"
 
 
 class TuberIceBoardBase(tuber.TuberObject):
@@ -75,18 +75,16 @@ class TuberIceBoardBase(tuber.TuberObject):
 
         if self.hostname:
             # We have a hostname; just use it.
-            return "http://{}/tuber".format(self.hostname)
+            return f"http://{self.hostname}/tuber"
 
         if self.serial:
             # We have a serial number; compute the hostname.
-            return "http://iceboard{}.local/tuber".format(self.serial)
+            return f"http://iceboard{self.serial}.local/tuber"
 
         if self.slot and self.crate:
             # We have a slot and crate,
             # we can use the crate-based hostname (i.e. slot3.crate001.local).
-            return "http://slot{0}.icecrate{1}.local/tuber".format(
-                self.slot, self.crate.serial
-            )
+            return f"http://slot{self.slot}.icecrate{self.crate.serial}.local/tuber"
 
         raise NameError(
             "Couldn't figure out a Tuber URI for this object! "
@@ -229,15 +227,7 @@ class IceBoardBase(TuberIceBoardBase):
         self.mezzanine = {}
 
     def __repr__(self):
-        return "%r.%s(%s)" % (
-            self.crate,
-            self.__class__.__name__,
-            "slot=%s" % self.slot
-            if self.crate
-            else "serial=%s" % self.serial
-            if self.serial
-            else "hostname=%s" % self.hostname,
-        )
+        return f"{self.crate!r}.{self.__class__.__name__}({(f'slot={self.slot}' if self.crate else f'serial={self.serial}' if self.serial else f'hostname={self.hostname}')})"
 
 
 
@@ -254,12 +244,7 @@ class FMCMezzanineBase():
     iceboard = None
 
     def __repr__(self):
-        return "%r.%s(%r,%r)" % (
-            self.iceboard,
-            self.__class__.__name__,
-            self.mezzanine,
-            self.serial,
-        )
+        return f"{self.iceboard!r}.{self.__class__.__name__}({self.mezzanine!r},{self.serial!r})"
 
     def eeprom_write(self, buf):
         """Writes a collection of bytes to the internal EEPROM.

@@ -29,7 +29,7 @@ class I2CInterface(object):
             A string which include the parent object id.
 
         """
-        return "%s(%r)" % (self.__class__.__name__, self.parent)
+        return f"{self.__class__.__name__}({self.parent!r})"
 
     def select_bus(self, bus_names, *args, **kwargs):
         """
@@ -61,16 +61,13 @@ class I2CInterface(object):
         for bus_name in bus_names:
             if bus_name not in self._I2C_BUS_LIST:
                 self._logger.error(
-                    "%r: I2C bus '%s' is not part of the available buses. "
-                    "Valid values are %s"
-                    % (self, bus_name, ','.join(str(self._I2C_BUS_LIST.keys()))))
+                    f"{self!r}: I2C bus '{bus_name}' is not part of the available buses. Valid values are {','.join(str(self._I2C_BUS_LIST.keys()))}")
             (fpga_port_number, switch_port_number) = self._I2C_BUS_LIST[bus_name]
             if selected_fpga_port_number is None:
                 selected_fpga_port_number = fpga_port_number
             elif selected_fpga_port_number != fpga_port_number:
                 self._logger.error(
-                    "%r: I2C bus '%s' is not on the same FPGA port as "
-                    "the other buses" % (self, bus_name))
+                    f"{self!r}: I2C bus '{bus_name}' is not on the same FPGA port as the other buses")
             selected_switch_port_numbers.append(switch_port_number)
             # self._logger.debug("Enabling I2C bus %s" % bus_name)
 

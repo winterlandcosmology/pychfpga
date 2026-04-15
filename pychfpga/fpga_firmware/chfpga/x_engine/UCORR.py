@@ -67,7 +67,7 @@ class UCORR(MMI):
 
     def status(self):
         """Displays the status of the correlator array"""
-        print('======= CORR.core[%i] =============' % self.instance_number)
+        print(f'======= CORR.core[{int(self.instance_number)}] =============')
         print(f' Don\'t accumulate: {self.NO_ACCUM}')
         print(f' Autocorrelation only: {self.AUTOCORR_ONLY}')
         print(f' Firmware integration period: {self.INTEGRATION_PERIOD} frames')

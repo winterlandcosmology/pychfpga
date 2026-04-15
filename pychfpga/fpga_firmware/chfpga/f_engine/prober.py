@@ -128,7 +128,7 @@ class PROBER(MMI):
         if burst_period < frames_per_burst:
             burst_period = frames_per_burst
         if burst_period >= 2**24:
-            raise RuntimeError('Capture period of %i frames is too long. Maximum value is %.3f s' % (burst_period, 2**24 - 1))
+            raise RuntimeError(f'Capture period of {int(burst_period)} frames is too long. Maximum value is {2 ** 24 - 1:.3f} s')
 
         delay_increment = 65536 / 125e6 # 0x10000 / 125 MHz
         delay_in_seconds = delay_increment * send_delay # Data transmission of new frames is held off by this amount
@@ -137,10 +137,7 @@ class PROBER(MMI):
         min_period_in_seconds = min_period * self.fpga.FRAME_PERIOD
         buffered_packets = frames_per_burst * np.ceil(delay_in_seconds / period_in_seconds)
         if buffered_packets > self.DATA_BUFFER_CAPACITY:
-            raise RuntimeError('Capture send delay of %.3f s in combination with the capture period of %.3f s '
-                'will cause up to %i packets to be buffered, wich exceed the capture buffer capability of %i frames. '
-                'Minimum period for the current send delay is %i frames (%.3f ms)' %
-                (delay_in_seconds, period_in_seconds, buffered_packets, self.DATA_BUFFER_CAPACITY, min_period, min_period_in_seconds * 1000))
+            raise RuntimeError(f'Capture send delay of {delay_in_seconds:.3f} s in combination with the capture period of {period_in_seconds:.3f} s will cause up to {int(buffered_packets)} packets to be buffered, wich exceed the capture buffer capability of {int(self.DATA_BUFFER_CAPACITY)} frames. Minimum period for the current send delay is {int(min_period)} frames ({min_period_in_seconds * 1000:.3f} ms)')
 
         self.BURST_LENGTH = frames_per_burst - 1 # BURST_LENGTH actually specifies the number of additional frames in the firmware
         self.set_burst_period(burst_period, burst_period)
@@ -185,7 +182,7 @@ class PROBER(MMI):
 
             self.STREAM_ID = ((crate & 0xF) << 8) | ((slot & 0xF) << 4) | (channel & 0x0F)
         else:
-            raise ValueError('Invalid stream id parameter %r' % (stream_id, ))
+            raise ValueError(f'Invalid stream id parameter {stream_id!r}')
 
     def get_stream_id(self):
         """ Return the stream ID of the current channel instance.
@@ -201,15 +198,15 @@ class PROBER(MMI):
         """ Initialize the data capture module"""
         # self.config_capture(1, 100) # Capture 1 frame every 100 frames
         channel = self.instance_number
-        self.logger.debug('%r: Initializing channel %i' % (self, channel))
+        self.logger.debug(f'{self!r}: Initializing channel {int(channel)}')
         # self.PROBE_ID = 0xA0 + channel  # For backwards compatibility
         self.set_stream_id(self.fpga.get_id(channel))
         self.RESET = 1  # Make sure no data is being transmitted at reset
 
     def status(self):
         """ Displays the status of the data capture module"""
-        print('-------------- CHAN[%i] data capture --------------' % self.instance_number)
-        print(' Capture frame(%s) every %s frames' % (self.BURST_LENGTH, self.get_burst_period()), end=' ')
+        print(f'-------------- CHAN[{int(self.instance_number)}] data capture --------------')
+        print(f' Capture frame({self.BURST_LENGTH}) every {self.get_burst_period()} frames', end=' ')
 
 
 

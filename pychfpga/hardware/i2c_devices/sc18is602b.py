@@ -56,12 +56,37 @@ class sc18is602b(object):
         self.i2c.select_bus(self.bus_name)
 
     def write(self, data):
+        """Write data to the device.
+
+        Args:
+            data (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self.i2c.write_read(self.address, data)
 
     def read(self, read_length=1):
+        """Read data from the device.
+
+        Args:
+            read_length (Any): Parameter value.
+
+        Returns:
+            Any: Returned value.
+        """
         return self.i2c.write_read(self.address, [], read_length)
 
     def spi_write(self, port, data):
+        """Write bytes on the downstream SPI target.
+
+        Args:
+            port (Any): Parameter value.
+            data (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self.select()
         self.write(bytes([1<<port]) + data)
 
@@ -75,7 +100,14 @@ class sc18is602b(object):
         return self.read(len(data))
 
     def spi_read(self, read_length=1):
-        """ returns the SPI data captured during the previous write """
+        """ returns the SPI data captured during the previous write 
+
+        Args:
+            read_length (Any): Parameter value.
+
+        Returns:
+            Any: Returned value.
+        """
         return self.read(read_length)
 
     def set_config(self, order=0, mode=0, clock_rate=0):
@@ -98,10 +130,20 @@ class sc18is602b(object):
         self.write(bytes((self.CONFIG, (order<<5) | (mode <<2) | clock_rate)))
 
     def clear_interrupts(self):
+        """Clear pending interrupt status in the bridge.
+
+        Returns:
+            None: No value is returned.
+        """
         self.write(bytes((self.CLEAR_INT,)))
 
 
     def set_idle(self):
+        """Set idle configuration.
+
+        Returns:
+            None: No value is returned.
+        """
         self.write(bytes((self.IDLE,)))
 
     def gpio_write(self, pattern):

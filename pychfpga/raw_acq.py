@@ -2791,8 +2791,8 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
                 comet_host = comet_config['host']
                 comet_port = comet_config['port']
             except KeyError as exc:
-                msg = "Failure registering initial config with comet broker: 'comet_broker/{}' " \
-                      "not defined in config.".format(exc)
+                msg = f"Failure registering initial config with comet broker: 'comet_broker/{exc}' " \
+                      "not defined in config."
                 self.log.error(msg)
                 raise RuntimeError(f'Cannot start comet broker: {msg}')
             comet_manager = comet.Manager(comet_host, comet_port)
@@ -2801,7 +2801,7 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
                 comet_manager.register_config(config.copy())
             except comet.CometError as exc:
                 msg = "Comet failed registering raw_acq start and initial config. " \
-                      "The Comet client returned the following error: {}".format(exc)
+                      f"The Comet client returned the following error: {exc}"
                 self.log.error(msg)
                 raise RuntimeError(f'Cannot start comet broker: {msg}')
         else:

@@ -210,7 +210,7 @@ class FPGAMaster(object):
              self.raw_acq_ibs (dict): lists the iceboards objects associated with each RawAcq server.
 
         """
-        self.log.info('%r: Sending configuration to raw_acq servers' % self)
+        self.log.info(f'{self!r}: Sending configuration to raw_acq servers')
 
         # Create RawAcq REST clients.
         self.raw_acq = {}
@@ -226,7 +226,7 @@ class FPGAMaster(object):
         for raw_acq_server_name, raw_acq_client in self.raw_acq.items():
             present = await raw_acq_client.ping()
             if not present:
-                raise RuntimeError('%r: raw_acq server %s (%r) is not running' % (self, raw_acq_server_name, raw_acq_client))
+                raise RuntimeError(f'{self!r}: raw_acq server {raw_acq_server_name} ({raw_acq_client!r}) is not running')
 
         conf = self.config.raw_acq
         #print(conf)
@@ -276,7 +276,7 @@ class FPGAMaster(object):
         recv_names = {}  # name of the receiver assigned to each server
         for server_name, port_configs in self.raw_acq_ports.items():  # for each raw_acq server
             # Name of the receiver object, which can hande multiple ports.
-            recv_names[server_name] = '%sRecv' % server_name
+            recv_names[server_name] = f'{server_name}Recv'
             recv_ports[server_name] = []
             for port_entry in port_configs: # for each port definition entry
                 # If port=0 amd we want fixed port number, create an entry for each board with the appropriate numeric port derived from the crate and slot number
@@ -901,7 +901,7 @@ class FPGAMaster(object):
             enable_comet = config['comet_broker']['enabled']
         except KeyError:
             msg = "Missing config value 'comet_broker/enabled'."
-            self.log.error('%r: %s' % (self, msg))
+            self.log.error(f'{self!r}: {msg}')
             raise RuntimeError(msg)
         if enable_comet:
             if comet is None:
@@ -913,8 +913,8 @@ class FPGAMaster(object):
                 comet_host = config['comet_broker']['host']
                 comet_port = config['comet_broker']['port']
             except KeyError as exc:
-                msg = "Failure registering initial config with comet broker: 'comet_broker/{}' " \
-                      "not defined in config.".format(exc)
+                msg = f"Failure registering initial config with comet broker: 'comet_broker/{exc}' " \
+                      "not defined in config."
                 self.log.error(f'{self!r}: {msg}')
                 raise RuntimeError(msg)
             self.comet_manager = comet.Manager(comet_host, comet_port)
@@ -924,7 +924,7 @@ class FPGAMaster(object):
                     self.startup_time, __version__, config, register_datasets=True)
                 # comet_manager.register_config(config)
             except comet.CometError as exc:
-                msg = 'Comet failed registering fpga_master start and initial config: {}'.format(exc)
+                msg = f'Comet failed registering fpga_master start and initial config: {exc}'
                 self.log.error(f'{self!r}: {msg}')
                 raise RuntimeError(msg)
         else:
@@ -1248,7 +1248,7 @@ class FPGAMaster(object):
     async def update_channelizers(self, **params):
 
         # Log the new parameters
-        output_str = ["  %-32s  %s" % (key + ':',  params[key]) for key in sorted(params.keys())]
+        output_str = [f"  {key + ':':32}  {params[key]}" for key in sorted(params.keys())]
         output_str.insert(0, 'Updating channelizer parameters:')
         self.log.info('\n'.join(output_str))
 
@@ -1281,10 +1281,10 @@ class FPGAMaster(object):
         If no board is specified for an entry (.board evaluates to False), the parameters are ignored.
         """
         if not ni_params:
-            self.log.info("%r: No noise injection settings; setup skipped." % (self))
+            self.log.info(f"{self!r}: No noise injection settings; setup skipped.")
         else:
             for source_name, source_params in ni_params.items():
-                self.log.info("%r: Setting noise injection for source '%s' with parameters %s" % (self, source_name, source_params))
+                self.log.info(f"{self!r}: Setting noise injection for source '{source_name}' with parameters {source_params}")
                 if source_params.board:
                     self.fpgas.set_noise_injection(local_sync=True, **source_params)
 
@@ -1653,7 +1653,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
     @endpoint('start')
     async def start(self, **config):
         # print('%r: Received start command' % self)
-        self.log.info('%r: Received start command' % self)
+        self.log.info(f'{self!r}: Received start command')
 
         # def done(future):
         #     # print('Done')
@@ -2183,12 +2183,12 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         # Don't monitor raw_acq servers at all if not is defined
         try:
             while True:
-                self.log.debug('%r: ============ Checking status of Raw_acq servers' % (self, ))
+                self.log.debug(f'{self!r}: ============ Checking status of Raw_acq servers')
                 if (self.fpga_master and self.fpga_master.raw_acq and
                     self.fpga_master.state == 'on' and self.fpga_master.fpgas):
                     for server_name, server in self.fpga_master.raw_acq.items():
                         try:
-                            self.log.debug('%r: Checking status of Raw_acq server %s' % (self, server_name))
+                            self.log.debug(f'{self!r}: Checking status of Raw_acq server {server_name}')
                             result = await server.status()
                             if not result['started']:
                                 self.log.warn(f'{self!r}: Raw_acq server {server_name} seems to be stopped. Restarting.')
@@ -2372,12 +2372,12 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             # Get icecrates
             for ic in self.fpga_master.fpgas.ic:
                 cn = ic.crate_number or 0
-                hwm['FCC%02d' % cn] = 'K7BP16-0%s' % ic.serial
+                hwm[f'FCC{int(cn):02}'] = f'K7BP16-0{ic.serial}'
             # Get iceboards and mezzanines
             for ib in self.fpga_master.fpgas.ib:
                 slot = ib.slot or 1
                 crate = ib.get_crate_number(default=0)
-                hwm['FCC%02d%02d' % (crate, slot-1)] = (
+                hwm[f'FCC{int(crate):02}{int(slot - 1):02}'] = (
                     [f'{ib.part_number}-{ib.serial}'] +
                     [f'{m.part_number}-{m.serial}' for m in ib.mezzanine.values()]
                     )
@@ -2472,7 +2472,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             # Update channelizers
             await self.fpga_master.update_channelizers(**new_params)
 
-            return 'Channelizers updated with configuration: %s' % config
+            return f'Channelizers updated with configuration: {config}'
 
         else:
             return 'FPGA array not yet initialized.'
@@ -2688,7 +2688,7 @@ class FPGAMasterAsyncRESTClient(AsyncRESTClient):
         hwm = await self.get('get-hw-map')
         # Save hardware map
         time_str = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
-        pickle.dump(hwm, open( '/home/chime/ch_acq/%s_hardware_map.pkl' %time_str, 'wb'))
+        pickle.dump(hwm, open( f'/home/chime/ch_acq/{time_str}_hardware_map.pkl', 'wb'))
         # Print hardware map
         for key in np.sort(hwm.keys()):
             print(f'{key}: {hwm[key]}')

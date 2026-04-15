@@ -25,6 +25,17 @@ class pca9546a(object):
     """
 
     def __init__(self, i2c_interface, address, port=0, verbose=0):
+        """Initialize this device driver instance.
+
+        Args:
+            i2c_interface (Any): Parameter value.
+            address (Any): Parameter value.
+            port (Any): Parameter value.
+            verbose (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self.i2c = i2c_interface
         self.switch_address = address
         self.port = port

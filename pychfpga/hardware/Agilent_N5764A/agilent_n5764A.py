@@ -47,7 +47,7 @@ class AgilentN5764A:
 
     def __repr__(self):
         if self.ps:
-            return '%s %s @%s' % (self.ps.instrument_name, self.ps.instrument_model, self.hostname)
+            return f'{self.ps.instrument_name} {self.ps.instrument_model} @{self.hostname}'
         else:
             return 'Unknown power supply'
 

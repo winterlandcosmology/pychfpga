@@ -68,22 +68,20 @@ class FMCMezzanine_MGADC08(FMCMezzanine):
         # self.motherboard = self.iceboard
         self.fmc_number = self.mezzanine - 1
 
-        self.logger.debug('%r: Creating MGADC08 instance and hardware elements' % self)
-        self.logger.debug('%r:   - ADC' % self)
+        self.logger.debug(f'{self!r}: Creating MGADC08 instance and hardware elements')
+        self.logger.debug(f'{self!r}:   - ADC')
         self.ADC = ADC.ADC_base(adc_board=self)
-        self.logger.debug('%r:   - IOExpander' % self)
+        self.logger.debug(f'{self!r}:   - IOExpander')
         self.IOExpander = IOExpander.IOExpander_base(adc_board=self)
-        self.logger.debug('%r:   - ADC_PLL' % self)
+        self.logger.debug(f'{self!r}:   - ADC_PLL')
         self.ADC_PLL = ADC_PLL.ADC_PLL_base(adc_board=self)
-        self.logger.debug('%r:   - AmbTemp' % self)
+        self.logger.debug(f'{self!r}:   - AmbTemp')
         self.AmbTemp = AmbTemp.AmbTemp_base(adc_board=self)
-        self.logger.debug('%r:   - MGT_PLL' % self)
+        self.logger.debug(f'{self!r}:   - MGT_PLL')
         self.MGT_PLL = MGT_PLL.MGT_PLL_base(mezz=self)
 
     def __repr__(self):
-        return "%r.Mezz%r" % (
-            self.iceboard,
-            self.mezzanine)
+        return f"{self.iceboard!r}.Mezz{self.mezzanine!r}"
 
 
 
@@ -117,9 +115,7 @@ class FMCMezzanine_MGADC08(FMCMezzanine):
             last_char = eeprom_data.find(b'}')
             if last_char < 0:
                 logger.error(
-                    '%r: The Mezzanine EEPROM indicated McGill-style data but '
-                    'no valid dictionary found on EEPROM. Did the board pass '
-                    'the quality control tests?' % cls)
+                    f'{cls!r}: The Mezzanine EEPROM indicated McGill-style data but no valid dictionary found on EEPROM. Did the board pass the quality control tests?')
                 return None
 
             # keep only the dict definition data_string: remove first char (board ID) and stop at last '}'.
@@ -131,8 +127,7 @@ class FMCMezzanine_MGADC08(FMCMezzanine):
             computed_crc = zlib.crc32(data_string)
             if computed_crc != crc:
                 raise RuntimeError(
-                    'FMC EEPROM CRC is invalid. Read crc = %08X, '
-                    'computed crc = %08X' % (crc, computed_crc))
+                    f'FMC EEPROM CRC is invalid. Read crc = {crc:08X}, computed crc = {computed_crc:08X}')
             dict_out = ast.literal_eval(data_string.decode())  # safer than using eval. Assumed UTF-8
 
             # Extract standard FRU information from McGill data structure
@@ -213,8 +208,7 @@ class FMCMezzanine_MGADC08(FMCMezzanine):
     def set_refclk_source(self, source):
         if source not in self.REFCLK_SOURCES:
             raise ValueError(
-                "Invalid Reference clock source name '%s'. Valid sources are: %s"
-                % (source, ', '.join(list(self.REFCLK_SOURCES.keys()))))
+                f"Invalid Reference clock source name '{source}'. Valid sources are: {', '.join(list(self.REFCLK_SOURCES.keys()))}")
         self.IOExpander.REFCLK_INPUT_SEL = self.REFCLK_SOURCES[source]
 
     def get_refclk_source(self):
@@ -259,11 +253,11 @@ class FMCMezzanine_MGADC08(FMCMezzanine):
         """
 
         if not isinstance(self.iceboard.fpga, chFPGA):
-            raise RuntimeError('%r: This %s mezzanine require a motherboard with the chFPGA firmware' % (self, self.__class__))
+            raise RuntimeError(f'{self!r}: This {self.__class__} mezzanine require a motherboard with the chFPGA firmware')
 
         # Do nothing if the FMC is not present
         if not await self.is_mezzanine_present_async():
-            self.logger.error('%r: Attempting to initialize a mezzanine that is not physically present. Aborting.' % self)
+            self.logger.error(f'{self!r}: Attempting to initialize a mezzanine that is not physically present. Aborting.')
             raise RuntimeError('Cannot initialize an mezzanine that is not present')
 
         # if self.iceboard._get_mezzanine_type(self.mezzanine) != self._ipmi_part_numbers:
@@ -271,13 +265,13 @@ class FMCMezzanine_MGADC08(FMCMezzanine):
         #     raise RuntimeError('Cannot initialize an mezzanine of the wrong type')
 
         if not await self.get_mezzanine_power_async():
-            self.logger.error('%r: Attempting to initialize a mezzanine that is not powered up. Aborting.' % self)
+            self.logger.error(f'{self!r}: Attempting to initialize a mezzanine that is not powered up. Aborting.')
             raise RuntimeError('Cannot initialize an mezzanine that has no power')
 
         self.sampling_frequency = sampling_frequency
         self.processing_frequency = processing_frequency
         self.reference_frequency = reference_frequency
-        self.logger.debug('%r: Initializing MGADC08 on Mezzanine %i' % (self, self.mezzanine))
+        self.logger.debug(f'{self!r}: Initializing MGADC08 on Mezzanine {int(self.mezzanine)}')
         # self.logger.debug('%r:   - AmbTemp' % self)
         self.AmbTemp.init()
 
@@ -292,10 +286,9 @@ class FMCMezzanine_MGADC08(FMCMezzanine):
 
     def status(self):
         """ Displays the status of the ADC board"""
-        self.logger.info('%r: Status of MGADC08 ADC board on Mezzanine %i' % (self, self.mezzanine))
+        self.logger.info(f'{self!r}: Status of MGADC08 ADC board on Mezzanine {int(self.mezzanine)}')
         self.logger.info(
-            '%r:   ADC board is %s'
-            % (self, ('not present', 'present')[bool(self.is_mezzanine_present())]))
+            f"{self!r}:   ADC board is {('not present', 'present')[bool(self.is_mezzanine_present())]}")
         if self.is_mezzanine_present():
             self.AmbTemp.status()
             self.IOExpander.status()

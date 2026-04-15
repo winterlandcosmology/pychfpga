@@ -229,15 +229,15 @@ class ADCDAQ(MMI):
         """
         Prints the ADCDAQ module status.
         """
-        print('-------------- CHAN[%i].ADCDAQ STATUS --------------' % self.instance_number)
+        print(f'-------------- CHAN[{int(self.instance_number)}].ADCDAQ STATUS --------------')
 
-        print('Clock source: %s' % ('ADC','SYSTEM CLOCK')[self.PLL_CLK_SRC])
+        print(f"Clock source: {('ADC', 'SYSTEM CLOCK')[self.PLL_CLK_SRC]}")
         print('Data Acquisition FIFO status')
         print('   Flag        Current   Sticky')
         print('   ----------- -------   ------')
-        print('   OVERFLOW    %5s     %5s' % (bool(self.FIFO_OVERFLOW), bool(self.FIFO_OVERFLOW_STICKY)))
-        print('   UNDERFLOW   %5s     %5s' % (bool(self.FIFO_UNDERFLOW), bool(self.FIFO_UNDERFLOW_STICKY)))
-        print('   EMPTY       %5s     %5s' % (bool(self.FIFO_EMPTY), bool(self.FIFO_EMPTY_STICKY)))
+        print(f'   OVERFLOW    {bool(self.FIFO_OVERFLOW):>5}     {bool(self.FIFO_OVERFLOW_STICKY):>5}')
+        print(f'   UNDERFLOW   {bool(self.FIFO_UNDERFLOW):>5}     {bool(self.FIFO_UNDERFLOW_STICKY):>5}')
+        print(f'   EMPTY       {bool(self.FIFO_EMPTY):>5}     {bool(self.FIFO_EMPTY_STICKY):>5}')
         print('Number of ramp errors: %i', self.RAMP_ERR_CTR)
 
         # fin=200

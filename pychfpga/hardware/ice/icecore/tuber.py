@@ -110,9 +110,7 @@ class TuberResult:
 
     def __repr__(self):
         """Return a nicely formatted representation string"""
-        return 'TuberResult({0})'.format(
-            ','.join('{0}={1!r}'.format(name, val)
-                     for name, val in self.__dict__.items()))
+        return f"TuberResult({','.join((f'{name}={val!r}' for (name, val) in self.__dict__.items()))})"
 
 
 def valid_dynamic_attr(name):
@@ -292,7 +290,7 @@ class Context():
 
         # Refuse to __getattr__ a couple of special names used elsewhere.
         if not valid_dynamic_attr(name):
-            raise AttributeError("'%s' is not a valid method or property!" % name)
+            raise AttributeError(f"'{name}' is not a valid method or property!")
 
         # Queue methods calls.
         def caller(*args, **kwargs):
@@ -381,13 +379,13 @@ class TuberCategory:
 
             # Refuse to __getattr__ a couple of special names used elsewhere.
             if not valid_dynamic_attr(name):
-                raise AttributeError("'%s' is not a valid method or property!" % name)
+                raise AttributeError(f"'{name}' is not a valid method or property!")
 
             parent = decorator.getobject(self)
 
             # Raise an Attribute error if the parent board isn't set
             if parent is None:
-                raise AttributeError("'%s' is not a valid method or property!" % name)
+                raise AttributeError(f"'{name}' is not a valid method or property!")
             m = getattr(parent, name)
 
             if isinstance(m, tworoutine.tworoutine):
@@ -403,7 +401,7 @@ class TuberCategory:
 
                 return acall
 
-            raise AttributeError("'%s' is not a valid method or property!" % name)
+            raise AttributeError(f"'{name}' is not a valid method or property!")
 
         cls.__getattr__ = __getattr__
 

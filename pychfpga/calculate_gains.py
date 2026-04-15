@@ -238,8 +238,8 @@ class GainCalc(object):
                 x = np.where(stream_ids[ix] == S)[0][0]
                 bx = self.stream_id_map[S]
                 # print 'CG: Stream 0 Median Actual/target RMS ratio is ', rms[ix[0]] / self.target_rms
-                median_rms_info = ',  '.join('%7.3f' % rms[x, i] for i in range(10))
-                gain_info = ',  '.join('%7.3e' % self.temp_gains[bx, i] for i in range(10))
+                median_rms_info = ',  '.join(f'{rms[x, i]:7.3f}' for i in range(10))
+                gain_info = ',  '.join(f'{self.temp_gains[bx, i]:7.3e}' for i in range(10))
                 self.log.debug(f'{self!r}: Stream 0 Median RMS is {median_rms_info}')
                 self.log.debug(f'{self!r}: Stream 0 Gain is {gain_info}')
 

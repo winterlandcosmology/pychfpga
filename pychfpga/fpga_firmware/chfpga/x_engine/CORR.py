@@ -71,7 +71,7 @@ class CORR_core(MMI):
 
     def status(self):
         """Displays the status of al the correlator blocks"""
-        print('======= CORR.core[%i] =============' % self.instance_number)
+        print(f'======= CORR.core[{int(self.instance_number)}] =============')
         # self.CH_DIST.status()
 
 
@@ -148,17 +148,11 @@ class CORR(MMIRouter):
         min_integ_period = frame_rate / (bandwidth_limit / 8 / all_corr_frame_size)
         autocorr_only_bit_rate = integ_rate * Ncorr * 4 * cmac_frame_size
         if verbose:
-            print('Integration rate: %.1f integ/s (%.3fs/integ)' % (integ_rate, 1 / integ_rate))
-            print('Bit rate =%.3f Gbps' % (bit_rate / 1e9))
+            print(f'Integration rate: {integ_rate:.1f} integ/s ({1 / integ_rate:.3f}s/integ)')
+            print(f'Bit rate ={bit_rate / 1000000000.0:.3f} Gbps')
         if bit_rate > bandwidth_limit:
             raise ValueError(
-                'The correlator setting would make it produce %.3f Gbps of data, which exceeds the specified bandwith '
-                'limit of %.3f Gbps. Try using a longer integration period (%i frames min).'
-                'Note that sending only the autocorrlation products with autocorr_only=True will produce %.3f Gbps)' % (
-                    bit_rate / 1e9,
-                    bandwidth_limit / 1e9,
-                    min_integ_period,
-                    autocorr_only_bit_rate / 1e9))
+                f'The correlator setting would make it produce {bit_rate / 1000000000.0:.3f} Gbps of data, which exceeds the specified bandwith limit of {bandwidth_limit / 1000000000.0:.3f} Gbps. Try using a longer integration period ({int(min_integ_period)} frames min).Note that sending only the autocorrlation products with autocorr_only=True will produce {autocorr_only_bit_rate / 1000000000.0:.3f} Gbps)')
 
         self.fpga.set_corr_reset(1)
         for i, corr in enumerate(self.corr):
@@ -621,21 +615,16 @@ class CorrFrameReceiver(object):
                 if ts != self.last_ts:
                     if self.last_ts is not None and ts-self.last_ts >= jump:
                         if jump == 1:
-                            print('    Flushing stopped because we found a timestamp jump from %i to %i' % (
-                                self.last_ts,
-                                ts))
+                            print(f'    Flushing stopped because we found a timestamp jump from {int(self.last_ts)} to {int(ts)}')
                             self.last_ts = ts
                             self.n = 1
                             break
                         else:
-                            print('    Detected a timestamp jump from %i to %i. '
-                                  'Now flushing the rest of the packets with the same timestamp' % (
-                                    self.last_ts,
-                                    ts))
+                            print(f'    Detected a timestamp jump from {int(self.last_ts)} to {int(ts)}. Now flushing the rest of the packets with the same timestamp')
                             self.last_ts = ts
                             jump = 1
                             continue
-                    print(('    Flushing correlator timestamp %i' % ts))
+                    print(f'    Flushing correlator timestamp {int(ts)}')
                     self.last_ts = ts
                 flushed_packets += 1
                 flushed_bytes += s
@@ -643,7 +632,7 @@ class CorrFrameReceiver(object):
                 print('    Flushing stopped because no data has been received for the timeout period ')
                 break
         self.socket.settimeout(old_timeout)
-        print(('Flushed %i UDP packets in total (%.1f kbytes)' % (flushed_packets, flushed_bytes / 1024.)))
+        print(f'Flushed {int(flushed_packets)} UDP packets in total ({flushed_bytes / 1024.0:.1f} kbytes)')
 
     def align(self):
         """
@@ -671,10 +660,7 @@ class CorrFrameReceiver(object):
                     if integ_index == 0:  # if the new frame is on an integration period
                         self.n = 1
                         break
-                    print('   Discarding correlator timestamp %i (integration index %i/%i)' % (
-                            ts,
-                            integ_index,
-                            self.soft_integ_period))
+                    print(f'   Discarding correlator timestamp {int(ts)} (integration index {int(integ_index)}/{int(self.soft_integ_period)})')
             except socket.timeout:
                 continue
 
@@ -724,7 +710,7 @@ class CorrFrameReceiver(object):
         # print 'We expect around %.1f packets and %.1f correlator frames in the requested integration period of %.3fs' % (expected_packets, expected_corr_frames, integ_time)
 
         if return_format not in ('raw', 'matrix', 'vector'):
-            raise ValueError('Invalid return format "%s"' % return_format)
+            raise ValueError(f'Invalid return format "{return_format}"')
 
         self.soft_integ_period = soft_integ_period
 
@@ -859,11 +845,8 @@ class CorrFrameReceiver(object):
             # l=empty((1*8*34,512), dtype=np.int32)
             # h=a.view(t)[:,0]['data']['h'].copy();np.left_shift(h,4,h);np.right_shift(h,14,h);np.add(z,h,out=z)
         # print 'Got %i packets in %i chunks with %i timeouts total and %i data timeouts. Processing took on average %i packets/chunk at %.3f ms/chunk, %.1f bytes/packet' % (packets, chunks, timeouts, data_timeouts, float(self.NPACKETS)/chunks, (float(dt) / chunks) * 1000, float(size)/packets)
-        print(('Received %i packets, %i no-data-available events' % (packets, timeouts)))
-        print(('Got %.1f%% of the packets, and between %.1f%% and %.1f%% of the correlator frames' % (
-                float(packets)/(self.NCORR * self.NCMAC * self.soft_integ_period * number_of_results) * 100,
-                np.min(self.count)/float(self.soft_integ_period) * 100,
-                np.max(self.count)/float(self.soft_integ_period) * 100)))
+        print(f'Received {int(packets)} packets, {int(timeouts)} no-data-available events')
+        print(f'Got {float(packets) / (self.NCORR * self.NCMAC * self.soft_integ_period * number_of_results) * 100:.1f}% of the packets, and between {np.min(self.count) / float(self.soft_integ_period) * 100:.1f}% and {np.max(self.count) / float(self.soft_integ_period) * 100:.1f}% of the correlator frames')
         # self.sat.real /= 32.
         # self.sat.imag /= 16.
         self.sat_cplx.real = self.sat[..., 0] / 32.

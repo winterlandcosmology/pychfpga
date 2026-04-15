@@ -104,7 +104,7 @@ class chFPGA_config(object):
     by `chFPGA_controller.get_config()`.
     """
     def __str__(self):
-        return '\n'.join(['%s = %s' % (key, repr(value)) for (key, value) in sorted(vars(self).items())])
+        return '\n'.join([f'{key} = {value!r}' for (key, value) in sorted(vars(self).items())])
 
 
 @dataclass
@@ -549,12 +549,7 @@ class chFPGA(FPGAFirmware):
         # Open the UDP MMI interface
         # -------------------------------------------------------------------------
         self.logger.info(
-            '%r: Opening FPGA MMI with FPGA=(%s:%s),  local=(%s:%s)' % (
-                self,
-                self.fpga_ip_addr,
-                self.fpga_control_port_number,
-                self.interface_ip_addr,
-                self.local_control_port_number))
+            f'{self!r}: Opening FPGA MMI with FPGA=({self.fpga_ip_addr}:{self.fpga_control_port_number}),  local=({self.interface_ip_addr}:{self.local_control_port_number})')
 
 
         self.mmi = FPGAMmi(
@@ -709,7 +704,7 @@ class chFPGA(FPGAFirmware):
             # Try to communicate with the FPGA by reading he firmware BSB Registers cookie
             try:
                 # Instantiate and initialize the GPIO subsystem
-                self.logger.debug('%r: === Instantiating and initializing GPIO' % self)
+                self.logger.debug(f'{self!r}: === Instantiating and initializing GPIO')
                 await asyncio.sleep(0)
                 self.GPIO = gpio.GPIO(router=self.system_router, router_port='GPIO')
                 # self.GPIO.init() # don't call init() yet as this sends some commands. The module can still read the cookie without it.
@@ -757,11 +752,11 @@ class chFPGA(FPGAFirmware):
             self.GPIO.set_channelizer_reset(True)  # stop the channelizer from sending data while we initialize
 
             # get system constants from the FPGA
-            self.logger.debug('%r: === Getting board info information' % self)
+            self.logger.debug(f'{self!r}: === Getting board info information')
             await asyncio.sleep(0)
             self.PLATFORM_ID = self.GPIO.PLATFORM_ID
             if self.PLATFORM_ID not in self._PLATFORM_ID_LIST:
-                raise RuntimeError('%r: Platform ID 0x%02X is not recognized' % (self, self.PLATFORM_ID))
+                raise RuntimeError(f'{self!r}: Platform ID 0x{self.PLATFORM_ID:02X} is not recognized')
 
 
             self._NUMBER_OF_FMC_SLOTS = self.mb.NUMBER_OF_FMC_SLOTS
@@ -1017,7 +1012,7 @@ class chFPGA(FPGAFirmware):
             # ---------------------------------------------------------------------
 
             await asyncio.sleep(0)
-            self.logger.debug('%r: === Analyzing available FMC Mezzanines' % self)
+            self.logger.debug(f'{self!r}: === Analyzing available FMC Mezzanines')
             # self._adc_board = [
             #     self.mezzanine.get(1, None),
             #     self.mezzanine.get(2, None)]
@@ -1040,7 +1035,7 @@ class chFPGA(FPGAFirmware):
             self._data_socket = None
 
         except Exception as e:
-            self.logger.error('****Exception during open!****** =  %r' % e)
+            self.logger.error(f'****Exception during open!****** =  {e!r}')
             await self.close_async()
             raise
 
@@ -1431,8 +1426,7 @@ class chFPGA(FPGAFirmware):
         year = (timestamp >> 17) & 0x3F
         month = (timestamp >> 23) & 0x0F
         day = (timestamp >> 27) & 0x1F
-        timestamp_string = '%04i-%02i-%02i %02i:%02i:%02i' % (
-            year + 2000, month, day, hour, minutes, seconds)
+        timestamp_string = f'{int(year + 2000):04}-{int(month):02}-{int(day):02} {int(hour):02}:{int(minutes):02}:{int(seconds):02}'
         return timestamp_string
 
 
@@ -1491,9 +1485,9 @@ class chFPGA(FPGAFirmware):
             for name, pos, width in self.UDP_STATUS_VECT_BITS:
                 metrics.add('fpga_udp_' + name, value= (vect >> pos) & (2**width-1))
         except IOError as e:
-            self.logger.error('%r: Error getting FPGA udp metrics. Error is %r' % (self, e))
+            self.logger.error(f'{self!r}: Error getting FPGA udp metrics. Error is {e!r}')
             self.udp_err_ctr += 1
-            self.udp_err_msgs.append('%r: Error getting FPGA udp metrics. Error is %r' % (self, e))
+            self.udp_err_msgs.append(f'{self!r}: Error getting FPGA udp metrics. Error is {e!r}')
         return metrics
 
     async def get_udp_status_async(self):
@@ -1589,10 +1583,7 @@ class chFPGA(FPGAFirmware):
                 valid = (cmd == self.mmi.send_counter & 0xFF) and (rply == self.mmi.recv_counter & 0xFF)
                 if not valid:
                     self.logger.warning(
-                        '%r: Command counters differ cmd/rply in FPGA is (%i, %i), '
-                        'Python MMI is (%i, %i)'
-                        % (self, cmd, rply, self.mmi.send_counter & 0xFF,
-                           self.mmi.recv_counter & 0xFF))
+                        f'{self!r}: Command counters differ cmd/rply in FPGA is ({int(cmd)}, {int(rply)}), Python MMI is ({int(self.mmi.send_counter & 255)}, {int(self.mmi.recv_counter & 255)})')
                 if reset:
                     self.mmi.send_counter = cmd
                     self.mmi.recv_counter = rply
@@ -1600,20 +1591,16 @@ class chFPGA(FPGAFirmware):
                 break
             except IOError as e:
                 self.logger.error(
-                    "%r: UDP communinication error. Attempting to reset FPGA's"
-                    " UDP stack via the ARM processor (trial %i).The error is:\n %s"
-                    % (self, trial+1, e))
+                    f"{self!r}: UDP communinication error. Attempting to reset FPGA's UDP stack via the ARM processor (trial {int(trial + 1)}).The error is:\n {e}")
                 await self.reset_fpga_udp_stack()
                 valid = False
                 reset = True
             except Exception as e:
                 self.logger.error(
-                    "%r: Unhandled error during UDP communinication check. "
-                    "The error is:\n %r" % (self, e))
+                    f"{self!r}: Unhandled error during UDP communinication check. The error is:\n {e!r}")
                 raise
         else:  # executes if we exhausted the for loop iterations, i.e  no break
-            errmsg = "%r: Could not re-establish UDP communinication with " \
-                     "the FPGA. Raising an exception" % (self)
+            errmsg = f"{self!r}: Could not re-establish UDP communinication with the FPGA. Raising an exception"
             self.logger.error(errmsg)
             raise IOError(errmsg)
         return valid
@@ -2055,14 +2042,7 @@ class chFPGA(FPGAFirmware):
             # nanoseconds. We have to do integer math to extract the subsecond
             # offset, then confert it to float with ``(nano % 1000000000) /
             # 1e9 ``.
-            return '%04i-%02i-%02i%s%02i:%02i:%02.9f' % (
-                n.year,
-                n.month,
-                n.day,
-                'T',
-                n.hour,
-                n.minute,
-                n.second + (self.nano % 1000000000) / 1e9)  # See note above
+            return f'{int(n.year):04}-{int(n.month):02}-{int(n.day):02}T{int(n.hour):02}:{int(n.minute):02}:{n.second + self.nano % 1000000000 / 1000000000.0:02.9f}'  # See note above
 
         def astype(self, format):
             return self._IRIGB_TIME_FORMAT[format](self)
@@ -2130,7 +2110,7 @@ class chFPGA(FPGAFirmware):
         for (source_name, source_number) in self._IRIGB_SOURCE_TABLE.items():
             if source == source_number:
                 return source_name
-        raise ValueError('The IRIG-B module has an unknown source number %i' % source)
+        raise ValueError(f'The IRIG-B module has an unknown source number {int(source)}')
 
     async def detect_irigb_source_async(self, set_source=False):
         """ Returns the name of the first input on which valid IRIG-B time is detected. """
@@ -2270,10 +2250,10 @@ class chFPGA(FPGAFirmware):
         # check if the time is valid
         if not noerror:
             if not hms_valid:
-                raise RuntimeError('Invalid IRIG-B time value %ih %im %is.' % (ts.h, ts.m, ts.s))
+                raise RuntimeError(f'Invalid IRIG-B time value {int(ts.h)}h {int(ts.m)}m {int(ts.s)}s.')
 
             if not day_valid:
-                raise RuntimeError('Invalid IRIG-B day value %i. Day-of-year must be between 1 and 366' % ts.d)
+                raise RuntimeError(f'Invalid IRIG-B day value {int(ts.d)}. Day-of-year must be between 1 and 366')
 
         # Compute a datetime object, one second in the future. We use
         # timedelta because ts.d > 31, and ts.s may be > 59 because of the
@@ -2310,7 +2290,7 @@ class chFPGA(FPGAFirmware):
         if not (ts.nano == ts.nano2 and
                 ts.time == ts.time2 and
                 ts.time_struct == ts.time_struct2):
-            self.logger.error("%r: IRIGB time computation error" % self)
+            self.logger.error(f"{self!r}: IRIGB time computation error")
         return ts
 
     async def set_irigb_trigger_time_async(self, datetime_=None, delay=None):
@@ -2778,7 +2758,7 @@ class chFPGA(FPGAFirmware):
 
         """
         if self.mb.serial and self.mb.part_number:
-            return '%s_SN%s' % (self.mb.part_number, self.mb.serial)
+            return f'{self.mb.part_number}_SN{self.mb.serial}'
         else:
             return self.hostname
 
@@ -3244,8 +3224,7 @@ class chFPGA(FPGAFirmware):
                 if mezz_number in self.mezzanine.keys():
                     board_list.add(self.mezzanine[mezz_number])
                 else:
-                    self.logger.warning('%r: ADC Mezzanine board for channel %i is not present. '
-                                         'Ignoring this board' % (self, ch))
+                    self.logger.warning(f'{self!r}: ADC Mezzanine board for channel {int(ch)} is not present. Ignoring this board')
             return list(board_list)
 
     ADC_MODE_NAMES = {
@@ -4493,12 +4472,7 @@ class chFPGA(FPGAFirmware):
                         bit_string += '!O'[d[delay]]
                     else:
                         bit_string += '.#'[d[delay]]
-                s = 'Bit %i: %s Delay = %2i   (rise @ %2i, fall @ %2i)' % (
-                    bit,
-                    bit_string,
-                    computed_delay[bit],
-                    re + 1,
-                    fe + 2)
+                s = f'Bit {int(bit)}: {bit_string} Delay = {int(computed_delay[bit]):2}   (rise @ {int(re + 1):2}, fall @ {int(fe + 2):2})'
                 if verbose:
                     print(s)
                 # self.logger.info(s)
@@ -4579,18 +4553,12 @@ class chFPGA(FPGAFirmware):
     def status(self):
         """
         """
-        self.logger.info('%r: ----------- chFPGA status ---------------' % self)
-        self.logger.info('%r:  Controller IP address: %s, port: %i ' % (self, self.ip_addr, self.mb.fpga.port_number))
-        self.logger.info('%r:  Firmware version: %s' % (self, self.get_fpga_firmware_version()))
-        self.logger.info('%r:  Number of channel inputs: %i' % (self, self.NUMBER_OF_CHANNELIZERS))
-        self.logger.info('%r:  Number of channelizers with FFT: %i (channels %s)' % (
-            self,
-            len(self.LIST_OF_ANTENNAS_WITH_FFT),
-            str(self.LIST_OF_ANTENNAS_WITH_FFT)))
-        self.logger.info('%r:  Number of correlators: %i (correlators %s)' % (
-            self,
-            len(self.LIST_OF_IMPLEMENTED_CORRELATORS),
-            str(self.LIST_OF_IMPLEMENTED_CORRELATORS)))
+        self.logger.info(f'{self!r}: ----------- chFPGA status ---------------')
+        self.logger.info(f'{self!r}:  Controller IP address: {self.ip_addr}, port: {int(self.mb.fpga.port_number)} ')
+        self.logger.info(f'{self!r}:  Firmware version: {self.get_fpga_firmware_version()}')
+        self.logger.info(f'{self!r}:  Number of channel inputs: {int(self.NUMBER_OF_CHANNELIZERS)}')
+        self.logger.info(f'{self!r}:  Number of channelizers with FFT: {len(self.LIST_OF_ANTENNAS_WITH_FFT)} (channels {self.LIST_OF_ANTENNAS_WITH_FFT!s})')
+        self.logger.info(f'{self!r}:  Number of correlators: {len(self.LIST_OF_IMPLEMENTED_CORRELATORS)} (correlators {self.LIST_OF_IMPLEMENTED_CORRELATORS!s})')
 
         self.FreqCtr.status()
 
@@ -4611,7 +4579,7 @@ class chFPGA(FPGAFirmware):
         """
 
         if width not in (4, 8):
-            raise ValueError('Number of bits %i is invalid. Only 4 or 8 is allowed' % width)
+            raise ValueError(f'Number of bits {int(width)} is invalid. Only 4 or 8 is allowed')
 
         # Set the channelizer data width
         self.chan.set_data_width(width)
@@ -4634,9 +4602,7 @@ class chFPGA(FPGAFirmware):
             xbar_data_width = self.CT.get_data_width()
 
             if xbar_data_width and xbar_data_width != chan_data_width:
-                raise RuntimeError("The channelizers and crossbar are not set "
-                                   "to the same data width (chan=%i bits, xbar=%i bits). "
-                                   "The data stream won't make much sense" % (chan_data_width, xbar_data_width))
+                raise RuntimeError(f"The channelizers and crossbar are not set to the same data width (chan={int(chan_data_width)} bits, xbar={int(xbar_data_width)} bits). The data stream won't make much sense")
         return chan_data_width
 
     def configure_crossbar(self, *args, **kwargs):
@@ -4723,7 +4689,7 @@ class chFPGA(FPGAFirmware):
     def get_gains_filename(self, folder=''):
         """Return the name of the full path and filename of the file containing the gains for this board.
         """
-        gain_filename = os.path.join(folder, 'gains_%s.pkl' % self.get_formatted_id())
+        gain_filename = os.path.join(folder, f'gains_{self.get_formatted_id()}.pkl')
         return gain_filename
 
     def load_gains(self, folder='.'):
@@ -4744,10 +4710,10 @@ class chFPGA(FPGAFirmware):
         try:
             with open(gain_filename, 'r') as f:
                 gains = pickle.load(f)
-            self.logger.debug('r: Loaded gains for board %s from file %s' % (self, gain_filename))
+            self.logger.debug(f'r: Loaded gains for board {self} from file {gain_filename}')
             # ib.set_gain(g_array, bank=bank)  # *** should this be bank=all_bank
         except IOError:
-            self.logger.warning("Gain file '%s' not found for (crate,slot)= %r" % (gain_filename, self.get_id()))
+            self.logger.warning(f"Gain file '{gain_filename}' not found for (crate,slot)= {self.get_id()!r}")
             gains = None
 
         # # Fill any missing channel info with None
@@ -4779,7 +4745,7 @@ class chFPGA(FPGAFirmware):
             # self.logger.info('Setting gains on IceBoard SN%s, crate %s, slot %i' % (ib.serial, crate, slot))
             # ib.set_gain(g_array, bank=bank)  # *** should this be bank=all_bank
         except IOError:
-            self.logger.warning("Gain file '%s' could not be saved for (crate,slot)=%r " % (gain_filename, self.get_id()))
+            self.logger.warning(f"Gain file '{gain_filename}' could not be saved for (crate,slot)={self.get_id()!r} ")
 
     def set_scaler_eight_bit(
             self,
@@ -5043,8 +5009,7 @@ class chFPGA(FPGAFirmware):
 
                 # Warn and skip if a channel does not exist
                 if ch not in self.chan.keys():
-                    self.logger.warning('%r: Gains on channel %i are not set because that channel is not available' % (
-                        self, ch))
+                    self.logger.warning(f'{self!r}: Gains on channel {int(ch)} are not set because that channel is not available')
                     continue
 
                 if use_fixed_gain:
@@ -5156,7 +5121,7 @@ class chFPGA(FPGAFirmware):
 
         for chan in self.chan.values():
             if chan.chan_number in channels:
-                self.logger.debug('%r: Setting FFT shift of channel %i' % (self, chan.chan_number))
+                self.logger.debug(f'{self!r}: Setting FFT shift of channel {int(chan.chan_number)}')
                 chan.FFT.FFT_SHIFT = fft_shift
 
     set_FFT_shift = set_fft_shift  # For legacy code compatibility
@@ -5358,17 +5323,12 @@ class chFPGA(FPGAFirmware):
                 self.get_fpga_cookie()
             except IOError:
                 errors += 1
-                print('error on transaction #%i' % i)
+                print(f'error on transaction #{int(i)}')
             except KeyboardInterrupt:
                 break
         t1 = time.time()
         self.mb.fpga.set_timeout(old_timeout)
-        print('%i read operations performed in %.2f s (%.0f read/s) with %i errors (%0.3f%% errors)' % (
-            trials,
-            t1 - t0,
-            float(n) / (t1 - t0),
-            errors,
-            float(errors) / float(trials) * 100))
+        print(f'{int(trials)} read operations performed in {t1 - t0:.2f} s ({float(n) / (t1 - t0):.0f} read/s) with {int(errors)} errors ({float(errors) / float(trials) * 100:0.3f}% errors)')
 
 
     def get_temperatures(self):
@@ -5383,7 +5343,7 @@ class chFPGA(FPGAFirmware):
         res['FPGA_core'] = self.SYSMON.temperature()
         for mezz_number, mezz in self.mezzanine.items():
             for (adc_number, adc) in enumerate(mezz.ADC):
-                res['FMC%i ADC%i' % (mezz_number - 1, adc_number)] = adc.get_temperature()
+                res[f'FMC{int(mezz_number - 1)} ADC{int(adc_number)}'] = adc.get_temperature()
         return res
 
 
@@ -5406,7 +5366,7 @@ class chFPGA(FPGAFirmware):
             # await self.check_command_count(reset=True)
             metrics = await self.BP_SHUFFLE.get_metrics(reset=reset)
         except IOError as e:
-            self.logger.error('%r: Error getting FPGA backplane link metrics. Error is %r' % (self, e))
+            self.logger.error(f'{self!r}: Error getting FPGA backplane link metrics. Error is {e!r}')
             metrics = Metrics()
         return metrics
 
@@ -5472,9 +5432,9 @@ class chFPGA(FPGAFirmware):
                 if cb:  # make sure the crossbar is in this firmware
                     metrics += await cb.get_metrics(reset=reset)
         except IOError as e:
-            self.logger.error('%r: Error getting FPGA crossbar metrics. Error is %r\n\n%s' % (self, e, traceback.format_exc()))
+            self.logger.error(f'{self!r}: Error getting FPGA crossbar metrics. Error is {e!r}\n\n{traceback.format_exc()}')
         except Exception as e:
-            self.logger.error('%r: Unhandled error while  getting FPGA crossbar metrics. Error is %r\n\n%s' % (self, e, traceback.format_exc()))
+            self.logger.error(f'{self!r}: Unhandled error while  getting FPGA crossbar metrics. Error is {e!r}\n\n{traceback.format_exc()}')
         return metrics
 
 
@@ -5605,7 +5565,7 @@ class chFPGA(FPGAFirmware):
     def test_correlator(self, test_name='rand_complex', integration_period=8192, trials=100, verbose=0):
         if test_name == 'rand_complex':
             for data_set_number in range(trials):
-                print('Trial #%i' % data_set_number)
+                print(f'Trial #{int(data_set_number)}')
                 data = np.floor(np.random.rand(16, 1024) * 4 - 2) + 1j * np.floor(np.random.rand(16, 1024) * 4 - 2)
                 trial = 0
                 while True:
@@ -5638,12 +5598,12 @@ class chFPGA(FPGAFirmware):
                     match = np.all(p==f)
                     if match:
                         if data_set_number % 10 == 0 and data_set_number > 0:
-                            print('[{3:s}]: Test #{0:d}/{1:d}; trial {2:d}'.format(data_set_number, trials, trial, datetime.now().strftime("%H:%M:%S.%f")))
-                            print("\t{0:d}".format(timestamp))
+                            print(f"[{datetime.now().strftime('%H:%M:%S.%f'):s}]: Test #{data_set_number:d}/{trials:d}; trial {trial:d}")
+                            print(f"\t{timestamp:d}")
                         break
                     trial += 1
                     if trial < 10:
-                        print('Trial {0:d} frames did not match! Retrying after rewriting the test data again...'.format(trial))
+                        print(f'Trial {trial:d} frames did not match! Retrying after rewriting the test data again...')
                         if(verbose):
                             print("Difference: ")
                             print(p - f)
@@ -5652,7 +5612,7 @@ class chFPGA(FPGAFirmware):
                         return match, data, p, f
 
         else:
-            raise ValueError('Unknown test name %s' % test_name)
+            raise ValueError(f'Unknown test name {test_name}')
 
         print('*** TEST PASSED! ***')
         return True, None, None, None

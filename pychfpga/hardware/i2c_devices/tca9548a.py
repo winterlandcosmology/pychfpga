@@ -15,6 +15,16 @@ class tca9548a(object):
     """
 
     def __init__(self, i2c_interface, address,  verbose=0):
+        """Initialize this device driver instance.
+
+        Args:
+            i2c_interface (Any): Parameter value.
+            address (Any): Parameter value.
+            verbose (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self.i2c = i2c_interface
         self.switch_address = address
 

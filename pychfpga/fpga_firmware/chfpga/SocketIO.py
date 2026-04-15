@@ -65,7 +65,7 @@ class DataSocket_base(object):
         #     self.sock = __main__.__opened_sockets__[self.port_number]
         #     self.logger.debug('%r: reusing existing socket %i' % (self, self.port_number))
         # else:
-        self.logger.debug('%r: Creating new socket %s:%i' % (self, self.host_ip, self.port_number))
+        self.logger.debug(f'{self!r}: Creating new socket {self.host_ip}:{int(self.port_number)}')
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind((self.host_ip, self.port_number))
 
@@ -76,20 +76,20 @@ class DataSocket_base(object):
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, self.BUFFER_LENGTH)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-        self.logger.debug('%r: Using host address %s' % (self, self.host_ip))
-        self.logger.debug('%r: Opened data UDP Socket' % self)
-        self.logger.debug('%r:     Data port:    listening on %s:%i ' % (self, self.host_ip, self.port_number))
+        self.logger.debug(f'{self!r}: Using host address {self.host_ip}')
+        self.logger.debug(f'{self!r}: Opened data UDP Socket')
+        self.logger.debug(f'{self!r}:     Data port:    listening on {self.host_ip}:{int(self.port_number)} ')
 
     def __repr__(self):
-        return 'RecvSocketIO(%s)' % self.ip_address
+        return f'RecvSocketIO({self.ip_address})'
 
     def close(self):
         """Closes the communication socket"""
         if self.port_number not in __main__.__opened_sockets__:
             self.sock.close()
-            self.logger.debug('%r: Closed UDP data socket' % self)
+            self.logger.debug(f'{self!r}: Closed UDP data socket')
         else:
-            self.logger.debug('%r: Closed UDP link, socket left open for future use' % self)
+            self.logger.debug(f'{self!r}: Closed UDP link, socket left open for future use')
 
     def flush(self):
         """Flushes the socket receive buffer."""
@@ -137,7 +137,7 @@ def get_host_addr(dest_addr, netmask='255.255.0.0', only_one=True):
         if all((host_addr_vect & netmask_vect) == (dest_addr_vect & netmask_vect)):
             matched_addr.append(host_addr)
     if only_one and len(matched_addr) != 1:
-        raise SystemError('Could not determine the host address. Found %i possible matches for %s/%s on the following adapters for %s : %s' % (len(matched_addr), dest_addr, netmask, host_data[0], ', '.join(host_addr_list)))
+        raise SystemError(f"Could not determine the host address. Found {len(matched_addr)} possible matches for {dest_addr}/{netmask} on the following adapters for {host_data[0]} : {', '.join(host_addr_list)}")
     return matched_addr[0]
 
 

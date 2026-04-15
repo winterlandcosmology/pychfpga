@@ -153,7 +153,7 @@ class Shuffle(xglink.XGLinkArray):
         elif all(group in self.lane_group_names for group in lane_group):
             groups = lane_group
         else:
-            raise ValueError('Invalid lane group. Can be one of %r' % lane_groups)
+            raise ValueError(f'Invalid lane group. Can be one of {lane_groups!r}')
 
         # cache the bypass flags obtained from the FPGA
         bypass_pcb_shuffle = self.BYPASS_PCB_SHUFFLE
@@ -235,7 +235,7 @@ class Shuffle(xglink.XGLinkArray):
         elif all(group in self.lane_group_names for group in lane_group):
             groups = lane_group
         else:
-            raise ValueError('Invalid lane group. Can be one of %r' % lane_groups)
+            raise ValueError(f'Invalid lane group. Can be one of {lane_groups!r}')
 
         # cache the bypass flags obtained from the FPGA
         bypass_pcb_shuffle = self.BYPASS_PCB_SHUFFLE

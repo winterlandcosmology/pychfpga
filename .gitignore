@@ -16,6 +16,7 @@ out_*/
 /venv/
 .py*venv/
 .venv/
+.venv-fmt/
 \.DS_Store
 .Xil
 *.str
