@@ -238,7 +238,7 @@ class Motherboard(HardwareMap):
         # print(f"In et_unique_instance")
 
         matching_boards = [
-            c for c in cls.get_all_instances() if (
+            c for c in cls.get_all_registered_instances() if (
                 (hostname is not None and c.hostname == hostname)
                 or ((new_class or cls).part_number
                     and serial

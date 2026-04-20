@@ -65,7 +65,7 @@ class Crate(HardwareMap):
 
         """
         matching_crates = [
-            c for c in cls.get_all_instances()
+            c for c in cls.get_all_registered_instances()
             if (crate_number is not None and c.crate_number == crate_number)
             or ((new_class or cls).part_number
                 and serial and c.part_number == (new_class or cls).part_number
@@ -105,7 +105,7 @@ class Crate(HardwareMap):
             other.slot = self.slot  # copy over the slot info
             # Search all Motherboard instance that referred to the old
             # crate instance and update their crate references to the new instance
-            for mb in self.get_all_instances('Motherboard'):
+            for mb in self.get_all_registered_instances('Motherboard'):
                 if mb.crate is self:
                     mb.crate = other
             return other

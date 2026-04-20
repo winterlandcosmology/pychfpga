@@ -406,8 +406,8 @@ class IceBoard(Motherboard, TuberIceBoardBase):
             # This is done to recognize the legacy non-IPMI EEPROM data format that the ARM cannot decode
             ipmi = None
             if eeprom_data is not None:
-                for cls in Mezzanine.get_all_classes():  # for each registered Mezzanine class
-                    if hasattr(cls, 'decode_eeprom'):  # If there si a decode method
+                for cls in Mezzanine.get_all_supported_classes(package='ice'):  # every Ice-platform Mezzanine in the manifest
+                    if hasattr(cls, 'decode_eeprom'):  # If there is a decode method
                         ipmi = cls.decode_eeprom(eeprom_data)   # try to decode
                         if ipmi:  # if not None, we're done
                             break
