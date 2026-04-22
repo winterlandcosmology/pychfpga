@@ -120,15 +120,32 @@ class UCorn(MMI):
         self.TX_INSERT_TIMESTAMP = 1  # insert the timestamp at the appropriate place in the payload header
 
         # CHORD packet transmission
+        def make_bin_map():
+            f_nat = np.arange(8192)
+            f_rev = (f_nat>>11) | ((f_nat & 0b11111111111) << 2)
+            frev2 = (f_rev & 0b1111111111100) | ((f_rev + np.arange(8192)) & 0b11)
+            return frev2
+
+        bin_map = make_bin_map()
+            
+        real_bins = [first_bin + n + number_of_packets * np.arange(bins_per_packet) for n in range(number_of_packets)]
+        # playlist = [(dict(dest_mac_addr=f"01:23:34:67:89:{(n % 16):02X}",
+        #                   dest_ip_addr=f"10.88.0.{(n % 16) + 1}",
+        #                   dest_ip_port=41001
+        #                   ),
+        #              first_bin + n + number_of_packets * np.arange(bins_per_packet))
+        #              for n in range(number_of_packets)]
+
         playlist = [(dict(dest_mac_addr=f"01:23:34:67:89:{(n % 16):02X}",
                           dest_ip_addr=f"10.88.0.{(n % 16) + 1}",
                           dest_ip_port=41001
                           ),
-                     first_bin + n + number_of_packets * np.arange(bins_per_packet))
+                     bin_map[real_bins[n]])
                      for n in range(number_of_packets)]
         
         # Set the playlist to send data
-        self.set_playlist(playlist = playlist)
+        # self.set_playlist(playlist = playlist)
+        self.set_playlist(playlist = playlist, sacrificial_bins = bin_map[np.arange(128)])
 
         self.TX_RESET = 0 # take the module out of reset. Packet transmisison starts.
 
