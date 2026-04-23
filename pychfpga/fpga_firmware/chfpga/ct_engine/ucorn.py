@@ -290,7 +290,7 @@ class UCorn(MMI):
         self.sacrificial_bins = sacrificial_bins
         write_mask = np.full(8192//8, 0xFF, dtype=np.uint8) # 1 bit per bin, 8 bits per byte x 1024 bytes = 8192 bins
         for b in self.sacrificial_bins:
-            write_mask[b//8] &=  ~ (1 << (b % 8))
+            write_mask[b//8] &=  (~ (1 << (b % 8))) & 0xFF
         self.write_mask_buffer(0, write_mask)
 
         bins_total = sum(len(b) for t,b in playlist)
