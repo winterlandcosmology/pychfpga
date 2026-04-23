@@ -3089,7 +3089,7 @@ class chFPGA(FPGAFirmware):
             self.set_gains(gain=gains, postscaler=postscaler, channels=channels)
 
         if offset_binary_encoding is not None:
-            self.set_offset_binary_encoding(offset=offset_binary_encoding, channels=channels)
+            self.set_offset_binary_encoding(offset=offset_binary_encoding, channels=channels) # , sync=False)
 
         if local_sync:
             self.sync()
@@ -3916,8 +3916,7 @@ class chFPGA(FPGAFirmware):
             self.logger.debug(f'Setting scaler capture data type to {cap_data_type} for channel {channels}')
             for ch in channels:
                 self.chan[ch].SCALER.CAP_DATA_TYPE = cap_data_type
-            self._update_channel_capture_state(channels, scaler_cap_data_type=normalized_cap_type)
-
+                self.chan[ch].SCALER.BYPASS = bypass
 
 
 

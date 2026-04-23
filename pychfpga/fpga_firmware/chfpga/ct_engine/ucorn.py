@@ -93,8 +93,8 @@ class UCorn(MMI):
         self.TX_OVERRIDE_DATA = 0 # Do not override the output data (for low level debugging)
         self.TX_RESET = 1 # put the module in reset state
 
-        # program data for one bin
-        self.set_bin_data(bin=1, frame=0, data=np.arange(8*16, dtype=np.uint8))
+        # # program data for one bin
+        # self.set_bin_data(bin=1, frame=0, data=np.arange(8*16, dtype=np.uint8))
 
         first_bin = 300*8192//1600 # 1536
         last_bin= 1500*8192//1600  # Last bin is excluded
