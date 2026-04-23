@@ -838,7 +838,7 @@ class TestPreDeploymentCrate(TestUtils):
                     from pychfpga.hardware import Crate
                     missing_slots = {
                         (ic.part_number, ic.serial, ic.crate_number): set(range(1, ic.NUMBER_OF_SLOTS + 1)) - set(ic.slot)
-                        for ic in Crate.get_all_instances()}
+                        for ic in Crate.get_all_registered_instances()}
                     
                     # for i in boards_to_ping:
                     #     if i not in self.ca.ib.values():
