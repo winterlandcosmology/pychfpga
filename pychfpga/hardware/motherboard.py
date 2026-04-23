@@ -10,6 +10,7 @@ from wtl.metrics import Metrics
 # local Packages
 from .hardware_map import HardwareMap
 from .crate import Crate
+from pychfpga.common import array_methods
 
 
 class Motherboard(HardwareMap):
@@ -47,6 +48,11 @@ class Motherboard(HardwareMap):
     FMC_MEZZ_NUMBERS = () # Logical mezzanine numbers
 
     port = None  # port number on which to access the platform `hostname`. Must be defined by subclasses. Is used by fpga_master.
+
+    # List of array methods accessible from this instance. 
+    # Defined here as a default so __getattr__ does not fall in a recursive loop until the instalce attribute shadows it.
+    _array_methods = frozenset()
+    fpga = None
 
     cls_logger = logging.getLogger(__name__)
 
@@ -117,6 +123,11 @@ class Motherboard(HardwareMap):
         # parameters.
         self._cached_repr = None
 
+        # Instance default for the FPGAArray-method cache. Shadows the class
+        # attribute; refreshed by ``update_array_methods`` (typically called
+        # by ``FPGAArray.update_array_methods`` after FPGA (re)programming).
+        self._array_methods = array_methods.get_array_methods(self)
+
         self.logger = logging.getLogger(__name__)
 
 
@@ -172,6 +183,23 @@ class Motherboard(HardwareMap):
         """ Returns bothe the Motherboard's and FPGA Firmware's attributes"""
         return list(set(super().__dir__()
                     + (self.fpga.__dir__() if self.fpga else [])))
+
+    def update_array_methods(self):
+        """Refresh ``self._array_methods`` with the set of FPGAArray-method
+        names currently exposed by this motherboard.
+
+        Scans ``dir(self)``, which already unions Motherboard and FPGA
+        firmware attributes via ``Motherboard.__dir__``, and keeps names
+        whose attribute carries ``is_array_method = True``.
+
+        Always builds a new ``frozenset`` object so that :class:`FPGAArray`
+        can detect the refresh via identity comparison in its cache.
+
+        Returns:
+            The refreshed ``frozenset`` of array-method names.
+        """
+        self._array_methods = array_methods.get_array_methods(self)
+        return self._array_methods
 
     # *************************
     # Motherboard-specific hardware map management methods
@@ -543,11 +571,37 @@ class Motherboard(HardwareMap):
         raise NotImplementedError('This method must be implemented by a subclass')
 
     # *************************
-    # FPGA Programming methods
+    # FPGA Firmware methods
     # *************************
 
+    def set_fpga_firmware(self, fpga_fw):
+        """ Set the FPGA firmware class for this motherboard.
+
+        Parameters:
+
+            fpga_fw (FPGAFirmware subclass): The firmware class to program the FPGA with.
+
+        Returns:
+            None
+        """
+        self.fpga = fpga_fw
+        self.update_array_methods() # update the list of array-wide methods that can be used by FPGAArray
+
     async def set_fpga_bitsream_async(self, firmware_class, force=True):
-        """ Programs the FPGA with the specified bitstream
+        """ Programs the FPGA with the specified bitstream.
+
+        Once the FPGA is programmed, the firmware class is stored in the `fpga` attribute.
+
+        Make sure to call `update_array_methods()` after programming the FPGA to update the list fof array-wide methods that can be used by FPGAArray.
+
+        Parameters:
+
+            firmware_class (FPGAFirmware subclass): The firmware class to program the FPGA with.
+
+            force (bool): If True, the FPGA will be programmed even if it is already programmed.
+
+        Returns:
+            None
         """
         raise NotImplementedError('This method must be implemented by a subclass')
 

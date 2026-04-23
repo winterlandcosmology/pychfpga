@@ -263,9 +263,7 @@ class HardwareMap:
         lookup is retried — so callers never need to pre-load platforms.
 
         There shall be only one class that matches the target IPMI. If there
-        are multiple matches, a ``RuntimeError`` will be raised. This method
-        is not suited for selecting objects that are software- or firmware-
-        defined, like IceBoards.
+        are multiple matches, a ``RuntimeError`` will be raised. 
 
         Parameters:
 

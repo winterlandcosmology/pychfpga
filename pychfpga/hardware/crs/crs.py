@@ -534,7 +534,7 @@ class CRS(Motherboard):
 
 
    ###################################
-    # Firmware management
+    # FPGA Firmware management
     ###################################
     # Called after open_platform_async(), but before the FPGA firmware is set.
 
@@ -606,10 +606,8 @@ class CRS(Motherboard):
             self.logger.debug(
                 f'{self!r}: FPGA is already configured. Skipping configuration.')
 
-        self.fpga = fw_cls(self, mode=firmware_mode, **fw_params)
-
-    # Mezzanine management
-
+        fpga_fw = fw_cls(self, mode=firmware_mode, **fw_params)
+        self.set_fpga_firmware(fpga_fw)
 
     async def get_fpga_bitstream_crc_async(self):
         """ Return the signature of the firmware currently configured in the
@@ -627,7 +625,7 @@ class CRS(Motherboard):
         Returns None if the FPGA is not configured.
         """
         fpga_is_programmed = await self.is_fpga_programmed_async()
-        self.tcpipe.get_fpga_bitstream_crc(crc32 if fpga_is_programmed else None)
+        self.tcpipe.set_fpga_bitstream_crc(crc32 if fpga_is_programmed else None)
 
     # def clear_fpga_bitstream(self):
     #     """ Stop the operation of the FPGA.
