@@ -96,6 +96,13 @@ To check the programming:
 		Starting main loop
 		mDNS: Board crs_0026 registered successfully over mDNS at 10.10.10.203:7
 
+New uboot-based firmware
+-------------------------
+
+Program with::
+
+    program_flash -f uboot.bin -fsbl fsbl-t0-crs.elf -flash_type qspi-x8-dual_parallel
+
 
 Resetting the board
 -------------------
