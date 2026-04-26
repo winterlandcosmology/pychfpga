@@ -28,7 +28,7 @@ except ImportError:
     comet = None
 
 # Local imports
-from pychfpga import __version__
+# from pychfpga import __version__
 
 class SpectrumInstrumentsTM4D(SocketContext):
     """
