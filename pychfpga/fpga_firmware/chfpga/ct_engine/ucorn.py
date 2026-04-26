@@ -83,33 +83,69 @@ class UCorn(MMI):
 
         """
 
-        self.RX_WRITE_EN = 0  # Do not allow F-Engine data wo be written - we will write test patterns manually into the data buffers.
-        self.RX_MASK_LOW_BINS = 1 # prevent F-ENgine data to be written in the first bins, as these are used for storing packet headers.
-
-        self.TX_TRIG_SEL = 1  # enable period-based transmission trigger
-        self.TX_ENABLE = 1 # enable packet transmission
-        self.TX_TOGGLE_BANK = 0 # always send data from the same bank
-        self.TX_INSERT_TIMESTAMP = 1  # insert the timestamp at the appropriate place in the payload header
-        self.TX_OVERRIDE_DATA = 0 # Do not override the output data (for low level debugging)
-        self.TX_RESET = 1 # put the module in reset state
-
-        # # program data for one bin
-        # self.set_bin_data(bin=1, frame=0, data=np.arange(8*16, dtype=np.uint8))
-
         first_bin = 300*8192//1600 # 1536
         last_bin= 1500*8192//1600  # Last bin is excluded
         number_of_bins = last_bin - first_bin
         number_of_packets = 128
         bins_per_packet = number_of_bins // number_of_packets
 
-        self.playlist = [
-            (dict(dest_mac_addr=f"01:23:34:67:89:{i+1:02X}",
-                  dest_ip_addr=f"10.88.0.{i+1}",
-                  dest_ip_port=41001),
-             np.arange(bins_per_packet) + first_bin + bins_per_packet*i)
-            for i in range(number_of_packets)]
-        # Set the playlist to send data from that bin
-        self.set_playlist(playlist=self.playlist)
+        self.TX_RESET = 1 # put the module in reset state
+        self.RX_MASK_LOW_BINS = 1 # prevent F-ENgine data to be written in the first bins, as these are used for storing packet headers.
+
+        # # Trigger-based, test packet transmission configuration
+        # self.RX_WRITE_EN = 0  # Do not allow F-Engine data wo be written - we will write test patterns manually into the data buffers.
+        # self.TX_TRIG_SEL = 1  # enable period-based transmission trigger
+        # self.TX_ENABLE = 1 # enable packet transmission
+        # self.TX_TOGGLE_BANK = 0 # always send data from the same bank
+        # self.TX_INSERT_TIMESTAMP = 1  # insert the timestamp at the appropriate place in the payload header
+        # self.TX_OVERRIDE_DATA = 0 # Do not override the output data (for low level debugging)
+
+        # # program data for one bin
+        # self.set_bin_data(bin=1, frame=0, data=np.arange(8*16, dtype=np.uint8))
+
+        # # Old version
+        # self.playlist = [
+        #     (dict(dest_mac_addr=f"01:23:34:67:89:{i+1:02X}",
+        #           dest_ip_addr=f"10.88.0.{i+1}",
+        #           dest_ip_port=41001),
+        #      np.arange(bins_per_packet) + first_bin + bins_per_packet*i)
+        #     for i in range(number_of_packets)]
+        # # Set the playlist to send data from that bin
+        # self.set_playlist(playlist=self.playlist)
+
+        # CHORD packet transmission configuration
+        self.RX_WRITE_EN = 1 # allow the buffer to be written with real data from the channelizers
+        self.TX_TRIG_SEL = 0 # do not do trigger-based sending. send data at the native clock rate instead.
+        self.TX_TOGGLE_BANK = 1 # bank toggling must be enabled with 1 since we'll be reading and writing at the same time
+        self.TX_INSERT_TIMESTAMP = 1  # insert the timestamp at the appropriate place in the payload header
+
+        # CHORD packet transmission
+        def make_bin_map():
+            f_nat = np.arange(8192)
+            f_rev = (f_nat>>11) | ((f_nat & 0b11111111111) << 2)
+            frev2 = (f_rev & 0b1111111111100) | ((f_rev + np.arange(8192)) & 0b11)
+            return frev2
+
+        bin_map = make_bin_map()
+            
+        real_bins = [first_bin + n + number_of_packets * np.arange(bins_per_packet) for n in range(number_of_packets)]
+        # playlist = [(dict(dest_mac_addr=f"01:23:34:67:89:{(n % 16):02X}",
+        #                   dest_ip_addr=f"10.88.0.{(n % 16) + 1}",
+        #                   dest_ip_port=41001
+        #                   ),
+        #              first_bin + n + number_of_packets * np.arange(bins_per_packet))
+        #              for n in range(number_of_packets)]
+
+        playlist = [(dict(dest_mac_addr=f"01:23:34:67:89:{(n % 16):02X}",
+                          dest_ip_addr=f"10.88.0.{(n % 16) + 1}",
+                          dest_ip_port=41001
+                          ),
+                     bin_map[real_bins[n]])
+                     for n in range(number_of_packets)]
+        
+        # Set the playlist to send data
+        # self.set_playlist(playlist = playlist)
+        self.set_playlist(playlist = playlist, sacrificial_bins = bin_map[np.arange(128)])
 
         self.TX_RESET = 0 # take the module out of reset. Packet transmisison starts.
 
