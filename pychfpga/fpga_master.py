@@ -1715,13 +1715,13 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         # self.port = port # port on which the web server will be run
         self.dummy = dummy
 
-        # Use a dummy CHIME Master object if dummy is True
+        # Use a dummy Master object if dummy is True
         FPGAMasterClass = DummyFPGAMaster if self.dummy else FPGAMaster
 
         self.fpga_master = FPGAMasterClass()
         self.future = None
-        self.metrics = Metrics()
-        self.last_metrics_client = None
+        # latest_only=True: keep only the most recent value per metric+labels.
+        self.metrics = Metrics(latest_only=True)
         self.metrics_request_last_number_of_metrics = 0
         self.metrics_requests = 0
 
@@ -2538,50 +2538,55 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             self.metrics.add('fpga_noise_injection_pwm_period', value=status['pwm_period'], ni_name=ni_name)
 
     @endpoint('get-monitoring-data')
-    async def get_monitoring_data(self, request):
-        """
-        Parameters:
-
-            request (aiohttp.web.Request): request object, automatically inserted by the call handler.
+    async def get_monitoring_data(self):
+        """ REST endpoint that returns the current metric values as a JSON dict.
 
         Returns:
 
-            Compressed set of metrics.
+            dict keyed by metric name, each value shaped as::
 
+                {
+                    "type": str or None,
+                    "doc":  str or None,
+                    "entries": [
+                        {"labels": {...}, "time": int_ms, "value": number},
+                        ...
+                    ],
+                }
+
+        Example:
+
+            curl http://localhost:54321/get-monitoring-data
         """
-        self.metrics_requests +=1
-        try:
-            t0 = time.time()
-            # metrics = self.metrics #  Metrics()
-            number_of_metrics = len(self.metrics)
-            # get IP address of the remote client initialing the HTTP request
-            client_ip = request.remote
-            self.log.debug(f'{self!r}: Received metrics request from {client_ip}')
-            if self.last_metrics_client and client_ip != self.last_metrics_client:
-                self.log.warning(
-                    f'{self!r}: A new client at {client_ip} is pulling metrics '
-                    f'from this server. Previous client was {self.last_metrics_client}')
-            self.last_metrics_client = client_ip
+        self.metrics_requests += 1
+        t0 = time.time()
 
-            metrics = self.metrics.pop()
-            response = aiohttp.web.Response(
-                body=metrics.get_gzip(),
-                headers={'Content-Encoding': 'gzip'})
+        snapshot = {}
+        for metric_name, metric in self.metrics.metrics.items():
+            entries = []
+            for label_set, time_entries in metric['entries'].items():
+                if not time_entries:
+                    continue
+                latest_time = max(time_entries)
+                entries.append(dict(
+                    labels=dict(label_set),
+                    time=latest_time,
+                    value=time_entries[latest_time],
+                ))
+            snapshot[metric_name] = dict(
+                type=metric['type'],
+                doc=metric['doc'],
+                entries=entries,
+            )
 
-            self.log.debug(f'{self!r}: Returning {number_of_metrics} FPGA metrics '
-                          f'(compression ratio {metrics.last_compression_ratio * 100:.1f}%)')
+        self.metrics_request_last_number_of_metrics = sum(
+            len(m['entries']) for m in snapshot.values())
+        self.log.debug(
+            f'{self!r}: Returning {len(snapshot)} metrics '
+            f'({self.metrics_request_last_number_of_metrics} entries) '
+            f'built in {time.time() - t0:.3f}s')
 
-            # handler.write(self.metrics.pop().get_gzip())
-            self.log.debug(
-                f'{self!r}: Metrics request took {time.time()-t0:.3f} seconds to execute')
-
-            self.metrics_request_last_number_of_metrics = number_of_metrics
-
-            return response
-
-        except Exception as e:
-            self.log.error(f'{self!r}: Exception in get-monitoring-data. Error is: {e!r}')
-            raise
+        return snapshot
 
 
     @endpoint('get-hw-map')
