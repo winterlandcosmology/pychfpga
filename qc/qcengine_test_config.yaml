@@ -8,7 +8,7 @@ comment: |
     That extends many lines
         this is indented more
 
-# test_results_folder: './test_results'
+test_results_folder: './test_results'
 # test_results_folder: '../../iceqc'  # relative to this config file's folder. "~" is allowed.
 #test_results_folder: '../../qc_results'  # relative to this config file's folder. "~" is allowed.
 test_results_folder_uses_git: false
@@ -22,7 +22,8 @@ submenus:
     - {name: 'adc', path: './MGADC08/test_config.yaml'}
     - {name: 'mb',  path: './MGK7MB/test_config.yaml'}
     - {name: 'bp',  path: './MGK7BP16/test_config.yaml'}
-    - {name: 'pd',  path: './pre_deployment/test_config.yaml'}
+    - {name: 'ic',  path: './ICE_crate/test_config.yaml'}
+    - {name: 'cc',  path: './CRS_crate/test_config.yaml'}
 
 menu:
     # The menu item will match the user input to either the 'key' field or to the regular expression 'regex'. The matching dictionary is returned.
@@ -37,7 +38,8 @@ menu:
     - { key: '1',                    action: run_submenu, submenu: adc, description: 'MGADC08 ADC tests'}
     - { key: '2',                    action: run_submenu, submenu: mb,  description: 'MGK7MB IceBoard tests'}
     - { key: '3',                    action: run_submenu, submenu: bp,  description: 'MGK7BP16 Backplane tests'}
-    - { key: '4',                    action: run_submenu, submenu: pd,  description: 'F-Engine pre-deployment tests'}
+    - { key: '4',                    action: run_submenu, submenu: ic,  description: 'ICE F-Engine pre-deployment tests'}
+    - { key: '5',                    action: run_submenu, submenu: cc,  description: 'CRS F-Engine pre-deployment tests'}
     - { key: 'S',                    action: push,                      description: 'Send all new test results data to McGill'}
     - { key: 'R',                    action: summary,                   description: 'Generate summary of all tests'}
     - { key: 'Q',                    action: exit,                      description: 'Exit'}
