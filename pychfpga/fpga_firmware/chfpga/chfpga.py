@@ -14,7 +14,7 @@ import time
 import os
 import pickle
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import struct
 from calendar import timegm
 from functools import wraps
@@ -1304,7 +1304,7 @@ class chFPGA(FPGAFirmware):
             err = any(abs(f - target_frequency) > 2.1e3 for f in freqs)
             msg = f'{self!r}: ADC output frequencies at stage {stage} are {[f/1e6 for f in freqs]} (check #{trial+1}) {"ERROR!" if err else ""}'
             if err:
-                self.logger.warn(msg)
+                self.logger.warning(msg)
                 self.adc_clk_err_ctr += 1
                 self.adc_clk_err_msgs.append(msg)
             else:
@@ -1499,8 +1499,6 @@ class chFPGA(FPGAFirmware):
     async def clear_fpga_udp_errors(self, force=False, no_reset=False, max_trials=3):
         """ Attempts to clear the FPGA UDP communication errors.
 
-        IceBoard only.
-
         Parameters:
 
             force (bool): If True, the UDP stack is reset whether of not the
@@ -1513,7 +1511,9 @@ class chFPGA(FPGAFirmware):
 
         trial = 1
         while True:
-            if force or self.mmi.error_counter > 40:
+            # Check error counter - handle both FPGAMmi (has error_counter) and TCPipe_BSB_MMI (has recv_counter)
+            error_count = getattr(self.mmi, 'error_counter', 0) if hasattr(self.mmi, 'error_counter') else 0
+            if force or error_count > 40:
                 self.logger.warning(f'{self!r}: Resetting FPGA UDP stack (trial #{trial}/{max_trials})')
 
                 if not no_reset:
@@ -1546,7 +1546,9 @@ class chFPGA(FPGAFirmware):
                             f'after {trial} FPGA UDP stack reset. Retrying...')
                     trial += 1
                 finally:
-                    self.mmi.error_counter = 0
+                    # Reset error counter if it exists
+                    if hasattr(self.mmi, 'error_counter'):
+                        self.mmi.error_counter = 0
                     self.logger.debug(f'{self!r}: Finished to attempt clearing FPGA UDP errors.')
             else:
                 break
@@ -2245,8 +2247,6 @@ class chFPGA(FPGAFirmware):
                 self.logger.debug(f'{self!r}: Waiting for valid IRIG-B time. (recent={ts.recent}, HMS valid={hms_valid}, day valid={day_valid})')
                 await asyncio.sleep(0.1)  # wait a bit before rechecking time
 
-
-
         # check if the time is valid
         if not noerror:
             if not hms_valid:
@@ -2262,6 +2262,7 @@ class chFPGA(FPGAFirmware):
             datetime(ts.y + 2000, 1, 1) +
             timedelta(days=ts.d - 1, hours=ts.h, minutes=ts.m,
                       seconds=ts.s + 1, microseconds=ts.ss // 100))
+        
         # compute a timestamp, one second in the future
         # unix timestamp = seconds since 1 Jan 1970 UTC
         timestamp = timegm((ts.y + 2000, 1, ts.d, ts.h, ts.m, ts.s + 1))
@@ -2270,7 +2271,7 @@ class chFPGA(FPGAFirmware):
         # provide (not necessarily to the nanosecond)
         ts.time = ts.nano / 1e9
         # Compute an modified time structure (a tuple) that contains the time
-        # elements including fractional nicroseconds
+        # elements including fractional microseconds
         tt = time.gmtime(timestamp)
         ts.time_struct = [tt.tm_year, tt.tm_mon, tt.tm_mday, tt.tm_hour,
                           tt.tm_min, tt.tm_sec, (ts.nano % 1000000000) / 1000.0]
@@ -2287,10 +2288,81 @@ class chFPGA(FPGAFirmware):
                            dt.second, (ts.nano2 % 1000000000) / 1000.0]
         # ts.event_ctr = e0
 
+        # Validate that the different ways of computing 
+        # the times agree with each other
         if not (ts.nano == ts.nano2 and
-                ts.time == ts.time2 and
-                ts.time_struct == ts.time_struct2):
-            self.logger.error(f"{self!r}: IRIGB time computation error")
+            ts.time == ts.time2 and
+            ts.time_struct == ts.time_struct2):
+            self.logger.error("%r: IRIGB time computation error" % self)
+
+        # # Last thing: apply an offset to correct for GPS rollover time
+        # # if a given GPS receiver has not had its firmware updated.
+        # # The GPS rollover time is 1024 weeks. Recall that epoch 0 ns = Jan. 1 1970 UTC
+        # # Start by defining the GPS epoch, Jan. 6 1980 UTC, with respect to UNIX epoch as a datetime object
+        # gps_t0_datetime_utc = datetime(year = 1980, month = 1, day = 6, tzinfo = timezone.utc)
+
+        # # Next, add a timedelta of n*1024, where n is an integer referring to the epoch we are in (1980, 1999, 2019, ...) 
+        # epochs = np.arange(5) # brings us to July 7, 2058
+        # gps_epochs_t0_datetime = [gps_t0_datetime_utc + timedelta(weeks = int(n*1024)) for n in epochs] # GPS time 0 for each epoch, datetime object
+        # gps_epochs_t0_s = [int(gps_epochs_t0_datetime[n].timestamp()) for n in epochs] # GPS time 0 for each epoch, seconds
+        
+        # # Finally, check the system time, and apply the offset to bring the IRIG-B time into the correct epoch
+        # # First, get the GPS epoch index for the system by determining the last epoch where the system time 
+        # # is greater than the epoch t0
+        # system_gps_epoch = int(np.where([ts.system_time > gps_epochs_t0_s[n] for n in epochs])[0][-1]) 
+
+        # # Next, get the GPS epoch index for the GPS receiver
+        # gps_receiver_gps_epoch = int(np.where([dt.timestamp() > gps_epochs_t0_s[n] for n in epochs])[0][-1])
+
+        # if gps_receiver_gps_epoch != system_gps_epoch:
+        #     # Iterate through and update each attribute of _IrigTimestamp accordingly
+        #     n_epochs_to_add = system_gps_epoch - gps_receiver_gps_epoch 
+
+        #     self.logger.debug('Difference in GPS epoch detected between GPS receiver and system. Correction needed.')
+        #     self.logger.debug(f'GPS receiver time before correction: {dt}')
+        #     self.logger.debug(f'System time: {datetime.fromtimestamp(ts.system_time)}')
+        #     self.logger.debug(f'GPS receiver\'s GPS epoch is {gps_receiver_gps_epoch} (starting at {gps_epochs_t0_datetime[gps_receiver_gps_epoch]}), but system\'s GPS epoch is {system_gps_epoch} (starting at {gps_epochs_t0_datetime[system_gps_epoch]}). Adding {n_epochs_to_add*1024} weeks to IRIG-B time.')
+            
+        #     if n_epochs_to_add < 0:
+        #         raise NotImplementedError('GPS receivers time-traveled from the future to the present not supported.')
+
+        #     # Start with the datetime object, to which we can simply add a timedelta 
+        #     ts.datetime = dt = ts.datetime + timedelta(weeks = n_epochs_to_add*1024)
+
+        #     # Then, use the datetime object to recover year, month, day, etc.
+        #     ts.y = dt.year
+        #     ts.d = dt.day
+        #     ts.h = dt.hour
+        #     ts.m = dt.minute
+        #     ts.s = dt.second
+            
+        #     # ts.ss and ts.pps don't need to be updated, 
+        #     # since we're only adding a number of weeks
+        #     # ts.pps
+        #     # ts.sbs
+
+        #     ts.time = dt.timestamp()
+        #     ts.nano = int(ts.time*1e9)
+        #     ts.time_struct = [dt.year, dt.month, dt.day, dt.hour, dt.minute,
+        #                       dt.second, (ts.nano2 % 1000000000) / 1000.0]
+
+        #     # We can assign the second time values to the first,
+        #     # since we already checked that they were the same 
+        #     # before adding the GPS epoch offset
+        #     ts.time2 = ts.time
+        #     ts.nano2 = ts.nano
+        #     ts.time_struct2 = ts.time_struct
+            
+        #     # # "straight binary seconds" since 00:00 on the current day (0-86399,
+        #     # # not BCD). Not necessarily supported by the GPS.
+        #     # ts.sbs = (w0 >> 8) & ((1 << 18) - 1)
+        #     # ts.source = (w1 >> 30) & ((1 << 2) - 1)
+        #     # ts.recent = (w1 >> 29) & 1
+        #     # ts.system_time = time.time()
+        #     # ts.refclk_counter = await self.fpga_core_reg_read_async(self._IRIGB_REFCLK_SAMPLE)
+
+        #     self.logger.debug(f'GPS receiver time after correction: {dt}')
+            
         return ts
 
     async def set_irigb_trigger_time_async(self, datetime_=None, delay=None):
@@ -2834,8 +2906,6 @@ class chFPGA(FPGAFirmware):
         else:
             raise ValueError(f"Invalid capture type: {self.CAPTURE_TYPE}")
 
-
-
     async def get_config_async(self, basic=False):
         """
         Return configuration for this FPGA.
@@ -3089,7 +3159,7 @@ class chFPGA(FPGAFirmware):
             self.set_gains(gain=gains, postscaler=postscaler, channels=channels)
 
         if offset_binary_encoding is not None:
-            self.set_offset_binary_encoding(offset=offset_binary_encoding, channels=channels) # , sync=False)
+            self.set_offset_binary_encoding(offset=offset_binary_encoding, channels=channels)
 
         if local_sync:
             self.sync()
@@ -3284,10 +3354,11 @@ class chFPGA(FPGAFirmware):
             adc_board.ADC.set_test_mode(test_mode=mode_value, adc_mode=sampling_mode, bandwidth=bandwidth)
 
         # Set the capture period for all specified channels
-        for ch in channels:
-            chan = self.chan[ch]
-            # Set the period so we are ready to capture data correctly after the SYNC resets the CAPTURE logic
-            chan.ADCDAQ.CAPTURE2_PERIOD = capture_period
+        if self.HAS_ADCDAQ:
+            for ch in channels:
+                chan = self.chan[ch]
+                # Set the period so we are ready to capture data correctly after the SYNC resets the CAPTURE logic
+                chan.ADCDAQ.CAPTURE2_PERIOD = capture_period
 
         # self.current_ADC_mode = mode_value
         if sync:
@@ -5000,6 +5071,16 @@ class chFPGA(FPGAFirmware):
             if (Glog is None) and (postscaler is not None):
                 Glog = postscaler
 
+            if np.all(Glin.imag == 0.) == True:
+                # If the gain is purely real, recover only the real part and convert to float
+                Glin = Glin.real.astype(float)
+
+            if Glog == -1:
+                # A Glog of -1 indicates that floating point gains were used,
+                # and we can therefore set Glog to None so that the gains are set 
+                # in floating point mode.
+                Glog = None
+
             # Process each channel
             for ch in channel_list:
                 # Ignore channels not in the `channels` parameters
@@ -5013,9 +5094,12 @@ class chFPGA(FPGAFirmware):
 
                 if use_fixed_gain:
                     raise DeprecatedError(f'Fix gain feature is deprecated. Set the table to a constant value instead.')
+                
+                self.logger.debug(f'Slot {self.slot}, channel {ch}: Glin = {Glin}, Glog = {Glog}')
 
                 self.chan[ch].SCALER.set_gain_table(Glin, bank=bank, gain_timestamp=timestamp_value, log_gain=Glog)
                 configured_channels.add(ch)
+
         self.logger.debug(f"{self!r}: Setting scaler gains for channel {', '.join(str(i) for i in configured_channels)}")
 
         if when is not None:
@@ -5040,14 +5124,30 @@ class chFPGA(FPGAFirmware):
             list of gains for each channelizer, in the format::
                  [[channel_number, [linear_gain_table, log gain]], ...]
 
-                 ``linear_gain_table`` is an array of 1024 complex values.
+                 ``linear_gain_table`` is an array of NBIN complex values.
                  ``log gain`` is an integer.
         """
         gain_list = []
         for chan in self.get_channelizers():
-            glog = chan.SCALER.SHIFT_LEFT
-            glin = chan.SCALER.get_gain_table(bank=bank, use_cache=True)
+
+            fp_gains_enabled = chan.SCALER.USE_FLOAT_GAINS
+
+            glin = chan.SCALER.get_gain_table(bank=bank, use_cache=use_cache)
+
+            if fp_gains_enabled:
+                '''
+                Floating-point gain convention: glin corresponds to the full gain, and the "log" part is returned as -1
+                to signify that floating-point gains are used (i.e., the full gain is represented by glin, and it is not
+                necessary to use glog).
+                '''
+                self.logger.debug(f'Floating point gains enabled on slot {self.slot}, channel {chan.chan_number}')
+                glog = -1
+
+            else:
+                glog = chan.SCALER.SHIFT_LEFT
+
             gain_list.append([chan.chan_number, [glin, glog]])
+
         return gain_list
 
     def get_gain_timestamps(self, bank=0):
@@ -5339,13 +5439,39 @@ class chFPGA(FPGAFirmware):
 
         """
         res = {}
-        res['FPGA_core'] = self.SYSMON.temperature()
-        for mezz_number, mezz in self.mezzanine.items():
-            for (adc_number, adc) in enumerate(mezz.ADC):
-                res[f'FMC{int(mezz_number - 1)} ADC{int(adc_number)}'] = adc.get_temperature()
+        if hasattr(self, 'SYSMON') and self.SYSMON:
+            res['FPGA_core'] = self.SYSMON.temperature()
+        if hasattr(self, 'mezzanine') and self.mezzanine:
+            for mezz_number, mezz in self.mezzanine.items():
+                for (adc_number, adc) in enumerate(mezz.ADC):
+                    res['FMC%i ADC%i' % (mezz_number - 1, adc_number)] = adc.get_temperature()
         return res
 
+    async def get_fpga_core_temperature_metrics(self):
+        """ Get the FPGA core temperature and wrap it in a Metrics object.
 
+        Returns:
+            a :class:`Metrics` object containing the FPGA core temperature.
+        """
+        metrics = Metrics(
+            type='GAUGE',
+            slot=(self.slot or 0) - 1,
+            id=self.get_string_id(),
+            crate_id=self.crate.get_string_id() if self.crate else None,
+            crate_number=self.crate.crate_number if self.crate else None)
+        
+        try:
+            # Get temperatures from the firmware
+            temperatures = self.get_temperatures()
+            
+            # Extract FPGA core temperature
+            if isinstance(temperatures, dict) and 'FPGA_core' in temperatures:
+                metrics.add('fpga_core_temperature', temperatures['FPGA_core'])
+                
+        except Exception as e:
+            self.logger.error(f'{self!r}: Error getting FPGA core temperature: {e}')
+            
+        return metrics
 
     def reset_gpu_links(self):
         """ Resets the GPU links.
@@ -5355,10 +5481,8 @@ class chFPGA(FPGAFirmware):
         self.GPU.reset()
 
 
-
-
     async def get_bp_shuffle_metrics_async(self, reset=True):
-        if not self.is_open() or not self.BP_SHUFFLE:
+        if not self.is_open() or not hasattr(self, 'BP_SHUFFLE') or not self.BP_SHUFFLE:
             return Metrics()
         try:
             await self.clear_fpga_udp_errors()
@@ -5427,9 +5551,20 @@ class chFPGA(FPGAFirmware):
         try:
             # await self.check_command_count(reset=True)
             await self.clear_fpga_udp_errors()
-            for cb in [self.CROSSBAR, self.CROSSBAR2, self.CROSSBAR3]:
-                if cb:  # make sure the crossbar is in this firmware
-                    metrics += await cb.get_metrics(reset=reset)
+            # Check for crossbar objects in the corner-turn engine
+            if self.CT:
+                # Try to get crossbar objects from the corner-turn engine
+                crossbars = []
+                if hasattr(self.CT, 'CROSSBAR'):
+                    crossbars.append(self.CT.CROSSBAR)
+                if hasattr(self.CT, 'CROSSBAR2'):
+                    crossbars.append(self.CT.CROSSBAR2)
+                if hasattr(self.CT, 'CROSSBAR3'):
+                    crossbars.append(self.CT.CROSSBAR3)
+                
+                for cb in crossbars:
+                    if cb:  # make sure the crossbar is in this firmware
+                        metrics += await cb.get_metrics(reset=reset)
         except IOError as e:
             self.logger.error(f'{self!r}: Error getting FPGA crossbar metrics. Error is {e!r}\n\n{traceback.format_exc()}')
         except Exception as e:

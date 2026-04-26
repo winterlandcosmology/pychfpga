@@ -233,6 +233,8 @@ class MMI(object):
         self.address_width = self.ADDRESS_WIDTH or max_address_width
         self.address_max = (1 << self.address_width) - 1
 
+        self.error_counter = 0 # Initialize error counter for incrementing in chfpga.py
+
     def __repr__(self):
         """ Return a string that represents this object and its parent object.
         """
