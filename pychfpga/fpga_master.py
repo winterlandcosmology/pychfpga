@@ -1195,8 +1195,9 @@ class FPGAMaster(object):
         # Clear errors accumulated during start and initialization
         self.log.info("Resetting FPGA statistics counters")
         self.reset_fpga_stats()
-        self.reset_crossbar_stats()
-        self.reset_bp_shuffle_stats()
+        if ca.mode in ['shuffle16', 'shuffle128', 'shuffle256', 'shuffle512']: # FIXME. Temporary hack to bypass crossbar and bp_shuffle stats for CRS platform.
+            self.reset_crossbar_stats()
+            self.reset_bp_shuffle_stats()
 
 
 
@@ -1231,10 +1232,93 @@ class FPGAMaster(object):
         self.log.info("Getting configuration data from all FPGAs")
         self.fpga_conf = await self.fpgas.get_fpga_config_async(basic=True)
 
+        # Take test Scaler data (debugging)
+        if conf.fpga.save_test_scaler_data:
+            self.log.info("Gathering a sample of Scaler data for debugging")
+            
+            r = ca.get_data_receiver()
+            n_cap_scaler = 100
+            bin_map = ca.ib[0].chan[0].FFT.get_bin_map(flatten = True, reverse = True) # get the bin map
+            inv_bin_map = ca.ib[0].chan[0].FFT.get_bin_map(flatten = True, reverse = False) # get the inverse bin map
+
+            def select_stream(slot_sel = [], chan_sel = []):
+                '''
+                empty arrays --> select all
+                Want channel 2 on all boards --> slot_sel=[], chan_sel = [2]
+                Want channel 2 on boards 3,4 --> slot_sel=[3,4], chan_sel = [2]
+                '''
+                #Initialize array of all data streams
+                slots = np.arange(16)     
+                channels = np.arange(8)
+                streams = 16 * slots[:, None] + channels 
+                
+            
+                slot_sel = slot_sel if len(slot_sel) > 0 else slice(None)
+                chan_sel = chan_sel if len(chan_sel) > 0 else slice(None)
+                
+                # select and flatten
+                select_streams = np.ravel(streams[slot_sel, chan_sel])
+                
+                return select_streams
+                
+            streams = select_stream(slot_sel = [0, 1, 2, 3])
+
+            # Setup channelizers and data capture for raw FFT data
+            self.log.info('Setting up channelizers for Scaler capture')
+            ca.set_channelizers(data_source = 'adc', fft_bypass = False, scaler_bypass = False, offset_binary_encoding = False)
+            ca.start_data_capture(0.03, source='scaler', mode = 0, channels = list(range(8)), data_type = 'fft_4bit', select = True, sync = False)
+            
+            # Synchronize the crate again to ensure all frames are synchronized
+            # ca.sync()
+            
+            # Capture data
+            self.log.info('Gathering Scaler data')
+            t, d_sclr, c = r.read_raw_frames(ncap = n_cap_scaler, format='16+16', stream_ids = streams, split=True, verbose=0)
+            self.log.info('Done gathering Scaler data')
+
+            # Shift to 4+4 bits
+            d_sclr /= 2**12
+            
+            # Flatten frequency axis
+            d_sclr = d_sclr.reshape(d_sclr.shape[0], d_sclr.shape[1], 8192)
+            
+            # Apply bin map
+            d_sclr = d_sclr[..., bin_map]
+
+            # Read back gains for comparison with archive
+            if conf.fpga.read_back_gains_for_verification:
+                gains_in_fpga = []
+                for n in range(len(ca.ib)):
+                    gain_list = ca.ib[n].get_gains(bank = 0, use_cache = False)
+                    gains_in_fpga.append([gain_list[n][1][0] for n in range(8)])
+                gains_in_fpga = np.array(gains_in_fpga)
+
+            import h5py
+            scaler_file_name = f'{self.run_folder}/sample_scaler_data.hdf5'
+            self.log.info(f'Creating Scaler file {scaler_file_name}')
+            scaler_file = h5py.File(scaler_file_name, 'w')
+            self.log.info(f'Writing to Scaler file {scaler_file_name}')
+
+            scaler_file.create_dataset('scaler_data', d_sclr.shape, d_sclr.dtype)
+            scaler_file.create_dataset('bin_map', bin_map.shape, bin_map.dtype)
+            scaler_file.create_dataset('inv_bin_map', inv_bin_map.shape, inv_bin_map.dtype)
+            scaler_file.create_dataset('gains_in_fpga', gains_in_fpga.shape, gains_in_fpga.dtype)
+
+            scaler_file['scaler_data'][:] = d_sclr
+            scaler_file['bin_map'][:] = bin_map
+            scaler_file['inv_bin_map'][:] = inv_bin_map
+            scaler_file['gains_in_fpga'][:] = gains_in_fpga
+
+            scaler_file.close()
+            self.log.info(f'Closing Scaler file {scaler_file_name}')
+
+            self.log.info("Reconfiguring channelizers to config file settings")
+            await ca.set_channelizers_async(**conf.fpga.channelizer_params)
 
         # Start storage of raw_data received by the raw_acq server in HDF5 files
-        self.log.info("Starting Raw data HDF5 data capture")
-        await self.start_hdf5_capture()
+        if self.config.raw_acq.enable:
+            self.log.info("Starting Raw data HDF5 data capture")
+            await self.start_hdf5_capture()
 
         # Start correlator data capture
         if corr_config and corr_config.enable:
@@ -1454,19 +1538,31 @@ class FPGAMaster(object):
         gains, gain_timestamps = self.gain_hdf5.read_gain(update_id=uid)
 
         # Convert the keys from serial numbers to (crate, slot, chan) tuples
-        gains = {key_to_chan_id_map[key]: val
-                 for key, val in gains.items() if key in key_to_chan_id_map}
+        if self.config.fpga.fpga_array_params.mode == 'shuffle8':
+            # Gains are stored in human-friendly frequency ordering, so we apply the inverse bin map to the gains if using CHORD firmware
+            ca = self.fpgas
+            inv_bin_map = ca.ib[0].chan[0].FFT.get_bin_map(flatten = True, reverse = False) # get the inverse bin map
+            gains = {key_to_chan_id_map[key]: [val[0][inv_bin_map], val[1]]
+                     for key, val in gains.items() if key in key_to_chan_id_map}
+        else:
+            # No bin mapping
+            gains = {key_to_chan_id_map[key]: val
+                     for key, val in gains.items() if key in key_to_chan_id_map}
+            
         gain_timestamps = {key_to_chan_id_map[key]: val
                            for key, val in gain_timestamps.items() if key in key_to_chan_id_map}
 
         # Load to requested bank
         self.log.info(f"{self!r}: Loading digital gains in bank #{bank}")
-        # print(f'gains={gains}')
         await self.fpgas.set_gains_async(
             gains,
             bank=bank,
             when=when,
             gain_timestamps=gain_timestamps)
+
+        # Instantiate gains_filename and gains_uid for REST server endpoint
+        self.gains_filename = self.gain_hdf5.reader.last_value.filename
+        self.gains_uid = uid
 
         # Return the unique identifier of the gains that were loaded
         return uid
@@ -1479,13 +1575,24 @@ class FPGAMaster(object):
         axis_dtypes = {axis_name:axis_dtype['dtype'] for axis_name, axis_dtype in digital_gain.DigitalGainArchive._axes.items()}
 
         # Create frequency axis
-        freq = self.SAMPLING_FREQUENCY - np.fft.fftfreq(self.SAMPLES_PER_FRAME, 1.0 / self.SAMPLING_FREQUENCY)
-        freq = 1e-6 * freq[0: self.SAMPLES_PER_FRAME // 2]
+        PLATFORM_ID = self.fpgas.ib[0].GPIO.PLATFORM_ID
+        if PLATFORM_ID not in [4, 5]: 
+            # ICE
+            freq = self.SAMPLING_FREQUENCY - np.fft.fftfreq(self.SAMPLES_PER_FRAME, 1.0 / self.SAMPLING_FREQUENCY)
+            freq = 1e-6 * freq[0: self.SAMPLES_PER_FRAME // 2]
+        elif PLATFORM_ID == 4:
+            # ZCU111
+            raise NotImplementedError("Gain HDF5 initialization for ZCU111 not supported.")
+        elif PLATFORM_ID == 5: # FIXME: temporary hack to access the PLATFORM_ID to deteremine frequency bins. Should be more human readable and not go into GPIO.
+            # CRS
+            self.log.info(f"{self!r}: Made it under CRS")
+            f_res = self.SAMPLING_FREQUENCY / self.SAMPLES_PER_FRAME
+            freq = 1e-6 * np.arange(0, self.SAMPLING_FREQUENCY/2, f_res)
+
         freq = np.array(list(zip(freq, [np.median(np.abs(np.diff(freq)))] * freq.size)),
                         dtype=axis_dtypes['freq'])
 
         # Create input axis
-
         if self.config.input_reorder:
             # If we already have a channel_id to channel SN map,
             # use it. We assume that the map contains all the channels IDs
@@ -1499,10 +1606,8 @@ class FPGAMaster(object):
             sid_to_sn_map = [(sid, self._chan_id_to_serial_number(sid_to_cid_map.get(sid,(0,0,0)))) for sid in range(max_sid+1)]
             inputs = np.array(sid_to_sn_map, dtype=axis_dtypes['input'])
 
-            # inputs = np.array([(stream_id, self._chan_id_to_serial_number(chan_id))
-            #                    for chan_id, stream_id in sorted(self.fpgas.get_stream_id_map().items(), key=lambda x:x[1])],
-            #                   dtype=axis_dtypes['input'])
-        # self.log.debug(f'{self!r}: Created input axis as {inputs} with dtypes {inputs.dtype}')
+        self.log.info(f"{self!r}: inputs {inputs}")
+
         # Expand some strings
         hdf5_conf = self.config.fpga.gain_hdf5.copy()
         hdf5_conf['output_dir'] = self.expand_path(hdf5_conf.get('output_dir', '.'))
