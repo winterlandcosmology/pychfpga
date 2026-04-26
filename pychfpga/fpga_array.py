@@ -2280,7 +2280,7 @@ class FPGAArray(object):
         if sync:
             self.sync()
 
-    async def set_channelizers_async(channels=None, local_sync=None, sync=True, **kwargs):
+    async def set_channelizers_async(self, channels=None, local_sync=None, sync=True, **kwargs):
         """
         Configures all channelizers in the array.
 
@@ -4362,13 +4362,13 @@ class FPGAArray(object):
             A :class:`Metrics` object.
         """
 
-        # IceCrate metrics
+        # Crate metrics
         self.logger.debug(f'{self!r}: Getting Motherboard backplane hardware metrics')
         for cr in self.ic:
             slot, mb = list(cr.slot.items())[0]
             metrics += await mb.get_backplane_metrics_async()
 
-        # IceBoard metrics
+        # Motherboard metrics
         self.logger.debug(f'{self!r}: Getting Motherboard temperature & power supply metrics')
         m = await asyncio.gather(*[mb.get_metrics_async() for mb in self.ib])
         metrics += m
@@ -4386,7 +4386,6 @@ class FPGAArray(object):
             A :class:`Metrics` object.
         """
 
-        # Shuffle status
         self.logger.debug(f'{self!r}: Getting corner-turn links metrics (over FPGA UDP link)')
         metrics += await asyncio.gather(*[mb.get_bp_shuffle_metrics_async(reset=reset) for mb in self.ib])
         self.logger.debug(f'{self!r}: Getting corner-turn crossbars metrics (over FPGA UDP link)')
