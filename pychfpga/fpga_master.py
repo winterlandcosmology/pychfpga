@@ -979,7 +979,7 @@ class FPGAMaster(object):
 
         # Give a more meaningful error if the user did not provide a valid config file
         if not hasattr(conf, 'corr_name'):
-            raise RuntimeError('CHIME master configuration data does not define the correlator name. Was the correct object selected in the configuration file (i.e. config.yaml:object)')
+            raise RuntimeError('Master configuration data does not define the correlator name. Was the correct object selected in the configuration file (i.e. config.yaml:object)')
 
         self.corr_name = conf.corr_name
 
@@ -1064,9 +1064,9 @@ class FPGAMaster(object):
         conf = self.config  # shortcut to shorten the code below
         fpga_array_params = conf.fpga.fpga_array_params
 
-        #Define some FPGA-related system constants
+        # Define some FPGA-related system constants
         self.SAMPLING_FREQUENCY = float(fpga_array_params.samp_freq) * 1e6  # frequency in Hz
-        self.SAMPLES_PER_FRAME = 2048
+        self.SAMPLES_PER_FRAME = fpga_array_params.samples_per_frame
         self.SECONDS_PER_FRAME = self.SAMPLES_PER_FRAME / self.SAMPLING_FREQUENCY
 
         self.log.info(f"Sampling frequency is {self.SAMPLING_FREQUENCY / 1e6:.3f} MHz.")
@@ -1131,8 +1131,11 @@ class FPGAMaster(object):
         # Set-up raw_acq servers to receive data from the boards specified in
         # the config. This will set-up the FPGA data transmission ports.
         # self.log.info("Sending configuration to raw_acq server(s)")
-        self.log.info("Starting raw_acq servers")
-        await self.start_raw_acq_servers()
+        if conf.raw_acq.enable:
+            self.log.info("Starting raw_acq servers")
+            await self.start_raw_acq_servers()
+        else:
+            self.log.info('raw_acq disabled. Not starting any raw_acq servers.')
 
 
         # Setup noise injection for normal operation
@@ -1163,13 +1166,21 @@ class FPGAMaster(object):
                 f"Corr_config={corr_config!r}, "
                 f"enable={corr_config.enable if corr_config else 'none'}")
 
-        # Start raw_data capture
-        self.log.info("Starting baseline raw data data capture")
-        await self.start_fpga_raw_data_transmission(sync=False)
+        if conf.raw_acq.enable:
+            # Start raw_data capture
+            self.log.info("Starting baseline raw data data capture")
+            await self.start_fpga_raw_data_transmission(sync=False)
+        else:
+            self.log.info("raw_acq disabled. Not starting baseline raw data data capture")
 
         self.log.info("Synchronizing the array...")
         self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% This is the last SYNC %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-        ca.sync()  # synchronize all the boards in the array
+        if conf.fpga.sync_params.enable:
+            # Use config params
+            ca.sync(**conf.fpga.sync_params)
+        else:
+            # Use default params
+            ca.sync()
         self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Last SYNC is done %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 
         # save the time of frame0 after sync
@@ -1197,16 +1208,20 @@ class FPGAMaster(object):
 
 
         # Initialize the digital gain hdf5 writer
-        self.log.info(f"{self!r}: Initializing HDF5 gain archive reader/writer")
-        self.initialize_gain_hdf5()
+        if self.config.raw_acq.enable:
+            self.log.info(f"{self!r}: Initializing HDF5 gain archive reader/writer")
+
+        # Initialize gain HDF5 file
+        if not self.gain_hdf5:
+            self.initialize_gain_hdf5()
 
         # Load most recent gains from archive into gain bank #0
         if conf.fpga.load_initial_gains and self.gain_hdf5:
-            await self.load_gains(update_id=None, bank=0, when='now')
-
+            await self.load_gains(update_id=None, bank=0, when='now') # update_id = None loads the most recent gains
 
         # Compute new gains if requested
-        await self.compute_gains(**conf.fpga.compute_gains)
+        if self.config.fpga.compute_gains.enable:
+            await self.compute_gains(**conf.fpga.compute_gains)
 
         # self.log.info("Waiting for 2 seconds")
         # await asyncio.sleep(2)
@@ -1619,10 +1634,10 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         self._gps_lock = asyncio.Lock()
 
     async def shutdown(self):
-        self.log.info('Shutting down CHIME Master')
+        self.log.info('Shutting down fpga_master')
         await self.fpga_master.stop()
         await asyncio.sleep(3)
-        self.log.info('CHIME Master is shut down')
+        self.log.info('fpga_master is shut down')
 
     def print_iceboard_info_callback(self):
         if self.fpga_master.fpgas:
@@ -1712,6 +1727,26 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             result['start_result'] = None
         return result
 
+    @endpoint('config')
+    async def config(self):
+        """ Return the full configuration currently loaded in the FPGAMaster.
+
+        The configuration is set by the /start endpoint. If /start has not
+        yet been called, the returned value will be None.
+
+        Returns:
+
+            dict: The configuration that was passed to /start (served up as json).
+            None if no configuration is currently loaded.
+
+        Example:
+
+            curl http://localhost:54321/config
+        """
+        if self.fpga_master.config is None:
+            return None
+        return self.fpga_master.config.as_dict()
+
     @endpoint('stop')
     async def stop(self):
         #self.start_time = None
@@ -1795,6 +1830,92 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             self.log.warning(f"{self}: FPGA array is not ready to accept command")
             return dict(message="FPGA not ready")
         return await self.fpga_master.get_noise_injection_status(name)
+
+    @endpoint('get-current-gain-filename')
+    async def get_current_gain_filename(self):
+        """ REST endpoint to return the absolute path of the current digital gains file.
+
+        Returns: 
+
+            current_gain_file_info (dict):
+
+                current_gain_file: (str) the full file path to the current gains, including the name of the .h5 file
+                current_update_id: (str) the update id of the current gains
+
+        Example:
+
+            curl http://localhost:54321/get-current-gain-filename
+        """
+        if not (self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas):
+            self.log.warning(f"{self!r}: FPGA array is not ready to accept command")
+            return dict(message="FPGA not ready")
+
+        try:
+            # Recover information on the current digital gains
+            # current_gain_file = self.gain_hdf5.reader.last_value.filename
+            # current_update_id = gain_hdf5.last_update_id
+
+            # self.gains_filename = self.gain_hdf5.reader.last_value.filename
+            # self.gains_uid = uid
+
+            return dict(current_gain_file = self.fpga_master.gains_filename, current_update_id = self.fpga_master.gains_uid)
+            
+        except Exception as e:
+            self.log.error(f'{self!r}: Error recovering current digital gains file path: {e}')
+            return {}
+
+    @endpoint('get-current-gain-file')
+    async def get_current_gain_file(self):
+        """ REST endpoint that returns the current digital gains .h5 file over HTTP.
+
+        Returns the file contents themselves (not just the path). The original
+        filename is reported in the Content-Disposition header so clients using
+        `curl -OJ` (or equivalent) will save it under the same name.
+
+        Responses:
+
+            200 - application/octet-stream, body is the raw .h5 file bytes.
+                  Content-Disposition: attachment; filename="<basename>"
+
+            503 - FPGA array is not ready (state != 'on'). Body is a short
+                  plain-text message.
+
+            404 - No current gain file is set, or the referenced path does
+                  not exist on disk. Body is a short plain-text message.
+
+        Example:
+
+            curl -OJ http://localhost:54321/get-current-gain-file
+
+        Note:
+
+            The gain file is written to by the server as new gains are
+            loaded. A download taken concurrently with a write may observe
+            partially-flushed HDF5 state.
+        """
+        if not (self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas):
+            self.log.warning(f"{self!r}: FPGA array is not ready to accept command")
+            return aiohttp.web.Response(status=503, text='FPGA array is not ready')
+
+        path = self.fpga_master.gains_filename
+        if not path:
+            return aiohttp.web.Response(
+                status=404, text='No current gain file is set')
+        if not os.path.isfile(path):
+            self.log.error(f"{self!r}: Current gain file does not exist on disk: {path}")
+            return aiohttp.web.Response(
+                status=404, text=f'Current gain file does not exist on disk: {path}')
+
+        self.log.info(f"{self!r}: Serving gain file {path}")
+        with open(path, 'rb') as h:
+            body = h.read()
+        return aiohttp.web.Response(
+            body=body,
+            content_type='application/octet-stream',
+            headers={
+                'Content-Disposition': f'attachment; filename="{os.path.basename(path)}"',
+            },
+        )
 
     @endpoint('compute-gains')
     async def compute_gains(self, **params):
@@ -2645,12 +2766,29 @@ class FPGAMasterAsyncRESTClient(AsyncRESTClient):
         result = await self.get('status')
         return result
 
+    async def config(self):
+        """
+        Get the full configuration currently loaded in fpga_master.
+
+        Returns None if no configuration has been loaded (i.e. the server
+        is running but /start has not yet been called).
+        """
+        result = await self.get('config')
+        return result
+
     async def stop(self):
         """
         Stop fpga_master.
         """
         r = await self.get('stop')
         self.print_result(r)
+
+    async def get_current_gain_filename(self):
+        """
+        Get information about the current digital gains file.
+        """
+        current_gain_info = await self.get('get-current-gain-filename')
+        return current_gain_info
 
     async def get_frequency_map(self):
         """
