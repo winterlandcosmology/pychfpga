@@ -71,7 +71,7 @@ import logging
 
 # PyPi packages
 import aiohttp
-import nest_asyncio
+# import nest_asyncio
 import json
 import ujson
 
@@ -152,7 +152,7 @@ def run_async(awaitable):
     # loop.set_debug(True)
     # print(f'Runnings async function {awaitable} in loop {loop} ID={id(loop)}')
     try:
-        nest_asyncio.apply()  # make sure we can run in an already running loop
+        # nest_asyncio.apply()  # make sure we can run in an already running loop
         return asyncio.run(awaitable)
         # return loop.run_until_complete(awaitable)
     except Exception as e:
@@ -743,13 +743,24 @@ class TuberObject:
 atexit.register(sync_wrap(TuberObject._tuber_close_client_sessions_async))
 
 
-
+# JFC: Disables block below. nest_async io is initialized by fpga_array. But maybe the try/except block is needed for some cases, so leaving it here for now.
+#
 # Enable nested run_until_complete() on current ipython loop. If we don't do
 # this now, ipython, enabling this later causes ipython to crash when we
 # tab-complete. Maybe it's because the event loops that is created when
 # requesting tab completion is not re-entrant and there are already tasks on
 # on this loop when we call our first run_async(), which then patches the
 # event loop to be reentrant.
-print(f'Enabling nested event loop on current loop ID {id(asyncio.get_event_loop())}')
-nest_asyncio.apply()
+# print(f'Enabling nested event loop on current loop ID {id(asyncio.get_event_loop())}')
+# nest_asyncio.apply()
+
+# try:
+#     loop = asyncio.get_event_loop()
+# except RuntimeError:
+#     loop = asyncio.new_event_loop()
+#     asyncio.set_event_loop(loop)
+
+# print(f'Enabling nested event loop on current loop ID {id(loop)}')
+# nest_asyncio.apply(loop)
+
 # # vim: sts=4 ts=4 sw=4 tw=78 smarttab expandtab
