@@ -18,8 +18,7 @@ import logging
 
 # Pypi packages
 
-# from numpy import NaN as npNaN
-from numpy import nan as npNaN #python 3.12 - NUmpy 2
+from numpy import nan as npNaN
 
 # Local packages
 
