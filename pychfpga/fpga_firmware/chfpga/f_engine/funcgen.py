@@ -8,6 +8,7 @@ History:
 """
 
 from ..mmi import MMI, BitField, CONTROL, STATUS
+from pychfpga.common import State
 import numpy as np
 import asyncio
 
@@ -177,8 +178,9 @@ class FUNCGEN(MMI):
 
     buffer_cache = None
 
-    def __init__(self,  *, router, router_port, instance_number):
+    def __init__(self,  *, router, router_port, instance_number, state):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.state = state
         self.SAMPLES_PER_FRAME = self.NS = self.fpga.ADC_SAMPLES_PER_FRAME
         self.BYTES_PER_FRAME = self.NB = self.fpga.ADC_BYTES_PER_FRAME
         self.BYTES_PER_SAMPLE = self.BPS = self.fpga.ADC_BYTES_PER_SAMPLE
@@ -196,16 +198,8 @@ class FUNCGEN(MMI):
         self.dtype = np.dtype(f'>u{self.BYTES_PER_SAMPLE}') # storage format, either dtype 'u1' or 'u2' (MSB is at lower byte address = big endian)
         self.lshift = self.dtype.itemsize*8 - self.fpga.ADC_BITS_PER_SAMPLE
 
-        # Prevent accidental addition of attributes (if, for example, a value is assigned to a wrongly-spelled property)
+        self.state.update(fn_name=None, fn_id=self.FN_ID, fn_code=self.FUNCTION, left_shift=self.LEFT_SHIFT, right_shift=self.RIGHT_SHIFT)
         self._lock()
-
-    def reset(self):
-        """ Resets the function generator"""
-        self.pulse_bit('RESET')
-
-    def reset_noise(self):
-        """Resets the seed of the noise generator and the output to 0"""
-        self.pulse_bit('RST_LFSR')
 
     def set_output_shifting(self, left_shift=0, right_shift=0):
         """Sets the left- and right-shifting of the FUNCGEN output
@@ -220,9 +214,10 @@ class FUNCGEN(MMI):
 
         """
         if left_shift is not None:
-            self.LEFT_SHIFT = left_shift
+            self.LEFT_SHIFT = self.state.left_shift = left_shift
         if right_shift is not None:
-            self.RIGHT_SHIFT = right_shift
+            self.RIGHT_SHIFT = self.state.right_shift = right_shift
+
     def set_data_source(self, source_name, verbose=0, **kwargs):
         """
         Selects the type of data outputted by the function generator.
@@ -276,6 +271,7 @@ class FUNCGEN(MMI):
         self.FN_ID = fn_id
         if buffer_fn:
             self.set_buffer(data=buffer_fn(self=self, **kwargs), verbose=verbose)
+        self.state.update(fn_name=source_name, fn_id=fn_id, fn_code=fn_code)
 
         # if seed is not None:
         #     self.BYTE_A = seed & 0xff

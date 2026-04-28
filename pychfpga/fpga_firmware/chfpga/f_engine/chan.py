@@ -41,10 +41,11 @@ class Chan(MMIRouter):
         'FUNCGEN': 5
     }
 
-    def __init__(self, router, router_port, instance_number):
+    def __init__(self, router, router_port, instance_number, state):
         self.chan_number = instance_number  # store current channelizer number for this instance
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port)
+        self.state = state
 
         if self.fpga.HAS_ADCDAQ:
             self.ADCDAQ = adcdaq.ADCDAQ(router=self, router_port='ADCDAQ', instance_number=instance_number)
@@ -56,7 +57,7 @@ class Chan(MMIRouter):
             self.PROBER = prober.PROBER(router=self, router_port='PROBER', instance_number=instance_number)
         else:
             self.PROBER = None
-        self.FUNCGEN = funcgen.FUNCGEN(router=self, router_port='FUNCGEN', instance_number=instance_number)
+        self.FUNCGEN = funcgen.FUNCGEN(router=self, router_port='FUNCGEN', instance_number=instance_number, state=self.state.add("funcgen"))
         self.frame_length = self.fpga.FRAME_LENGTH
 
     def __repr__(self):
@@ -117,15 +118,16 @@ class ChanArray(MMIRouter):
 
     ROUTER_PORT_NUMBER_WIDTH = 4
 
-    def __init__(self, *, router, router_port, verbose=0):
+    def __init__(self, *, router, router_port, state, verbose=0):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port)
+        self.state = state
         # Create an instance of ADC_chip for each chip of the FMC board
         self.frame_length = self.fpga.FRAME_LENGTH
         self.chan = []
         for i in range(self.fpga.NUMBER_OF_CHANNELIZERS):
-            self.chan.append(Chan(router=self, router_port=i, instance_number=i))
+            self.chan.append(Chan(router=self, router_port=i, instance_number=i, state=self.state.add(i)))
 
     def __repr__(self):
         """ Return a string that represents this object and its parent object.

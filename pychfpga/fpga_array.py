@@ -87,104 +87,90 @@ class FPGAArray(object):
     }
 
     # -------------------------------------------------------------------------
-    # Array-wide operations (see :func:`pychfpga.common.array_methods.array_method`).
+    # Array-wide operations (see :class:`pychfpga.common.array_methods.ArrayMethods`).
     #
-    # Each Motherboard caches its own set of exposed array-method names in
-    # ``Motherboard._array_methods`` (a ``frozenset``). ``FPGAArray`` caches
-    # the intersection of those per-motherboard sets in ``_array_methods``
-    # and remembers the tuple of per-motherboard frozenset objects it last
-    # saw in ``_array_methods_sets``. On each ``__getattr__`` / ``__dir__``
-    # call, the tuple is rebuilt and compared with ``_array_methods_sets``
-    # (element-wise ``is`` comparison, O(N) identity check); the
-    # intersection is recomputed only when something has changed.
-    #
-    # The rebuild is strict: a tagged method name must be present on every
-    # motherboard AND every motherboard must resolve it to the same
-    # function object (same ``id``). Any mismatch raises
-    # :class:`AttributeError` listing the offending names, so inconsistent
-    # firmware combinations surface immediately instead of silently
-    # dispatching to one arbitrary implementation.
+    # Each Motherboard caches its own set of array-method provider classes in
+    # ``Motherboard._array_method_classes`` (a ``frozenset``). ``FPGAArray``
+    # caches the intersection of those per-motherboard sets, instantiates one
+    # provider for each common class, and exposes the providers' public methods
+    # through ``_array_methods`` as ``{method_name: bound_provider_method}``.
     #
     # Class-body defaults below ensure the attributes are always defined,
     # even on ``object.__new__(FPGAArray)`` code paths (tests, unpickle),
     # so ``__getattr__`` never needs a guard against early initialization.
     # -------------------------------------------------------------------------
 
-    # Define defaults for the following class attributes to prevent recursiveness in __getattr__ in case it tries to access them before they get shadowed by the initialized instance attributes
-    _array_methods = frozenset()
-    _array_methods_sets = ()  # tuple of each motherboard's _array_methods frozenset
+    # Define defaults for the following class attributes to prevent
+    # recursiveness in __getattr__ in case it tries to access them before they
+    # get shadowed by the initialized instance attributes.
+    _array_methods = {}
+    _array_method_class_sets = ()  # tuple of each motherboard's provider-class frozenset
+    _array_method_instances = {}
     ib = []
 
     def get_array_methods(self):
-        """Return the ``frozenset`` of array-wide methods available on every
-        motherboard in the array, rebuilding the cache when any
-        motherboard's ``_array_methods`` frozenset has changed identity.
+        """Return array-wide methods available on every motherboard.
 
-        The method uses a quick staleness check using a cached set of motherboard array method lists, and recomputes the whole list only if necessary.  
-
-        It is recommended to call this method after operations that might
-        affect the list (e.g. after programming an FPGA) so the next
-        time-sensitive calls (``__getattr__``, ``__dir__``) use the fresh
-        cached set.
-
-        Raises:
-            AttributeError: If any tagged array method is missing on at
-                least one motherboard, or resolves to different function
-                objects across motherboards. The offending names are
-                listed in the message.
+        The result is a dict of ``{method_name: bound_provider_method}``.
+        Provider methods have their provider instance already bound, and the
+        provider keeps a reference to this :class:`FPGAArray`.
         """
-        # Return immediately if the cached list is up-to-date
-        current = tuple(mb._array_methods for mb in self.ib)
-        if self._array_methods_sets == current: # Python internally optimize with identity checks and hashes
+        current = tuple(mb._array_method_classes for mb in self.ib)
+        if self._array_method_class_sets == current:
             return self._array_methods
 
-        intersection = frozenset.intersection(*current)
+        common_classes = frozenset.intersection(*current) if current else frozenset()
+        array_method_instances = {
+            cls: self._array_method_instances.get(cls) or cls(self)
+            for cls in common_classes
+        }
+        array_methods = {}
+
+        for provider in array_method_instances.values():
+            for name, method in provider.get_array_methods().items():
+                if name in array_methods:
+                    raise AttributeError(
+                        f"Array-wide method {name!r} is defined by more than "
+                        "one ArrayMethods provider")
+                array_methods[name] = method
+
         if current:
-
-
-            # Check for methods that are not defined on every motherboard
             union = frozenset().union(*current)
-            partial_names = union - intersection
-            if partial_names:
-                self.logger.warning(f"Array-wide method(s) {partial_names} are not defined on every motherboard")
+            partial_classes = union - common_classes
+            if partial_classes:
+                self.logger.warning(
+                    f"Array-wide method provider(s) {partial_classes} are not "
+                    "defined on every motherboard")
 
-            # Check for methods that resolve to different function objects across motherboards
-            divergent_names = [n for n in intersection if len({id(getattr(mb, n)) for mb in self.ib}) > 1]
-            if divergent_names:
-                self.logger.warning(f"Array-wide method(s) {divergent_names} resolve to different function objects across motherboards")
-
-        self._array_methods = intersection
-        self._array_methods_sets = current
+        self._array_methods = array_methods
+        self._array_method_instances = array_method_instances
+        self._array_method_class_sets = current
         return self._array_methods
 
     def get_array_method(self, name):
-        """Return the array-wide method with the given name, with ``self``
-        bound as the first positional argument via :func:`functools.partial`.
+        """Return an array-wide method bound to its provider instance.
 
         Parameters:
             name (str): The name of the array-wide method to look up.
 
         Raises:
-            AttributeError: If ``name`` is not an array-wide method
-                available on every motherboard, or if
-                :meth:`get_array_methods` detects an array-methods
-                mismatch.
+            AttributeError: If ``name`` is not an array-wide method available
+                on every motherboard.
         """
-        if name in self.get_array_methods():
-            return functools.partial(getattr(self.ib[0], name), self)
+        array_methods = self.get_array_methods()
+        if name in array_methods:
+            return array_methods[name]
         raise AttributeError(
             f'{type(self).__name__!r} object has no array-wide method {name!r}'
         )
 
     def __getattr__(self, name):
-        """Dispatch array-wide methods discovered on motherboard / firmware
-        classes. See :meth:`get_array_method`.
-        """
+        """Dispatch array-wide methods. See :meth:`get_array_method`."""
         return self.get_array_method(name)
 
     def __dir__(self):
         """Return the normal attributes plus every array-wide method name."""
-        return sorted(set(super().__dir__()) | self.get_array_methods())
+        return sorted(set(super().__dir__()) | set(self.get_array_methods()))
 
     def __init__(
             self,
@@ -677,8 +663,9 @@ class FPGAArray(object):
         # Instance shadows of the class-body defaults; ensures a fresh
         # per-array cache state even if the class attributes were ever
         # mutated in some test or debugging session.
-        self._array_methods = frozenset()
-        self._array_methods_sets = ()
+        self._array_methods = {}
+        self._array_method_class_sets = ()
+        self._array_method_instances = {}
 
         discover_slot = True
         discover_crate = True
@@ -1650,6 +1637,11 @@ class FPGAArray(object):
                 else:
                     raise TypeError(f'Trying to create object {current_class} that '
                                     f'is other than Motherboard or Crate')
+            elif el[0] == '*':
+                if not current_class:
+                    raise RuntimeError('A part number must be specified before a wildcard serial number')
+                obj = current_class.get_unique_instance(serial='*')
+
             else:  # otherwise, assume it is a part number
                 # ``HardwareMap.get_class_by_part_number`` looks through every
                 # hardware base class (Motherboard, Crate, ...), lazy-loads
@@ -2166,245 +2158,7 @@ class FPGAArray(object):
                     mb.set_funcgen_function('ab', a=(slot - 1) << 4, b=ch << 4, channels=[ch])
                 mb.set_data_source('funcgen')
 
-    IRIGB_SYNC_METHODS = ('irig-b', 'irigb', 'distributed_time')
-    TRIG_SYNC_METHODS = ('trig',  'centralized_soft_trigger')
-    LOCAL_SYNC_METHODS = ('local', 'local_soft_trigger')
 
-    def set_sync_method(self, method='irig-b', source=None, master=None, master_source=None, master_output=0):
-        """ Sets the global syncing method, and setup the boards accordingly.
-
-        Parameters:
-
-            method (string): Specifies the synchronization method:
-
-                - ``'irig-b'`` (or ``'irigb'``, ``'distributed_time'``): All boards sychronize when
-                  the target IRIG-B time is reached. `source` specifies the source of the IRIG-B
-                  signal that feeds the IRIG-B decoder module.
-
-                - ``'trig'`` (or ``'centralized_soft_trigger'``): All boards synchronize on the
-                  rising edge of the signal specified in ``source``.
-
-                - ``'local'`` (or ``'local_soft_trigger'``): Each board generates its own
-                  software-generated SYNC trigger when the `sync()` method is called. This can be
-                  used to reset the processing pipeline of each board, but does not allow
-                  synchronized capture packed capture between board or use of multi-board
-                  corner-turning operational modes.
-
-            source: (string): source of synchronization signal.
-                - If ``method='irig-b'``, `source` must match one of the available IRIG-B sources (see motherboard method `set_irigb_source_async()`).
-
-                - If ``method='trig'``, `source` must match one of the available REFCLK sources (see REFCLK method `set_sync_source`).
-
-            master (Motherboard, string, int): Motherboard that is to be configured to generate the time
-                or trigger signals.
-
-                - None: No master board is set up.
-                - `Motherboard` object: use the provided Motherboard object
-                - str: Use board with specified serial number (must include all leading zeros)
-                - int: Use board in specified slot number (starts with index 1)
-
-            master_source: (string): source of the synchornization signal that the master board will
-                send to the master output. Used as ``source`` paramater in method
-                `set_user_output_source` called on the master board.
-
-            master_output: (int): User output to which the synchronization signal will be sent. Used
-                as ``output`` paramater in method `set_user_output_source` called on the master
-                board.
-
-        The boards start their sync process on the next rising edge of the 10
-        MHz reference after the trigger event.  This events shoudld
-        to occur between two reference clock edges in order to guarantee
-        detection on the same edge across the entire array.
-
-        """
-        if master:
-            if isinstance(master, str):
-                master = self.ib.get(serial=master)
-            elif isinstance(master, int):
-                master = self.ib.get(slot=master)
-            master.set_user_output_source(source=master_source, output=master_output or 0)
-            if source == 'bp_gpio_int':
-                # Enable GPIO_INT as an output only on the master board
-                # TODO: JFC: This code should be moved to lower-level methods
-                self.ib.GPIO.BP_GPIO_INT_EN = 0
-                master.GPIO.BP_GPIO_INT_EN = 1
-
-        self.sync_master = master
-        self.sync_method = method
-
-        if source == 'bp_gpio_int' and not master:
-            raise RuntimeError('A master board should be specified when bp_gpio_int is used as a source')
-
-        if method in self.IRIGB_SYNC_METHODS: # REFCLK trigs on the output of the IRIG-B time comparator
-            source = source or 'bp_time'
-            self.ib.set_sync_source('irigb')
-            self.ib.set_irigb_source_sync(source)
-        # elif method == 'centralized_time_trigger':
-        #     source = source or 'bp_time'
-        #     # if not master or not master_source:
-        #     #     raise ValueError('In the centralized time trigger mode, the master board '
-        #     #                      'and its time source must be specified')
-        #     # self.ib.set_sync_source(source)
-        #     master.set_irigb_source_sync(master_source)
-        #     master.set_user_output_source('irigb_trig')
-        elif method in self.TRIG_SYNC_METHODS: # REFCLK trigs directly on the rising edge of the specified source signal
-            source = source or 'bp_time'
-            self.ib.set_sync_source(source)
-        elif method in self.LOCAL_SYNC_METHODS:
-            self.ib.set_sync_source('local')
-            self.ib.sync()
-        # elif method == 'external':
-        #     source = source or 'sma_a'  # if no source is specified
-        #     if master:
-        #         raise ValueError('In the local soft trigger mode, a master board should NOT specified')
-        #     if master_source:
-        #         raise ValueError('In the local soft trigger mode, a master_source should NOT be specified')
-        #     self.ib.set_sync_source(source)
-        else:
-            raise ValueError(f"Unknown syncing method '{method}'")
-
-    def sync(self, *args, **kwargs):
-        return self.sync_array(*args, **kwargs)
-
-
-    def set_channelizers(self, channels=None, local_sync=None, sync=True, **kwargs):
-        """
-        Configures all channelizers in the array.
-
-        See firmware set_channelizer(...) for details.
-        """
-        if local_sync is not None:
-            raise RuntimeError('local_sync parameter is not supported on array-wide set_channelizer call')
-        for mb in self.ib:
-            mb.set_channelizer(**kwargs, channels=channels, local_sync=False)
-        if sync:
-            self.sync()
-
-    async def set_channelizers_async(self, channels=None, local_sync=None, sync=True, **kwargs):
-        """
-        Configures all channelizers in the array.
-
-        See firmware set_channelizer(...) for details.
-        """
-        if local_sync is not None:
-            raise RuntimeError('local_sync parameter is not supported on array-wide set_channelizer call')
-        for mb in self.ib:
-            mb.set_channelizer(**kwargs, channels=channels, local_sync=False)
-            await asyncio.sleep(0)
-        if sync:
-            self.sync()
-
-    def set_noise_injection(
-            self,
-            board,
-            enable=False,
-            offset=0,
-            high_time=8388608,
-            period=16777216,
-            local_sync=True,
-            output='bp_sma'):
-        """ Configure noise injection gating signal.
-
-        Parameters:
-
-            board:  is either the serial number (as a string) of the target
-                board, or is the target motherboard object. If board evaluates to
-                False (empty string), the noise injection setup is skipped.
-
-        Notes:
-
-            A sync event is necessary to restart the counters so the gating signal will be generated properly.
-
-        """
-        if not board:
-            return
-
-        mb = self.get_iceboard(board)
-
-        if enable:
-            mb.set_user_output_source('pwm', output=output)
-
-        mb.set_pwm(enable=enable, offset=offset, high_time=high_time,
-                   period=period, local_sync=local_sync)
-
-    async def get_user_output_state_async(self, board, output='bp_sma'):
-        """ Get the current state of the specified user output and the
-        information about its source.
-
-        Parameters:
-
-            board (tuple/list, str, Motherboard):  is either a 2-element tuple or
-                list describing the board, or a string containing the board's
-                serial number or hostname.
-
-            output (str): name of the user output to which the noise injection
-                hardware is connected. This will be used to verify if the PWM
-                signal is actually sent to that output.
-
-        Returns:
-
-            A dict containing the following fields:
-
-                board (str or tuple/list): the target board, as specified in the `board` parameter
-
-                output (str): output to which the noise injection electronics
-                    is connected, as specified by the `output` parameter.
-
-                output_source (str): name of the source driving the specified
-                    'output'.
-
-                pwm_offset (int): the PWM generator waveform offset from frame 0, in frames
-
-                pwm_high_time (int): the high time of the PWM generator waveform, in frames
-
-                pwm_period (int): the period of the PWM generator waveform, in frames
-
-                pwm_enabled (bool): True when the PWM generator is not in reset. Useful when output_source is 'pwm'.
-
-                user_bit0 (int): State of the user bit 0. Useful when output_source is 'user_bit0'.
-
-                user_bit1 (int): State of the user bit 1. Useful when output_source is 'user_bit1'.
-
-
-            If `board` evaluates to False, only the first 3 fields are returned, with
-            output_source set to None.
-
-        """
-        status = dict(board=board,
-                      output=output,
-                      output_source=None)
-        if not board:
-            return status
-
-        mb = self.get_iceboard(board)
-        output_source = mb.get_user_output_source(output)
-        offset, high_time, period, reset = mb.get_pwm()
-        user_bit0, user_bit1 = mb.get_user_bits()
-        status.update(
-            output_source=output_source,
-            pwm_offset=offset,
-            pwm_high_time=high_time,
-            pwm_period=period,
-            pwm_enabled=not reset,
-            user_bit0=user_bit0,
-            user_bit1=user_bit1)
-        return status
-
-    def get_stream_id_map(self):
-        """ Return the stream_ids if every channel of the array, indexed by channel_id.
-
-        Returns:
-            dict if the format {channel_id:stream_id}, where channel_id is a (crate, slot, channel) tuple.
-        """
-
-        stream_id_map = {}
-        for mb in self.ib:
-            stream_id_map.update(mb.get_stream_id_map())
-
-        if len(stream_id_map) != len(set(stream_id_map.values())):
-            self.logger.warning(f'{self!r}: Stream IDs are not unique!')
-
-        return stream_id_map
 
     # ---------------------
     # -- Correlator methods

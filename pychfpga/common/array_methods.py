@@ -1,57 +1,56 @@
-"""Shared utilities for :class:`pychfpga.fpga_array.FPGAArray`-wide methods.
+"""Shared support for :class:`pychfpga.fpga_array.FPGAArray`-wide methods.
 
-An *array method* is a function marked with ``is_array_method = True`` that a
-:class:`FPGAArray` can dispatch across every motherboard in the array. This
-module provides:
-
-- :func:`array_method` -- decorator that tags a function and wraps it as a
-  :class:`staticmethod` so that ``getattr(mb, name)`` returns the plain
-  function (allowing ``functools.partial(fn, array)`` binding on the array
-  side without a double ``self`` argument).
-- :func:`get_array_methods` -- scanner that returns the ``frozenset`` of
-  array-method names currently exposed by any object.
-
-The decorator and scanner live here (rather than on :class:`FPGAArray`) so
-that modules defining array methods -- including subclasses of
-:class:`~pychfpga.hardware.motherboard.Motherboard`, which cannot import
-``fpga_array`` without creating a circular import -- can pull them in
-without any coupling to ``fpga_array``.
+Array-wide methods live on explicit :class:`ArrayMethods` provider classes.
+Motherboard and firmware classes opt in by assigning ``array_method_class`` to
+one provider class. ``FPGAArray`` instantiates the providers shared by every
+motherboard and exposes their public methods as array methods.
 """
 
+import logging
 
-def array_method(fn):
-    """Mark ``fn`` as an :class:`FPGAArray`-wide operation.
+class ArrayMethods:
+    """Base class for explicit :class:`FPGAArray` method providers.
 
-    Sets ``is_array_method = True`` on the underlying function object and
-    returns a :class:`staticmethod` wrapping it. Using ``staticmethod``
-    guarantees that ``getattr(mb, name)`` on a motherboard / firmware
-    instance returns the *plain* function, so :class:`FPGAArray` can bind
-    itself as the first positional argument via :func:`functools.partial`
-    without the descriptor protocol inserting ``mb`` as the first argument.
-
-    Usage::
-
-        from pychfpga.common.array_methods import array_method
-
-        class chFPGA(FPGAFirmware):
-            @array_method
-            def sync_array(array, delay=..., ...):
-                ...
+    Provider methods should be regular instance methods. The provider receives
+    the calling :class:`FPGAArray` at construction and exposes ``ib`` and
+    ``ic`` attributes so methods can keep the old array-method shape.
     """
-    fn.is_array_method = True
-    return staticmethod(fn)
+
+    _local_attrs = frozenset(('fpga_array', 'ib', 'ic', 'logger'))
+    array_method_names = None
+
+    def __init__(self, fpga_array):
+        self.fpga_array = fpga_array
+        self.ib = fpga_array.ib
+        self.ic = getattr(fpga_array, 'ic', None)
+        self.logger = logging.getLogger(__name__)
+
+    # def __repr__(self):
+    #     return repr(self.fpga_array)
+
+    # def __getattr__(self, name):
+    #     """Delegate old array-method attribute reads to the FPGAArray."""
+    #     return getattr(self.fpga_array, name)
+
+    # def __setattr__(self, name, value):
+    #     """Keep provider-local state local and delegate array state writes."""
+    #     if name.startswith('_') or name in self._local_attrs or 'fpga_array' not in self.__dict__:
+    #         object.__setattr__(self, name, value)
+    #     else:
+    #         setattr(self.fpga_array, name, value)
+
+    def get_array_methods(self):
+        """Return public callable methods exposed by this provider."""
+        if self.array_method_names is not None:
+            return {
+                name: method for name in self.array_method_names
+                if callable(method := getattr(self, name))
+            }
+        return {
+            name: method for name in dir(self)
+            if not name.startswith('_')
+            and name not in dir(ArrayMethods)
+            and callable(method := getattr(self, name))
+        }
 
 
-def get_array_methods(obj):
-    """Return a ``frozenset`` of attribute names on ``obj`` marked as array
-    methods (i.e. carrying ``is_array_method = True``).
-
-    The scan walks ``dir(obj)``; for a
-    :class:`~pychfpga.hardware.motherboard.Motherboard` instance this
-    already unions Motherboard and FPGA-firmware attributes via
-    :meth:`Motherboard.__dir__`.
-    """
-    return frozenset(
-        n for n in dir(obj)
-        if getattr(getattr(obj, n, None), 'is_array_method', False)
-    )

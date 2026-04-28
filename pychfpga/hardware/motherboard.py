@@ -42,6 +42,9 @@ class Motherboard(HardwareMap):
 
     SERIAL_NUMBER_LENGTH = 4  # number of digits in the serial number. Used to convert integers to a valid serial number.
 
+    # Array method provider class for this motherboard.
+    array_method_class = None
+
     # _cached_repr = None  # Stores a pre-processed string representation of the board repr() for efficiency
 
     NUMBER_OF_FMC_SLOTS = 0  # Number of supported mezzanines
@@ -49,9 +52,10 @@ class Motherboard(HardwareMap):
 
     port = None  # port number on which to access the platform `hostname`. Must be defined by subclasses. Is used by fpga_master.
 
-    # List of array methods accessible from this instance. 
-    # Defined here as a default so __getattr__ does not fall in a recursive loop until the instalce attribute shadows it.
-    _array_methods = frozenset()
+    # Array method providers accessible from this instance.
+    # Defined here as defaults so __getattr__ does not fall in a recursive
+    # loop until instance attributes shadow them.
+    _array_method_classes = frozenset()
     fpga = None
 
     cls_logger = logging.getLogger(__name__)
@@ -123,10 +127,10 @@ class Motherboard(HardwareMap):
         # parameters.
         self._cached_repr = None
 
-        # Instance default for the FPGAArray-method cache. Shadows the class
-        # attribute; refreshed by ``update_array_methods`` (typically called
-        # by ``FPGAArray.update_array_methods`` after FPGA (re)programming).
-        self._array_methods = array_methods.get_array_methods(self)
+        # Instance default for the FPGAArray-method provider cache. Shadows
+        # the class attribute; refreshed by ``update_array_methods`` when the
+        # firmware changes.
+        self._array_method_classes = self.get_array_method_classes()
 
         self.logger = logging.getLogger(__name__)
 
@@ -184,22 +188,22 @@ class Motherboard(HardwareMap):
         return list(set(super().__dir__()
                     + (self.fpga.__dir__() if self.fpga else [])))
 
+    def get_array_method_classes(self):
+        """Return array-method provider classes for this board and firmware."""
+        return frozenset(
+            cls for cls in (
+                self.array_method_class,
+                self.fpga.array_method_class if self.fpga else None) if cls)
+
     def update_array_methods(self):
-        """Refresh ``self._array_methods`` with the set of FPGAArray-method
-        names currently exposed by this motherboard.
+        """Refresh the cached set of FPGAArray-method provider classes.
 
-        Scans ``dir(self)``, which already unions Motherboard and FPGA
-        firmware attributes via ``Motherboard.__dir__``, and keeps names
-        whose attribute carries ``is_array_method = True``.
-
-        Always builds a new ``frozenset`` object so that :class:`FPGAArray`
-        can detect the refresh via identity comparison in its cache.
-
-        Returns:
-            The refreshed ``frozenset`` of array-method names.
+        Always builds a new ``frozenset`` object so :class:`FPGAArray` can
+        detect firmware/provider changes by comparing its tuple of
+        per-motherboard sets.
         """
-        self._array_methods = array_methods.get_array_methods(self)
-        return self._array_methods
+        self._array_method_classes = self.get_array_method_classes()
+        return self._array_method_classes
 
     # *************************
     # Motherboard-specific hardware map management methods
@@ -585,14 +589,15 @@ class Motherboard(HardwareMap):
             None
         """
         self.fpga = fpga_fw
-        self.update_array_methods() # update the list of array-wide methods that can be used by FPGAArray
+        self.update_array_methods() # update the array-method providers used by FPGAArray
 
     async def set_fpga_bitsream_async(self, firmware_class, force=True):
         """ Programs the FPGA with the specified bitstream.
 
         Once the FPGA is programmed, the firmware class is stored in the `fpga` attribute.
 
-        Make sure to call `update_array_methods()` after programming the FPGA to update the list fof array-wide methods that can be used by FPGAArray.
+        Make sure to call `update_array_methods()` after programming the FPGA
+        to update the array-method providers used by FPGAArray.
 
         Parameters:
 
