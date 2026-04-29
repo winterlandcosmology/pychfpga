@@ -23,6 +23,7 @@
    howto/pocket_correlator
    howto/deploy
    howto/scaler_test
+   howto/chfpga_state
 
 .. toctree::
    :hidden:
