@@ -685,7 +685,7 @@ class chFPGA(FPGAFirmware):
                 # Instantiate and initialize the GPIO subsystem
                 self.logger.debug(f'{self!r}: === Instantiating and initializing GPIO')
                 await asyncio.sleep(0)
-                self.GPIO = gpio.GPIO(router=self.system_router, router_port='GPIO')
+                self.GPIO = gpio.GPIO(router=self.system_router, router_port='GPIO', state=self.state.add("gpio"))
                 # self.GPIO.init() # don't call init() yet as this sends some commands. The module can still read the cookie without it.
 
                 # Read the firmware version cookie from the GPIO subsystem (this
@@ -877,27 +877,27 @@ class chFPGA(FPGAFirmware):
             self.logger.debug(f'{self!r}: === Instantiating SYSTEM objects')
 
             self.logger.debug(f'{self!r}: ===     Instantiating SYSMON')
-            self.SYSMON = sysmon.SYSMON(router=self.system_router, router_port='SYSMON')
+            self.SYSMON = sysmon.SYSMON(router=self.system_router, router_port='SYSMON', state=self.state.add("sysmon"))
 
             if self.HAS_SPI:
                 self.logger.debug(f'{self!r}: ===     Instantiating SPI')
-                self.SPI = spi.SPI(router=self.system_router, router_port='SPI')
+                self.SPI = spi.SPI(router=self.system_router, router_port='SPI', state=self.state.add("spi"))
             else:
                 self.SPI = None
 
             if self.HAS_I2C:
                 self.logger.debug(f'{self!r}: ===     Instantiating I2C')
-                self.I2C = i2c.I2C(router=self.system_router, router_port='I2C')
+                self.I2C = i2c.I2C(router=self.system_router, router_port='I2C', state=self.state.add("i2c"))
             else:
                 self.I2C = None
 
 
             self.logger.debug(f'{self!r}: ===     Instantiating FreqCtr')
-            self.FreqCtr = freqctr.FreqCtr(router=self.system_router, router_port='FREQ_CTR')
+            self.FreqCtr = freqctr.FreqCtr(router=self.system_router, router_port='FREQ_CTR', state=self.state.add("freqctr"))
 
             if self.HAS_REFCLK:
                 self.logger.debug(f'{self!r}: ===     Instantiating REFCLK')
-                self.REFCLK = refclk.REFCLK(router=self.system_router, router_port='REFCLK')
+                self.REFCLK = refclk.REFCLK(router=self.system_router, router_port='REFCLK', state=self.state.add("refclk"))
             else:
                 self.REFCLK = None
 
@@ -926,13 +926,15 @@ class chFPGA(FPGAFirmware):
 
                 self.CT = bct_engine.BCTEngine(
                     router=self.top_router,
-                    router_port = 'CT'
+                    router_port = 'CT',
+                    state=self.state.add("ct")
                     )
             # UCT corner-turn
             elif self.CT_TYPE == "UCT":
                 self.CT = uct_engine.UCTEngine(
                     router=self.top_router,
-                    router_port = 'CT'
+                    router_port = 'CT',
+                    state=self.state.add("ct")
                     )
             else:
                 raise RuntimeError(f'Unknown CT-Engine type {self.CT_TYPE}')
@@ -940,7 +942,8 @@ class chFPGA(FPGAFirmware):
             if self.HAS_UCORN:  # ***JFC temp hack to determine if we have UCORN. Not it capability reg yet.
                 self.UCORN = ucorn.UCorn(
                     router=self.top_router,
-                    router_port = 'UCORN'
+                    router_port = 'UCORN',
+                    state=self.state.add("ucorn")
                     )
             else:
                 self.UCORN = None
@@ -954,9 +957,9 @@ class chFPGA(FPGAFirmware):
             if self.NUMBER_OF_CORRELATORS:
                 self.logger.debug(f'{self!r}: === Instantiating X-Engine, type={self.CORR_TYPE}')
                 if self.CORR_TYPE == "CORR44":
-                    self.CORR = CORR.CORR(router=self.top_router, router_port = 'CORR')
+                    self.CORR = CORR.CORR(router=self.top_router, router_port = 'CORR', state=self.state.add("corr"))
                 elif self.CORR_TYPE == "UCORR44":
-                    self.CORR = UCORR.UCORR(router=self.top_router, router_port = 'CORR')
+                    self.CORR = UCORR.UCORR(router=self.top_router, router_port = 'CORR', state=self.state.add("corr"))
             else:
                 self.CORR = None
 
@@ -967,9 +970,9 @@ class chFPGA(FPGAFirmware):
             if self.NUMBER_OF_GPU_LINKS:
                 self.logger.debug(f'{self!r}: === Instantiating real-time data offload links, type={self.GPU_LINK_TYPE}')
                 if self.GPU_LINK_TYPE == '10GE':
-                    self.GPU = gpu.GPU(router=self.top_router, router_port = 'GPU')
+                    self.GPU = gpu.GPU(router=self.top_router, router_port = 'GPU', state=self.state.add("gpu"))
                 elif self.GPU_LINK_TYPE == '100GE':
-                    self.GPU = cge.CGE(router=self.top_router, router_port = 'GPU')
+                    self.GPU = cge.CGE(router=self.top_router, router_port = 'GPU', state=self.state.add("gpu"))
                 else:
                     raise RuntimeError(f'Unknown data link type {self.GPU_LINK_TYPE}')
             else:
@@ -981,7 +984,7 @@ class chFPGA(FPGAFirmware):
 
             if self.CAPTURE_TYPE == 'UCAP':
                 self.logger.debug(f'{self!r}: === Instantiating UCAP')
-                self.UCAP = ucap.UCAP(router=self.top_router, router_port = 'UCAP')
+                self.UCAP = ucap.UCAP(router=self.top_router, router_port = 'UCAP', state=self.state.add("ucap"))
             elif self.CAPTURE_TYPE !='PROBER':
                 raise RuntimeError(f'Unknown Data capture type {self.CAPTURE_TYPE}')
 
@@ -1114,7 +1117,7 @@ class chFPGA(FPGAFirmware):
         # through
         # GPIO module is already initialized
         self.logger.debug(f'{self!r}: --- Setting buck phases')
-        await asyncio.sleep(1.3)  # JFC debug.
+        # await asyncio.sleep(1.3)  # JFC debug.
         self.GPIO.BUCK_PHASE = 0xfedcba9876543210  # debug
         self.logger.debug(f'{self!r}: --- Done setting buck phases. We survived this!')
         if verbose >= 2:

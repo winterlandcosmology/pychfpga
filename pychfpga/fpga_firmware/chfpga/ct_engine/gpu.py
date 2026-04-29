@@ -44,9 +44,9 @@ class GPU(xglink.XGLinkCore):
     DATA_FIFO_OVERFLOW  = BitField(STATUS, 2+2, 0, width=8, doc='Indicates if the data FIFO has overflows on the last 8 GPU links. Bit 0 is for lane 0.')
     FRAME_FIFO_OVERFLOW = BitField(STATUS, 2+3, 0, width=8, doc='Indicates if the frame header FIFO has overflows on the last 8 GPU links. Bit 0 is for lane 0.')
 
-    def __init__(self, *, router, router_port, verbose=0):
+    def __init__(self, *, router, router_port, state, verbose=0):
         self.verbose = verbose
-        super().__init__(router=router, router_port=router_port)
+        super().__init__(router=router, router_port=router_port, state=state)
 
     def set_enable(self, state):
         #  self.LINK_ENABLE = state

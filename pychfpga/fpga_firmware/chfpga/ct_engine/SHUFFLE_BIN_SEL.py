@@ -64,11 +64,12 @@ class SHUFFLE_BIN_SEL_base(MMI):
     # IN_FRAME_CTR             = BitField(STATUS, 0x02, 0, width=8, doc="Number of frames received on lane 0 before the alignment FIFOs. Rolls over.")
     # LANE_CTR                = BitField(STATUS, 0x04, 0, width=4, doc="Debug")
 
-    def __init__(self, fpga_instance, base_address, instance_number, crossbar_level):
+    def __init__(self, *, router, router_port, instance_number, crossbar_level, state):
         # self.parent = parent
         # self.fpga = fpga_instance
         self.crossbar_level = crossbar_level
-        super().__init__(fpga_instance, base_address, instance_number)
+        super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.state = state
         self.logger = logging.getLogger(__name__)
         self.NUMBER_OF_INPUTS = None
         self.cached_bin_select_table = None

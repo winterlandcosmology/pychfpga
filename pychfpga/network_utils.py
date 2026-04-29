@@ -10,7 +10,7 @@ import re
 import os
 import sys
 from typing import Dict, List, Tuple, Optional
-from pychfpga.mdns_discovery import mdns_resolve
+from pychfpga.common.mdns_discovery import mdns_resolve
 
 
 def get_network_interfaces() -> List[str]:

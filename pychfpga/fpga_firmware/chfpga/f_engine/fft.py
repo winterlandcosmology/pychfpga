@@ -46,8 +46,9 @@ class FFT(MMI):
     IMPLEMENT_FFT     = BitField(STATUS, 4, 7, doc="'1' if FFT in implemented")
     ROTATE_BINS       = BitField(STATUS, 4, 6, doc="'1' if FFT bin rotation is enabled")
     RESET_MON         = BitField(STATUS, 4, 5, doc="Monitors the reset line")
-    def __init__(self, *, router, router_port, instance_number):
+    def __init__(self, *, router, router_port, instance_number, state):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.state = state
         self.config_id = 0  # Increases every time a configuration change is made
 
     def reset(self):

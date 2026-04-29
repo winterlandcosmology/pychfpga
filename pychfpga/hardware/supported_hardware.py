@@ -34,6 +34,7 @@ HARDWARE = (
     dict(type_=Crate,       name='IceCrate_MGK7BP1',     part_number='MGK7BP1',    ipmi_part_numbers=('MGK7BP1',),           package='ice'),
     dict(type_=Motherboard, name='ZCU111',               part_number='ZCU111',     ipmi_part_numbers=('ZCU111',),            package='zcu111'),
     dict(type_=Motherboard, name='CRS',                  part_number='CRS',        ipmi_part_numbers=('CRS',),               package='crs'),
+    dict(type_=Crate,       name='CRSBackplane',         part_number='CRS_BP',     ipmi_part_numbers=('CRS_BP', 'CRSBP', 'CRS-BP', 'CRS'), package='crs'),
     dict(type_=Motherboard, name='ZUBoard',              part_number='ZUBOARD1GC', ipmi_part_numbers=('ZUBOARD1GC',),        package='zuboard'),
     dict(type_=Mezzanine,   name='FMCMezzanine',         part_number=None,         ipmi_part_numbers=(),                     package='ice'),
     dict(type_=Mezzanine,   name='FMCMezzanine_MGADC08', part_number=None,         ipmi_part_numbers=(),                     package='ice'),

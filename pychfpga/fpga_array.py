@@ -22,6 +22,7 @@ import datetime
 import functools
 import asyncio
 import nest_asyncio
+from collections import defaultdict
 
 # Patch asyncio so ``asyncio.run`` / ``loop.run_until_complete`` tolerate being
 # called from an already-running event loop (e.g. when ``FPGAArray(...)`` is
@@ -65,8 +66,6 @@ from wtl.config import load_yaml_config
 
 from pychfpga.common import Ccoll
 from pychfpga.common.udp_packet_receiver import UDPPacketReceiver
-
-from pychfpga.mdns_discovery import mdns_discover
 
 from pychfpga.hardware import HardwareMap, Motherboard, Crate
 
@@ -185,6 +184,7 @@ class FPGAArray(object):
             subarrays=None,
             ping=True,
             mdns_timeout=2,
+            platform_firmware_pathname=None,
             no_mezz=False,
 
             bitfile=None,
@@ -301,6 +301,10 @@ class FPGAArray(object):
                 ``hwm`` hardware map, but an exception is raised if a board listed
                 explicitely fails. If ``ping`` is false, the presence of boards is not
                 checked.
+
+            platform_firmware_pathname (str): Optional path to platform ARM
+                firmware used during network discovery. For CRS, ``None`` uses
+                the default ``tcpipe.elf`` in the CRS ``arm_firmware`` folder.
 
 
         .. centered:: **Configuration & initialization parameters**
@@ -511,16 +515,15 @@ class FPGAArray(object):
                 map.
 
                 If an Motherboard is specified by its serial number (e.g. '0007', or
-                just a numeric 7 as a convenient shortcut), the board will use mDNS to
-                actively find and query  boards that match the serial number.
+                just a numeric 7 as a convenient shortcut), the board will use its
+                platform-specific network discovery method to actively find boards
+                that match the serial number.
 
 
             Note:
 
-                Selecting boards by Crate serial number *always*
-                require mDNS queries to discover the
-                specified Motherboards that advertised themseles along with
-                their associated crate number.
+                Selecting boards by Crate serial number uses the platform-specific
+                network discovery method for that crate type.
 
         """
         async_init = functools.partial(
@@ -533,6 +536,7 @@ class FPGAArray(object):
             ignore_missing_boards=ignore_missing_boards,
             subarrays=subarrays, ping=ping,
             mdns_timeout=mdns_timeout,
+            platform_firmware_pathname=platform_firmware_pathname,
             no_mezz=no_mezz,
             bitfile=bitfile,
             prog=prog,
@@ -607,6 +611,7 @@ class FPGAArray(object):
 
             subarrays=None, ping=True,
             mdns_timeout=2,
+            platform_firmware_pathname=None,
             no_mezz=False,
 
             mode=None,
@@ -712,6 +717,7 @@ class FPGAArray(object):
         self.logger.info(f'{self!r}:     subarrays = {subarrays}')
         self.logger.info(f'{self!r}:     ping = {ping}')
         self.logger.info(f'{self!r}:     mdns_timeout = {mdns_timeout}')
+        self.logger.info(f'{self!r}:     platform_firmware_pathname = {platform_firmware_pathname}')
         self.logger.info(f'{self!r}:     exclude_iceboards = {exclude_iceboards}')
         self.logger.info(f'{self!r}:     bitfile = {bitfile}')
         self.logger.info(f'{self!r}:     prog = {prog}')
@@ -877,47 +883,48 @@ class FPGAArray(object):
         #         self.logger.info('%r: Finished resolving IP addresses. It took %s seconds' % (self, time.time() - t0))
 
         ###########################################################################
-        # mDNS discovery of boards and crates specified by model/serial number only
+        # Network discovery of boards and crates specified by model/serial number only
         ###########################################################################
-        # The serial and slot numbers will be set based on the data returned by the MDNS TXT fields
+        # Network discovery adds boards/crates to the hardware map and sets their key attributes based on the available information. The discovery method is platform-specific. 
 
+        discovery_groups = defaultdict(lambda: dict(boards=[], crates=[]))
         # We search for motherboards that are specified by serial number but have no hostname
         # A generic Motherboard (empty part_number) indicates we look for any part number ('*').
-        mb_to_discover = [(mb.part_number or '*', mb.serial)
-                          for mb in motherboards
-                          if mb.serial and not mb.hostname]
+        for mb in motherboards:
+            if mb.serial and not mb.hostname:
+                discovery_fn = mb.get_network_discovery_function()
+                discovery_groups[discovery_fn]['boards'].append((mb.part_number or '*', mb.serial))
+
         # Search for boards on crates that have a serial number but no assigned boards (cr.slot is empty).
         # If the crate has boards already assigned, we assume they are all assigned and we don't need to search
         # for more boards on this crate.
-        cr_to_discover = [(cr.part_number, cr.serial)
-                          for cr in crates
-                          if cr.serial and not cr.slot]
-        # Remove iceboards with wildcard serial numbers
+        for cr in crates:
+            if cr.serial and not cr.slot:
+                discovery_fn = cr.get_network_discovery_function()
+                discovery_groups[discovery_fn]['crates'].append((cr.part_number or '*', cr.serial))
+
+        # Remove iceboards with wildcard serial numbers. Those will be re-added to the hardware map by the network discovery function.
         for mb in motherboards:
             if mb.serial == '*':
                 mb.delete_instance()
-        if mb_to_discover or cr_to_discover:
-            self.logger.info(f'{self!r}: Discovering Motherboards and Crates specified by serial number using mDNS')
-            self.logger.info(f'{self!r}:     Motherboards to find: {mb_to_discover}')
-            self.logger.info(f'{self!r}:     Crates to find: {cr_to_discover}')
-            self.print_flush()
-            # Perform mDNS discovery. This is done on a separate ioloop, which locks up the current loop for a while.
-            #
-            # `inter_reply_timeout=0.5` short-circuits the per-attempt timeout
-            # when no replies have arrived in the last 500 ms, so the retry
-            # logic kicks in faster on the (~5-10%) of calls where the very
-            # first multicast query is dropped on the wire (typically by
-            # switch IGMP-snooping pruning or EMAC RX contention on the
-            # responder). Without this, a single dropped first-query forces
-            # waiting the full `mdns_timeout` (2 s by default) before the
-            # next attempt — user-visibly stalling the FPGAArray init for
-            # 2 s. With it, the second attempt starts after ~0.5 s of
-            # silence and almost always succeeds immediately.
-            await mdns_discover(
-                iceboards=mb_to_discover,
-                icecrates=cr_to_discover,
-                timeout=mdns_timeout,
-                inter_reply_timeout=0.5)
+        if discovery_groups:
+            self.logger.info(f'{self!r}: Discovering Motherboards and Crates specified by serial number')
+            for discovery_async_fn, targets in discovery_groups.items():
+                mb_to_discover = targets['boards']
+                cr_to_discover = targets['crates']
+                if not mb_to_discover and not cr_to_discover:
+                    continue
+                self.logger.info(f'{self!r}:         Calling network discovery function: {discovery_async_fn}')
+                self.logger.info(f'{self!r}:         Motherboards to find: {mb_to_discover}')
+                self.logger.info(f'{self!r}:         Crates to find: {cr_to_discover}')
+                self.print_flush()
+                # `inter_reply_timeout=0.5` preserves the historical mDNS
+                # retry behavior; platform hooks that do not use it can ignore it.
+                await discovery_async_fn(
+                    boards=mb_to_discover,
+                    crates=cr_to_discover,
+                    timeout=mdns_timeout,
+                    inter_reply_timeout=0.5)
 
         ########################################################
         # Establish communication with the motherboards
@@ -930,6 +937,19 @@ class FPGAArray(object):
         self.logger.debug(f'{self!r}: Hardware map so far:')
         for mb in motherboards:
             self.logger.debug(f'    {mb}(hostname={mb.hostname}, serial={mb.serial}, slot={mb.slot})')
+
+        # Set the platform firmware on the motherboards that have a hostname
+        # We separate the motherboards by platform class, then call the platform-specific firmware set function for each class with the list of boards belonging to that class.
+        platform_firmware_groups = defaultdict(list)
+        for mb in motherboards:
+            if mb.hostname:
+                platform_firmware_groups[mb.__class__].append(mb)
+        self.logger.info(f'{self!r}: Loading platform firmware {platform_firmware_pathname} on the following motherboards: {platform_firmware_groups}')
+
+        for board_cls, boards in platform_firmware_groups.items():
+            await board_cls.set_platform_firmware(
+                boards=boards,
+                firmware_pathname=platform_firmware_pathname)
 
         if motherboards:
             self.logger.info(f'{self!r}: Establishing communication with the motherboards')
@@ -4466,6 +4486,7 @@ def add_fpga_array_arguments(parser):
     parser.add_argument('--no_mezz',         action='store_true', help='Do not attempt to auto-detect the mezzanines')
     parser.add_argument('--ping',            type=int, help="1: Check if Tuber is responding. 0: Check but ignore. ")
     parser.add_argument('--mdns_timeout',    type=float, help="Time to wait for mDNS discovery replies")
+    parser.add_argument('--arm_firmware_pathname', type=str, help="Path to platform ARM firmware used during network discovery. For CRS, defaults to the tcpipe.elf file in the CRS arm_firmware folder.")
     parser.add_argument('--prog',            type=int, nargs='?', const=1,
                         help='Overrides the FPGA programming method. Is meaningful only if --mode is specified'
                         '--prog 0: do not program the FPGA (even if --mode is specified), '
@@ -4642,6 +4663,10 @@ def create_fpga_array(args=None):
     - exclude_iceboards: Remove the specified IceBoards (serial numbers) from the hardware map.
 
     - mdns_timeout: Time to wait for motherboards to responds to mDNS queries
+
+    - arm_firmware_pathname: Path to platform ARM firmware used by
+        network discovery. For CRS, None uses the default tcpipe.elf in the
+        CRS arm_firmware folder.
 
     - no_mezz: Do not discover nor initialize the mezzanine on the motherboards
 

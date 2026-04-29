@@ -88,20 +88,23 @@ class ShuffleCrossbar(MMI):
     FIFO_COUNT       = BitField(STATUS, 12, 0, width=16, doc="")
     PACKET_ERROR_CTR = BitField(STATUS, 14, 0, width=16, doc="Number of CRC/length/aligment errors for the lane selected by LANE_MONITOR_SEL. Saturates to maximum value. Is reset by LANE_MONITOR_RESET")
 
-    def __init__(self, *, router, router_port, crossbar_level=1, verbose=0, number_of_bin_sel=2):
+    def __init__(self, *, router, router_port, crossbar_level=1, state, verbose=0, number_of_bin_sel=2):
 
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
         self.crossbar_level = crossbar_level
+        self.state = state
 
         scb_router = SCBRouter(router=router, router_port=router_port)
         super().__init__(router=scb_router, router_port='COMMON')
         self.BIN_SEL = []
+        bin_sel_state = self.state.add("bin_sel")
         for i in range(number_of_bin_sel):
             self.BIN_SEL.append(SHUFFLE_BIN_SEL.SHUFFLE_BIN_SEL_base(
                     router=scb_router,
                     router_port=i+1,
                     instance_number=i,
+                    state=bin_sel_state.add(i),
                     crossbar_level=crossbar_level))
 
     def __getitem__(self, key):

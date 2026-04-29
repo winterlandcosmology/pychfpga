@@ -9,7 +9,7 @@ import time
 
 sys.modules.setdefault('freetype', type(sys)('freetype'))
 
-from pychfpga.mdns_discovery import mdns_discover
+from pychfpga.common.mdns_discovery import mdns_discover
 from pychfpga.hardware.crs import CRS  # noqa: F401  registers 'crs' part number
 
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
@@ -25,7 +25,7 @@ class _RetryCounter(logging.Handler):
             retry_count += 1
 
 
-logging.getLogger('pychfpga.mdns_discovery').addHandler(_RetryCounter())
+logging.getLogger('pychfpga.common.mdns_discovery').addHandler(_RetryCounter())
 
 
 async def main(n_iters, idle_gap):
@@ -36,7 +36,7 @@ async def main(n_iters, idle_gap):
         t0 = time.time()
         try:
             ibs, _ = await mdns_discover(
-                iceboards=[('crs', '37')], icecrates=[],
+                boards=[('crs', '37')], crates=[],
                 timeout=2.0, retries=2, inter_reply_timeout=0.5)
             ok = any(int(ib.serial) == 37 for ib in (ibs or []))
         except Exception as e:

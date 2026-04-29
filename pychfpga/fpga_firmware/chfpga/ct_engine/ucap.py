@@ -46,10 +46,11 @@ class UCAP(MMI):
     OUT_FRAME_CTR    = BitField(STATUS, 2, 0, width=8, doc='debug')
     M_CLK_CTR        = BitField(STATUS, 3, 0, width=8, doc='debug')
 
-    def __init__(self, *, router, router_port, verbose=0):
+    def __init__(self, *, router, router_port, state, verbose=0):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port)
+        self.state = state
         self.sock = None
 
     def init(self):

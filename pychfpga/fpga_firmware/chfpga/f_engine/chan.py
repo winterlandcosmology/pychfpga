@@ -48,13 +48,13 @@ class Chan(MMIRouter):
         self.state = state
 
         if self.fpga.HAS_ADCDAQ:
-            self.ADCDAQ = adcdaq.ADCDAQ(router=self, router_port='ADCDAQ', instance_number=instance_number)
+            self.ADCDAQ = adcdaq.ADCDAQ(router=self, router_port='ADCDAQ', instance_number=instance_number, state=self.state.add("adcdaq"))
         else:
             self.ADCDAQ = None
-        self.FFT = fft.FFT(router=self, router_port='FFT', instance_number=instance_number)
-        self.SCALER = scaler.SCALER(router=self, router_port='SCALER', instance_number=instance_number)
+        self.FFT = fft.FFT(router=self, router_port='FFT', instance_number=instance_number, state=self.state.add("fft"))
+        self.SCALER = scaler.SCALER(router=self, router_port='SCALER', instance_number=instance_number, state=self.state.add("scaler"))
         if self.fpga.CAPTURE_TYPE == 'PROBER':
-            self.PROBER = prober.PROBER(router=self, router_port='PROBER', instance_number=instance_number)
+            self.PROBER = prober.PROBER(router=self, router_port='PROBER', instance_number=instance_number, state=self.state.add("prober"))
         else:
             self.PROBER = None
         self.FUNCGEN = funcgen.FUNCGEN(router=self, router_port='FUNCGEN', instance_number=instance_number, state=self.state.add("funcgen"))

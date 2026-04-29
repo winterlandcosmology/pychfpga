@@ -58,8 +58,9 @@ class CORR_core(MMI):
     IN_FRAME_CTR  = BitField(STATUS, 0x01, 0, width=8, doc="Input frame counter")
     OUT_FRAME_CTR = BitField(STATUS, 0x02, 0, width=8, doc="Output frame counter")
 
-    def __init__(self, *, router, router_port, instance_number, verbose=0):
+    def __init__(self, *, router, router_port, instance_number, state, verbose=0):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.state = state
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
 
@@ -83,13 +84,15 @@ class CORR(MMIRouter):
     REQUIRES_OFFSET_BINARY_ENCODING = True
     BIT_WIDTH = 4
 
-    def __init__(self, *, router, router_port, verbose=0):
+    def __init__(self, *, router, router_port, state, verbose=0):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
-        super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        super().__init__(router=router, router_port=router_port)
+        self.state = state
         self.corr = []
+        corr_state = self.state.add("corr")
         for i in range(self.fpga.NUMBER_OF_CORRELATORS):
-            self.corr.append(CORR_core(router=self, router_port=i, instance_number=i))
+            self.corr.append(CORR_core(router=self, router_port=i, instance_number=i, state=corr_state.add(i)))
 
     def __getitem__(self, key):
         """    Returns the correlator instance specified by the index"""

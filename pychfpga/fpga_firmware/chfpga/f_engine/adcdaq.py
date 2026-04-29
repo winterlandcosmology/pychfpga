@@ -103,8 +103,9 @@ class ADCDAQ(MMI):
     MMCM_POWER =        BitField(DRP, 0x28, 0, width=16, doc='MCMM Power bits. Must be set to 0xFFFF in order to successfully program the other MMCM registers')
 
 
-    def __init__(self, *, router, router_port, instance_number):
+    def __init__(self, *, router, router_port, instance_number, state):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.state = state
         self._lock() # Prevent accidental addition of attributes (if, for example, a value is assigned to a wrongly-spelled property)
 
     def set_ADCDAQ_mode(self, mode):

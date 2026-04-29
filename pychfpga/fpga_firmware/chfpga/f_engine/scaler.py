@@ -87,8 +87,9 @@ class SCALER(MMI):
 
     # Define Status registers
 
-    def __init__(self, *, router, router_port, instance_number):
+    def __init__(self, *, router, router_port, instance_number, state):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.state = state
         self.cached_gain_table = {}
         self.cached_gain_timestamp = {}
 

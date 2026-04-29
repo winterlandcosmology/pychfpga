@@ -2,10 +2,90 @@
 import logging
 import socket
 import re
+import time
 import textwrap
+from contextlib import contextmanager
 
 
 from .bsb_mmi import BSB_MMI
+
+class _TCPipePerf:
+    """Collect and log TCPipe RPC and BSB aggregate timing statistics."""
+
+    def __init__(self, tcpipe, log_interval):
+        self.tcpipe = tcpipe
+        self.log_interval = log_interval
+        self.stats_by_rpc = {}
+        self.flush_count = 0
+        self.commands_flushed = 0
+        self.flush_wall_s = 0.0
+        self.max_flush_commands = 0
+
+    def record_rpc(self, rpc_id, tx_len, rx_len, send_s, recv_s, total_s):
+        stats = self.stats_by_rpc.setdefault(rpc_id, {
+            'count': 0,
+            'tx_bytes': 0,
+            'rx_bytes': 0,
+            'send_s': 0.0,
+            'recv_s': 0.0,
+            'total_s': 0.0,
+            'max_s': 0.0,
+        })
+        stats['count'] += 1
+        stats['tx_bytes'] += tx_len
+        stats['rx_bytes'] += rx_len
+        stats['send_s'] += send_s
+        stats['recv_s'] += recv_s
+        stats['total_s'] += total_s
+        stats['max_s'] = max(stats['max_s'], total_s)
+
+        if rpc_id in (self.tcpipe.RPC_BSB_WRITE_READ, self.tcpipe.RPC_BSB_BATCH_WRITE):
+            count = stats['count']
+            if count in (1, 10, 100) or (self.log_interval and count % self.log_interval == 0):
+                self.log_rpc_line(rpc_id, stats)
+
+    def log_rpc_line(self, rpc_id, stats):
+        count = stats['count']
+        name = self.tcpipe.RPC_NAMES.get(rpc_id, f'rpc_{rpc_id}')
+        self.tcpipe.log.info(
+            '%s: TCPipe RPC perf %s: n=%d avg=%.3f ms send=%.3f ms recv/wait=%.3f ms max=%.3f ms avg_tx=%.1f B avg_rx=%.1f B',
+            self.tcpipe,
+            name,
+            count,
+            1000.0 * stats['total_s'] / count,
+            1000.0 * stats['send_s'] / count,
+            1000.0 * stats['recv_s'] / count,
+            1000.0 * stats['max_s'],
+            stats['tx_bytes'] / count,
+            stats['rx_bytes'] / count)
+
+    def record_aggregate_flush(self, command_count, wall_s):
+        self.flush_count += 1
+        self.commands_flushed += command_count
+        self.flush_wall_s += wall_s
+        self.max_flush_commands = max(self.max_flush_commands, command_count)
+
+    def log_rpc_summary(self):
+        for rpc_id, stats in sorted(self.stats_by_rpc.items()):
+            self.log_rpc_line(rpc_id, stats)
+
+    def log_aggregate_summary(self):
+        if not self.flush_count:
+            return
+        self.tcpipe.log.info(
+            '%s: TCPipe BSB aggregate: flushes=%d avg_cmds_per_flush=%.2f '
+            'max_cmds_in_flush=%d avg_flush_wall=%.3f ms amortized_per_cmd=%.4f ms',
+            self.tcpipe,
+            self.flush_count,
+            self.commands_flushed / self.flush_count,
+            self.max_flush_commands,
+            1000.0 * self.flush_wall_s / self.flush_count,
+            1000.0 * self.flush_wall_s / max(1, self.commands_flushed))
+
+    def log_summary(self):
+        self.log_rpc_summary()
+        self.log_aggregate_summary()
+
 
 class TCPipe:
     """ Interface to the TCP-based command and control protocol to the FPGA board.
@@ -27,7 +107,25 @@ class TCPipe:
     RPC_CORE_REG_READ = 0x05
     RPC_CORE_REG_WRITE = 0x06
     RPC_ADC_SYNC = 0x07
+    RPC_OLED_DRAW_XBM = 0x08
+    RPC_OLED_SET_FIRMWARE_LABEL = 0x09
+    RPC_OLED_DRAW_TEXT = 0x0A
+    RPC_BSB_BATCH_WRITE = 0x0B
 
+    RPC_NAMES = {
+        RPC_BSB_WRITE_READ: 'bsb_write_read',
+        RPC_GET_RPC_FUNCTIONS: 'get_rpc_functions',
+        RPC_IIC_WRITE_READ: 'iic_write_read',
+        RPC_SPI_WRITE_READ: 'spi_write_read',
+        RPC_CORE_REG_READ: 'core_reg_read',
+        RPC_CORE_REG_WRITE: 'core_reg_write',
+        RPC_ADC_SYNC: 'adc_sync',
+        RPC_OLED_DRAW_XBM: 'oled_draw_xbm',
+        RPC_OLED_SET_FIRMWARE_LABEL: 'oled_set_firmware_label',
+        RPC_OLED_DRAW_TEXT: 'oled_draw_text',
+        RPC_BSB_BATCH_WRITE: 'bsb_batch_write',
+    }
+    RPC_PERF_LOG_INTERVAL = 500
 
     CORE_REG_UDP_DATA_PORT = 2
 
@@ -51,14 +149,167 @@ class TCPipe:
         self.firmware_crc = None
         self.log.debug(f'{self!r}: Opened TCPipe socket from local address{self.sock.getsockname()} to remote address {self.hostname}:{self.port}')
         self.bsb_sent_ctr = 0
+        self.perf = _TCPipePerf(self, self.RPC_PERF_LOG_INTERVAL)
+        # BSB write aggregation uses the batch-write RPC provided by the RTOS.
+        self._bsb_aggregate_ctx_depth = 0
+        self._bsb_agg_pending = []
+        self._bsb_agg_pending_tx = 0
+        self._bsb_aggregate_max_cmds = 512
+        self._bsb_aggregate_max_tx_bytes = 64 * 1024
+
+        self.check_tcpipe_version()
 
     def __repr__(self):
         return f'TCPipe({self.hostname}:{self.port})'
 
     def close(self):
-        print(f'Closing TCPipe socket at {self.sock.getsockname()}')
-        self.sock.close()
-        self.sock = None
+        try:
+            self._bsb_batch_write_flush()
+        except (IOError, OSError) as exc:
+            self.log.warning('%r: _bsb_batch_write_flush during close failed: %r', self, exc)
+        self.perf.log_summary()
+        if self.sock is not None:
+            print(f'Closing TCPipe socket at {self.sock.getsockname()}')
+            self.sock.close()
+            self.sock = None
+
+    def _rpc_write_read(self, rpc_id, payload=b'', read_length=None, read_until=None, timeout=None):
+        if self._bsb_agg_pending:
+            self._bsb_batch_write_flush()
+        if not isinstance(payload, (bytes, bytearray, memoryview)):
+            payload = bytes(payload)
+        if len(payload) >= 65536:
+            raise ValueError(f'{self!r}: RPC payload length must fit in 16 bits')
+
+        tx_len = 4 + len(payload)
+        if tx_len <= len(self.tx_buf):
+            self.tx_view[0] = self.RPC_PREFIX
+            self.tx_view[1] = rpc_id
+            self.tx_view[2] = len(payload) & 0xFF
+            self.tx_view[3] = len(payload) >> 8
+            self.tx_view[4:tx_len] = payload
+            tx_payload = self.tx_view[:tx_len]
+        else:
+            tx_payload = bytearray(tx_len)
+            tx_payload[0] = self.RPC_PREFIX
+            tx_payload[1] = rpc_id
+            tx_payload[2] = len(payload) & 0xFF
+            tx_payload[3] = len(payload) >> 8
+            tx_payload[4:tx_len] = payload
+
+        old_timeout = None
+        if timeout:
+            old_timeout = self.sock.gettimeout()
+            self.sock.settimeout(timeout)
+        start_time = time.perf_counter()
+        send_done_time = start_time
+        recv_done_time = start_time
+        rx_len = 0
+        reply = None
+        try:
+            self.sock.sendall(tx_payload)
+            send_done_time = time.perf_counter()
+            if read_until is not None:
+                reply = bytearray()
+                while True:
+                    reply += self.sock.recv(1024)
+                    if reply.endswith(read_until):
+                        recv_done_time = time.perf_counter()
+                        rx_len = len(reply)
+                        break
+            else:
+                rx_len = self.sock.recv_into(self.rx_buf)
+                recv_done_time = time.perf_counter()
+                reply = self.rx_buf[:rx_len]
+        finally:
+            if timeout:
+                self.sock.settimeout(old_timeout)
+        self.perf.record_rpc(
+            rpc_id=rpc_id,
+            tx_len=tx_len,
+            rx_len=rx_len,
+            send_s=send_done_time - start_time,
+            recv_s=recv_done_time - send_done_time,
+            total_s=recv_done_time - start_time)
+        if read_length is not None and rx_len != read_length:
+            raise IOError(f'{self!r}: RPC {rpc_id} received {rx_len} bytes instead of {read_length} bytes')
+        return reply
+
+    def bsb_write_read(self, data):
+        """ Writes `data` to the FPGA firmware Byte-serial bus and return reply.
+
+
+        Parameters:
+
+            data (bytes): data to write prior to the read operation
+
+
+        """
+        if self._bsb_agg_pending:
+            self._bsb_batch_write_flush()
+        reply = self._rpc_write_read(self.RPC_BSB_WRITE_READ, data)
+        self.bsb_sent_ctr += 1
+        return reply
+
+    def bsb_batch_write(self, commands):
+        """Execute multiple write-only BSB transfers in one ``bsb_batch_write`` RPC.
+
+        Each command is the same payload as :meth:`bsb_write_read`. For write-only commands,
+        reply bytes are the single RPC status/sequence byte per command (see ``bsb_write_read``).
+
+        Returns:
+            bytes: ``n`` status bytes (equivalent to the first byte of each individual RPC reply).
+        """
+        for cmd in commands:
+            self._bsb_batch_write_enqueue(cmd)
+        if self._bsb_aggregate_active():
+            return b''
+        return self._bsb_batch_write_flush()
+
+    def _bsb_batch_write_now(self, commands):
+        """Send write-only BSB commands immediately with the batch-write RPC.
+
+        Parameters:
+            commands (list of bytes): the BSB commands to send.
+
+        Returns:
+            bytes: the reply from the BSB batch write.
+
+        Raises:
+            IOError: if the BSB batch write fails.
+        """
+        n = len(commands)
+        parts = [n.to_bytes(2, 'little')]
+        for c in commands:
+            if isinstance(c, memoryview):
+                c = c.tobytes()
+            elif not isinstance(c, (bytes, bytearray)):
+                c = bytes(c)
+            lc = len(c)
+            if lc >= 65536:
+                raise ValueError(f'BSB batch pack: command length {lc} must fit in 16 bits')
+            parts.append(lc.to_bytes(2, 'little'))
+            parts.append(c)
+        payload = b''.join(parts)
+        reply = self._rpc_write_read(self.RPC_BSB_BATCH_WRITE, payload)
+        if len(reply) == 1:
+            if reply[0] == 0xFF:
+                raise IOError(f'{self!r}: BSB batch RPC failed (protocol/parse error on board)')
+            raise IOError(
+                f'{self!r}: BSB batch RPC failed at command index {reply[0] - 1} '
+                f'(1-based status code {reply[0]})')
+        if len(reply) != 1 + n:
+            raise IOError(
+                f'{self!r}: BSB batch RPC expected {1 + n} reply bytes, got {len(reply)}')
+        if reply[0] != 0:
+            if reply[0] == 0xFF:
+                raise IOError(f'{self!r}: BSB batch RPC failed (protocol/parse error on board)')
+            raise IOError(
+                f'{self!r}: BSB batch RPC failed at command index {reply[0] - 1} '
+                f'(1-based status code {reply[0]})')
+        self.bsb_sent_ctr += n
+        return reply[1:]
+
 
     def get_rpc_functions(self):
         """ Fetches the list of functions provided by the platform processor.
@@ -68,22 +319,8 @@ class TCPipe:
 
 
         """
-        tx_len = 4 # RPC header, I2C address, read length,  excluding data
-        self.tx_view[0] = self.RPC_PREFIX
-        self.tx_view[1] = 1
-        self.tx_view[2] = 0   # I2C addr, read_length & data
-        self.tx_view[3] = 0
-
-        # print(f'Sending {bytes(self.tx_view[:tx_len_data]).hex(":")}')
-        self.sock.sendall(self.tx_view[:tx_len])
-
-        b = bytearray()
+        b = self._rpc_write_read(self.RPC_GET_RPC_FUNCTIONS, read_until=b'\x00\x00\x00')
         funcs = {}
-        # read TCP stream until we encounter 3 consecutive nulls indicting the end of the list
-        while True:
-            b += self.sock.recv(1024)
-            if b.endswith(b'\x00\x00\x00'):
-                break
         # extract function id byte, and the name and docs null-terminated strings
         f=re.findall('(.)([^\x00]*\x00)([^\x00]*\x00)',b.decode())
         for (func_id, name, docs) in f:
@@ -100,23 +337,96 @@ class TCPipe:
             print(textwrap.indent(info['docs'], '\t'))
 
 
+    def check_tcpipe_version(self):
+        """Require RTOS firmware that provides the write-only BSB batch RPC."""
+        funcs = self.get_rpc_functions()
+        if (
+                self.RPC_BSB_BATCH_WRITE not in funcs
+                and not any(info.get('name') == 'bsb_batch_write' for info in funcs.values())):
+            raise RuntimeError(
+                f'{self!r}: RTOS firmware does not advertise required RPC '
+                f'bsb_batch_write (id {self.RPC_BSB_BATCH_WRITE}); update the board firmware')
+        self.log.info('%s: BSB aggregate flushes will use bsb_batch_write RPC', self)
+
+
+    def _bsb_aggregate_active(self):
+        return self._bsb_aggregate_ctx_depth > 0
+
+
+    @contextmanager
+    def aggregate_commands(self):
+        """Coalesce write-only BSB MMI transactions until exit, then flush."""
+        self._bsb_aggregate_ctx_depth += 1
+        try:
+            yield self
+        finally:
+            self._bsb_batch_write_flush()
+            self._bsb_aggregate_ctx_depth -= 1
+            self.perf.log_aggregate_summary()
+
+    def _bsb_batch_write_flush(self):
+        """Send all queued write-only BSB commands with the required batch-write RPC."""
+        if not self._bsb_agg_pending:
+            return b''
+        cmds = list(self._bsb_agg_pending)
+        self._bsb_agg_pending.clear()
+        self._bsb_agg_pending_tx = 0
+        try:
+            t0 = time.perf_counter()
+            reply = self._bsb_batch_write_now(cmds)
+            self.perf.record_aggregate_flush(len(cmds), time.perf_counter() - t0)
+            return reply
+        except Exception:
+            # Restore queue so callers can retry or abort explicitly
+            self._bsb_agg_pending = cmds + self._bsb_agg_pending
+            self._bsb_agg_pending_tx = sum(4 + len(x) for x in self._bsb_agg_pending)
+            raise
+
+    def _bsb_batch_write_enqueue(self, cmd):
+        """ Enqueue a write-only BSB command for aggregation.
+
+        Parameters:
+            cmd (bytes): the BSB command to enqueue.
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: if the command is too large to aggregate.
+        """
+        if isinstance(cmd, memoryview):
+            cmd = cmd.tobytes()
+        elif not isinstance(cmd, (bytes, bytearray)):
+            cmd = bytes(cmd)
+        fs = 4 + len(cmd)
+        if fs > self._bsb_aggregate_max_tx_bytes:
+            raise ValueError(
+                f'{self!r}: BSB command of {len(cmd)} bytes (+ framing) exceeds aggregate max tx {self._bsb_aggregate_max_tx_bytes}')
+        while self._bsb_agg_pending and (
+                len(self._bsb_agg_pending) >= self._bsb_aggregate_max_cmds
+                or self._bsb_agg_pending_tx + fs > self._bsb_aggregate_max_tx_bytes):
+            self._bsb_batch_write_flush()
+        self._bsb_agg_pending.append(bytes(cmd))
+        self._bsb_agg_pending_tx += fs
+
+    #########################################################
+    #  I2C interface
+    #########################################################
+
     def i2c_read(self, addr, read_length, no_error=False):
         return self.i2c_write_read(addr, data=b'', read_length=read_length, no_error=no_error)
 
 
     def i2c_polled_read(self, addr, read_length, no_error=False):
-        tx_len = 6  # prefix, cmd, len_lsb, len_msb, addr, read_length
-        self.tx_view[:tx_len] = bytes((self.RPC_PREFIX, self.RPC_IIC_READ, 2, 0, addr, read_length))
-        self.sock.send(self.tx_view[:tx_len])
-        rx_len = self.sock.recv_into(self.rx_buf)
-        if self.rx_buf[0]:
+        reply = self._rpc_write_read(self.RPC_IIC_READ, bytes((addr, read_length)))
+        if reply[0]:
             if no_error:
                 return b''
             else:
-                raise IOError(f'{self!r}: I2C Reply has {rx_len} bytes but has error code {self.rx_buf[0]}')
-        if rx_len < 1+read_length:
-            raise IOError(f'{self!r}: I2C Did not receive enough bytes {rx_len} instead of {1+read_length}')
-        return self.rx_buf[1:read_length + 1]
+                raise IOError(f'{self!r}: I2C Reply has {len(reply)} bytes but has error code {reply[0]}')
+        if len(reply) < 1+read_length:
+            raise IOError(f'{self!r}: I2C Did not receive enough bytes {len(reply)} instead of {1+read_length}')
+        return reply[1:read_length + 1]
 
 
     # def rpc_call(self, command, length, reply_length=0):
@@ -155,29 +465,16 @@ class TCPipe:
             data = bytes(data)
         if 0 > read_length >= 256:
             raise ValueError('{self!r}: Read length bust be between 0 and 255')
-        tx_len = 6 # RPC header, I2C address, read length,  excluding data
-        tx_len_data = tx_len + len(data)
-        rpc_len = 2 + len(data)
-        self.tx_view[0] = self.RPC_PREFIX
-        self.tx_view[1] = self.RPC_IIC_WRITE_READ
-        self.tx_view[2] = rpc_len & 0xFF  # I2C addr, read_length & data
-        self.tx_view[3] = rpc_len >> 8
-        self.tx_view[4] = addr # 7-bit I2C address; bit 7 is the port number.
-        self.tx_view[5] = read_length # number of bytes to read after the write
-
-        self.tx_view[tx_len:tx_len_data] = data
-
-        # print(f'Sending {bytes(self.tx_view[:tx_len_data]).hex(":")}')
-        self.sock.sendall(self.tx_view[:tx_len_data])
-        rx_len = self.sock.recv_into(self.rx_buf)
-        if self.rx_buf[0]:
+        payload = bytes((addr, read_length)) + data
+        reply = self._rpc_write_read(self.RPC_IIC_WRITE_READ, payload)
+        if reply[0]:
             if no_error:
                 return b''
             else:
-                raise IOError(f'{self!r}: TCPipe I2C: Reply has error code {self.rx_buf[0]} ({", ".join(e for v,e in self.I2C_ERROR_CODES.items() if self.rx_buf[0] & v)})')
-        if rx_len != 1 + read_length:
-            raise IOError(f'{self!r}: TCPipe I2C: Receive {rx_len} bytes instead of {1+read_length} bytes (including status byte)')
-        return self.rx_buf[1:read_length + 1]
+                raise IOError(f'{self!r}: TCPipe I2C: Reply has error code {reply[0]} ({", ".join(e for v,e in self.I2C_ERROR_CODES.items() if reply[0] & v)})')
+        if len(reply) != 1 + read_length:
+            raise IOError(f'{self!r}: TCPipe I2C: Receive {len(reply)} bytes instead of {1+read_length} bytes (including status byte)')
+        return reply[1:read_length + 1]
 
     def i2c_write(self, addr, data):
         """ Writes `data` to I2C address `addr`.
@@ -194,29 +491,61 @@ class TCPipe:
         """
         self.i2c_write_read(addr, data, read_length=0)
 
-    def bsb_write_read(self, data):
-        """ Writes `data` to the FPGA firmware Byte-serial bus and return reply.
+    #########################################################
+    #  OLED interface
+    #########################################################
+
+    OLED_SET_FIRMWARE_LABEL_STATUS = {
+        0: 'Success',
+        1: 'Argument too long',
+    }
+
+    OLED_DRAW_TEXT_STATUS = {
+        0: 'Success',
+        1: 'Bad arguments',
+        2: 'OLED not initialized',
+        3: 'I2C/mux error',
+    }
 
 
-        Parameters:
+    def _check_oled_status(self, command, reply, status_table):
+        if len(reply) != 1:
+            raise IOError(f'{self!r}: OLED {command} received {len(reply)} status bytes instead of 1')
+        status = reply[0]
+        if status:
+            status_name = status_table.get(status, f'Unknown status {status}')
+            raise IOError(f'{self!r}: OLED {command} failed: {status_name}')
 
-            data (bytes): data to write prior to the read operation
+    def oled_set_firmware_label(self, label):
+        if label is None:
+            payload = b''
+        else:
+            payload = str(label).encode('ascii')
+        reply = self._rpc_write_read(self.RPC_OLED_SET_FIRMWARE_LABEL, payload, read_length=1)
+        self._check_oled_status('set firmware label', reply, self.OLED_SET_FIRMWARE_LABEL_STATUS)
 
+    def oled_draw_text(self, x, y, text, rotation=0):
+        """ Draw text on the RTOS-managed OLED display.
 
+        Coordinates are SSD1306/u8g2 coordinates. ``rotation`` follows u8g2:
+        0 = horizontal, 1 = 90 degrees clockwise, 2 = 180 degrees, 3 = 90 degrees counter-clockwise.
         """
-        tx_len = 4 # excluding data
-        tx_len_data = tx_len + len(data)
-        # self.tx_view[:tx_len] = bytes((self.RPC_PREFIX, self.RPC_BSB_WRITE_READ, len(data) & 0xFF, len(data) >> 8))
-        self.tx_view[0] = self.RPC_PREFIX
-        self.tx_view[1] = self.RPC_BSB_WRITE_READ
-        self.tx_view[2] = len(data) & 0xFF # lsb of data length
-        self.tx_view[3] = len(data) >> 8 # msb of dat alength
-        self.tx_view[tx_len:tx_len_data] = data
-        self.sock.sendall(self.tx_view[:tx_len_data])
-        self.bsb_sent_ctr += 1
-        # print(self.bsb_sent_ctr)
-        rx_len = self.sock.recv_into(self.rx_buf)
-        return self.rx_buf[:rx_len]
+        try:
+            payload = bytearray(5)
+            payload[0:2] = int(x).to_bytes(2, 'little')
+            payload[2:4] = int(y).to_bytes(2, 'little')
+            payload[4] = int(rotation)
+            payload.extend(str(text).encode('ascii'))
+
+            reply = self._rpc_write_read(self.RPC_OLED_DRAW_TEXT, payload, read_length=1)
+            self._check_oled_status('draw text', reply, self.OLED_DRAW_TEXT_STATUS)
+        except (IOError, OSError, UnicodeEncodeError) as e:
+            self.log.warning(f'{self!r}: Failed updating OLED display text: {e!r}')
+
+
+    #########################################################
+    #  SPI interface
+    #########################################################
 
     def spi_write_read(self, spi_device, data, read_length, timeout=None):
         """ Writes `data` to SPI address `spi_device` while reading the same number of bytes, and return  the last `read_length` bytes transaction.
@@ -237,34 +566,21 @@ class TCPipe:
         """
         if not isinstance(data, (bytes, bytearray)):
             data = bytes(data)
-        tx_len = 6
-        self.tx_view[0] = self.RPC_PREFIX
-        self.tx_view[1] = self.RPC_SPI_WRITE_READ
-        self.tx_view[2] = 2 + len(data) + read_length  # SPI port, read_length & data length
-        self.tx_view[3] = 0 # data length assumed to be < 256-2
-        self.tx_view[4] = spi_device # SPI port
-        self.tx_view[5] = read_length
+        payload = bytes((spi_device, read_length)) + data + b'\x00' * read_length
+        reply = self._rpc_write_read(
+            self.RPC_SPI_WRITE_READ,
+            payload,
+            timeout=timeout)
+        if reply[0]:
+            raise IOError(f'{self!r}: SPI Reply has error code {reply[0]}')
+        if len(reply) != 1 + len(data) + read_length:
+            raise IOError(f'{self!r}: SPI Received {len(reply)} bytes instead of {1 + len(data) + read_length} bytes')
 
-        self.tx_view[tx_len: tx_len + len(data)] = data
-        self.tx_view[tx_len + len(data): tx_len + len(data) + read_length] = b'\x00' * read_length
+        return reply[len(reply) - read_length: len(reply)]
 
-        # print(f'TCPIPE SPI: Sending {self.tx_buf[:tx_len + len(data) + read_length]}')
-        self.sock.sendall(self.tx_view[:tx_len + len(data) + read_length])
-        if timeout:
-            old_timeout = self.sock.gettimeout()
-            self.sock.settimeout(timeout)
-        try:
-            rx_len = self.sock.recv_into(self.rx_buf)
-        finally:
-            if timeout:
-                self.sock.settimeout(old_timeout)
-        if self.rx_buf[0]:
-            raise IOError(f'{self!r}: SPI Reply has error code {self.rx_buf[0]}')
-        if rx_len != 1 + len(data) + read_length:
-            raise IOError(f'{self!r}: SPI Received {rx_len} bytes instead of {1 + len(data) + read_length} bytes')
-        # print(f'received {self.rx_buf[:rx_len]}, returning {self.rx_buf[rx_len-read_length:rx_len]}')
-
-        return self.rx_buf[rx_len - read_length: rx_len]
+    #########################################################
+    #  FPGA bitstream programming
+    #########################################################
 
     def set_fpga_bitstream(self, data, crc=0, timeout=40):
         """ Programs the FPGA with the provided bitstream.
@@ -297,42 +613,29 @@ class TCPipe:
     def is_fpga_programmed(self):
         return True
 
+    #########################################################
+    #  Core register access
+    #########################################################
+
     def core_reg_read(self, reg):
-        tx_len = 5
-        self.tx_view[0] = self.RPC_PREFIX
-        self.tx_view[1] = self.RPC_CORE_REG_READ
-        self.tx_view[2] = 1
-        self.tx_view[3] = 0
-        self.tx_view[4] = reg # register number
+        reply = self._rpc_write_read(self.RPC_CORE_REG_READ, bytes((reg,)))
+        if reply[0]:
+            raise IOError(f'core_reg_read reply has error code {reply[0]}')
+        if len(reply) != 5:
+            raise IOError(f'core_reg_read received {len(reply)} bytes instead of {5} bytes')
 
-        # print(f'Sending {self.tx_buf[:tx_len + len(data) + read_length]}')
-        self.sock.sendall(self.tx_view[:tx_len])
-        rx_len = self.sock.recv_into(self.rx_buf)
-        if self.rx_buf[0]:
-            raise IOError(f'core_reg_read reply has error code {self.rx_buf[0]}')
-        if rx_len != 5:
-            raise IOError(f'core_reg_read received {rx_len} bytes instead of {5} bytes')
-        # print(f'received {self.rx_buf[:rx_len]}, returning {self.rx_buf[rx_len-read_length:rx_len]}')
-
-        return int.from_bytes(self.rx_buf[1:5], 'little')
+        return int.from_bytes(reply[1:5], 'little')
 
     def core_reg_write(self, reg, value):
-        tx_len = 4+1+4
-        self.tx_view[0] = self.RPC_PREFIX
-        self.tx_view[1] = self.RPC_CORE_REG_WRITE
-        self.tx_view[2] = 5 # register + value word
-        self.tx_view[3] = 0
-        self.tx_view[4] = reg # register number
-        self.tx_view[5: 9] = value.to_bytes(4, 'little');
+        payload = bytes((reg,)) + value.to_bytes(4, 'little')
+        reply = self._rpc_write_read(self.RPC_CORE_REG_WRITE, payload, read_length=1)
+        if reply[0]:
+            raise IOError(f'core_reg_write reply has error code {reply[0]}')
 
-        # print(f'Sending {self.tx_buf[:tx_len + len(data) + read_length]}')
-        self.sock.sendall(self.tx_view[:tx_len])
-        rx_len = self.sock.recv_into(self.rx_buf)
-        if self.rx_buf[0]:
-            raise IOError(f'core_reg_read reply has error code {self.rx_buf[0]}')
-        if rx_len != 1:
-            raise IOError(f'core_reg_read received {rx_len} bytes instead of {1} byte')
-        # print(f'received {self.rx_buf[:rx_len]}, returning {self.rx_buf[rx_len-read_length:rx_len]}')
+
+    #########################################################
+    #  ADC synchronization
+    #########################################################
 
     def adc_sync(self):
         """ Synchronizes the ADCs.
@@ -340,17 +643,7 @@ class TCPipe:
         Parameters: None
 
         """
-        tx_len = 4 # RPC header, I2C address, read length,  excluding data
-        self.tx_view[0] = self.RPC_PREFIX
-        self.tx_view[1] = self.RPC_ADC_SYNC
-        self.tx_view[2] = 0   # I2C addr, read_length & data
-        self.tx_view[3] = 0
-
-        # print(f'Sending {bytes(self.tx_view[:tx_len_data]).hex(":")}')
-        self.sock.sendall(self.tx_view[:tx_len])
-
-        b = self.sock.recv(1024)
-        return b
+        return self._rpc_write_read(self.RPC_ADC_SYNC)
 
 class TCPipe_I2C:
     """
@@ -657,6 +950,24 @@ class TCPipe_BSB_MMI(BSB_MMI):
         return repr(self.tcpipe)
 
     def _send_command(self, cmd, expected_reply_length, retry=1, resync=False, **kwargs):
+        """ Send a BSB command and return the reply.
+
+        Parameters:
+            cmd (bytes): the BSB command to send.
+            expected_reply_length (int): the expected length of the reply.
+            retry (int): (unused)
+            resync (bool): (unused)
+            **kwargs: (unused)
+
+        Returns:
+            bytes: the reply from the BSB command. b'' for a write-only command
+
+        Raises:
+            IOError: if the reply is not the expected length.
+        """
+        if expected_reply_length == 0:
+            self.tcpipe.bsb_batch_write((cmd,))
+            return b''
         reply = self.tcpipe.bsb_write_read(cmd)
         if len(reply) != expected_reply_length + 1:
             raise IOError(f'{self!r}: Unexpected number of reply bytes. Got {len(reply)} bytes ({reply.hex(",")}), expected {expected_reply_length + 1} bytes')

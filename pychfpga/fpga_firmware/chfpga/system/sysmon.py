@@ -53,10 +53,11 @@ class SYSMON(MMI):
     SEQ_ADC_ACQTIME1_ADDR = 0x4E
     SEQ_ADC_ACQTIME2_ADDR = 0x4F
 
-    def __init__(self, *, router, router_port, verbose=1):
+    def __init__(self, *, router, router_port, state, verbose=1):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port)
+        self.state = state
         fpga = self.fpga
         self.supported_by_platform = fpga.PLATFORM_ID in (
             fpga._PLATFORM_ID_ML605,

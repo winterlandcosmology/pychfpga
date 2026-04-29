@@ -9,7 +9,7 @@ from collections import Counter
 
 import sys
 sys.modules.setdefault('freetype', type(sys)('freetype'))  # stub missing optional dep
-from pychfpga.mdns_discovery import mdns_discover
+from pychfpga.common.mdns_discovery import mdns_discover
 from pychfpga.hardware.crs import CRS  # registers 'crs' part number  # noqa: F401
 
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
@@ -19,7 +19,7 @@ async def one(idx, *, timeout, retries):
     t0 = time.time()
     try:
         ibs, _ = await mdns_discover(
-            iceboards=[('crs', '37')], icecrates=[],
+            boards=[('crs', '37')], crates=[],
             timeout=timeout, retries=retries)
         ok = any(int(ib.serial) == 37 for ib in (ibs or []))
         res = [ib.serial for ib in (ibs or [])]

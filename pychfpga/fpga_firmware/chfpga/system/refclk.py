@@ -9,11 +9,10 @@
     2012-09-23 JFC: Removed MMCM status registers. Converted bitfield list to independent variables. Commented out set_refclk200_phase.
 """
 
-from ..mmi import MMI, BitField, CONTROL, STATUS, DRP
-
 import logging
 import time
 import numpy as np
+from ..mmi import MMI, BitField, CONTROL, STATUS, DRP
 
 class REFCLK(MMI):
 
@@ -48,9 +47,10 @@ class REFCLK(MMI):
     SYNC_IN                = BitField(STATUS, 0x02, 0, doc='reflects the level on the sync_in port')
     # SYNC_DELAY_READBACK  = BitField(STATUS, 0x02, 0, width=5,doc='Reads back the delay set onthe SYNC IODELAY')
 
-    def __init__(self, *, router, router_port):
+    def __init__(self, *, router, router_port, state):
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port)
+        self.state = state
 
     def init(self):
         # Sets the REFCLK delay to zero by default.

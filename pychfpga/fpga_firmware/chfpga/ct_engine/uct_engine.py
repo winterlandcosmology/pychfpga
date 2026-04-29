@@ -20,6 +20,10 @@ class CT1Regs(MMI):
     IN_FRAME_CTR = BitField(STATUS, 1, 0, width=8, doc='Counts frames coming into the CT engine')
     OUT_FRAME_CTR = BitField(STATUS, 2, 0, width=8, doc='Counts frames coming out of the CT engine')
 
+    def __init__(self, *, router, router_port, state):
+        super().__init__(router=router, router_port=router_port)
+        self.state = state
+
 class CT2Regs(MMI):
 
     ALIGN_MON_RESET = BitField(CONTROL, 0, 0, doc='Resets the ALIGN monitoring statistics')
@@ -32,6 +36,10 @@ class CT2Regs(MMI):
 
     NUMBER_OF_CT2_INPUTS = 4
     NUMBER_OF_CT2_OUTPUTS = 4
+
+    def __init__(self, *, router, router_port, state):
+        super().__init__(router=router, router_port=router_port)
+        self.state = state
 
     def set_lane_map(self, premap, postmap):
         """ Sets the lane remapping.
@@ -76,6 +84,10 @@ class CT3Regs(MMI):
     RST_STATUS        = BitField(STATUS, 0, 0, doc='Reset line state')
     ALIGN_MON_WORD    = BitField(STATUS, 2, 0, width=16, doc='ALIGN monitoring word, selected by ALIGN_MON_SOURCE and ALIGN_MON_LANE')
 
+    def __init__(self, *, router, router_port, state):
+        super().__init__(router=router, router_port=router_port)
+        self.state = state
+
     def init(self):
         self.SLOT_GROUP =  (self.fpga.slot - 1) // 4
         self.ZERO_DATA_ON_LANE_ERROR = 1
@@ -93,11 +105,12 @@ class UCTEngine(MMIRouter):
         'BPLINKS': 3
         }
 
-    def __init__(self,*, router, router_port, verbose=1):
+    def __init__(self,*, router, router_port, state, verbose=1):
         self.logger = logging.getLogger(__name__)
         self.verbose = verbose
 
         super().__init__(router=router, router_port=router_port)
+        self.state = state
 
         self.CT_LEVEL = self.fpga.CT_LEVEL
 
@@ -106,19 +119,20 @@ class UCTEngine(MMIRouter):
         self.CT1 = self.CT2 = self.CT3 = self.GTLINKS = None
 
         # Instantiate Level-1 CT registers
-        self.CT1 = CT1Regs(router=self, router_port='CT1')
+        self.CT1 = CT1Regs(router=self, router_port='CT1', state=self.state.add("ct1"))
 
         if self.CT_LEVEL >=2:
             lane_groups = (('pcb', 1, 3),) # (name, # of bypass lanes, # of links)
-            self.CT2 = CT2Regs(router=self, router_port='CT2')
+            self.CT2 = CT2Regs(router=self, router_port='CT2', state=self.state.add("ct2"))
             self.BPLINKS = xxvglink.XXVGLinkArray(
                 router = self,
                 router_port='BPLINKS',
                 lane_groups=lane_groups,
+                state=self.state.add("bplinks"),
                 verbose=1)
 
         if self.CT_LEVEL >=3:
-            self.CT3 = CT3Regs(router=self, router_port='CT3')
+            self.CT3 = CT3Regs(router=self, router_port='CT3', state=self.state.add("ct3"))
 
 
 

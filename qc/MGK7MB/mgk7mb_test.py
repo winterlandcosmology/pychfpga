@@ -28,6 +28,7 @@ import labpy
 import pychfpga
 
 from pychfpga import fpga_array 
+from pychfpga.common.mdns_discovery import mdns_resolve
 from pychfpga.common import run_async, async_to_sync
 from pychfpga.hardware.interfaces import ipmi_fru
 
@@ -609,7 +610,7 @@ class TestMGK7MBNetwork(TestUtils):
             #THIS HAD TO BE MODIFIED TO FIT THE NEW VERSION
             #ip = pychfpga.mdns_resolve(f'iceboard{self.params.serial}.local', timeout=2)
 
-            ip = pychfpga.mdns_discovery.mdns_resolve(f'iceboard{self.params.serial}.local', timeout=2)
+            ip = mdns_resolve(f'iceboard{self.params.serial}.local', timeout=2)
            
             
             if ip:
@@ -623,7 +624,7 @@ class TestMGK7MBNetwork(TestUtils):
             # no, so if requested, try to find an unprogrammed iceboard
             if without_serial:
                 print(f'Trial {count+1}/30: looking for iceboard.local')
-                ip = pychfpga.mdns_discovery.mdns_resolve('iceboard.local', timeout=2)
+                ip = mdns_resolve('iceboard.local', timeout=2)
                 if ip:
                     ca = fpga_array.FPGAArray(f'MGK7MB {ip}', ping=1, ignore_missing_boards=True)
                     if ca.ib:

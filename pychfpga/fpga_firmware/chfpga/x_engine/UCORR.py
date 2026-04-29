@@ -48,8 +48,9 @@ class UCORR(MMI):
     NCLK_PER_BIN  = BitField(STATUS, 5, 0, width=4, doc="Number of clocks required to send all channels for one bin")
 
 
-    def __init__(self, *, router, router_port, verbose=0):
+    def __init__(self, *, router, router_port, state, verbose=0):
         super().__init__(router=router, router_port=router_port)
+        self.state = state
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
         self.corr_config_id = 0  # Number that is increased each time the correlator configuration is changed.

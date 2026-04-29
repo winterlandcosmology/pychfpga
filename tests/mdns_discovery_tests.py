@@ -1,7 +1,7 @@
 """Regression test for repeated calls to ``mdns_discover``.
 
 The test patches the zeroconf transport classes used by
-``pychfpga.mdns_discovery`` so that the function can be exercised offline.
+``pychfpga.common.mdns_discovery`` so that the function can be exercised offline.
 A stub ``AsyncServiceBrowser`` synthesizes a burst of service announcements
 each time it is constructed; the per-service handler is artificially slowed
 down so that some of its tasks are still in flight when ``mdns_discover``
@@ -172,7 +172,7 @@ class RepeatedMdnsDiscoverTests(unittest.TestCase):
 
     def test_repeated_calls_do_not_leak_tasks(self):
         # Imported lazily so the patch targets the module's attributes.
-        from pychfpga import mdns_discovery
+        from pychfpga.common import mdns_discovery
 
         async def runner():
             baseline = {t for t in asyncio.all_tasks() if t is not asyncio.current_task()}
@@ -180,8 +180,8 @@ class RepeatedMdnsDiscoverTests(unittest.TestCase):
             with _patch_mdns(mdns_discovery):
                 for _ in range(5):
                     await mdns_discovery.mdns_discover(
-                        iceboards=[('*', '*')],
-                        icecrates=[],
+                        boards=[('*', '*')],
+                        crates=[],
                         timeout=0.3,
                     )
 
@@ -207,7 +207,7 @@ class RepeatedMdnsDiscoverTests(unittest.TestCase):
         retrieves the exception from every completed handler task so they
         are GC'd cleanly."""
 
-        from pychfpga import mdns_discovery
+        from pychfpga.common import mdns_discovery
 
         unhandled = []
 
@@ -223,8 +223,8 @@ class RepeatedMdnsDiscoverTests(unittest.TestCase):
                 with _patch_mdns(mdns_discovery, info_cls=_FakeAsyncServiceInfoRaises):
                     for _ in range(3):
                         await mdns_discovery.mdns_discover(
-                            iceboards=[('*', '*')],
-                            icecrates=[],
+                            boards=[('*', '*')],
+                            crates=[],
                             timeout=0.3,
                         )
                 # Force a GC pass to flush any "Task exception was never
@@ -257,7 +257,7 @@ class RepeatedMdnsDiscoverTests(unittest.TestCase):
         giving up. This protects against transient board ARM / TCPIPE
         unresponsiveness."""
 
-        from pychfpga import mdns_discovery
+        from pychfpga.common import mdns_discovery
 
         # Stub Motherboard / Crate registry plumbing the handler needs.
         # Patch the bits we need so the handler's get_unique_instance /
@@ -312,8 +312,8 @@ class RepeatedMdnsDiscoverTests(unittest.TestCase):
                 classmethod(lambda cls: []),
             ):
                 ibs, _ = await mdns_discovery.mdns_discover(
-                    iceboards=[('CRS', '0037')],
-                    icecrates=[],
+                    boards=[('CRS', '0037')],
+                    crates=[],
                     timeout=0.3,
                     retries=3,
                 )
@@ -332,7 +332,7 @@ class RepeatedMdnsDiscoverTests(unittest.TestCase):
         """Wildcard-only searches have no completion criterion, so they should
         run exactly once even if ``retries > 0``."""
 
-        from pychfpga import mdns_discovery
+        from pychfpga.common import mdns_discovery
 
         _CountingAsyncServiceBrowser.construction_count = 0
         _CountingAsyncServiceBrowser.succeed_on_attempt = 999  # never satisfies
@@ -345,8 +345,8 @@ class RepeatedMdnsDiscoverTests(unittest.TestCase):
                 AsyncServiceInfo=_FakeAsyncServiceInfo,
             ):
                 await mdns_discovery.mdns_discover(
-                    iceboards=[('*', '*')],
-                    icecrates=[],
+                    boards=[('*', '*')],
+                    crates=[],
                     timeout=0.2,
                     retries=3,
                 )

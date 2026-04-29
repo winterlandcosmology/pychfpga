@@ -8,7 +8,6 @@ History:
 """
 
 from ..mmi import MMI, BitField, CONTROL, STATUS
-from pychfpga.common import State
 import numpy as np
 import asyncio
 

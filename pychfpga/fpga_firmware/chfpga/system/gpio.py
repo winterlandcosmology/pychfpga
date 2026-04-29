@@ -139,8 +139,9 @@ class GPIO(MMI):
     GPIO_RST_IN                = BitField(CONTROL, 37, 1, doc="FPGA I/O line")
     ARM_IRQ_IN                 = BitField(CONTROL, 37, 0, doc="FPGA I/O line")
 
-    def __init__(self, *,  router,  router_port):
+    def __init__(self, *,  router,  router_port, state):
         super().__init__(router=router, router_port=router_port)
+        self.state = state
         self._lock() # prevent further property creation to avoid creating attributes by mistake
 
     def get_bitstream_date(self):

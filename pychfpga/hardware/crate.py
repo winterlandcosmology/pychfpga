@@ -57,6 +57,13 @@ class Crate(HardwareMap):
         return f'{self.__class__.__name__}(serial={self.serial})'
 
     @classmethod
+    def get_network_discovery_function(cls):
+        """Return the default function to use for network crate discovery."""
+        from pychfpga.common.mdns_discovery import mdns_discover
+
+        return mdns_discover
+
+    @classmethod
     def get_unique_instance(cls, new_class=None, serial=None, crate_number=None):
         """
         Creates a new Crate instance if one with matching crate_number or

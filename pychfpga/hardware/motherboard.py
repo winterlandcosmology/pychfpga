@@ -205,6 +205,22 @@ class Motherboard(HardwareMap):
         self._array_method_classes = self.get_array_method_classes()
         return self._array_method_classes
 
+    @classmethod
+    def get_network_discovery_function(cls):
+        """Return the function to use for network discovery of CRS backplanes."""
+        from pychfpga.common.mdns_discovery import mdns_discover
+
+        return mdns_discover
+
+    @classmethod
+    async def set_platform_firmware(
+            cls,
+            boards=None,
+            arm_firmware_pathname=None,
+            **kwargs):
+        """Ensure platform ARM firmware is loaded and running before opening connections."""
+        return None
+
     # *************************
     # Motherboard-specific hardware map management methods
     # *************************
@@ -663,7 +679,8 @@ class Motherboard(HardwareMap):
     async def init_fpga_async(self, **kwargs):
         """ Initializes the FPGA firmware.
         """
-        await self.fpga.init_async(**kwargs)
+        with self.tcpipe.aggregate_commands():
+            await self.fpga.init_async(**kwargs)
 
     # ****************************
     # Metrics

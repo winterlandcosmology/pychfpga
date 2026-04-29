@@ -73,9 +73,10 @@ class FreqCtr(MMI):
     FREQ_COUNT = BitField(STATUS, 3, 0, width=32, doc='Frequency count (number of rising edges seen on the source signal during the gate time)')
     DONE = BitField(STATUS, 4, 0, doc='Frequency counting is complete (gate time has been reached).')
 
-    def __init__(self, *, router, router_port, verbose=1):
+    def __init__(self, *, router, router_port, state, verbose=1):
         self.verbose = verbose
         super().__init__(router=router, router_port=router_port)
+        self.state = state
         self._lock()  # prevent further property creation to avoid creating attributes by mistake
 
 

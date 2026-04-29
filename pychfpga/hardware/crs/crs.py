@@ -7,6 +7,7 @@ import time
 import base64
 import socket
 import asyncio
+from os import path
 
 # Pypi packages
 
@@ -22,6 +23,7 @@ from pychfpga.hardware import Motherboard
 from pychfpga.common import run_async, async_to_sync, Ccoll
 from pychfpga.hardware.interfaces import TCPipe, TCPipe_I2C, TCPipe_SPI, ipmi_fru
 from pychfpga.fpga_firmware import FPGAFirmware
+from . import crs_discovery
 
 from ..i2c_devices.pca9575 import pca9575 # I2C 16-bit IO Expander
 from ..i2c_devices.pca6524 import pca6524 # I2C 24-bit IO Expander
@@ -33,7 +35,6 @@ from ..i2c_devices.eeprom import eeprom
 from ..i2c_devices.qsfp import QSFP as qsfp
 from ..i2c_devices.gpio import GPIO
 from ..i2c_devices.hmc7044 import hmc7044  # Dual PLL
-from ..i2c_devices.ssd1306 import SSD1306
 
 class iic_dummy:
     def __init__(self, *args, **kwargs):
@@ -79,9 +80,13 @@ class CRS(Motherboard):
     # One day we'll be able to query the board directly.
     REV0_SERIALS = ('429', '0429', # returned by SN003 with old TCPipe firmware that didn't read the EEPROM and used the FPGA DNA
                     '003',)
-    NO_I2C = ('000') # could not read eeprom, so assuming I2C is bad
+    NO_I2C = ('000') # Serials of boards that could not read eeprom, so assuming I2C is bad
 
     port = 7  # port number on which to access the platform `hostname`
+
+    REQUIRED_TCPIPE_VERSION = "1.0" # Requird version of the TCPipe firmware running on the board.
+    DEFAULT_ARM_FIRMWARE_NAME = "tcpipe.elf"
+    DEFAULT_ARM_FIRMWARE_PATHNAME = path.join(path.dirname(__file__), 'arm_firmware', DEFAULT_ARM_FIRMWARE_NAME)
 
 
     TX_TO_RX_LANE_MAP = { # (Tx_slot, Tx_lane):(Rx_slot, Rx_lane), slots are 0-based
@@ -97,6 +102,10 @@ class CRS(Motherboard):
     REFCLK_BP = 1
     REFCLK_MB_SMA = 2
 
+    OLED_CONFIG_NAME_X = 118
+    OLED_CONFIG_NAME_Y = 30
+    OLED_ROTATED_CLOCKWISE_TEXT_ROTATION = 3
+
     def __init__(self, hostname=None, serial=None, slot=None, subarray=None, **kwargs):
         super().__init__(
             hostname=hostname,
@@ -108,6 +117,7 @@ class CRS(Motherboard):
         self.spi = None
         # self.mmi = None
         self.tcpipe = None
+        self.tcpipe_version = None
         self._is_open = None
         self.fpga = None  # firmware object
 
@@ -117,6 +127,19 @@ class CRS(Motherboard):
 
     def open(self):
         run_async(self.open_async())
+
+    @classmethod
+    def get_network_discovery_function(cls):
+        """Return the function to use for network discovery of CRS backplanes."""
+        return crs_discovery.discover_crs
+
+    @classmethod
+    async def set_platform_firmware(cls, boards=None, firmware_pathname=None, **kwargs):
+
+        return await crs_discovery.set_platform_firmware(
+            boards=boards or [],
+            required_version=cls.REQUIRED_TCPIPE_VERSION,
+            firmware_pathname=firmware_pathname or cls.DEFAULT_ARM_FIRMWARE_PATHNAME)
 
 
     async def open_platform_async(self, **kwargs):
@@ -181,7 +204,8 @@ class CRS(Motherboard):
         self.i2c1_eeprom_data = eeprom(self.iic, address=0x57, bus_name=(i2c1_switch0, 0), address_width=7, max_read_length=255, max_write_length=8, write_page_size=8)
         self.i2c1_eeprom_serial = eeprom(self.iic, address=0x5F, bus_name=(i2c1_switch0, 0), address_width=8, max_read_length=255)  # must read 16 bytes from memory address 0x80
 
-        self.display = disp = SSD1306(self.iic, address=0x3C, port=(i2c1_switch0, 0))
+        # self.display = disp = SSD1306(self.iic, address=0x3C, port=(i2c1_switch0, 0))
+        self.display = None  # OLED initialization and status refresh are handled by tcpipe_rtos.
 
         # I2C1 Switch 0 port 1 devices
         #   0x18: DDR4 SODIMM Temp sensor
@@ -398,7 +422,8 @@ class CRS(Motherboard):
         # self._is_open = True
 
         # self.fpga = self.firmware(self)
-        await self.fpga.open_async()
+        with self.tcpipe.aggregate_commands():
+            await self.fpga.open_async()
 
 
 
@@ -419,33 +444,6 @@ class CRS(Motherboard):
         self.fpga.GPIO.PLL_SYNC=0
 
 
-        self.logger.info(f'{self!r}: Initializing CRS display')
-        if disp := self.display:
-            await asyncio.sleep(0.2) # make sure the display has time to finish resetting since the FPGA was programmed and started sending a clock
-            for trial in range(30):
-                try:
-                    disp.select()
-                    disp.init()
-                    disp.clear()
-                    disp.hline(0,127,0)
-                    disp.hline(0,127,31)
-                    disp.vline(0,0,31)
-                    disp.vline(127,0,31)
-                    disp.vline(13,0,31)
-                    disp.print(f'{self.serial}', x=1, y=28, fg=1, bg=0, font_size=12, rotate=True)
-                    disp.print(f'{self.hostname}', x=20, y=2, font_size=12)
-                    t=self.fpga.SYSMON.temperature()
-                    disp.print(f'Core={t:0.1f}°C', x=20, y=14, font_size=12)
-                    disp.fill(120,0,127,31)
-                    disp.print(f'chFPGA', x=120, y=30, fg=0, bg=1, font_size=7, rotate=True)
-                    disp.update()
-                    break
-                except OSError as e:
-                    # self.logger.warn(f'{self!r}: Error Initializing CRS display on trial {trial}. Error is: {e!r}')
-                    await asyncio.sleep(0.01)
-            else:
-                self.logger.warn(f'{self!r}: Failed Initializing CRS display after {trial} trials')
-                self.display = None
 
 
 
@@ -580,7 +578,8 @@ class CRS(Motherboard):
 
 
         self.logger.info(f'{self!r}: Programming PLL before configuring the FPGA. {fw_params=}')
-        self.input_reference = await self.pll_init_async(fvco=fw_params['sampling_frequency'])  # add fw params here if we want to have mode/application-specific frequencies sent to the FPGA
+        with self.tcpipe.aggregate_commands():
+            self.input_reference = await self.pll_init_async(fvco=fw_params['sampling_frequency'])  # add fw params here if we want to have mode/application-specific frequencies sent to the FPGA
 
         # self.logger.warn(f'{self!r}: Using backplane clock to synchronize PLL outputs to REFCLK. This mignt not be right')
         # self.GPIO.CLK10_SEL=1 # Select clock source to re-sync the PLL: 0: MB SMA, 1: BP
@@ -608,6 +607,13 @@ class CRS(Motherboard):
 
         fpga_fw = fw_cls(self, mode=firmware_mode, **fw_params)
         self.set_fpga_firmware(fpga_fw)
+        self.tcpipe.oled_set_firmware_label('chFPGA')
+        self.tcpipe.oled_draw_text(
+            self.OLED_CONFIG_NAME_X,
+            self.OLED_CONFIG_NAME_Y,
+            firmware_mode,
+            rotation=self.OLED_ROTATED_CLOCKWISE_TEXT_ROTATION)
+
 
     async def get_fpga_bitstream_crc_async(self):
         """ Return the signature of the firmware currently configured in the

@@ -55,9 +55,10 @@ class PROBER(MMI):
 
     DATA_BUFFER_CAPACITY = 3 # Number of full frames that can fit in the FIFOs.
 
-    def __init__(self,  *, router, router_port, instance_number):
+    def __init__(self,  *, router, router_port, instance_number, state):
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.state = state
         self._lock()  # Prevent accidental addition of attributes (if, for example, a value is assigned to a wrongly-spelled property)
     # Specialized functions
 
