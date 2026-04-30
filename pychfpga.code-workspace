@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../wtl.namespace"
+		},
+		{
+			"path": "../t0"
+		},
+		{
+			"path": "../tcpipe"
+		}
+	],
+	"settings": {}
+}
