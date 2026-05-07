@@ -48,3 +48,35 @@ services:
       timeout: 5s
       retries: 18
       start_period: 15s
+
+  fpga_watchdog:
+    image: docker:cli
+    restart: unless-stopped
+    depends_on:
+      raw_acq:
+        condition: service_started
+      fpga_master:
+        condition: service_started
+    working_dir: /workspace
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/workspace:ro
+      - "${PYCHFPGA_DATA_DIR}:/data"
+    environment:
+      PYCHFPGA_DATA_DIR: "/data"
+      WATCHDOG_LOG_FILE: "/data/swartfontein-data/current/fpga_master_debug.log"
+      WATCHDOG_ACTION_LOG: "/data/swartfontein-data/current/fpga_watchdog.log"
+      WATCHDOG_POLL_INTERVAL_SEC: "${WATCHDOG_POLL_INTERVAL_SEC:-5}"
+      WATCHDOG_RESTART_DELAY_SEC: "${WATCHDOG_RESTART_DELAY_SEC:-60}"
+      WATCHDOG_COOLDOWN_SEC: "${WATCHDOG_COOLDOWN_SEC:-20}"
+      WATCHDOG_RAW_HEALTH_TIMEOUT_SEC: "${WATCHDOG_RAW_HEALTH_TIMEOUT_SEC:-90}"
+      WATCHDOG_DRY_RUN: "${WATCHDOG_DRY_RUN:-0}"
+      WATCHDOG_STATE_DIR: "/tmp/fpga-watchdog"
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        while true; do
+          /workspace/scripts/docker/watch_fpga_errors.sh
+          sleep "$${WATCHDOG_POLL_INTERVAL_SEC:-5}"
+        done

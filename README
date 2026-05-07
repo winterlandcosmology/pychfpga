@@ -302,6 +302,38 @@ Useful host-side monitoring commands::
     curl http://127.0.0.1:54321/status
     curl --compressed http://127.0.0.1:54321/get-monitoring-data
 
+Quick watchdog auto-restart
+---------------------------
+
+If you need a pragmatic recovery mechanism (without building full fault recovery in ``pychfpga``), use ``scripts/docker/watch_fpga_errors.sh``. It scans new lines in ``fpga_master_debug.log`` and, on matching critical FPGA-MMI error signatures, performs:
+
+- stop ``fpga_master`` and ``raw_acq``
+- wait 60 seconds
+- start ``raw_acq`` first, then ``fpga_master``
+
+Run once manually::
+
+    ./scripts/docker/watch_fpga_errors.sh
+
+Dry-run mode (detect only, no restart)::
+
+    WATCHDOG_DRY_RUN=1 ./scripts/docker/watch_fpga_errors.sh
+
+The script keeps its state in ``/tmp/fpga-watchdog`` by default, so it only reacts to newly appended log lines and has a cooldown window (default 20s) to avoid tight restart loops. On first run it initializes at EOF (to avoid acting on old errors) unless ``WATCHDOG_SCAN_FROM_START=1`` is set.
+
+Each invocation writes watchdog logs to stdout and to ``/data/swartfontein-data/current/fpga_watchdog.log`` (or the configured ``WATCHDOG_ACTION_LOG``). If that path is temporarily unavailable, it falls back to ``/tmp/fpga-watchdog/actions.log``.
+When running inside the Compose sidecar, the script auto-detects the actual Compose project name from Docker labels before locating ``raw_acq`` and ``fpga_master`` containers.
+
+Cron option (host-side, every minute)::
+
+    * * * * * cd /path/to/pychfpga && ./scripts/docker/watch_fpga_errors.sh
+
+Compose sidecar option (enabled by default)::
+
+    docker compose up -d fpga_watchdog
+
+The sidecar uses the Docker socket and runs the same script every 5 seconds by default. Tuning knobs are available as env vars (for example ``WATCHDOG_POLL_INTERVAL_SEC``, ``WATCHDOG_RESTART_DELAY_SEC``, ``WATCHDOG_COOLDOWN_SEC``).
+
 Boot on Raspberry Pi
 --------------------
 

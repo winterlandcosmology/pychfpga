@@ -315,7 +315,7 @@ TEST:
     corr_name: "TEST"
     comment: "corr16 mode, one board, capture_n_inputs=[0,2,7]"
     run_name: '%(isotime)s_%(corr_name)s'
-    data_folder: '/home/vbidula/pychfpga/corr16tests'
+    data_folder: '/data/icebox'
     run_folder: '%(data_folder)s/%(run_name)s'
     current_folder: '%(data_folder)s/current'  # symlink that points to the latest run folder
 
