@@ -319,7 +319,7 @@ class FPGAMaster(object):
             for ib in self.raw_acq_ibs[server_name]:
                     ip_addr, port, eth_addr = targets[(ib.hostname, ib.port)]
                     self.log.info(f'{self!r} Setting data transmission address of board {ib.get_id()} to {ip_addr}:{port}({eth_addr})')
-                    await ib.set_data_target_address_async(ip_addr, port, eth_addr)
+                    await ib.set_udp_data_target_address_async(ip_addr, port, eth_addr)
         self.log.info(f'{self!r}: RawAcq server setup successfully')
 
 

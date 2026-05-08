@@ -117,8 +117,8 @@ class TCPipe:
         RPC_GET_RPC_FUNCTIONS: 'get_rpc_functions',
         RPC_IIC_WRITE_READ: 'iic_write_read',
         RPC_SPI_WRITE_READ: 'spi_write_read',
-        RPC_CORE_REG_READ: 'core_reg_read',
-        RPC_CORE_REG_WRITE: 'core_reg_write',
+        RPC_CORE_REG_READ: 'read_reg',
+        RPC_CORE_REG_WRITE: 'write_reg',
         RPC_ADC_SYNC: 'adc_sync',
         RPC_OLED_DRAW_XBM: 'oled_draw_xbm',
         RPC_OLED_SET_FIRMWARE_LABEL: 'oled_set_firmware_label',
@@ -127,6 +127,9 @@ class TCPipe:
     }
     RPC_PERF_LOG_INTERVAL = 500
 
+    #: TCPipe processor-side register index for UDP data port (see :meth:`set_local_data_port_number`).
+    _UDP_DATA_PORT_REG = 2
+    #: Deprecated alias for `_UDP_DATA_PORT_REG` (prefer :meth:`set_local_data_port_number`).
     CORE_REG_UDP_DATA_PORT = 2
 
     opened_sockets = {}
@@ -174,6 +177,23 @@ class TCPipe:
             self.sock = None
 
     def _rpc_write_read(self, rpc_id, payload=b'', read_length=None, read_until=None, timeout=None):
+        """Execute a RPC command and return the reply.
+
+
+        Parameters:
+            rpc_id (int): The RPC ID to write.
+            payload (bytes): The payload to write.
+            read_length (int): The number of bytes to read.
+            read_until (bytes): The bytes to read until.
+            timeout (float): The timeout in seconds.
+
+        Returns:
+            bytes: The reply from the TCPipe interface.
+
+        Raises:
+            ValueError: If the payload length is too long.
+            IOError: If the RPC fails.
+        """
         if self._bsb_agg_pending:
             self._bsb_batch_write_flush()
         if not isinstance(payload, (bytes, bytearray, memoryview)):
@@ -614,23 +634,43 @@ class TCPipe:
         return True
 
     #########################################################
-    #  Core register access
+    #  TCPipe-backed BSB memory-mapped interface
     #########################################################
 
-    def core_reg_read(self, reg):
+    async def open_tcpipe_mmi_async(self):
+        """Return the TCPipe-backed BSB memory-mapped interface (``TCPipe_BSB_MMI``) for the FPGA.
+        
+        Returns:
+            TCPipe_BSB_MMI: The TCPipe-backed BSB memory-mapped interface instance.
+        """
+        return TCPipe_BSB_MMI(self)
+
+    #########################################################
+    #  TCPipe processor register access (RPC)
+    #########################################################
+
+    def read_reg(self, reg):
         reply = self._rpc_write_read(self.RPC_CORE_REG_READ, bytes((reg,)))
         if reply[0]:
-            raise IOError(f'core_reg_read reply has error code {reply[0]}')
+            raise IOError(f'read_reg reply has error code {reply[0]}')
         if len(reply) != 5:
-            raise IOError(f'core_reg_read received {len(reply)} bytes instead of {5} bytes')
+            raise IOError(f'read_reg received {len(reply)} bytes instead of {5} bytes')
 
         return int.from_bytes(reply[1:5], 'little')
 
-    def core_reg_write(self, reg, value):
+    def write_reg(self, reg, value):
         payload = bytes((reg,)) + value.to_bytes(4, 'little')
         reply = self._rpc_write_read(self.RPC_CORE_REG_WRITE, payload, read_length=1)
         if reply[0]:
-            raise IOError(f'core_reg_write reply has error code {reply[0]}')
+            raise IOError(f'write_reg reply has error code {reply[0]}')
+
+    def set_local_data_port_number(self, port):
+        """Set the UDP data-channel destination port (TCPipe processor register, not FPGA core map)."""
+        self.write_reg(self._UDP_DATA_PORT_REG, port)
+
+    def get_local_data_port_number(self):
+        """Return the UDP data-channel destination port (TCPipe processor register, not FPGA core map)."""
+        return self.read_reg(self._UDP_DATA_PORT_REG)
 
 
     #########################################################
@@ -644,6 +684,7 @@ class TCPipe:
 
         """
         return self._rpc_write_read(self.RPC_ADC_SYNC)
+
 
 class TCPipe_I2C:
     """
@@ -935,6 +976,8 @@ class TCPipe_BSB_MMI(BSB_MMI):
     Provides read/write functions for accessing the FPGA's memory-map registers through a
     Byte-serial Bus interface through the TCPipe interface.
 
+    Parameters:
+        tcpipe (TCPipe): The TCPipe object, which will be used to access the FPGA core registers.
     """
     # Maximum packet lengths, limited by the size of the FIFOs
     MAX_BSB_COMMAND_PACKET_LENGTH = 4096

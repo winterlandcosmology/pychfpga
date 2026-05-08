@@ -22,8 +22,7 @@ import socket
 import __main__
 import asyncio
 import traceback
-from dataclasses import asdict, dataclass, field
-from typing import Dict, List, Literal, Optional, Sequence, Tuple
+from typing import List, Literal, Optional, Sequence, Tuple
 
 # PyPi external packages
 import numpy as np
@@ -37,9 +36,9 @@ from wtl.metrics import Metrics
 
 
 from pychfpga.common import State, async_to_sync, run_async
-from pychfpga.hardware.interfaces import TCPipe_BSB_MMI, FPGAMmi
 
 from pychfpga.fpga_firmware import FPGAFirmware
+from .chfpga_udp import chFPGA_UDP
 from .chFPGA_receiver import chFPGA_receiver
 from .f_engine.scaler import SCALER
 # Memory-mapped interface
@@ -109,90 +108,7 @@ class chFPGA_config(object):
         return '\n'.join([f'{key} = {value!r}' for (key, value) in sorted(vars(self).items())])
 
 
-@dataclass
-class ChannelCaptureState:
-    """
-    Host-side capture settings tracked per channelizer.
-
-    This state is updated by setter calls (channelizer/funcgen/scaler/capture)
-    and is used to derive an :class:`EffectiveDecodeProfile`.
-    """
-    channel: int
-    stream_id: int
-    data_source: str = "funcgen"
-    funcgen_source: str = "adc"
-    funcgen_left_shift: int = 0
-    funcgen_right_shift: int = 0
-    fft_bypass: bool = False
-    scaler_bypass: bool = False
-    scaler_bypass_data_type: int = 0
-    scaler_cap_data_type: int = 0
-    prober_sub_period: int = 23
-
-
-@dataclass
-class CaptureRunState:
-    """
-    Capture-session settings controlled by ``start_data_capture()``.
-
-    These fields describe run-time transport context (engine, active channels,
-    burst frame count, UCAP mode) independent of per-channel DSP settings.
-    """
-    capture_engine: str = "PROBER"
-    source: str = "scaler"
-    channels: Tuple[int, ...] = field(default_factory=tuple)
-    pkt_frames_per_burst: int = 1
-    ucap_mode: int = 0
-    ucap_select: bool = False
-
-
-@dataclass(frozen=True)
-class EffectiveDecodeProfile:
-    """
-    Derived decode settings consumed by ``RawDataProcessor``.
-
-    Field intent:
-    - transport: ``capture_engine``, ``target_mode``, ``number_of_subframes``
-    - burst geometry: ``pkt_frames_per_burst``, ``packets_per_logical_frame``,
-      ``logical_frames_per_burst``
-    - source/mode: ``source``, ``scaler_cap_data_type``, ``decode_transform``
-    - output defaults: ``default_format``, ``fft_bins_per_word``
-    - strictness: ``decode_strict`` controls layout completeness checks.
-    """
-    capture_engine: str
-    source: str
-    channel: int
-    stream_id: int
-    scaler_cap_data_type: Optional[int]
-    pkt_frames_per_burst: int
-    packets_per_logical_frame: int
-    logical_frames_per_burst: int
-    number_of_subframes: int
-    target_mode: Optional[int]
-    decode_transform: str
-    default_format: str
-    fft_bins_per_word: int
-    decode_strict: bool = True
-
-    def receiver_signature(self) -> Tuple:
-        """Signature used to detect incompatible receiver reuse."""
-        return (
-            self.capture_engine,
-            self.source,
-            self.scaler_cap_data_type,
-            self.pkt_frames_per_burst,
-            self.packets_per_logical_frame,
-            self.logical_frames_per_burst,
-            self.number_of_subframes,
-            self.target_mode,
-            self.decode_transform,
-            self.default_format,
-            self.fft_bins_per_word,
-            self.decode_strict,
-        )
-
-
-class chFPGA(FPGAFirmware):
+class chFPGA(chFPGA_UDP, FPGAFirmware):
     """Provides an API to access the chFPGA firmware running on the motherboard's FPGA.
 
     The API provides the methods to establish communication with the FPGA to
@@ -201,17 +117,19 @@ class chFPGA(FPGAFirmware):
 
     This class supports two methods to access the FPGA firmware:
 
-    - Ethernet/UDP-based Memory-mapped Interface (MMI) implemented directly by the FPGA,
-      typically used by the IceBoard motherboard. The class provides SPI-based Memory-mapped
-      Interface to the FPGA, which is used to configure the networking parameters in the FPGA
-      via the on-board ARM processor.
+    - Ethernet/UDP-based Memory-mapped Interface (MMI) implemented directly by the FPGA
+      (UltraScale+ USP UDP stack), used on MGK7MB today. SPI-based access from the on-board
+      processor configures FPGA networking before that UDP link comes up.
 
-    - TCPipe, TCP-based memory-map interface typically supported by the ZCU111
+    - TCPipe: TCP-based BSB bridge on the on-board processor (ZCU111 / CRS today).
     """
 
     # Array method provider class for this firmware
     array_method_class = chFPGAArrayMethods
 
+    #: Values for ``self.BSB_TRANSPORT`` and ``PLATFORM_SUPPORT[''bsb_transport'']`` (same strings).
+    BSB_TRANSPORT_UDP = 'udp'
+    BSB_TRANSPORT_TCPIPE = 'tcpipe'
 
     # Define the motherboard models and operational modes supported by this class, and associate corresponding FPGA
     # configuration bitstreams and initialization parameters The 'clock_divider' is used to know when clock frequency
@@ -221,15 +139,15 @@ class chFPGA(FPGAFirmware):
     PLATFORM_SUPPORT = ( # [ {"platform":<platform_model>, "modes":<supported_modes>, "firmware_url":<firmware filename_or_url>, <other platform key-value parameters>}, ...]
         dict(platform="MGK7MB", modes=("shuffle16", "shuffle128",
                                        "shuffle256", "shuffle512",
-                                       "chan8", "chan4"),    firmware_url='chfpga_ice_ct.bit',         sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4),
-        dict(platform="MGK7MB", modes=("corr16",),           firmware_url='chfpga_ice_corr16.bit',     sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4),
-        dict(platform="MGK7MB", modes=("chord16",),          firmware_url='chordFPGA_MGK7MB_Rev2.bit', sampling_frequency=1200e6, processing_frequency=300e6),
-        dict(platform="ZCU111", modes=("corr4", "corr8"),    firmware_url='sifpga_zcu111_wrapper.bit', sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16),
-        dict(platform="ZCU111", modes=("chan8",),            firmware_url='chfpga_zcu111.bit',         sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16),
-        dict(platform="CRS",    modes=("corr4","corr8"),     firmware_url='chfpga_crs_corr8.bit',      sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
-        dict(platform="CRS",    modes=("corr32",),           firmware_url='chfpga_crs_corr32.bit',     sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
-        dict(platform="CRS",    modes=("corr64",),           firmware_url='chfpga_crs_corr64.bit',     sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
-        dict(platform="CRS",    modes=("chan8", "shuffle8"), firmware_url='chfpga_crs_ct.bit',         sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
+                                       "chan8", "chan4"),    firmware_url='chfpga_ice_ct.bit',         bsb_transport=BSB_TRANSPORT_UDP,    sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4),
+        dict(platform="MGK7MB", modes=("corr16",),           firmware_url='chfpga_ice_corr16.bit',     bsb_transport=BSB_TRANSPORT_UDP,    sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4),
+        dict(platform="MGK7MB", modes=("chord16",),          firmware_url='chordFPGA_MGK7MB_Rev2.bit', bsb_transport=BSB_TRANSPORT_UDP,    sampling_frequency=1200e6, processing_frequency=300e6),
+        dict(platform="ZCU111", modes=("corr4", "corr8"),    firmware_url='sifpga_zcu111_wrapper.bit', bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16),
+        dict(platform="ZCU111", modes=("chan8",),            firmware_url='chfpga_zcu111.bit',         bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16),
+        dict(platform="CRS",    modes=("corr4","corr8"),     firmware_url='chfpga_crs_corr8.bit',      bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
+        dict(platform="CRS",    modes=("corr32",),           firmware_url='chfpga_crs_corr32.bit',     bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
+        dict(platform="CRS",    modes=("corr64",),           firmware_url='chfpga_crs_corr64.bit',     bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
+        dict(platform="CRS",    modes=("chan8", "shuffle8"), firmware_url='chfpga_crs_ct.bit',         bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
     )
 
     FFT_INFO = fft.FFT_INFO
@@ -265,7 +183,8 @@ class chFPGA(FPGAFirmware):
     ################################################################################################
     # Core FPGA firmware registers
     ################################################################################################
-
+    # Core register addresses are byte offsets 
+ 
     FPGA_CORE_FIRMWARE_COOKIE_ADDR        = 4 * 0 # (read only) 0xbeefface
     FPGA_APPLICATION_FIRMWARE_COOKIE_ADDR = 4 * 1 # (read-only) 0x42
     FPGA_APPLICATION_FLAGS_ADDR           = 4 * 2
@@ -273,9 +192,9 @@ class chFPGA(FPGAFirmware):
     FPGA_FIRMWARE_TIMESTAMP_ADDR          = 4 * 4
     FPGA_SERIAL_NUMBER_LSW_ADDR           = 4 * 5
     FPGA_SERIAL_NUMBER_MSW_ADDR           = 4 * 6
-    _FPGA_MAC_ADDR_LSW_ADDR         = 4 * 7 # FPGA listening MAC address
-    _FPGA_MAC_ADDR_MSW_CMD_LISTENING_PORT_ADDR = 4 * 8 # FPGA listening MAC address and command listening port
-    _FPGA_IP_ADDR_ADDR              = 4 * 9 # FPGA listening IP address
+    _FPGA_MAC_ADDR_LSW_ADDR         = 4 * 7 # FPGA listening MAC address (UDP BSB / ``BSB_TRANSPORT_UDP`` only)
+    _FPGA_MAC_ADDR_MSW_CMD_LISTENING_PORT_ADDR = 4 * 8 # FPGA listening MAC address and command listening port (UDP BSB only)
+    _FPGA_IP_ADDR_ADDR              = 4 * 9 # FPGA listening IP address (UDP BSB only)
     _IRIGB_SAMPLE0_ADDR             = 4 * 10
     _IRIGB_SAMPLE1_ADDR             = 4 * 11
     _IRIGB_SAMPLE2_ADDR             = 4 * 12
@@ -285,14 +204,14 @@ class chFPGA(FPGAFirmware):
     _IRIGB_TARGET2_ADDR             = 4 * 15
     _IRIGB_EVENT_CTR_ADDR           = 4 * 16
     _IRIGB_EVENT_CTR_ADDR2          = 4 * 17
-    _SFP_CONFIG_ADDR                = 4 * 18
-    _SFP_STATUS_ADDR                = 4 * 19
-    _CMD_REPLY_DEST_PORT_ADDR       = 4 * 20 # command reply destination port
-    _IRIGB_REFCLK_SAMPLE            = 4 * 21 # lower word of REFCLK counter
-    _IRIGB_REFCLK_SAMPLE2           = 4 * 22 # upper word of REFCLK counter
-    _FPGA_DATA_DEST_MAC_ADDR_LSW_ADDR         = 4 * 23 # Data packet destination MAC address
-    _FPGA_DATA_DEST_MAC_ADDR_MSW_IP_PORT_ADDR = 4 * 24 # Data packet destination MAC address and port
-    _FPGA_DATA_DEST_IP_ADDR_ADDR              = 4 * 25 # Data packet destination IP address
+    _SFP_CONFIG_ADDR                = 4 * 18  # SFP configuration register (UDP BSB only)
+    _SFP_STATUS_ADDR                = 4 * 19  # SFP status register (UDP BSB only)
+    _CMD_REPLY_DEST_PORT_ADDR       = 4 * 20 # command reply destination port (UDP BSB only)
+    _IRIGB_REFCLK_SAMPLE            = 4 * 21 # lower word of REFCLK counter (UDP BSB only)
+    _IRIGB_REFCLK_SAMPLE2           = 4 * 22 # upper word of REFCLK counter (UDP BSB only)
+    _FPGA_DATA_DEST_MAC_ADDR_LSW_ADDR         = 4 * 23 # Data packet destination MAC address (UDP BSB only)
+    _FPGA_DATA_DEST_MAC_ADDR_MSW_IP_PORT_ADDR = 4 * 24 # Data packet destination MAC address and port (UDP BSB only)
+    _FPGA_DATA_DEST_IP_ADDR_ADDR              = 4 * 25 # Data packet destination IP address (UDP BSB only)
 
 
     ################################################################################################
@@ -317,11 +236,6 @@ class chFPGA(FPGAFirmware):
         _PLATFORM_ID_CRS:  ('Zynq Ultrascale+ RfSoC (XCZU47) t0 technology CRS Board ', None),
     }
 
-    # UDP communication constants (used if implemented in firmware)
-
-    _FPGA_CONTROL_BASE_PORT = 41000
-    _BROADCAST_BASE_PORT = 41000
-    _ZCU111_LOCAL_DATA_PORT_NUMBER = 41000 # port to which the ZCU111 is sending its adc/correlator UDP packets
 
     _XILINX_OUI = 0x000A35
 
@@ -374,10 +288,8 @@ class chFPGA(FPGAFirmware):
         self._last_init_time = None
         self.recv = None # raw data capture receiver object
         self._capture_pkt_frames_per_burst = None
-        self._capture_run_state = CaptureRunState()
-        self._channel_capture_state: Dict[int, ChannelCaptureState] = {}
-        self._effective_decode_profiles: Dict[int, EffectiveDecodeProfile] = {}
-        self._receiver_profile_signature: Optional[Tuple] = None
+        self.state.add("raw_capture")
+        self._receiver_raw_capture_signature: Optional[Tuple] = None
         self.corr_recv = None # correlator data receiver object
         self.mmi = None
 
@@ -394,7 +306,21 @@ class chFPGA(FPGAFirmware):
         self.udp_err_ctr = 0
         self.udp_err_msgs = []
 
+        #: ``BSB_TRANSPORT_UDP``, ``BSB_TRANSPORT_TCPIPE``, or ``None`` until :meth:`open_mmi_async`.
+        self.BSB_TRANSPORT = None
+
     def get_id(self, lane=None, default_crate=None, default_slot=None, numeric_only=False):
+        """ Get the ID of the chFPGA board as a tuple containing the crate number, slot number, and optional lane number.
+
+        Parameters:
+            lane (int): The lane number of the chFPGA board. If None, the lane number is not included in the ID.
+            default_crate (int): The default crate number to use if the crate number is not available.
+            default_slot (int): The default slot number to use if the slot number is not available.
+            numeric_only (bool): If True, the ID will only contain the numeric crate and slot numbers. Otherwise the crate and slot fields could be the model+serial string if the crate_number is not initialied or the board is not in a crate and no slot has been manually provided.
+
+        Returns:
+            A tuple containing the crate number, slot number, and lane number.
+        """
         return self.mb.get_id(lane=lane, default_crate=default_crate, default_slot=default_slot, numeric_only=numeric_only)
 
     @property
@@ -414,6 +340,8 @@ class chFPGA(FPGAFirmware):
 
             - Direct UDP communication with the FPGA
             - TCPipe connection with the on-board processor (requires the self.mb.tcpipe object)
+
+        Transport is chosen from the bsb_transport parameter in the firmware parameters.
 
         Parameters:
 
@@ -443,25 +371,36 @@ class chFPGA(FPGAFirmware):
                 f"{self!r}: The FPGA is not programmed with a bitstream. "
                 f'Cannot open link with the FPGA and initialize it')
 
+        transport = self.fw_params['bsb_transport']
+        self.BSB_TRANSPORT = transport
+        if not self.BSB_TRANSPORT:
+            raise ValueError(f'Unsupported bsb_transport {transport!r} in firmware params')
+
         # Discover ethernet interface through which we communicate with the
         # motherboard. We will use the same interface to listen to data.
-        self.set_interface_ip_address()
+        self.set_host_interface_ip_address()
 
         # Creates the MMI interface and open communications to the FPGA through it.
-        if self.mb.part_number in ("ZCU111", "CRS"):
-            self.mmi = TCPipe_BSB_MMI(self.mb.tcpipe)
-        elif self.mb.part_number == "MGK7MB":
+        if self.BSB_TRANSPORT == self.BSB_TRANSPORT_TCPIPE:
+            self.mmi = await self.mb.tcpipe.open_tcpipe_mmi_async()
+        elif self.BSB_TRANSPORT == self.BSB_TRANSPORT_UDP:
             self.mmi = await self.open_udp_mmi_async()
         else:
-            raise RuntimeError(f'Motherboard on type {self.mb.part_number} does not support any MMI/BSB interface to the FPGA')
-
+            raise RuntimeError(
+                f'{self!r}: No BSB transport was specified for this firmware/motherboard (BSB_TRANSPORT={self.BSB_TRANSPORT!r}'); 
+                
     async def close_mmi_async(self):
+        """ Closes the MMI interface to the FPGA 
+        
+        Returns:
+            None
+        """
         if self.mmi:
             self.mmi.close()
             self.mmi = None
 
-    def set_interface_ip_address(self):
-        """Sets the IP address of the interface through which the host running pychfpga
+    def set_host_interface_ip_address(self):
+        """Sets the IP address of the host interface through which the host running pychfpga
         communicates with the motherboard, if this interface is not yet defined.
 
         This sets the ``self.interface_ip_addr`` attribute. The interface is not changes if it already is non-zero.
@@ -484,114 +423,6 @@ class chFPGA(FPGAFirmware):
                 s.close()
             else:
                 self.interface_ip_addr = None
-
-
-    ######################################################
-    # Firmware UDP stack methods
-    ######################################################
-    # These methods are used to set-up and operate the firmware UDP stack and
-    # use it to establish a UDP-based FPGA MMI interface.
-
-    async def open_udp_mmi_async(self):
-        """Setup the FPGA UDP communication and return a mmi object.
-
-        This method is IceBoard-specific.
-        """
-
-        self.logger.debug(f'{self!r}: Opening UDP connection to the FPGA')
-
-        # Compute the IP address to use for the FPGA UDP interface For now, we
-        # replace a.b.c.d by a.b.3.d. We need to find a more generic mechanism
-        # for this (like obtaining another IP from the DHCP server)
-        if not self.fpga_ip_addr:
-            ip_packed = socket.inet_aton(await self.mb.get_motherboard_ip_address())
-            ip_tuple = tuple(c for c in ip_packed)
-            ip_packed = bytes(self.fpga_ip_addr_fn(*ip_tuple))
-            # ip_packed = ip_packed[:2] + chr(3) + ip_packed[3]
-            self.fpga_ip_addr = socket.inet_ntoa(ip_packed)
-
-        # Compute the local port number if requested (self.local_control_port_number
-        # is None) and if possible (there is a slot and crate number)
-        if self.local_control_port_number is None:
-            if not self.slot or self.mb.get_crate_number() is None:
-                self.local_control_port_number = 0
-                self.logger.debug(
-                    f'{self!r}: Cannot use slot/crate_number-based UDP port number '
-                    f'for UDP control channel. There is no slot or crate_number'
-                    f' info. Using OS-assigned random port')
-            else:
-                self.local_control_port_number = self._FPGA_CONTROL_BASE_PORT + 16*self.mb.get_crate_number(0) + (self.slot-1)
-                # self.logger.info('%r: Replies will be sent to %s:%i'
-                #                  % (self, self.interface_ip_addr, self.local_control_port_number))
-
-        # -------------------------------------------------------------------------
-        # Open the UDP MMI interface
-        # -------------------------------------------------------------------------
-        self.logger.info(
-            f'{self!r}: Opening FPGA MMI with FPGA=({self.fpga_ip_addr}:{self.fpga_control_port_number}),  local=({self.interface_ip_addr}:{self.local_control_port_number})')
-
-
-        self.mmi = FPGAMmi(
-            fpga_ip_addr=self.fpga_ip_addr,
-            fpga_port_number=self.fpga_control_port_number,  # none or 0: use local port number
-            interface_ip_addr=self.interface_ip_addr,
-            local_port_number=self.local_control_port_number,  # 0 = randomly assigned by os
-            udp_retries=self.udp_retries,
-            parent=self)
-
-        self.mmi.open()
-        self.local_control_port_number = self.mmi.local_port_number
-        self.fpga_control_port_number = self.mmi.fpga_port_number
-
-        # Select the fpga port number
-        # if not self.fpga_control_port_number:
-        #    self.fpga_control_port_number = self.local_control_port_number
-
-        # Set-up the FPGA networking parameters using the ARM-SPI link to the
-        # FPGA We assume it has been checked that the proper version of the SD
-        # card is present so the SPI communication  with the FPGA will work.
-        self.fpga_mac_addr = await self.set_fpga_control_networking_parameters_async(
-            fpga_ip_addr=self.fpga_ip_addr,
-            fpga_port_number=self.fpga_control_port_number)
-
-        for trial in range(10):
-            # Make sure the PMA core uses the SGMII protocol with autonegociation
-            self.logger.debug(f"{self!r}: Initializing SFP in SGMII mode with autonegociation (trial {trial+1})")
-            await self.set_sgmii_config_vector(an=True, reset=1)
-            await self.set_sgmii_config_vector(an=True, reset=0)
-            await asyncio.sleep(0.150)  # wait for autonegotiation to complete
-            status = await self.get_sgmii_status_vector()
-            if status & 1:
-                self.logger.info(f"{self!r}: SFP successfully established link with autonegociation (1000BASE-X mode)")
-                break
-            else:
-                self.logger.debug(f"{self!r}: SFP did not respond to autonegociation on trial {trial+1}. It might not support it. Retrying without autonegociation.")
-                await self.set_sgmii_config_vector(an=False, reset=1)
-                await self.set_sgmii_config_vector(an=False, reset=0)
-                await asyncio.sleep(0.150)  # wait for autonegotiation to complete
-                status = await self.get_sgmii_status_vector()
-                if status & 1:
-                    self.logger.info(f"{self!r}: SFP successfully established link without autonegociation (SGMII mode)")
-                    break
-                raise IOError(f"{self!r}: Cannot get the SFP module to establish a link")
-
-        self.logger.debug(f"{self!r}: Clearing FPGAs UDP communication stack")
-        await self.reset_fpga_udp_stack()
-        # self.mmi.flush()
-
-        # -------------------------------------------------------------------------
-        # Check if we can communicate with the FPGA over the direct Ethernet
-        # link by reading the UDP MMI cookie (not the SPI one) and check if
-        # the cookie correspond to the chFPGA firmware.
-        # -------------------------------------------------------------------------
-
-        self.logger.info(
-            f"{self!r}: UDP communication link with the FPGA established "
-            f"at {self.fpga_ip_addr}:{self.fpga_control_port_number}")
-
-
-        return self.mmi
-
 
 
     async def open_async(
@@ -748,28 +579,19 @@ class chFPGA(FPGAFirmware):
 
             # Set platform/implementation-specific features & constants based on a local table
             if self.PLATFORM_ID in (self._PLATFORM_ID_ZCU111, self._PLATFORM_ID_CRS):
-                assert self.mb.part_number == "ZCU111" or self.mb.part_number == "CRS", 'This version of the firmware is meant to operate on the ZCU111 only'
                 self.HAS_REFCLK = True
                 self.HAS_SPI = False
                 self.HAS_I2C = False
                 self.HAS_ADCDAQ = False
                 self.HAS_FMC = False
                 self.MAX_BSB_COMMAND_LENGTH = 512
-                # self.CT_TYPE = "UCT" # Fixed GTY-based corner-turn, 8 inputs (4 bins/input/clk) x 1 output (packetized), across 1, 4, or 8 boards
-                # if self.mode == 'corr32':
-                #     self.CT_LEVEL = 2 # Need to read this from registers
-                # else:
-                #     self.CT_LEVEL = 1
-
                 self.HAS_UCORN = self.mode == 'shuffle8' # Hacky method until we can read it back.
                 self.CROSSBAR1_TYPE = "URAM"
                 self.GPU_LINK_TYPE = "100GE"
                 self.CAPTURE_TYPE = "UCAP"
                 self.CORR_TYPE = "UCORR44"
                 self.ADC_FREQS_TO_CHECK = range(self.NUMBER_OF_ADCS)
-                # Select the FFT latency. We currently don't have access to the firmware FFT_TYPE, so we assume we use the CHORD FFT
-                # self.FFT_LATENCY = 12533 # This is probably for the D3A FFT
-                # self.FFT_LATENCY = 10452 # Bitgrowth (CHORD) FFT good value=10452 10450= DC@bin 8, 16451 DC @ bin 4
+                assert self.BSB_TRANSPORT == self.BSB_TRANSPORT_TCPIPE, f'{self!r}: Expected TCPipe BSB for PLATFORM_ID ZCU111/CRS'
 
             elif self.PLATFORM_ID in (self._PLATFORM_ID_MGK7MB_REV0, self._PLATFORM_ID_MGK7MB_REV2):
                 assert self.mb.part_number == "MGK7MB", 'This version of the firmware is meant to operate on the MGK7MB (IceBoard) only'
@@ -787,11 +609,7 @@ class chFPGA(FPGAFirmware):
                 # self.CORR_TYPE = "CORR44"
                 self.CORR_TYPE = "UCORR44"
                 self.ADC_FREQS_TO_CHECK = (0,4,8,12)
-                # self.FFT_LATENCY = 3230 # CHIME FFT
-                # if self.mode == 'corr16':
-                #     self.CT_LEVEL = 1 # Need to read this from registers
-                # else:
-                #     self.CT_LEVEL = 3
+                assert self.BSB_TRANSPORT == self.BSB_TRANSPORT_UDP, f'{self!r}: Expected FPGA UDP BSB for PLATFORM_ID MGK7MB'
 
             else:
                 raise RuntimeError(f'Unknown feature list for PLATFORM_ID = {self.PLATFORM_ID}')
@@ -909,7 +727,7 @@ class chFPGA(FPGAFirmware):
             # Instantiate a channelizer for for each input
             self.chan = chan.ChanArray(router = self.top_router, router_port = 'CHAN', state=self.state.add("chan"))
             self.CHAN_FMC_NUMBER = [i // 8 for i in range(self.NUMBER_OF_CHANNELIZERS)]
-            self._init_capture_state_tracking()
+            # self._init_capture_state_tracking()
 
             await asyncio.sleep(0)
 
@@ -1035,6 +853,11 @@ class chFPGA(FPGAFirmware):
         # await super().close_async()  # Make sure we close superclasses (there are none)
 
     def is_open(self):
+        """Check if the MMI interface to the FPGA is open
+
+        Returns:
+            bool: True if the MMI interface to the FPGA is open, False otherwise
+        """
         return bool(self.mmi)
 
     async def init_async(
@@ -1267,7 +1090,6 @@ class chFPGA(FPGAFirmware):
 
 
         self._last_init_time = time.time()
-        self.refresh_capture_state_from_hardware()
 
         # Create a data socket. The socket will be cached for future use. This also sets the destination address/port for data streams in the FPGA.
         # self.get_data_socket()
@@ -1275,8 +1097,21 @@ class chFPGA(FPGAFirmware):
         # Create a data receiver
         if create_receiver:
             self.get_data_receiver()
+        # Update state
+        # self.refresh_capture_state_from_hardware()
+        self._update_raw_capture_state()
 
     def check_adc_frequencies(self, stage):
+        """ Check the frequencies of the ADC clocks 
+
+        This method is called at various stages of the initialization to check the frequencies of the ADC clocks. This catches issues of  IceBoard ADC mezzanines sometimes erratically losing their clocks after the initial power-up.
+
+        Parameters:
+            stage (str): The stage of the initialization to check the ADC frequencies for. This string is used ot identify where the check is being performed in the log messages.
+
+        Returns:
+            bool: True if the ADC frequencies are within the target frequency, False otherwise.
+        """
         # TODO: disable if mezzanine is not attached
         # if self.mezzanine.atta
         target_frequency = self._sampling_frequency/self.adc_clock_divider
@@ -1304,13 +1139,12 @@ class chFPGA(FPGAFirmware):
     ###################################
     """
     Core registers is a set of 32-bit registers that can be
-    accessed both through the MMI interface AND through an external SPI link.
+    accessed both through the BSB  interface AND, for some platforms, an external SPI link.
 
-    When using the MMI interface, the core registers are mapped as a RAM page for the GPIO module.
+    When using the BSB interface, the core registers are mapped as a RAM page for the GPIO module.
 
-    On some platforms (like the IceBoard), the SPI link is necessary at
-    startup to configure the FPGA's networking stack, which is used to establish the MMI interface.
-
+    On platforms that use direct FPGA UDP for BSB (UltraScale+ USP stack, MGK7MB today),
+    SPI from the on-board processor may be required to configure networking before the UDP MMI link works.
     """
 
     async def fpga_core_reg_read_async(self, addr):
@@ -1326,7 +1160,6 @@ class chFPGA(FPGAFirmware):
 
            int: 32-bit unsigned value of the register
         """
-        # print(f'Reading core reg via MMI at {addr:03X}')
         if self.mmi:
             return int(self.mmi.read(self.mmi._RAM_BASE_ADDR + addr, type='<u4', length=1)[0]) & 0xFFFFFFFF
         else:
@@ -1344,26 +1177,22 @@ class chFPGA(FPGAFirmware):
 
             value (int): 32-bit value to write in the register
         """
-        # print(f'Writing core reg via MMI at {addr:03X}')
         if self.mmi:
             self.mmi.write(self.mmi._RAM_BASE_ADDR + addr, value.to_bytes(4, 'little'))
         else:
             raise IOError('Attempted to write FPGA core registers before MMI is initialized')
 
-
-#    async def fpga_core_reg_read_async(self, addr):
-#        return await self.mb.fpga_core_reg_spi_read_async(addr)
-
-#    async def fpga_core_reg_write_async(self, addr, value):
-#        await self.mb.fpga_core_reg_spi_write_async(addr, value)
-
-
-    # Bitstream management
+    ###################################
+    # Bitstream management methods
+    ###################################
 
     async def get_fpga_core_cookie(self):
-        """ Return the core FPGA firmware cookie. Should always be 0xBEEFFACE.
+        """ Return the core chFPGA firmware cookie. Should always be 0xBEEFFACE.
 
-        The cookie is obtained from a core register via the MMI interface.
+        The cookie is obtained from a core register via the BSB interface.
+
+        Returns:
+            int: The core chFPGA firmware cookie. Should always be 0xBEEFFACE.
         """
         if not (await self.mb.is_fpga_programmed_async()):
             return None
@@ -1374,6 +1203,9 @@ class chFPGA(FPGAFirmware):
         """ Return the application-specific FPGA firmware cookie.
 
         The cookie is obtained from a core register via the MMI interface.
+
+        Returns:
+            int: The application-specific FPGA firmware cookie.
         """
         if not (await self.mb.is_fpga_programmed_async()):
             return None
@@ -1395,11 +1227,12 @@ class chFPGA(FPGAFirmware):
         """ Returns a string containing the date-time of the currrent firmware
         bitstream.
 
-        The value is retreived from the core register that exposes the
+        The value is retreived from the FPGA firmware core register that exposes the
         USER_ACCESS field embedded in the firmware, which is set in Vivado to
         encode the bitstream generation time.
 
-        The USER_ACCESS field is accessed through a core register read via the MMI interface.
+        Returns:
+            A string containing the date-time of the current firmware bitstream.
         """
         timestamp = await self.fpga_core_reg_read_async(self.FPGA_FIRMWARE_TIMESTAMP_ADDR)
         seconds = (timestamp >> 0) & 0x3F
@@ -1414,129 +1247,27 @@ class chFPGA(FPGAFirmware):
 
 
     async def ping_fpga_async(self, timeout=0.3):
+        """ Check if the FPGA firmware is responsive by attempting to perform a BSB read on a known register.
+
+        Note: This does not check is the platform is visible on the network: that is a prerequisite. This rather checks if the FPGA firmware is configured and the FPGA's BSB bus is accessible through the UDP/IP network or TCPIPE interface, depending on the platform.
+
+        Parameters:
+            timeout (float): The timeout in seconds to wait for the FPGA to respond.
+
+        Returns:
+            True if the FPGA is responsive, False otherwise.
+        """
         # Open the core right now if needed so we don't mask IOError exceptions this could generate
         if not self.mb._is_core_open():
             await self.open_core()
         try:
-            self.mmi.read(self.mmi._STATUS_BASE_ADDR + _GPIO_COOKIE_ADDR, type=int, length=1, timeout=timeout)
+            self.mmi.read(self.mmi._STATUS_BASE_ADDR + self._GPIO_COOKIE_ADDR, type=int, length=1, timeout=timeout)
             return True
         except IOError:
             return False
 
-
-
-    ############################
-    # ICEBoard-specific methods
-    ############################
-    UDP_STATUS_VECT_BITS = [
-            # Name, lsb pos, width
-            ('tx_fifo_overflow', 17, 1),
-            ('rx_fifo_overflow', 16, 1),
-            ('sfp_remote_fault', 13, 1),
-            ('sfp_duplex_mode', 12, 1),
-            ('sfp_speed', 10, 2),
-            ('rxnotintable',6, 1),
-            ('rxdisperr', 5, 1),
-            ('link_sync', 1, 1),
-            ('link_status', 0, 1)]
-
-    async def get_fpga_udp_metrics_async(self):
-        """
-
-        UDP metrics obtained from a core register via the MMI interface.
-
-        """
-        if not self.is_open():
-            return
-
-        if self.PLATFORM_ID == self._PLATFORM_ID_ZCU111:
-            self.logger.warning(f'{self!r} ZCU111 platform has no UDP metrics')
-            return
-
-        metrics = Metrics(
-            type='GAUGE',
-            slot=(self.slot or 0) - 1,
-            id=self.get_string_id(),
-            crate_id=self.crate.get_string_id() if self.crate else None,
-            crate_number=self.mb.get_crate_number())
-
-        try:
-            # await self.check_command_count_async(reset=True)
-            metrics.add('fpga_udp_error_current_count', value=self.mmi.error_counter)
-            vect = await self.fpga_core_reg_read_async(self._SFP_STATUS_ADDR)
-            for name, pos, width in self.UDP_STATUS_VECT_BITS:
-                metrics.add('fpga_udp_' + name, value= (vect >> pos) & (2**width-1))
-        except IOError as e:
-            self.logger.error(f'{self!r}: Error getting FPGA udp metrics. Error is {e!r}')
-            self.udp_err_ctr += 1
-            self.udp_err_msgs.append(f'{self!r}: Error getting FPGA udp metrics. Error is {e!r}')
-        return metrics
-
-    async def get_udp_status_async(self):
-        """ Return a dictionary describing the status bits of the SGMII/1000BASE-X interface.
-        """
-        vect = await self.fpga_core_reg_read_async(self._SFP_STATUS_ADDR)
-        return {name: ((vect >> pos) & (2**width-1)) for name, pos, width in self.UDP_STATUS_VECT_BITS}
-
-    async def clear_fpga_udp_errors(self, force=False, no_reset=False, max_trials=3):
-        """ Attempts to clear the FPGA UDP communication errors.
-
-        Parameters:
-
-            force (bool): If True, the UDP stack is reset whether of not the
-                current number of communication errors exceed the threshold or
-                not.
-
-        """
-        if self.PLATFORM_ID == self._PLATFORM_ID_ZCU111:
-            return
-
-        trial = 1
-        while True:
-            # Check error counter - handle both FPGAMmi (has error_counter) and TCPipe_BSB_MMI (has recv_counter)
-            error_count = getattr(self.mmi, 'error_counter', 0) if hasattr(self.mmi, 'error_counter') else 0
-            if force or error_count > 40:
-                self.logger.warning(f'{self!r}: Resetting FPGA UDP stack (trial #{trial}/{max_trials})')
-
-                if not no_reset:
-                    await self.mb.reset_sfp()
-                    await asyncio.sleep(0.1)
-                    await self.reset_fpga_udp_stack()
-                    await asyncio.sleep(0.1)
-                self.logger.debug(f'{self!r}: Trying to read from FPGA UDP stack')
-                try:
-                    self.mmi.flush()
-                    self.mmi.read(0, type=int, length=1, retry=-1, resync=1)
-                    self.mmi.read(0, type=int, length=1, resync=1)
-                    self.mmi.flush()
-                    (cmd, rply) = self.GPIO.get_command_count()
-                    self.mmi.send_counter = cmd
-                    self.mmi.recv_counter = rply
-                    break
-                except IOError:
-                    if trial >= max_trials:
-                        # raise IOError(
-                        #      '%r: cannot communicate with FPGA port after '
-                        #      '%i FPGA UDP stack resets' % (self, trial))
-                        self.logger.error(
-                            f'{self!r}: cannot communicate with FPGA port '
-                            f'after {trial} FPGA UDP stack resets')
-                        break
-                    else:
-                        self.logger.warning(
-                            f'{self!r}: Still obtaining FPGA UDP errors '
-                            f'after {trial} FPGA UDP stack reset. Retrying...')
-                    trial += 1
-                finally:
-                    # Reset error counter if it exists
-                    if hasattr(self.mmi, 'error_counter'):
-                        self.mmi.error_counter = 0
-                    self.logger.debug(f'{self!r}: Finished to attempt clearing FPGA UDP errors.')
-            else:
-                break
-
     async def check_command_count_async(self, reset=False):
-        """ Check UDP communication command/reply synchronization and optionally reset counts.
+        """Check BSB/MMI command/reply counters against FPGA GPIO tallies.
 
         Checks if the number of command and replies sent to/from the FPGA
         by the Python memory mapped interface matches the counts tallied by the FPGA
@@ -1567,7 +1298,8 @@ class chFPGA(FPGAFirmware):
                 valid = (cmd == self.mmi.send_counter & 0xFF) and (rply == self.mmi.recv_counter & 0xFF)
                 if not valid:
                     self.logger.warning(
-                        f'{self!r}: Command counters differ cmd/rply in FPGA is ({int(cmd)}, {int(rply)}), Python MMI is ({int(self.mmi.send_counter & 255)}, {int(self.mmi.recv_counter & 255)})')
+                        f'{self!r}: Command counters differ cmd/rply in FPGA is ({int(cmd)}, {int(rply)}), '
+                        f'Python MMI is ({int(self.mmi.send_counter & 255)}, {int(self.mmi.recv_counter & 255)})')
                 if reset:
                     self.mmi.send_counter = cmd
                     self.mmi.recv_counter = rply
@@ -1575,13 +1307,15 @@ class chFPGA(FPGAFirmware):
                 break
             except IOError as e:
                 self.logger.error(
-                    f"{self!r}: UDP communinication error. Attempting to reset FPGA's UDP stack via the ARM processor (trial {int(trial + 1)}).The error is:\n {e}")
-                await self.reset_fpga_udp_stack()
+                    f"{self!r}: BSB/MMI communication error while checking command counters "
+                    f"(trial {int(trial + 1)}). The error is:\n {e}")
+                if self.BSB_TRANSPORT == self.BSB_TRANSPORT_UDP:
+                    await self.reset_fpga_udp_stack()
                 valid = False
                 reset = True
             except Exception as e:
                 self.logger.error(
-                    f"{self!r}: Unhandled error during UDP communinication check. The error is:\n {e!r}")
+                    f"{self!r}: Unhandled error during command counter check. The error is:\n {e!r}")
                 raise
         else:  # executes if we exhausted the for loop iterations, i.e  no break
             errmsg = f"{self!r}: Could not re-establish UDP communinication with the FPGA. Raising an exception"
@@ -1589,170 +1323,10 @@ class chFPGA(FPGAFirmware):
             raise IOError(errmsg)
         return valid
 
-    async def reset_fpga_udp_stack(self):
-        """
-
-        IceBoard only.
-
-        This method uses the IceBoard ARM-FPGA SPI link to access the core registers since access through UDB packsts might not work.
-        """
-
-        # self.logger.warning("%r: Resetting %s FPGA's UDP communication stack" % (self, self.hostname))
-        await self.mb.fpga_core_reg_spi_write_async(self._SFP_STATUS_ADDR, 3 << 30)
-        await self.mb.fpga_core_reg_spi_write_async(self._SFP_STATUS_ADDR, 0 << 30)
-        self.mmi.send_counter = 0
-
-
-    async def set_sgmii_config_vector(
-            self, sgmii=1, an=1, pause=0, duplex=1, reset=0,
-            los=0, fault=0, an_trig=False, loopback=0, speed=2):
-        """
-
-        This is an IceBoard-specific method.
-
-        This is called before the UDP MMI interface exists and therefore uses the ARM-FPGA SPI link.
-
-            bit 0: 1000BASE-X:0, SGMII=1
-            bit 5: 1000BASE-X: full duplex
-            bits: 8-7: 1000BASE-X: pause
-            bits 13:12: 1000BASE-X: remote fault
-
-            bit 16: unidir
-            bit 17: loopback
-            bit 18: power down
-            bit 19: isolate
-            bit 20: auto-negotiation enable
-
-            bit 28: loss_of_signal
-            bit 29: reset
-            bit 30: an_restart
-            bit 31: basex_or_sgmii
-
-
-        """
-        val = (loopback << 17) + (an << 20) + (los << 28)
-        if sgmii:
-            val |= (1 << 31) + (1 << 0) + (speed << 10) + (duplex << 12)
-        else:
-            val |= (duplex << 5) + (pause << 7) + (fault << 12)
-
-        if reset:
-            # await self.fpga_core_reg_write_async(18 * 4, val | (1<<29))
-            val |= 1 << 29
-        if an_trig:
-            # await self.fpga_core_reg_write_async(18 * 4, val | (1 << 30))
-            val |= 1 << 30
-        await self.mb.fpga_core_reg_spi_write_async(self._SFP_CONFIG_ADDR, val)
-        return val
-
-    async def get_sgmii_status_vector(self):
-        """
-
-        This is an IceBoard-specific method.
-
-        This is called before the UDP MMI interface exists and therefore uses the ARM-FPGA SPI link.
-
-        """
-        val = await self.mb.fpga_core_reg_spi_read_async(self._SFP_STATUS_ADDR)
-        self.logger.debug(f'{self!r}: SGMII/1000BASE-X status: '
-                          f'link={bool(val&1)}, sync={bool(val&(1<<1))}, '
-                          f'RUDI={(val>>2)&(0b11111):05b}, PHY={(val>>7)&1}, '
-                          f'ERR={(val>>13)&1} ERRCODE={(val>>8)&3:02b}, '
-                          f'speed={(val>>10)&3:02b}, duplex={(val>>12)&1}, '
-                          f'pause={(val>>14)&3:02b}')
-        return val
-
-
-    async def set_fpga_control_networking_parameters_async(
-            self,
-            fpga_mac_addr=None,
-            fpga_ip_addr=None,
-            fpga_port_number=_FPGA_CONTROL_BASE_PORT,
-            fpga_command_reply_dest_port=0):
-        """
-        Set the FPGA MAC and IP addresses, and sets the UDP listening and reply destination ports of the command channel.
-
-        This method **uses the SPI interface** to the FPGA provided by motherboard
-        to access the relevant networking core registers. This method can therefore be
-        called before the UDP MMI interface is initialized.
-
-        Parameters:
-
-            fpga_mac_addr (str): MAC address of the FPGA in the format
-                'xx:xx:xx:xx:xx:xx, where 'xx' is a hex number'. If `fpga_mac_addr` is `None`, an
-                arbitrary MAC address is created using the IP address to ensure its uniqueness.
-
-            fpga_ip_addr (str):  Address at which the FPGA listens for commands. The address is in
-                the format of 'a.b.c.d', where a,b,c and d are decimal numbers.
-
-            fpga_port_number (int): Port on which the FPGA listens for commands. This port is 41000
-                by default.
-
-            fpga_command_reply_dest_port (int): port to which the command replies will be sent back towards the host. If 0,
-                the destination port for the reply will be the source port of the previous command packet. This is typically used.
-
-        Returns:
-
-            str: MAC address that was used/computed, in the form 'xx:xx:xx:xx:xx'
-
-
-        The command reply packets are sent to the following destination:
-
-            * command reply MAC address: Is hardwired to use the source MAC address of the last valid
-              packet received
-            * command reply IP address: Is hardwired to use the source IP of the last valid IP packet
-              received
-            * command reply  port number: Is set by the `fpga_command_reply_dest_port` parameter.
-
-        With the default configuration, the user can bind a UDP socket to any port (or let the
-        system choose by specifying port 0 to the bind() method).  The outgoing command packets will
-        have the source IP and source port set to that value, and reply packets will automatically
-        come back to this port without having to set up the return port manually. Letting the socket
-        choose ports allows the system to easily connect to multiple boards without having to ensure
-        the availability of specific ports. Note that is might be necessary to bind the socket to a
-        specific interface address in case there are multiple interfaces in the system.
-
-
-        [Note1] The FPGA firmware allows for the UDP networking parameters to
-        be set without the help of a SPI link to the FPGA core registers. This
-        is done by using UDP broadcasts that select specific target FPGAs by
-        their serial number.
-
-
-        """
-
-        fpga_ip_addr_bytes = socket.inet_aton(fpga_ip_addr)  #
-
-        # Compute a MAC address for the FPGA
-        # mac = socket.inet_aton(self._get_arm_mac())  #
-        if fpga_mac_addr is None:
-            fpga_mac_addr_bytes = bytes((0x12, 0x34)) + fpga_ip_addr_bytes
-            fpga_mac_addr = ':'.join([f'{c:02X}' for c in fpga_mac_addr_bytes])
-        else:
-            fpga_mac_addr_bytes = bytes.fromhex(fpga_mac_addr.replace(':',''))
-
-        fpga_mac_addr_int = int.from_bytes(fpga_mac_addr_bytes, 'big')
-        fpga_ip_addr_int = int.from_bytes(fpga_ip_addr_bytes, 'big')
-        # self.fpga_mac_addr = fpga_mac_addr
-        # self.fpga_control_port_number = fpga_port_number
-        # self.fpga_ip_addr = fpga_ip_addr
-
-
-        # Set the FPGA Networking parameters over the ARM-FPGA SPI interface
-        await self.mb.fpga_core_reg_spi_write_async(self._FPGA_MAC_ADDR_LSW_ADDR, fpga_mac_addr_int & 0xFFFFFFFF)
-        await self.mb.fpga_core_reg_spi_write_async(self._FPGA_MAC_ADDR_MSW_CMD_LISTENING_PORT_ADDR,
-            ((fpga_mac_addr_int >> 16) & 0xFFFF0000) | (fpga_port_number & 0xFFFF))
-        await self.mb.fpga_core_reg_spi_write_async(self._FPGA_IP_ADDR_ADDR, fpga_ip_addr_int)
-
-        word = await self.mb.fpga_core_reg_spi_read_async(self._CMD_REPLY_DEST_PORT_ADDR)
-        await self.mb.fpga_core_reg_spi_write_async(self._CMD_REPLY_DEST_PORT_ADDR, (word & 0xFFFF0000) | (fpga_command_reply_dest_port & 0xFFFF))
-
-        return fpga_mac_addr
 
     async def set_local_data_port_number_async(self, port):
         """
-        Sets the port number to which the FPGA is sending data channel packets to the host. Use
-        `set_data_target_address` instead.
+        Sets the port number to which the FPGA sends data-channel packets to the host.
 
         This method uses MMI interface to access the FPGA core registers.
 
@@ -1763,96 +1337,31 @@ class chFPGA(FPGAFirmware):
 
         Does not change the target MAC or IP address.
         """
-        if self.PLATFORM_ID in (self._PLATFORM_ID_ZCU111, self._PLATFORM_ID_CRS):
-            self.mb.tcpipe.core_reg_write(self.mb.tcpipe.CORE_REG_UDP_DATA_PORT, port)
+        if self.BSB_TRANSPORT == self.BSB_TRANSPORT_UDP:
+            await self._set_local_udp_data_port_number_async(port)
+        elif self.BSB_TRANSPORT == self.BSB_TRANSPORT_TCPIPE:
+            self.mb.tcpipe.set_local_data_port_number(port)
         else:
-            word = await self.fpga_core_reg_read_async(self._FPGA_DATA_DEST_MAC_ADDR_MSW_IP_PORT_ADDR)
-            await self.fpga_core_reg_write_async(self._FPGA_DATA_DEST_MAC_ADDR_MSW_IP_PORT_ADDR, (word & 0xFFFF0000) | (port & 0xFFFF))
+            raise RuntimeError(f'{self!r}: No UDP or TCPipe path for local data port')
 
     async def get_local_data_port_number_async(self):
-        """ Return the port number to which the FPGA is sending its captured data stream on the control network.
+        """Return the UDP data-channel destination port (FPGA core map or TCPipe register)."""
+        if self.BSB_TRANSPORT == self.BSB_TRANSPORT_UDP:
+            return await self._get_local_udp_data_port_number_async()
+        if self.BSB_TRANSPORT == self.BSB_TRANSPORT_TCPIPE:
+            return self.mb.tcpipe.get_local_data_port_number()
+        raise RuntimeError(f'{self!r}: No UDP or TCPipe path for local data port')
 
-        This method uses MMI interface to access the FPGA core registers.
 
-        """
-        if self.PLATFORM_ID in (self._PLATFORM_ID_ZCU111, self._PLATFORM_ID_CRS):
-            return self.mb.tcpipe.core_reg_read(self.mb.tcpipe.CORE_REG_UDP_DATA_PORT)
-        else:
-            return (await self.fpga_core_reg_read_async(self._FPGA_DATA_DEST_MAC_ADDR_MSW_IP_PORT_ADDR)) & 0xFFFF
-
-    async def set_data_target_address_async(self, ip_addr=None, port=None, mac_addr=None):
-        """
-        Sets the IP address, port number and MAC address to which data is sent back to the host comptuter.
-
-        This method sets the target address for data sent back to the host computer through the UDP
-        data channel (UDP Channel 1). This is a unidirectiol UDP-to-HOST channel.
-
-        The UDP data channel is usually used to send low-bandwidth data and is
-        not to be confussed with dedicated data channels such as the 10G
-        Ethernet links to GPU nodes. The UDP data channel is used by:
-
-         - Raw data capture module (PROBER) to capture periodic rad data form the ADC or SCALER output
-         - Correlator (CORR44) to stream integrated correlator products
-
-        This method uses MMI interface to access the FPGA core registers. It must be used once the MMI interface is initialized.
-
-        Parameters:
-
-            ip_addr (str):  Destination IP Address to which the FPGA send the UDP Channel 1 packets. The address is
-                in the format of 'a.b.c.d', where a,b,c and d are decimal numbers. If `ip_addr` is
-                '0.0.0.0' or None, then data will be sent back to the source address of the last
-                valid received control packet.
-
-            port (int): Destination port to which the FPGA sends UDP Channel 1 packets. If `port` is
-                0, the packets will be sent to the the source port of the last valid received
-                control packet **plus one**.
-
-            mac_addr (str): Destination MAC address to which the FPGA will sends UDP Channel 1
-                packets. It is in the format 'xx:xx:xx:xx:xx:xx, where 'xx' is a hex number'. If
-                fpga_mac_addr is None or '00:00:00:00:00:00', the packets will be sent to the the
-                source MAC address of the last valid received control packet.
-
-        After initializarion, all three parameters are set to zero, meaning
-        that if the FPGA receives control packets from port x, data will be
-        sent back to the same host on port x+1. Only setting the port number
-        ensures that the data will come back to the controlling host at the
-        specified port. It is usually easier to let the operating system
-        assign a random port and set that port number on the FPGA.
-
-        """
-        if self.PLATFORM_ID == self._PLATFORM_ID_ZCU111:
-            self.logger.warning(
-                f'{self!r}: Setting the target address for the data channel is not currently '
-                f'supported by this platform. The request will be ignored. Make sure the receiver '
-                f'uses the correct address and port for this platform.')
-            return
-
-        if not ip_addr:
-            ip_addr_int = 0
-        else:
-            ip_addr_int = int.from_bytes(socket.inet_aton(ip_addr), 'big')
-
-        if not mac_addr:
-            mac_addr_int = 0
-        else:
-            mac_addr_int = int.from_bytes(bytes.fromhex(mac_addr.replace(':','')), 'big')
-
-        self.logger.debug(
-            f'{self!r}: setting data target address to '
-            f'ip={ip_addr}({ip_addr_int}), port={port}({port}), '
-            f'mac={mac_addr}({mac_addr_int})')
-
-        # Set the UDP data channel networking parameters (MAC, IP & PORT) over the MMI interface
-        await self.mb.fpga_core_reg_write_async(self._FPGA_DATA_DEST_MAC_ADDR_LSW_ADDR, mac_addr_int & 0xFFFFFFFF)
-        await self.mb.fpga_core_reg_write_async(self._FPGA_DATA_DEST_MAC_ADDR_MSW_IP_PORT_ADDR, (mac_addr_int>>16) & 0xFFFF0000 | (port & 0xFFFF))
-        await self.mb.fpga_core_reg_write_async(self._FPGA_DATA_DEST_IP_ADDR_ADDR, ip_addr_int)
-
+    # ---------------------------------------------------------
+    # IceBoard / mezzanine helpers (GPIO path, I2C — not the USP UDP stack)
+    # ---------------------------------------------------------
 
     async def get_fpga_firmware_cookie(self, resync=False):
         """
         Get the FPGA firmware cookie.
 
-        Reads the FPGA over the UDP link and returns the cookie that
+        Reads the FPGA over the BSB (UDP MMI or TCPipe, depending on platform) and returns the cookie that
         identifies the firmware. This method can be called before any FPGA
         modules are instatiated.
 
@@ -1867,6 +1376,9 @@ class chFPGA(FPGAFirmware):
         """
         Returns the firmware revion currenting running on the FPGA (which si
         the date and time of bitstream generation)
+
+        Returns:
+            str: The firmware revision of the current firmware bitstream.
         """
         return self.GPIO.get_bitstream_date()
 
@@ -1881,8 +1393,20 @@ class chFPGA(FPGAFirmware):
         bytes from that device after a restart.
 
         See the FPGA I2C module for detailed method description.
+
+        Parameters:
+            *args: Variable length argument list.
+            **kwargs: Arbitrary keyword arguments.
+
+        Returns:
+            list: The data read from the I2C device.
         """
         return self.I2C.write_read(*args, **kwargs)
+
+    def toto(self, a,b,c, aa=10, bb=20, cc=30):
+        pass
+
+        toto(1,2,3, aa=10, bb=20, cc=30)
 
     def fpga_i2c_set_port(self, *args, **kwargs):
         """
@@ -2590,24 +2114,6 @@ class chFPGA(FPGAFirmware):
                 pass
         return int(channel)
 
-    def _init_capture_state_tracking(self):
-        if not hasattr(self, "chan"):
-            return
-        for channel in self.get_channels():
-            if channel not in self._channel_capture_state:
-                self._channel_capture_state[channel] = ChannelCaptureState(
-                    channel=channel,
-                    stream_id=self._read_default_stream_id(channel),
-                )
-        stale_channels = set(self._channel_capture_state).difference(self.get_channels())
-        for channel in stale_channels:
-            self._channel_capture_state.pop(channel, None)
-            self._effective_decode_profiles.pop(channel, None)
-        if not self._capture_run_state.channels:
-            self._capture_run_state.channels = tuple(self.default_channels)
-        self._capture_run_state.capture_engine = self.CAPTURE_TYPE
-        self._capture_run_state.pkt_frames_per_burst = int(self._capture_pkt_frames_per_burst or 1)
-        self._recompute_effective_decode_profiles()
 
     @staticmethod
     def _ucap_mode_to_pkt_frames(mode: int) -> int:
@@ -2662,78 +2168,147 @@ class chFPGA(FPGAFirmware):
         return int(data_type)
 
     def _update_channel_capture_state(self, channels=None, **updates):
-        self._init_capture_state_tracking()
         target_channels = self._normalize_channels(channels)
         for channel in target_channels:
-            state = self._channel_capture_state[channel]
+            state = self.state.chan[channel]
             for key, value in updates.items():
                 if value is not None:
                     setattr(state, key, value)
-        self._recompute_effective_decode_profiles(target_channels)
+        self._update_raw_capture_state(channels=target_channels)
 
     def _update_capture_run_state(self, **updates):
         self._init_capture_state_tracking()
+        raw_capture = self.state.raw_capture
         for key, value in updates.items():
             if value is not None:
-                setattr(self._capture_run_state, key, value)
-        target_channels = self._capture_run_state.channels or tuple(self.default_channels)
-        self._recompute_effective_decode_profiles(list(target_channels))
+                if key == "pkt_frames_per_burst":
+                    raw_capture.frames_per_burst = int(value)
+                elif key == "ucap_mode":
+                    raw_capture.target_mode = int(value)
+                else:
+                    setattr(raw_capture, key, value)
+        self._update_raw_capture_state(channels=raw_capture.channels or tuple(self.default_channels))
 
-    def _recompute_effective_decode_profiles(self, channels=None):
-        if not hasattr(self, "chan"):
-            return
+    def _raw_capture_format(self, source: str, cap_data_type: Optional[int]) -> Tuple[str, int]:
+        adc_format = {1: "8", 2: "16", 4: "32", 8: "64"}.get(int(self.ADC_BYTES_PER_SAMPLE), "8")
+        if source != "scaler":
+            return adc_format, 1
+        if cap_data_type == 4:
+            return ("32interleave2" if self.PLATFORM_ID == self._PLATFORM_ID_CRS else "16interleave2"), 2
+        if cap_data_type == 5:
+            bins_per_word = self._get_fft_bins_per_word()
+            return "32laneinterleave", 2 * max(1, int(bins_per_word))
+        if cap_data_type == 6:
+            return "16saturationflags", 1
+        return ("16" if self.PLATFORM_ID == self._PLATFORM_ID_CRS else "8"), 1
+
+    def _update_raw_capture_state(self, channels=None):
+
+        if "raw_capture" not in self.state:
+            self.state.add("raw_capture")
+        raw_capture = self.state.raw_capture
+        if not raw_capture:
+            raw_capture.update(
+                capture_engine=self.CAPTURE_TYPE,
+                source="scaler",
+                channels=tuple(getattr(self, "default_channels", ())),
+                frames_per_burst=int(self._capture_pkt_frames_per_burst or 1),
+                subframes_per_frame=4 if self.CAPTURE_TYPE == "UCAP" else 1,
+                target_mode=0,
+                bytes_per_sample=int(self.ADC_BYTES_PER_SAMPLE),
+                samples_per_frame=int(self.ADC_SAMPLES_PER_FRAME),
+                bytes_per_frame=int(self.ADC_BYTES_PER_SAMPLE * self.ADC_SAMPLES_PER_FRAME),
+                packet_header_format="raw-v1",
+            )
+
         target_channels = self._normalize_channels(channels)
+        for channel in target_channels:
+            chan = self.chan[channel]
+            state = self.state.chan[channel]
+            if chan.PROBER is not None:
+                state.data_source = "scaler" if int(chan.PROBER.SOURCE_SEL) else "funcgen"
+                state.prober_sub_period = int(chan.PROBER.SUB_PERIOD)
+            state.scaler_cap_data_type = int(chan.SCALER.CAP_DATA_TYPE)
+            state.scaler_bypass = bool(chan.SCALER.BYPASS)
+            state.scaler_bypass_data_type = int(chan.SCALER.DATA_TYPE)
+            state.fft_bypass = bool(chan.FFT.BYPASS)
+            state.funcgen_source = chan.FUNCGEN.get_data_source()
+            state.funcgen_left_shift = int(chan.FUNCGEN.LEFT_SHIFT)
+            state.funcgen_right_shift = int(chan.FUNCGEN.RIGHT_SHIFT)
 
-        capture_engine = self._capture_run_state.capture_engine or self.CAPTURE_TYPE
-        source = self._capture_run_state.source or "scaler"
+        if self.CAPTURE_TYPE == "UCAP":
+            self.state.raw_capture.target_mode = int(self.UCAP.MODE)
+            self.state.raw_capture.source = "scaler" if int(self.UCAP.SOURCE_SEL) == 255 else "funcgen"
 
+        target_channels = tuple(self._normalize_channels(channels or raw_capture.get("channels", tuple(self.default_channels))))
+        capture_engine = raw_capture.get("capture_engine", self.CAPTURE_TYPE) or self.CAPTURE_TYPE
+        source = raw_capture.get("source", "scaler") or "scaler"
         if capture_engine == "UCAP":
-            target_mode = int(self._capture_run_state.ucap_mode)
+            target_mode = int(raw_capture.get("target_mode", 0) or 0)
             pkt_frames_per_burst = self._ucap_mode_to_pkt_frames(target_mode)
             number_of_subframes = 4
         else:
             target_mode = 0
-            pkt_frames_per_burst = int(self._capture_run_state.pkt_frames_per_burst or 1)
+            pkt_frames_per_burst = int(raw_capture.get("frames_per_burst", self._capture_pkt_frames_per_burst or 1) or 1)
             number_of_subframes = 1
-
-        fft_bins_per_word = self._get_fft_bins_per_word()
+        stream_ids = [int(self.get_stream_id(channel)) for channel in target_channels]
+        cap_types = []
         for channel in target_channels:
-            state = self._channel_capture_state[channel]
-            cap_data_type = int(state.scaler_cap_data_type) if source == "scaler" else None
-            packets_per_logical_frame, decode_transform = self._scaler_packets_per_logical_frame(
-                cap_data_type,
-                fft_bins_per_word=fft_bins_per_word,
-            ) if source == "scaler" else (1, "identity")
-            logical_frames_per_burst = pkt_frames_per_burst // packets_per_logical_frame
-            self._effective_decode_profiles[channel] = EffectiveDecodeProfile(
-                capture_engine=capture_engine,
-                source=source,
-                channel=channel,
-                stream_id=int(state.stream_id),
-                scaler_cap_data_type=cap_data_type,
-                pkt_frames_per_burst=pkt_frames_per_burst,
-                packets_per_logical_frame=packets_per_logical_frame,
-                logical_frames_per_burst=logical_frames_per_burst,
-                number_of_subframes=number_of_subframes,
-                target_mode=target_mode,
-                decode_transform=decode_transform,
-                default_format=self._default_capture_format(source=source, cap_data_type=cap_data_type),
-                fft_bins_per_word=fft_bins_per_word,
-                decode_strict=True,
-            )
+            chan_state = self.state.chan[channel]
+            if "scaler_cap_data_type" in chan_state:
+                cap_types.append(int(chan_state.scaler_cap_data_type))
+            else:
+                cap_types.append(int(self.chan[channel].SCALER.CAP_DATA_TYPE) if source == "scaler" else 0)
+        cap_data_type = cap_types[0] if cap_types else None
+        if any(cap_type != cap_data_type for cap_type in cap_types):
+            raise ValueError("Selected channels have different raw capture data formats. Use separate receivers.")
+        format_, packets_per_logical_frame = self._raw_capture_format(source=source, cap_data_type=cap_data_type)
+        logical_frames_per_burst = max(1, pkt_frames_per_burst // packets_per_logical_frame)
+        raw_capture.update(
+            capture_engine=capture_engine,
+            source=source,
+            channels=target_channels,
+            stream_ids=tuple(stream_ids),
+            frames_per_burst=int(pkt_frames_per_burst),
+            subframes_per_frame=int(number_of_subframes),
+            target_mode=int(target_mode),
+            bytes_per_sample=int(self.ADC_BYTES_PER_SAMPLE),
+            samples_per_frame=int(self.ADC_SAMPLES_PER_FRAME),
+            bytes_per_frame=int(self.ADC_BYTES_PER_SAMPLE * self.ADC_SAMPLES_PER_FRAME),
+            bytes_per_subframe=int(self.ADC_BYTES_PER_SAMPLE * self.ADC_SAMPLES_PER_FRAME // number_of_subframes),
+            packets_per_channel_per_burst=int(pkt_frames_per_burst * number_of_subframes),
+            packets_per_logical_frame=int(packets_per_logical_frame),
+            logical_frames_per_burst=int(logical_frames_per_burst),
+            fft_bins_per_word=int(self._get_fft_bins_per_word()),
+            raw_decoder=dict(format=format_),
+            packet_header_format="raw-v1",
+            format='16',
+            split=False
+        )
+
+    def get_raw_decoder_state(self, stream_ids=None, format=None):
+        channels = self._resolve_receiver_channels(stream_ids=stream_ids)
+        self._update_raw_capture_state(channels=channels)
+        if format is not None:
+            raw_decoder = self.state.raw_capture.get("raw_decoder", {})
+            if hasattr(raw_decoder, "as_dict"):
+                raw_decoder = raw_decoder.as_dict()
+            else:
+                raw_decoder = dict(raw_decoder)
+            raw_decoder["format"] = format
+            self.state.raw_capture.raw_decoder = raw_decoder
+        return self.state.raw_capture.as_dict()
+
 
     def _resolve_receiver_channels(self, stream_ids=None):
         self._init_capture_state_tracking()
         if stream_ids is None:
-            return list(self._capture_run_state.channels or tuple(self.default_channels))
+            return list(self.state.raw_capture.channels or tuple(self.default_channels))
 
         if isinstance(stream_ids, (int, np.integer)):
             stream_ids = [int(stream_ids)]
 
-        sid_to_channel = {
-            int(state.stream_id): channel
-            for channel, state in self._channel_capture_state.items()
-        }
+        sid_to_channel = dict(zip(self.state.raw_capture.stream_ids, self.state.raw_capture.channels))
         channels = []
         unresolved = []
         for stream_id in list(stream_ids):
@@ -2759,43 +2334,7 @@ class chFPGA(FPGAFirmware):
                 seen.add(channel)
         return unique_channels
 
-    def _get_uniform_receiver_profile(self, stream_ids=None):
-        channels = self._resolve_receiver_channels(stream_ids=stream_ids)
-        profiles = [self._effective_decode_profiles[ch] for ch in channels]
-        if not profiles:
-            raise RuntimeError("No decode profiles available for selected channels.")
 
-        signature = profiles[0].receiver_signature()
-        mismatched = [p.channel for p in profiles if p.receiver_signature() != signature]
-        if mismatched:
-            raise ValueError(
-                f"Selected stream IDs span different decode profiles. "
-                f"Use separate receivers for channel groups. Mismatched channels: {mismatched}"
-            )
-        return profiles[0]
-
-    def refresh_capture_state_from_hardware(self, channels=None):
-        """Optional debug helper to reconcile tracked state from hardware registers."""
-        self._init_capture_state_tracking()
-        target_channels = self._normalize_channels(channels)
-        for channel in target_channels:
-            chan = self.chan[channel]
-            state = self._channel_capture_state[channel]
-            if chan.PROBER is not None:
-                state.stream_id = int(chan.PROBER.STREAM_ID)
-                state.data_source = "scaler" if int(chan.PROBER.SOURCE_SEL) else "funcgen"
-                state.prober_sub_period = int(chan.PROBER.SUB_PERIOD)
-            state.scaler_cap_data_type = int(chan.SCALER.CAP_DATA_TYPE)
-            state.scaler_bypass = bool(chan.SCALER.BYPASS)
-            state.scaler_bypass_data_type = int(chan.SCALER.DATA_TYPE)
-            state.fft_bypass = bool(chan.FFT.BYPASS)
-            state.funcgen_source = chan.FUNCGEN.get_data_source()
-            state.funcgen_left_shift = int(chan.FUNCGEN.LEFT_SHIFT)
-            state.funcgen_right_shift = int(chan.FUNCGEN.RIGHT_SHIFT)
-        if self.CAPTURE_TYPE == "UCAP":
-            self._capture_run_state.ucap_mode = int(self.UCAP.MODE)
-            self._capture_run_state.source = "scaler" if int(self.UCAP.SOURCE_SEL) == 255 else "funcgen"
-        self._recompute_effective_decode_profiles(target_channels)
 
 
 
@@ -3460,40 +2999,36 @@ class chFPGA(FPGAFirmware):
             ``decode_strict``, ``ignore_first_burst``. Engine/profile kwargs
             are injected internally.
         """
-        self._init_capture_state_tracking()
+        # self._init_capture_state_tracking()
 
-        profile = self._get_uniform_receiver_profile(stream_ids=kwargs.get("stream_ids"))
+        # raw_capture_state = self.get_raw_decoder_state(
+        #     stream_ids=kwargs.get("stream_ids"),
+        #     format=kwargs.get("format"),
+        # )
+        # kwargs.pop("stream_ids", None)
+        # kwargs.pop("format", None)
+        # kwargs["raw_capture_state"] = raw_capture_state
+        # desired_pkt_frames = int(raw_capture_state["frames_per_burst"])
+        # desired_ignore_first_burst = bool(kwargs.get("ignore_first_burst", True))
+        # kwargs["ignore_first_burst"] = desired_ignore_first_burst
+        # profile_signature = tuple(
+        #     (key, tuple(value) if isinstance(value, list) else value)
+        #     for key, value in sorted(raw_capture_state.items())
+        #     if key in raw_capture_state.get("receiver_recreate_attrs", ())
+        # )
 
-        if kwargs.get("format") is None:
-            kwargs["format"] = profile.default_format
-
-        desired_pkt_frames = kwargs.get("pkt_frames_per_burst", profile.pkt_frames_per_burst)
-        kwargs["pkt_frames_per_burst"] = desired_pkt_frames
-        desired_ignore_first_burst = bool(kwargs.get("ignore_first_burst", True))
-        kwargs["ignore_first_burst"] = desired_ignore_first_burst
-        kwargs["capture_engine"] = profile.capture_engine
-        kwargs["effective_decode_profile"] = asdict(profile)
-        profile_signature = (
-            profile.receiver_signature(),
-            int(desired_pkt_frames),
-            kwargs.get("format"),
-        )
-
-        if profile.capture_engine == "UCAP":
-            kwargs.setdefault("target_mode", profile.target_mode)
-
-        if self.recv:
-            current_pkt_frames = getattr(self.recv, "PKT_FRAMES_PER_BURST", None)
-            current_profile_signature = getattr(self.recv, "decode_profile_signature", None)
-            if current_pkt_frames != desired_pkt_frames or current_profile_signature != profile_signature:
-                self.logger.debug(
-                    f"{self!r}: Recreating data receiver due to capture context change "
-                    f"(pkt_frames {current_pkt_frames}->{desired_pkt_frames}, "
-                    f"profile {current_profile_signature}->{profile_signature})."
-                )
-                if pr is None:
-                    pr = self.recv.pr
-                self.recv = None
+        # if self.recv:
+        #     current_pkt_frames = getattr(self.recv, "PKT_FRAMES_PER_BURST", None)
+        #     current_profile_signature = getattr(self.recv, "decode_profile_signature", None)
+        #     if current_pkt_frames != desired_pkt_frames or current_profile_signature != profile_signature:
+        #         self.logger.debug(
+        #             f"{self!r}: Recreating data receiver due to capture context change "
+        #             f"(pkt_frames {current_pkt_frames}->{desired_pkt_frames}, "
+        #             f"profile {current_profile_signature}->{profile_signature})."
+        #         )
+        #         if pr is None:
+        #             pr = self.recv.pr
+        #         self.recv = None
 
         if not self.recv:
             if not isinstance(pr, UDPPacketReceiver):
@@ -3506,15 +3041,7 @@ class chFPGA(FPGAFirmware):
                 self.logger.debug(f'{self!r}: Creating data receiver')
                 pr = UDPPacketReceiver(self.get_data_socket(port_number=port_number), **pr_kwargs)
 
-            self.recv = RawFrameReceiver(
-                pr,
-                bytes_per_sample=self.ADC_BYTES_PER_SAMPLE,
-                samples_per_frame=self.ADC_SAMPLES_PER_FRAME,
-                platform_id=self.PLATFORM_ID,
-                **kwargs,
-            )
-            self.recv.decode_profile_signature = profile_signature
-            self._receiver_profile_signature = profile_signature
+            self.recv = RawFrameReceiver(pr, config=self.state.raw_capture, **kwargs)
         else:
             self.logger.debug(f'{self!r}: Fetching existing data receiver')
         return self.recv
@@ -3632,9 +3159,7 @@ class chFPGA(FPGAFirmware):
         self._init_capture_state_tracking()
         for ch, stream_id in stream_ids.items():
             self.chan[ch].PROBER.STREAM_ID = stream_id
-            if ch in self._channel_capture_state:
-                self._channel_capture_state[ch].stream_id = int(stream_id)
-        self._recompute_effective_decode_profiles(stream_ids.keys())
+        self._update_raw_capture_state(stream_ids.keys())
 
     def start_data_capture(
             self,
@@ -3753,7 +3278,7 @@ class chFPGA(FPGAFirmware):
                 f'with first frame offset of {offset} frames ({offset * self.FRAME_PERIOD * 1000:.3f} ms)'
                 f'and a send delay factor of {send_delay} ({send_delay * 65536 / 125e6 * 1000:.3f} ms).')
 
-        self._init_capture_state_tracking()
+        self._update_raw_capture_state()
 
         if data_type is not None:
             if source == 'scaler':
@@ -3780,25 +3305,9 @@ class chFPGA(FPGAFirmware):
         if self.CAPTURE_TYPE == 'UCAP':
             self.UCAP.set_data_capture(source=source, mode=mode, channels=channels, select=select, periods=[burst_period_in_frames-1, burst_period_in_frames-1])
             self._capture_pkt_frames_per_burst = None
-            self._update_capture_run_state(
-                capture_engine="UCAP",
-                source=source,
-                channels=tuple(channels),
-                ucap_mode=int(mode),
-                ucap_select=bool(select),
-                pkt_frames_per_burst=self._ucap_mode_to_pkt_frames(int(mode)),
-            )
 
         elif self.CAPTURE_TYPE =='PROBER':
             self._capture_pkt_frames_per_burst = frames_per_burst
-            self._update_capture_run_state(
-                capture_engine="PROBER",
-                source=source,
-                channels=tuple(channels),
-                ucap_mode=0,
-                ucap_select=False,
-                pkt_frames_per_burst=int(frames_per_burst),
-            )
 
             frames_per_second = frames_per_burst * 1.0 / self.FRAME_PERIOD / burst_period_in_frames
             packet_size_in_bits = (self.FRAME_LENGTH + 10 + 42) * 8  # 10 header bytes, 42 Ethernet/IP/UDP overhead
