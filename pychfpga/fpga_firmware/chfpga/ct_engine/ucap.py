@@ -70,7 +70,7 @@ class UCAP(MMI):
     def get_stream_ids(self):
         """ Return the stream_ids of all channels.
         """
-        return [self.USER_STREAM_ID<<4 + ch for ch in range(8)]
+        return [(self.USER_STREAM_ID << 4) + ch for ch in range(8)]
 
     def set_data_capture(self, source, mode=0, channels=None, periods=[195312,195312], select=False):
         """ Selects the source of the data to be captured (FUNCGEN or SCALER). Optionally enables streaming the captured data instead of the correlator data.
