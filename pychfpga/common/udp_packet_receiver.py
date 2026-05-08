@@ -48,28 +48,44 @@ class UDPPacketReceiver:
         """
         return self.sock.gettimeout()
 
-    def receive_packets(self, verbose=0):
-        """ Receive some packets into the buffer until there is a timeout or the buffer is full
+    def receive_packets(self, verbose=None):
+        """Receive packets until timeout or the buffer is full.
+
+        Parameters
+        ----------
+        verbose : int or None
+            If ``None``, use :attr:`verbose` on this receiver. If set, that level is used
+            for this call only (it is **not** raised to match :attr:`verbose`), so a parent
+            such as :class:`~pychfpga.common.raw_frame_receiver.RawFrameReceiver` can force
+            quiet UDP logs with ``verbose=0`` even when the packet receiver was constructed
+            with a higher default.
         """
-        verbose = max(verbose, self.verbose)
+        v = int(self.verbose if verbose is None else verbose)
         n = 0
         # last_ts = None
         while n < self.n_packets:
             try:
                 nbytes, addr = self.sock.recvfrom_into(self.buf[n])
                 self.pkt_len[n] = nbytes
-                if verbose >= 3 and self.pkt_len[n] > self.report_pkt_len_me:
+                if v >= 3 and nbytes > self.report_pkt_len_me:
                     print(f"receive_packets: got raw packet {n:03d} from {addr}, len={nbytes}: {self.buf[n,:26].tobytes().hex(':')}")
                 n += 1
             except socket.timeout:  # we have a timeout, so we probably have time to process data
                 if not n:
                     continue
-                if verbose >= 3:
+                if v >= 3:
                     print(f'receive_packets: timeout')
                 break
         # we get here if there is a timeout or if the buffer is full
-        if verbose >= 2:
+        if v >= 2:
             print(f'receive_packets: Returning {n} packets')
+        # Clear the packet length for the packets that were not received
+        # We optimize speed by clearing only from n up to the last stored packet, not the entire buffer after n
+        # Benchmarks show that this is a significant speed up.
+        if n < self.n_stored:
+            self.pkt_len[n:self.n_stored] = 0
+        elif n < self.n_packets:  # Effectively if n != self.n_packets
+            self.pkt_len[n:] = 0
         self.n_stored = n
         return n
 
