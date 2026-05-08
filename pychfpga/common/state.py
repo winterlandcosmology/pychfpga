@@ -21,6 +21,10 @@ class State(NameSpace):
         super().__init__(*args, **kwargs)
         object.__setattr__(self, "_baselines", {})
 
+    def deepcopy(self):
+        """Return a new ``State`` with a deep-copied mapping (fresh change-tracking baselines)."""
+        return State(copy.deepcopy(self._obj))
+
     def __repr__(self):
         return f"{self.__class__.__name__}({self._obj!r})"
 
@@ -57,8 +61,25 @@ class State(NameSpace):
 
     has_changed = is_changed
 
-    def update(self, **values):
-        """Assign multiple state values."""
+    def update(self, other=None, **values):
+        """Assign multiple state values.
+
+        If ``other`` is a :class:`~wtl.namespace.NameSpace` (including :class:`State`)
+        or a :class:`~collections.abc.Mapping`, its keys are merged into this node first.
+        Keyword arguments are applied second and override keys from ``other``.
+        """
+        if other is not None:
+            if isinstance(other, NameSpace):
+                payload = other.as_dict()
+            elif isinstance(other, Mapping):
+                payload = dict(other)
+            else:
+                raise TypeError(
+                    "State.update() expects Mapping or NameSpace as first argument, "
+                    f"got {type(other).__name__!r}"
+                )
+            for key, value in payload.items():
+                setattr(self, key, value)
         for key, value in values.items():
             setattr(self, key, value)
         return self
