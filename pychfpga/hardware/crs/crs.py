@@ -217,7 +217,6 @@ class CRS(Motherboard):
 
         # Switch port 0: QSFP
         self.i2c1_qsfp = qsfp(self.iic, bus_name=(i2c1_switch1, 0), gpio_prefix='QSFP_', gpio=self.i2c1_gpios, address=0x50)
-        self._enable_qsfp_high_power_mode()
         # Switch port 1-6: SFPs
 
         self.i2c0_bp_eeprom_data = eeprom(self.iic, address=0x50, bus_name=0, address_width=7, max_read_length=255, max_write_length=8, write_page_size=8)
@@ -240,7 +239,7 @@ class CRS(Motherboard):
         }
 
 
-    def _enable_qsfp_high_power_mode(self, ready_timeout=2.5, poll_interval=0.1):
+    def enable_qsfp_high_power_mode(self, ready_timeout=2.5, poll_interval=0.1):
         """Bring the QSFP module into high-power mode at startup.
 
         Waits for the module to be present and for its management interface
@@ -269,7 +268,7 @@ class CRS(Motherboard):
                 try:
                     self.i2c1_qsfp.enable_i2c(True)
                     try:
-                        if self.i2c1_qsfp._qsfp_eeprom.is_present():
+                        if self.i2c1_qsfp.is_present():
                             ready = True
                             break
                     finally:
@@ -557,7 +556,6 @@ class CRS(Motherboard):
         # -------------------
         self.logger.debug('%r: Instantiating QSFP manager' % self)
         self.i2c1_qsfp = qsfp(self.iic, bus_name=(self.i2c1_switch1, 0), gpio_prefix='QSFP_', gpio=self.i2c1_gpios, address=0x50)
-        self._enable_qsfp_high_power_mode()
 
         # -------------------
         # Temperature Sensors
