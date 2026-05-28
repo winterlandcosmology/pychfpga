@@ -134,7 +134,7 @@ class TCPipe:
 
     opened_sockets = {}
 
-    def __init__(self, hostname, port=7, timeout=2):
+    def __init__(self, hostname, port=7, timeout=2, log_performance=False):
         self.log = logging.getLogger(__name__)
         self.hostname = hostname
         self.port = port
@@ -152,7 +152,7 @@ class TCPipe:
         self.firmware_crc = None
         self.log.debug(f'{self!r}: Opened TCPipe socket from local address{self.sock.getsockname()} to remote address {self.hostname}:{self.port}')
         self.bsb_sent_ctr = 0
-        self.perf = _TCPipePerf(self, self.RPC_PERF_LOG_INTERVAL)
+        self.perf = _TCPipePerf(self, self.RPC_PERF_LOG_INTERVAL) if log_performance else None
         # BSB write aggregation uses the batch-write RPC provided by the RTOS.
         self._bsb_aggregate_ctx_depth = 0
         self._bsb_agg_pending = []
@@ -170,7 +170,8 @@ class TCPipe:
             self._bsb_batch_write_flush()
         except (IOError, OSError) as exc:
             self.log.warning('%r: _bsb_batch_write_flush during close failed: %r', self, exc)
-        self.perf.log_summary()
+        if self.perf:
+            self.perf.log_summary()
         if self.sock is not None:
             print(f'Closing TCPipe socket at {self.sock.getsockname()}')
             self.sock.close()
@@ -244,7 +245,8 @@ class TCPipe:
         finally:
             if timeout:
                 self.sock.settimeout(old_timeout)
-        self.perf.record_rpc(
+        if self.perf:
+            self.perf.record_rpc(
             rpc_id=rpc_id,
             tx_len=tx_len,
             rx_len=rx_len,
@@ -382,7 +384,8 @@ class TCPipe:
         finally:
             self._bsb_batch_write_flush()
             self._bsb_aggregate_ctx_depth -= 1
-            self.perf.log_aggregate_summary()
+            if self.perf:
+                self.perf.log_aggregate_summary()
 
     def _bsb_batch_write_flush(self):
         """Send all queued write-only BSB commands with the required batch-write RPC."""
@@ -394,7 +397,8 @@ class TCPipe:
         try:
             t0 = time.perf_counter()
             reply = self._bsb_batch_write_now(cmds)
-            self.perf.record_aggregate_flush(len(cmds), time.perf_counter() - t0)
+            if self.perf:
+                self.perf.record_aggregate_flush(len(cmds), time.perf_counter() - t0)
             return reply
         except Exception:
             # Restore queue so callers can retry or abort explicitly
