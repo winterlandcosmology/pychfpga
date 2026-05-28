@@ -4,15 +4,20 @@ import socket
 import time
 
 class UDPPacketReceiver:
-    """ Receives and stores UDP packets until the buffer is full or a timout has occured.
+    """Receives and stores UDP packets until the buffer is full or a timeout has occurred.
 
         Parameters:
 
-            sock (socket.socket): Socket to use for receiving UDP packets
+    Parameters
+    ----------
+    sock : socket.socket
+        Socket used for receiving UDP packets.
 
-            n_packets (int): Size of the packet buffer in number of packets
+    buf_size : int
+        Size of the packet buffer in number of packets.
 
-            max_packet_size (int): Maximum expected UDP payload length
+    max_packet_size : int
+        Maximum expected UDP payload length (second axis of ``buf``).
     """
 
     def __init__(self, sock, buf_size=2048, max_packet_size=9000, verbose=1, report_pkt_len_me: int = 0):
@@ -60,7 +65,8 @@ class UDPPacketReceiver:
             quiet UDP logs with ``verbose=0`` even when the packet receiver was constructed
             with a higher default.
         """
-        v = int(self.verbose if verbose is None else verbose)
+        v = verbose or self.verbose
+        # print(f"UDPPacketReceiver: receive_packets: with verbose={v}")
         n = 0
         # last_ts = None
         while n < self.n_packets:
@@ -78,7 +84,7 @@ class UDPPacketReceiver:
                 break
         # we get here if there is a timeout or if the buffer is full
         if v >= 2:
-            print(f'receive_packets: Returning {n} packets')
+            print(f'{self.__class__.__name__}: Returning {n} packets')
         # Clear the packet length for the packets that were not received
         # We optimize speed by clearing only from n up to the last stored packet, not the entire buffer after n
         # Benchmarks show that this is a significant speed up.
