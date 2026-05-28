@@ -349,7 +349,9 @@ class RawDataProcessor(object):
         return data
 
 
-    def create_output_buffer(self, n_ts: int) -> np.ndarray:
+    def create_output_buffer(
+        self, n_ts: int, chan_first: bool = False
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Create arrays to store the timestamps, formatted data, and data counts returned by process_packets.
 
         This is used by applications that need to crate a storage space for the formatted data returned by the process_packets method.
@@ -358,13 +360,18 @@ class RawDataProcessor(object):
 
         Parameters:
             n_ts (int): Number of timestamps to create the output buffer for.
-        
+            chan_first (bool): If False (default), ``data`` is ``(n_ts, nchan, nvalues)``.
+                If True, ``data`` is ``(nchan, n_ts, nvalues)``.
+
         Returns:
-            np.ndarray: The output buffer.
+            Tuple of ``ts`` ``(n_ts,)``, ``data``, and ``counts`` ``(n_ts, nchan)``.
         """
         formatted_row = self.format_data(self.raw_data[0:1])  # format a single row so we can determine the shape and dtype of the output buffer
-        _,nchan, nvalues = formatted_row.shape
-        data = np.empty((n_ts, nchan, nvalues), dtype=formatted_row.dtype)
+        _, nchan, nvalues = formatted_row.shape
+        if chan_first:
+            data = np.empty((nchan, n_ts, nvalues), dtype=formatted_row.dtype)
+        else:
+            data = np.empty((n_ts, nchan, nvalues), dtype=formatted_row.dtype)
         counts = np.empty((n_ts, nchan), dtype=self.raw_data_count.dtype)
         ts = np.empty((n_ts,), dtype=self.ts_array.dtype)
         return ts, data, counts
@@ -415,7 +422,7 @@ class RawDataProcessor(object):
         """
         verbose = self.verbose if verbose is None else verbose
         # self.move_carryover()  # move partially assembled slots to top of buffer
-
+        print(f"RawDataProcessor: process_packets: with verbose={verbose}")
         self.update_config(config)
     
         # Move partially assembled slots to top of buffer
@@ -442,7 +449,9 @@ class RawDataProcessor(object):
         np.bitwise_and(bix_mask, temp_mask[:n], out=bix_mask)
 
         if verbose >= 2:
-            print(f"process_packets: found {bix_mask.sum()} packets matching the cookie and packet size")
+            n_packets = bix_mask.sum()
+            if n_packets or verbose >= 3:
+                print(f"process_packets: found {n_packets} packets matching the cookie and packet size")
         # bix_mask[:n] = (self.buf_cookie[:n] & self.PACKET_COOKIE_MASK) == self.PACKET_COOKIE)
         #     & (pkt_len[:n] == self.PACKET_SIZE)
         # )
@@ -475,12 +484,9 @@ class RawDataProcessor(object):
         np.greater(self.pkt_ts[:n], self._last_emitted_ts, out=temp_mask, where=bix_mask)
         np.bitwise_and(bix_mask, temp_mask, out=bix_mask)
 
-        if verbose >= 2:
-            print(
-                "process_packets: found "
-                f"{bix_mask.sum()} packets matching the cookie, packet size, frame number, "
-                "subframe number, mode and stream index"
-            )
+        if self.verbose:
+            rejected_packets = np.sum(self.pkt_ts[:n][bix_mask] <= self._last_emitted_ts)
+            print(f"RawDataProcessor: process_packets: rejected {rejected_packets} packets at or before the latest timestamp already returned (monotonic emits). {self._last_emitted_ts=} {self.pkt_ts[:n].min() =}.")
 
         # Byte offset: reuse pkt_frame / pkt_subframe (already decoded above) — no temp arrays.
         # Only ``pkt_off[bix]`` is read later; entries where ``bix_mask`` is false are left undefined.
@@ -491,72 +497,65 @@ class RawDataProcessor(object):
 
        # Find the indices of the packets to process
         bix = np.flatnonzero(bix_mask)
-        if not bix.size:
-            return None # todo: what if there are carryover slots?
-
         old_nts = self.n_ts
-        # Trailing incomplete rows withheld at the end of the *previous* ``process_packets``;
-        # re-merge their timestamps with this UDP batch. Not the same as ``self.carry_len``
-        # *after* this call (recomputed below from the new ``n_ts``).
         n_carry = self.carry_len
+        cix = slice(old_nts - n_carry, old_nts)  # indices of the carryover rows in the output buffer
+    
+        if not bix.size and not n_carry:
+            return None
+
+    
         if n_carry > old_nts:
             raise RuntimeError(
                 f"RawDataProcessor: carry_len={n_carry} exceeds prior n_ts={old_nts} (internal state bug)"
             )
 
-        # Fill carryover timestamps with existing timestamp so they don't do anything
-        cix = slice(old_nts - n_carry, old_nts)  # indices of the carryover rows in the output buffer
-        self.pkt_ts_with_carry[n : n + n_carry] = self.ts_array[cix]  # copy the carryover timestamps
-        # bix2 = np.concatenate((bix, np.arange(np, np+n_carry)))  # 1.5 us
-        bix_mask2 = self.tmp_mask[: n + n_carry]  # temporary mask, slightly longer to hold the carryover timestamps
-        bix_mask2[:n] = bix_mask
-        bix_mask2[n:] = True
-        _ts_flat = self.pkt_ts_with_carry[: n + n_carry][bix_mask2]
-        ts_unique, inv = np.unique(_ts_flat, return_inverse=True, sorted=True)
-        self.pkt_tix[: n + n_carry][bix_mask2] = inv.astype(self.pkt_tix.dtype, copy=False)
+     
+        ts = np.concatenate((self.pkt_ts[bix], self.ts_array[cix])) # find all unique timestamps to process, including the carryover ones. n_carry=self.carry_len is zero if buffer is not initialized yet.
+        integ_unique, target_integ = np.unique(ts, return_inverse=True)
+        tix, carry_tix = np.split(target_integ,[ts.size-n_carry])
+        if self.verbose > 2:
+            print(f"RawDataProcessor: tix={tix}, carry_tix={carry_tix}, {old_nts=}, {n_carry=}, {cix=}, {ts=}, {integ_unique=}, {target_integ=}, {tix=} {carry_tix=}.")
+    
+        # Compute how many timestamps we keep in the buffer, and adjust index lists & masks if necessary.
+        n_raw_ts = len(integ_unique)
+        n_ts = min(n_raw_ts, self.max_timestamps)
+        dropped = n_raw_ts - n_ts
+        if dropped: # drop the oldest timestamps (np.unique sorted them). This is rarely executed, so we don't care about the performance of the code within
+            if self.verbose:
+                print(f"RawDataProcessor: dropping {dropped} oldest timestamps from the buffer.")
+            integ_unique = integ_unique[dropped:] # drop the oldest timestamps (np.unique sorted them)
+            tix -= dropped # decrease the destination timestamp index for each packet. Last n_carry are the carry ones
+            carry_tix -= dropped
+            bix_mask[bix[tix < 0]] = 0  # skip the packets that were dropped in the buffer row index mask
+            bix = bix[tix >= 0] # skip the packets that were dropped in the buffer row list
+            tix = tix[tix >= 0]
 
-        n_ts = len(ts_unique) # number of new unique timestamps in the current UDP packet batch and carryover
-        dropped_ts = max(0, n_ts - self.max_timestamps) # Number of timestamps to drop due to buffer overflow
 
-        if dropped_ts:
-            n_ts -= dropped_ts  # Adjust the number of timestamps that will be stored
-            print(f"Warning: Raw processor timestamp buffer is too small ({n_ts} > {self.max_timestamps}). Dropping {dropped_ts} timestamps.")
+        # Copy carryover state to their new rows.
+        tix_to_clear = np.ones(n_ts, dtype=bool)
+        cix_mask = carry_tix >= 0 # find indices of carryover timestamps that were not dropped
+        if cix_mask.any():
+            if self.verbose:
+                print(f"RawPacketProcessor: preserving carryover state for {len(cix_mask)} carryover timestamps {cix=}, {cix_mask=}, {carry_tix[cix_mask]=}.")
+            src_tix = np.arange(cix.start, cix.stop)[cix_mask]
+            dst_tix = carry_tix[cix_mask]
+            assert np.unique(dst_tix).size == dst_tix.size, "Duplicate carryover destination indices. This should not happen."
+            self.raw_data_count[dst_tix] = self.raw_data_count[src_tix] # Fancy indexing on the RHS cretes a copy, so order of indices is not important
+            self.raw_data_complete[dst_tix] = self.raw_data_complete[src_tix]
+            self.raw_data[dst_tix] = self.raw_data[src_tix]
+            tix_to_clear[dst_tix] = False  # don't clear the carryover rows
 
-        # preserve the carryover count and complete before clearing the output buffer where they live
-        if n_carry:
-            carry_count = self.raw_data_count[cix].copy()  # preserve the carryover count
-            carry_complete = self.raw_data_complete[cix].copy()  # preserve the carryover complete
+        self.raw_data_count[:n_ts][tix_to_clear] = 0
+        self.raw_data_complete[:n_ts][tix_to_clear] = 0
+        self.raw_data[:n_ts][tix_to_clear] = 0
 
-        # clear the output buffer
-        self.raw_data_count[:n_ts] = 0
-        self.raw_data_complete[:n_ts] = 0
-
-        # move the carryover slots to their new positions
-        if n_carry:
-            tix = self.pkt_tix[n : n + n_carry]  # get the ts index of the carryover timetmaps we injected into the UDP buffer
-            if dropped_ts:
-                tix_mask = (tix >= dropped_ts)
-                tix = tix[tix_mask]-dropped_ts
-                cix = np.arange(cix.start, cix.stop)[tix_mask]
-            self.ts_array[tix] = self.ts_array[cix]
-            self.raw_data[tix] = self.raw_data[cix]
-            self.raw_data_count[tix] = carry_count[cix]  # restore the carryover counts
-            self.raw_data_complete[tix] = carry_complete[cix]  # restore the carryover complete
-
-        self.carry_len = 0
-
-        self.ts_array[:n_ts] = ts_unique[dropped_ts:]
-        self.n_ts = n_ts 
-        tix = self.pkt_tix[:n][bix_mask]
-
-        if dropped_ts:
-            tix_mask = (tix >= dropped_ts)
-            tix = tix[tix_mask]-dropped_ts
-            bix = bix[tix_mask]
+        self.ts_array[:n_ts] = integ_unique
+        self.n_ts = n_ts
 
         # Now that we have all the info we need to copy data from the UDP buffer and reassemble it into the output buffer.
         # This is done in a very efficient single vectorized operation.
-        self.raw_data[
+        self.raw_data[  
             tix[:, None],
             self.pkt_six[bix, None],
             self.pkt_off[bix, None] + np.arange(self.BYTES_PER_SUBFRAME, dtype=self.pkt_off.dtype),
@@ -578,17 +577,24 @@ class RawDataProcessor(object):
         # Withhold trailing *incomplete* rows (``self.carry_len``), not the carry merge width
         # from the previous block (that was ``n_carry`` only).
         n_out = max(0, n_ts - self.carry_len) # number of timestamps to output (what is in the buffer minus the carryover)
+
+        if verbose >= 1:
+            print(f"RawDataProcessor: process_packets: returning {n_out} timestamps")
+
+        if not n_out:
+            return None
+    
         ts = self.ts_array[:n_out]
         data = self.format_data(self.raw_data[:n_out])
         counts = self.raw_data_count[:n_out]
 
-        if n_out:
-            self._last_emitted_ts = ts[n_out - 1]
+        self._last_emitted_ts = ts[n_out - 1]
+
 
         return ts, data, counts
 
 
-    def flush(self, flush_timeout: Optional[float] = None) -> None:
+    def flush(self, flush_timeout=None):
         """Flush UDP receiver and clear assembled-buffer state."""
         flush_kwargs = {}
         if flush_timeout is not None:

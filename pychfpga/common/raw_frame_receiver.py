@@ -63,6 +63,7 @@ class RawFrameReceiver(RawDataProcessor):
             if not self.pr.n_stored:
                 continue
             result = self.process_packets()
+            # print(f"RawFrameReceiver: get_data_iter: processed packets returned {result=}.")
             if not result:
                 continue
             ts, data, counts = result
@@ -72,10 +73,11 @@ class RawFrameReceiver(RawDataProcessor):
     def read_raw_frames_iter(
         self,
         ncap: int = 1,
-        flush: bool = True,
+        flush: bool = False,
         flush_timeout: Optional[int] = None,
         data_timeout: Optional[int] = None,
         config=None,
+        verbose=None,
         **kwargs: Any,
     ):
         """
@@ -97,8 +99,10 @@ class RawFrameReceiver(RawDataProcessor):
         Returns:
             Iterator yielding timestamp, raw frame data, and per-channel counts.
         """
-        if "verbose" in kwargs:
-            self.verbose = int(kwargs["verbose"])
+        if verbose is not None:
+            self.verbose = verbose
+            self.pr.verbose = verbose
+            print(f"RawFrameReceiver: verbose={verbose}")
         if config is not None:
             self.update_config(config)
         if flush:
@@ -113,7 +117,9 @@ class RawFrameReceiver(RawDataProcessor):
         self,
         ncap: int = 1,
         split_frames: bool = False,
+        chan_first: bool = True,
         config=None,
+        verbose=None,
         **kwargs: Any,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -121,29 +127,37 @@ class RawFrameReceiver(RawDataProcessor):
 
         Parameters:
             ncap (int): Number of frames to capture.
-            split_frames (bool): Keep logical frames split along axis ``-2``.
-                                 If False, that axis is flattened into samples.
+            split_frames (bool): Reserved; logical frame layout comes from capture ``split`` config.
+            chan_first (bool): If True (default), ``data`` is ``(nchan, ncap, nsamples)``.
+                If False, ``data`` is ``(ncap, nchan, nsamples)`` (same as :meth:`format_data`).
+            verbose (int): Verbosity level for optional prints (0 quiet; ``>= 2`` enables
+                ``process_packets`` / flush progress lines).
             **kwargs (Any): Arguments forwarded to read_raw_frames_iter
                 (e.g., flush, data_timeout, ``verbose``, etc.)
 
         Returns:
             Tuple[np.ndarray, np.ndarray, np.ndarray]: Timestamps, raw frame data, and per-channel counts.
                                                        Return shapes:
-                                                       ts: (ncap)
-                                                       data: (ncap, nchannels, nframes_per_cap, nsamples_per_frame)
-                                                       data_count: (ncap, nchannels)
+                                                       ts: (ncap,)
+                                                       data: (nchan, ncap, nsamples) if ``chan_first`` else (ncap, nchan, nsamples)
+                                                       data_count: (ncap, nchan)
         """
         if config is not None:
             self.update_config(config)  # make sure the config is updated before we get the packet format
         # Pre-allocate; zero so rows not filled by the iterator (short reads) are deterministic.
-        ts, data, counts = self.create_output_buffer(n_ts=ncap)
+        ts, data, counts = self.create_output_buffer(n_ts=ncap, chan_first=chan_first)
         ts.fill(0)
         data.fill(0)
         counts.fill(0)
 
         n_filled = 0
-        for i, (ts_, data_, data_count_) in enumerate(self.read_raw_frames_iter(ncap=ncap, **kwargs)):
-            ts[i], data[i], counts[i] = ts_, data_, data_count_
+        for i, (ts_, data_, data_count_) in enumerate(self.read_raw_frames_iter(ncap=ncap, verbose=verbose, **kwargs)):
+            ts[i] = ts_
+            counts[i] = data_count_
+            if chan_first:
+                data[:, i] = data_
+            else:
+                data[i] = data_
             n_filled = i + 1
         if n_filled != ncap:
             warnings.warn(
