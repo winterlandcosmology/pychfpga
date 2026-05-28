@@ -44,6 +44,8 @@ except ImportError:
 # Local imports
 from pychfpga import __version__
 from pychfpga.fpga_firmware.chfpga import CORR
+from pychfpga.common.raw_data_processor import RawDataProcessor
+from pychfpga.common.state import State
 
 
 class RawAcqReceiver(object):
@@ -55,6 +57,10 @@ class RawAcqReceiver(object):
 
     This reciever uses Threads to implement concurrency, not Tornado.
 
+    Packet buffer contract (aligned with :class:`~pychfpga.common.udp_packet_receiver.UDPPacketReceiver`
+    so :class:`~pychfpga.common.raw_data_processor.RawDataProcessor` can use either as ``packet_receiver``):
+
+    ``buf``, ``pkt_len``, ``n_packets``, ``n_stored``, ``max_packet_size``, and :meth:`flush`.
 
     Notes:
         The performance ofthis receiver is limited by Python. It is meant to be used mostly for debugging.
@@ -83,6 +89,9 @@ class RawAcqReceiver(object):
         self.is_locked = False  # debug
         self.raw_packet_processor = None
         self.corr_packet_processor = None
+        self.raw_data_processor = None
+        self.raw_data_result = None
+        self.raw_capture_state = None
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.name})'
@@ -103,6 +112,7 @@ class RawAcqReceiver(object):
             corr_firmware_integration_period=0,  # used to compute timestamps
             corr_software_integration_period=0,  # no corr processing until changed
             jump_thresholds=[],
+            raw_capture_state=None,
             hostname=None,  # not used, but may be passed by start_client()
             post=None  # not used, but may be passed by start_client()
     ):
@@ -211,6 +221,7 @@ class RawAcqReceiver(object):
         self.run_name = run_name
         self.data_folder = data_folder
         self.run_folder = run_folder
+        self.raw_capture_state = raw_capture_state or {}
         # self.frame0_irigb_time = frame0_irigb_time
 
         # Socket creation variables
@@ -237,16 +248,19 @@ class RawAcqReceiver(object):
         # of size PACKET_SIZE. PACKET_SIZE is big enough to contain a raw data
         # packet or a correlator packet.
         self.MAX_RAW_PACKET_SIZE = max(RawPacketProcessor.RAW_PACKET_LENGTH, CorrPacketProcessor.RAW_PACKET_LENGTH) # Big enough to accomodate all packets for one frame from the RAW or correlator subsystem.
-        self.BUF_SIZE = 2048  # Number of packets that can be held in the buffer.
+        self.BUF_SIZE = 2048  # Number of packets that can be held in the buffer (alias of n_packets).
+        self.n_packets = self.BUF_SIZE
 
         # if not self.BUF_SIZE:
         #     self.log.warning('%r: Buffer size is zero! The list of expected STREAM IDs must have been empty!' % self)
         # Define the BUF_SIZE x MAX_RAW_PACKET_SIZE buffer
-        self.buf = np.empty((self.BUF_SIZE, self.MAX_RAW_PACKET_SIZE), dtype=np.uint8)
-        # List of numbr of bytes stored in each buffer slot
-        self.buf_packet_length = np.empty(self.BUF_SIZE, dtype=np.uint16)
-        self.source_socket = np.empty(self.BUF_SIZE, dtype=np.uint16)
-        self.n = 0  # number of packets currently stored in the buffer
+        self.buf = np.empty((self.n_packets, self.MAX_RAW_PACKET_SIZE), dtype=np.uint8)
+        # Per-slot byte counts (UDPPacketReceiver names this pkt_len)
+        self.pkt_len = np.empty(self.n_packets, dtype=np.uint16)
+        self.buf_packet_length = self.pkt_len  # legacy alias for RawPacketProcessor / CorrPacketProcessor
+        self.source_socket = np.empty(self.n_packets, dtype=np.uint16)
+        self.n_stored = 0  # number of packets currently stored in the buffer
+        self.max_packet_size = int(self.MAX_RAW_PACKET_SIZE)
 
 
         # Create the packet processors
@@ -257,7 +271,8 @@ class RawAcqReceiver(object):
             stream_ids=stream_ids,
             metrics_refresh_time=metrics_refresh_time,
             adc_rms_refresh_count=adc_rms_refresh_count,
-            fft_offset_encoding=fft_offset_encoding)
+            fft_offset_encoding=fft_offset_encoding,
+            config=self.raw_capture_state)
 
         # Correlator data processor
         self.corr_packet_processor = CorrPacketProcessor(
@@ -506,7 +521,7 @@ class RawAcqReceiver(object):
         self.log.info(f"{self!r}: Starting packet processing")
         self.old_timestamp = None
         self.n_ant_rec = 0
-        self.n = 0
+        self.n_stored = 0
 
         if not self.BUF_SIZE:
             return
@@ -521,25 +536,25 @@ class RawAcqReceiver(object):
                 if sockets_with_data:
                     for sock in sockets_with_data:
                         t0 = time.time()
-                        self.buf_packet_length[self.n] = sock.recv_into(self.buf[self.n])  # data is transferred directly into the preallocated buffer, which is fast!
-                        self.source_socket[self.n] = self.sockets.index(sock) # store indice of current socket
-                        self.n += 1
+                        self.pkt_len[self.n_stored] = sock.recv_into(self.buf[self.n_stored])  # data is transferred directly into the preallocated buffer, which is fast!
+                        self.source_socket[self.n_stored] = self.sockets.index(sock) # store indice of current socket
+                        self.n_stored += 1
                         self.packet_max_readout_time = max(time.time() - t0, self.packet_max_readout_time)
                         # Process packets if the buffer is full or if we have
                         # been buffering packets for a sufficient period of
                         # time. This is useful when we have a long buffer but
                         # low packet rate.
-                        if self.n == self.BUF_SIZE or (t0 - last_processing_time) > max_time_between_processing:
+                        if self.n_stored == self.BUF_SIZE or (t0 - last_processing_time) > max_time_between_processing:
                             self.process_packets()
-                            self.n = 0
+                            self.n_stored = 0
                             last_processing_time = time.time()
-                elif self.n:
+                elif self.n_stored:
                     # There was not data after the timeout. Its probable the pause might be
                     # much longer since data comes in burst, so we don't want to wait for `max_time_between_processing`.
                     # Let's process whatever data we have so the user
                     # does not have to wait too long for it.
                     self.process_packets()
-                    self.n = 0
+                    self.n_stored = 0
                     last_processing_time = time.time()
             except KeyboardInterrupt:
                 break
@@ -550,21 +565,23 @@ class RawAcqReceiver(object):
         FFT, etc) and calling the appropriate processing method.
 
         inputs:
-            self.n: number of packets in the buffer
+            self.n_stored: number of packets in the buffer
             self.buf and its structured references: captured packets, in random order
 
         """
-        # print('Processing %i packets' % self.n)
+        # print('Processing %i packets' % self.n_stored)
 
         # Just return if there are no packets to process
-        if not self.n:
+        if not self.n_stored:
             return
 
         t0 = time.time()
 
-        self.received_packets += self.n
+        self.received_packets += self.n_stored
 
         try:
+            if self.raw_data_processor is not None:
+                self.raw_data_result = self.raw_data_processor.process_packets()
             for p in [self.raw_packet_processor, self.corr_packet_processor]:
                 if p:
                     p.process_packets()
@@ -576,6 +593,35 @@ class RawAcqReceiver(object):
 
         self.packet_max_processing_time = max(t3 - t0, self.packet_max_processing_time)
         self.packet_current_processing_time += t3 - t0
+
+    def flush(self, timeout=0.001, max_flush_time=2, verbose=0, **kwargs):
+        """Clear packet buffer bookkeeping (UDPPacketReceiver-compatible signature).
+
+        Unlike :meth:`UDPPacketReceiver.flush`, there is no UDP socket to drain;
+        this only resets the in-memory ring used with :class:`RawDataProcessor`.
+        """
+        self.n_stored = 0
+        self.pkt_len[:] = 0
+        return 0
+
+    def configure_raw_receiver(self, raw_capture_state):
+        self.raw_capture_state = dict(raw_capture_state)
+        if getattr(self, "buf", None) is None:
+            return
+        current_signature = getattr(self.raw_data_processor, "raw_capture_signature", None)
+        recreate_attrs = self.raw_capture_state.get("receiver_recreate_attrs", ())
+        signature = tuple(
+            (key, tuple(value) if isinstance(value, list) else value)
+            for key, value in sorted(self.raw_capture_state.items())
+            if key in recreate_attrs
+        )
+        if self.raw_data_processor is None or current_signature != signature:
+            self.raw_data_processor = RawDataProcessor(
+                self,
+                config=self.raw_capture_state,
+            )
+        else:
+            self.raw_data_processor.process_packets(config=State(self.raw_capture_state))
 
     async def get_metrics_async(self):
         """ Gather metrics from all packet processors"""
@@ -944,7 +990,7 @@ class RawPacketProcessor(object):
         """
 
         # Process raw ADC data packets (raw capture source 0) ###
-        (buf_ix, ) = np.where(self.buf_cookie[:self.recv.n] == 0xA0)
+        (buf_ix, ) = np.where(self.buf_cookie[:self.recv.n_stored] == 0xA0)
 
         if not buf_ix.size:
             return
@@ -1399,7 +1445,7 @@ class RawPacketProcessor(object):
 
         """
 
-        (buf_ix, ) = np.where(self.buf_cookie[:self.recv.n] == 0xA1)
+        (buf_ix, ) = np.where(self.buf_cookie[:self.recv.n_stored] == 0xA1)
 
         if not buf_ix.size:
             return
@@ -2073,7 +2119,7 @@ class CorrPacketProcessor(object):
             return
 
         # find the buffer indices of the correlator packets by looking at their header
-        (buf_ix, ) = np.where(self.buf_cookie[:self.recv.n] == self.CORR_COOKIE)
+        (buf_ix, ) = np.where(self.buf_cookie[:self.recv.n_stored] == self.CORR_COOKIE)
 
         if not buf_ix.size:
             return
@@ -2819,6 +2865,12 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
         self.receiver.stop()
         return "stopped receiver"
 
+    @endpoint('configure-raw-receiver')
+    async def configure_raw_receiver(self, **raw_capture_state):
+        self.log.info(f'{self!r}: received raw receiver state update')
+        self.receiver.configure_raw_receiver(raw_capture_state)
+        return dict(configured=self.receiver.raw_data_processor is not None)
+
     @endpoint('start-raw-hdf5')
     async def start_raw_hdf5(
             self,
@@ -3025,6 +3077,9 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
     async def stop(self):
         result = await self.get('stop')
         return result
+
+    async def configure_raw_receiver(self, raw_capture_state):
+        return await self.post('configure-raw-receiver', **raw_capture_state)
 
     async def get_packets(self):
         data = await self.get('get-packets')

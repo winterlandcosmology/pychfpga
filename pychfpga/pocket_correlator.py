@@ -1452,14 +1452,15 @@ class POCKET_CORRELATOR:
                                 )
 
         t1 = time.time() # This is our rough timestamp  
-        d_corr, count, sat, = self.corr_receiver.read_corr_frames(soft_integ_period = n_software_frames,
-                                                                  number_of_results = number_of_results,
-                                                                  flush = flush,
-                                                                  data_timeout = data_timeout,
-                                                                  flush_timeout = flush_timeout,
-                                                                  return_format = return_format,
-                                                                  verbose = verbose
-                                                                  )
+        # Note: ``return_format`` is currently a no-op (kept for API compatibility); only 'raw' has been validated.
+        _ = return_format
+        _integ_ts, d_corr, sat, count = self.corr_receiver.read_corr_frames(soft_integ_period = n_software_frames,
+                                                                            number_of_results = number_of_results,
+                                                                            flush = flush,
+                                                                            data_timeout = data_timeout,
+                                                                            flush_timeout = flush_timeout,
+                                                                            verbose = verbose
+                                                                            )
         t2 = time.time()
 
         print(f'Took {t2 - t1} s to capture correlated data')
