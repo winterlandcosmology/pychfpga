@@ -1,5 +1,6 @@
 """CRS network discovery through U-Boot and tcpipe beacons."""
 
+import os
 import asyncio
 import logging
 import socket
@@ -62,7 +63,7 @@ class CRSBeacon:
 async def discover_crs(boards=None, crates=None, timeout=2, **kwargs):
     """Discover CRS boards and crates from UBOOT/TCPIPE UDP beacons."""
     if kwargs:
-        logger.info(f"discover_crs  keyword arguments {kwargs} will be ignored")
+        logger.debug(f"discover_crs: keyword arguments {kwargs} will be ignored")
     await CRSDiscovery(board_targets=boards or [], crate_targets=crates or [], timeout=timeout).run()
 
 async def set_platform_firmware(boards=None, required_version=None, firmware_pathname=None, **kwargs):
@@ -130,7 +131,7 @@ class CRSDiscovery:
             crate_targets,
             timeout):
 
-        mb_classes = ()
+        self.logger = logging.getLogger(__name__)
         self.board_targets = _normalize_targets(board_targets)
         self.crate_targets = _normalize_targets(crate_targets)
         self.timeout = timeout
@@ -138,8 +139,11 @@ class CRSDiscovery:
         self.discovered_crates = []
         self.seen_serials = set()
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
 
     async def run(self):
+        self.logger.info(f"{self!r}: Starting CRS beacon-based network discovery")
         loop = asyncio.get_running_loop()
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
@@ -175,6 +179,7 @@ class CRSDiscovery:
 
         Returns the kind of the beacon that was processed, or None if the beacon was ignored.
         """
+        logger.info(f"{self!r}: Detected {beacon.kind} {beacon.version} beacon from {beacon.board_part} SN{beacon.board_serial} at {beacon.address}")
         if not self._matches_requested_targets(beacon):
             logger.debug(f"{self!r}: Ignoring {beacon.kind} beacon from serial {beacon.board_serial} (not in {self.board_targets} or {self.crate_targets})")
             return None
@@ -184,14 +189,14 @@ class CRSDiscovery:
             self._update_hardware_map(beacon, tcpipe_version=None)
             self.discovered_serials.add(beacon.board_serial)
             self._record_discovered_crate(beacon)
-            logger.info(f"{self!r}: {beacon.board_serial} discovered in U-Boot at {beacon.address}")
+            # logger.info(f"{self!r}: {beacon.board_serial} discovered in U-Boot at {beacon.address}")
             return beacon.kind
 
         if beacon.kind == "TCPIPE":
             self._update_hardware_map(beacon, tcpipe_version=beacon.version)
             self.discovered_serials.add(beacon.board_serial)
             self._record_discovered_crate(beacon)
-            logger.info(f"{self!r}: {beacon.board_serial} ready at {beacon.address} with tcpipe {beacon.version}")
+            # logger.info(f"{self!r}: {beacon.board_serial} ready at {beacon.address} with tcpipe {beacon.version}")
             return beacon.kind
         return None
 
@@ -252,6 +257,14 @@ class CRSDiscovery:
             f"discovered={sorted(self.discovered_serials)}")
 
     def _update_hardware_map(self, beacon, tcpipe_version):
+        """Update the hardware map with the information from the beacon.
+        
+        Parameters:
+            beacon (CRSBeacon): The beacon to update the hardware map with.
+            tcpipe_version (str): The version of the tcpipe firmware.
+        Returns:
+            Motherboard: The updated motherboard.
+        """
         crate = self._update_crate(beacon)
         board_part = beacon.board_part
         board_cls = Motherboard.get_class_by_ipmi_part_number(board_part.upper())
@@ -262,6 +275,7 @@ class CRSDiscovery:
         mb.tcpipe_version = tcpipe_version
         if crate is not None or beacon.slot is not None:
             mb.update_instance(slot=beacon.slot, crate=crate)
+        logger.info(f"{self!r}: Updated hardware map with {beacon.kind} beacon from {beacon.board_part} SN{beacon.board_serial} @ {beacon.address} on crate {beacon.crate_part} SN{beacon.crate_serial} (crate number {beacon.crate_number})")
         return mb
 
     def _update_crate(self, beacon):
@@ -287,12 +301,16 @@ class CRSArmFirmwareUploader:
     uboot_cmd = DEFAULT_UBOOT_CMD
 
     def __init__(self, boards, required_version, firmware_pathname=None):
+        self.logger = logging.getLogger(__name__)
         self.required_tcpipe_version = required_version
         self.boards = list(boards)
         self.firmware_pathname = firmware_pathname
         self.target_serials = set()
         self.ready_serials = set()
         self._http_server = None
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}()"
 
     async def run(self):
 
@@ -333,8 +351,10 @@ class CRSArmFirmwareUploader:
         if beacon.kind == "FWREQ":
             command = self._get_firmware_upload_command(beacon)
             sock.sendto(command.encode("utf-8"), addr)
-            logger.info(f"{self!r}: Sent TCPipe firmware {self.firmware_pathname} to {beacon.board_part}_SN{beacon.board_serial} @ {addr[0]} ")
+            short_path = os.path.relpath(self.firmware_pathname, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            logger.info(f"{self!r}: Sent TCPipe firmware {short_path} to {beacon.board_part}_SN{beacon.board_serial} @ {addr[0]} ")
             return
+       
         if beacon.kind == "TCPIPE":
             expected = self.required_tcpipe_version
             if expected is not None and beacon.version != expected:
