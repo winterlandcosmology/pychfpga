@@ -304,7 +304,7 @@ class FPGAArray(object):
 
             platform_firmware_pathname (str): Optional path to platform ARM
                 firmware used during network discovery. For CRS, ``None`` uses
-                the default ``tcpipe.elf`` in the CRS ``arm_firmware`` folder.
+                the default ``tcpipe_rtos.elf`` in the CRS ``arm_firmware`` folder.
 
 
         .. centered:: **Configuration & initialization parameters**
@@ -940,11 +940,12 @@ class FPGAArray(object):
 
         # Set the platform firmware on the motherboards that have a hostname
         # We separate the motherboards by platform class, then call the platform-specific firmware set function for each class with the list of boards belonging to that class.
-        platform_firmware_groups = defaultdict(list)
+        platform_firmware_groups = dict()
         for mb in motherboards:
             if mb.hostname:
-                platform_firmware_groups[mb.__class__].append(mb)
-        self.logger.info(f'{self!r}: Loading platform firmware {platform_firmware_pathname} on the following motherboards: {platform_firmware_groups}')
+                platform_firmware_groups.setdefault(mb.__class__, []).append(mb)
+        platform_names = ', '.join(f'{cls.__name__}' for cls in platform_firmware_groups.keys())
+        self.logger.debug(f'{self!r}: Loading platform firmware on the following motherboards as needed: {platform_names}')
 
         for board_cls, boards in platform_firmware_groups.items():
             await board_cls.set_platform_firmware(
@@ -1449,9 +1450,10 @@ class FPGAArray(object):
         # ``self.ib`` / ``self.ic`` are populated near the end of ``init()``;
         # before that point we fall back to the live ``HardwareMap`` registry
         # so ``__repr__`` is still useful in early-init log messages.
-        mb = self.ib or Motherboard.get_all_registered_instances() or []
-        cr = self.ic or Crate.get_all_registered_instances() or []
-        return f'{self.__class__.__name__}({len(mb)}_boards,{len(cr)}_crates)'
+        # mb = self.ib or Motherboard.get_all_registered_instances() or []
+        # cr = self.ic or Crate.get_all_registered_instances() or []
+        # return f'{self.__class__.__name__}({len(mb)}_boards,{len(cr)}_crates)'
+        return f'{self.__class__.__name__}()'
 
     def get_hwm_info(self):
         string = f'{self.__class__.__name__} object with the following hardware map:\n'
@@ -4486,7 +4488,7 @@ def add_fpga_array_arguments(parser):
     parser.add_argument('--no_mezz',         action='store_true', help='Do not attempt to auto-detect the mezzanines')
     parser.add_argument('--ping',            type=int, help="1: Check if Tuber is responding. 0: Check but ignore. ")
     parser.add_argument('--mdns_timeout',    type=float, help="Time to wait for mDNS discovery replies")
-    parser.add_argument('--arm_firmware_pathname', type=str, help="Path to platform ARM firmware used during network discovery. For CRS, defaults to the tcpipe.elf file in the CRS arm_firmware folder.")
+    parser.add_argument('--arm_firmware_pathname', type=str, help="Path to platform ARM firmware used during network discovery. For CRS, defaults to the tcpipe_rtos_rtos_rtos.elf file in the CRS arm_firmware folder.")
     parser.add_argument('--prog',            type=int, nargs='?', const=1,
                         help='Overrides the FPGA programming method. Is meaningful only if --mode is specified'
                         '--prog 0: do not program the FPGA (even if --mode is specified), '
@@ -4665,7 +4667,7 @@ def create_fpga_array(args=None):
     - mdns_timeout: Time to wait for motherboards to responds to mDNS queries
 
     - arm_firmware_pathname: Path to platform ARM firmware used by
-        network discovery. For CRS, None uses the default tcpipe.elf in the
+        network discovery. For CRS, None uses the default tcpipe_rtos_rtos.elf in the
         CRS arm_firmware folder.
 
     - no_mezz: Do not discover nor initialize the mezzanine on the motherboards

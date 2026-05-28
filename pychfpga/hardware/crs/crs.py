@@ -85,7 +85,7 @@ class CRS(Motherboard):
     port = 7  # port number on which to access the platform `hostname`
 
     REQUIRED_TCPIPE_VERSION = "1.0" # Requird version of the TCPipe firmware running on the board.
-    DEFAULT_ARM_FIRMWARE_NAME = "tcpipe.elf"
+    DEFAULT_ARM_FIRMWARE_NAME = "tcpipe_rtos.elf"
     DEFAULT_ARM_FIRMWARE_PATHNAME = path.join(path.dirname(__file__), 'arm_firmware', DEFAULT_ARM_FIRMWARE_NAME)
 
 
