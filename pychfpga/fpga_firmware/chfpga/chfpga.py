@@ -403,26 +403,34 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         """Sets the IP address of the host interface through which the host running pychfpga
         communicates with the motherboard, if this interface is not yet defined.
 
-        This sets the ``self.interface_ip_addr`` attribute. The interface is not changes if it already is non-zero.
+        This sets the ``self.interface_ip_addr`` attribute. The interface is not changed if it already is non-zero.
 
-        The interface if obtained by opening a TCP socket to the motherboard processor and inspecting the
-        socket that was used.
+        The indterface is determined by looking at the interface address of a socket once it is connected to the motherboard. We assume that
+        the data packets are arriving through the same
+        interface as the command stream. 
 
-        This is used to open targeted UDP sockets, and therefore assumes that
-        the UDP data or command packets are arriving through the same
-        interface (even if, in some cases, the data comes from a separate
-        FPGA-bound ethernet port instead of the processor's port).
+        If the BSB transport is TCPipe, the interface is obtained by inspecting the existing TCPIPE
+        socket.**
+
+        If the BSB transport is not TCPipe, the interface is obtained by opening a TCP socket to the motherboard processor and inspecting the
+        socket that was used, and then close that socket. **This assumes that the brief socket connection will not cause side-effects on the motherboard.**
         """
 
-        if not self.interface_ip_addr:  # set the interface only of we haven't manually defined one
-            if self.mb.hostname:
+        if self.interface_ip_addr:  # set the interface only if we have not manually defined one
+            return
+
+        if self.mb.hostname:
+            if self.BSB_TRANSPORT == self.BSB_TRANSPORT_TCPIPE:
+                s = self.mb.tcpipe.sock
+                (self.interface_ip_addr, _) = s.getsockname()
+            else:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 s.connect((self.mb.hostname, self.mb.port))
                 self.logger.debug(f'{self!r}: Established TCP connection with {s.getsockname()} to determine interface.')
                 (self.interface_ip_addr, _) = s.getsockname()
-                s.close()
-            else:
-                self.interface_ip_addr = None
+                s.close() 
+        else:
+            self.interface_ip_addr = None
 
 
     async def open_async(
@@ -4564,7 +4572,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
             if np.all(Glin.imag == 0.) == True:
                 # If the gain is purely real, recover only the real part and convert to float
-                Glin = Glin.real.astype(float)
+                Glin = np.array(Glin.real).astype(float)
 
             if Glog == -1:
                 # A Glog of -1 indicates that floating point gains were used,
