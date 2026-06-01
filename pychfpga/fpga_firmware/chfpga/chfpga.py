@@ -2684,8 +2684,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 "Using 'function' parameter for setting FUNCGEN function is obsolete. Please use 'data_source' instead."
             )
 
+        if function is not None or data_source is not None:
         # Set the date source and the function generator that feed the FFT
-        self.set_funcgen(function=data_source or function, channels=channels, left_shift=funcgen_left_shift, right_shift=funcgen_right_shift, **function_kwargs)
+            self.set_funcgen(function=data_source or function, channels=channels, left_shift=funcgen_left_shift, right_shift=funcgen_right_shift, **function_kwargs)
 
         # Set FFT bypass and shift schedule
         if fft_bypass is not None:
