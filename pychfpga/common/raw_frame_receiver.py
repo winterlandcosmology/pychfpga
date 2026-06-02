@@ -4,12 +4,12 @@ import warnings
 
 import numpy as np
 
-from .raw_data_processor import RawDataProcessor
+from .raw_data_packet_processor import RawDataPacketProcessor
 from .udp_packet_receiver import UDPPacketReceiver
 
 
-class RawFrameReceiver(RawDataProcessor):
-    """Convenience wrapper around :class:`RawDataProcessor` for burst reads."""
+class RawFrameReceiver(RawDataPacketProcessor):
+    """Convenience wrapper around :class:`RawDataPacketProcessor` for burst reads."""
 
     def __init__(
         self,
@@ -30,7 +30,7 @@ class RawFrameReceiver(RawDataProcessor):
             ignore_first_burst (bool): If True (default), the first yielded burst is skipped
                 only when its timestamp is exactly 0. This handles known startup behavior
                 where the first post-reconfiguration burst can be incomplete.
-            **kwargs (Any): Additional parameters forwarded to RawDataProcessor
+            **kwargs (Any): Additional parameters forwarded to RawDataPacketProcessor
                 (e.g., ring_buffer_size, decode_strict).
         """
         super().__init__(
