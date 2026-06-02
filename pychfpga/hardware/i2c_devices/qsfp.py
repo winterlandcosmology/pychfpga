@@ -220,15 +220,71 @@ class QSFP(object):
         return not self.get_control_bit('ModPrsL')
 
     def set_power_mode(self, state):
-        """ 0 = low power, 1 = High power 
+        """ 0 = low power, 1 = High power.
 
-        Args:
-            state (Any): Parameter value.
-
-        Returns:
-            None: No value is returned.
+        Drives the LPMode hardware pin and, when enabling high power, also
+        programs byte 93 (PowerSet) so that modules declaring Power Class 5-8
+        (>3.5 W) are actually allowed to draw their full rated power. Per
+        SFF-8636 the LPMode pin alone only gates Power Classes 1-4; classes
+        5-7 additionally require the "High Power Class Enable" bit and
+        class 8 requires the "Class 8 Enable" bit.
         """
+        if state:
+            try:
+                self.enable_high_power_class()
+            except Exception:
+                self._logger.exception(
+                    '%r: Failed to program PowerSet (byte 93) for high power '
+                    'class; module may stay clamped to Power Class 1.', self)
         self.set_control_bit('LPMode', not state)
+
+    def get_power_class(self):
+        """ Return the QSFP module's declared Power Class (1..8) based on
+        byte 129 (ExtIdentifier) per SFF-8636.
+
+        Returns None if the module is not present or cannot be read.
+        """
+        if not self.is_present():
+            return None
+        try:
+            ext = self.read_byte('ExtIdentifier')
+        except Exception:
+            self._logger.exception('%r: Failed to read ExtIdentifier', self)
+            return None
+        # bit 5: Power Class 8 implemented (max power encoded in byte 107)
+        if ext & (1 << 5):
+            return 8
+        # bits [1:0]: Power Class 5-7 extension (00 => use bits [7:6])
+        ext_low = ext & 0b11
+        if ext_low:
+            return 4 + ext_low  # 01->5, 10->6, 11->7
+        # bits [7:6]: Power Class 1-4 (00->1 .. 11->4)
+        return ((ext >> 6) & 0b11) + 1
+
+    def enable_high_power_class(self):
+        """ Program byte 93 (PowerSet) according to the module's declared
+        Power Class so that classes >3.5 W are allowed to power up.
+
+        - Always sets Power_override (bit 0) so software controls the class.
+        - Clears Power_set (bit 1) so the module is not forced to low power.
+        - Sets High Power Class Enable (bit 2) for Power Class 5-8.
+        - Sets Class 8 Enable (bit 3) for Power Class 8.
+
+        Returns the value written to byte 93, or None if no module is present.
+        """
+        power_class = self.get_power_class()
+        if power_class is None:
+            return None
+        value = 0x01  # bit 0: Power_override
+        if power_class >= 5:
+            value |= 0x04  # bit 2: High Power Class Enable (classes 5-7, also required for 8)
+        if power_class >= 8:
+            value |= 0x08  # bit 3: Class 8 Enable
+        self._logger.info(
+            '%r: Module declares Power Class %d; writing PowerSet=0x%02X',
+            self, power_class, value)
+        self.write('PowerSet', bytes([value]))
+        return value
 
     def __getattr__(self, name):
         """Resolve dynamic attributes through device accessors.
