@@ -29,6 +29,10 @@ class GPU(xglink.XGLinkCore):
 
     """
 
+    # Map of loopback lanes for the 8-lane 10G links
+    # This assumes we connect the two QSFP connectors together with a cable
+    LOOPBACK_LANE_MAP = {0:4, 1:5, 2:6, 3:7, 4:8, 5:0, 6:1, 7:2}
+
     CONTROL = BitField.CONTROL
     STATUS = BitField.STATUS
 

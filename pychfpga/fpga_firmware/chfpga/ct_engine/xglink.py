@@ -54,6 +54,14 @@ class QPLL(MMI):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
         self.state = state
 
+    def select(self):
+        """No-op: this block has a dedicated DRP port (API parity with :class:`cge.CGECommon`)."""
+        return self
+
+    def unselect(self):
+        """No-op."""
+        return self
+
     def init(self):
         """ Initializes the antenna modules"""
         # self.logger.info('Initializing BP Shuffle QPLL #%i' % self.instance_number)
@@ -205,6 +213,14 @@ class GTX(MMI):
         self.state = state
         self.node_id = (self.fpga.slot, instance_number + 1)
         self._lock()
+
+    def select(self):
+        """No-op: this lane has a dedicated DRP port (API parity with :class:`cge.CGEChannel`)."""
+        return self
+
+    def unselect(self):
+        """No-op."""
+        return self
 
     def init(self):
         """ Initializes the GTX CHANNEL block"""
