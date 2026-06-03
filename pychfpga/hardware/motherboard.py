@@ -679,7 +679,12 @@ class Motherboard(HardwareMap):
     async def init_fpga_async(self, **kwargs):
         """ Initializes the FPGA firmware.
         """
-        with self.tcpipe.aggregate_commands():
+        # Only TCPipe-backed platforms support BSB command aggregation.
+        tcpipe = self.__dict__.get('tcpipe')
+        if tcpipe is not None:
+            with tcpipe.aggregate_commands():
+                await self.fpga.init_async(**kwargs)
+        else:
             await self.fpga.init_async(**kwargs)
 
     # ****************************
