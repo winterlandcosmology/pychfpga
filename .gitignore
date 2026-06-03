@@ -28,3 +28,4 @@ xreport.xml
 .env.docker
 docker-data/
 .env
+.codex
