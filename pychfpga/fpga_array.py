@@ -1904,6 +1904,183 @@ class FPGAArray(object):
         else:
             return iceboards
 
+    def print_table(self, data=None,
+                    row_labels=None, col_labels=None, corner_label=None,
+                    row_keys=None, col_keys=None,
+                    max_width=180, line_sep=False):
+        """
+        Prints a nicely formatted table of data, where data is a list of column contents.
+        """
+
+        # If we provide no row/col keys, and labels are dict, use the label keys as the row/col keys
+        if col_keys is None:
+            if isinstance(col_labels, dict):
+                col_keys = list(col_labels.keys())
+            elif isinstance(data, dict):  # columns are dicts
+                col_keys = list(data.keys())
+            else:
+                col_keys = list(range(len(data)))
+
+        data = [data[key] for key in col_keys]
+
+        if row_keys is None:
+            if isinstance(row_labels, dict):
+                row_keys = row_labels.keys()
+            else:
+                for col_data in data:
+                    keys = list(col_data.keys()) if isinstance(col_data, dict) else list(range(len(col_data)))
+                    if row_keys is None:
+                        row_keys = keys
+                    elif keys != row_keys:
+                        raise ValueError('Row keys are not identical for every column')
+
+        data = [[col_data[row_key] for row_key in row_keys] for col_data in data]
+
+        if col_labels is None:
+            col_labels = [str(key) for key in col_keys]
+        else:
+            col_labels = [str(label) for label in col_labels]
+        if row_labels is None:
+            row_labels = [str(key) for key in row_keys]
+        else:
+            row_labels = [str(label) for label in row_labels]
+
+        if corner_label is None:
+            corner_label = ''
+
+        col_keys = list(range(len(data)))
+        row_keys = list(range(len(data[0])))
+        col_width = [max([len(line) for cell_data in [col_labels[col]] + data[col]
+                     for line in str(cell_data).splitlines()]) for col in col_keys]
+        row_labels_width = max([len(line) for row_label in [corner_label] + row_labels
+                               for line in row_label.splitlines()])
+        col_labels_height = max([len(label.splitlines()) for label in [corner_label] + col_labels])
+
+        remaining_col_keys = list(col_keys)
+        while remaining_col_keys:
+            block_col_keys = []
+            block_col_width = []
+            while remaining_col_keys:
+                col_key = remaining_col_keys[0]
+                width = col_width[col_key]
+                block_width = row_labels_width + 3 + sum(block_col_width + [width]) + len(block_col_width) * 3 + 3 + 1
+                # print block_col_keys, col_key, block_col_width, width, block_width, max_width
+                if block_width <= max_width:
+                    block_col_keys.append(remaining_col_keys.pop(0))
+                    block_col_width.append(width)
+                else:
+                    break
+
+            line_format = (f'| %-{int(row_labels_width)}s'
+                           + ' | '
+                           + ' | '.join(f'%-{int(width)}s' for width in block_col_width)
+                           + ' |')
+            line_sep_str = '+' + '+'.join(['-' * (width + 2) for width in [row_labels_width] + block_col_width]) + '+'
+
+            print(line_sep_str)
+
+            for i in range(col_labels_height):
+                line_data = [cell.splitlines()[i] if i < len(cell.splitlines()) else ''
+                             for cell in [corner_label] + [col_labels[col_key] for col_key in block_col_keys]]
+                print(line_format % tuple(line_data))
+
+            print(line_sep_str)
+
+            for row_key in row_keys:
+                row_data = [str(cell) for cell in [row_labels[row_key]] + [data[col_key][row_key]
+                            for col_key in block_col_keys]]
+                row_height = max([len(cell.splitlines()) for cell in row_data])
+                for i in range(row_height):
+                    line_data = [cell.splitlines()[i] if i < len(cell.splitlines()) else '' for cell in row_data]
+                    print(line_format % tuple(line_data))
+                if line_sep:
+                    print(line_sep_str)
+
+            if not line_sep:  # Make sure we have a bottom line if we didn't already printed one
+                print(line_sep_str)
+
+            print() # make sure we have a blank line between tables
+
+    def print_iceboard_table(self, func=None, row_labels=None, grid=False, add_serial=True):
+        """
+        func=function
+        func=async function : wll be called concurrently
+        func=data, dict, key is motherboard object
+        """
+
+        if not len(self.ib):
+            print('[ There are no Motherboards in the hardware map ]')
+            return
+
+        # Process func and end up with a dict of {motherboard:cell_text}
+        if func:
+            if isinstance(func, dict):
+                data = func
+            elif hasattr(func, 'async_map'):
+                data = dict(zip(self.ib, func.async_map(self.ib)))
+            else:
+                data = {mb: func(mb) for mb in self.ib}
+        else:
+            data = {mb: '' for mb in self.ib}
+
+        iceboards = list(data.keys())
+
+        if row_labels is None:
+            row_labels = ''
+        if isinstance(row_labels, str):
+            row_labels = [row_labels]
+
+        # Print a table of crate-less (stand-alone) motherboards
+        orphan_iceboards = [mb for mb in iceboards if not mb.crate or not mb.crate.serial]
+        corner_label = 'Standalone\nMotherboards'
+        # col_labels = ['-'] * len(orphan_iceboards)
+        col_labels = [f'Virt. slot {mb.slot}\n{mb.part_number}_SN{mb.serial}\n{mb.hostname}' for mb in orphan_iceboards]
+        # for i, mb in enumerate(orphan_iceboards):
+        #    col_labels[i] += '\n%s' % mb.hostname
+        table = []
+        for mb in orphan_iceboards:
+            # cell = 'SN' + mb.serial + '\n' if add_serial else ''
+            cell = data[mb] if data else ''
+            table.append([cell])  # append single-row column
+        if not any(table):
+            table = []
+        if table:
+            self.print_table(
+                table, row_labels=row_labels, col_labels=col_labels,
+                corner_label=corner_label, line_sep=grid)
+
+        # Create list of unique crates, preserving order. We use the keys of a dict to implement a de-facto ordered set (Python 3 dicts are ordered, sets ar enot)
+        valid_crates = list({mb.crate: None for mb in iceboards if mb.crate and mb.crate.serial}.keys())
+
+        for crate in valid_crates:
+            corner_label = f'{crate.get_string_id()}\nCrate #{crate.crate_number}'
+            slot_range = list(range(1, crate.NUMBER_OF_SLOTS + 1))
+            col_labels = [f'{int(s)}' for s in slot_range]
+
+
+
+            if add_serial:
+                for i, slot in enumerate(slot_range):
+                    col_labels[i] += (f'\nSN {crate.slot[slot].serial}') if slot in crate.slot else '\n-'
+            if add_serial:
+                for i, slot in enumerate(slot_range):
+                    col_labels[i] += (f'\n{crate.slot[slot].hostname}') if slot in crate.slot else '\n-'
+
+            table = []
+            # local_row_labels = [row_labels for crate in valid_crates]
+            for slot in slot_range:
+
+                # col_data = []
+                if slot in crate.slot.keys():
+                    cell = data[crate.slot[slot]] if data else ''
+                else:
+                    cell = '-'
+                # col_data.append(cell)
+                table.append([cell])
+            if table:
+                self.print_table(
+                    table, row_labels=row_labels, col_labels=col_labels,
+                    corner_label=corner_label, line_sep=grid)
 
 
 log_levels = {'info': logging.INFO,
