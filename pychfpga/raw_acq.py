@@ -44,7 +44,7 @@ except ImportError:
 # Local imports
 from pychfpga import __version__
 from pychfpga.fpga_firmware.chfpga import CORR
-from pychfpga.common.raw_data_processor import RawDataProcessor
+from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
 from pychfpga.common.state import State
 
 
@@ -58,7 +58,7 @@ class RawAcqReceiver(object):
     This reciever uses Threads to implement concurrency, not Tornado.
 
     Packet buffer contract (aligned with :class:`~pychfpga.common.udp_packet_receiver.UDPPacketReceiver`
-    so :class:`~pychfpga.common.raw_data_processor.RawDataProcessor` can use either as ``packet_receiver``):
+    so :class:`~pychfpga.common.raw_data_packet_processor.RawDataPacketProcessor` can use either as ``packet_receiver``):
 
     ``buf``, ``pkt_len``, ``n_packets``, ``n_stored``, ``max_packet_size``, and :meth:`flush`.
 
@@ -598,7 +598,7 @@ class RawAcqReceiver(object):
         """Clear packet buffer bookkeeping (UDPPacketReceiver-compatible signature).
 
         Unlike :meth:`UDPPacketReceiver.flush`, there is no UDP socket to drain;
-        this only resets the in-memory ring used with :class:`RawDataProcessor`.
+        this only resets the in-memory ring used with :class:`RawDataPacketProcessor`.
         """
         self.n_stored = 0
         self.pkt_len[:] = 0
@@ -616,7 +616,7 @@ class RawAcqReceiver(object):
             if key in recreate_attrs
         )
         if self.raw_data_processor is None or current_signature != signature:
-            self.raw_data_processor = RawDataProcessor(
+            self.raw_data_processor = RawDataPacketProcessor(
                 self,
                 config=self.raw_capture_state,
             )
