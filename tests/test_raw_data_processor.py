@@ -4,7 +4,7 @@ import re
 import numpy as np
 import pytest
 
-from pychfpga.common.raw_data_processor import RawDataProcessor
+from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
 from pychfpga.common.raw_frame_receiver import RawFrameReceiver
 from pychfpga.common.state import State
 
@@ -71,7 +71,7 @@ def make_processor(n_packets=16, format="8", frames_per_burst=1, receive_window=
         frames_per_burst=frames_per_burst,
         **kwargs,
     )
-    return RawDataProcessor(
+    return RawDataPacketProcessor(
         pr,
         config=state,
         receive_window=receive_window,
@@ -100,7 +100,7 @@ def test_duplicate_stream_ids_rejected():
     pr = DummyPacketReceiver()
     state = default_config(stream_ids=(0, 0))
     with pytest.raises(ValueError, match="stream_ids must be unique"):
-        RawDataProcessor(pr, config=state, receive_window=3)
+        RawDataPacketProcessor(pr, config=state, receive_window=3)
 
 
 def test_captured_payload_not_all_zeros_process_packets():

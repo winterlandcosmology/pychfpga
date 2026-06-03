@@ -111,7 +111,6 @@ class RawDataPacketProcessor(PacketProcessorBase):
         # Instialize empty buffers. These will be resized when the configuration is updated below.
         self.raw_data_buf = np.empty(0, dtype=np.uint8)
         self.raw_data_count_buf = np.empty(0, dtype=np.int64)
-        self.raw_data_complete_buf = np.empty(0, dtype=np.uint8)
         self.fmt_cdata_buf1 = np.empty(0, dtype=np.uint8)
         self.fmt_cdata_buf2 = np.empty(0, dtype=np.uint8)
 
@@ -204,14 +203,13 @@ class RawDataPacketProcessor(PacketProcessorBase):
 
             self.raw_data = self.resize_buffer('raw_data_buf', (self.max_timestamps, self.NCHAN, self.PKT_FRAMES_PER_BURST * self.BYTES_PER_FRAME), element_dtype=np.uint8)
             self.raw_data_count = self.resize_buffer('raw_data_count_buf', (self.max_timestamps, self.NCHAN), element_dtype=np.int64)
-            self.raw_data_complete = self.resize_buffer('raw_data_complete_buf', (self.max_timestamps, self.NCHAN), element_dtype=np.uint8)
 
             # No carryover
             self.carry_len = 0
             self.carry_tix = 0
             self._last_emitted_ts = 0 
 
-            self.expected_packets_per_channel = self.PKT_FRAMES_PER_BURST * self.NUMBER_OF_SUBFRAMES
+            self.expected_packets = self.PKT_FRAMES_PER_BURST * self.NUMBER_OF_SUBFRAMES
     
             state.ack(static_state_attrs, context=static_state_attrs)
 
@@ -398,6 +396,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         return super().process_packets(config, verbose)
 
     def filter_packets(self, n: int) -> Optional[np.ndarray]:
+        """Decode UCAP headers and return UDP row indices for packets to integrate."""
         # Select the packets to process by creating a boolean mask
         bix_mask = self.bix_mask[:n]
         temp_mask = self.tmp_mask[:n]
@@ -457,32 +456,39 @@ class RawDataPacketProcessor(PacketProcessorBase):
         # Find the indices of the packets to process
         return np.flatnonzero(bix_mask)
 
-    def _on_ts_overflow(self, dropped: int) -> None:
-        if self.verbose:
-            print(f"RawDataPacketProcessor: dropping {dropped} oldest timestamps from the buffer.")
+    def init_dest_rows(self, n_ts, cix, carry_tix):
+        """Relocate carryover rows to their new rows and zero the rest.
+        
+        Parameters
+        ----------
+        n_ts (int): Number of timestamps in the new output buffer.
+        cix (slice): Indices of the carryover rows in the old output buffer.
+        carry_tix (np.ndarray): Indices of the carryover rows in the new output buffer.
 
-    def _relocate_carryover_rows(
-        self, cix: slice, carry_tix: np.ndarray, tix_to_clear: np.ndarray
-    ) -> None:
+        """
+        tix_to_clear = np.ones(n_ts, dtype=bool)
         cix_mask = carry_tix >= 0  # find indices of carryover timestamps that were not dropped
-        if self.verbose:
-            print(f"RawPacketProcessor: preserving carryover state for {len(cix_mask)} carryover timestamps {cix=}, {cix_mask=}, {carry_tix[cix_mask]=}.")
-        src_tix = np.arange(cix.start, cix.stop)[cix_mask]
-        dst_tix = carry_tix[cix_mask]
-        assert np.unique(dst_tix).size == dst_tix.size, "Duplicate carryover destination indices. This should not happen."
-        self.raw_data_count[dst_tix] = self.raw_data_count[src_tix] # Fancy indexing on the RHS cretes a copy, so order of indices is not important
-        self.raw_data_complete[dst_tix] = self.raw_data_complete[src_tix]
-        self.raw_data[dst_tix] = self.raw_data[src_tix]
-        tix_to_clear[dst_tix] = False  # don't clear the carryover rows
+        if cix_mask.any():
+            if self.verbose:
+                print(
+                    f"RawPacketProcessor: preserving carryover state for {cix_mask.sum()} "
+                    f"carryover timestamps {cix=}, {cix_mask=}, {carry_tix[cix_mask]=}."
+                )
+            src_tix = np.arange(cix.start, cix.stop)[cix_mask]
+            dst_tix = carry_tix[cix_mask]
+            assert np.unique(dst_tix).size == dst_tix.size, (
+                "Duplicate carryover destination indices. This should not happen."
+            )
+            self.raw_data_count[dst_tix] = self.raw_data_count[src_tix] # Fancy indexing on the RHS cretes a copy, so no danger if source and destination overlap
+            self.raw_data[dst_tix] = self.raw_data[src_tix]
+            tix_to_clear[dst_tix] = False  # don't clear the carryover rows
 
-    def _clear_ts_rows(self, n_ts: int, tix_to_clear: np.ndarray) -> None:
-        self.raw_data_count[:n_ts][tix_to_clear] = 0
-        self.raw_data_complete[:n_ts][tix_to_clear] = 0
-        self.raw_data[:n_ts][tix_to_clear] = 0
+        n = tix_to_clear.size
+        self.raw_data_count[:n][tix_to_clear] = 0
+        self.raw_data[:n][tix_to_clear] = 0
 
-    def store_packets(self, n: int, bix: np.ndarray, tix: np.ndarray) -> None:
-        if not bix.size:
-            return
+    def store_packets(self, bix: np.ndarray, tix: np.ndarray) -> None:
+        """Scatter subframe bytes into ``raw_data`` and update per-channel packet counts."""
         # Now that we have all the info we need to copy data from the UDP buffer and reassemble it into the output buffer.
         # This is done in a very efficient single vectorized operation.
         self.raw_data[
@@ -493,21 +499,11 @@ class RawDataPacketProcessor(PacketProcessorBase):
 
         # Update the raw data count and raw data complete arrays
         np.add.at(self.raw_data_count, (tix, self.pkt_six[bix]), 1)
-        # self.raw_data_complete[:self.n_ts] = self.raw_data_count[:self.n_ts] == self.expected_packets_per_channel
-        np.equal(self.raw_data_count[:self.n_ts], self.expected_packets_per_channel, out=self.raw_data_complete[:self.n_ts])
 
-    def _compute_carry_len(self, n_ts: int) -> int:
-        # Trailing rows we keep back from emission until the next UDP block: incomplete
-        # timestamp rows at the end of the active prefix. Must be derived from *row-wise*
-        # completion (all channels), not flatnonzero on the 2D (time, channel) mask — the
-        # latter mixes channel index into carry_len and corrupts pkt_ts_with_carry copies.
-        w = min(self.receive_window, n_ts)
-        rch = np.all(self.raw_data_complete[n_ts - w : n_ts] != 0, axis=1)[::-1]
-        return int(np.argmax(rch)) if rch.size and rch.any() else w
-
-    def _emit_complete_rows(
+    def emit_complete_rows(
         self, n_out: int, verbose: int
     ) -> Optional[Tuple[np.ndarray, Any, np.ndarray]]:
+        """Return ``(ts, formatted_data, counts)`` views for complete rows."""
         if verbose >= 1:
             print(f"RawDataPacketProcessor: process_packets: returning {n_out} timestamps")
 

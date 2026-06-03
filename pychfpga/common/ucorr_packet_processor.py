@@ -6,8 +6,8 @@ from typing import Optional
 
 import numpy as np
 
-from pychfpga.common.packet_processor_base import PacketProcessorBase
-from pychfpga.common.state import State
+from .packet_processor_base import PacketProcessorBase
+from .state import State
 
 class UCorrPacketProcessor(PacketProcessorBase):
     """
@@ -61,42 +61,6 @@ class UCorrPacketProcessor(PacketProcessorBase):
         if config is not None:
             self.update_config(State(config).deepcopy())
 
-    @property
-    def pkt_integ(self):
-        return self.pkt_ts
-
-    @property
-    def integ_array(self):
-        return self.ts_array
-
-    @integ_array.setter
-    def integ_array(self, value):
-        self.ts_array = value
-
-    @property
-    def n_integ(self):
-        return self.n_ts
-
-    @n_integ.setter
-    def n_integ(self, value):
-        self.n_ts = value
-
-    @property
-    def max_integ(self):
-        return self.max_timestamps
-
-    @max_integ.setter
-    def max_integ(self, value):
-        self.max_timestamps = value
-
-    @property
-    def _last_emitted_integ(self):
-        return self._last_emitted_ts
-
-    @_last_emitted_integ.setter
-    def _last_emitted_integ(self, value):
-        self._last_emitted_ts = value
-
     def init(self) -> None:
         # Header layout is fixed; product layout depends on NCMAC and is rebuilt on bin_map changes.
         self.header_dtype = np.dtype(dict(
@@ -119,7 +83,7 @@ class UCorrPacketProcessor(PacketProcessorBase):
         self.acc_re_buf = np.empty(0, dtype=np.uint8)
         self.acc_im_buf = np.empty(0, dtype=np.uint8)
         self.sat_buf = np.empty(0, dtype=np.uint8)
-        self.total_count_buf = np.empty(0, dtype=np.uint8)
+        self.raw_data_count_buf = np.empty(0, dtype=np.uint8)
         self.integ_array_buf = np.empty(0, dtype=np.uint8)
         self.integ_data_buf = np.empty(0, dtype=np.uint8)
         self.integ_sats_buf = np.empty(0, dtype=np.uint8)
@@ -133,7 +97,7 @@ class UCorrPacketProcessor(PacketProcessorBase):
         ``bin_map`` is the only static attribute: changing it triggers reallocation of
         packet-buffer views, the per-packet ``temp32`` scratch, and all integ-indexed
         accumulators / output buffers. Everything else is dynamic and may be applied
-        with no buffer reallocation (or only ``max_integ`` resizing when the integration
+        with no buffer reallocation (or only ``max_timestamps`` resizing when the integration
         period or per-integ packet count changes).
         """
         if config is None:
@@ -188,7 +152,7 @@ class UCorrPacketProcessor(PacketProcessorBase):
             state.ack(buf_view_attrs, context=buf_view_attrs)
 
         # Dynamic: all non-shape attributes. NCHAN drives ij_to_prod_map; integ-period
-        # drives max_integ which sizes the linear accumulators / output buffers.
+        # drives max_timestamps which sizes the linear accumulators / output buffers.
         ij_attrs = ("NCHAN",)
         if state.has_changed(ij_attrs, context=ij_attrs):
             self.ij_to_prod_map = UCORR.get_ij_to_prod_map(self.NCHAN)
@@ -203,27 +167,23 @@ class UCorrPacketProcessor(PacketProcessorBase):
             self.soft_integ_period = state.soft_integ_period
 
             self.integ_period = np.uint64(self.soft_integ_period * self.firmware_integ_period)
-            self.expected_packets_per_integ = self.NPROD_PER_ARRAY * self.soft_integ_period
-            self.max_timestamps = math.ceil(self.pr.n_packets / max(1, self.expected_packets_per_integ)) + self.receive_window
+            self.expected_packets = self.NPROD_PER_ARRAY * self.soft_integ_period
+            self.max_timestamps = math.ceil(self.pr.n_packets / max(1, self.expected_packets)) + self.receive_window
 
             self.acc_re = self.resize_buffer("acc_re_buf", (self.max_timestamps, self.NDECIM, self.NCORRS, self.NPROD_PER_CMAC, self.NCMAC), np.int64)
             self.acc_im = self.resize_buffer("acc_im_buf", (self.max_timestamps, self.NDECIM, self.NCORRS, self.NPROD_PER_CMAC, self.NCMAC), np.int64)
             self.sat = self.resize_buffer("sat_buf", (self.max_timestamps, self.NDECIM, self.NCORRS, self.NPROD_PER_CMAC, self.NCMAC, 2), np.int32)
-            self.total_count = self.resize_buffer("total_count_buf", (self.max_timestamps,), np.int64)
+            self.raw_data_count = self.resize_buffer("raw_data_count_buf", (self.max_timestamps,), np.int64)
             self.ts_array = self.resize_buffer("integ_array_buf", (self.max_timestamps,), np.uint64)
             self.integ_data = self.resize_buffer("integ_data_buf", (self.max_timestamps, self.NBINS, self.NPROD), np.complex128)
             self.integ_sats = self.resize_buffer("integ_sats_buf", (self.max_timestamps, self.NBINS, self.NPROD), np.complex64)
             self.acc_re.fill(0)
             self.acc_im.fill(0)
             self.sat.fill(0)
-            self.total_count.fill(0)
+            self.raw_data_count.fill(0)
             self.n_ts = 0
             self.carry_len = 0
             state.ack(integ_attrs, context=integ_attrs)
-
-    def config_ready(self) -> bool:
-        """Return True if all fundamental configuration parameters have been specified."""
-        return all(v is not None for v in (self.NCHAN, self.NCLK, self.bin_map, self.prod_map, self.firmware_integ_period))
 
     def get_ij_to_prod_map(self):
         return self.ij_to_prod_map
@@ -243,15 +203,16 @@ class UCorrPacketProcessor(PacketProcessorBase):
         self.integ_sats.imag[ix] = self.sat[:n_out, ..., 1] * (1.0 / 16.0)
         return self.integ_data[:n_out], self.integ_sats[:n_out]
 
-    def create_output_buffer(self, n_integ):
+    def create_output_buffer(self, n_ts):
         """Allocate caller-side output arrays matching the shapes produced by :meth:`process_packets`."""
-        integ_ts = np.empty((n_integ,), dtype=self.integ_array.dtype)
-        data = np.empty((n_integ, self.NBINS, self.NPROD), dtype=self.integ_data.dtype)
-        sats = np.empty((n_integ, self.NBINS, self.NPROD), dtype=self.integ_sats.dtype)
-        counts = np.empty((n_integ,), dtype=self.total_count.dtype)
-        return integ_ts, data, sats, counts
+        ts = np.empty((n_ts,), dtype=self.ts_array.dtype)
+        data = np.empty((n_ts, self.NBINS, self.NPROD), dtype=self.integ_data.dtype)
+        sats = np.empty((n_ts, self.NBINS, self.NPROD), dtype=self.integ_sats.dtype)
+        counts = np.empty((n_ts,), dtype=self.raw_data_count.dtype)
+        return ts, data, sats, counts
 
     def filter_packets(self, n: int) -> Optional[np.ndarray]:
+        """Decode UCORR headers; leave integration index in ``pkt_ts``; return row indices."""
         # Cookie filter — UCORR packets only. Header layout is fixed so no packet-size check needed.
         bix_mask = self.bix_mask[:n]
         np.equal(self.buf_cookie[:n], self.CORR_PACKET_COOKIE, out=bix_mask)
@@ -271,31 +232,44 @@ class UCorrPacketProcessor(PacketProcessorBase):
 
         return np.flatnonzero(bix_mask)
 
-    def _on_ts_overflow(self, dropped: int) -> None:
+    def on_ts_overflow(self, dropped: int) -> None:
+        """Warn when integration keys are dropped because the buffer is full."""
         warnings.warn(f"UCorrPacketProcessor: {dropped} feel out of the buffer.")
 
-    def _relocate_carryover_rows(
-        self, cix: slice, carry_tix: np.ndarray, tix_to_clear: np.ndarray
-    ) -> None:
+    def init_dest_rows(self, n_ts, cix, carry_tix):
+        """Relocate carryover rows to their new rows and zero the rest.
+        
+        Parameters
+        ----------
+        n_ts (int): Number of timestamps in the new output buffer.
+        cix (slice): Indices of the carryover rows in the old output buffer.
+        carry_tix (np.ndarray): Indices of the carryover rows in the new output buffer.
+
+        """
+        tix_to_clear = np.ones(n_ts, dtype=bool)        
         cix_mask = carry_tix >= 0  # find indices of carryover timestamps that were not dropped
-        print(f"UCorrPacketProcessor: preserving carryover state for {len(cix_mask)} carryover timestamps {cix_mask=}, {carry_tix[cix_mask]=}.")
-        src_tix = np.arange(cix.start, cix.stop)[cix_mask]
-        dst_tix = carry_tix[cix_mask]
-        self.acc_re[dst_tix] = self.acc_re[src_tix]
-        self.acc_im[dst_tix] = self.acc_im[src_tix]
-        self.sat[dst_tix] = self.sat[src_tix]
-        self.total_count[dst_tix] = self.total_count[src_tix]
-        tix_to_clear[dst_tix] = False  # don't clear the carryover rows
+        if cix_mask.any():
+            if self.verbose:
+                print(
+                    f"UCorrPacketProcessor: preserving carryover state for {cix_mask.sum()} "
+                    f"carryover timestamps {cix_mask=}, {carry_tix[cix_mask]=}."
+                )
+            src_tix = np.arange(cix.start, cix.stop)[cix_mask]
+            dst_tix = carry_tix[cix_mask]
+            self.acc_re[dst_tix] = self.acc_re[src_tix]
+            self.acc_im[dst_tix] = self.acc_im[src_tix]
+            self.sat[dst_tix] = self.sat[src_tix]
+            self.raw_data_count[dst_tix] = self.raw_data_count[src_tix]
+            tix_to_clear[dst_tix] = False  # don't clear the carryover rows
 
-    def _clear_ts_rows(self, n_ts: int, tix_to_clear: np.ndarray) -> None:
-        self.acc_re[:n_ts][tix_to_clear] = 0
-        self.acc_im[tix_to_clear] = 0
-        self.sat[:n_ts][tix_to_clear] = 0
-        self.total_count[:n_ts][tix_to_clear] = 0
+        n = tix_to_clear.size
+        self.acc_re[:n][tix_to_clear] = 0
+        self.acc_im[:n][tix_to_clear] = 0
+        self.sat[:n][tix_to_clear] = 0
+        self.raw_data_count[:n][tix_to_clear] = 0
 
-    def store_packets(self, n: int, bix: np.ndarray, tix: np.ndarray) -> None:
-        if not bix.size:
-            return
+    def store_packets(self, bix: np.ndarray, tix: np.ndarray) -> None:
+        """Accumulate correlation products from valid packets into ``acc_re`` / ``acc_im``."""
         # integrate the packets into the accumulators
         # Track overrun bit (LSB of flags) over valid packets only.
         self.overrun |= int((self.buf_flags[bix] & 1).any())
@@ -323,18 +297,14 @@ class UCorrPacketProcessor(PacketProcessorBase):
         self.sat[tix, bin_set, corr, bin_, :, 0] += sat_pkt & 0x20
         self.sat[tix, bin_set, corr, bin_, :, 1] += sat_pkt & 0x10
 
-        np.add.at(self.total_count, tix, 1)
+        np.add.at(self.raw_data_count, tix, 1)
 
-    def _compute_carry_len(self, n_ts: int) -> int:
-        # Carry length = trailing run of incomplete integrations within receive_window.
-        w = min(self.receive_window, n_ts)
-        complete_tail = (self.total_count[n_ts - w:n_ts] >= self.expected_packets_per_integ)[::-1]
-        return int(np.argmax(complete_tail)) if complete_tail.size and complete_tail.any() else w
 
-    def _emit_complete_rows(self, n_out: int, verbose: int):
+    def emit_complete_rows(self, n_out: int, verbose: int):
+        """Return ``(ts, data, sats, counts)`` views for complete integration rows."""
         integ_ts = self.ts_array[:n_out]
         data, sats = self.format_data(n_out)
-        counts = self.total_count[:n_out]
+        counts = self.raw_data_count[:n_out]
 
         self._last_emitted_ts = integ_ts[n_out - 1]
 
@@ -356,7 +326,7 @@ class UCorrPacketProcessor(PacketProcessorBase):
             self.acc_re.fill(0)
             self.acc_im.fill(0)
             self.sat.fill(0)
-            self.total_count.fill(0)
+            self.raw_data_count.fill(0)
             self.ts_array.fill(0)
         self.n_ts = 0
         self.carry_len = 0

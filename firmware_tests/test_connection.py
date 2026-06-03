@@ -1,4 +1,4 @@
-from pychfpga.common import UDPPacketReceiver, RawDataProcessor
+from pychfpga.common import UDPPacketReceiver, RawDataPacketProcessor
 from pychfpga.fpga_array import FPGAArray
 
 config = {
