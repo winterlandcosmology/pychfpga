@@ -327,7 +327,7 @@ class ZCU111(Motherboard):
             self.logger.debug(
                 f'{self!r}: FPGA is already configured. Skipping configuration.')
 
-        self.fpga = fw_cls(self, **fw_params)
+        self.set_fpga_firmware(fw_cls(self, **fw_params))
 
     # Mezzanine management
 
@@ -451,4 +451,3 @@ class ZCU111(Motherboard):
         # Add ZCU111 monitoring data to metrics here
 
         return metrics
-
