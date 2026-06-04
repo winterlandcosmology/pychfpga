@@ -209,6 +209,13 @@ class TestScaler:
         params = self.test_config.get(test_name, {}) #we have access to test_config since setup has been run 
         return params.get(param_name, default)
 
+    def _uniform_real_gains(self, gain):
+        '''
+        Return a full-bin real gain vector for APIs that no longer safely accept
+        scalar real gains.
+        '''
+        return np.full(int(self.board.NUMBER_OF_FREQUENCY_BINS), float(gain), dtype=np.float64)
+
     def _set_capture_scaler(self, func, double=False, read=True, get_flags=False, cap_data_type=None, **func_kwargs):
         '''
         Sets the function generator to output a specific set of values and then captures data from the scaler.
@@ -276,7 +283,7 @@ class TestScaler:
         stream is exactly zero on every sample.
         '''
         logger = self.get_logger()
-        self.board.set_gains(0)
+        self.board.set_gains(self._uniform_real_gains(0), postscaler=0)
 
         source = self.gen_data('ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
         self.board.set_data_source(source='arb', data=source)
@@ -314,7 +321,7 @@ class TestScaler:
 
         self.board.set_scaler_output_modes(cap_data_type=cap_data_type)
         self.board.set_scaler_rounding_mode(0)
-        self.board.set_gains(1, postscaler=postscaler)
+        self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
         self.board.set_symmetric_saturation(symmetric_saturation)
 
         source = self.gen_data('ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
@@ -352,7 +359,7 @@ class TestScaler:
         logger = self.get_logger()
         gains = np.tile([*np.repeat(0, period - 1), 1], self.data.NUM_SAMPLES//(2 * period))
         gains = np.append(gains, (np.repeat(0, self.data.NUM_SAMPLES//2 - gains.size)))
-        self.board.set_gains(gains, self.data.MAPPING_POSTSCALER)
+        self.board.set_gains(gains, postscaler=self.data.MAPPING_POSTSCALER)
 
         source = self.gen_data('periodic_ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
         self.board.set_data_source(source='arb', data=source)
@@ -394,10 +401,10 @@ class TestScaler:
         if force_float_gains:
             if any(chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
                 pytest.skip("Platform does not support floating point gains")
-            self.board.set_gains(gain * 2**postscaler)
+            self.board.set_gains((self._uniform_real_gains(gain * 2**postscaler), -1))
             assert(all(ch.SCALER.USE_FLOAT_GAINS == True for ch in self.board.chan))
         else:
-            self.board.set_gains(gain, postscaler=postscaler)
+            self.board.set_gains(self._uniform_real_gains(gain), postscaler=postscaler)
             assert(all(ch.SCALER.USE_FLOAT_GAINS == False for ch in self.board.chan))
         self.board.set_symmetric_saturation(symmetric_saturation)
 
@@ -434,7 +441,7 @@ class TestScaler:
         logger = self.get_logger()
         gains = self.gen_data('periodic_ramp', min=self.get_test_param('ramp_gains', 'gain_min', 0), max=self.get_test_param('ramp_gains', 'gain_max', 8), samples=512)
         gains = np.concatenate((gains, gains[::-1]))
-        self.board.set_gains(gains, self.data.MAPPING_POSTSCALER)
+        self.board.set_gains(gains, postscaler=self.data.MAPPING_POSTSCALER)
         source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
         ref_data  = np.clip(np.repeat(gains, 2) * source * 2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
         logger.debug(
@@ -463,7 +470,7 @@ class TestScaler:
         #alternate between 1+0j and 0+1j
         nfreq = self.data.NUM_SAMPLES // 2
         gains = np.tile((1+0j, 0+1j), (nfreq + 1) // 2)[:nfreq]
-        self.board.set_gains(gains, self.data.MAPPING_POSTSCALER)
+        self.board.set_gains(gains, postscaler=self.data.MAPPING_POSTSCALER)
         split_source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
         source = unsplit_imag(split_source)
         ref_data = np.clip(split_imag(gains * source) * 2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
@@ -508,7 +515,7 @@ class TestScaler:
         nfreq = int(self.board.NUMBER_OF_FREQUENCY_BINS)
         split_gains = self.gen_data('complex_ramp', min=0, max=32, samples=2 * nfreq)
         gains = unsplit_imag(split_gains) #collapse interleaved real/imag values into complex coefficients
-        self.board.set_gains(gains, self.data.MAPPING_POSTSCALER)
+        self.board.set_gains(gains, postscaler=self.data.MAPPING_POSTSCALER)
         split_source, data = self._set_capture_scaler(
             'ramp',
             min=self.data.MIN_OUTPUT,
@@ -544,7 +551,7 @@ class TestScaler:
             pytest.skip("Platform does not support floating point gains")
         nfreq = int(self.board.NUMBER_OF_FREQUENCY_BINS)
         target_gain = 2 ** self.data.MAPPING_POSTSCALER
-        self.board.set_gains(np.ones(nfreq) * target_gain) #since postscaler=None, should automatically detect common factor
+        self.board.set_gains((np.ones(nfreq) * target_gain, -1))
         expected_shift_left = self.data.MAPPING_POSTSCALER - 10
         logger.debug(
             f"test_uniform_common_log_gain: nfreq={nfreq} target_gain={target_gain} expected_shift_left={expected_shift_left}"
@@ -594,7 +601,7 @@ class TestScaler:
             f"test_common_log_gain: common_log_gain={common_log_gain} expected_shift_left={expected_shift_left} "
             f"nfreq={nfreq} gains_first16={gains[:16]}"
         )
-        self.board.set_gains(gains)
+        self.board.set_gains((gains, -1))
         for ch in range(len(self.board.chan)):
             if not self.board.chan[ch].SCALER.USE_FLOAT_GAINS:
                 logger.error(f'Floating point gains not enabled in channel {ch}')
@@ -636,7 +643,7 @@ class TestScaler:
         logger.debug(f"test_ramp_float_gains: log_gains_first16={log_gains[:16]}")
         logger.debug(f"test_ramp_float_gains: lin_gains_first16={lin_gains[:16]}")
         logger.debug(f"test_ramp_float_gains: gains_first16={gains[:16]}")
-        self.board.set_gains(gains)
+        self.board.set_gains((gains, -1))
         source, data = self._set_capture_scaler('a', a=1, cap_data_type=0)
         ref_data = np.clip((source * np.repeat(gains, 2)) * 2**self.data.IMPLICIT_SHIFT // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
         logger.debug(
@@ -678,7 +685,7 @@ class TestScaler:
             pytest.skip(f"Cannot fit {value} into input bits with {num_fractional_bits} fractional bits")
         value = np.clip(value, min_val, max_val)
         postscaler = self.data.IDENTITY_POSTSCALER - num_fractional_bits
-        self.board.set_gains(1, postscaler=postscaler)
+        self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
         self.board.set_scaler_rounding_mode(rounding_mode)
         source, data = self._set_capture_scaler(
             'ramp',
@@ -756,10 +763,10 @@ class TestScaler:
         if force_float_gains:
             if any(chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
                 pytest.skip("Platform does not support floating point gains")
-            self.board.set_gains(2**postscaler)
+            self.board.set_gains((self._uniform_real_gains(2**postscaler), -1))
             assert(all(ch.SCALER.USE_FLOAT_GAINS == True for ch in self.board.chan))
         else:
-            self.board.set_gains(1, postscaler=postscaler)
+            self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
             assert(all(ch.SCALER.USE_FLOAT_GAINS == False for ch in self.board.chan))
         source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=cap_data_type)
         ref_data = source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler  // 2**self.data.SCALER_SHIFT
@@ -802,7 +809,7 @@ class TestScaler:
             overflow in either component zeros both Re/Im outputs for that bin pair.
         '''
         logger = self.get_logger()
-        self.board.set_gains(1, self.data.IDENTITY_POSTSCALER + 1)
+        self.board.set_gains(self._uniform_real_gains(1), postscaler=self.data.IDENTITY_POSTSCALER + 1)
         self.board.set_zero_on_sat(True)
         self.board.set_symmetric_saturation(symmetric_saturation)
         try:
@@ -845,7 +852,7 @@ class TestScaler:
             of the signed clipped scaler output.
         '''
         logger = self.get_logger()
-        self.board.set_gains(1, postscaler)
+        self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
         required_offset = bool(self.board.CORR.REQUIRES_OFFSET_BINARY_ENCODING) if self.board.CORR else False
         previous_offset = bool(self.board.chan[0].SCALER.USE_OFFSET_BINARY)
         if self.board.CORR and not required_offset:
@@ -899,7 +906,7 @@ class TestScaler:
         logger = self.get_logger()
         cap_data_type = 0
         self.board.set_scaler_output_modes(bypass=True, bypass_data_type=out_mode, cap_data_type=cap_data_type)
-        self.board.set_gains(1, postscaler)
+        self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
         self.board.set_symmetric_saturation(symmetric_saturation)
         source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=cap_data_type)
         source_i = source.astype(np.int64)
@@ -995,7 +1002,7 @@ class TestScaler:
         if self.data.CAPTURE_WIDTH < 8:
             pytest.skip("Cannot use double resolution capture in 4-bit mode")
         self.board.set_scaler_output_modes(cap_data_type=cap_data_type)
-        self.board.set_gains(1, postscaler)
+        self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
 
         source = self.gen_data('ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
         self.board.set_data_source(source='arb', data=source)
@@ -1051,7 +1058,7 @@ class TestScaler:
             per frame.
         '''
         logger = self.get_logger()
-        self.board.set_gains(1, self.data.IDENTITY_POSTSCALER + 1)
+        self.board.set_gains(self._uniform_real_gains(1), postscaler=self.data.IDENTITY_POSTSCALER + 1)
         self.board.set_scaler_output_modes(bypass=False, cap_data_type=0)
 
         data = np.zeros(self.data.NUM_SAMPLES, dtype=np.int64)
@@ -1246,7 +1253,7 @@ class TestScaler:
         adc_overflow = bool(adc_overflow)
         adc_overflow_i = int(adc_overflow)
         self.board.set_scaler_output_modes(bypass=False, cap_data_type=0)
-        self.board.set_gains(1, postscaler=postscaler, bank=bank, when='now')
+        self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler, bank=bank, when='now')
         source, flags = self._set_capture_scaler(
             'ramp',
             min=self.data.MIN_INPUT,
@@ -1346,8 +1353,8 @@ class TestScaler:
         logger = self.get_logger()
         _ = interval  # kept for compatibility with existing test parametrization
         self.board.set_scaler_output_modes(bypass=False, cap_data_type=0)
-        self.board.set_gains(2, self.data.MAPPING_POSTSCALER, bank=1)
-        self.board.set_gains(1, self.data.MAPPING_POSTSCALER, bank=0, when='now')
+        self.board.set_gains(self._uniform_real_gains(2), postscaler=self.data.MAPPING_POSTSCALER, bank=1)
+        self.board.set_gains(self._uniform_real_gains(1), postscaler=self.data.MAPPING_POSTSCALER, bank=0, when='now')
         source = self.gen_data(func='ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
         self.board.set_data_source(source='arb', data=source)
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
@@ -1449,7 +1456,7 @@ class TestScaler:
         n = self.data.NUM_SAMPLES * len(self.board.chan) * num_frames
         num_bursts = num_frames // FRAMES_PER_BURST
         for postscaler in range(postscaler_range[0], postscaler_range[1]): #for all possible postscalers
-            self.board.set_gains(1, postscaler)
+            self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
             for i in range(num_bursts):
                 for ch in range(len(self.board.chan)):
                     self.board.chan[ch].FUNCGEN.BYTE_A = randint(0, 255)
