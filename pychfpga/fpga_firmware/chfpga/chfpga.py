@@ -274,7 +274,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self.mode = mode # operational mode that was requested to load the firmware
         self.logger = logging.getLogger(__name__)
         self.logger.debug(f"{self!r}: Creating chFPGA FPGAFirmware object")
-        self.state = State()
+        self.config = State()
 
         # Firmware attributes provided by PLATFORM_SUPPORT. Those will be used later by `init_async`.
         self.fw_params = fw_params
@@ -288,7 +288,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self._last_init_time = None
         self.recv = None # raw data capture receiver object
         self._capture_pkt_frames_per_burst = None
-        self.state.add("raw_capture")
+        self.config.add("raw_capture")
         self._receiver_raw_capture_signature: Optional[Tuple] = None
         self.corr_recv = None # correlator data receiver object
         self.mmi = None
@@ -524,7 +524,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 # Instantiate and initialize the GPIO subsystem
                 self.logger.debug(f'{self!r}: === Instantiating and initializing GPIO')
                 await asyncio.sleep(0)
-                self.GPIO = gpio.GPIO(router=self.system_router, router_port='GPIO', state=self.state.add("gpio"))
+                self.GPIO = gpio.GPIO(router=self.system_router, router_port='GPIO', state=self.config.add("gpio"))
                 # self.GPIO.init() # don't call init() yet as this sends some commands. The module can still read the cookie without it.
 
                 # Read the firmware version cookie from the GPIO subsystem (this
@@ -703,27 +703,27 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             self.logger.debug(f'{self!r}: === Instantiating SYSTEM objects')
 
             self.logger.debug(f'{self!r}: ===     Instantiating SYSMON')
-            self.SYSMON = sysmon.SYSMON(router=self.system_router, router_port='SYSMON', state=self.state.add("sysmon"))
+            self.SYSMON = sysmon.SYSMON(router=self.system_router, router_port='SYSMON', state=self.config.add("sysmon"))
 
             if self.HAS_SPI:
                 self.logger.debug(f'{self!r}: ===     Instantiating SPI')
-                self.SPI = spi.SPI(router=self.system_router, router_port='SPI', state=self.state.add("spi"))
+                self.SPI = spi.SPI(router=self.system_router, router_port='SPI', state=self.config.add("spi"))
             else:
                 self.SPI = None
 
             if self.HAS_I2C:
                 self.logger.debug(f'{self!r}: ===     Instantiating I2C')
-                self.I2C = i2c.I2C(router=self.system_router, router_port='I2C', state=self.state.add("i2c"))
+                self.I2C = i2c.I2C(router=self.system_router, router_port='I2C', state=self.config.add("i2c"))
             else:
                 self.I2C = None
 
 
             self.logger.debug(f'{self!r}: ===     Instantiating FreqCtr')
-            self.FreqCtr = freqctr.FreqCtr(router=self.system_router, router_port='FREQ_CTR', state=self.state.add("freqctr"))
+            self.FreqCtr = freqctr.FreqCtr(router=self.system_router, router_port='FREQ_CTR', state=self.config.add("freqctr"))
 
             if self.HAS_REFCLK:
                 self.logger.debug(f'{self!r}: ===     Instantiating REFCLK')
-                self.REFCLK = refclk.REFCLK(router=self.system_router, router_port='REFCLK', state=self.state.add("refclk"))
+                self.REFCLK = refclk.REFCLK(router=self.system_router, router_port='REFCLK', state=self.config.add("refclk"))
             else:
                 self.REFCLK = None
 
@@ -733,7 +733,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
             self.logger.debug(f'{self!r}: === Instantiating F-Engine')
             # Instantiate a channelizer for for each input
-            self.chan = chan.ChanArray(router = self.top_router, router_port = 'CHAN', state=self.state.add("chan"))
+            self.chan = chan.ChanArray(router = self.top_router, router_port = 'CHAN', state=self.config.add("chan"))
             self.CHAN_FMC_NUMBER = [i // 8 for i in range(self.NUMBER_OF_CHANNELIZERS)]
             # self._init_capture_state_tracking()
 
@@ -753,14 +753,14 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 self.CT = bct_engine.BCTEngine(
                     router=self.top_router,
                     router_port = 'CT',
-                    state=self.state.add("ct")
+                    state=self.config.add("ct")
                     )
             # UCT corner-turn
             elif self.CT_TYPE == "UCT":
                 self.CT = uct_engine.UCTEngine(
                     router=self.top_router,
                     router_port = 'CT',
-                    state=self.state.add("ct")
+                    state=self.config.add("ct")
                     )
             else:
                 raise RuntimeError(f'Unknown CT-Engine type {self.CT_TYPE}')
@@ -769,7 +769,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 self.UCORN = ucorn.UCorn(
                     router=self.top_router,
                     router_port = 'UCORN',
-                    state=self.state.add("ucorn")
+                    state=self.config.add("ucorn")
                     )
             else:
                 self.UCORN = None
@@ -783,9 +783,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             if self.NUMBER_OF_CORRELATORS:
                 self.logger.debug(f'{self!r}: === Instantiating X-Engine, type={self.CORR_TYPE}')
                 if self.CORR_TYPE == "CORR44":
-                    self.CORR = CORR.CORR(router=self.top_router, router_port = 'CORR', state=self.state.add("corr"))
+                    self.CORR = CORR.CORR(router=self.top_router, router_port = 'CORR', state=self.config.add("corr"))
                 elif self.CORR_TYPE == "UCORR44":
-                    self.CORR = UCORR.UCORR(router=self.top_router, router_port = 'CORR', state=self.state.add("corr"))
+                    self.CORR = UCORR.UCORR(router=self.top_router, router_port = 'CORR', state=self.config.add("corr"))
             else:
                 self.CORR = None
 
@@ -796,9 +796,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             if self.NUMBER_OF_GPU_LINKS:
                 self.logger.debug(f'{self!r}: === Instantiating real-time data offload links, type={self.GPU_LINK_TYPE}')
                 if self.GPU_LINK_TYPE == '10GE':
-                    self.GPU = gpu.GPU(router=self.top_router, router_port = 'GPU', state=self.state.add("gpu"))
+                    self.GPU = gpu.GPU(router=self.top_router, router_port = 'GPU', state=self.config.add("gpu"))
                 elif self.GPU_LINK_TYPE == '100GE':
-                    self.GPU = cge.CGE(router=self.top_router, router_port = 'GPU', state=self.state.add("gpu"))
+                    self.GPU = cge.CGE(router=self.top_router, router_port = 'GPU', state=self.config.add("gpu"))
                 else:
                     raise RuntimeError(f'Unknown data link type {self.GPU_LINK_TYPE}')
             else:
@@ -810,7 +810,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
             if self.CAPTURE_TYPE == 'UCAP':
                 self.logger.debug(f'{self!r}: === Instantiating UCAP')
-                self.UCAP = ucap.UCAP(router=self.top_router, router_port = 'UCAP', state=self.state.add("ucap"))
+                self.UCAP = ucap.UCAP(router=self.top_router, router_port = 'UCAP', state=self.config.add("ucap"))
             elif self.CAPTURE_TYPE !='PROBER':
                 raise RuntimeError(f'Unknown Data capture type {self.CAPTURE_TYPE}')
 
@@ -2242,7 +2242,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
     def _update_channel_capture_state(self, channels=None, **updates):
         target_channels = self._normalize_channels(channels)
         for channel in target_channels:
-            state = self.state.chan[channel]
+            state = self.config.chan[channel]
             for key, value in updates.items():
                 if value is not None:
                     setattr(state, key, value)
@@ -2259,7 +2259,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         their decode profiles.
         """
         self._init_capture_state_tracking()
-        raw_capture = self.state.raw_capture
+        raw_capture = self.config.raw_capture
         for key, value in updates.items():
             if value is not None:
                 if key == "pkt_frames_per_burst":
@@ -2285,9 +2285,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
     def _update_raw_capture_state(self, channels=None):
 
-        if "raw_capture" not in self.state:
-            self.state.add("raw_capture")
-        raw_capture = self.state.raw_capture
+        if "raw_capture" not in self.config:
+            self.config.add("raw_capture")
+        raw_capture = self.config.raw_capture
         if not raw_capture:
             raw_capture.update(
                 capture_engine=self.CAPTURE_TYPE,
@@ -2305,7 +2305,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         target_channels = self._normalize_channels(channels)
         for channel in target_channels:
             chan = self.chan[channel]
-            state = self.state.chan[channel]
+            state = self.config.chan[channel]
             if chan.PROBER is not None:
                 state.data_source = "scaler" if int(chan.PROBER.SOURCE_SEL) else "funcgen"
                 state.prober_sub_period = int(chan.PROBER.SUB_PERIOD)
@@ -2319,8 +2319,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             state.funcgen_right_shift = int(chan.FUNCGEN.RIGHT_SHIFT)
 
         if self.CAPTURE_TYPE == "UCAP":
-            self.state.raw_capture.target_mode = int(self.UCAP.MODE)
-            self.state.raw_capture.source = "scaler" if int(self.UCAP.SOURCE_SEL) == 255 else "funcgen"
+            self.config.raw_capture.target_mode = int(self.UCAP.MODE)
+            self.config.raw_capture.source = "scaler" if int(self.UCAP.SOURCE_SEL) == 255 else "funcgen"
 
         target_channels = tuple(self._normalize_channels(channels or raw_capture.get("channels", tuple(self.default_channels))))
         capture_engine = raw_capture.get("capture_engine", self.CAPTURE_TYPE) or self.CAPTURE_TYPE
@@ -2336,7 +2336,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         stream_ids = [int(self.get_stream_id(channel)) for channel in target_channels]
         cap_types = []
         for channel in target_channels:
-            chan_state = self.state.chan[channel]
+            chan_state = self.config.chan[channel]
             if "scaler_cap_data_type" in chan_state:
                 cap_types.append(int(chan_state.scaler_cap_data_type))
             else:
@@ -2345,7 +2345,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         if any(cap_type != cap_data_type for cap_type in cap_types):
             raise ValueError("Selected channels have different raw capture data formats. Use separate receivers.")
         offset_encodings = [
-            bool(int(getattr(self.state.chan[ch], "scaler_use_offset_binary", 1)))
+            bool(int(getattr(self.config.chan[ch], "scaler_use_offset_binary", 1)))
             for ch in target_channels
         ]
         if offset_encodings and any(e != offset_encodings[0] for e in offset_encodings):
@@ -2382,12 +2382,12 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         adc_format, adc_pplf = self._raw_capture_format(source="funcgen", cap_data_type=0)
         fft_format, fft_pplf = self._raw_capture_format(source="scaler", cap_data_type=cap_data_type)
         shared = raw_capture.as_dict()
-        if "raw_capture_adc" not in self.state:
-            self.state.add("raw_capture_adc")
-        if "raw_capture_fft" not in self.state:
-            self.state.add("raw_capture_fft")
+        if "raw_capture_adc" not in self.config:
+            self.config.add("raw_capture_adc")
+        if "raw_capture_fft" not in self.config:
+            self.config.add("raw_capture_fft")
         _storage_dtype = {1: "i1", 2: "i2", 4: "i4", 8: "i8"}.get(int(self.ADC_BYTES_PER_SAMPLE), "i1")
-        self.state.raw_capture_adc.update(
+        self.config.raw_capture_adc.update(
             shared,
             source="funcgen",
             format=adc_format,
@@ -2396,7 +2396,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             packet_cookie_mask=0xFF,
             packets_per_logical_frame=int(adc_pplf),
         )
-        self.state.raw_capture_fft.update(
+        self.config.raw_capture_fft.update(
             shared,
             source="scaler",
             format=fft_format,
@@ -2410,14 +2410,14 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         channels = self._resolve_receiver_channels(stream_ids=stream_ids)
         self._update_raw_capture_state(channels=channels)
         if format is not None:
-            raw_decoder = self.state.raw_capture.get("raw_decoder", {})
+            raw_decoder = self.config.raw_capture.get("raw_decoder", {})
             if hasattr(raw_decoder, "as_dict"):
                 raw_decoder = raw_decoder.as_dict()
             else:
                 raw_decoder = dict(raw_decoder)
             raw_decoder["format"] = format
-            self.state.raw_capture.raw_decoder = raw_decoder
-        return self.state.raw_capture.as_dict()
+            self.config.raw_capture.raw_decoder = raw_decoder
+        return self.config.raw_capture.as_dict()
 
 
     def _resolve_receiver_channels(self, stream_ids=None):
@@ -2432,12 +2432,12 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         """
         self._init_capture_state_tracking()
         if stream_ids is None:
-            return list(self.state.raw_capture.channels or tuple(self.default_channels))
+            return list(self.config.raw_capture.channels or tuple(self.default_channels))
 
         if isinstance(stream_ids, (int, np.integer)):
             stream_ids = [int(stream_ids)]
 
-        sid_to_channel = dict(zip(self.state.raw_capture.stream_ids, self.state.raw_capture.channels))
+        sid_to_channel = dict(zip(self.config.raw_capture.stream_ids, self.config.raw_capture.channels))
         channels = []
         unresolved = []
         for stream_id in list(stream_ids):
@@ -3170,7 +3170,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 self.logger.debug(f'{self!r}: Creating data receiver')
                 pr = UDPPacketReceiver(self.get_data_socket(port_number=port_number), **pr_kwargs)
 
-            self.recv = RawFrameReceiver(pr, config=self.state.raw_capture, **kwargs)
+            self.recv = RawFrameReceiver(pr, config=self.config.raw_capture, **kwargs)
         else:
             self.logger.debug(f'{self!r}: Fetching existing data receiver')
         return self.recv
@@ -5376,7 +5376,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         print('*** TEST PASSED! ***')
         return True, None, None, None
-
 
 
 

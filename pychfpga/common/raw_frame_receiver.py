@@ -24,7 +24,7 @@ class RawFrameReceiver(RawDataPacketProcessor):
 
         Parameters:
             packet_receiver (UDPPacketReceiver): UDP packet receiver providing the packet buffer.
-            raw_capture_state (dict): Serialized ``chfpga.state.raw_capture``.
+            raw_capture_state (dict): Serialized ``chfpga.config.raw_capture``.
             verbose (int): Verbosity level for optional prints (0 quiet; ``>= 2`` enables
                 ``process_packets`` / flush progress lines).
             ignore_first_burst (bool): If True (default), the first yielded burst is skipped
