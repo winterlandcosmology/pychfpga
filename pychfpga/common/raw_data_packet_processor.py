@@ -246,15 +246,16 @@ class RawDataPacketProcessor(PacketProcessorBase):
 
 
     def parse_format(self):
-        """Decode the format string and returns the associated formatting parameters that can be used to create formatted buffers and transform the data.
-        
-        Format: <width>[+<width>][<modifiers>]
+        """Decode the format string and set formatting parameters for buffers and transforms.
 
-        <width>: 8, 14, 16, 32, 64
-        <modifiers>: 
-            d = deinterleave
+        Format string: ``<width>`` [``+<width>``] [``<modifiers>``]
 
-        Returns: None
+        Bit widths (``<width>``): ``8``, ``14``, ``16``, ``32``, ``64``.
+
+        Modifiers (``<modifiers>``): ``d`` — deinterleave.
+
+        Returns:
+            None
         """
         if not (m := re.fullmatch(r'(\d+)(?:\+(\d+))?(.*)', self.format)):
             raise ValueError(f"Invalid raw data format {self.format!r}: must be in the format <width>[+<width>][<modifiers>]")

@@ -11,11 +11,28 @@ from wtl import log
 
 class HDF5CorrWriter(object):
     """ Object representing a HDF5 file containing N-squared correlation data
-    capture_n_inputs - can either be an int or an array of integers. If int, only the N first channels will be saved. 
-                       With an array you can specify arbitrary channels to be saved. Examples:
-                       capture_n_inputs = 4 -- saves autocorrelations and crosscorelations of channels A1, A2, A3 and A4
-                       capture_n_inputs = [0, 7, 9] -- saves autocorrelations and crosscorelations of channels A1, A8 and B2
-    autocorr_only - if True, only saves autocorrelation products
+
+    Parameters:
+
+    base_dir (str): the directory to save the HDF5 file to
+    filename (str): the name of the HDF5 file
+    capture_n_inputs (int or array of ints): can either be an int or an array of integers. If int, only the N first channels will be saved. 
+        With an array you can specify arbitrary channels to be saved. Examples:
+
+        - capture_n_inputs = 4 -- saves autocorrelations and crosscorrelations of channels A1, A2, A3 and A4
+        -capture_n_inputs = [0, 7, 9] -- saves autocorrelations and crosscorrelations of channels A1, A8 and B2
+    autocorr_only (bool): if True, only saves autocorrelation products
+    elements_per_file (int): the number of elements to save per file
+    n_freq_bins (int): the number of frequency bins to save per frame
+    sample_freq (float): the sample frequency
+    include_counts (bool): if True, include the counts in the HDF5 file
+    include_sat (bool): if True, include the saturation information in the HDF5 file
+
+    number_of_correlators (int): the number of correlators to save
+    number_of_correlated_inputs (int): the number of inputs to correlate
+    number_of_bins_per_frame (int): the number of bins per frame
+
+    sample_freq (float): the sample frequency
     """
     def __init__(self,
                  base_dir='.',

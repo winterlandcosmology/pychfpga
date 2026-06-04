@@ -619,24 +619,23 @@ class POCKET_CORRELATOR:
         digital gains are used, the digital gains correspond to an 11-bit "linear" (i.e., mantissa) component 
         which is directly multiplied with the FFT data, and a 5-bit "logarithmic" (i.e., exponent) component 
         which applies a bit shift, with a maximum value of 2^5 = 32 bits, or equivalently a multiplication by 2^32. 
-        The maximum digital gain that can be applied is therefore
-
-            maximum_gain = maximum_gain_lin * maximum_gain_log = 2^11 * 2^32.
+        The maximum digital gain is
+        ``maximum_gain_lin * maximum_gain_log = 2^11 * 2^32``.
 
         The application of the digital gains results in a "post-gain" value with a bit-depth of 48+48 bits, of which the
         upper 4+4 MSBSs are taken and rounded to perform the 4+4-bit quantization.
 
         Since we can recover the full resolution of the FFT data, we can compute directly the digital gains
         necessary for optimial quantization in the SCALER, which is defined as a "target" SCALER magnitude. 
-        We can express the application of digital gains as
+        We can express the application of digital gains as::
 
             target_full = gain * |FFT|,
 
-        where target_full = target * 2^44, and |FFT| refers to the magnitude of FFT data, averaged for a 
-        specified number of frames to reduce noise. The digital gains are therefore simply
+        where ``target_full = target * 2^44``, and ``|FFT|`` refers to the magnitude of FFT data, averaged for a 
+        specified number of frames to reduce noise. The digital gains are therefore simply::
 
             gain = target_full / |FFT|.
-
+            
         This function uses the set_gain_table() function of the SCALER module (see scaler.py), which performs 
         additional processing of the digital gains as computed with the equation above prior to writing them
         to the memory banks of the SCALER. Therefore, the "theoretical" gains, since they are computed as 
@@ -650,6 +649,7 @@ class POCKET_CORRELATOR:
 
         Parameters
         ----------
+
         target : (float) The average magnitude of the 4+4-bit SCALER frames. If target is too low, quantization
         noise will begin to dominate over the signal. If target is too high, both the SCALER and the accumulator 
         of the correlator might saturate. The recommended value is borrowed from that used in the CHIME F-Engine,
@@ -698,15 +698,16 @@ class POCKET_CORRELATOR:
 
         Returns
         -------
+
         d_fft : (np.ndarray) The raw FFT frames used for the digital gain computation. The shape is 
-        (NPOLS, n_fft_frames, NBINS).
+        ``(NPOLS, n_fft_frames, NBINS)``.
 
         d_fft_mean_mag : (np.ndarray) The average magnitude of the FFT frames, used for computing the digital gains.
-        The shape is (NPOLS, NBINS).
+        The shape is ``(NPOLS, NBINS)`` .
 
-        gain_lin_actual : (np.ndarray) The linear component of the "actual" digital gains. The shape is (NPOLS, NBINS).
+        gain_lin_actual : (np.ndarray) The linear component of the "actual" digital gains. The shape is ``(NPOLS, NBINS)``.
 
-        gain_log_actual : (np.ndarray) The logarithmic component of the "actual" digital gains. The shape is (NPOLS, NBINS).
+        gain_log_actual : (np.ndarray) The logarithmic component of the "actual" digital gains. The shape is ``(NPOLS, NBINS)``.
 
         d_sclr : (np.ndarray) An array of SCALER frames, returned if return_scaler_frames = True. The SCALER frames 
         are captured after the digital gains have been computed and applied, so these frames can be used to verify 
@@ -1555,46 +1556,56 @@ class POCKET_CORRELATOR:
 
         Parameters
         ----------
-        data_path : (str) The path to the directory to which visibility data will be written. If it doesn't exist, a parent directory will be created according
-        to data_path. Within this directory, another directory will be created according to the date and time of the acquisition. HDF5 files will be written within 
-        this directory, beginning with 0.hdf5 and incrementing the number by 1 with each new file. In this manner, all data can be stored in a parent directory,
-        with specific acquisitions identified by the date and time of the acquisiton.
 
-        obs_tag : (str) Observation tag added to end of obs_string, which together correspond to the observation file name.
+        data_path (str): The path to the directory to which visibility data will be written. If it doesn't exist, a parent directory will be created according
+            to data_path. Within this directory, another directory will be created according to the date and time of the acquisition. HDF5 files will be written within 
+            this directory, beginning with 0.hdf5 and incrementing the number by 1 with each new file. In this manner, all data can be stored in a parent directory,
+            with specific acquisitions identified by the date and time of the acquisiton.
+
+        obs_tag (str): Observation tag added to end of ``obs_string``, which together correspond to the observation file name.
 
             For D3A, obs_tag = '_D3A_rfsoc' for backwards compatibility. 
 
         digital_gains_path : (str) The path to which digital gains will be stored, or the file from which digital gains will be called. If None, then observe()
-        will compute the digital gains with self.compute_gains(), which will be stored in the directory f'{data_path}/digital_gains/{obs_string}_digitalgain' as
-        the file 'gains.hdf5'. The obs_string corresponds to the date and time of the acquisition, as with the data itself.
+            will compute the digital gains with self.compute_gains(), which will be stored in the directory ``f'{data_path}/digital_gains/{obs_string}_digitalgain'`` as
+            the file ``'gains.hdf5'``. The obs_string corresponds to the date and time of the acquisition, as with the data itself.
 
-        If digitial_gains_path is specified, observe() will search for a 'gains.hdf5' file within the specified directory. These gains will be opened and set 
-        in the Scaler during the observation. 
+            If `digital_gains_path` is specified, observe() will search for a 'gains.hdf5' file within the specified directory. These gains will be opened and set 
+            in the Scaler during the observation. 
 
-        n_vis_per_file : (int) The number of visibilities to store per HDF5 file. Increasing this number will increase the size of each HDF5 file. Reducing this
-        may be useful to collect more ADC and/or FFT snapshots during the observation, as the ADC and/or FFT snapshots are collected when a new HDF5 file is created. 
+        n_vis_per_file (int): The number of visibilities to store per HDF5 file. Increasing this number will increase the size of each HDF5 file. Reducing this
+            may be useful to collect more ADC and/or FFT snapshots during the observation, as the ADC and/or FFT snapshots are collected when a new HDF5 file is created. 
 
-        n_software_frames : (int) The number of pre-integrated firmware frames to integrate in Python.
-        Increasing this value increases the total integration time.
+        n_software_frames (int): The number of pre-integrated firmware frames to integrate in Python.
+            Increasing this value increases the total integration time.
 
-        autocorr_only : (int) Bit to choose between return all correlated products, or only autocorrelations.
-        Default is to send all N(N-1)/2 correlated products.
+        autocorr_only  (int): Bit to choose between return all correlated products, or only autocorrelations.
+            Default is to send all ``N(N-1)/2`` correlated products.
 
             0: return all products
             1: return autocorrelations only
 
-        no_accum : (int) Bit to choose between accumulating (i.e., summing) correalted SCALER frames, and not
-        accumulating. Default is to accumulate.
+        no_accum (int): Bit to choose between accumulating (i.e., summing) correalted SCALER frames, and not
+            accumulating. Default is to accumulate.
 
             0: do accumulate
             1: do not accumulate
 
-        n_firmware_frames : (int) Number of frames to accumulate in firmware. Take care not to set this too 
-        low (see minimum), as this will increase the data rate, and could lead to overrun condition. Also take
-        care not to set this too high (see maximum), as this may cause increased saturation. The firmware 
-        accumulator can add numbers up to 18+18-bit values, at which point they saturate.
+        n_firmware_frames (int): Number of frames to accumulate in firmware. Take care not to set this too 
+            low (see minimum), as this will increase the data rate, and could lead to overrun condition. Also take
+            care not to set this too high (see maximum), as this may cause increased saturation. The firmware 
+            accumulator can add numbers up to 18+18-bit values, at which point they saturate.
 
-        Use the recommended value!
+            Use the recommended value!
+
+        capture_adc_bursts (bool): If True, capture ADC snapshots at the start of each HDF5 file.
+
+        n_adc_frames_per_file (int): ADC frames per file when ``capture_adc_bursts`` is True.
+
+        capture_fft_bursts (bool): If True, capture FFT snapshots at the start of each HDF5 file.
+
+        n_fft_frames_per_file (int): FFT frames per file when ``capture_fft_bursts`` is True.
+            FFT frames per file when ``capture_fft_bursts`` is True.
 
             8192 - 1 : minimum
             16384 - 1: recommended
@@ -1618,20 +1629,21 @@ class POCKET_CORRELATOR:
         capture_adc_bursts : (bool) Specifies whether to capture ADC frames at the beginning of each HDF5 file. If True, capture ADC data. If False, don't capture
         ADC data.
 
-        n_adc_frames_per_file : (int) The number of ADC frames to capture for each HDF5 file if capture_adc_bursts = True. Note that the data volume for a single capture is
+        n_adc_frames_per_file : (int) The number of ADC frames to capture for each HDF5 file if capture_adc_bursts = True. Note that the data volume for a single capture is::
 
             16384 samples per frames * 16 frames per capture * 16 bits per sample / 8 bits per byte / 1e6 B per MB = 0.524288 MB of data.
 
         capture_fft_bursts : (bool) Specifies whether to capture FFT frames at the beginning of each HDF5 file. If True, capture FFT data. If False, don't capture
         FFT data.
 
-        n_fft_frames_per_file : (int) The number of FFT frames to capture for each HDF5 file if capture_fft_bursts = True. Note that the data volume for a single capture is
+        n_fft_frames_per_file : (int) The number of FFT frames to capture for each HDF5 file if capture_fft_bursts = True. Note that the data volume for a single capture is::
 
             16384 samples * 16 frames per capture * (32+32) bit per sample / 8 bits per byte / 1e6 B per MB = 2.097152 MB of data.
 
         Returns
         -------
-        None.
+
+        None
 
         """
 

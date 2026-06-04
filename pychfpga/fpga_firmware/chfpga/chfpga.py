@@ -3260,9 +3260,11 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             data_type (str or int): If the data is from the scaler, indicates what type of data is to be captured.
 
             channels (list): list of channels for which the data capture will be enabled. Behavior differs depending on the capture engine:
+
                 - PROBER: Capture is configured ont he selected channels only
                 - UCAP: Only specified channels will be captured. The number of allowed channels differs depending
                   on `mode`:
+
                   - mode 0: All 8 channels are sent, and `channels` must be exactly [0,1,2,3,4,5,6,7]. This is the default when None.
                   - mode 1: Any 4 channels are sent. `channels` must be a list of exactly 4 channel numbers. Default when None is [0,1,2,3].
                   - mode 2: Any 2 channels are sent. `channels` must be a list of exactly 2 channel numbers. Default when None is [0,1].

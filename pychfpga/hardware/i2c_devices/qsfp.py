@@ -74,7 +74,9 @@ class QSFP(object):
 
             gpio_prefix (str): String that is prefixed to the GPIO names to access GPIOs provided by the `gpio` object
 
-            gpio (GPIO): GPIO-class object that provides read() and write() methods to access the QSFP hardware control lines.
+            gpio (:class:`~pychfpga.hardware.i2c_devices.gpio.GPIO`): GPIO-class object
+                that provides read() and write() methods to access the QSFP hardware
+                control lines.
                 The object must define the following GPIOs:
 
                     - <prefix>ModPrsL

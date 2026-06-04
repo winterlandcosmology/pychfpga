@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-import fp_type
+from . import fp_type
 
 class TestFixedPointType(unittest.TestCase):
     def test_init(self):
