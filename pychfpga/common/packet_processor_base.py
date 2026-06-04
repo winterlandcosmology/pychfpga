@@ -153,6 +153,7 @@ class PacketProcessorBase(ABC):
         if dropped:
             # drop the oldest timestamps (np.unique sorted them). This is rarely executed,
             # so we don't care about the performance of the code within
+            self.on_ts_overflow(dropped)
             if self.verbose:
                 print(f"{type(self).__name__}: dropping {dropped} oldest timestamps from the buffer.")
             ts_unique = ts_unique[dropped:]
@@ -173,10 +174,16 @@ class PacketProcessorBase(ABC):
             self.store_packets(bix, tix)
 
         # Compute the carry length by checking the raw data count for the trailing rows that are not complete.
-        w = min(self.receive_window, n_ts)
-        raw_counts_tail = self.raw_data_count[n_ts - w:n_ts]
-        complete_tail = (raw_counts_tail >= self.expected_packets).reshape(w,-1).all(axis=-1)[::-1]  # collapse all but the first dimension and reverse order
-        self.carry_len = int(np.argmax(complete_tail)) if complete_tail.size and complete_tail.any() else w
+        if n_ts == 0:
+            self.carry_len = 0
+        else:
+            w = min(self.receive_window, n_ts)
+            raw_counts_tail = self.raw_data_count[n_ts - w:n_ts]
+            if raw_counts_tail.ndim > 1:
+                complete_tail = (raw_counts_tail >= self.expected_packets).all(axis=-1)[::-1]
+            else:
+                complete_tail = (raw_counts_tail >= self.expected_packets)[::-1]
+            self.carry_len = int(np.argmax(complete_tail)) if complete_tail.size and complete_tail.any() else w
 
         # COmpute the number of packets to return, 
         # Withholding up carryover rows 

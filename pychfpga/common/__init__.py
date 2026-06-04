@@ -6,3 +6,6 @@ from .raw_frame_receiver import RawFrameReceiver
 from .state import State
 from .ucorr_packet_processor import UCorrPacketProcessor
 from .ucorr_frame_receiver import UCorrFrameReceiver
+
+# RawDataProcessor alias kept for legacy imports (do not import raw_acq here — circular).
+RawDataProcessor = RawDataPacketProcessor

@@ -127,7 +127,7 @@ class UCorrPacketProcessor(PacketProcessorBase):
 
 
         # Static attributes changes cause loss of data as the main integ buffer needs to be resized. 
-        buf_view_attrs = tuple("NCMAC",)
+        buf_view_attrs = ("NCMAC",)
         if state.has_changed(buf_view_attrs, context=buf_view_attrs):
             if self.verbose:
                 print("UCorrPacketProcessor: bin_map changed; rebuilding views and buffers.")

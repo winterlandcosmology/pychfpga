@@ -4,6 +4,7 @@ import copy
 import math
 import re
 import warnings
+from warnings import warn as _warn
 
 import numpy as np
 
@@ -31,7 +32,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
     """
 
     PACKET_COOKIE = 0xA0
-    PACKET_COOKIE_MASK = 0xFE
+    PACKET_COOKIE_MASK = 0xFF
 
 
     def __init__(
@@ -66,6 +67,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
         """
         self.decode_strict = decode_strict
         self.config = State()
+        self.packet_cookie = self.PACKET_COOKIE
+        self.packet_cookie_mask = self.PACKET_COOKIE_MASK
         super().__init__(packet_receiver, receive_window, verbose)
         self.update_config(State(config).deepcopy())
 
@@ -161,9 +164,15 @@ class RawDataPacketProcessor(PacketProcessorBase):
             if max(self.stream_ids) >= 1 << 12:
                 raise ValueError("stream_ids must be less than 1 << 12")
 
-            self.BYTES_PER_FRAME = self.BYTES_PER_SAMPLE * self.SAMPLES_PER_FRAME
-            self.BYTES_PER_SUBFRAME = self.BYTES_PER_FRAME // max(1, self.NUMBER_OF_SUBFRAMES) # = payload bytes per packet without header
-            self.PACKET_SIZE = self.header_dtype.itemsize + self.BYTES_PER_SUBFRAME # packet size in bytes = header size + payload size             
+            if state.get("bytes_per_frame") is not None:
+                self.BYTES_PER_FRAME = int(state.bytes_per_frame)
+            else:
+                self.BYTES_PER_FRAME = self.BYTES_PER_SAMPLE * self.SAMPLES_PER_FRAME
+            if state.get("bytes_per_subframe") is not None:
+                self.BYTES_PER_SUBFRAME = int(state.bytes_per_subframe)
+            else:
+                self.BYTES_PER_SUBFRAME = self.BYTES_PER_FRAME // max(1, self.NUMBER_OF_SUBFRAMES)
+            self.PACKET_SIZE = self.header_dtype.itemsize + self.BYTES_PER_SUBFRAME
 
             self.CAPTURE_SOURCE = state.source
             self.FFT_BINS_PER_WORD = state.fft_bins_per_word or 1
@@ -219,6 +228,11 @@ class RawDataPacketProcessor(PacketProcessorBase):
             "format",
             "split",
         )
+
+        if state.get("packet_cookie") is not None:
+            self.packet_cookie = int(state.packet_cookie)
+        if state.get("packet_cookie_mask") is not None:
+            self.packet_cookie_mask = int(state.packet_cookie_mask)
 
         if state.has_changed(dynamic_state_attrs, context=dynamic_state_attrs):
             self.format = state.format
@@ -391,9 +405,15 @@ class RawDataPacketProcessor(PacketProcessorBase):
             - If the output buffer is full, raise an error
 
         """
-        verbose = self.verbose if verbose is None else verbose
-        print(f"RawDataPacketProcessor: process_packets: with verbose={verbose}")
         return super().process_packets(config, verbose)
+
+    def on_ts_overflow(self, dropped: int) -> None:
+        """Warn when timestamp keys are dropped because the buffer is full."""
+        _warn(
+            f"timestamp backlog: {dropped} oldest timestamps dropped.",
+            UserWarning,
+            stacklevel=3,
+        )
 
     def filter_packets(self, n: int) -> Optional[np.ndarray]:
         """Decode UCAP headers and return UDP row indices for packets to integrate."""
@@ -402,8 +422,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
         temp_mask = self.tmp_mask[:n]
 
         # Filter out packets with the wrong cookie or packet size
-        np.bitwise_and(self.buf_cookie[:n], self.PACKET_COOKIE_MASK, out=self.pkt_cookie[:n])
-        np.equal(self.pkt_cookie[:n], self.PACKET_COOKIE, out=bix_mask)
+        np.bitwise_and(self.buf_cookie[:n], self.packet_cookie_mask, out=self.pkt_cookie[:n])
+        np.equal(self.pkt_cookie[:n], self.packet_cookie, out=bix_mask)
         np.equal(self.pr.pkt_len[:n], self.PACKET_SIZE, out=temp_mask[:n], where=bix_mask)
         np.bitwise_and(bix_mask, temp_mask[:n], out=bix_mask)
 
@@ -527,7 +547,6 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.ts_array.fill(self.TS_EMPTY)
         self.raw_data.fill(0)
         self.raw_data_count.fill(0)
-        self.raw_data_complete.fill(0)
         self.n_ts = 0
         self.carry_len = 0
         self._emit_stop = 0
