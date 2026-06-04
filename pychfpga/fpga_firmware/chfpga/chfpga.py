@@ -2240,6 +2240,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 state.data_source = "scaler" if int(chan.PROBER.SOURCE_SEL) else "funcgen"
                 state.prober_sub_period = int(chan.PROBER.SUB_PERIOD)
             state.scaler_cap_data_type = int(chan.SCALER.CAP_DATA_TYPE)
+            state.scaler_use_offset_binary = bool(int(chan.SCALER.USE_OFFSET_BINARY))
             state.scaler_bypass = bool(chan.SCALER.BYPASS)
             state.scaler_bypass_data_type = int(chan.SCALER.DATA_TYPE)
             state.fft_bypass = bool(chan.FFT.BYPASS)
@@ -2273,6 +2274,16 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         cap_data_type = cap_types[0] if cap_types else None
         if any(cap_type != cap_data_type for cap_type in cap_types):
             raise ValueError("Selected channels have different raw capture data formats. Use separate receivers.")
+        offset_encodings = [
+            bool(int(getattr(self.state.chan[ch], "scaler_use_offset_binary", 1)))
+            for ch in target_channels
+        ]
+        if offset_encodings and any(e != offset_encodings[0] for e in offset_encodings):
+            raise ValueError(
+                "Selected channels have different scaler offset-binary encoding settings. "
+                "Use separate receivers."
+            )
+        fft_offset_encoding = offset_encodings[0] if offset_encodings else True
         format_, packets_per_logical_frame = self._raw_capture_format(source=source, cap_data_type=cap_data_type)
         logical_frames_per_burst = max(1, pkt_frames_per_burst // packets_per_logical_frame)
         raw_capture.update(
@@ -2293,8 +2304,36 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             fft_bins_per_word=int(self._get_fft_bins_per_word()),
             raw_decoder=dict(format=format_),
             packet_header_format="raw-v1",
-            format='16',
-            split=False
+            format=format_,
+            split=False,
+            packet_cookie=0xA1 if source == "scaler" else 0xA0,
+            packet_cookie_mask=0xFF,
+        )
+        adc_format, adc_pplf = self._raw_capture_format(source="funcgen", cap_data_type=0)
+        fft_format, fft_pplf = self._raw_capture_format(source="scaler", cap_data_type=cap_data_type)
+        shared = raw_capture.as_dict()
+        if "raw_capture_adc" not in self.state:
+            self.state.add("raw_capture_adc")
+        if "raw_capture_fft" not in self.state:
+            self.state.add("raw_capture_fft")
+        _storage_dtype = {1: "i1", 2: "i2", 4: "i4", 8: "i8"}.get(int(self.ADC_BYTES_PER_SAMPLE), "i1")
+        self.state.raw_capture_adc.update(
+            shared,
+            source="funcgen",
+            format=adc_format,
+            storage_dtype=_storage_dtype,
+            packet_cookie=0xA0,
+            packet_cookie_mask=0xFF,
+            packets_per_logical_frame=int(adc_pplf),
+        )
+        self.state.raw_capture_fft.update(
+            shared,
+            source="scaler",
+            format=fft_format,
+            packet_cookie=0xA1,
+            packet_cookie_mask=0xFF,
+            packets_per_logical_frame=int(fft_pplf),
+            fft_offset_encoding=bool(fft_offset_encoding),
         )
 
     def get_raw_decoder_state(self, stream_ids=None, format=None):

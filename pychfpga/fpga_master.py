@@ -306,7 +306,6 @@ class FPGAMaster(object):
                 run_folder=self.run_folder,
                 run_name=self.run_name,
                 corr_name=self.corr_name,
-                fft_offset_encoding=self.config.fpga.channelizer_params.offset_binary_encoding  # scaler output encoding
                 )
             for server_name, raw_acq_server in self.raw_acq.items()])
 
