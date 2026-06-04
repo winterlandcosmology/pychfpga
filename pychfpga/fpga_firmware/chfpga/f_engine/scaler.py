@@ -104,6 +104,7 @@ class SCALER(MMI):
             self.BYPASS = 0
         else:
             self.BYPASS = 1
+        self.set_capture_data_type(0)
         self.SHIFT_LEFT = 31
         self.USE_OFFSET_BINARY = 1
         self.set_gain_table(1)
