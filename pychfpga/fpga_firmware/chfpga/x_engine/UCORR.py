@@ -150,6 +150,9 @@ class UCORR(MMI):
 
 
         fft_bin_map = config.fft_bin_map
+        if not isinstance(fft_bin_map, np.ndarray):
+            fft_bin_map = np.asarray(fft_bin_map)
+            config.fft_bin_map = fft_bin_map
 
         if not ct_level:
             raise RuntimeError(f'Incalid CT_LEVEL with value {ct_level}')
