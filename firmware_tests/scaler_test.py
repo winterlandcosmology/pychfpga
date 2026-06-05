@@ -965,7 +965,6 @@ class TestScaler:
             ref_data = np.zeros(self.data.NUM_SAMPLES)
             ref_data[::2] = overflow
             ref_data[1::2] = underflow
-        self.plot_and_test(xr, data[:, 950:1000], source[950:1000], f'Overflow detection (postscaler={postscaler}, mode={out_mode}, symmetric_saturation={symmetric_saturation})', split_complex=True)
             ref_data = np.zeros(source.size, dtype=np.int64)
             ref_data[::2] = overflow.astype(np.int64)
             ref_data[1::2] = underflow.astype(np.int64)
@@ -1004,8 +1003,6 @@ class TestScaler:
             ) #send FFT to output and capture from output
         else:
             self.board.set_scaler_output_modes(bypass=False, bypass_data_type=0, cap_data_type=1) #send FFT to capture directly
-        source, data = self._set_capture_scaler('periodic_ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
-        ref_data = source * 2**self.data.IMPLICIT_SHIFT // 2**(self.data.FFT_WIDTH - self.data.CAPTURE_WIDTH)
             cap_data_type = 1
             self.board.set_scaler_output_modes(
                 bypass=False,
