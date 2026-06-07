@@ -111,6 +111,7 @@ class TCPipe:
     RPC_OLED_SET_FIRMWARE_LABEL = 0x09
     RPC_OLED_DRAW_TEXT = 0x0A
     RPC_BSB_BATCH_WRITE = 0x0B
+    RPC_SPI_BATCH_WRITE = 0x0C
 
     RPC_NAMES = {
         RPC_BSB_WRITE_READ: 'bsb_write_read',
@@ -124,6 +125,7 @@ class TCPipe:
         RPC_OLED_SET_FIRMWARE_LABEL: 'oled_set_firmware_label',
         RPC_OLED_DRAW_TEXT: 'oled_draw_text',
         RPC_BSB_BATCH_WRITE: 'bsb_batch_write',
+        RPC_SPI_BATCH_WRITE: 'spi_batch_write',
     }
     RPC_PERF_LOG_INTERVAL = 500
 
@@ -172,10 +174,13 @@ class TCPipe:
             self.log.warning('%r: _bsb_batch_write_flush during close failed: %r', self, exc)
         if self.perf:
             self.perf.log_summary()
-        if self.sock is not None:
-            print(f'Closing TCPipe socket at {self.sock.getsockname()}')
-            self.sock.close()
-            self.sock = None
+        if self.sock is None:
+            return
+        old_sock = self.opened_sockets.get((self.hostname, self.port))
+        if old_sock is self.sock:
+            self.opened_sockets.pop((self.hostname, self.port), None)
+        self.sock.close()
+        self.sock = None
 
     def _rpc_write_read(self, rpc_id, payload=b'', read_length=None, read_until=None, timeout=None):
         """Execute a RPC command and return the reply.
@@ -238,6 +243,10 @@ class TCPipe:
                         recv_done_time = time.perf_counter()
                         rx_len = len(reply)
                         break
+            elif read_length is not None:
+                reply = self._recv_exact(read_length, timeout=timeout)
+                recv_done_time = time.perf_counter()
+                rx_len = len(reply)
             else:
                 rx_len = self.sock.recv_into(self.rx_buf)
                 recv_done_time = time.perf_counter()
@@ -333,6 +342,42 @@ class TCPipe:
         return reply[1:]
 
 
+    def _drain_socket_buffer(self):
+        """Discard any bytes left in the kernel socket buffer after a stream RPC."""
+        if self.sock is None:
+            return
+        old_timeout = self.sock.gettimeout()
+        self.sock.settimeout(0)
+        try:
+            while self.sock.recv(4096):
+                pass
+        except (BlockingIOError, socket.timeout, ConnectionResetError, ConnectionAbortedError):
+            pass
+        finally:
+            self.sock.settimeout(old_timeout)
+
+    def _recv_exact(self, nbytes, timeout=None):
+        """Read exactly ``nbytes`` from the RPC stream socket."""
+        if nbytes == 0:
+            return b''
+        buf = bytearray(nbytes)
+        view = memoryview(buf)
+        got = 0
+        old_timeout = None
+        if timeout is not None:
+            old_timeout = self.sock.gettimeout()
+            self.sock.settimeout(timeout)
+        try:
+            while got < nbytes:
+                n = self.sock.recv_into(view[got:], nbytes - got)
+                if n == 0:
+                    raise ConnectionResetError('TCPipe connection closed by peer')
+                got += n
+        finally:
+            if timeout is not None:
+                self.sock.settimeout(old_timeout)
+        return bytes(buf)
+
     def get_rpc_functions(self):
         """ Fetches the list of functions provided by the platform processor.
 
@@ -342,6 +387,7 @@ class TCPipe:
 
         """
         b = self._rpc_write_read(self.RPC_GET_RPC_FUNCTIONS, read_until=b'\x00\x00\x00')
+        self._drain_socket_buffer()
         funcs = {}
         # extract function id byte, and the name and docs null-terminated strings
         f=re.findall('(.)([^\x00]*\x00)([^\x00]*\x00)',b.decode())
@@ -490,7 +536,8 @@ class TCPipe:
         if 0 > read_length >= 256:
             raise ValueError('{self!r}: Read length bust be between 0 and 255')
         payload = bytes((addr, read_length)) + data
-        reply = self._rpc_write_read(self.RPC_IIC_WRITE_READ, payload)
+        reply = self._rpc_write_read(
+            self.RPC_IIC_WRITE_READ, payload, read_length=1 + read_length)
         if reply[0]:
             if no_error:
                 return b''
@@ -594,6 +641,7 @@ class TCPipe:
         reply = self._rpc_write_read(
             self.RPC_SPI_WRITE_READ,
             payload,
+            read_length=1 + len(data) + read_length,
             timeout=timeout)
         if reply[0]:
             raise IOError(f'{self!r}: SPI Reply has error code {reply[0]}')
@@ -601,6 +649,54 @@ class TCPipe:
             raise IOError(f'{self!r}: SPI Received {len(reply)} bytes instead of {1 + len(data) + read_length} bytes')
 
         return reply[len(reply) - read_length: len(reply)]
+
+    def spi_batch_write(self, spi_device, writes, timeout=None):
+        """Run multiple SPI write-only segments in one ``spi_batch_write`` RPC.
+
+        Each element of ``writes`` is clocked out in a separate chip-select
+        assertion (CS deasserts between segments), which is required by devices
+        such as the HMC7044.
+
+        Parameters:
+            spi_device (int): SPI port index on the board processor.
+            writes (list of bytes): segments to send, each at most 255 bytes.
+            timeout (float): RPC socket timeout in seconds.
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: if segment count or length limits are exceeded.
+            IOError: if the board reports a parse error or a failing segment.
+        """
+        if not writes:
+            raise ValueError(f'{self!r}: spi_batch_write requires at least one segment')
+        n = len(writes)
+        if n > 255:
+            raise ValueError(f'{self!r}: spi_batch_write supports at most 255 segments, got {n}')
+        parts = [bytes((spi_device, n))]
+        for i, segment in enumerate(writes):
+            if isinstance(segment, memoryview):
+                segment = segment.tobytes()
+            elif not isinstance(segment, (bytes, bytearray)):
+                segment = bytes(segment)
+            seg_len = len(segment)
+            if seg_len > 255:
+                raise ValueError(
+                    f'{self!r}: spi_batch_write segment {i} length {seg_len} exceeds 255 bytes')
+            parts.append(bytes([seg_len]))
+            parts.append(segment)
+        payload = b''.join(parts)
+        reply = self._rpc_write_read(self.RPC_SPI_BATCH_WRITE, payload, read_length=1, timeout=timeout)
+        if len(reply) != 1:
+            raise IOError(f'{self!r}: spi_batch_write expected 1 reply byte, got {len(reply)}')
+        if reply[0] == 0:
+            return
+        if reply[0] == 0xFF:
+            raise IOError(f'{self!r}: spi_batch_write failed (protocol/parse error on board)')
+        raise IOError(
+            f'{self!r}: spi_batch_write failed at segment index {reply[0] - 1} '
+            f'(1-based status code {reply[0]})')
 
     #########################################################
     #  FPGA bitstream programming
@@ -614,7 +710,7 @@ class TCPipe:
             data (bytes): bitstream, without header, uncompressed. Sould be 34437356 bytes long for the ZU28.
         """
 
-        print(f'TCPipe: Programming FPGA with {len(data)} bytes')
+        self.log.info('%r: programming FPGA with %d bytes', self, len(data))
 
         assert len(data) == 34437356, "ZU27/28/47/48 bitstream should be 34437356 bytes long"
 
@@ -955,6 +1051,19 @@ class TCPipe_SPI:
         # self._logger.debug("Accessing I2C bus...")
 
         return self.tcpipe.spi_write_read(spi_device, data, read_length, timeout=timeout)
+
+    def batch_write(self, spi_device, writes, timeout=None):
+        """Write multiple SPI segments with CS deasserted between each.
+
+        Parameters:
+            spi_device (int): SPI port index.
+            writes (list of bytes): one segment per list element (max 255 bytes each).
+            timeout (float): RPC socket timeout in seconds.
+
+        Returns:
+            None
+        """
+        return self.tcpipe.spi_batch_write(spi_device, writes, timeout=timeout)
 
     # def is_present(self, addr, bus_name=None):
     #     """ Test the presence of an I2C device at the specified address.
