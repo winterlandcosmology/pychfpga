@@ -349,12 +349,19 @@ class CRS(Motherboard):
 
 
     # Name of each PLL reference input
-    PLL_INPUT_NAMES = ( 'ETH_REG_125MHz', 'BP_CLK_10MHZ', 'SMA_CLK_10MHZ', 'PL_RECCLK')
+    PLL_INPUT_ETH_REG_125MHZ = 0
+    PLL_INPUT_BP_CLK_10MHZ = 1
+    PLL_INPUT_SMA_CLK_10MHZ = 2
+    PLL_INPUT_PL_RECCLK = 3
+    PLL_INPUT_NAMES = {PLL_INPUT_ETH_REG_125MHZ: 'ETH_REG_125MHz', 
+                       PLL_INPUT_BP_CLK_10MHZ: 'BP_CLK_10MHZ', 
+                       PLL_INPUT_SMA_CLK_10MHZ: 'SMA_CLK_10MHZ', 
+                       PLL_INPUT_PL_RECCLK: 'PL_RECCLK'}
 
     async def pll_init_async(
             self,
             input_sel = None,  # 1 = backplane, 2=motherboard SMA, None: use input_priorities
-            input_priorities = (2, 1, 0, 3), # ignored if input_sel is not None
+            input_priorities = (PLL_INPUT_SMA_CLK_10MHZ, PLL_INPUT_BP_CLK_10MHZ), # ignored if input_sel is not None
             fref=10e6,  # external 10 MHz reference from backplane or SMA
             fosc=50e6,  # on-board VCXO nominal frequency
             fvco=3000e6, # PLL2 VCO frequency, which is also the ADC sampling frequency
@@ -421,6 +428,7 @@ class CRS(Motherboard):
             fref=fref, # external 10 MHz reference from backplane or SMA
             fosc=fosc, # on-board VCXO nominal frequency
             fvco=fvco,
+            check=0,
             fout={
                 0: frfdc,    # RF_CLK (FPGA RFDC 229)
                 1: fsys,     # DDR4_CLK (FPGA Bank 67 LVDS)- used as system clock
@@ -492,7 +500,11 @@ class CRS(Motherboard):
             self.fpga.GPIO.CLK10_SEL=0 # use MB SMA
             self.fpga.GPIO.PLL_SYNC = 1
         else:
-            raise RuntimeError(f'Invalid PLL input reference number {self.input_reference}')
+            self.logger.warning(
+                f'{self!r}: PLL locked to {self.PLL_INPUT_NAMES[3]}; This is not a valid input.'
+                f'skipping CLK10_SEL/PLL_SYNC (no 10 MHz backplane or SMA reference)')
+            self.input_reference = None
+
         self.fpga.GPIO.PLL_SYNC=0
 
 
@@ -543,7 +555,7 @@ class CRS(Motherboard):
             if_addr = s.getsockname()
             s.close()
         except (socket.timeout, Exception) as e:
-            self.logger.warn(f'Could not establish a TCP connection with {self.hostname}.{self.port}. Error is:\n {e}')
+            self.logger.warning(f'Could not establish a TCP connection with {self.hostname}.{self.port}. Error is:\n {e}')
             return False
         return True
 
@@ -621,8 +633,9 @@ class CRS(Motherboard):
         t0 = time.time()
         self.logger.debug(f'{self!r}: Called set_fpga_bitstream')
 
-        if hasattr(self, 'close'):
-            self.close()
+        if self.fpga is not None:
+            await self.close_fpga_async()
+            self.fpga = None
 
         fw_cls, buf, fw_params = FPGAFirmware.get_firmware(self.part_number, firmware_mode, bitfile_override=bitfile_override)
         crc32 = buf.crc32
