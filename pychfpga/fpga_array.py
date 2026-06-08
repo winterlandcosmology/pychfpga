@@ -909,6 +909,11 @@ class FPGAArray(object):
                 mb.delete_instance()
         if discovery_groups:
             self.logger.info(f'{self!r}: Discovering Motherboards and Crates specified by serial number')
+            explicit_board_serials = set()
+            for targets in discovery_groups.values():
+                for _model, serial in targets['boards']:
+                    if serial != '*':
+                        explicit_board_serials.add(str(serial))
             for discovery_async_fn, targets in discovery_groups.items():
                 mb_to_discover = targets['boards']
                 cr_to_discover = targets['crates']
@@ -925,6 +930,16 @@ class FPGAArray(object):
                     crates=cr_to_discover,
                     timeout=mdns_timeout,
                     inter_reply_timeout=0.5)
+            # if explicit_board_serials:
+            #     from pychfpga.hardware.crs.crs_discovery import serials_equal
+            #     for mb in list(motherboards):
+            #         if not mb.serial or mb.serial == '*':
+            #             continue
+            #         if not any(serials_equal(mb.serial, target) for target in explicit_board_serials):
+            #             self.logger.warning(
+            #                 f'{self!r}: Removing {mb} from hardware map '
+            #                 f'(not among requested serials {sorted(explicit_board_serials)})')
+            #             mb.delete_instance()
 
         ########################################################
         # Establish communication with the motherboards

@@ -12,7 +12,7 @@ sys.modules.setdefault("matplotlib.pyplot", matplotlib_pyplot_stub)
 from pychfpga.fpga_array import FPGAArray
 from pychfpga.hardware import HardwareMap, Motherboard, Crate
 from pychfpga.hardware.crs import CRS, CRSBackplane
-from pychfpga.hardware.crs.crs_discovery import CRSArmFirmwareRunner, CRSBeacon, CRSDiscovery
+from pychfpga.hardware.crs.crs_discovery import CRSArmFirmwareUploader, CRSBeacon, CRSDiscovery
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +40,6 @@ def test_parse_tcpipe_beacon_with_crs_metadata():
 
 def test_crs_discovery_updates_board_crate_and_slot_from_beacon():
     discovery = CRSDiscovery(
-        crs_class=CRS,
         board_targets=[("CRS", "003")],
         crate_targets=[],
         timeout=0)
@@ -65,7 +64,6 @@ def test_crs_discovery_updates_board_crate_and_slot_from_beacon():
 
 def test_crs_discovery_completion_accepts_integer_equivalent_serials():
     discovery = CRSDiscovery(
-        crs_class=CRS,
         board_targets=[("CRS", "3")],
         crate_targets=[],
         timeout=0)
@@ -77,7 +75,6 @@ def test_crs_discovery_completion_accepts_integer_equivalent_serials():
 
 def test_explicit_targets_wait_without_deadline_even_when_timeout_is_set():
     discovery = CRSDiscovery(
-        crs_class=CRS,
         board_targets=[("CRS", "0037")],
         crate_targets=[],
         timeout=0)
@@ -87,7 +84,6 @@ def test_explicit_targets_wait_without_deadline_even_when_timeout_is_set():
 
 def test_crs_discovery_reports_missing_explicit_targets():
     discovery = CRSDiscovery(
-        crs_class=CRS,
         board_targets=[("CRS", "0037")],
         crate_targets=[],
         timeout=0)
@@ -99,7 +95,6 @@ def test_crs_discovery_reports_missing_explicit_targets():
 
 def test_wildcard_targets_keep_timeout_deadline():
     discovery = CRSDiscovery(
-        crs_class=CRS,
         board_targets=[("CRS", "*")],
         crate_targets=[],
         timeout=0)
@@ -109,7 +104,6 @@ def test_wildcard_targets_keep_timeout_deadline():
 
 def test_fwreq_matches_crs_target_by_serial_when_identifier_is_not_model():
     discovery = CRSDiscovery(
-        crs_class=CRS,
         board_targets=[("CRS", "0037")],
         crate_targets=[],
         timeout=0)
@@ -118,20 +112,51 @@ def test_fwreq_matches_crs_target_by_serial_when_identifier_is_not_model():
     assert discovery._matches_requested_targets(beacon)
 
 
-def test_fwreq_marks_board_discovered_with_no_tcpipe_version():
+def test_fwreq_sends_firmware_without_adding_board_to_hardware_map(monkeypatch):
+    class FakeSock:
+        def __init__(self):
+            self.sent = []
+
+        def sendto(self, data, addr):
+            self.sent.append((data, addr))
+
     discovery = CRSDiscovery(
-        crs_class=CRS,
         board_targets=[("CRS", "003")],
         crate_targets=[],
-        timeout=0)
+        timeout=0,
+        platform_firmware_pathname=CRS.DEFAULT_ARM_FIRMWARE_PATHNAME,
+    )
+    monkeypatch.setattr(
+        discovery,
+        "_send_platform_firmware",
+        lambda sock, beacon, addr: sock.sendto(b"FWRESP 1.0\n\nboot", addr),
+    )
     beacon = CRSBeacon(b"FWREQ 1.0 CRS 003", address="127.0.0.1")
+    sock = FakeSock()
 
-    handled_kind = discovery._process_beacon(beacon)
+    handled_kind = discovery._process_beacon(sock, beacon, ("127.0.0.1", 9875))
+
+    assert handled_kind == "FWREQ"
+    assert Motherboard.get_all_registered_instances() == []
+    assert discovery.discovered_serials == set()
+    assert sock.sent == [(b"FWRESP 1.0\n\nboot", ("127.0.0.1", 9875))]
+
+
+def test_tcpipe_adds_matching_board_to_hardware_map():
+    discovery = CRSDiscovery(
+        board_targets=[("CRS", "003")],
+        crate_targets=[],
+        timeout=0,
+        required_tcpipe_version="1.0",
+    )
+    beacon = CRSBeacon(b"TCPIPE 1.0 CRS 003", address="127.0.0.1")
+
+    handled_kind = discovery._process_beacon(None, beacon, ("127.0.0.1", 9875))
 
     [mb] = Motherboard.get_all_registered_instances()
-    assert handled_kind == "FWREQ"
+    assert handled_kind == "TCPIPE"
     assert mb.hostname == "127.0.0.1"
-    assert mb.tcpipe_version is None
+    assert mb.tcpipe_version == "1.0"
     assert discovery.discovered_serials == {"003"}
 
 
@@ -145,11 +170,13 @@ def test_arm_firmware_runner_sends_fwresp_for_uboot_board(monkeypatch):
 
     board = CRS(serial="0037", hostname="192.0.2.10")
     board.tcpipe_version = None
-    runner = CRSArmFirmwareRunner(
-        crs_class=CRS,
-        boards=[board])
-    runner._classify_boards()
-    monkeypatch.setattr(runner, "_fwresp_for", lambda beacon: "FWRESP 1.0\n\nboot")
+    runner = CRSArmFirmwareUploader(
+        boards=[board],
+        required_version=CRS.REQUIRED_TCPIPE_VERSION,
+        firmware_pathname=CRS.DEFAULT_ARM_FIRMWARE_PATHNAME,
+    )
+    runner.target_serials = {"0037"}
+    runner._firmware_session = type("S", (), {"command_for": lambda _self, _beacon: "FWRESP 1.0\n\nboot"})()
     beacon = CRSBeacon(b"FWREQ 1.0 unknown-t0-crs-rev? 0037")
     beacon.address = "127.0.0.1"
     sock = FakeSock()
@@ -160,36 +187,46 @@ def test_arm_firmware_runner_sends_fwresp_for_uboot_board(monkeypatch):
     assert runner.ready_serials == set()
 
 
-def test_arm_firmware_runner_skips_matching_tcpipe_version():
+def test_arm_firmware_uploader_skips_matching_tcpipe_version():
     board = CRS(serial="0037", hostname="192.0.2.10")
-    board.tcpipe_version = CRS.TCPIPE_VERSION
-    runner = CRSArmFirmwareRunner(
-        crs_class=CRS,
-        boards=[board])
-
-    runner._classify_boards()
+    board.tcpipe_version = CRS.REQUIRED_TCPIPE_VERSION
+    runner = CRSArmFirmwareUploader(
+        boards=[board],
+        required_version=CRS.REQUIRED_TCPIPE_VERSION,
+        firmware_pathname=CRS.DEFAULT_ARM_FIRMWARE_PATHNAME,
+    )
+    runner.target_serials = {
+        str(board.serial) for board in runner.boards
+        if board.tcpipe_version != runner.required_tcpipe_version
+    }
 
     assert runner.target_serials == set()
 
 
-def test_arm_firmware_runner_rejects_bad_tcpipe_version():
+def test_arm_firmware_uploader_rejects_bad_tcpipe_version():
     board = CRS(serial="0037", hostname="192.0.2.10")
     board.tcpipe_version = "0.9"
-    runner = CRSArmFirmwareRunner(
-        crs_class=CRS,
-        boards=[board])
+    runner = CRSArmFirmwareUploader(
+        boards=[board],
+        required_version=CRS.REQUIRED_TCPIPE_VERSION,
+        firmware_pathname=CRS.DEFAULT_ARM_FIRMWARE_PATHNAME,
+    )
+    runner.target_serials = {"0037"}
+    beacon = CRSBeacon(b"TCPIPE 0.9 CRS 0037", address="192.0.2.11")
 
     with pytest.raises(RuntimeError, match="expected 1.0"):
-        runner._classify_boards()
+        runner._process_beacon(None, beacon, ("192.0.2.11", 9875))
 
 
-def test_arm_firmware_runner_marks_board_ready_from_tcpipe():
+def test_arm_firmware_uploader_marks_board_ready_from_tcpipe():
     board = CRS(serial="0037", hostname="192.0.2.10")
     board.tcpipe_version = None
-    runner = CRSArmFirmwareRunner(
-        crs_class=CRS,
-        boards=[board])
-    runner._classify_boards()
+    runner = CRSArmFirmwareUploader(
+        boards=[board],
+        required_version=CRS.REQUIRED_TCPIPE_VERSION,
+        firmware_pathname=CRS.DEFAULT_ARM_FIRMWARE_PATHNAME,
+    )
+    runner.target_serials = {"0037"}
     beacon = CRSBeacon(b"TCPIPE 1.0 CRS 0037", address="192.0.2.11")
 
     runner._process_beacon(None, beacon, ("192.0.2.11", 9875))
@@ -205,16 +242,14 @@ def test_fpga_array_routes_crs_crates_to_crs_network_discovery():
     assert FPGAArray._network_discovery_class_for_crate(crate) is CRS
 
 
-def test_discovery_records_tcpipe_version_without_validating():
+def test_discovery_rejects_unexpected_tcpipe_version():
     discovery = CRSDiscovery(
-        crs_class=CRS,
         board_targets=[("CRS", "003")],
         crate_targets=[],
-        timeout=0)
-    beacon = CRSBeacon(b"TCPIPE 0.9 CRS 003")
-    beacon.address = "192.0.2.10"
+        timeout=0,
+        required_tcpipe_version="1.0",
+    )
+    beacon = CRSBeacon(b"TCPIPE 0.9 CRS 003", address="192.0.2.10")
 
-    discovery._process_beacon(beacon)
-
-    [mb] = Motherboard.get_all_registered_instances()
-    assert mb.tcpipe_version == "0.9"
+    with pytest.raises(RuntimeError, match="expected 1.0"):
+        discovery._process_beacon(None, beacon, ("192.0.2.10", 9875))
