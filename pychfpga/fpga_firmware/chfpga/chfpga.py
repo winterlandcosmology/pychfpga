@@ -3358,7 +3358,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         if self.CAPTURE_TYPE == 'UCAP':
             self.UCAP.set_data_capture(source=source, mode=mode, channels=channels, select=select, periods=[burst_period_in_frames-1, burst_period_in_frames-1])
+            self.UCAP.USER_RESET = 0
             self._capture_pkt_frames_per_burst = None
+            
 
         elif self.CAPTURE_TYPE =='PROBER':
             self._capture_pkt_frames_per_burst = frames_per_burst
@@ -4646,8 +4648,11 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 Glog = postscaler
 
             if np.all(Glin.imag == 0.) == True:
-                # If the gain is purely real, recover only the real part and convert to float
-                Glin = np.array(Glin.real).astype(float)
+                if np.isscalar(Glin):
+                    Glin = float(Glin.real)
+                else:
+                    # If the gain is purely real, recover only the real part and convert to float
+                    Glin = np.array(Glin).real.astype(float)
 
             if Glog == -1:
                 # A Glog of -1 indicates that floating point gains were used,

@@ -499,7 +499,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         if self.verbose >= 2:
             n_packets = bix_mask.sum()
             if n_packets or self.verbose >= 3:
-                print(f"process_packets: found {n_packets} packets matching the cookie and packet size")
+                print(f"process_packets: found {n_packets} packets matching the cookie ({self.packet_cookie_mask}) and packet size")
         # bix_mask[:n] = (self.buf_cookie[:n] & self.PACKET_COOKIE_MASK) == self.PACKET_COOKIE)
         #     & (pkt_len[:n] == self.PACKET_SIZE)
         # )
@@ -529,11 +529,12 @@ class RawDataPacketProcessor(PacketProcessorBase):
         np.equal(self.pkt_mode[:n], self.TARGET_MODE, out=temp_mask, where=bix_mask)
         np.bitwise_and(bix_mask, temp_mask, out=bix_mask)
         # Drop UDP packets at or before the latest timestamp already returned (monotonic emits).
+        if self.verbose:
+            rejected_packets = int(np.sum(bix_mask[:n] & (self.pkt_ts[:n] <= self._last_emitted_ts)))
         np.greater(self.pkt_ts[:n], self._last_emitted_ts, out=temp_mask, where=bix_mask)
         np.bitwise_and(bix_mask, temp_mask, out=bix_mask)
 
-        if self.verbose:
-            rejected_packets = np.sum(self.pkt_ts[:n][bix_mask] <= self._last_emitted_ts)
+        if self.verbose and rejected_packets:
             print(f"RawDataPacketProcessor: process_packets: rejected {rejected_packets} packets at or before the latest timestamp already returned (monotonic emits). {self._last_emitted_ts=} {self.pkt_ts[:n].min() =}.")
 
         # Byte offset: reuse pkt_frame / pkt_subframe (already decoded above) — no temp arrays.
