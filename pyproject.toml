@@ -36,7 +36,7 @@
         "wtl.h5-archive @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.h5-archive.git",   # was @v1.0.3, testing 1.1.0
 
         # t0.technology packages
-        "psucontrol @ git+ssh://git@github.com/t0/psucontrol.git",
+        "psucontrol @ git+https://github.com/t0/psucontrol.git",
 
         # PyPi packages
         "aiohttp",  # new, using 3.7.2
