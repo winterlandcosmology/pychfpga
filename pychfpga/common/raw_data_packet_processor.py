@@ -559,7 +559,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         tix_to_clear = np.ones(n_ts, dtype=bool)
         cix_mask = carry_tix >= 0  # find indices of carryover timestamps that were not dropped
         if cix_mask.any():
-            if self.verbose:
+            if self.verbose >= 2:
                 print(
                     f"RawPacketProcessor: preserving carryover state for {cix_mask.sum()} "
                     f"carryover timestamps {cix=}, {cix_mask=}, {carry_tix[cix_mask]=}."
@@ -597,7 +597,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
     def get_formatted_data(self, split=False):
         split = bool(split)
         """Return ``(ts, formatted_data, counts, sources)`` views for complete rows."""
-        if self.verbose >= 1:
+        if self.verbose >= 3:
             print(f"RawDataPacketProcessor: process_packets: returning {self.n_out} timestamps")
         n_out = self.n_out
         ts_in = self.ts_array[:n_out]

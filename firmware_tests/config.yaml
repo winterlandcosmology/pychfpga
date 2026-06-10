@@ -5,10 +5,10 @@ connection_config:
 
 test_config:
     loglevelconn: "INFO"   # Log level during connection to the board
-    logleveltest: "DEBUG"   # Log level during tests
+    logleveltest: "INFO"   # Log level during tests
     loglevelrecv: 1        # 0-3
     conn_scope: "class"     # Select "function" to re-establish connection for each test or
-                            # "class" if you want to reuse connection.
+                        # "class" if you want to reuse connection.
     only_plot: False              #Don't compare results, only plot them 
 
     #parameters for scaler tests 
@@ -26,7 +26,8 @@ test_config:
         postscaler: range(12, 22)
     averages:
         num_frames: [120]
-        postscaler_range: ((IDENTITY_POSTSCALER - CAPTURE_WIDTH, IDENTITY_POSTSCALER + CAPTURE_WIDTH),)
+        frames_per_burst: 2
+        postscaler_range: ((MAPPING_POSTSCALER - CAPTURE_WIDTH, MAPPING_POSTSCALER + CAPTURE_WIDTH),)
 
     #parameters for funcgen tests
     global_seeds: [-7680, 7744, -14296, -65, -32175, -29190, 30160, 5679, -2070, 24601, 29784, -18765, -25554, -10744, -27608, 3207, 5129, 5031, 22606, 11371, 2446, -28089, 29554, -24103, -26437, 18246, -6527, 10486, -25707, -5372, -16068, 25810, 14648, 23623, 4812, 4715, -2645, -28820, -15584, 13563, 32522, 31152, 17351, -22105, -2246, 25818, 17051, -2280, -25287, -20404, -15797, -12642, -15709, -31140, 7986, 22594, -6864, -32133, 11524, -4534, -11304, 16974, -14582, -19158, -30167, 18625, 24000, -12775, -2598, 10724, -17769, -6480, -21887, -20074, -20059, 14521, -5225, 4359, 6366, 30513, -25340, 4396, -224, -4468, 28533, -14307, 13536, -24931, 20594, -30438, -10245, -4246, 25084, -3154, 26509, -16821, -1224, 10499, -16869, -1795]

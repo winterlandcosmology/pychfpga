@@ -3538,10 +3538,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             self.get_firmware_config(channels=channels)
         elif bypass_data_type is not None:
             self.logger.debug(f'Setting scaler output data type to {bypass_data_type} for channel {channels}')
-            for ch in channels:
+            for ch in self._normalize_channels(channels):
                 self.chan[ch].SCALER.DATA_TYPE = bypass_data_type
                 self.chan[ch].SCALER.BYPASS = True
-            for ch in self._normalize_channels(channels):
                 st = self.config.chan[ch]
                 st.scaler_bypass = True
                 st.scaler_bypass_data_type = int(bypass_data_type)
@@ -3558,10 +3557,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             else:
                 normalized_cap_type = int(cap_data_type)
             self.logger.debug(f'Setting scaler capture data type to {cap_data_type} for channel {channels}')
-            for ch in channels:
-                self.chan[ch].SCALER.CAP_DATA_TYPE = cap_data_type
-                self.chan[ch].SCALER.BYPASS = bypass
             for ch in self._normalize_channels(channels):
+                self.chan[ch].SCALER.CAP_DATA_TYPE = cap_data_type
                 self.config.chan[ch].scaler_cap_data_type = normalized_cap_type
             self.get_firmware_config(channels=channels)
 

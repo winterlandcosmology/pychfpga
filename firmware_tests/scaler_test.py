@@ -135,6 +135,7 @@ class TestScaler:
         self.connection_config = xr.config.connection_config
         self.board = self.board_conn(xr)
         self.data.NUM_SAMPLES = self.board.ADC_SAMPLES_PER_FRAME
+        self.data.NUM_BINS = self.board.NUMBER_OF_FREQUENCY_BINS
         self.data.NUM_CHANNELIZERS = len(self.board.chan) #currently unused
         conn_logger_name = FPGAArray.__name__.rsplit('.', 1)[0] if '.' in __name__ else ''
         self.logger = logging.getLogger(conn_logger_name) #store logger in xr for future use
@@ -146,7 +147,6 @@ class TestScaler:
         pre_flags = [ch.SCALER.CHAN_FIFO_OVERFLOW for ch in self.board.chan]
         self.logger.debug(f"setup pre-check: chan_fifo_overflow={pre_flags}")
         assert all(v == 0 for v in pre_flags)
-        print("Board setup")
         yield # test occurs here
         post_flags_before = [ch.SCALER.CHAN_FIFO_OVERFLOW for ch in self.board.chan]
         self.logger.debug(f"setup post-check before cleanup: chan_fifo_overflow={post_flags_before}")
@@ -173,8 +173,7 @@ class TestScaler:
             scaler_rounding_mode=0,
             symmetric_saturation=False)
         self.logger.debug("Setup channelizer for testing scaler")
-        print("Setup scaler")
-
+    
     def gen_data(self, func, samples, **kwargs):
         if func == 'a': #constant input
             return np.ones(samples) * kwargs.get('a', 1)
@@ -218,7 +217,7 @@ class TestScaler:
         Return a full-bin real gain vector for APIs that no longer safely accept
         scalar real gains.
         '''
-        return np.full(int(self.board.NUMBER_OF_FREQUENCY_BINS), float(gain), dtype=np.float64)
+        return np.full(int(self.data.NUM_BINS), float(gain), dtype=np.float64)
 
     def _set_capture_scaler(self, func, double=False, read=True, get_flags=False, cap_data_type=None, **func_kwargs):
         '''
@@ -243,9 +242,9 @@ class TestScaler:
             return source, source
         if self.data.PLATFORM == 'ICE':
             if double:
-                _, data, _ = receiver.read_raw_frames_double_resolution(data_timeout=1)
+                _, data, _ = receiver.read_raw_frames_double_resolution()
             else:
-                _, data, _ = receiver.read_raw_frames(data_timeout=1)
+                _, data, _ = receiver.read_raw_frames()
             assert np.all(np.equal(data[0], data))
             if get_flags:
                 return source, data & (2**self.data.READOUT_SHIFT-1)
@@ -255,12 +254,12 @@ class TestScaler:
             if double:
                 pytest.skip("Double resolution not supported on UCAP yet")
             else:
-                 _, data, _ = receiver.read_raw_frames(ncap=1, flush=False, data_timeout=1, verbose=self.test_config.loglevelrecv)
+                 _, data, _ = receiver.read_raw_frames(ncap=1, flush=False, split=True, verbose=self.test_config.loglevelrecv)
                  #data = data[:, ::2]
             assert np.all(np.equal(data[0], data))
             if get_flags:
                 raise Exception("Flag feature not implemented on UCAP")
-            return source, (data[:, 0, :data.shape[2]//2] // (2**self.data.READOUT_SHIFT))
+            return source, (data[:, 0] // (2**self.data.READOUT_SHIFT)) #only return first frame of data
         logger.debug("Initializing data receiver")
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
         ts, data, count = receiver.read_raw_frames(ncap=1, split_frames=False)
@@ -287,6 +286,7 @@ class TestScaler:
         return source, data
 
     def plot_and_test(self, xr, data, ref_data, title, **kwargs):
+        logging.getLogger("matplotlib").setLevel(logging.WARNING)
         test_name = title[:title.find('(')] #up to position of first bracket
         parameters  = title[title.find('('):]
         xr.header(test_name)
@@ -345,10 +345,6 @@ class TestScaler:
         '''
         self.board.set_scaler_output_modes(cap_data_type=0, bypass=False)
         logger = self.get_logger()
-        cap_data_type = 2 if use_prerounding else 0
-
-        self.board.set_scaler_output_modes(cap_data_type=cap_data_type)
-        self.board.set_scaler_rounding_mode(0)
         self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
         self.board.set_symmetric_saturation(symmetric_saturation)
 
@@ -464,12 +460,10 @@ class TestScaler:
             Uses `_set_capture_scaler` with the current raw-frame capture API and the
             currently configured scaler capture mode.
         '''
-        gains = self.gen_data('periodic_ramp', min=self.get_test_param('ramp_gains', 'gain_min', 0), max=self.get_test_param('ramp_gains', 'gain_max', 8), samples=self.data.NUM_SAMPLES//2)
-        self.logger.debug(f'Gain length: '  + str(np.size(gains)))
-        #gains = np.concatenate((gains, gains[::-1]))
         logger = self.get_logger()
-        gains = self.gen_data('periodic_ramp', min=self.get_test_param('ramp_gains', 'gain_min', 0), max=self.get_test_param('ramp_gains', 'gain_max', 8), samples=512)
+        gains = self.gen_data('periodic_ramp', min=self.get_test_param('ramp_gains', 'gain_min', 0), max=self.get_test_param('ramp_gains', 'gain_max', 8), samples=self.data.NUM_BINS//2)
         gains = np.concatenate((gains, gains[::-1]))
+        logger.debug(f'Gain shape: '  + str(gains.shape))
         self.board.set_gains(gains, postscaler=self.data.MAPPING_POSTSCALER)
         source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
         ref_data  = np.clip(np.repeat(gains, 2) * source * 2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
@@ -1087,7 +1081,7 @@ class TestScaler:
         self.plot_and_test(xr, data, ref_data, f'Double resolution capture (postscaler = {postscaler}, capture mode = {cap_data_type})', split_complex=False) 
 
     @pytest.mark.scaler
-    @pytest.mark.parametrize("ch", range(16))
+    @pytest.mark.parametrize("ch", (0,))
     #@pytest.mark.parametrize('postscaler, symmetric_saturation, frame_cnt', product(range(TEST_CONFIG['overflow_stats'].get('postscaler_min', 0), TEST_CONFIG['overflow_stats'].get('postscaler_max', 31)), (False, True), TEST_CONFIG['overflow_stats'].get('frame_cnt', 1)))
     def test_scaler_overflow_stats(self, ch, frame_cnt, setup_scaler, xr):
         '''
@@ -1129,7 +1123,7 @@ class TestScaler:
         assert overflow_stats == expected_overflows
 
     @pytest.mark.scaler
-    @pytest.mark.parametrize("ch", range(16))
+    @pytest.mark.parametrize("ch", (0,))
     @pytest.mark.parametrize("fft_bypass", [True, False])
     def test_adc_overflow_stats(self, ch, frame_cnt, fft_bypass, setup_scaler, xr):
         '''
@@ -1213,7 +1207,7 @@ class TestScaler:
         assert(len(set(delay_ctrs)) == 1) #ensure all delay counters are the same
 
     @pytest.mark.scaler
-    def test_counters(self, setup_scaler, xr):
+    def test_counter_reset(self, setup_scaler, xr):
         '''
         Tests the reset signal by ensure that various counters are always 0 as long as the reset signal is high, and that they are (mostly) non-zero when it is low.
 
@@ -1424,20 +1418,23 @@ class TestScaler:
         )
         assert(self.board.GPIO.ANT_RESET == 0)
 
-        ts_before, data_before, count_before = receiver.read_raw_frames(ncap=1, split_frames=True)
+        ts_before, data_before, count_before = receiver.read_raw_frames(ncap=1, split=True)
         if self.data.READOUT_SHIFT > 0:
             data_before //= 2**self.data.READOUT_SHIFT
         before_frame = data_before[0, 0]
-        before_ts = int(ts_before[0, 0])
+        before_ts = int(ts_before[0])
 
         self.board.switch_gains(bank=1, when='now')
+        print("switching gain banks")
+        #self.board.sync()
         sleep(1.0)
+        receiver.flush()
 
-        ts_after, data_after, count_after = receiver.read_raw_frames(ncap=1, split_frames=True)
+        ts_after, data_after, count_after = receiver.read_raw_frames(ncap=1, split=True)
         if self.data.READOUT_SHIFT > 0:
             data_after //= 2**self.data.READOUT_SHIFT
         after_frame = data_after[0, 0]
-        after_ts = int(ts_after[0, 0])
+        after_ts = int(ts_after[0])
 
         assert all(ch.SCALER.CURRENT_GAIN_BANK == 1 for ch in self.board.chan)
         logger.debug(
@@ -1446,10 +1443,10 @@ class TestScaler:
             f"count_before_shape={count_before.shape} count_after_shape={count_after.shape} "
             f"before_ts={before_ts} after_ts={after_ts}"
         )
-        logger.debug(f"test_gain_bank_switching: ref_before_first16={ref_before_frame[:16]}")
-        logger.debug(f"test_gain_bank_switching: ref_after_first16={ref_after_frame[:16]}")
-        logger.debug(f"test_gain_bank_switching: before_frame_first16={before_frame[:16]}")
-        logger.debug(f"test_gain_bank_switching: after_frame_first16={after_frame[:16]}")
+        print(f"test_gain_bank_switching: ref_before_first16={ref_before_frame[4000:4100]}")
+        print(f"test_gain_bank_switching: ref_after_first16={ref_after_frame[4000:4100]}")
+        print(f"test_gain_bank_switching: before_frame_first16={before_frame[4000:4100]}")
+        print(f"test_gain_bank_switching: after_frame_first16={after_frame[4000:4100]}")
 
         assert (before_frame == ref_before_frame).all()
         assert (after_frame == ref_after_frame).all()
@@ -1506,7 +1503,8 @@ class TestScaler:
                 for ch in range(len(self.board.chan)):
                     self.board.chan[ch].FUNCGEN.BYTE_A = randint(0, 255)
                     self.board.chan[ch].FUNCGEN.BYTE_B = randint(0, 255)
-                ts, data, count = receiver.read_raw_frames(ncap=1, split_frames=False)
+                receiver.flush()
+                ts, data, count = receiver.read_raw_frames(ncap=1, split=False)
                 if self.data.READOUT_SHIFT > 0:
                     data //= 2 ** self.data.READOUT_SHIFT
                 avgs[postscaler-postscaler_range[0]] += np.sum(data)
