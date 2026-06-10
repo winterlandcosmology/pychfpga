@@ -25,6 +25,9 @@ class State(NameSpace):
         """Return a new ``State`` with a deep-copied mapping (fresh change-tracking baselines)."""
         return State(copy.deepcopy(self._obj))
 
+    def __deepcopy__(self, memo):
+        return State(copy.deepcopy(self._obj, memo))
+
     def __repr__(self):
         return f"{self.__class__.__name__}({self._obj!r})"
 
@@ -70,16 +73,16 @@ class State(NameSpace):
         """
         if other is not None:
             if isinstance(other, NameSpace):
-                payload = other.as_dict()
+                for key, value in other._obj.items():
+                    setattr(self, key, value)
             elif isinstance(other, Mapping):
-                payload = dict(other)
+                for key, value in other.items():
+                    setattr(self, key, value)
             else:
                 raise TypeError(
                     "State.update() expects Mapping or NameSpace as first argument, "
                     f"got {type(other).__name__!r}"
                 )
-            for key, value in payload.items():
-                setattr(self, key, value)
         for key, value in values.items():
             setattr(self, key, value)
         return self

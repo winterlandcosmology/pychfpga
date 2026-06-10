@@ -16,11 +16,30 @@ import psutil
 from wtl import log
 from wtl.metrics import Metrics
 
+from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
+from pychfpga.common.state import State
+
 from .adc_data_processor import ADCDataProcessor
 from .fft_data_processor import FFTDataProcessor
 from .corr_data_processor import CorrDataProcessor
 
-CAPTURE_CONFIG_KEYS = ("adc", "fft", "corr")
+FIRMWARE_CONFIG_KEYS = ("raw", "adc", "fft", "corr")
+CAPTURE_CONFIG_KEYS = FIRMWARE_CONFIG_KEYS  # legacy alias
+
+
+def _firmware_config_sections(config):
+    """Split a firmware State or partial processor patch dict into per-receiver sections."""
+    if config is None:
+        return {}
+    if isinstance(config, State):
+        payload = config.as_dict()
+    elif isinstance(config, dict):
+        payload = config
+    else:
+        raise TypeError(f"Expected firmware State or dict, got {type(config).__name__!r}")
+    if set(payload.keys()) >= set(FIRMWARE_CONFIG_KEYS):
+        return {key: payload[key] for key in FIRMWARE_CONFIG_KEYS}
+    return payload
 
 # TCP port used to reach CRS/ICE boards for switch MAC learning (echo service).
 DEFAULT_PING_PORT = 7
@@ -74,15 +93,14 @@ class RawAcqReceiver(object):
         return f'{self.__class__.__name__}({self.name})'
 
     def update_config(self, config=None, **kwargs):
-        """Merge capture settings for adc, fft, and/or corr into stored processor configs."""
+        """Apply firmware or per-processor configuration patches without merging subtrees."""
         if config is None:
             config = {}
         if kwargs:
             config = {**config, **kwargs}
         if not config:
             return
-        started = getattr(self, "buf", None) is not None
-        for key, patch in config.items():
+        for key, patch in _firmware_config_sections(config).items():
             if key not in self.processors:
                 self.log.warning(f'{self!r}: Unknown processor key: {key}')
                 continue
@@ -101,6 +119,7 @@ class RawAcqReceiver(object):
             metrics_refresh_time=1,
             adc_rms_refresh_count=60,
             jump_thresholds=[],
+            config=None,
             raw_capture_state=None,
             ping_port=DEFAULT_PING_PORT,
             hostname=None,  # not used, but may be passed by start_client()
@@ -212,7 +231,14 @@ class RawAcqReceiver(object):
         self.run_name = run_name
         self.data_folder = data_folder
         self.run_folder = run_folder
-        self.raw_capture_state = raw_capture_state or {}
+        firmware_config = config if config is not None else raw_capture_state
+        if firmware_config is None:
+            firmware_config = {}
+        self.firmware_config = (
+            firmware_config.deepcopy()
+            if isinstance(firmware_config, State)
+            else State(firmware_config).deepcopy()
+        )
 
         # Socket creation variables
         self.sockets = []  # Sockets that were opened
@@ -254,25 +280,32 @@ class RawAcqReceiver(object):
         self.max_packet_size = int(self.MAX_RAW_PACKET_SIZE)
 
 
-        if set(self.raw_capture_state.keys()) != set(("adc", "fft", "corr")):
-            raise ValueError(f'{self!r}: Configurations shall include states for "adc", "fft", and "corr"')
+        sections = _firmware_config_sections(self.firmware_config)
+        if set(sections.keys()) != set(FIRMWARE_CONFIG_KEYS):
+            raise ValueError(
+                f'{self!r}: firmware config must include {FIRMWARE_CONFIG_KEYS!r}'
+            )
 
-        # Create the packet processors (ADC and FFT share the UDP buffer, separate assembly state).
+        # One dual-source raw processor; ADC/FFT sinks consume formatted output per source.
+        raw_proc = RawDataPacketProcessor(self, config=sections["raw"])
         adc_proc = ADCDataProcessor(
             self,
-            config=self.raw_capture_state["adc"],
+            raw_proc,
+            config=sections["adc"],
             stream_ids=stream_ids,
             metrics_refresh_time=metrics_refresh_time,
             adc_rms_refresh_count=adc_rms_refresh_count,
         )
         fft_proc = FFTDataProcessor(
             self,
-            config=self.raw_capture_state["fft"],
+            raw_proc,
+            config=sections["fft"],
             stream_ids=stream_ids,
         )
-        corr_proc = CorrDataProcessor(self, config=self.raw_capture_state["corr"])
+        corr_proc = CorrDataProcessor(self, config=sections["corr"])
 
         self.processors = {
+            "raw": raw_proc,
             "adc": adc_proc,
             "fft": fft_proc,
             "corr": corr_proc,
@@ -618,9 +651,19 @@ class RawAcqReceiver(object):
         self.received_packets += self.n_stored
 
         try:
-            for proc in self.processors.values():
-                if proc:
-                    proc.process_packets()
+            raw = self.processors.get("raw")
+            if raw:
+                raw.process_udp_packets()
+            corr = self.processors.get("corr")
+            if corr:
+                t_corr = time.time()
+                corr.process_udp_packets()
+                corr.after_process_udp_packets(time.time() - t_corr)
+                corr.consume(corr.get_formatted_data())
+            if raw and raw.n_out:
+                ts, data_pair, counts, sources = raw.get_formatted_data()
+                self.processors["adc"].consume((ts, data_pair[0], counts, sources))
+                self.processors["fft"].consume((ts, data_pair[1], counts, sources))
         except Exception as e:
             self.log.error(f'process_packets: exception {e!r}')
             raise
@@ -638,7 +681,7 @@ class RawAcqReceiver(object):
         """
         self.n_stored = 0
         self.pkt_len[:] = 0
-        for proc in self.processors.values():
+        for key, proc in self.processors.items():
             if proc is not None:
                 proc.flush()
         return 0

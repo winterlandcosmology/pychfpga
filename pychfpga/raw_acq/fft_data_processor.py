@@ -8,61 +8,69 @@ import time
 
 import numpy as np
 
-from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
 from pychfpga.common.state import State
+
+SOURCE_INDEX = 1
 
 from wtl import log
 
 PACKET_COOKIE_FFT = 0xA1
 
 
-class FFTDataProcessor(RawDataPacketProcessor):
-    """FFT / SCALER spectrum packets (cookie 0xA1)."""
+class FFTDataProcessor:
+    """FFT / SCALER spectrum sink (source 1 / cookie 0xA1)."""
 
     def __init__(
         self,
         packet_receiver,
+        raw_processor,
         config=None,
         stream_ids=(),
-        receive_window: int = 3,
-        verbose: int = 0,
-        decode_strict: bool = True,
         **kwargs,
-    ) -> None:
+    ):
         kwargs.pop("metrics_refresh_time", None)
         kwargs.pop("adc_rms_refresh_count", None)
         kwargs.pop("fft_offset_encoding", None)
-        state = State(config).deepcopy() if config is not None else State()
-        if stream_ids and not state.get("stream_ids"):
-            state.stream_ids = tuple(stream_ids)
-        state.packet_cookie = PACKET_COOKIE_FFT
-        state.packet_cookie_mask = 0xFF
-        RawDataPacketProcessor.__init__(
-            self,
-            packet_receiver,
-            config=state,
-            receive_window=receive_window,
-            verbose=verbose,
-            decode_strict=decode_strict,
-        )
+        kwargs.pop("receive_window", None)
+        kwargs.pop("verbose", None)
+        kwargs.pop("decode_strict", None)
+        self.raw = raw_processor
         self.recv = packet_receiver
+        self.config = State(config).deepcopy() if config is not None else State()
+        if stream_ids and not self.config.get("stream_ids"):
+            self.config.stream_ids = tuple(stream_ids)
         self.log = log.get_logger(self)
         self.lock = threading.RLock()
         self.processed_packets = 0
         self._sync_stream_id_helpers()
-        self._init_fft_state()
+        nchan = getattr(self.raw, "NCHAN", len(self.config.get("stream_ids") or ()))
+        if nchan:
+            self._init_fft_state(nchan=nchan)
 
-    def update_config(self, config=None) -> None:
+    @property
+    def NCHAN(self):
+        return self.raw.NCHAN
+
+    @property
+    def stream_ids(self):
+        return self.raw.stream_ids
+
+    @property
+    def expected_packets(self):
+        return self.raw.expected_packets
+
+    def update_config(self, config=None):
+        if config is not None:
+            self.config.update(config)
         nchan_before = getattr(self, "NCHAN", 0)
         n_bins_before = getattr(self, "_fft_n_bins", 1)
-        super().update_config(config)
         self._sync_stream_id_helpers()
         self._apply_fft_offset_encoding_from_config()
         if not hasattr(self, "fft_rms_buffer"):
-            self._init_fft_state()
+            self._init_fft_state(nchan=self.NCHAN)
             return
         if self.NCHAN != nchan_before:
-            self._init_fft_state()
+            self._init_fft_state(nchan=self.NCHAN)
         elif self._fft_n_bins != n_bins_before:
             self._alloc_fft_rms_buffers(self.NCHAN, self._fft_n_bins)
 
@@ -83,17 +91,19 @@ class FFTDataProcessor(RawDataPacketProcessor):
         enc = bool(self.config.get("fft_offset_encoding", True))
         self.fft_offset_encoding_mask = -128 if enc else 0
 
-    def _init_fft_state(self):
+    def _init_fft_state(self, nchan=None):
         """FFT / scaler RMS acquisition state fed from assembled frames."""
+        if nchan is None:
+            nchan = self.NCHAN
         self.fft_processed_packets = 0
         self.fft_max_processing_time = 0
         self.fft_current_processing_time = 0
         self.fft_current_processed_packets = 0
-        self.metrics_incomplete_frames = np.zeros(self.NCHAN, dtype=np.int32)
+        self.metrics_incomplete_frames = np.zeros(nchan, dtype=np.int32)
         self._apply_fft_offset_encoding_from_config()
         self.fft_lock = threading.RLock()
         self._fft_n_bins = 1
-        self._alloc_fft_rms_buffers(self.NCHAN, self._fft_n_bins)
+        self._alloc_fft_rms_buffers(nchan, self._fft_n_bins)
 
     def _alloc_fft_rms_buffers(self, nchan, n_bins):
         self._fft_n_bins = int(n_bins)
@@ -120,8 +130,8 @@ class FFTDataProcessor(RawDataPacketProcessor):
         im = ((raw[1::2] ^ mask) >> 4).astype(np.int32)
         return re * re + im * im
 
-    def _process_fft_emitted(self, ts, data, counts) -> None:
-        """Update FFT RMS acquisition and metrics from one ``process_packets`` emission."""
+    def _process_fft_emitted(self, ts, data, counts, indices):
+        """Update FFT RMS acquisition and metrics from one ``get_formatted_data`` emission."""
         n_out = ts.shape[0]
         packet_inc = int(counts[:n_out].sum())
         self.processed_packets += packet_inc
@@ -178,17 +188,25 @@ class FFTDataProcessor(RawDataPacketProcessor):
         self.log.info(f'{self!r}: get_fft_rms returned FFT RMS vectors from {sid.size} channels')
         return sid, rms
 
-    def process_packets(self, config=None, verbose=None):
-        """Assemble UDP frames, then update FFT RMS / metrics sinks."""
+    def consume(self, result):
+        """Update FFT RMS / metrics from a ``get_formatted_data(1)`` result.
+
+        Args:
+            result: ``(ts, data, counts, indices)`` tuple, or None.
+
+        Returns:
+            The same ``result`` argument (for chaining).
+        """
         t0 = time.time()
-        result = RawDataPacketProcessor.process_packets(self, config, verbose)
-        t1 = time.time()
         if result is not None:
             self._process_fft_emitted(*result)
-        t2 = time.time()
-        self.fft_max_processing_time = max(t2 - t0, self.fft_max_processing_time)
-        self.fft_current_processing_time += t2 - t1
+        t1 = time.time()
+        self.fft_max_processing_time = max(t1 - t0, self.fft_max_processing_time)
+        self.fft_current_processing_time += t1 - t0
         return result
+
+    def flush(self, flush_timeout=None):
+        """No-op; assembly flush is handled by the shared raw processor."""
 
     async def get_metrics_async(self, metrics):
         """Gather raw acquisition metrics for the FFT path."""

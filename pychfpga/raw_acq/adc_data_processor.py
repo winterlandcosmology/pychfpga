@@ -12,7 +12,6 @@ import numpy as np
 
 from wtl import log
 
-from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
 from pychfpga.common.state import State
 
 PACKET_COOKIE_ADC = 0xA0
@@ -25,44 +24,48 @@ _BYTES_PER_SAMPLE_TO_DTYPE = {
 }
 
 
-class ADCDataProcessor(RawDataPacketProcessor):
-    """Raw ADC / FUNCGEN timestream packets (cookie 0xA0)."""
+class ADCDataProcessor:
+    """ADC / FUNCGEN sink (source 0 / cookie 0xA0) on a shared raw processor."""
 
     def __init__(
         self,
         packet_receiver,
+        raw_processor,
         config=None,
         stream_ids=(),
         metrics_refresh_time=10,
         adc_rms_refresh_count=100,
-        receive_window: int = 3,
-        verbose: int = 0,
-        decode_strict: bool = True,
         **kwargs,
     ) -> None:
         kwargs.pop("metrics_refresh_time", None)
         kwargs.pop("adc_rms_refresh_count", None)
         kwargs.pop("fft_offset_encoding", None)
-        state = State(config).deepcopy() if config is not None else State()
-        if stream_ids and not state.get("stream_ids"):
-            state.stream_ids = tuple(stream_ids)
-        state.packet_cookie = PACKET_COOKIE_ADC
-        state.packet_cookie_mask = 0xFF
-        RawDataPacketProcessor.__init__(
-            self,
-            packet_receiver,
-            config=state,
-            receive_window=receive_window,
-            verbose=verbose,
-            decode_strict=decode_strict,
-        )
+        kwargs.pop("receive_window", None)
+        kwargs.pop("verbose", None)
+        kwargs.pop("decode_strict", None)
+        self.raw = raw_processor
         self.recv = packet_receiver
+        self.config = State(config).deepcopy() if config is not None else State()
+        if stream_ids and not self.config.get("stream_ids"):
+            self.config.stream_ids = tuple(stream_ids)
         self.log = log.get_logger(self)
         self.lock = threading.RLock()
         self.processed_packets = 0
         self._sync_stream_id_helpers()
         self._init_adc_state(metrics_refresh_time, adc_rms_refresh_count)
         self._sync_adc_hdf5_layout()
+
+    @property
+    def NCHAN(self):
+        return self.raw.NCHAN
+
+    @property
+    def stream_ids(self):
+        return self.raw.stream_ids
+
+    @property
+    def expected_packets(self):
+        return self.raw.expected_packets
 
     @staticmethod
     def storage_dtype_from_config(state) -> np.dtype:
@@ -82,8 +85,8 @@ class ADCDataProcessor(RawDataPacketProcessor):
         """Sample dtype and length per assembled frame for HDF5 and metrics."""
         state = self.config
         self.adc_storage_dtype = self.storage_dtype_from_config(state)
-        bps = int(self.BYTES_PER_SAMPLE)
-        burst_bytes = int(getattr(self, "PKT_FRAMES_PER_BURST", 1)) * self.BYTES_PER_FRAME
+        bps = int(state.get("bytes_per_sample") or self.raw.BYTES_PER_SAMPLE)
+        burst_bytes = int(self.raw.PKT_FRAMES_PER_BURST) * int(self.raw.BYTES_PER_FRAME)
         if np.issubdtype(self.adc_storage_dtype, np.complexfloating):
             self.adc_samples_per_frame = burst_bytes // (2 * bps)
         else:
@@ -91,7 +94,8 @@ class ADCDataProcessor(RawDataPacketProcessor):
 
     def update_config(self, config=None) -> None:
         nchan_before = getattr(self, "NCHAN", 0)
-        super().update_config(config)
+        if config is not None:
+            self.config.update(config)
         self._sync_adc_hdf5_layout()
         self._sync_stream_id_helpers()
         if self.NCHAN == nchan_before or not hasattr(self, "metrics_refresh_time"):
@@ -162,15 +166,15 @@ class ADCDataProcessor(RawDataPacketProcessor):
         self.slot_number_mismatch_count = 0
 
     def _channel_frame(self, wire_row) -> np.ndarray:
-        """Decode one assembled channel row using the same path as ``format_data``."""
-        wire_bytes = int(self.PKT_FRAMES_PER_BURST) * self.BYTES_PER_FRAME
+        """Decode one assembled channel row using the shared raw processor."""
+        wire_bytes = int(self.raw.PKT_FRAMES_PER_BURST) * int(self.raw.BYTES_PER_FRAME)
         raw = np.ascontiguousarray(wire_row).reshape(-1).view(np.uint8)[:wire_bytes]
         shaped = raw.reshape(1, 1, raw.size)
-        formatted = self.format_data(shaped)
+        _, formatted, _ = self.raw.format_data(shaped, source=0)
         return np.asarray(formatted[0, 0], dtype=self.adc_storage_dtype)
 
     def _process_adc_emitted(self, ts, data, counts) -> None:
-        """Feed HDF5, metrics, and averaged RMS from one ``process_packets`` emission."""
+        """Feed HDF5, metrics, and averaged RMS from one ``get_formatted_data(0)`` emission."""
         n_out = ts.shape[0]
         packet_inc = int(counts[:n_out].sum())
         self.processed_packets += packet_inc
@@ -184,7 +188,7 @@ class ADCDataProcessor(RawDataPacketProcessor):
                 if n_pkt < self.expected_packets:
                     self.metrics_incomplete_frames[cix] += 1
                     continue
-                frame = self._channel_frame(self.raw_data[tix, cix])
+                frame = np.asarray(data[tix, cix], dtype=self.adc_storage_dtype)
                 self.adc_frames[cix] += 1
 
                 t0 = time.time()
@@ -370,17 +374,19 @@ class ADCDataProcessor(RawDataPacketProcessor):
         raise NotImplementedError(
             "get_data_async is not supported; use process_packets() assembled output instead.")
 
-    def process_packets(self, config=None, verbose=None):
-        """Assemble UDP frames, then update ADC HDF5 / metrics / RMS sinks."""
+    def consume(self, result):
+        """Update ADC HDF5 / metrics / RMS from a ``get_formatted_data(0)`` result."""
         t0 = time.time()
-        result = RawDataPacketProcessor.process_packets(self, config, verbose)
-        t1 = time.time()
         if result is not None:
-            self._process_adc_emitted(*result)
-        t2 = time.time()
-        self.adc_max_processing_time = max(t2 - t0, self.adc_max_processing_time)
-        self.adc_current_processing_time += t2 - t1
+            ts, data, counts, _indices = result
+            self._process_adc_emitted(ts, data, counts)
+        t1 = time.time()
+        self.adc_max_processing_time = max(t1 - t0, self.adc_max_processing_time)
+        self.adc_current_processing_time += t1 - t0
         return result
+
+    def flush(self, flush_timeout=None):
+        """No-op; assembly flush is handled by the shared raw processor."""
 
     def stop(self):
         if self.hdf5_file:

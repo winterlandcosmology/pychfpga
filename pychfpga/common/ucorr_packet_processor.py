@@ -204,7 +204,7 @@ class UCorrPacketProcessor(PacketProcessorBase):
         return self.integ_data[:n_out], self.integ_sats[:n_out]
 
     def create_output_buffer(self, n_ts):
-        """Allocate caller-side output arrays matching the shapes produced by :meth:`process_packets`."""
+        """Allocate caller-side output arrays matching the shapes produced by :meth:`get_formatted_data`."""
         ts = np.empty((n_ts,), dtype=self.ts_array.dtype)
         data = np.empty((n_ts, self.NBINS, self.NPROD), dtype=self.integ_data.dtype)
         sats = np.empty((n_ts, self.NBINS, self.NPROD), dtype=self.integ_sats.dtype)
@@ -300,20 +300,37 @@ class UCorrPacketProcessor(PacketProcessorBase):
         np.add.at(self.raw_data_count, tix, 1)
 
 
-    def emit_complete_rows(self, n_out: int, verbose: int):
-        """Return ``(ts, data, sats, counts)`` views for complete integration rows."""
-        integ_ts = self.ts_array[:n_out]
-        data, sats = self.format_data(n_out)
-        counts = self.raw_data_count[:n_out]
-
-        self._last_emitted_ts = integ_ts[n_out - 1]
-
+    def _on_rows_ready(self, n_out, verbose):
         if verbose >= 2:
             print(f"UCorrPacketProcessor: emitted {n_out} integ(s), carry={self.carry_len}, overrun={self.overrun}")
         if self.overrun:
             print("*** Warning: the correlator experienced an overrun condition. All products could not be sent within the hardware integration period.")
             self.overrun = 0
 
+    def get_formatted_data(self, **kwargs):
+        """Return formatted integration rows assembled by the last ``process_udp_packets`` call.
+
+        Args:
+            **kwargs: Must be empty. ``source`` and ``format`` are not supported for correlator data.
+
+        Returns:
+            None if no rows are ready; otherwise ``(integ_ts, data, sats, counts)`` where
+            ``integ_ts`` has shape ``(n,)``, ``data`` and ``sats`` have shape
+            ``(n, NBINS, NPROD)``, and ``counts`` has shape ``(n,)``.
+
+        Raises:
+            TypeError: If ``source`` or ``format`` keyword arguments are passed.
+        """
+        if kwargs:
+            if "source" in kwargs or "format" in kwargs:
+                raise TypeError("UCorrPacketProcessor.get_formatted_data does not accept source or format")
+            raise TypeError(f"unexpected keyword arguments: {list(kwargs)}")
+        n_out = self._ready_n_out
+        if not n_out:
+            return None
+        integ_ts = self.ts_array[:n_out]
+        data, sats = self.format_data(n_out)
+        counts = self.raw_data_count[:n_out]
         return integ_ts, data, sats, counts
 
     def flush(self, flush_timeout=None):

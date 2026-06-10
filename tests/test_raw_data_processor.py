@@ -4,9 +4,44 @@ import re
 import numpy as np
 import pytest
 
-from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
+from pychfpga.common.raw_data_packet_processor import (
+    PACKET_COOKIE_ADC,
+    RawDataPacketProcessor,
+    decode_format_string,
+)
 from pychfpga.common.raw_frame_receiver import RawFrameReceiver
 from pychfpga.common.state import State
+
+
+def capture_format_for_tests(format="8"):
+    params = decode_format_string(format)
+    return State(
+        fmt_base_width=params["bit_width"],
+        fmt_is_complex=params["is_complex"],
+        fmt_interleave_factor=2 if params["deinterleave"] else 1,
+    )
+
+
+def _unused_capture_format_slot():
+    """Placeholder for dual-source ``capture_format[1]`` when tests only use source 0."""
+    return State(fmt_base_width=8, fmt_is_complex=False, fmt_interleave_factor=1)
+
+
+def process_and_get(processor, source=0, config=None, verbose=None, with_indices=False):
+    processor.process_udp_packets(config=config, verbose=verbose)
+    if not processor.n_out:
+        return None
+    ts, data_pair, counts, sources = processor.get_formatted_data()
+    data = data_pair[source]
+    row_src = sources[:, 0] if sources.ndim > 1 else sources
+    mask = row_src == source
+    if not np.any(mask):
+        return None
+    ts, data, counts = ts[mask], data[mask], counts[mask]
+    sources = sources[mask]
+    if with_indices:
+        return ts, data, counts, np.flatnonzero(mask)
+    return ts, data, counts
 
 
 class DummyPacketReceiver:
@@ -28,6 +63,7 @@ class DummyPacketReceiver:
 
 
 def default_config(format="8", frames_per_burst=1, **overrides):
+    cf0 = capture_format_for_tests(format)
     state = dict(
         capture_engine="PROBER",
         source="funcgen",
@@ -44,8 +80,7 @@ def default_config(format="8", frames_per_burst=1, **overrides):
         packets_per_logical_frame=1,
         logical_frames_per_burst=frames_per_burst,
         fft_bins_per_word=1,
-        format=format,
-        split=False,
+        capture_format=[cf0, _unused_capture_format_slot()],
         packet_header_format="raw-v1",
         receiver_recreate_attrs=(
             "capture_engine",
@@ -58,7 +93,7 @@ def default_config(format="8", frames_per_burst=1, **overrides):
             "logical_frames_per_burst",
             "packet_header_format",
         ),
-        receiver_update_attrs=("stream_ids", "target_mode", "source", "format", "split"),
+        receiver_update_attrs=("stream_ids", "target_mode", "source", "capture_format"),
     )
     state.update(overrides)
     return state
@@ -80,7 +115,7 @@ def make_processor(n_packets=16, format="8", frames_per_burst=1, receive_window=
 
 def write_packet(processor, pr, ix, stream_id, ts, frame=0, payload=None):
     payload = np.asarray(payload if payload is not None else np.arange(4), dtype=np.uint8)
-    pr.buf[ix, 0] = processor.PACKET_COOKIE
+    pr.buf[ix, 0] = PACKET_COOKIE_ADC
     pr.buf[ix, 1] = ((frame & 0xF) << 4) | ((stream_id >> 8) & 0xF)
     pr.buf[ix, 2] = stream_id & 0xFF
     pr.buf[ix, 3] = 0
@@ -115,7 +150,7 @@ def test_captured_payload_not_all_zeros_process_packets():
     write_burst(processor, pr, 2, ts=6, payload_base=21)
     write_burst(processor, pr, 4, ts=7, payload_base=31)
     write_burst(processor, pr, 6, ts=8, payload_base=41)
-    out = processor.process_packets()
+    out = process_and_get(processor)
     assert out is not None
     ts, data, counts = out
     flat = np.asarray(data, dtype=np.uint8).ravel()
@@ -147,7 +182,7 @@ def test_captured_payload_not_all_zeros_by_format(fmt, bytes_per_sample, samples
     write_burst(processor, pr, 2, ts=6, payload_base=13)
     write_burst(processor, pr, 4, ts=7, payload_base=23)
     write_burst(processor, pr, 6, ts=8, payload_base=33)
-    out = processor.process_packets()
+    out = process_and_get(processor)
     assert out is not None
     _ts, data, _counts = out
     sample = np.asarray(data).ravel()
@@ -226,7 +261,7 @@ def test_process_packets_returns_complete_burst_after_carryover_tail():
     write_burst(processor, pr, 4, ts=7, payload_base=20)
     write_burst(processor, pr, 6, ts=8, payload_base=30)
 
-    out = processor.process_packets()
+    out = process_and_get(processor)
     assert out is not None
     ts, data, counts = out
 
@@ -244,7 +279,7 @@ def test_carryover_tail_compacts_on_next_packet_block():
     processor, pr = make_processor()
     for i, ts in enumerate((5, 6, 7, 8)):
         write_burst(processor, pr, 2 * i, ts=ts, payload_base=10 * i)
-    out = processor.process_packets()
+    out = process_and_get(processor)
     assert out is not None
     ts, data, counts = out
 
@@ -254,7 +289,7 @@ def test_carryover_tail_compacts_on_next_packet_block():
     pr.n_stored = 0
     for i, ts_ in enumerate((9, 10, 11)):
         write_burst(processor, pr, 2 * i, ts=ts_, payload_base=40 + 10 * i)
-    out = processor.process_packets()
+    out = process_and_get(processor)
     assert out is not None
     ts, data, counts = out
 
@@ -288,7 +323,7 @@ def test_multi_channel_sequential_blocks_rowwise_carry():
 
     for i, tsv in enumerate((100, 101, 102, 103)):
         write_ts_block(nch * i, tsv, 10 * i)
-    out1 = processor.process_packets()
+    out1 = process_and_get(processor)
     assert out1 is not None
     assert len(out1[0]) == 4
     d1 = out1[1]
@@ -300,7 +335,7 @@ def test_multi_channel_sequential_blocks_rowwise_carry():
     pr.n_stored = 0
     for i, tsv in enumerate((200, 201, 202)):
         write_ts_block(nch * i, tsv, 50 + 10 * i)
-    out2 = processor.process_packets()
+    out2 = process_and_get(processor)
     assert out2 is not None
     assert len(out2[0]) == 3
 
@@ -315,13 +350,13 @@ def test_partial_burst_survives_across_packet_blocks():
     processor, pr = make_processor()
     write_packet(processor, pr, 0, stream_id=10, ts=7, payload=[1, 1, 1, 1])
 
-    r0 = processor.process_packets()
+    r0 = process_and_get(processor)
     assert r0 is None or len(r0[0]) == 0
 
     pr.pkt_len.fill(0)
     pr.n_stored = 0
     write_packet(processor, pr, 0, stream_id=11, ts=7, payload=[2, 2, 2, 2])
-    r1 = processor.process_packets()
+    r1 = process_and_get(processor)
     assert r1 is None or len(r1[0]) == 0
 
     pr.pkt_len.fill(0)
@@ -329,7 +364,7 @@ def test_partial_burst_survives_across_packet_blocks():
     write_burst(processor, pr, 0, ts=8, payload_base=10)
     write_burst(processor, pr, 2, ts=9, payload_base=20)
     write_burst(processor, pr, 4, ts=10, payload_base=30)
-    out = processor.process_packets()
+    out = process_and_get(processor)
     assert out is not None
     ts, data, counts = out
 
@@ -353,7 +388,7 @@ def test_timestamp_clip_keeps_newest_distinct_timestamps():
     for i, tsv in enumerate((100, 101, 102)):
         write_burst(processor, pr, 2 * i, ts=tsv, payload_base=10 * i)
     with pytest.warns(UserWarning, match="timestamp backlog"):
-        out = processor.process_packets()
+        out = process_and_get(processor)
     assert out is not None
     ts, _, _ = out
     np.testing.assert_array_equal(ts, np.array([101, 102], dtype=ts.dtype))
@@ -364,7 +399,7 @@ def test_monotonic_rejects_udp_not_after_last_emitted():
     processor, pr = make_processor(receive_window=0)
     for i, tsv in enumerate((5, 6, 7, 8)):
         write_burst(processor, pr, 2 * i, ts=tsv, payload_base=10 * i)
-    out1 = processor.process_packets()
+    out1 = process_and_get(processor)
     assert out1 is not None
     assert int(out1[0][-1]) == 8
 
@@ -372,7 +407,7 @@ def test_monotonic_rejects_udp_not_after_last_emitted():
     pr.n_stored = 0
     write_burst(processor, pr, 0, ts=7, payload_base=100)
     write_burst(processor, pr, 2, ts=9, payload_base=20)
-    out2 = processor.process_packets()
+    out2 = process_and_get(processor)
     assert out2 is not None
     ts2, data2, _ = out2
     assert len(ts2) == 1
@@ -383,18 +418,18 @@ def test_monotonic_rejects_udp_not_after_last_emitted():
     pr.n_stored = 0
     write_burst(processor, pr, 0, ts=6, payload_base=30)
     write_burst(processor, pr, 2, ts=7, payload_base=40)
-    assert processor.process_packets() is None
+    assert process_and_get(processor) is None
 
 
 def test_flush_clears_last_emitted_timestamp_tracker():
     processor, pr = make_processor(receive_window=0)
     write_burst(processor, pr, 0, ts=50, payload_base=1)
     write_burst(processor, pr, 2, ts=51, payload_base=2)
-    assert processor.process_packets() is not None
+    assert process_and_get(processor) is not None
     processor.flush()
     write_burst(processor, pr, 0, ts=50, payload_base=11)
     write_burst(processor, pr, 2, ts=51, payload_base=12)
-    out = processor.process_packets()
+    out = process_and_get(processor)
     assert out is not None
     np.testing.assert_array_equal(out[0], np.array([50, 51], dtype=out[0].dtype))
 
@@ -404,7 +439,7 @@ def test_view_capable_format_can_return_raw_storage_view():
     write_packet(processor, pr, 0, stream_id=10, ts=9, payload=[1, 2, 3, 4])
     write_packet(processor, pr, 1, stream_id=11, ts=9, payload=[5, 6, 7, 8])
 
-    out = processor.process_packets()
+    out = process_and_get(processor)
     assert out is not None
     ts, data, counts = out
 
@@ -416,7 +451,7 @@ def test_transformed_format_uses_formatted_output_buffer():
     write_packet(processor, pr, 0, stream_id=10, ts=11, payload=[0, 4, 0, 8])
     write_packet(processor, pr, 1, stream_id=11, ts=11, payload=[0, 12, 0, 16])
 
-    out = processor.process_packets()
+    out = process_and_get(processor)
     assert out is not None
     ts, data, counts = out
 
@@ -428,13 +463,12 @@ def test_transformed_format_uses_formatted_output_buffer():
 def test_output_only_reconfiguration_reuses_raw_buffer():
     processor, pr = make_processor(n_packets=2, format="8", receive_window=0)
     raw_data = processor.raw_data
-    cfg = default_config(format="14")
+    cfg = default_config(format="14", capture_format=[capture_format_for_tests("14"), _unused_capture_format_slot()])
 
-    processor.process_packets(config=State(cfg))
+    process_and_get(processor, config=State(cfg))
 
     assert processor.raw_data is raw_data
-    assert processor.format == "14"
-    assert processor.fmt_out_dtype == np.dtype(np.int16)
+    assert processor.config.capture_format[0].fmt_base_width == 14
 
 
 def test_geometry_reconfiguration_reallocates_when_shape_changes():
@@ -447,11 +481,72 @@ def test_geometry_reconfiguration_reallocates_when_shape_changes():
         logical_frames_per_burst=2,
     )
 
-    processor.process_packets(config=State(cfg))
+    process_and_get(processor, config=State(cfg))
 
     assert processor.raw_data is not raw_data
     assert processor.PKT_FRAMES_PER_BURST == 2
     assert processor.n_ts == 0
+
+
+def test_read_raw_frames_split_kwarg_yields_per_frame_width():
+    """``read_raw_frames(split=1)`` must enable splitting (notebook API alias)."""
+    cfg = default_config(
+        format="8",
+        frames_per_burst=2,
+        bytes_per_sample=1,
+        samples_per_frame=8,
+        bytes_per_frame=8,
+        bytes_per_subframe=8,
+        subframes_per_frame=1,
+        packets_per_channel_per_burst=2,
+    )
+    pr = DummyPacketReceiver(n_packets=16, max_packet_size=32)
+    r = RawFrameReceiver(pr, config=cfg, verbose=0, receive_window=0)
+    write_burst(r, pr, 0, ts=5, payload_base=10)
+    write_burst(r, pr, 2, ts=6, payload_base=20)
+    ts, data, counts = r.read_raw_frames(ncap=2, split=1, flush=False)
+    assert data.shape[-1] == 8, f"expected 8 samples per frame, got shape {data.shape}"
+
+
+def test_split_parameter_yields_samples_per_frame():
+    """UCAP-style burst: split=True exposes 16384 samples/frame, not 32768 (full burst)."""
+    processor, _pr = make_processor(
+        n_packets=4,
+        format="16",
+        frames_per_burst=2,
+        bytes_per_sample=2,
+        samples_per_frame=16384,
+        bytes_per_frame=32768,
+        bytes_per_subframe=8192,
+        subframes_per_frame=4,
+        stream_ids=(10,),
+        channels=(0,),
+        receive_window=0,
+    )
+    assert processor.BYTES_PER_FRAME == 32768
+    assert processor.raw_data.shape[-1] == 2 * 32768
+
+    processor.raw_data[0, 0, :] = 1
+    processor.ts_array[0] = 100
+    processor.raw_data_count[0, 0] = 8
+    processor.n_out = 1
+
+    ts_in = processor.ts_array[:1]
+    counts_in = processor.raw_data_count[:1]
+    ts_wide, burst_wide, counts_wide = processor.format_data(
+        processor.raw_data[:1], ts=ts_in, counts=counts_in, source=0, split=False,
+    )
+    assert burst_wide.shape == (1, 1, 32768), burst_wide.shape
+    np.testing.assert_array_equal(ts_wide, [100])
+    np.testing.assert_array_equal(counts_wide, [[8]])
+
+    split_ts, split_rows, split_counts = processor.format_data(
+        processor.raw_data[:1], ts=ts_in, counts=counts_in, source=0, split=True,
+    )
+    assert split_rows.shape == (2, 1, 16384), split_rows.shape
+    assert split_rows.shape[-1] == 16384
+    np.testing.assert_array_equal(split_ts, [100, 101])
+    np.testing.assert_array_equal(split_counts, [[4], [4]])
 
 
 def test_split_format_core_and_modifiers_suffix():

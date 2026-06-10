@@ -18,23 +18,22 @@ def test_storage_dtype_from_bytes_per_sample():
 
 
 def _proc_16bit(**kw):
-    class Proc(ADCDataProcessor):
-        def __init__(self):
-            self.config = State(
-                bytes_per_sample=2,
-                storage_dtype="i2",
-                format="16",
-                **kw,
-            )
-            self.BYTES_PER_FRAME = 8
-            self.BYTES_PER_SAMPLE = 2
-            self.PKT_FRAMES_PER_BURST = 1
-            self.format = "16"
-            self.split = False
-            self.parse_format()
-            self._sync_adc_hdf5_layout()
+    from test_raw_data_processor import DummyPacketReceiver, make_processor
 
-    return Proc()
+    raw = make_processor(
+        n_packets=4,
+        format="16",
+        receive_window=0,
+        bytes_per_sample=2,
+        bytes_per_frame=8,
+        samples_per_frame=4,
+    )[0]
+    cfg = State(
+        bytes_per_sample=2,
+        storage_dtype="i2",
+        **kw,
+    )
+    return ADCDataProcessor(None, raw, config=cfg)
 
 
 def test_channel_frame_uses_format_data_for_16bit_be():
@@ -46,8 +45,8 @@ def test_channel_frame_uses_format_data_for_16bit_be():
 
 def test_channel_frame_full_scale_sinewave_shape():
     p = _proc_16bit()
-    p.BYTES_PER_FRAME = 32768
-    p.PKT_FRAMES_PER_BURST = 1
+    p.raw.BYTES_PER_FRAME = 32768
+    p.raw.PKT_FRAMES_PER_BURST = 1
     p._sync_adc_hdf5_layout()
     assert p.adc_samples_per_frame == 16384
     assert p.adc_storage_dtype == np.dtype("i2")

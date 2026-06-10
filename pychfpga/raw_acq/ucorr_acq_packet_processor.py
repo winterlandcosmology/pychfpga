@@ -32,16 +32,16 @@ class CorrDataProcessor(UCorrPacketProcessor):
         self.frame0_irigb_time = 0
         super().__init__(packet_receiver, config=config, receive_window=receive_window, verbose=verbose)
 
-    def process_packets(self, config=None, verbose=None):
-        """Called by the receiver to process the correlator packet currently present in the main receiver buffer"""
-        t0 = time.time()
-        result = super().process_packets(config, verbose)
-        t1 = time.time()
-        self.corr_max_processing_time = max(t1 - t0, self.corr_max_processing_time)
-        self.corr_current_processing_time += t1 - t0
+    def consume(self, result):
+        """Append correlator HDF5 rows from a ``get_formatted_data()`` result."""
         if result is not None and self.hdf5_file is not None:
             self._write_hdf5_from_result(result)
         return result
+
+    def after_process_udp_packets(self, elapsed):
+        """Update correlator timing metrics after UDP assembly."""
+        self.corr_max_processing_time = max(elapsed, self.corr_max_processing_time)
+        self.corr_current_processing_time += elapsed
 
     def _write_hdf5_from_result(self, result):
         """Append completed UCORR integration rows to the correlator HDF5 file."""

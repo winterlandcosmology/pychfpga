@@ -25,17 +25,23 @@ async def main() -> None:
         raw_capture_state=_json_safe(_capture_states(for_rest=False)),
     )
     await asyncio.sleep(2.0)
+    raw = recv.processors["raw"]
     adc = recv.processors["adc"]
     for _ in range(300):
-        adc.process_packets()
-        if (adc.raw_data_count > 0).any():
+        recv.process_packets()
+        if (raw.raw_data_count > 0).any():
             break
     recv.stop()
 
     cix = 0
-    tix = int(np.argmax(adc.raw_data_count[:, cix]))
-    wire = np.asarray(adc.raw_data[tix, cix], dtype=np.uint8)
-    formatted = adc.format_data(wire.reshape(1, 1, -1))[0, 0]
+    tix = int(np.argmax(raw.raw_data_count[:, cix]))
+    wire = np.asarray(raw.raw_data[tix, cix], dtype=np.uint8)
+    from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
+    fmt = raw._capture_format[0]
+    formatted = RawDataPacketProcessor.format_data(
+        wire.reshape(1, 1, -1), fmt, scratch=raw._fmt_scratch[0],
+        pkt_frames_per_burst=raw.PKT_FRAMES_PER_BURST,
+    )[0, 0]
     frame = adc._channel_frame(wire)
 
     def rms(x):

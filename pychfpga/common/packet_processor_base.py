@@ -1,13 +1,9 @@
 """Shared UDP packet batch processor base for timestamp-indexed assembly."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional, Tuple, Union
-
 import warnings
 
 import numpy as np
-
-from .udp_packet_receiver import UDPPacketReceiver
 
 
 class PacketProcessorBase(ABC):
@@ -19,10 +15,10 @@ class PacketProcessorBase(ABC):
 
     def __init__(
         self,
-        packet_receiver: UDPPacketReceiver,
-        receive_window: int = 3,
-        verbose: int = 0,
-    ) -> None:
+        packet_receiver,
+        receive_window=3,
+        verbose=0,
+    ):
         self.pr = packet_receiver
         self.receive_window = receive_window
         self.verbose = verbose
@@ -45,10 +41,10 @@ class PacketProcessorBase(ABC):
         self.init()
 
     @abstractmethod
-    def init(self) -> None:
+    def init(self):
         """Set up UDP buffer views, per-packet decode scratch, and empty data buffers."""
 
-    def resize_buffer(self, buf_name: str, dims, element_dtype=None) -> np.ndarray:
+    def resize_buffer(self, buf_name, dims, element_dtype=None):
         """Return a ``dims`` view into ``buf_name``, reallocating raw bytes if needed."""
         dt = np.dtype(element_dtype)
         nel = int(np.prod(dims))
@@ -63,17 +59,17 @@ class PacketProcessorBase(ABC):
         return raw[:nbytes].view(dt).reshape(dims)
 
     @abstractmethod
-    def update_config(self, config=None) -> None:
+    def update_config(self, config=None):
         """Apply configuration (subclass-specific)."""
 
     @abstractmethod
-    def filter_packets(self, n: int) -> Optional[np.ndarray]:
+    def filter_packets(self, n):
         """Decode and select packets; return UDP row indices ``bix`` or ``None`` if unusable."""
 
     @abstractmethod
     def init_dest_rows(self, n_ts, cix, carry_tix):
         """Relocate carryover rows to their new rows and zero the rest.
-        
+
         Parameters
         ----------
         n_ts (int): Number of timestamps in the new output buffer.
@@ -81,13 +77,13 @@ class PacketProcessorBase(ABC):
         carry_tix (np.ndarray): Indices of the carryover rows in the new output buffer.
 
         """
- 
+
     @abstractmethod
-    def store_packets(self, bix: np.ndarray, tix: np.ndarray) -> None:
+    def store_packets(self, bix, tix):
         """Put UDP packets data into the raw_data output buffer.
 
         Must update self.raw_data_count with the number of packets that were processed. Will be used to compute how many packets are returned.
-        
+
         Parameters
         ----------
         bix (np.ndarray): Row indices into the UDP buffer that contain the data we want to process.
@@ -95,42 +91,42 @@ class PacketProcessorBase(ABC):
         """
 
 
-    @abstractmethod
-    def emit_complete_rows(self, n_out: int, verbose: int):
-        """Build the return tuple for ``n_out`` complete leading rows.
+    def process_udp_packets(self, config=None, verbose=None):
+        """Assemble one active UDP packet block into internal raw buffers.
 
-        Must update ``self._last_emitted_ts`` to the last emitted timestamp key.
-        """
+        Filters packets, merges timestamps with carryover, scatters payload bytes,
+        and computes how many leading timestamp rows are ready to read via
+        ``get_formatted_data``.
 
-    def process_packets(self, config=None, verbose = None):
-        """Process one active UDP packet block.
+        Future: ``get_formatted_data`` returns row ``indices`` into the raw buffer,
+        so a follow-up can replace compaction/carry-over with a ring-buffer layout.
 
-        Parameters
-        ----------
-        config (dict or State or None): The configuration to use for the processor.
-        verbose (int or None): The verbosity level to use for the processor.
+        Args:
+            config: Configuration mapping or State to apply before processing, or None.
+            verbose: Verbosity level, or None to use ``self.verbose``.
 
-        Returns a subclass-specific tuple of views for complete timestamp rows, or
-        ``None`` when there is nothing to emit.
+        Returns:
+            None. Ready row count is stored in ``self.n_out``.
         """
         verbose = self.verbose if verbose is None else verbose
         self.update_config(config)
+        self.n_out = 0
 
         n = self.pr.n_stored  # number of packets in the UDP buffer
         if not n:
-            return None
+            return
 
         # Filter the packets to process. Return list of row indices into the udb buffer that contain the data we want to process.
         bix = self.filter_packets(n)
         if bix is None:
-            return None
+            return
 
         old_nts = self.n_ts
         n_carry = self.carry_len
         cix = slice(old_nts - n_carry, old_nts)  # indices of the carryover rows in the output buffer
 
         if not bix.size and not n_carry:
-            return None
+            return
 
         if n_carry > old_nts:
             raise RuntimeError(
@@ -165,12 +161,12 @@ class PacketProcessorBase(ABC):
                 tix = tix[tix >= 0]
 
         # Relocate carryover rows to their new rows and zero the rest.
-        self.init_dest_rows(n_ts, cix, carry_tix)  
+        self.init_dest_rows(n_ts, cix, carry_tix)
 
         self.ts_array[:n_ts] = ts_unique
         self.n_ts = n_ts
 
-        if bix.size:  
+        if bix.size:
             self.store_packets(bix, tix)
 
         # Compute the carry length by checking the raw data count for the trailing rows that are not complete.
@@ -185,11 +181,22 @@ class PacketProcessorBase(ABC):
                 complete_tail = (raw_counts_tail >= self.expected_packets)[::-1]
             self.carry_len = int(np.argmax(complete_tail)) if complete_tail.size and complete_tail.any() else w
 
-        # COmpute the number of packets to return, 
-        # Withholding up carryover rows 
+        # COmpute the number of packets to return,
+        # Withholding up carryover rows
         n_out = max(0, n_ts - self.carry_len)
+        self.n_out = n_out
 
-        if not n_out:
-            return None
+        if n_out:
+            self._last_emitted_ts = self.ts_array[n_out - 1]
 
-        return self.emit_complete_rows(n_out, verbose)
+    @abstractmethod
+    def get_formatted_data(self, *args, **kwargs):
+        """Return formatted views for rows assembled by the last ``process_udp_packets`` call."""
+
+    def on_ts_overflow(self, dropped: int) -> None:
+        """Warn when timestamp keys are dropped because the buffer is full."""
+        warnings.warn(
+            f"timestamp backlog: {dropped} oldest timestamps dropped.",
+            UserWarning,
+            stacklevel=3,
+        )

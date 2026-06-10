@@ -1,6 +1,3 @@
-from typing import Any, Dict, Optional, Tuple, Union
-
-import copy
 import math
 import re
 import warnings
@@ -9,18 +6,113 @@ from warnings import warn as _warn
 import numpy as np
 
 from .packet_processor_base import PacketProcessorBase
-from .udp_packet_receiver import UDPPacketReceiver
 from .state import State
 
+
+PACKET_COOKIE_ADC = 0xA0
+PACKET_COOKIE_FFT = 0xA1
+PACKET_COOKIE_MASK = 0xFE
+RAW_SOURCE_EMPTY = 255
+NUM_SOURCES = 2
+
+
+def decode_format_string(format):
+    """Decode a raw capture format string into formatting parameters.
+
+    Format string: ``<width>`` [``+<width>``] [``<modifiers>``]
+
+    Bit widths (``<width>``): ``8``, ``14``, ``16``, ``32``, ``64``.
+
+    Modifiers (``<modifiers>``): ``d`` — deinterleave.
+
+    Args:
+        format: Format string such as ``"16"``, ``"32+32"``, or ``"32+32d"``.
+
+    Returns:
+        dict with keys ``is_complex``, ``bit_width``, ``deinterleave``, ``split``
+        (split is not encoded in the string; caller must set if needed),
+        ``output_dtype``, ``scalar_bytes``, ``integer_dtype``, and ``modifiers``.
+
+    Raises:
+        ValueError: If the format string is invalid.
+    """
+    if not (m := re.fullmatch(r'(\d+)(?:\+(\d+))?(.*)', format)):
+        raise ValueError(
+            f"Invalid raw data format {format!r}: must be in the format <width>[+<width>][<modifiers>]"
+        )
+    base = int(m.group(1))
+    second = m.group(2)
+    suffix = m.group(3) or ""
+    if base not in (8, 14, 16, 32, 64):
+        raise ValueError(
+            f"Invalid bit width in data format {format!r}: must be 8, 14, 16, 32, or 64"
+        )
+    is_complex = second is not None
+    if is_complex:
+        second = int(second)
+        if base != second:
+            raise ValueError(
+                f"Invalid raw data format {format!r}: second width must be the same as the base width"
+            )
+    if not is_complex and suffix:
+        raise ValueError(f"Modifiers {suffix!r} are not supported for non-complex data")
+
+    scalar_bytes = math.ceil(base / 8)
+    out_dtype = np.dtype(f"i{scalar_bytes}")
+    if is_complex:
+        out_dtype = np.dtype(np.complex128 if base == 64 else np.complex64)
+
+    return dict(
+        is_complex=is_complex,
+        bit_width=base,
+        deinterleave="d" in suffix,
+        split=False,
+        output_dtype=out_dtype,
+        scalar_bytes=scalar_bytes,
+        integer_dtype=np.dtype(f">i{scalar_bytes}"),
+        modifiers=suffix)
+
+
+
+
+    # def parse_format(self):
+    #     """Decode the format string and set formatting parameters for buffers and transforms.
+
+    #     Format string: ``<width>`` [``+<width>``] [``<modifiers>``]
+
+    #     Bit widths (``<width>``): ``8``, ``14``, ``16``, ``32``, ``64``.
+
+    #     Modifiers (``<modifiers>``): ``d`` — deinterleave.
+
+    #     Returns:
+    #         None
+    #     """
+    #     if not (m := re.fullmatch(r'(\d+)(?:\+(\d+))?(.*)', self.format)):
+    #         raise ValueError(f"Invalid raw data format {self.format!r}: must be in the format <width>[+<width>][<modifiers>]")
+    #     base, second, suffix = m.groups()
+    #     base = int(m.group(1))
+    #     if base not in (8, 14, 16, 32, 64):
+    #         raise ValueError(f"Invalid bit width in data format {self.format!r}: must be 8, 14, 16, 32, or 64")
+    #     self.fmt_is_complex = False
+    #     if second is not None:
+    #         second = int(m.group(2))
+    #         self.fmt_is_complex = True
+    #         if base != second:
+    #             raise ValueError(f"Invalid raw data format {self.format!r}: second width must be the same as the base width")
+    #     self.fmt_modifiers = m.group(3) or ""
+
+    #     self.fmt_base_width = base
+    #     self.fmt_scalar_bytes = math.ceil(base / 8)
+    #     self.fmt_integer_dtype = np.dtype(f">i{self.fmt_scalar_bytes}")  # integer number format
 
 class RawDataPacketProcessor(PacketProcessorBase):
     """
     Fast packet-to-linear-buffer processor for raw UDP FPGA captures.
 
     Packet payloads are written to an internal timestamp-indexed linear buffer.
-    Complete timestamp rows are returned as direct views when the output format
-    allows it, or copied into a reusable formatted buffer when a transform is
-    required.
+    Complete timestamp rows are formatted on demand via ``get_formatted_data`` as
+    direct views when the output format allows it, or into reusable per-source
+    formatted buffers when a transform is required.
 
     Notes
     -----
@@ -32,47 +124,39 @@ class RawDataPacketProcessor(PacketProcessorBase):
     """
 
     PACKET_COOKIE = 0xA0
-    PACKET_COOKIE_MASK = 0xFF
-
+    PACKET_COOKIE_MASK = 0xFE
 
     def __init__(
         self,
-        packet_receiver: UDPPacketReceiver,
-        config: Union[Dict[str, Any], State],
-        receive_window: int = 3,
-        verbose: int = 0,
-        decode_strict: bool = True,
-    ) -> None:
+        packet_receiver,
+        config=None,
+        receive_window=3,
+        verbose=0,
+        decode_strict=True,
+    ):
         """
         Build a UDP packet processor including packet reception and timestamp-indexed assembly pipeline.
 
         Parameters
         ----------
-        packet_receiver (UDPPacketReceiver): UDP packet source holding the shared packet buffer.
-        config (State or dict): Flat capture configuration (what callers typically take from
-            ``raw_capture`` / decoder state: geometry, streams, ``format``, ``split``, etc.).
-            The mapping is deep-copied into an internal :class:`State` so the caller can retain
-            and mutate their copy without affecting this processor.
-        receive_window (int): Maximum number of incomplete trailing timestamp rows retained as
-            carryover between UDP packet blocks. This is used to handle the case where the last timestamps could not be completed
-            with the current UDP packet blocks, and should be carried over to the next processing block so they can be completed 
-            with the next batch of UDP packets.
-            in a block is incomplete, and the next block starts with a timestamp that is less than the
-            last packet in the previous block.
-        verbose (int): Verbosity level for debug prints.
-        decode_strict (bool): Strictness control for multi-packet logical decode.
-            - ``True``: invalid profile/layout and incomplete logical groups
-              raise explicit errors.
-            - ``False``: tolerate some layout mismatches by falling back to coarser framing where possible.
+        packet_receiver: UDP packet source holding the shared packet buffer.
+        config: Flat capture configuration (geometry, streams, ``capture_format``, etc.).
+            Deep-copied into an internal State so the caller can retain and mutate their copy.
+        receive_window: Maximum incomplete trailing timestamp rows retained as carryover.
+        verbose: Verbosity level for debug prints.
+        decode_strict: Strictness control for multi-packet logical decode.
         """
         self.decode_strict = decode_strict
         self.config = State()
-        self.packet_cookie = self.PACKET_COOKIE
-        self.packet_cookie_mask = self.PACKET_COOKIE_MASK
+        self.packet_cookie_mask = PACKET_COOKIE_MASK
+        self.source_target_mode = np.zeros((NUM_SOURCES,), dtype=np.uint8)
+        self._capture_format = [None, None]
+        self._fmt_scratch = [{}, {}]
         super().__init__(packet_receiver, receive_window, verbose)
-        self.update_config(State(config).deepcopy())
+        if config is not None:
+            self.update_config(State(config).deepcopy())
 
-    def init(self) -> None:
+    def init(self):
         self.header_dtype = np.dtype(
             dict(
                 names=["cookie", "stream_id", "frame_number", "slot_chan", "mode_subframe", "ts"],
@@ -108,23 +192,22 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.pkt_cookie = np.empty((n_packets,), dtype=np.uint8)
         self.pkt_frame = np.empty((n_packets,), dtype=np.uint32) # same as pkt_off  into the data buffer for each packet
         self.pkt_subframe = np.empty((n_packets,), dtype=np.uint32) # must be wide enough to compute the offset into the data buffer for each packet
+        self.pkt_source = np.empty((n_packets,), dtype=np.uint8)
+
         self.pkt_six = np.empty((n_packets,), dtype=np.uint16)
         self.pkt_off = np.empty((n_packets,), dtype=np.uint32)
 
         # Instialize empty buffers. These will be resized when the configuration is updated below.
         self.raw_data_buf = np.empty(0, dtype=np.uint8)
         self.raw_data_count_buf = np.empty(0, dtype=np.int64)
-        self.fmt_cdata_buf1 = np.empty(0, dtype=np.uint8)
-        self.fmt_cdata_buf2 = np.empty(0, dtype=np.uint8)
+        self.raw_source_buf = np.empty(0, dtype=np.uint8)
+        self.formatted_data_bufs = [np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)]
+        self.fmt_cdata_bufs1 = [np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)]
+        self.fmt_cdata_bufs2 = [np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)]
+        self.fmt_cdata1 = [None, None]
+        self.fmt_cdata2 = [None, None]
 
-
-
-        # self.configure_output(format=format)
-
-        # self.last_decode_meta: Dict[str, Any] = {}
-        # self._allocate_block_output()
-
-    def update_config(self, config=None) -> None:
+    def update_config(self, config=None):
         if config is not None:
             self.config.update(config)
 
@@ -134,16 +217,16 @@ class RawDataPacketProcessor(PacketProcessorBase):
         # The tuple is used both as a list of attributes and the context token
 
         static_state_attrs = (
-                "capture_engine",
-                "bytes_per_sample",
-                "samples_per_frame",
-                "frames_per_burst",
-                "fft_bins_per_word",
-                "subframes_per_frame",
-                "stream_ids",
-                "packets_per_logical_frame",
-                "logical_frames_per_burst",
-                "packet_header_format",
+            "capture_engine",
+            "bytes_per_sample",
+            "samples_per_frame",
+            "frames_per_burst",
+            "fft_bins_per_word",
+            "subframes_per_frame",
+            "stream_ids",
+            "packets_per_logical_frame",
+            "logical_frames_per_burst",
+            "packet_header_format",
         )
 
         # Recompute output buffer arrays if the packet geometry parameter has changed 
@@ -152,7 +235,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
                 print(f"update_config: static state attributes have changed. Buffers will be cleared.")
 
             self.CAPTURE_ENGINE = state.capture_engine
-            self.TARGET_MODE = state.target_mode 
+            self.TARGET_MODE = state.target_mode
             self.BYTES_PER_SAMPLE = state.bytes_per_sample
             self.SAMPLES_PER_FRAME = state.samples_per_frame
             self.PKT_FRAMES_PER_BURST = state.frames_per_burst
@@ -177,24 +260,6 @@ class RawDataPacketProcessor(PacketProcessorBase):
             self.CAPTURE_SOURCE = state.source
             self.FFT_BINS_PER_WORD = state.fft_bins_per_word or 1
 
-            # self.PACKETS_PER_LOGICAL_FRAME = state.packets_per_logical_frame or 1
-            # if self.PACKETS_PER_LOGICAL_FRAME < 1:
-            #     raise ValueError("packets_per_logical_frame must be >= 1")
-
-            # if self.PKT_FRAMES_PER_BURST % self.PACKETS_PER_LOGICAL_FRAME != 0:
-            #     if self.decode_strict:
-            #         raise ValueError(
-            #             "pkt_frames_per_burst is not a multiple of packets_per_logical_frame "
-            #             f"({self.PKT_FRAMES_PER_BURST} vs {self.PACKETS_PER_LOGICAL_FRAME})."
-            #         )
-
-            # self.LOGICAL_FRAMES_PER_BURST = state.logical_frames_per_burst
-            # if self.LOGICAL_FRAMES_PER_BURST <= 0:
-            #     self.LOGICAL_FRAMES_PER_BURST = max(
-            #         1,
-            #         self.PKT_FRAMES_PER_BURST // self.PACKETS_PER_LOGICAL_FRAME,
-            #     )
-
             self.NCHAN = len(self.stream_ids)
             # Map of stream IDs to stream index
             self.six_map = np.full((1 << 12,), -1, dtype=np.int64)
@@ -209,135 +274,139 @@ class RawDataPacketProcessor(PacketProcessorBase):
             self.n_ts = 0
             self._emit_stop = 0
 
+            burst_bytes = self.PKT_FRAMES_PER_BURST * self.BYTES_PER_FRAME
+            self.raw_data = self.resize_buffer(
+                'raw_data_buf',
+                (self.max_timestamps, self.NCHAN, burst_bytes),
+                element_dtype=np.uint8,
+            )
+            self.raw_data_count = self.resize_buffer(
+                'raw_data_count_buf',
+                (self.max_timestamps, self.NCHAN),
+                element_dtype=np.int64,
+            )
+            self.raw_source = self.resize_buffer(
+                'raw_source_buf',
+                (self.max_timestamps, self.NCHAN),
+                element_dtype=np.uint8,
+            )
+            self.raw_source.fill(RAW_SOURCE_EMPTY)
 
-            self.raw_data = self.resize_buffer('raw_data_buf', (self.max_timestamps, self.NCHAN, self.PKT_FRAMES_PER_BURST * self.BYTES_PER_FRAME), element_dtype=np.uint8)
             self.raw_data_count = self.resize_buffer('raw_data_count_buf', (self.max_timestamps, self.NCHAN), element_dtype=np.int64)
 
             # No carryover
             self.carry_len = 0
             self.carry_tix = 0
-            self._last_emitted_ts = 0 
+            self._last_emitted_ts = 0
+            self._ready_n_out = 0
 
             self.expected_packets = self.PKT_FRAMES_PER_BURST * self.NUMBER_OF_SUBFRAMES
-    
+
             state.ack(static_state_attrs, context=static_state_attrs)
 
         dynamic_state_attrs = (
-            "target_mode",
-            "source",
-            "format",
-            "split",
+            "capture_format0",
+            "capture_format1",
         )
 
-        if state.get("packet_cookie") is not None:
-            self.packet_cookie = int(state.packet_cookie)
-        if state.get("packet_cookie_mask") is not None:
-            self.packet_cookie_mask = int(state.packet_cookie_mask)
+        for source, cf in enumerate(state.capture_format):
+            if cf.has_changed(context=dynamic_state_attrs[source]):
+                if cf.fmt_is_complex:
+                    bytes_per_integer = math.ceil(cf.fmt_base_width / 8)
+                    out_dtype = np.dtype(np.complex128 if cf.fmt_base_width == 64 else np.complex64)
+                    complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // 2
+                    interleave_factor = cf.fmt_interleave_factor
+                    # interleaved_values_per_frame = complex_values_per_frame * interleaved_factor # 2 for interleaved, 1 for non-interleaved
+                    cdata1_dims = (self.max_timestamps * self.PKT_FRAMES_PER_BURST, self.NCHAN, complex_values_per_frame) # complex value storage buffer
+                    cdata2_dims = (self.max_timestamps * self.PKT_FRAMES_PER_BURST // interleave_factor, self.NCHAN, complex_values_per_frame * interleave_factor) # deinterleaved complex value storage buffer  
+                    self.fmt_cdata1[source] = self.resize_buffer("fmt_cdata_buf1", cdata1_dims, element_dtype=out_dtype)
+                    self.fmt_cdata2[source] = self.resize_buffer("fmt_cdata_buf2", cdata2_dims, element_dtype=out_dtype)
+            cf.ack(context=dynamic_state_attrs[source])
 
-        if state.has_changed(dynamic_state_attrs, context=dynamic_state_attrs):
-            self.format = state.format
-            self.split = bool(state.split)
-            self.parse_format()
-            if self.fmt_is_complex:
-                self.fmt_cdata1 = self.resize_buffer("fmt_cdata_buf1", self.fmt_cdata1_dims, element_dtype=self.fmt_out_dtype)
-                self.fmt_cdata2 = self.resize_buffer("fmt_cdata_buf2", self.fmt_cdata2_dims, element_dtype=self.fmt_out_dtype)
-
-            state.ack(dynamic_state_attrs, context=dynamic_state_attrs)
 
 
-    def parse_format(self):
-        """Decode the format string and set formatting parameters for buffers and transforms.
 
-        Format string: ``<width>`` [``+<width>``] [``<modifiers>``]
 
-        Bit widths (``<width>``): ``8``, ``14``, ``16``, ``32``, ``64``.
+    def format_data(self, raw_data, ts=None, counts=None, source=0, split=False):
+        """Transform assembled rows into ``(ts, data, counts)`` views.
 
-        Modifiers (``<modifiers>``): ``d`` — deinterleave.
-
-        Returns:
-            None
-        """
-        if not (m := re.fullmatch(r'(\d+)(?:\+(\d+))?(.*)', self.format)):
-            raise ValueError(f"Invalid raw data format {self.format!r}: must be in the format <width>[+<width>][<modifiers>]")
-        base, second, suffix = m.groups()
-        base = int(m.group(1))
-        if base not in (8, 14, 16, 32, 64):
-            raise ValueError(f"Invalid bit width in data format {self.format!r}: must be 8, 14, 16, 32, or 64")
-        self.fmt_is_complex = False
-        if second is not None:
-            second = int(m.group(2))
-            self.fmt_is_complex = True
-            if base != second:
-                raise ValueError(f"Invalid raw data format {self.format!r}: second width must be the same as the base width")
-        self.fmt_modifiers = m.group(3) or ""
-
-        self.fmt_base_width = base
-        self.fmt_scalar_bytes = math.ceil(base / 8)
-        self.fmt_integer_dtype = np.dtype(f">i{self.fmt_scalar_bytes}")  # integer number format
-        self.fmt_out_dtype = np.dtype(f"i{self.fmt_scalar_bytes}")        
-        if self.fmt_is_complex:
-            self.fmt_out_dtype = np.dtype(np.complex128 if self.fmt_base_width == 64 else np.complex64)
-            complex_values_per_frame = self.BYTES_PER_FRAME // self.fmt_scalar_bytes // 2
-            interleaved_factor = 2 if 'd' in self.fmt_modifiers else 1
-            interleaved_values_per_frame = complex_values_per_frame * interleaved_factor # 2 for interleaved, 1 for non-interleaved
-            self.fmt_cdata1_dims = (self.max_timestamps * self.PKT_FRAMES_PER_BURST, self.NCHAN, complex_values_per_frame) # complex value storage buffer
-            self.fmt_cdata2_dims = (self.max_timestamps * self.PKT_FRAMES_PER_BURST // interleaved_factor, self.NCHAN, complex_values_per_frame * interleaved_factor) # deinterleaved complex value storage buffer  
-
-        if not self.fmt_is_complex and self.fmt_modifiers:
-            raise ValueError(f"Modifiers {self.fmt_modifiers!r} are not supported for non-complex data")
-        if self.fmt_is_complex and not self.split:
-            raise ValueError("Complex format can only be used with split=True")
-
-    def format_data(self, raw_data) -> np.ndarray:
-        """Transform the raw data in the output buffer into the required format.
+        Parameters
+        ----------
+        raw_data: np.ndarray - the raw data to format
+        ts: np.ndarray - burst timestamps ``(n_rows,)``, aligned with ``raw_data``
+        counts: np.ndarray - packet counts ``(n_rows, nchan)``, aligned with ``raw_data``
+        source: int - the source index
+        split: bool - if True, split each burst into ``frames_per_burst`` rows with
+            consecutive timestamps and per-frame packet counts
 
         Returns:
-            data: np.ndarray - the formatted data
+            tuple: ``(ts, data, counts)`` with matching leading dimensions
         """
+        n_rows = raw_data.shape[0]
+        if ts is None:
+            ts = np.zeros(n_rows, dtype=self.ts_array.dtype)
+        else:
+            ts = np.asarray(ts[:n_rows])
+        if counts is None:
+            counts = np.ones((n_rows, self.NCHAN), dtype=self.raw_data_count.dtype)
+        else:
+            counts = np.asarray(counts[:n_rows])
 
-        base = self.fmt_base_width
-        is_complex = self.fmt_is_complex
-        modifiers = self.fmt_modifiers
-        right_shift = 8*self.fmt_scalar_bytes - base
-        split = self.split
+        cf = self.config.capture_format[source]
+        base = cf.fmt_base_width
+        is_complex = cf.fmt_is_complex
+        split = bool(split)
 
+        # derive format parameters
+        scalar_bytes = math.ceil(base / 8)
+        integer_dtype = np.dtype(f">i{scalar_bytes}")
+        right_shift = 8*scalar_bytes - base
         # View the buffer as N-byte integers
-        data = raw_data.view(self.fmt_integer_dtype)
+        data = raw_data.view(integer_dtype)
         if right_shift > 0:
             np.right_shift(data, right_shift, data)
 
-        if split:  # split a busrt into multiple independent frames
-            nchan, nframes, nsamples = data.shape
-            data = data.reshape((nchan, nframes * self.PKT_FRAMES_PER_BURST, -1))
+        if split:  # split a burst into multiple independent frames
+            n_ts, nchan, nsamples_burst = data.shape
+            frames_per_burst = int(self.PKT_FRAMES_PER_BURST)
+            samples_per_frame = nsamples_burst // frames_per_burst
+            data = data.reshape(n_ts * frames_per_burst, nchan, samples_per_frame)
+
+            frame_offsets = np.arange(frames_per_burst, dtype=ts.dtype)
+            ts = (ts[:, None] + frame_offsets[None, :]).reshape(-1)
+            per_frame_counts = counts // frames_per_burst
+            counts = np.tile(per_frame_counts[:, None, :], (1, frames_per_burst, 1)).reshape(
+                n_ts * frames_per_burst, nchan
+            )
+
 
         if not is_complex:
-            return data
+            return ts, data, counts
 
         # From here we have complex data, possibly with modifiers
-        cdata = self.fmt_cdata1
-        np.copyto(cdata.real, data[:, :, ::2]) 
+        cdata = self.fmt_cdata1[source]
+        np.copyto(cdata.real, data[:, :, ::2])
         np.copyto(cdata.imag, data[:, :, 1::2])
- 
-        if 'd' in modifiers:  # apply double resolution deinterleave ([[0,1,2,3], [4,5,6,7]] -> [[0 4 1 5 2 6 3 7]])
+
+        interleave_factor = cf.fmt_interleave_factor
+        if interleave_factor == 2:  # apply double resolution deinterleave ([[0,1,2,3], [4,5,6,7]] -> [[0 4 1 5 2 6 3 7]])
             s0, s1, s2 = cdata.shape
-            v = cdata.reshape(s0, -1, 2, s2)
-            data = self.fmt_cdata2
+            v = cdata.reshape(s0, -1, interleave_factor, s2)
+            data = self.fmt_cdata2[source]
             np.copyto(data[..., 0::2], v[..., 0, :])
             np.copyto(data[..., 1::2], v[..., 1, :])
 
-        elif 'f' in modifiers:  # full resolution
-            # Full resolution is dependent on the capture bus width (W) and number of bins per word (B). 
+        elif interleave_factor > 2:  # full resolution
+            # Full resolution is dependent on the capture bus width (W) and number of bins per word (B).
             # We send W-bit Re then W-bit Im, skipping 2*B bins between them. It takes 2B frames to get the full spectrum.
             # ICE: W=32, B=2, 32+32-bit complex values, 2B= 4 frames (Max burst length = 4 frames)
             # CRS: W=128, B=4, 128+128-bit complex values, 2B= 8 frames (use mode 2 (8 frames/2 channels) or more 3 (16 frames/1 channel))
             raise NotImplementedError("Full resolution is not implemented yet")
-        
-        return data
+
+        return ts, data, counts
 
 
-    def create_output_buffer(
-        self, n_ts: int, chan_first: bool = False
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def create_output_buffer(self, n_ts, source=0, split=False, chan_first= False):
         """Create arrays to store the timestamps, formatted data, and data counts returned by process_packets.
 
         This is used by applications that need to crate a storage space for the formatted data returned by the process_packets method.
@@ -352,7 +421,13 @@ class RawDataPacketProcessor(PacketProcessorBase):
         Returns:
             Tuple of ``ts`` ``(n_ts,)``, ``data``, and ``counts`` ``(n_ts, nchan)``.
         """
-        formatted_row = self.format_data(self.raw_data[0:1])  # format a single row so we can determine the shape and dtype of the output buffer
+        _, formatted_row, _ = self.format_data(
+            self.raw_data[0:1],
+            ts=self.ts_array[0:1],
+            counts=self.raw_data_count[0:1],
+            source=source,
+            split=split,
+        )
         _, nchan, nvalues = formatted_row.shape
         if chan_first:
             data = np.empty((nchan, n_ts, nvalues), dtype=formatted_row.dtype)
@@ -362,69 +437,62 @@ class RawDataPacketProcessor(PacketProcessorBase):
         ts = np.empty((n_ts,), dtype=self.ts_array.dtype)
         return ts, data, counts
 
-    def process_packets(
-        self,
-        config: Optional[Union[Dict[str, Any], State]] = None,
-        verbose: Optional[int] = None,
-    ) -> Optional[Tuple[np.ndarray, Any, np.ndarray]]:
-        """Process one active UDP packet block.
+    # def process_packets(
+    #     self,
+    #     config: Optional[Union[Dict[str, Any], State]] = None,
+    #     verbose: Optional[int] = None,
+    # ) -> Optional[Tuple[np.ndarray, Any, np.ndarray]]:
+    #     """Process one active UDP packet block.
 
-        Parameters
-        ----------
-        config : dict or State: The configuration to use for the processor.
+    #     Parameters
+    #     ----------
+    #     config : dict or State: The configuration to use for the processor.
 
-        verbose : int: The verbosity level to use for the processor.
+    #     verbose : int: The verbosity level to use for the processor.
 
-        Returns
-        -------
-        tuple or None
-            ``(ts, data, data_count)`` views for complete timestamp rows in this batch,
-            or ``None`` when there is nothing to process.
+    #     Returns
+    #     -------
+    #     tuple or None
+    #         ``(ts, data, data_count)`` views for complete timestamp rows in this batch,
+    #         or ``None`` when there is nothing to process.
 
 
-        Notes:
+    #     Notes:
 
-        The packet processing flow is as follows:
+    #     The packet processing flow is as follows:
 
-        - Compute the UDP buffer index (bix) for packets that match the followinf conditions:
-            - The packet header matches the cookie and packet size
-            - Target mode matches
-            - Timestamp is not too old
-            - Stream ID is valid
-            - Frame number and subframe number are within valid range
-            - Subframe number is within valid range
-            - Frame number is within valid range
-            - Subframe number is within valid range
-        - Run a loop for each unique timestamp in the buffer for valid packets to:
-            - Find the ringbuffer slot for the timestamp
-            - If the slot is not found, allocate a new slot
-            - Write the packet data to the ringbuffer slot
-            - Update the raw data count and raw data complete arrays
-            - If the slot is full, copy the slot to the output buffer
-            - If the output buffer is full, raise an error
-            - If the output buffer is not full, copy the slot to the output buffer
-            - If the output buffer is full, raise an error
+    #     - Compute the UDP buffer index (bix) for packets that match the followinf conditions:
+    #         - The packet header matches the cookie and packet size
+    #         - Target mode matches
+    #         - Timestamp is not too old
+    #         - Stream ID is valid
+    #         - Frame number and subframe number are within valid range
+    #         - Subframe number is within valid range
+    #         - Frame number is within valid range
+    #         - Subframe number is within valid range
+    #     - Run a loop for each unique timestamp in the buffer for valid packets to:
+    #         - Find the ringbuffer slot for the timestamp
+    #         - If the slot is not found, allocate a new slot
+    #         - Write the packet data to the ringbuffer slot
+    #         - Update the raw data count and raw data complete arrays
+    #         - If the slot is full, copy the slot to the output buffer
+    #         - If the output buffer is full, raise an error
+    #         - If the output buffer is not full, copy the slot to the output buffer
+    #         - If the output buffer is full, raise an error
 
-        """
-        return super().process_packets(config, verbose)
+    #     """
+    #     return super().process_packets(config, verbose)
 
-    def on_ts_overflow(self, dropped: int) -> None:
-        """Warn when timestamp keys are dropped because the buffer is full."""
-        _warn(
-            f"timestamp backlog: {dropped} oldest timestamps dropped.",
-            UserWarning,
-            stacklevel=3,
-        )
 
-    def filter_packets(self, n: int) -> Optional[np.ndarray]:
+    def filter_packets(self, n):
         """Decode UCAP headers and return UDP row indices for packets to integrate."""
         # Select the packets to process by creating a boolean mask
         bix_mask = self.bix_mask[:n]
         temp_mask = self.tmp_mask[:n]
 
         # Filter out packets with the wrong cookie or packet size
-        np.bitwise_and(self.buf_cookie[:n], self.packet_cookie_mask, out=self.pkt_cookie[:n])
-        np.equal(self.pkt_cookie[:n], self.packet_cookie, out=bix_mask)
+        np.bitwise_and(self.buf_cookie[:n], self.PACKET_COOKIE_MASK, out=self.pkt_cookie[:n])
+        np.equal(self.pkt_cookie[:n], self.PACKET_COOKIE, out=bix_mask)
         np.equal(self.pr.pkt_len[:n], self.PACKET_SIZE, out=temp_mask[:n], where=bix_mask)
         np.bitwise_and(bix_mask, temp_mask[:n], out=bix_mask)
 
@@ -502,13 +570,15 @@ class RawDataPacketProcessor(PacketProcessorBase):
             )
             self.raw_data_count[dst_tix] = self.raw_data_count[src_tix] # Fancy indexing on the RHS cretes a copy, so no danger if source and destination overlap
             self.raw_data[dst_tix] = self.raw_data[src_tix]
+            self.raw_source[dst_tix] = self.raw_source[src_tix]
             tix_to_clear[dst_tix] = False  # don't clear the carryover rows
 
         n = tix_to_clear.size
         self.raw_data_count[:n][tix_to_clear] = 0
         self.raw_data[:n][tix_to_clear] = 0
+        self.raw_source[:n][tix_to_clear] = RAW_SOURCE_EMPTY
 
-    def store_packets(self, bix: np.ndarray, tix: np.ndarray) -> None:
+    def store_packets(self, bix, tix):
         """Scatter subframe bytes into ``raw_data`` and update per-channel packet counts."""
         # Now that we have all the info we need to copy data from the UDP buffer and reassemble it into the output buffer.
         # This is done in a very efficient single vectorized operation.
@@ -518,23 +588,27 @@ class RawDataPacketProcessor(PacketProcessorBase):
             self.pkt_off[bix, None] + np.arange(self.BYTES_PER_SUBFRAME, dtype=self.pkt_off.dtype),
         ] = self.buf_data[bix, :self.BYTES_PER_SUBFRAME] # copy the payload bytes from the UDP buffer to the output buffer
 
+        self.raw_source[tix[:, None], self.pkt_six[bix, None]] = 0
+
         # Update the raw data count and raw data complete arrays
         np.add.at(self.raw_data_count, (tix, self.pkt_six[bix]), 1)
 
-    def emit_complete_rows(
-        self, n_out: int, verbose: int
-    ) -> Optional[Tuple[np.ndarray, Any, np.ndarray]]:
-        """Return ``(ts, formatted_data, counts)`` views for complete rows."""
-        if verbose >= 1:
-            print(f"RawDataPacketProcessor: process_packets: returning {n_out} timestamps")
-
-        ts = self.ts_array[:n_out]
-        data = self.format_data(self.raw_data[:n_out])
-        counts = self.raw_data_count[:n_out]
-
-        self._last_emitted_ts = ts[n_out - 1]
-
-        return ts, data, counts
+    def get_formatted_data(self, split=False):
+        split = bool(split)
+        """Return ``(ts, formatted_data, counts, sources)`` views for complete rows."""
+        if self.verbose >= 1:
+            print(f"RawDataPacketProcessor: process_packets: returning {self.n_out} timestamps")
+        n_out = self.n_out
+        ts_in = self.ts_array[:n_out]
+        counts_in = self.raw_data_count[:n_out]
+        sources = self.raw_source[:n_out]
+        ts, data0, counts = self.format_data(
+            self.raw_data[:n_out], ts=ts_in, counts=counts_in, source=0, split=split,
+        )
+        _, data1, _ = self.format_data(
+            self.raw_data[:n_out], ts=ts_in, counts=counts_in, source=1, split=split,
+        )
+        return ts, (data0, data1), counts, sources
 
 
     def flush(self, flush_timeout=None):
@@ -548,7 +622,9 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.ts_array.fill(self.TS_EMPTY)
         self.raw_data.fill(0)
         self.raw_data_count.fill(0)
+        self.raw_source.fill(RAW_SOURCE_EMPTY)
         self.n_ts = 0
         self.carry_len = 0
         self._emit_stop = 0
         self._last_emitted_ts = 0
+        self._ready_n_out = 0

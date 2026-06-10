@@ -124,8 +124,9 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
             self.pr.receive_packets(verbose=self.verbose)
             if not self.pr.n_stored:
                 continue
-            result = self.process_packets()
-            if not result:
+            self.process_udp_packets()
+            result = self.get_formatted_data()
+            if result is None:
                 continue
             integ_ts, data, sats, counts = result
             for it, d, s, c in zip(integ_ts, data, sats, counts):
