@@ -67,6 +67,7 @@ class RawFrameReceiver(RawDataPacketProcessor):
         across calls unless :meth:`flush` runs.
         """
         while True:
+            self.flushing = False
             self.pr.receive_packets(verbose=self.verbose)
             if not self.pr.n_stored:
                 continue
@@ -138,7 +139,8 @@ class RawFrameReceiver(RawDataPacketProcessor):
         Returns:
             Tuple[np.ndarray, np.ndarray, np.ndarray]: Timestamps, raw frame data, and per-channel counts.
                                                        Return shapes:
-                                                       ts: (ncap,)
+             
+                                                                                                 ts: (ncap,)
                                                        data: (nchan, ncap, nsamples) if ``chan_first`` else (ncap, nchan, nsamples)
                                                        data_count: (ncap, nchan)
         """
@@ -152,6 +154,8 @@ class RawFrameReceiver(RawDataPacketProcessor):
         self.split_bursts = bool(split)
         if config is not None:
             self.update_config(config)  # make sure the config is updated before we get the packet format
+        #self.config.format == '18+18'
+        #self.update_config()
         # Pre-allocate; zero so rows not filled by the iterator (short reads) are deterministic.
         ts, data, counts = self.create_output_buffer(
             n_ts=ncap,
