@@ -6,7 +6,7 @@ import numpy as np
 
 from .raw_data_packet_processor import PACKET_COOKIE_FFT, RawDataPacketProcessor
 from .udp_packet_receiver import UDPPacketReceiver
-
+from .state import State
 
 class RawFrameReceiver(RawDataPacketProcessor):
     """Convenience wrapper around :class:`RawDataPacketProcessor` for burst reads."""
@@ -29,9 +29,9 @@ class RawFrameReceiver(RawDataPacketProcessor):
         super().__init__(packet_receiver, config=config, verbose=verbose, **kwargs)
 
         self.ignore_first_burst = bool(ignore_first_burst)
-        self.source = 0
-        self.split_bursts = False
-        self.chan_first = True
+        # self.source = 0
+        # self.split_bursts = False
+        self.recv_state=State(source=0, split_bursts=False)
         # self._sync_capture_source_index()
         # One long-lived generator: ``islice`` may stop mid ``for`` over one ``process_udp_packets``
         # batch; a new ``get_data_iter()`` would abandon those rows and the next
@@ -74,7 +74,8 @@ class RawFrameReceiver(RawDataPacketProcessor):
             self.process_udp_packets()
             if not self.n_out:
                 continue
-            for results in zip(*self.get_formatted_data(split=self.split_bursts)):
+            ts,data,counts = self.format_data(n_out=self.n_out, source=self.recv_state.source, split=self.recv_state.split_bursts)
+            for results in zip(ts, data, counts):
                 yield results
 
     def read_raw_frames_iter(self, ncap=1, flush=False, flush_timeout=None, 
@@ -149,9 +150,8 @@ class RawFrameReceiver(RawDataPacketProcessor):
             self.pr.verbose = verbose
             print(f"RawFrameReceiver: verbose={verbose}")
 
-        self.source = source
-        self.chan_first = chan_first
-        self.split_bursts = bool(split)
+        self.recv_state.source = source
+        self.recv_state.split_bursts = bool(split)
         if config is not None:
             self.update_config(config)  # make sure the config is updated before we get the packet format
         #self.config.format == '18+18'
@@ -160,8 +160,7 @@ class RawFrameReceiver(RawDataPacketProcessor):
         ts, data, counts = self.create_output_buffer(
             n_ts=ncap,
             source=source,
-            split=split,
-            chan_first=chan_first,
+            split=split
         )
         ts.fill(0)
         data.fill(0)
@@ -170,17 +169,12 @@ class RawFrameReceiver(RawDataPacketProcessor):
 
         n_filled = 0
 
-        if flush:
+        if flush or self.recv_state.has_changed(ack=True):
+            print(f"Flushing receiver state")
             self.flush(flush_timeout)
 
-        for i, (ts_, data_, data_count_, sources_) in enumerate(itertools.islice(self.data_iter, ncap)):
-            ts[i] = ts_
-            counts[i] = data_count_
-
-            if chan_first:
-                data[:, i] = data_[source]
-            else:
-                data[i] = data_[source]
+        for i, results in enumerate(itertools.islice(self.data_iter, ncap)):
+            ts[i], data[i], counts[i] = results
             n_filled = i + 1
         if n_filled != ncap:
             warnings.warn(
@@ -189,4 +183,6 @@ class RawFrameReceiver(RawDataPacketProcessor):
                 UserWarning,
                 stacklevel=2,
             )
+        if chan_first:
+            data = data.swapaxes(0,1)
         return ts, data, counts
