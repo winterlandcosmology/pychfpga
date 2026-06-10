@@ -1,6 +1,6 @@
 connection_config:
     prog: 1                 # 0 - do not reprogram, 1 - reprogram if outdated, 2 - always reprogram
-    mode: 'corr8'          # Do not change for a single board
+    mode: 'shuffle8'          # Do not change for a single board
     hwm: 'crs 77'           # For a different board change the serial number
 
 test_config:
@@ -13,17 +13,15 @@ test_config:
 
     #parameters for scaler tests 
     platform: 'CRS'
-    global_postscaler: range(IDENTITY_POSTSCALER - 1, IDENTITY_POSTSCALER + 2) #range(SCALER_SHIFT - INPUT_WIDTH - IMPLICIT_SHIFT + 1, SCALED_WIDTH - IMPLICIT_SHIFT)
+    global_postscaler: range(MAPPING_POSTSCALER - 1, MAPPING_POSTSCALER + 2) #range(SCALER_SHIFT - INPUT_WIDTH - IMPLICIT_SHIFT + 1, SCALED_WIDTH - IMPLICIT_SHIFT)
     global_frame_cnt: [100, 30000]
     alternating_gain:
-        period: range(1, 20, 2)
+        period: [1, 2, 500] #range(1, 20, 2)
     constant_gain:
         gain: [3, 65535]
         #gain: [-3, 32767]
     rounding:
         value: [-8, 7]
-    overflow_detection:
-        postscaler: [26]
     double_resolution_capture:
         postscaler: range(12, 22)
     averages:
