@@ -176,7 +176,12 @@ class PacketProcessorBase(ABC):
             w = min(self.receive_window, n_ts)
             raw_counts_tail = self.raw_data_count[n_ts - w:n_ts]
             if raw_counts_tail.ndim > 1:
-                complete_tail = (raw_counts_tail >= self.expected_packets).all(axis=-1)[::-1]
+                # Collapse channel/frame (and any other) dims so argmax counts timestamp rows only.
+                complete_tail = (
+                    (raw_counts_tail >= self.expected_packets)
+                    .reshape(w, -1)
+                    .all(axis=-1)[::-1]
+                )
             else:
                 complete_tail = (raw_counts_tail >= self.expected_packets)[::-1]
             self.carry_len = int(np.argmax(complete_tail)) if complete_tail.size and complete_tail.any() else w
