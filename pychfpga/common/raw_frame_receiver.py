@@ -1,12 +1,9 @@
-from typing import Any, Generator, Optional, Tuple
-import itertools
 import warnings
 
 import numpy as np
 
-from .raw_data_packet_processor import PACKET_COOKIE_FFT, RawDataPacketProcessor
-from .udp_packet_receiver import UDPPacketReceiver
-from .state import State
+from .raw_data_packet_processor import RawDataPacketProcessor
+
 
 class RawFrameReceiver(RawDataPacketProcessor):
     """Convenience wrapper around :class:`RawDataPacketProcessor` for burst reads."""
@@ -29,89 +26,15 @@ class RawFrameReceiver(RawDataPacketProcessor):
         super().__init__(packet_receiver, config=config, verbose=verbose, **kwargs)
 
         self.ignore_first_burst = bool(ignore_first_burst)
-        # self.source = 0
-        # self.split_bursts = False
-        self.recv_state=State(source=0, split_bursts=False)
-        # self._sync_capture_source_index()
-        # One long-lived generator: ``islice`` may stop mid ``for`` over one ``process_udp_packets``
-        # batch; a new ``get_data_iter()`` would abandon those rows and the next
-        # ``receive_packets`` would overwrite ``pr.buf`` before they are yielded.
-        self.flushing = False
-        self.data_iter = self.get_data_iter()
-
-    # def _sync_capture_source_index(self):
-    #     """Map config cookie / source name to capture source index 0 or 1."""
-    #     state = self.config
-    #     cookie = state.get("packet_cookie")
-    #     if cookie == PACKET_COOKIE_FFT or state.get("source") == "scaler":
-    #         self._capture_source_index = 1
-    #     else:
-    #         self._capture_source_index = 0
+        self.current_row = 0
 
     def update_config(self, config=None):
         super().update_config(config)
-        # self._sync_capture_source_index()
 
-    def flush(self, flush_timeout: Optional[float] = None) -> None:
-        """Clear UDP and assembly state and restart the streaming iterator (matches a clean capture)."""
+    def flush(self, flush_timeout = None):
+        """Clear UDP and assembly state (matches a clean capture)."""
         super().flush(flush_timeout)
-        self.flushing = True
-        self.data_iter = self.get_data_iter()
-
-    def get_data_iter(self) -> Generator:
-        """
-        Continuously receive UDP packets, process them, and yield ``(timestamp, data, data_count)``.
-
-        Uses :attr:`verbose` and any config already applied via :meth:`update_config`. Callers
-        normally consume this through :meth:`read_raw_frames_iter`, which shares one iterator
-        across calls unless :meth:`flush` runs.
-        """
-        while True:
-            self.flushing = False
-            self.pr.receive_packets(verbose=self.verbose)
-            if not self.pr.n_stored:
-                continue
-            self.process_udp_packets()
-            if not self.n_out:
-                continue
-            ts,data,counts = self.format_data(n_out=self.n_out, source=self.recv_state.source, split=self.recv_state.split_bursts)
-            for results in zip(ts, data, counts):
-                yield results
-
-    def read_raw_frames_iter(self, ncap=1, flush=False, flush_timeout=None, 
-                             data_timeout=None, config=None, verbose=None):
-        """
-        Yield ``ncap`` bursts as ``(timestamp, data, data_count)`` tuples.
-
-        Reuses :attr:`data_iter` so a slice that ends in the middle of a ``process_udp_packets``
-        result does not drop unconsumed rows (the next call continues the same generator).
-
-        Parameters:
-            ncap (int): Number of frames to capture.
-            flush (bool): If True, flush UDP buffers and internal ring state before capture
-                (also restarts :attr:`data_iter`).
-            flush_timeout (Optional[int]): Timeout used while flushing the UDP socket.
-            data_timeout (Optional[int]): Socket timeout while waiting for packets.
-            config (dict): Configuration dictionary.
-            **kwargs: ``verbose`` updates :attr:`verbose` when passed; other keys are ignored
-                here (use :meth:`update_config` for decode profile changes).
-
-        Returns:
-            Iterator yielding timestamp, raw frame data, and per-channel counts.
-        """
-        if verbose is not None:
-            self.verbose = verbose
-            self.pr.verbose = verbose
-            print(f"RawFrameReceiver: verbose={verbose}")
-        if config is not None:
-            self.update_config(config)
-        if flush:
-            self.flush(flush_timeout)
-
-        if data_timeout is not None:
-            self.pr.settimeout(data_timeout)
-
-        return itertools.islice(self.data_iter, ncap)
+        self.current_row = 0
 
     def read_raw_frames(
         self,
@@ -122,67 +45,73 @@ class RawFrameReceiver(RawDataPacketProcessor):
         flush_timeout=None,
         chan_first: bool = True,
         config=None,
-        verbose=None
+        format=None,
+        verbose=None,
     ):
         """
         Read a fixed number of raw frames into preallocated arrays.
 
         Parameters:
-            ncap (int): Number of frames to capture.
-            split (bool): If True, pass ``split=True`` to :meth:`get_formatted_data`.
+            ncap (int): Number of **bursts** to capture. The number of rows returned might be different depending `split` and the specific output format for the specified source
+            split (bool): If True, split each burst into per-firmware-frame rows. Has an effect only on real data (i.e. timestream typically returned by source 0). Has no effect on complex data
+            source (int): Capture source index (0=ADC, 1=FFT).
+            flush (bool): If True, flush UDP and assembly state before capture.
             chan_first (bool): If True (default), ``data`` is ``(nchan, ncap, nsamples)``.
-                If False, ``data`` is ``(ncap, nchan, nsamples)`` (same as :meth:`format_data`).
-            verbose (int): Verbosity level for optional prints (0 quiet; ``>= 2`` enables
-                ``process_packets`` / flush progress lines).
-            **kwargs (Any): Arguments forwarded to read_raw_frames_iter
-                (e.g., flush, data_timeout, ``verbose``, etc.)
+                If False, ``data`` is ``(ncap, nchan, nsamples)``.
+            config: Configuration passed to :meth:`update_config`. If not specified, the config specified when the constructor was called is used. No action is taken if no change is detected compared to the previous config. Some changes will cause buffered data to be lost. 
+            verbose (int): Verbosity level for optional prints.
 
         Returns:
-            Tuple[np.ndarray, np.ndarray, np.ndarray]: Timestamps, raw frame data, and per-channel counts.
-                                                       Return shapes:
-             
-                                                                                                 ts: (ncap,)
-                                                       data: (nchan, ncap, nsamples) if ``chan_first`` else (ncap, nchan, nsamples)
-                                                       data_count: (ncap, nchan)
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: ``ts``, ``data``, ``counts``.
         """
         if verbose is not None:
             self.verbose = verbose
             self.pr.verbose = verbose
-            print(f"RawFrameReceiver: verbose={verbose}")
+            if verbose >= 2:
+                print(f"RawFrameReceiver: verbose={verbose}")
 
-        self.recv_state.source = source
-        self.recv_state.split_bursts = bool(split)
         if config is not None:
-            self.update_config(config)  # make sure the config is updated before we get the packet format
-        #self.config.format == '18+18'
-        #self.update_config()
-        # Pre-allocate; zero so rows not filled by the iterator (short reads) are deterministic.
-        ts, data, counts = self.create_output_buffer(
-            n_ts=ncap,
-            source=source,
-            split=split
-        )
-        ts.fill(0)
-        data.fill(0)
-        counts.fill(0)
+            self.update_config(config)
 
 
-        n_filled = 0
+        ts, data, counts = self.create_output_buffer(n_ts=ncap, source=source, split=split, format=format)
+        # ts.fill(0)
+        # data.fill(0)
+        # counts.fill(0)
 
-        if flush or self.recv_state.has_changed(ack=True):
+        raw_rows_completed = 0
+        fmt_rows_completed = 0
+
+
+        if flush:
             print(f"Flushing receiver state")
             self.flush(flush_timeout)
 
-        for i, results in enumerate(itertools.islice(self.data_iter, ncap)):
-            ts[i], data[i], counts[i] = results
-            n_filled = i + 1
-        if n_filled != ncap:
-            warnings.warn(
-                f"read_raw_frames: received {n_filled} burst(s), expected {ncap}; "
-                "remaining rows are zero-filled (timeouts, no packets passing filters, or slow source).",
-                UserWarning,
-                stacklevel=2,
-            )
+        while raw_rows_completed < ncap:
+            if self.current_row < self.n_out:
+                n = min(ncap - raw_rows_completed, self.n_out - self.current_row)
+                print(f"Taking  {n} rows from raw buffer {self.current_row} to {self.current_row + n}")
+                rows = slice(self.current_row, self.current_row + n)
+                ts_, data_, counts_ = self.format_data(rows, source=source, split=split, format=format)
+                raw_rows_completed += n
+                n_fmt = ts_.shape[0]  # number of formatted rows to store
+                fmt_rows = slice(fmt_rows_completed, fmt_rows_completed + n_fmt)
+                ts[fmt_rows], data[fmt_rows], counts[fmt_rows] = ts_, data_, counts_
+                fmt_rows_completed += n_fmt
+                self.current_row += n
+            print(f"{raw_rows_completed=}  {fmt_rows_completed=} {ncap=} {self.current_row=} {self.n_out=}")
+            if raw_rows_completed >= ncap:
+                break
+            while True:  # Wait nutil we have new data
+                print(f"Receiving packets. current_row is {self.current_row}, {self.n_out=} rows in buffer")
+                self.pr.receive_packets(verbose=self.verbose)
+                self.current_row = 0
+                if self.pr.n_stored:
+                    self.process_udp_packets()
+                    print(f"Received {self.n_out} rows from raw buffer")
+                    if self.n_out:
+                        break
+
         if chan_first:
-            data = data.swapaxes(0,1)
+            data = data.swapaxes(0, 1)
         return ts, data, counts

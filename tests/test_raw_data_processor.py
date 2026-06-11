@@ -14,12 +14,7 @@ from pychfpga.common.state import State
 
 
 def capture_format_for_tests(format="8"):
-    params = decode_format_string(format)
-    return State(
-        fmt_base_width=params["bit_width"],
-        fmt_is_complex=params["is_complex"],
-        fmt_interleave_factor=2 if params["deinterleave"] else 1,
-    )
+    return decode_format_string(format)
 
 
 def _unused_capture_format_slot():
@@ -31,16 +26,10 @@ def process_and_get(processor, source=0, config=None, verbose=None, with_indices
     processor.process_udp_packets(config=config, verbose=verbose)
     if not processor.n_out:
         return None
-    ts, data_pair, counts, sources = processor.get_formatted_data()
-    data = data_pair[source]
-    row_src = sources[:, 0] if sources.ndim > 1 else sources
-    mask = row_src == source
-    if not np.any(mask):
-        return None
-    ts, data, counts = ts[mask], data[mask], counts[mask]
-    sources = sources[mask]
+    formatted = processor.get_formatted_data()
+    ts, data, counts = formatted[source]
     if with_indices:
-        return ts, data, counts, np.flatnonzero(mask)
+        return ts, data, counts, np.arange(ts.shape[0])
     return ts, data, counts
 
 
@@ -199,8 +188,8 @@ def test_captured_payload_not_all_zeros_by_format(fmt, bytes_per_sample, samples
         np.testing.assert_array_equal(data[0, 1, 0], np.full(2, 1285, dtype=np.dtype(">i2")))
 
 
-def test_raw_frame_receiver_iter_yields_nonzero_data():
-    """Same path as notebooks using ``get_data_iter`` / ``read_raw_frames`` (receive → process → zip)."""
+def test_read_raw_frames_yields_nonzero_data():
+    """Notebook path: receive → process → copy formatted rows into output buffer."""
     pr = DummyPacketReceiver()
     cfg = default_config(format="8")
     r = RawFrameReceiver(pr, config=cfg, verbose=0)
@@ -208,25 +197,25 @@ def test_raw_frame_receiver_iter_yields_nonzero_data():
     write_burst(r, pr, 2, ts=9002, payload_base=30)
     write_burst(r, pr, 4, ts=9003, payload_base=40)
     write_burst(r, pr, 6, ts=9004, payload_base=50)
-    ts_, data_, counts_ = next(iter(r.read_raw_frames_iter(ncap=1, flush=False)))
-    assert int(ts_) == 9001
+    ts_, data_, counts_ = r.read_raw_frames(ncap=1, flush=False, chan_first=False)
+    assert int(ts_[0]) == 9001
     sample = np.asarray(data_).ravel()
     assert sample.size > 0
     assert not np.all(sample == 0), (
-        "iterator yielded all-zero data (process_packets vs zip path bug)"
+        "read_raw_frames returned all-zero data (process_packets vs copy path bug)"
     )
     assert np.any(np.asarray(counts_) > 0)
-    np.testing.assert_array_equal(data_[0, 0], np.full(4, 21, dtype=np.int8))
-    np.testing.assert_array_equal(data_[1, 0], np.full(4, 22, dtype=np.int8))
+    np.testing.assert_array_equal(data_[0, 0, 0], np.full(4, 21, dtype=np.int8))
+    np.testing.assert_array_equal(data_[0, 1, 0], np.full(4, 22, dtype=np.int8))
 
 
-def test_read_raw_frames_iter_omitting_verbose_preserves_constructor():
-    """read_raw_frames_iter must not reset verbose when omitted (use constructor / get_data_receiver value)."""
+def test_read_raw_frames_omitting_verbose_preserves_constructor():
+    """read_raw_frames must not reset verbose when omitted (use constructor / get_data_receiver value)."""
     pr = DummyPacketReceiver()
     r = RawFrameReceiver(pr, config=default_config(format="8"), verbose=4)
-    r.read_raw_frames_iter(ncap=1, flush=False)
+    r.read_raw_frames(ncap=1, flush=False)
     assert r.verbose == 4
-    r.read_raw_frames_iter(ncap=1, flush=False, verbose=1)
+    r.read_raw_frames(ncap=1, flush=False, verbose=1)
     assert r.verbose == 1
 
 
@@ -484,7 +473,7 @@ def test_geometry_reconfiguration_reallocates_when_shape_changes():
     process_and_get(processor, config=State(cfg))
 
     assert processor.raw_data is not raw_data
-    assert processor.PKT_FRAMES_PER_BURST == 2
+    assert processor.FRAMES_PER_BURST == 2
     assert processor.n_ts == 0
 
 
@@ -528,21 +517,16 @@ def test_split_parameter_yields_samples_per_frame():
 
     processor.raw_data[0, 0, :] = 1
     processor.ts_array[0] = 100
-    processor.raw_data_count[0, 0] = 8
+    processor.raw_data_count[0, 0, :] = 4
+    processor.raw_source[0, 0, :] = 0
     processor.n_out = 1
 
-    ts_in = processor.ts_array[:1]
-    counts_in = processor.raw_data_count[:1]
-    ts_wide, burst_wide, counts_wide = processor.format_data(
-        processor.raw_data[:1], ts=ts_in, counts=counts_in, source=0, split=False,
-    )
+    ts_wide, burst_wide, counts_wide = processor.format_data(slice(0, 1), source=0, split=False)
     assert burst_wide.shape == (1, 1, 32768), burst_wide.shape
     np.testing.assert_array_equal(ts_wide, [100])
     np.testing.assert_array_equal(counts_wide, [[8]])
 
-    split_ts, split_rows, split_counts = processor.format_data(
-        processor.raw_data[:1], ts=ts_in, counts=counts_in, source=0, split=True,
-    )
+    split_ts, split_rows, split_counts = processor.format_data(slice(0, 1), source=0, split=True)
     assert split_rows.shape == (2, 1, 16384), split_rows.shape
     assert split_rows.shape[-1] == 16384
     np.testing.assert_array_equal(split_ts, [100, 101])

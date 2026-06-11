@@ -173,7 +173,7 @@ class PacketProcessorBase(ABC):
         if n_ts == 0:
             self.carry_len = 0
         else:
-            w = min(self.receive_window, n_ts)
+            w = min(self.receive_window, n_ts) # w cannot be zero
             raw_counts_tail = self.raw_data_count[n_ts - w:n_ts]
             if raw_counts_tail.ndim > 1:
                 # Collapse channel/frame (and any other) dims so argmax counts timestamp rows only.

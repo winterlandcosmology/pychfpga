@@ -17,7 +17,7 @@ NUM_SOURCES = 2
 
 
 def decode_format_string(format):
-    """Decode a raw capture format string into formatting parameters.
+    """Decode a raw capture format string into a ``State`` for ``format_data``.
 
     Format string: ``<width>`` [``+<width>``] [``<modifiers>``]
 
@@ -29,9 +29,8 @@ def decode_format_string(format):
         format: Format string such as ``"16"``, ``"32+32"``, or ``"32+32d"``.
 
     Returns:
-        dict with keys ``is_complex``, ``bit_width``, ``deinterleave``, ``split``
-        (split is not encoded in the string; caller must set if needed),
-        ``output_dtype``, ``scalar_bytes``, ``integer_dtype``, and ``modifiers``.
+        State with ``fmt_base_width``, ``fmt_is_complex``, and
+        ``fmt_interleave_factor`` (same fields as ``config.capture_format[i]``).
 
     Raises:
         ValueError: If the format string is invalid.
@@ -57,20 +56,12 @@ def decode_format_string(format):
     if not is_complex and suffix:
         raise ValueError(f"Modifiers {suffix!r} are not supported for non-complex data")
 
-    scalar_bytes = math.ceil(base / 8)
-    out_dtype = np.dtype(f"i{scalar_bytes}")
-    if is_complex:
-        out_dtype = np.dtype(np.complex128 if base == 64 else np.complex64)
-
-    return dict(
-        is_complex=is_complex,
-        bit_width=base,
-        deinterleave="d" in suffix,
-        split=False,
-        output_dtype=out_dtype,
-        scalar_bytes=scalar_bytes,
-        integer_dtype=np.dtype(f">i{scalar_bytes}"),
-        modifiers=suffix)
+    deinterleave = "d" in suffix
+    return State(
+        fmt_base_width=base,
+        fmt_is_complex=is_complex,
+        fmt_interleave_factor=2 if deinterleave else 1,
+    )
 
 
 
@@ -272,7 +263,6 @@ class RawDataPacketProcessor(PacketProcessorBase):
             self.max_timestamps = math.ceil(self.pr.n_packets / self.packets_per_timestamp) + self.receive_window  # number of timestamps to allocate, including the receive window
             self.ts_array = np.full(self.max_timestamps, self.TS_EMPTY, dtype=np.uint64)
             self.n_ts = 0
-            self._emit_stop = 0
 
             bytes_per_burst = self.FRAMES_PER_BURST * self.BYTES_PER_FRAME
             self.raw_data = self.resize_buffer(
@@ -297,7 +287,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
             self.carry_len = 0
             self.carry_tix = 0
             self._last_emitted_ts = 0
-            self._ready_n_out = 0
+            self.n_out = 0
 
             self.expected_packets = self.FRAMES_PER_BURST * self.NUMBER_OF_SUBFRAMES
 
@@ -326,25 +316,36 @@ class RawDataPacketProcessor(PacketProcessorBase):
 
 
 
-    def format_data(self, n_out, source=0, split=False):
-        """Transform the first `n_out` rows of assembled data from source `source` into ``(ts, data, counts)`` views with the format associated with that source in the config. Bursts of frames can be split into individual frames if `split` is True.
+    def format_data(self, rows=slice(None), source=0, split=False, format=None):
+        """Transform assembled raw rows into ``(ts, data, counts)`` for source ``source``.
 
         Parameters
         ----------
-        n_out: int - the number of rows to format
-        source: int - the source index
-        split: bool - if True, split each burst into ``frames_per_burst`` rows with
-            consecutive timestamps and per-frame packet counts
+        rows : slice, int, or ndarray
+            ``slice`` or ``int`` (``int n`` means ``slice(0, n)``) index rows in the
+            internal assembly buffer.  An ndarray supplies ``raw_data`` directly (optional
+            ``ts``, ``counts``, ``sources`` override companion arrays).
+        source : int
+            Capture source index (ADC vs FFT).
+        split : bool
+            If True, split each burst into ``frames_per_burst`` rows with consecutive
+            timestamps and per-frame packet counts.
+        format (str): Ovverides the capture format for the specified source.
 
-        Returns:
-            tuple: ``(ts, data, counts)`` with matching leading dimensions
+        Returns
+        -------
+        tuple
+            ``(ts, data, counts)`` with matching leading dimensions.
         """
-        raw_data = self.raw_data[:n_out]
-        ts = self.ts_array[:n_out]
-        counts = self.raw_data_count[:n_out]
-        sources = self.raw_source[:n_out]
+        raw_data = self.raw_data[rows]
+        ts = self.ts_array[rows]
+        counts = self.raw_data_count[rows]
+        sources = self.raw_source[rows]
 
-        cf = self.config.capture_format[source]
+        if format is not None:
+            cf = decode_format_string(format)
+        else:
+            cf = self.config.capture_format[source]
         base = cf.fmt_base_width
         is_complex = cf.fmt_is_complex
 
@@ -363,7 +364,9 @@ class RawDataPacketProcessor(PacketProcessorBase):
             n_ts, nchan, nsamples_burst = data.shape
             frames_per_burst = int(self.FRAMES_PER_BURST)
             samples_per_frame = nsamples_burst // frames_per_burst
-            data = data.swapaxes(-1,-2).reshape(n_ts * frames_per_burst, nchan,-1)
+            data = data.reshape(n_ts, nchan, frames_per_burst, samples_per_frame)\
+                .transpose(0, 2, 1, 3)\
+                .reshape(n_ts * frames_per_burst, nchan, samples_per_frame)
 
             frame_offsets = np.arange(frames_per_burst, dtype=ts.dtype)
             ts = (ts[:, None] + frame_offsets[None, :]).reshape(-1)
@@ -400,7 +403,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         return ts, data, counts
 
 
-    def create_output_buffer(self, n_ts, source=0, split=False):
+    def create_output_buffer(self, n_ts, source=0, split=False, format=None):
         """Create arrays to store the timestamps, formatted data, and data counts returned by process_packets.
 
         This is used by applications that need to crate a storage space for the formatted data returned by the process_packets method.
@@ -416,11 +419,12 @@ class RawDataPacketProcessor(PacketProcessorBase):
         Returns:
             Tuple of ``ts`` ``(n_ts,)``, ``data``, and ``counts`` ``(n_ts, nchan)``.
         """
-        _, formatted_row, _ = self.format_data(n_out=1, source=source, split=split)
-        _, nchan, nvalues = formatted_row.shape
-        data = np.empty((n_ts, nchan, nvalues), dtype=formatted_row.dtype)
-        counts = np.empty((n_ts, nchan), dtype=self.raw_data_count.dtype)
-        ts = np.empty((n_ts,), dtype=self.ts_array.dtype)
+        # format a dummy 1-row buffer to get the shape of the data and counts
+        ts_, data_, counts_ = self.format_data(slice(0, 1), source=source, split=split, format=format)
+        ts_mult, nchan, nvalues = data_.shape  # ts_mult indicates how many formatted rowswe get from a single burst
+        data = np.empty((n_ts*ts_mult, nchan, nvalues), dtype=data_.dtype)
+        counts = np.empty((n_ts*ts_mult, nchan), dtype=counts_.dtype)
+        ts = np.empty((n_ts*ts_mult,), dtype=ts_.dtype)
         return ts, data, counts
 
     # def process_packets(
@@ -586,8 +590,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
         if self.verbose >= 3:
             print(f"RawDataPacketProcessor: process_packets: returning {self.n_out} timestamps")
         n_out = self.n_out
-        ts0, data0, counts0 = self.format_data(n_out=n_out, source=0, split=split)
-        ts1, data1, counts1 = self.format_data(n_out=n_out, source=1, split=split)
+        ts0, data0, counts0 = self.format_data(slice(0, n_out), source=0, split=split)
+        ts1, data1, counts1 = self.format_data(slice(0, n_out), source=1, split=split)
         return (ts0, data0, counts0), (ts1, data1, counts1)
 
 
@@ -605,6 +609,5 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.raw_source.fill(RAW_SOURCE_EMPTY)
         self.n_ts = 0
         self.carry_len = 0
-        self._emit_stop = 0
         self._last_emitted_ts = 0
-        self._ready_n_out = 0
+        self.n_out = 0
