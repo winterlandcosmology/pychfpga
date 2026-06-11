@@ -1850,6 +1850,17 @@ class POCKET_CORRELATOR:
                     # Write to file
                     dset_adc[...] = d_adc
 
+                    # Print the RMS power for each ADC
+                    rms_voltage_LSBs = np.array([np.sqrt((1/(d_adc.shape[1]*d_adc.shape[2]))*np.sum(d_adc[n].flatten()**2)) for n in range(8)])
+                    rms_voltage_V = rms_voltage_LSBs*(1/2**14)
+                    rms_power_lin = rms_voltage_V**2/100
+                    rms_power_dBm = 10*np.log10(rms_power_lin/1e-3)
+
+                    print('')
+                    print('ADC RMS power:')
+                    for n in range(8):
+                        print(f'ADC{n + 1}: {np.round(rms_power_dBm[n], 2)} dBm')
+
                 if capture_fft_bursts:
                     # Capture FFT data. Note: a single capture for all 8 pols in mode 0 is equal to
                     # 16384 samples * 16 frames per capture * (32+32) bit per sample / 8 bits per byte / 1e6 B per MB = 2.097152 MB of data.
@@ -1858,6 +1869,7 @@ class POCKET_CORRELATOR:
                     dset_fft = f.create_dataset('fft', (self.NPOLS, n_fft_frames_per_file, self.NBINS), dtype = np.complex128) 
                     
                     # Capture bursts
+                    print('')
                     print(f'Capturing {n_fft_frames_per_file} FFT frames...')
                     d_fft = self.read_fft_frames(n_frames = n_fft_frames_per_file,
                                                  fft_bit_res = '32+32',
@@ -1901,21 +1913,37 @@ class POCKET_CORRELATOR:
                         # Scaler stats reset
                         self.i.chan[m].SCALER.STATS_CAPTURE = 1
 
-                    # Capture data, filling the NumPy buffer on each iteration
-                    if n == 0:
-                        flush = True # Not very pythonic, but flush on first capture
-                    else:
-                        flush = False # Otherwise, no flush
+                    # Capture data, filling the NumPy buffer on each iteration, flush on first capture
+                    flush = True if n == 0 else False
+
+                    try:
                         
-                    # Capture correlated data (note that many default arguments are used here)
-                    t, vis, counts, sat = self.read_corr_frames(data_source = 'adc',
-                                                                fft_bypass = False,
-                                                                scaler_bypass = False,
-                                                                n_software_frames = n_software_frames,
-                                                                number_of_results = 1,
-                                                                flush = flush,
-                                                                corr_is_configured = self.corr_is_configured
-                                                                )
+                        # Capture correlated data (note that many default arguments are used here)
+                        t, vis, counts, sat = self.read_corr_frames(data_source = 'adc',
+                                                                    fft_bypass = False,
+                                                                    scaler_bypass = False,
+                                                                    n_software_frames = n_software_frames,
+                                                                    number_of_results = 1,
+                                                                    flush = flush,
+                                                                    corr_is_configured = self.corr_is_configured
+                                                                    )
+
+                    except RuntimeError as e:
+                        print('Caught an error while capturing correlated data')
+                        print(f'RuntimeError: {e}')
+
+                        # Try capturing data again, this time flushing the buffer
+                        t, vis, counts, sat = self.read_corr_frames(data_source = 'adc',
+                                                                    fft_bypass = False,
+                                                                    scaler_bypass = False,
+                                                                    n_software_frames = n_software_frames,
+                                                                    number_of_results = 1,
+                                                                    flush = True,
+                                                                    corr_is_configured = self.corr_is_configured
+                                                                    )
+
+                    # Reset the early timestamp error flag after capturing new data
+                    early_timestamp_error = False
                     
                     t_buf[n] = t
                     vis_buf[n] = vis[0] # vis is a 3D array even if we only request 1 result

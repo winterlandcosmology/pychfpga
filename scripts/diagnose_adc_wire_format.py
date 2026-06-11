@@ -26,7 +26,7 @@ async def main() -> None:
     )
     await asyncio.sleep(2.0)
     raw = recv.processors["raw"]
-    adc = recv.processors["adc"]
+    adc = recv.processors["raw"].adc
     for _ in range(300):
         recv.process_packets()
         if (raw.raw_data_count > 0).any():

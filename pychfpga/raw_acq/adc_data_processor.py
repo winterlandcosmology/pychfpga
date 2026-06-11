@@ -45,6 +45,7 @@ class ADCDataProcessor:
         kwargs.pop("decode_strict", None)
         self.raw = raw_processor
         self.recv = packet_receiver
+        self.pr = packet_receiver
         self.config = State(config).deepcopy() if config is not None else State()
         if stream_ids and not self.config.get("stream_ids"):
             self.config.stream_ids = tuple(stream_ids)
@@ -86,7 +87,7 @@ class ADCDataProcessor:
         state = self.config
         self.adc_storage_dtype = self.storage_dtype_from_config(state)
         bps = int(state.get("bytes_per_sample") or self.raw.BYTES_PER_SAMPLE)
-        burst_bytes = int(self.raw.PKT_FRAMES_PER_BURST) * int(self.raw.BYTES_PER_FRAME)
+        burst_bytes = int(self.raw.FRAMES_PER_BURST) * int(self.raw.BYTES_PER_FRAME)
         if np.issubdtype(self.adc_storage_dtype, np.complexfloating):
             self.adc_samples_per_frame = burst_bytes // (2 * bps)
         else:
@@ -167,7 +168,7 @@ class ADCDataProcessor:
 
     def _channel_frame(self, wire_row) -> np.ndarray:
         """Decode one assembled channel row using the shared raw processor."""
-        wire_bytes = int(self.raw.PKT_FRAMES_PER_BURST) * int(self.raw.BYTES_PER_FRAME)
+        wire_bytes = int(self.raw.FRAMES_PER_BURST) * int(self.raw.BYTES_PER_FRAME)
         raw = np.ascontiguousarray(wire_row).reshape(-1).view(np.uint8)[:wire_bytes]
         shaped = raw.reshape(1, 1, raw.size)
         _, formatted, _ = self.raw.format_data(shaped, source=0)

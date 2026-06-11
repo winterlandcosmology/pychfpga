@@ -2684,8 +2684,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 "Using 'function' parameter for setting FUNCGEN function is obsolete. Please use 'data_source' instead."
             )
 
+        if function is not None or data_source is not None:
         # Set the date source and the function generator that feed the FFT
-        self.set_funcgen(function=data_source or function, channels=channels, left_shift=funcgen_left_shift, right_shift=funcgen_right_shift, **function_kwargs)
+            self.set_funcgen(function=data_source or function, channels=channels, left_shift=funcgen_left_shift, right_shift=funcgen_right_shift, **function_kwargs)
 
         # Set FFT bypass and shift schedule
         if fft_bypass is not None:
@@ -3357,7 +3358,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         if self.CAPTURE_TYPE == 'UCAP':
             self.UCAP.set_data_capture(source=source, mode=mode, channels=channels, select=select, periods=[burst_period_in_frames-1, burst_period_in_frames-1])
+            self.UCAP.USER_RESET = 0
             self._capture_pkt_frames_per_burst = None
+            
 
         elif self.CAPTURE_TYPE =='PROBER':
             self._capture_pkt_frames_per_burst = frames_per_burst
@@ -3535,10 +3538,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             self.get_firmware_config(channels=channels)
         elif bypass_data_type is not None:
             self.logger.debug(f'Setting scaler output data type to {bypass_data_type} for channel {channels}')
-            for ch in channels:
+            for ch in self._normalize_channels(channels):
                 self.chan[ch].SCALER.DATA_TYPE = bypass_data_type
                 self.chan[ch].SCALER.BYPASS = True
-            for ch in self._normalize_channels(channels):
                 st = self.config.chan[ch]
                 st.scaler_bypass = True
                 st.scaler_bypass_data_type = int(bypass_data_type)
@@ -3555,10 +3557,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             else:
                 normalized_cap_type = int(cap_data_type)
             self.logger.debug(f'Setting scaler capture data type to {cap_data_type} for channel {channels}')
-            for ch in channels:
-                self.chan[ch].SCALER.CAP_DATA_TYPE = cap_data_type
-                self.chan[ch].SCALER.BYPASS = bypass
             for ch in self._normalize_channels(channels):
+                self.chan[ch].SCALER.CAP_DATA_TYPE = cap_data_type
                 self.config.chan[ch].scaler_cap_data_type = normalized_cap_type
             self.get_firmware_config(channels=channels)
 
@@ -4645,8 +4645,11 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 Glog = postscaler
 
             if np.all(Glin.imag == 0.) == True:
-                # If the gain is purely real, recover only the real part and convert to float
-                Glin = np.array(Glin.real).astype(float)
+                if np.isscalar(Glin):
+                    Glin = float(Glin.real)
+                else:
+                    # If the gain is purely real, recover only the real part and convert to float
+                    Glin = np.array(Glin).real.astype(float)
 
             if Glog == -1:
                 # A Glog of -1 indicates that floating point gains were used,

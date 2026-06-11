@@ -5,7 +5,7 @@ from .hdf5_corr_writer import HDF5CorrWriter
 from .hdf5_raw_writer import HDF5RawWriter
 from .adc_data_processor import ADCDataProcessor
 from .fft_data_processor import FFTDataProcessor
-from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor as RawDataProcessor
+from .raw_data_processor import RawDataProcessor
 from .receiver import CAPTURE_CONFIG_KEYS, RawAcqReceiver
 from .server import RawAcqAsyncRESTServer
 from .corr_data_processor import CorrDataProcessor, UCorrAcqPacketProcessor

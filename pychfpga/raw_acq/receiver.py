@@ -16,12 +16,10 @@ import psutil
 from wtl import log
 from wtl.metrics import Metrics
 
-from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
 from pychfpga.common.state import State
 
-from .adc_data_processor import ADCDataProcessor
-from .fft_data_processor import FFTDataProcessor
 from .corr_data_processor import CorrDataProcessor
+from .raw_data_processor import RawDataProcessor
 
 FIRMWARE_CONFIG_KEYS = ("raw", "adc", "fft", "corr")
 CAPTURE_CONFIG_KEYS = FIRMWARE_CONFIG_KEYS  # legacy alias
@@ -101,6 +99,13 @@ class RawAcqReceiver(object):
         if not config:
             return
         for key, patch in _firmware_config_sections(config).items():
+            if key in ("adc", "fft"):
+                raw = self.processors.get("raw")
+                if raw is None:
+                    self.log.warning(f'{self!r}: No raw processor for {key!r} config patch')
+                    continue
+                getattr(raw, key).update_config(patch)
+                continue
             if key not in self.processors:
                 self.log.warning(f'{self!r}: Unknown processor key: {key}')
                 continue
@@ -286,28 +291,19 @@ class RawAcqReceiver(object):
                 f'{self!r}: firmware config must include {FIRMWARE_CONFIG_KEYS!r}'
             )
 
-        # One dual-source raw processor; ADC/FFT sinks consume formatted output per source.
-        raw_proc = RawDataPacketProcessor(self, config=sections["raw"])
-        adc_proc = ADCDataProcessor(
+        raw_proc = RawDataProcessor(
             self,
-            raw_proc,
-            config=sections["adc"],
+            config=sections["raw"],
+            adc_config=sections["adc"],
+            fft_config=sections["fft"],
             stream_ids=stream_ids,
             metrics_refresh_time=metrics_refresh_time,
             adc_rms_refresh_count=adc_rms_refresh_count,
-        )
-        fft_proc = FFTDataProcessor(
-            self,
-            raw_proc,
-            config=sections["fft"],
-            stream_ids=stream_ids,
         )
         corr_proc = CorrDataProcessor(self, config=sections["corr"])
 
         self.processors = {
             "raw": raw_proc,
-            "adc": adc_proc,
-            "fft": fft_proc,
             "corr": corr_proc,
         }
 
@@ -660,10 +656,6 @@ class RawAcqReceiver(object):
                 corr.process_udp_packets()
                 corr.after_process_udp_packets(time.time() - t_corr)
                 corr.consume(corr.get_formatted_data())
-            if raw and raw.n_out:
-                ts, data_pair, counts, sources = raw.get_formatted_data()
-                self.processors["adc"].consume((ts, data_pair[0], counts, sources))
-                self.processors["fft"].consume((ts, data_pair[1], counts, sources))
         except Exception as e:
             self.log.error(f'process_packets: exception {e!r}')
             raise
@@ -809,9 +801,14 @@ class RawAcqReceiver(object):
         """Filesystem path for global raw_acq_disk_* metrics."""
         if self.data_folder:
             return self.data_folder
-        for key in ("adc", "corr"):
-            proc = self.processors.get(key)
-            base_dir = getattr(proc, "hdf5_base_dir", None) if proc is not None else None
+        raw = self.processors.get("raw")
+        if raw is not None:
+            base_dir = getattr(raw.adc, "hdf5_base_dir", None)
+            if base_dir:
+                return base_dir
+        corr = self.processors.get("corr")
+        if corr is not None:
+            base_dir = getattr(corr, "hdf5_base_dir", None)
             if base_dir:
                 return base_dir
         return None

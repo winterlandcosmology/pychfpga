@@ -65,7 +65,7 @@ class UDPPacketReceiver:
             quiet UDP logs with ``verbose=0`` even when the packet receiver was constructed
             with a higher default.
         """
-        v = verbose or self.verbose
+        v = self.verbose if verbose is None else verbose
         # print(f"UDPPacketReceiver: receive_packets: with verbose={v}")
         n = 0
         # last_ts = None

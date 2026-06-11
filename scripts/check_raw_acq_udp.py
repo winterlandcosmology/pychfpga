@@ -165,11 +165,12 @@ async def run_raw_acq(port: int, source_host: str, source_port: int, seconds: fl
         await asyncio.sleep(1.0)
         n = recv.received_packets
         stored = recv.n_stored
-        adc = recv.processors["adc"]
+        raw = recv.processors["raw"]
+        adc = raw.adc
         if n != last:
             print(
                 f"  received_packets={n}  n_stored={stored}  "
-                f"adc_emitted_ts={adc.n_ts}  adc_processed={getattr(adc, 'adc_current_processed_packets', '?')}"
+                f"adc_emitted_ts={raw.n_ts}  adc_processed={getattr(adc, 'adc_current_processed_packets', '?')}"
             )
             last = n
     recv.stop()

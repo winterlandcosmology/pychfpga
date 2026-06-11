@@ -156,7 +156,7 @@ class TCPipe:
         self.bsb_sent_ctr = 0
         self.perf = _TCPipePerf(self, self.RPC_PERF_LOG_INTERVAL) if log_performance else None
         # BSB write aggregation uses the batch-write RPC provided by the RTOS.
-        self._bsb_aggregate_ctx_depth = 0
+        self._bsb_aggregate_ctx_depth = 1
         self._bsb_agg_pending = []
         self._bsb_agg_pending_tx = 0
         self._bsb_aggregate_max_cmds = 512
