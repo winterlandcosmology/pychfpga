@@ -12,7 +12,7 @@ test_config:
     only_plot: False              #Don't compare results, only plot them 
 
     #parameters for scaler tests 
-    platform: 'ICE-4bit-r'
+    platform: 'ICE-8bit-r'
     global_postscaler: range(IDENTITY_POSTSCALER - 1, IDENTITY_POSTSCALER + 2) #range(SCALER_SHIFT - INPUT_WIDTH - IMPLICIT_SHIFT + 1, SCALED_WIDTH - IMPLICIT_SHIFT)
     global_frame_cnt: [100, 30000]
     alternating_gain:

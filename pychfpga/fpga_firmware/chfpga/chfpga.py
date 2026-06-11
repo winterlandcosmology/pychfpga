@@ -3361,6 +3361,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         elif self.CAPTURE_TYPE =='PROBER':
             self._capture_pkt_frames_per_burst = frames_per_burst
+            self.config.raw_capture.frames_per_burst = int(frames_per_burst)
 
             frames_per_second = frames_per_burst * 1.0 / self.FRAME_PERIOD / burst_period_in_frames
             packet_size_in_bits = (self.FRAME_LENGTH + 10 + 42) * 8  # 10 header bytes, 42 Ethernet/IP/UDP overhead
@@ -5323,6 +5324,5 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         print('*** TEST PASSED! ***')
         return True, None, None, None
-
 
 

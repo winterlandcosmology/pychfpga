@@ -31,3 +31,4 @@ docker-data/
 xreport.xml
 .vscode
 *__pycache__*
+fw_test_results/

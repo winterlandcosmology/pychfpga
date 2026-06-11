@@ -310,6 +310,11 @@ class RawDataPacketProcessor(PacketProcessorBase):
                     out_dtype = np.dtype(np.complex128 if cf.fmt_base_width == 64 else np.complex64)
                     complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // 2
                     interleave_factor = cf.fmt_interleave_factor
+                    if interleave_factor > 2:
+                        raise ValueError(
+                            "Full-resolution complex raw capture with "
+                            f"fmt_interleave_factor={interleave_factor} is not supported yet."
+                        )
                     # interleaved_values_per_frame = complex_values_per_frame * interleaved_factor # 2 for interleaved, 1 for non-interleaved
                     cdata1_dims = (self.max_timestamps * self.FRAMES_PER_BURST, self.NCHAN, complex_values_per_frame) # complex value storage buffer
                     cdata2_dims = (self.max_timestamps * self.FRAMES_PER_BURST // interleave_factor, self.NCHAN, complex_values_per_frame * interleave_factor) # deinterleaved complex value storage buffer  

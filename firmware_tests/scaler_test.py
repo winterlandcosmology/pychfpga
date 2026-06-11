@@ -241,6 +241,7 @@ class TestScaler:
         self.board.start_data_capture(period=0.1, source='scaler', data_type=cap_data_type)
         self.board.sync()
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv) #NOTE: must be after earlier calls for some reason
+        capture_config = self.board.get_firmware_config().raw
         receiver.flush()
         #receiver.update_config(self.board.state.raw_capture)
         if not read:
@@ -249,10 +250,15 @@ class TestScaler:
             )
             return source, source
         if self.data.PLATFORM == 'ICE':
-            if double:
-                _, data, _ = receiver.read_raw_frames_double_resolution()
-            else:
-                _, data, _ = receiver.read_raw_frames()
+            _, data, _ = receiver.read_raw_frames(
+                ncap=1,
+                flush=False,
+                split=False,
+                source=1,
+                config=capture_config,
+                verbose=self.test_config.loglevelrecv,
+            )
+            data = data[:, 0, :]
             assert np.all(np.equal(data[0], data))
             if get_flags:
                 return source, data & (2**self.data.READOUT_SHIFT-1)
@@ -262,36 +268,13 @@ class TestScaler:
             if double:
                 pytest.skip("Double resolution not supported on UCAP yet")
             else:
-                 _, data, _ = receiver.read_raw_frames(ncap=1, flush=False, split=True, verbose=self.test_config.loglevelrecv)
+                 _, data, _ = receiver.read_raw_frames(ncap=1, flush=False, split=True, source=1, config=capture_config, verbose=self.test_config.loglevelrecv)
                  #data = data[:, ::2]
+            data = data[:, 0, :]
             assert np.all(np.equal(data[0], data))
             if get_flags:
                 raise Exception("Flag feature not implemented on UCAP")
-            return source, (data[:, 0] // (2**self.data.READOUT_SHIFT)) #only return first frame of data
-        logger.debug("Initializing data receiver")
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
-        ts, data, count = receiver.read_raw_frames(ncap=1, split_frames=False)
-
-        logger.debug(
-            f"_set_capture_scaler: func={func} double={double} get_flags={get_flags} cap_data_type={cap_data_type} "
-            f"ts_shape={ts.shape} data_shape={data.shape} count_shape={count.shape}"
-        )
-
-        if get_flags:
-            if self.data.READOUT_SHIFT > 0:
-                flags = data & (2 ** self.data.READOUT_SHIFT - 1)
-            else:
-                raise RuntimeError("Cannot extract scaler flags when READOUT_SHIFT is 0.")
-            logger.debug(f"_set_capture_scaler: flags_first16={flags[0][:16]}")
-            return source, flags
-
-        if self.data.READOUT_SHIFT > 0:
-            data = data // (2 ** self.data.READOUT_SHIFT)
-
-        logger.debug(f"_set_capture_scaler: received_first16={data[0][:16]}")
-        if double:
-            logger.debug("_set_capture_scaler: double=True (decoded through capture profile)")
-        return source, data
+            return source, (data // (2**self.data.READOUT_SHIFT)) #only return first frame of data
 
     def plot_and_test(self, xr, data, ref_data, title, **kwargs):
         logging.getLogger("matplotlib").setLevel(logging.WARNING)
@@ -328,7 +311,8 @@ class TestScaler:
         self.board.set_data_source(source='arb', data=source)
         self.board.start_data_capture(period=0.01, source='scaler', data_type=0)
         receiver = self.board.get_data_receiver(verbose=2)
-        _, data, _ = receiver.read_raw_frames(ncap=1, split_frames=False)
+        _, data, _ = receiver.read_raw_frames(ncap=1, split=False, source=1, config=self.board.get_firmware_config().raw)
+        data = data[:, 0, :]
 
         ref_data = source * 0
         logger.debug(
@@ -361,7 +345,8 @@ class TestScaler:
         self.board.set_data_source(source='arb', data=source)
         self.board.start_data_capture(period=0.01, source='scaler', data_type=cap_data_type)
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
-        _, data, _ = receiver.read_raw_frames(ncap=1, split_frames=False)
+        _, data, _ = receiver.read_raw_frames(ncap=1, split=False, source=1)
+        data = data[:, 0, :]
         data = data // (2 ** self.data.READOUT_SHIFT)'''
 
         ref_data = np.clip(source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT + (symmetric_saturation), self.data.MAX_OUTPUT)
@@ -400,7 +385,8 @@ class TestScaler:
         self.board.set_data_source(source='arb', data=source)
         self.board.start_data_capture(period=0.01, source='scaler', data_type=0)
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
-        ts, data, count = receiver.read_raw_frames(ncap=1, split_frames=False)
+        ts, data, count = receiver.read_raw_frames(ncap=1, split=False, source=1)
+        data = data[:, 0, :]
         data = data // (2 ** self.data.READOUT_SHIFT)'''
 
         ref_data = np.clip(source * np.repeat(gains, 2) * 2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
@@ -429,7 +415,7 @@ class TestScaler:
             force_float_gains (bool): if True, performs this test with the postscaler explicitly incorporated into the floating point gain, instead of seperately as a common log gain
 
         Notes:
-            Uses scaler capture mode 0 and the current raw-frame API (`ncap`, `split_frames`)
+            Uses scaler capture mode 0 and the current raw-frame API (`ncap`, `split`)
             so the received stream is compared directly against the integer reference model.
         '''
         logger = self.get_logger()
@@ -1062,8 +1048,23 @@ class TestScaler:
             source='scaler',
             data_type=cap_data_type,
         )
+        if cap_data_type == 5:
+            try:
+                with pytest.raises(ValueError, match="Full-resolution complex raw capture"):
+                    receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
+                    receiver.read_raw_frames(
+                        ncap=1,
+                        split=False,
+                        source=1,
+                        config=self.board.get_firmware_config().raw,
+                    )
+            finally:
+                self.board.recv = None
+            return
+
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
-        ts, data, count = receiver.read_raw_frames(ncap=1, split_frames=False)
+        ts, data, count = receiver.read_raw_frames(ncap=1, split=False, source=1, config=self.board.get_firmware_config().raw)
+        data = data[:, 0, :]
 
         source_i = source.astype(np.int64)
         raw_fft = source_i * (2 ** self.data.IMPLICIT_SHIFT)
@@ -1349,9 +1350,9 @@ class TestScaler:
                 )
                 self.board.start_data_capture(period=0.01, source='scaler', data_type=0)
                 receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
-                ts, data, count = receiver.read_raw_frames(ncap=2, split_frames=False)
+                ts, data, count = receiver.read_raw_frames(ncap=2, split=False, source=1, config=self.board.get_firmware_config().raw)
                 # Use the second frame to avoid potential source-switch transition effects.
-                flags_out = (data & mask)[-1:]
+                flags_out = data[:, -1, :] & mask
                 logger.debug(
                     f"test_flags(frame8): inject_overflow={inject_overflow} ts_shape={ts.shape} "
                     f"data_shape={data.shape} count_shape={count.shape} flags_shape={flags_out.shape}"
@@ -1404,7 +1405,6 @@ class TestScaler:
         self.board.set_gains(self._uniform_real_gains(1), postscaler=self.data.MAPPING_POSTSCALER, bank=0, when='now')
         source = self.gen_data(func='ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
         self.board.set_data_source(source='arb', data=source)
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
         source_i = source.astype(np.int64)
         ref_before_frame = np.clip(
             source_i * 2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT,
@@ -1425,8 +1425,11 @@ class TestScaler:
             verbose=0,
         )
         assert(self.board.GPIO.ANT_RESET == 0)
+        capture_config = self.board.get_firmware_config().raw
+        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        receiver.flush()
 
-        ts_before, data_before, count_before = receiver.read_raw_frames(ncap=1, split=True)
+        ts_before, data_before, count_before = receiver.read_raw_frames(ncap=1, split=True, source=1, config=capture_config)
         if self.data.READOUT_SHIFT > 0:
             data_before //= 2**self.data.READOUT_SHIFT
         before_frame = data_before[0, 0]
@@ -1438,7 +1441,7 @@ class TestScaler:
         sleep(1.0)
         receiver.flush()
 
-        ts_after, data_after, count_after = receiver.read_raw_frames(ncap=1, split=True)
+        ts_after, data_after, count_after = receiver.read_raw_frames(ncap=1, split=True, source=1, config=capture_config)
         if self.data.READOUT_SHIFT > 0:
             data_after //= 2**self.data.READOUT_SHIFT
         after_frame = data_after[0, 0]
@@ -1502,6 +1505,7 @@ class TestScaler:
         self.board.set_scaler_rounding_mode(rounding_mode)
         self.board.set_symmetric_saturation(symmetric_saturation)
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        capture_config = self.board.get_firmware_config().raw
         avgs = np.zeros(postscaler_range[1]  - postscaler_range[0], dtype=np.float64)
         n = self.data.NUM_SAMPLES * len(self.board.chan) * num_frames
         num_bursts = num_frames // FRAMES_PER_BURST
@@ -1512,7 +1516,7 @@ class TestScaler:
                     self.board.chan[ch].FUNCGEN.BYTE_A = randint(0, 255)
                     self.board.chan[ch].FUNCGEN.BYTE_B = randint(0, 255)
                 receiver.flush()
-                ts, data, count = receiver.read_raw_frames(ncap=1, split=False)
+                ts, data, count = receiver.read_raw_frames(ncap=1, split=False, source=1, config=capture_config)
                 if self.data.READOUT_SHIFT > 0:
                     data //= 2 ** self.data.READOUT_SHIFT
                 avgs[postscaler-postscaler_range[0]] += np.sum(data)
