@@ -29,3 +29,5 @@ docker-data/
 .codex
 .env
 xreport.xml
+.vscode
+*__pycache__*
