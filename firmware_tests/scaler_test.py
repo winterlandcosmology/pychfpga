@@ -40,6 +40,14 @@ TODO: 1. Import pytest_generate_tests into .utils so that both funcgen, scaler a
       3. Parametrize scaler tests to work with CRS (add ucap capture)
 '''
 
+# ICE entries encode two independent choices:
+# - `4bit` vs `8bit` is the scaler readout width used by the test capture path.
+# - `-c` vs `-r` selects the expected internal scaler word width: `-c` assumes the
+#   extra bit from the complex-gain datapath (`USE_COMPLEX_GAINS=1`, raw scaled
+#   value width 35), while `-r` assumes the real/floating-gain datapath
+#   (`USE_COMPLEX_GAINS=0`, raw scaled value width 34). That one-bit delta feeds
+#   directly into `SCALER_SHIFT`, `IDENTITY_POSTSCALER`, and the host-side
+#   reference model below.
 platforms = {
     'ICE-4bit-c':
         {'INPUT_WIDTH': 8, 'CAPTURE_WIDTH': 4, 'FFT_WIDTH': 18, 'SCALED_WIDTH': 35, 'READOUT_SHIFT': 4, 'BINS_PER_SAMPLE': 2},
