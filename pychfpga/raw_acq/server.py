@@ -122,7 +122,7 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
             capture_aux_refresh_time=0,
             capture_aux_stream_ids=[6],
             aux_elements_per_file=2048 * 64):
-        self.receiver.processors["adc"].start_adc_hdf5(
+        self.receiver.processors["raw"].adc.start_adc_hdf5(
             base_dir=base_dir,
             base_filename=base_filename,
             capture_duration=capture_duration,
@@ -138,7 +138,7 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
 
     @endpoint('stop-raw-hdf5')
     async def stop_raw_hdf5(self):
-        self.receiver.processors["adc"].stop_adc_hdf5()
+        self.receiver.processors["raw"].adc.stop_adc_hdf5()
         return "stopped hdf5 writing to disk."
 
     @endpoint('status')
@@ -149,12 +149,12 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
     @endpoint('get-packets')
     async def get_packets(self):
         self.log.info(f'{self!r}: received get_packets command')
-        await self.receiver.processors["adc"].get_data_async()
+        await self.receiver.processors["raw"].adc.get_data_async()
 
     @endpoint('start-fft-rms')
     async def start_fft_rms(self, stream_ids=[], target_gain_bank=0, number_of_frames=100):
         self.log.info(f'{self!r}: received start_fft_rms command')
-        await self.receiver.processors["fft"].start_fft_rms_async(
+        await self.receiver.processors["raw"].fft.start_fft_rms_async(
             stream_ids=stream_ids,
             target_gain_bank=target_gain_bank,
             number_of_frames=number_of_frames)
@@ -163,7 +163,7 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
     @endpoint('get-fft-rms')
     async def get_fft_rms(self):
         self.log.info(f'{self!r}: received get_fft_rms command')
-        ix, rms = await self.receiver.processors["fft"].get_fft_rms_async()
+        ix, rms = await self.receiver.processors["raw"].fft.get_fft_rms_async()
         return (ix.tolist(), rms.tolist())
 
     @endpoint('start-corr-hdf5')

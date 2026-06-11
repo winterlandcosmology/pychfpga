@@ -325,7 +325,7 @@ class UCorrPacketProcessor(PacketProcessorBase):
             if "source" in kwargs or "format" in kwargs:
                 raise TypeError("UCorrPacketProcessor.get_formatted_data does not accept source or format")
             raise TypeError(f"unexpected keyword arguments: {list(kwargs)}")
-        n_out = self._ready_n_out
+        n_out = self.n_out
         if not n_out:
             return None
         integ_ts = self.ts_array[:n_out]

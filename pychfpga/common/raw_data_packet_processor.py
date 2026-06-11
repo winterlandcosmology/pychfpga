@@ -299,6 +299,11 @@ class RawDataPacketProcessor(PacketProcessorBase):
         )
 
         for source, cf in enumerate(state.capture_format):
+            if cf is None:
+                continue
+            if not isinstance(cf, State):
+                cf = State(cf)
+                state.capture_format[source] = cf
             if cf.has_changed(context=dynamic_state_attrs[source]):
                 if cf.fmt_is_complex:
                     bytes_per_integer = math.ceil(cf.fmt_base_width / 8)
@@ -346,6 +351,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
             cf = decode_format_string(format)
         else:
             cf = self.config.capture_format[source]
+            if cf is not None and not isinstance(cf, State):
+                cf = State(cf)
         base = cf.fmt_base_width
         is_complex = cf.fmt_is_complex
 
