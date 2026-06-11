@@ -26,8 +26,7 @@ def process_and_get(processor, source=0, config=None, verbose=None, with_indices
     processor.process_udp_packets(config=config, verbose=verbose)
     if not processor.n_out:
         return None
-    formatted = processor.get_formatted_data()
-    ts, data, counts = formatted[source]
+    ts, data, counts = processor.get_formatted_data(slice(0, processor.n_out), source=source)
     if with_indices:
         return ts, data, counts, np.arange(ts.shape[0])
     return ts, data, counts
@@ -222,7 +221,7 @@ def test_read_raw_frames_omitting_verbose_preserves_constructor():
 def test_back_to_back_read_raw_frames_each_gets_fresh_iterator():
     """Regression: singleton data_iter caused confusing state; each read_raw_frames starts clean."""
     pr = DummyPacketReceiver()
-    r = RawFrameReceiver(pr, config=default_config(format="8"), receive_window=0, verbose=0)
+    r = RawFrameReceiver(pr, config=default_config(format="8"), verbose=0)
     for i, tsv in enumerate((100, 101, 102, 103)):
         write_burst(r, pr, 2 * i, ts=tsv, payload_base=10 * i)
     ts1, _d1, c1 = r.read_raw_frames(ncap=4, flush=False)
@@ -372,7 +371,7 @@ def test_block_output_capacity_allows_nearly_complete_buffered_burst():
 
 def test_timestamp_clip_keeps_newest_distinct_timestamps():
     """When distinct timestamps exceed ``max_timestamps``, keep the newest N and warn."""
-    processor, pr = make_processor(n_packets=16, receive_window=0)
+    processor, pr = make_processor(n_packets=16)
     processor.max_timestamps = 2
     for i, tsv in enumerate((100, 101, 102)):
         write_burst(processor, pr, 2 * i, ts=tsv, payload_base=10 * i)
@@ -385,7 +384,7 @@ def test_timestamp_clip_keeps_newest_distinct_timestamps():
 
 def test_monotonic_rejects_udp_not_after_last_emitted():
     """Packets at or before the last returned timestamp are ignored; emits stay strictly increasing."""
-    processor, pr = make_processor(receive_window=0)
+    processor, pr = make_processor()
     for i, tsv in enumerate((5, 6, 7, 8)):
         write_burst(processor, pr, 2 * i, ts=tsv, payload_base=10 * i)
     out1 = process_and_get(processor)
@@ -411,7 +410,7 @@ def test_monotonic_rejects_udp_not_after_last_emitted():
 
 
 def test_flush_clears_last_emitted_timestamp_tracker():
-    processor, pr = make_processor(receive_window=0)
+    processor, pr = make_processor()
     write_burst(processor, pr, 0, ts=50, payload_base=1)
     write_burst(processor, pr, 2, ts=51, payload_base=2)
     assert process_and_get(processor) is not None
@@ -424,7 +423,7 @@ def test_flush_clears_last_emitted_timestamp_tracker():
 
 
 def test_view_capable_format_can_return_raw_storage_view():
-    processor, pr = make_processor(n_packets=2, receive_window=0)
+    processor, pr = make_processor(n_packets=2)
     write_packet(processor, pr, 0, stream_id=10, ts=9, payload=[1, 2, 3, 4])
     write_packet(processor, pr, 1, stream_id=11, ts=9, payload=[5, 6, 7, 8])
 
@@ -436,7 +435,7 @@ def test_view_capable_format_can_return_raw_storage_view():
 
 
 def test_transformed_format_uses_formatted_output_buffer():
-    processor, pr = make_processor(n_packets=2, format="14", receive_window=0)
+    processor, pr = make_processor(n_packets=2, format="14")
     write_packet(processor, pr, 0, stream_id=10, ts=11, payload=[0, 4, 0, 8])
     write_packet(processor, pr, 1, stream_id=11, ts=11, payload=[0, 12, 0, 16])
 
@@ -450,7 +449,7 @@ def test_transformed_format_uses_formatted_output_buffer():
 
 
 def test_output_only_reconfiguration_reuses_raw_buffer():
-    processor, pr = make_processor(n_packets=2, format="8", receive_window=0)
+    processor, pr = make_processor(n_packets=2, format="8")
     raw_data = processor.raw_data
     cfg = default_config(format="14", capture_format=[capture_format_for_tests("14"), _unused_capture_format_slot()])
 
@@ -461,7 +460,7 @@ def test_output_only_reconfiguration_reuses_raw_buffer():
 
 
 def test_geometry_reconfiguration_reallocates_when_shape_changes():
-    processor, pr = make_processor(n_packets=2, format="8", receive_window=0)
+    processor, pr = make_processor(n_packets=2, format="8")
     raw_data = processor.raw_data
     cfg = default_config(
         format="8",
@@ -490,7 +489,7 @@ def test_read_raw_frames_split_kwarg_yields_per_frame_width():
         packets_per_channel_per_burst=2,
     )
     pr = DummyPacketReceiver(n_packets=16, max_packet_size=32)
-    r = RawFrameReceiver(pr, config=cfg, verbose=0, receive_window=0)
+    r = RawFrameReceiver(pr, config=cfg, verbose=0)
     write_burst(r, pr, 0, ts=5, payload_base=10)
     write_burst(r, pr, 2, ts=6, payload_base=20)
     ts, data, counts = r.read_raw_frames(ncap=2, split=1, flush=False)
@@ -510,7 +509,6 @@ def test_split_parameter_yields_samples_per_frame():
         subframes_per_frame=4,
         stream_ids=(10,),
         channels=(0,),
-        receive_window=0,
     )
     assert processor.BYTES_PER_FRAME == 32768
     assert processor.raw_data.shape[-1] == 2 * 32768
@@ -521,12 +519,12 @@ def test_split_parameter_yields_samples_per_frame():
     processor.raw_source[0, 0, :] = 0
     processor.n_out = 1
 
-    ts_wide, burst_wide, counts_wide = processor.format_data(slice(0, 1), source=0, split=False)
+    ts_wide, burst_wide, counts_wide = processor.get_formatted_data(slice(0, 1), source=0, split=False)
     assert burst_wide.shape == (1, 1, 32768), burst_wide.shape
     np.testing.assert_array_equal(ts_wide, [100])
     np.testing.assert_array_equal(counts_wide, [[8]])
 
-    split_ts, split_rows, split_counts = processor.format_data(slice(0, 1), source=0, split=True)
+    split_ts, split_rows, split_counts = processor.get_formatted_data(slice(0, 1), source=0, split=True)
     assert split_rows.shape == (2, 1, 16384), split_rows.shape
     assert split_rows.shape[-1] == 16384
     np.testing.assert_array_equal(split_ts, [100, 101])

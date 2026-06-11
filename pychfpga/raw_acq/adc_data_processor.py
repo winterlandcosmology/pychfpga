@@ -171,7 +171,7 @@ class ADCDataProcessor:
         wire_bytes = int(self.raw.FRAMES_PER_BURST) * int(self.raw.BYTES_PER_FRAME)
         raw = np.ascontiguousarray(wire_row).reshape(-1).view(np.uint8)[:wire_bytes]
         shaped = raw.reshape(1, 1, raw.size)
-        _, formatted, _ = self.raw.format_data(shaped, source=0)
+        _, formatted, _ = self.raw.get_formatted_data(shaped, source=0)
         return np.asarray(formatted[0, 0], dtype=self.adc_storage_dtype)
 
     def _process_adc_emitted(self, ts, data, counts) -> None:

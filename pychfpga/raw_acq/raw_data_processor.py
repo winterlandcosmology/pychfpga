@@ -52,19 +52,20 @@ class RawDataProcessor(RawDataPacketProcessor):
         if not self.n_out:
             return
         indices = np.arange(self.n_out)
-        (ts0, data0, counts0), (ts1, data1, counts1) = self.get_formatted_data()
-        self.adc.consume((ts0, data0, counts0, indices))
-        self.fft.consume((ts1, data1, counts1, indices))
+        rows = slice(0, self.n_out)
+        for source, processor in enumerate((self.adc, self.fft)):
+            ts, data, counts = self.get_formatted_data(rows, source=source)
+            processor.consume((ts, data, counts, indices))
 
     async def get_metrics_async(self, metrics):
-        await self.adc.get_metrics_async(metrics)
-        await self.fft.get_metrics_async(metrics)
+        for processor in (self.adc, self.fft):
+            await processor.get_metrics_async(metrics)
 
     def flush(self, flush_timeout=None):
         super().flush(flush_timeout=flush_timeout)
-        self.adc.flush(flush_timeout=flush_timeout)
-        self.fft.flush(flush_timeout=flush_timeout)
+        for processor in (self.adc, self.fft):
+            processor.flush(flush_timeout=flush_timeout)
 
     def stop(self):
-        self.adc.stop()
-        self.fft.stop()
+        for processor in (self.adc, self.fft):
+            processor.stop()

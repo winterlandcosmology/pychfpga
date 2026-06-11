@@ -59,8 +59,9 @@ def test_dual_processors_on_ucap_burst():
     write_burst(proc, pr, 4, ts=7, payload_base=31)
     write_burst(proc, pr, 6, ts=8, payload_base=41)
     pr.n_stored = 8
-    process_and_get(proc)
-    ts, data_pair, counts, sources = proc.get_formatted_data()
-    row_src = sources[:, 0]
-    assert np.any(row_src == 0)
-    assert not np.any(row_src == 1)
+    out0 = process_and_get(proc, source=0)
+    assert out0 is not None
+    ts, data, counts = out0
+    assert ts.shape[0] > 0
+    assert counts.sum() > 0
+    assert np.all((proc.raw_source[: proc.n_out] & 1) == 0)
