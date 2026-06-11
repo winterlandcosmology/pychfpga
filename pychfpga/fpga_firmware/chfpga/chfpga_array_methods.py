@@ -1327,14 +1327,20 @@ class chFPGAArrayMethods(ArrayMethods):
             for b in self.ib:
                 b.CORR.select()
 
-            corr_config = self.ib[0].CORR.get_config()
-            cr.update_config(corr_config)
+            corr = self.ib[0].CORR
+            # Refreshes corr.config in place: get_bin_map() pulls the current FFT bin map,
+            # rebuilds UCORR bin/product maps, and updates derived receiver geometry.
+            corr.get_bin_map()
+            cr.update_config(corr.config)
 
-        corr_config = self.ib[0].CORR.get_config()
+        corr = self.ib[0].CORR
+        # Populate corr.config before handing it to the receiver; the returned maps
+        # are already stored as corr.config.bin_map and corr.config.prod_map.
+        corr.get_bin_map()
 
         if not self.fpga_array.corr_recv:
             pr = self.get_packet_receiver(port_number=port_number)
-            self.fpga_array.corr_recv = self.ib[0].CORR.get_corr_receiver(packet_receiver=pr, config=corr_config, pre_func=select_func)
+            self.fpga_array.corr_recv = corr.get_corr_receiver(packet_receiver=pr, config=corr.config, pre_func=select_func)
         return self.fpga_array.corr_recv
 
 

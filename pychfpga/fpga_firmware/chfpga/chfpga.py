@@ -2342,12 +2342,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         )
 
         if self.CORR:
-            corr = State(self.CORR.get_config())
-            corr.CT_LEVEL = int(self.CT_LEVEL)
-            corr.NDECIM = int(self.CORR.NDECIM)
-            corr.fft_bin_map = self.CORR.get_input_bin_map()
+            self.CORR.get_bin_map()
+            corr = self.CORR.config.deepcopy()
             corr.soft_integ_period = int(getattr(corr, "soft_integ_period", 1) or 1)
-            UCORR.update_corr_maps(corr)
         else:
             corr = State()
 
@@ -5326,7 +5323,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         print('*** TEST PASSED! ***')
         return True, None, None, None
-
 
 
 
