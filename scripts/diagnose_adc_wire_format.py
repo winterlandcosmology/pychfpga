@@ -36,13 +36,9 @@ async def main() -> None:
     cix = 0
     tix = int(np.argmax(raw.raw_data_count[:, cix]))
     wire = np.asarray(raw.raw_data[tix, cix], dtype=np.uint8)
-    from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
-    fmt = raw._capture_format[0]
-    formatted = RawDataPacketProcessor.format_data(
-        wire.reshape(1, 1, -1), fmt, scratch=raw._fmt_scratch[0],
-        pkt_frames_per_burst=raw.PKT_FRAMES_PER_BURST,
-    )[0, 0]
+    _, formatted, _ = raw.get_formatted_data(slice(tix, tix + 1), source=0)
     frame = adc._channel_frame(wire)
+    formatted_row = np.asarray(formatted[0, cix], dtype=adc.adc_storage_dtype)
 
     def rms(x):
         x = np.asarray(x, dtype=np.float64)
@@ -52,7 +48,7 @@ async def main() -> None:
     print(f"complete packets={adc.raw_data_count[tix, cix]} expected={adc.expected_packets}")
     print(f"samples_per_row={frame.size} (HDF5 width={adc.adc_samples_per_frame})")
     print(f"wire hex (first 16 B): {wire[:16].tobytes().hex()}")
-    print(f"format_data first 8: {formatted[:8]}  rms={rms(formatted):.2f}")
+    print(f"get_formatted_data first 8: {formatted_row[:8]}  rms={rms(formatted_row):.2f}")
     print(f"_channel_frame first 8: {frame[:8]}  rms={rms(frame):.2f} min/max={frame.min()}/{frame.max()}")
 
 

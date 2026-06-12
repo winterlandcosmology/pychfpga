@@ -17,7 +17,7 @@ NUM_SOURCES = 2
 
 
 def decode_format_string(format):
-    """Decode a raw capture format string into a ``State`` for ``format_data``.
+    """Decode a raw capture format string into a ``State`` for ``get_formatted_data``.
 
     Format string: ``<width>`` [``+<width>``] [``<modifiers>``]
 
@@ -326,20 +326,14 @@ class RawDataPacketProcessor(PacketProcessorBase):
 
 
 
-    def format_data(self, rows=slice(None), source=0, split=False, format=None):
+    def get_formatted_data(self, rows=slice(None), source=0, split=False, format=None):
         """Transform assembled raw rows into ``(ts, data, counts)`` for source ``source``.
 
         Parameters
         ----------
-        rows : slice, int, or ndarray
-            ``slice`` or ``int`` (``int n`` means ``slice(0, n)``) index rows in the
-            internal assembly buffer.  An ndarray supplies ``raw_data`` directly (optional
-            ``ts``, ``counts``, ``sources`` override companion arrays).
-        source : int
-            Capture source index (ADC vs FFT).
-        split : bool
-            If True, split each burst into ``frames_per_burst`` rows with consecutive
-            timestamps and per-frame packet counts.
+        rows (slice): Index rows in the internal assembly buffer. These are burst rows, not packet or formatted data rows.
+        source (int): Capture source index (ADC vs FFT).
+        split (bool): If True, split each burst into ``frames_per_burst`` rows with consecutive timestamps and per-frame packet counts.
         format (str): Ovverides the capture format for the specified source.
 
         Returns
@@ -432,7 +426,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
             Tuple of ``ts`` ``(n_ts,)``, ``data``, and ``counts`` ``(n_ts, nchan)``.
         """
         # format a dummy 1-row buffer to get the shape of the data and counts
-        ts_, data_, counts_ = self.format_data(slice(0, 1), source=source, split=split, format=format)
+        ts_, data_, counts_ = self.get_formatted_data(slice(0, 1), source=source, split=split, format=format)
         ts_mult, nchan, nvalues = data_.shape  # ts_mult indicates how many formatted rowswe get from a single burst
         data = np.empty((n_ts*ts_mult, nchan, nvalues), dtype=data_.dtype)
         counts = np.empty((n_ts*ts_mult, nchan), dtype=counts_.dtype)
@@ -595,17 +589,6 @@ class RawDataPacketProcessor(PacketProcessorBase):
 
         # Update the raw data count and raw data complete arrays
         np.add.at(self.raw_data_count, (tix, self.pkt_six[bix], self.pkt_frame[bix]), 1)
-
-    def get_formatted_data(self, split=False):
-        split = bool(split)
-        """Return ``(ts, formatted_data, counts, sources)`` views for complete rows."""
-        if self.verbose >= 3:
-            print(f"RawDataPacketProcessor: process_packets: returning {self.n_out} timestamps")
-        n_out = self.n_out
-        ts0, data0, counts0 = self.format_data(slice(0, n_out), source=0, split=split)
-        ts1, data1, counts1 = self.format_data(slice(0, n_out), source=1, split=split)
-        return (ts0, data0, counts0), (ts1, data1, counts1)
-
 
     def flush(self, flush_timeout=None):
         """Flush UDP receiver and clear assembled-buffer state."""

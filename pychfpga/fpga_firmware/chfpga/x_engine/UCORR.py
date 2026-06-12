@@ -12,6 +12,7 @@ import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 
+from pychfpga.common.state import State
 from pychfpga.common.ucorr_frame_receiver import UCorrFrameReceiver
 from pychfpga.common.udp_packet_receiver import UDPPacketReceiver
 
@@ -349,8 +350,7 @@ class UCORR(MMI):
 
     @classmethod
     def get_corr_receiver(cls, packet_receiver, config=None, pre_func=None):
-        """ Return an instance of a correlator packet receiver
-        """
+        """Return an instance of a correlator packet receiver."""
         return UCorrFrameReceiver(packet_receiver, config=config, pre_func=pre_func)
 
     @classmethod

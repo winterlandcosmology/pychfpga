@@ -188,21 +188,6 @@ class UCorrPacketProcessor(PacketProcessorBase):
     def get_ij_to_prod_map(self):
         return self.ij_to_prod_map
 
-    def format_data(self, n_out: int):
-        """Remap leading ``n_out`` accumulator rows into ``(NBINS, NPROD)`` complex outputs.
-
-        ``acc_re``/``acc_im``/``sat`` are indexed by ``(integ, NDECIM, NCORRS, NPROD_PER_CMAC, NCMAC)``;
-        ``bin_map`` (4D) and ``prod_map`` (3D) broadcast together to scatter products
-        into the dense ``(NBINS, NPROD)`` plane. Beware: the .real/.imag view must be
-        taken *before* the fancy-index assignment, otherwise the write hits a copy.
-        """
-        ix = (slice(None, n_out), self.bin_map, self.prod_map)
-        self.integ_data.real[ix] = self.acc_re[:n_out]
-        self.integ_data.imag[ix] = self.acc_im[:n_out]
-        self.integ_sats.real[ix] = self.sat[:n_out, ..., 0] * (1.0 / 32.0)
-        self.integ_sats.imag[ix] = self.sat[:n_out, ..., 1] * (1.0 / 16.0)
-        return self.integ_data[:n_out], self.integ_sats[:n_out]
-
     def create_output_buffer(self, n_ts):
         """Allocate caller-side output arrays matching the shapes produced by :meth:`get_formatted_data`."""
         ts = np.empty((n_ts,), dtype=self.ts_array.dtype)
@@ -307,11 +292,18 @@ class UCorrPacketProcessor(PacketProcessorBase):
             print("*** Warning: the correlator experienced an overrun condition. All products could not be sent within the hardware integration period.")
             self.overrun = 0
 
-    def get_formatted_data(self, **kwargs):
+    def get_formatted_data(self, rows=slice(None), **kwargs):
         """Return formatted integration rows assembled by the last ``process_udp_packets`` call.
 
-        Args:
-            **kwargs: Must be empty. ``source`` and ``format`` are not supported for correlator data.
+        Remaps accumulator rows into ``(NBINS, NPROD)`` complex outputs. ``acc_re``/``acc_im``/``sat``
+        are indexed by ``(integ, NDECIM, NCORRS, NPROD_PER_CMAC, NCMAC)``; ``bin_map`` (4D) and
+        ``prod_map`` (3D) broadcast together to scatter products into the dense ``(NBINS, NPROD)``
+        plane. Beware: the .real/.imag view must be taken *before* the fancy-index assignment,
+        otherwise the write hits a copy.
+
+        Parameters:
+            rows (slice or int): Index rows in the internal assembly buffer. An ``int`` selects
+                ``slice(0, rows)``.
 
         Returns:
             None if no rows are ready; otherwise ``(integ_ts, data, sats, counts)`` where
@@ -325,12 +317,24 @@ class UCorrPacketProcessor(PacketProcessorBase):
             if "source" in kwargs or "format" in kwargs:
                 raise TypeError("UCorrPacketProcessor.get_formatted_data does not accept source or format")
             raise TypeError(f"unexpected keyword arguments: {list(kwargs)}")
-        n_out = self.n_out
-        if not n_out:
+        if isinstance(rows, int):
+            rows = slice(0, rows)
+        if not self.n_out:
             return None
-        integ_ts = self.ts_array[:n_out]
-        data, sats = self.format_data(n_out)
-        counts = self.raw_data_count[:n_out]
+        if rows == slice(None):
+            rows = slice(0, self.n_out)
+        start, stop, _ = rows.indices(self.n_out)
+        if start >= stop:
+            return None
+        integ_ts = self.ts_array[rows]
+        counts = self.raw_data_count[rows]
+        ix = (rows, self.bin_map, self.prod_map)
+        self.integ_data.real[ix] = self.acc_re[rows]
+        self.integ_data.imag[ix] = self.acc_im[rows]
+        self.integ_sats.real[ix] = self.sat[rows, ..., 0] * (1.0 / 32.0)
+        self.integ_sats.imag[ix] = self.sat[rows, ..., 1] * (1.0 / 16.0)
+        data = self.integ_data[rows]
+        sats = self.integ_sats[rows]
         return integ_ts, data, sats, counts
 
     def flush(self, flush_timeout=None):

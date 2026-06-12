@@ -130,3 +130,35 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
         result = await self.get('stop-raw-hdf5')
         return result
 
+    async def start_corr_hdf5(
+            self,
+            base_dir=None,
+            base_filename=None,
+            capture_duration=0,
+            elements_per_file=2048 * 64,
+            capture_n_inputs=4,
+            autocorr_only=False,
+            software_integration_period=1,
+            firmware_integration_period=1,
+            frame0_irigb_time=0,
+            **kwargs):
+        """Start correlator HDF5 capture on the remote raw_acq server."""
+        self.log.debug(f'{self!r}: Triggered start_corr_hdf5, posting start-corr-hdf5 endpoint')
+        result = await self.post(
+            'start-corr-hdf5',
+            base_dir=base_dir or self.hdf5_base_dir,
+            base_filename=base_filename or self.base_filename,
+            capture_duration=capture_duration,
+            capture_n_inputs=capture_n_inputs,
+            autocorr_only=autocorr_only,
+            elements_per_file=elements_per_file,
+            frame0_irigb_time=frame0_irigb_time,
+            firmware_integration_period=firmware_integration_period,
+            software_integration_period=software_integration_period,
+        )
+        return result
+
+    async def stop_corr_hdf5(self):
+        result = await self.get('stop-corr-hdf5')
+        return result
+

@@ -92,24 +92,31 @@ class RawAcqReceiver(object):
 
     def update_config(self, config=None, **kwargs):
         """Apply firmware or per-processor configuration patches without merging subtrees."""
-        if config is None:
-            config = {}
         if kwargs:
-            config = {**config, **kwargs}
+            config = {**(config or {}), **kwargs}
         if not config:
             return
-        for key, patch in _firmware_config_sections(config).items():
-            if key in ("adc", "fft"):
-                raw = self.processors.get("raw")
-                if raw is None:
-                    self.log.warning(f'{self!r}: No raw processor for {key!r} config patch')
-                    continue
-                getattr(raw, key).update_config(patch)
-                continue
-            if key not in self.processors:
-                self.log.warning(f'{self!r}: Unknown processor key: {key}')
-                continue
-            self.processors[key].update_config(patch)
+        sections = _firmware_config_sections(config)
+        if set(sections.keys()) >= set(FIRMWARE_CONFIG_KEYS):
+            raw_proc = self.processors.get("raw")
+            if raw_proc:
+                raw_proc.update_config(
+                    config=sections.get("raw"),
+                    adc_config=sections.get("adc"),
+                    fft_config=sections.get("fft"),
+                )
+            corr_proc = self.processors.get("corr")
+            if corr_proc is not None and sections.get("corr") is not None:
+                corr_proc.update_config(sections["corr"])
+            return
+        corr_proc = self.processors.get("corr")
+        if corr_proc is not None and (
+                'firmware_integ_period' in config or 'soft_integ_period' in config):
+            corr_proc.update_config(config)
+            return
+        raw_proc = self.processors.get("raw")
+        if raw_proc is not None:
+            raw_proc.update_config(config=config)
 
     async def start_async(
             self,
@@ -127,6 +134,7 @@ class RawAcqReceiver(object):
             config=None,
             raw_capture_state=None,
             ping_port=DEFAULT_PING_PORT,
+            no_ping=False,
             hostname=None,  # not used, but may be passed by start_client()
             post=None  # not used, but may be passed by start_client()
     ):
@@ -228,6 +236,7 @@ class RawAcqReceiver(object):
               connect.
         """
         self.name = name
+        self.no_ping = bool(no_ping)
         self.listen_to_all_interfaces = True
         self.ping_port = int(ping_port) if ping_port is not None else DEFAULT_PING_PORT
         self.ports = ports
@@ -310,7 +319,15 @@ class RawAcqReceiver(object):
         # Determine the interface from which data will be coming from each source by pinging them
         # returns a dictionary that maps each source to an interface IP and target port
         #   { (src_ip, src_port) : (if_ip, port) }
-        src_if_addrs = await self.ping_sources_async()
+        if self.no_ping:
+            self.log.info(f'{self!r}: no_ping=True; skipping TCP ping (listen on all interfaces)')
+            src_if_addrs = {}
+            for port_info in self.ports:
+                for src in port_info["sources"]:
+                    source_key, _ping_addr = self._parse_source(src, self.ping_port)
+                    src_if_addrs[source_key] = ('0.0.0.0', 0)
+        else:
+            src_if_addrs = await self.ping_sources_async()
         print('IF addr=', src_if_addrs)
         failed_src = [src_addr for src_addr, src_if_addr in src_if_addrs.items() if not src_if_addr]
         if failed_src:
@@ -493,6 +510,8 @@ class RawAcqReceiver(object):
     async def ping_sources_async(self):
         if not self.ports:
             return None
+        if getattr(self, 'no_ping', False):
+            return None
         self.log.info(f'{self!r}: Pinging all data sources (TCP; default ping port {self.ping_port})')
         source_keys = []
         ping_addrs = []
@@ -557,8 +576,7 @@ class RawAcqReceiver(object):
         self.start_time = None
 
     def start_processing_thread(self):
-        self.data_processing_thread = threading.Thread(target=self.receive_packets)
-        self.data_processing_thread.setDaemon(True)
+        self.data_processing_thread = threading.Thread(target=self.receive_packets, daemon=True)
         self.data_processing_thread.start()
         # def process_thread(self):
         #     while self.started:
@@ -799,8 +817,9 @@ class RawAcqReceiver(object):
 
     def _disk_metrics_path(self):
         """Filesystem path for global raw_acq_disk_* metrics."""
-        if self.data_folder:
-            return self.data_folder
+        data_folder = getattr(self, 'data_folder', None)
+        if data_folder:
+            return data_folder
         raw = self.processors.get("raw")
         if raw is not None:
             base_dir = getattr(raw.adc, "hdf5_base_dir", None)
@@ -818,10 +837,10 @@ class RawAcqReceiver(object):
         """
         fields = {
             'raw_acq_start_time': time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(self.start_time)),
-            'data_folder': self.data_folder or '.',
-            'run_name': self.run_name or 'Unknown',
-            'run_folder': self.run_folder or '.',
-            'corr_name': self.corr_name or 'Unknown'
+            'data_folder': getattr(self, 'data_folder', None) or '.',
+            'run_name': getattr(self, 'run_name', None) or 'Unknown',
+            'run_folder': getattr(self, 'run_folder', None) or '.',
+            'corr_name': getattr(self, 'corr_name', None) or 'Unknown'
         }
         fields.update(extra_fields)
         return os.path.expanduser(path.format(**fields) % fields)

@@ -20,6 +20,8 @@ class PacketProcessorBase(ABC):
         verbose=0,
     ):
         self.pr = packet_receiver
+        if not receive_window:
+            raise ValueError("receive_window must be greater than 0")
         self.receive_window = receive_window
         self.verbose = verbose
         self.carry_len = 0

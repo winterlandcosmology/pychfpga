@@ -23,12 +23,28 @@ class CorrDataProcessor(UCorrPacketProcessor):
         self.recv = packet_receiver
         self.hdf5_file = None
         self.hdf5_start_time = None
-        self.corr_processed_packets = 0
+        self.corr_udp_cookie_packets_total = 0
+        self.corr_udp_packets_total = 0
+        self.corr_current_udp_packets = 0
+        self.corr_integrations_emitted = 0
+        self.corr_hdf5_integrations_written = 0
         self.corr_max_processing_time = 0
         self.corr_current_processing_time = 0
         self.metrics_corr_packet_length_error = 0
         self.frame0_irigb_time = 0
         super().__init__(packet_receiver, config=config, receive_window=receive_window, verbose=verbose)
+
+    def filter_packets(self, n):
+        """Count UCORR cookie matches, then delegate to the base filter."""
+        if getattr(self, 'buf_cookie', None) is not None:
+            self.corr_udp_cookie_packets_total += int(
+                np.sum(self.buf_cookie[:n] == self.CORR_PACKET_COOKIE))
+        bix = super().filter_packets(n)
+        if bix is not None and bix.size:
+            n_matched = int(bix.size)
+            self.corr_udp_packets_total += n_matched
+            self.corr_current_udp_packets += n_matched
+        return bix
 
     def consume(self, result):
         """Append correlator HDF5 rows from a ``get_formatted_data()`` result.
@@ -39,8 +55,10 @@ class CorrDataProcessor(UCorrPacketProcessor):
         Returns:
             The same ``result`` argument (for chaining).
         """
-        if result is not None and self.hdf5_file is not None:
-            self._write_hdf5_from_result(result)
+        if result is not None:
+            self.corr_integrations_emitted += len(result[0])
+            if self.hdf5_file is not None:
+                self._write_hdf5_from_result(result)
         return result
 
     def after_process_udp_packets(self, elapsed):
@@ -48,11 +66,32 @@ class CorrDataProcessor(UCorrPacketProcessor):
         self.corr_max_processing_time = max(elapsed, self.corr_max_processing_time)
         self.corr_current_processing_time += elapsed
 
+    def _hdf5_writer_geometry(self):
+        """Return HDF5CorrWriter geometry from the firmware corr config on this processor."""
+        if self.NBINS is None or self.NCHAN is None:
+            raise RuntimeError(
+                f'{self!r}: correlator geometry is not configured; '
+                'start raw_acq with firmware corr config first')
+        cfg = self.config
+        engine = getattr(cfg, 'capture_engine', 'UCORR')
+        geom = dict(
+            capture_engine=engine,
+            n_freq_bins=int(self.NBINS),
+            number_of_correlated_inputs=int(self.NCHAN),
+            sample_freq=float(getattr(cfg, 'sample_freq_mhz', 800.)),
+        )
+        if engine == 'ICE':
+            geom['number_of_correlators'] = int(cfg.number_of_correlators)
+            geom['number_of_bins_per_frame'] = int(cfg.number_of_bins_per_frame)
+        else:
+            geom['number_of_correlators'] = int(getattr(cfg, 'NCORRS', 1))
+        return geom
+
     def _write_hdf5_from_result(self, result):
         """Append completed UCORR integration rows to the correlator HDF5 file."""
         integ_ts, data, sats, counts = result
         n = len(integ_ts)
-        self.corr_processed_packets += n
+        self.corr_hdf5_integrations_written += n
         soft = max(1, int(self.soft_integ_period or 1))
         firm = max(1, int(self.firmware_integ_period or 1))
         for i in range(n):
@@ -79,13 +118,18 @@ class CorrDataProcessor(UCorrPacketProcessor):
                         autocorr_only=False,
                         elements_per_file=256,
                         frame0_irigb_time=0,
-                        number_of_correlators=None,  # has to be provided
-                        number_of_correlated_inputs= None,  # has to be provided
-                        number_of_bins_per_frame=None,  # has to be provided
-
+                        firmware_integration_period=None,
+                        software_integration_period=None,
                         ):
         """ Start the capture of data in a HDF5 file.
         """
+        integ_patch = {}
+        if firmware_integration_period is not None:
+            integ_patch['firmware_integ_period'] = int(firmware_integration_period)
+        if software_integration_period is not None:
+            integ_patch['soft_integ_period'] = int(software_integration_period)
+        if integ_patch:
+            self.update_config(integ_patch)
 
         if self.hdf5_file:
             self.stop_corr_hdf5()
@@ -133,16 +177,14 @@ class CorrDataProcessor(UCorrPacketProcessor):
         try:
             from .hdf5_corr_writer import HDF5CorrWriter
 
-            self.hdf5_file = HDF5CorrWriter(base_dir=self.hdf5_base_dir,
-                                            filename=base_filename,
-                                            elements_per_file=self.elements_per_file,
-                                            capture_n_inputs=self.capture_n_inputs,
-                                            autocorr_only=autocorr_only,
-                                            # correlator geometry
-                                            number_of_correlators = number_of_correlators,
-                                            number_of_correlated_inputs = number_of_correlated_inputs,
-                                            number_of_bins_per_frame = number_of_bins_per_frame,
-                                            )
+            self.hdf5_file = HDF5CorrWriter(
+                base_dir=self.hdf5_base_dir,
+                filename=base_filename,
+                elements_per_file=self.elements_per_file,
+                capture_n_inputs=self.capture_n_inputs,
+                autocorr_only=autocorr_only,
+                **self._hdf5_writer_geometry(),
+            )
             self.log.info(f'{self!r}: Correlator HDF5 data writer is started')
         except Exception as e:
             self.log.error(
@@ -167,7 +209,22 @@ class CorrDataProcessor(UCorrPacketProcessor):
 
         """
 
-        metrics.add('raw_acq_processed_corr_packets', value=self.corr_processed_packets)
+        metrics.add('raw_acq_corr_udp_cookie_packets', value=self.corr_udp_cookie_packets_total)
+        metrics.add('raw_acq_corr_udp_packets', value=self.corr_udp_packets_total)
+        metrics.add('raw_acq_corr_integrations_emitted', value=self.corr_integrations_emitted)
+        metrics.add('raw_acq_corr_hdf5_integrations_written', value=self.corr_hdf5_integrations_written)
+        # Legacy alias: previously counted HDF5 rows only (misleading when writer failed).
+        metrics.add('raw_acq_processed_corr_packets', value=self.corr_hdf5_integrations_written)
+        metrics.add('raw_acq_corr_max_processing_time', value=self.corr_max_processing_time)
+        self.corr_max_processing_time = 0
+        metrics.add(
+            'raw_acq_corr_avg_processing_time',
+            value=(
+                self.corr_current_processing_time / self.corr_current_udp_packets
+                if self.corr_current_udp_packets else 0),
+        )
+        self.corr_current_processing_time = 0
+        self.corr_current_udp_packets = 0
         if self.hdf5_file:
             metrics.add('raw_acq_corr_hdf5_file_number', value=self.hdf5_file.file_number)
             metrics.add('raw_acq_corr_hdf5_current_sample_in_file', value=self.hdf5_file.n)

@@ -272,29 +272,14 @@ class chFPGA_UDP:
     async def _get_local_udp_data_port_number_async(self):
         return (await self.fpga_core_reg_read_async(self._FPGA_DATA_DEST_MAC_ADDR_MSW_IP_PORT_ADDR)) & 0xFFFF
 
-    async def set_udp_data_target_address_async(self, ip_addr=None, port=None, mac_addr=None):
-        """Set the destination MAC/IP/port for the UDP data stream sent by the FPGA.
+    async def _set_udp_data_target_address_async(self, ip_addr=None, port=None, mac_addr=None):
+        """Program UDP data destination MAC/IP/port in FPGA core registers.
 
-        The addresses are set via FPGA core registers, so they are accessible even if the FPGA's UDP stack networking addresses is not yet configured.
-
-        Use ths method to initially set the destination MAC and IP addresses for the data stream sent by the FPGA over the UDP link.
-        This method also sets the destination port, but _set_local_udp_data_port_number_async() can be used subsequently to set the destination port.
-
-        Parameters:
-            ip_addr (str): The IP address of the data target.
-            port (int): The port number of the data target.
-            mac_addr (str): The MAC address of the data target.
-
-        Returns:
-            None
+        Called from :meth:`chFPGA.set_udp_data_target_address_async` when
+        ``BSB_TRANSPORT_UDP`` is active. Use
+        :meth:`_set_local_udp_data_port_number_async` to change only the port
+        afterward.
         """
-        if self.BSB_TRANSPORT != type(self).BSB_TRANSPORT_UDP:
-            self.logger.warning(
-                f'{self!r}: Setting the target MAC & IP address for the UDP data channel is not currently '
-                f'supported by this platform (it is likely managed by the platform). The request will be ignored. Make sure the UDP receiver '
-                f'uses the correct address and port for this platform.')
-            return
-
         ip_addr_int = int.from_bytes(socket.inet_aton(ip_addr), 'big') if ip_addr else 0
         mac_addr_int = int.from_bytes(bytes.fromhex(mac_addr.replace(':', '')), 'big') if mac_addr else 0
 

@@ -175,9 +175,8 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
                               autocorr_only=False,
                               elements_per_file=256,
                               frame0_irigb_time=0,
-                              number_of_correlators=None,  # has to be provided
-                              number_of_correlated_inputs= None,  # has to be provided
-                              number_of_bins_per_frame=None,  # has to be provided
+                              firmware_integration_period=None,
+                              software_integration_period=None,
                               ):
         self.log.debug(f'{self!r}: Starting correlator data capture (calling receiver.processors["corr"].start_corr_hdf5)')
         self.receiver.processors["corr"].start_corr_hdf5(
@@ -188,9 +187,8 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
             autocorr_only=autocorr_only,
             elements_per_file=elements_per_file,
             frame0_irigb_time=frame0_irigb_time,
-            number_of_correlators=number_of_correlators,  # has to be provided
-            number_of_correlated_inputs=number_of_correlated_inputs,  # has to be provided
-            number_of_bins_per_frame=number_of_bins_per_frame  # has to be provided
+            firmware_integration_period=firmware_integration_period,
+            software_integration_period=software_integration_period,
             )
         corr = self.receiver.processors["corr"]
         return (
@@ -200,8 +198,8 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
 
     @endpoint('stop-corr-hdf5')
     async def stop_corr_hdf5(self):
-        self.receiver.processors["corr"].stop_adc_hdf5()
-        return "stopped corrlelator hdf5 writing to disk."
+        self.receiver.processors["corr"].stop_corr_hdf5()
+        return "stopped correlator hdf5 writing to disk."
 
     @endpoint('get-rms')
     async def get_rms(self):

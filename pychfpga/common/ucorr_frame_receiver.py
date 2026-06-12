@@ -1,8 +1,6 @@
 """Burst-read wrapper around :class:`UCorrPacketProcessor`."""
 
-import itertools
 import warnings
-from typing import Generator
 
 from .ucorr_packet_processor import UCorrPacketProcessor
 
@@ -28,23 +26,6 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
 
         config (dict): Dict containing initial information on the correlator
             configuration.
-
-        pre_func (function): Function to be called before data acquisition and processing is performed.
-
-            , or function  to be called to get that dict. The dict shall also be passed
-            to subsequent correlator packet request calls if the configuration has changed.
-
-            If `corr_params` is a function it should have the signature ``corr_params(init)`` where
-            True on initial setup to force an update of all parameters, and generally False on each
-            subsequent packet request unless a re-init is requested by the user. The function can be
-            used to setup the correlator data transmission path when init=False if needed by the
-            firmware. If ``init=False``, the function can return `None` to indicate that no
-            configuration change has occured. Since the function will be called on every
-            time-sensitive packet requests, care should be taken to avoid any lengthy or unnecessary
-            processing.
-
-            Note that the user can manually call the `update_params` method after changes that impact the receiver.
-
 
     Data format
     -----------
@@ -109,76 +90,44 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
     ):
         self.pre_func = pre_func
         super().__init__(packet_receiver, config=config, receive_window=receive_window, verbose=verbose)
-        # Singleton iterator: an islice that stops mid-batch must not abandon unyielded
-        # rows — a fresh iterator would let the next pr.receive_packets() overwrite them.
-        self.data_iter: Generator = self.get_data_iter()
+        self.current_row = 0
 
     def flush(self, flush_timeout=None):
-        """Drain UDP, clear assembly state, and restart the streaming iterator."""
+        """Drain UDP, clear assembly state, and reset the read cursor."""
         super().flush(flush_timeout)
-        self.data_iter = self.get_data_iter()
+        self.current_row = 0
 
-    def get_data_iter(self):
-        """Continuously receive UDP packets, process them, and yield ``(integ_ts, data, sats, counts)`` rows."""
-        while True:
-            self.pr.receive_packets(verbose=self.verbose)
-            if not self.pr.n_stored:
-                continue
-            self.process_udp_packets()
-            result = self.get_formatted_data()
-            if result is None:
-                continue
-            integ_ts, data, sats, counts = result
-            for it, d, s, c in zip(integ_ts, data, sats, counts):
-                yield it, d, s, c
-
-    def read_corr_data_iter(
+    def read_corr_frames(
         self,
-        number_of_results=None,
+        number_of_results=1,
         soft_integ_period=1,
         flush=False,
         data_timeout=0.1,
         flush_timeout=0.001,
         config=None,
-        verbose=0,
+        verbose=None,
+        **kwargs,
     ):
-        """Yield ``number_of_results`` ``(integ_ts, data, sats, counts)`` tuples.
+        """Capture ``number_of_results`` integrated frames into preallocated arrays.
 
-        The loop pulls batches of packets from the UDP receiver, decodes them
-        into integration slots via ``get_data_iter``, and yields each completed
-        (data, counts, sats) tuple. Optional flushing and alignment allow you to
-        discard partial integrations and start on a clean boundary.
+        Returns ``(integ_ts, data, sats, counts)`` of shapes
+        ``(N,)``, ``(N, NBINS, NPROD)``, ``(N, NBINS, NPROD)``, ``(N,)``.
 
         Parameters:
-
-
-            number_of_results (int): Number of results to yield. If None or zero, the generator runs indefinitely.
-
+            number_of_results (int): Number of software-integrated frames to capture.
             soft_integ_period (int): Number of hardware frames to accumulate in
-                software before yielding a result. Results are aligned to
-                multiples of ``soft_integ_period`` when alignment is enabled.
-
+                software before yielding a result.
             flush (bool): If True, drain the UDP buffer before starting capture.
-                Use True on the first call in a burst series and False on
-                subsequent calls to avoid losing in-flight packets.
-
-            align (bool): If True, discard the first partial integration so the
-                first yielded result starts on a clean integration boundary.
-                This is forced on when ``flush`` is True.
-
-            data_timeout (float): Socket timeout while waiting for packets. Set
-                to slightly less than the expected inter-burst gap so the
-                buffer can be processed promptly; too large delays processing
-                until the buffer fills.
-
-            flush_timeout (float): Socket timeout used while flushing. Must be
-                shorter than the gap between packet bursts so flushing stops.
-
-            verbose (int): verbosity level. 0=Quiet, 1=basic info, 2=detailed info, 3 = debugging info
+            data_timeout (float): Socket timeout while waiting for packets.
+            flush_timeout (float): Socket timeout used while flushing.
+            config: Configuration passed to :meth:`update_config`.
+            verbose (int): Verbosity level for optional prints.
         """
-        # self.verbose = verbose
-        # self.soft_integ_period = soft_integ_period,
-        # self.skip_partial_integs = skip_partial_integs,
+        if verbose is not None:
+            self.verbose = verbose
+            self.pr.verbose = verbose
+            if verbose >= 2:
+                print(f"UCorrFrameReceiver: verbose={verbose}")
 
         if self.pre_func:
             self.pre_func(self)
@@ -186,31 +135,44 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
             self.update_config(config)
         if soft_integ_period != self.soft_integ_period:
             self.update_config({"soft_integ_period": int(soft_integ_period)})
+        if data_timeout is not None:
+            self.pr.settimeout(data_timeout)
+
+        integ_ts, data, sats, counts = self.create_output_buffer(n_ts=number_of_results)
+
+        rows_completed = 0
+
         if flush:
             self.flush(flush_timeout)
-        self.pr.settimeout(data_timeout)
-        return itertools.islice(self.data_iter, number_of_results) if number_of_results else self.data_iter
 
-    def read_corr_frames(self, number_of_results=1, **kwargs):
-        """Capture ``number_of_results`` integrated frames into preallocated arrays.
+        while rows_completed < number_of_results:
+            if self.current_row < self.n_out:
+                n = min(number_of_results - rows_completed, self.n_out - self.current_row)
+                rows = slice(self.current_row, self.current_row + n)
+                result = self.get_formatted_data(rows)
+                if result is None:
+                    break
+                it_, d_, s_, c_ = result
+                out_rows = slice(rows_completed, rows_completed + n)
+                integ_ts[out_rows] = it_
+                data[out_rows] = d_
+                sats[out_rows] = s_
+                counts[out_rows] = c_
+                rows_completed += n
+                self.current_row += n
+            if rows_completed >= number_of_results:
+                break
+            while True:
+                self.pr.receive_packets(verbose=self.verbose)
+                self.current_row = 0
+                if self.pr.n_stored:
+                    self.process_udp_packets()
+                    if self.n_out:
+                        break
 
-        Returns ``(integ_ts, data, sats, counts)`` of shapes
-        ``(N,)``, ``(N, NBINS, NPROD)``, ``(N, NBINS, NPROD)``, ``(N,)``.
-        """
-        if (config := kwargs.get("config")) is not None:
-            self.update_config(config)
-        integ_ts, data, sats, counts = self.create_output_buffer(n_ts=number_of_results)
-        integ_ts.fill(0)
-        data.fill(0)
-        sats.fill(0)
-        counts.fill(0)
-        n_filled = 0
-        for i, (it, d, s, c) in enumerate(self.read_corr_data_iter(number_of_results=number_of_results, **kwargs)):
-            integ_ts[i], data[i], sats[i], counts[i] = it, d, s, c
-            n_filled = i + 1
-        if n_filled != number_of_results:
+        if rows_completed != number_of_results:
             warnings.warn(
-                f"read_corr_frames: received {n_filled} integ(s), expected {number_of_results}; "
+                f"read_corr_frames: received {rows_completed} integ(s), expected {number_of_results}; "
                 "remaining rows are zero-filled (timeouts, no packets passing filters, or slow source).",
                 UserWarning, stacklevel=2,
             )

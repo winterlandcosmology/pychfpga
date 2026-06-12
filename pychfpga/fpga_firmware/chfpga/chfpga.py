@@ -1363,6 +1363,40 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             return self.mb.tcpipe.get_local_data_port_number()
         raise RuntimeError(f'{self!r}: No UDP or TCPipe path for local data port')
 
+    async def set_udp_data_target_address_async(self, ip_addr=None, port=None, mac_addr=None):
+        """Set the destination MAC/IP/port for the UDP data stream sent by the FPGA.
+
+        On ``BSB_TRANSPORT_UDP``, programs FPGA core registers via
+        :meth:`_set_udp_data_target_address_async`. On ``BSB_TRANSPORT_TCPIPE``,
+        MAC and IP are managed by the platform; only ``port`` is programmed via
+        :meth:`set_local_data_port_number_async`.
+
+        Parameters:
+            ip_addr (str): The IP address of the data target (UDP path only).
+            port (int): The port number of the data target.
+            mac_addr (str): The MAC address of the data target (UDP path only).
+        """
+        if self.BSB_TRANSPORT == self.BSB_TRANSPORT_TCPIPE:
+            if port is not None:
+                self.logger.info(
+                    f'{self!r}: setting UDP data destination port to {port} via TCPipe '
+                    f'(MAC/IP managed by platform; ip={ip_addr!r}, mac={mac_addr!r} ignored)')
+                await self.set_local_data_port_number_async(port)
+            else:
+                self.logger.warning(
+                    f'{self!r}: set_udp_data_target_address_async called without port on '
+                    f'TCPipe platform; destination port unchanged.')
+            return
+
+        if self.BSB_TRANSPORT == self.BSB_TRANSPORT_UDP:
+            await self._set_udp_data_target_address_async(
+                ip_addr=ip_addr, port=port, mac_addr=mac_addr)
+            return
+
+        self.logger.warning(
+            f'{self!r}: Setting the target MAC & IP address for the UDP data channel is not currently '
+            f'supported by this platform (it is likely managed by the platform). The request will be ignored. Make sure the UDP receiver '
+            f'uses the correct address and port for this platform.')
 
     # ---------------------------------------------------------
     # IceBoard / mezzanine helpers (GPIO path, I2C — not the USP UDP stack)
@@ -2342,9 +2376,33 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         )
 
         if self.CORR:
-            self.CORR.get_bin_map()
-            corr = self.CORR.config.deepcopy()
-            corr.soft_integ_period = int(getattr(corr, "soft_integ_period", 1) or 1)
+            if hasattr(self.CORR, "config"):
+                self.CORR.get_bin_map()
+                corr = self.CORR.config.deepcopy()
+                corr.CT_LEVEL = int(self.CT_LEVEL)
+                corr.NDECIM = int(corr.NDECIM)
+                corr.fft_bin_map = self.CORR.get_input_bin_map()
+                corr.soft_integ_period = int(getattr(corr, "soft_integ_period", 1) or 1)
+                UCORR.update_corr_maps(corr)
+                corr.capture_engine = "UCORR"
+                corr.NPROD = int(corr.NCHAN) * (int(corr.NCHAN) + 1) // 2
+            else:
+                from pychfpga.fpga_firmware.chfpga.x_engine import CORR as corr_mod
+                nchan = int(self.fpga.NUMBER_OF_INPUTS_TO_CORRELATE)
+                nbins = int(getattr(corr_mod, "NBINS_TOTAL", 1024))
+                corr = State(
+                    capture_engine="ICE",
+                    NCHAN=nchan,
+                    NBINS=nbins,
+                    NPROD=nchan * (nchan + 1) // 2,
+                    number_of_correlators=int(self.fpga.NUMBER_OF_CORRELATORS),
+                    number_of_correlated_inputs=nchan,
+                    number_of_bins_per_frame=int(
+                        self.fpga.CROSSBAR.BIN_SEL[0].NUMBER_OF_SELECTED_WORDS),
+                    firmware_integ_period=int(self.CORR[0].INTEGRATION_PERIOD + 1),
+                )
+            fs = self._sampling_frequency or self.fw_params.get("sampling_frequency") or 800e6
+            corr.sample_freq_mhz = float(fs) / 1e6
         else:
             corr = State()
 
@@ -2461,7 +2519,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         if self.CAPTURE_TYPE == 'UCAP':
             ucap_stream_ids = self.UCAP.get_stream_ids()
-            return {self.get_id(ch): ucap_stream_ids[ch] for ch in self.chan}
+            return {self.get_id(ch): ucap_stream_ids[ch] for ch in self.chan.keys()}
         elif self.CAPTURE_TYPE == 'PROBER':
             return {self.get_id(ch): chan.PROBER.get_stream_id() for ch, chan in self.chan.items()}
         else:
@@ -5067,7 +5125,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             metrics = Metrics()
         return metrics
 
-    '''async def get_channelizer_metrics_async(self, reset=True):
+    async def get_channelizer_metrics_async(self, reset=True):
         metrics = Metrics(
             type='GAUGE',
             slot=(self.slot or 0) - 1,
@@ -5078,7 +5136,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         if not self.is_open():
             return metrics
         try:
-            # await self.check_command_count(reset=True)
             await self.clear_fpga_udp_errors()
             for i, chan in self.chan.items():
                 metrics.add('fpga_fft_overflow_count', value=chan.FFT.OVERFLOW_COUNT, chan=i)
@@ -5088,7 +5145,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                     chan.FFT.reset_fft_overflow_count()
         except IOError as e:
             self.logger.error('%r: Error getting FPGA channelizer metrics. Error is %r' % (self, e))
-        return metrics'''
+        return metrics
 
     def get_channel_metrics(self, ch, frame_cnt=300_000, polling_interval=0.0001):
         '''
@@ -5146,16 +5203,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         return metrics
 
 
-
-    # def get_correlator_params(self):
-    #     """ Returns the correlator geometry and configuration
-
-    #     Notes:
-
-    #         - start_correlator() must have been called before for some software-configurable
-    #             parameters to be updated.
-    #     """
-    #     return self.CORR.get_params()
 
     def start_correlator(
             self,
@@ -5324,4 +5371,3 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         print('*** TEST PASSED! ***')
         return True, None, None, None
-
