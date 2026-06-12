@@ -11,6 +11,7 @@ import logging
 import numpy as np
 import matplotlib.pyplot as plt
 
+from pychfpga.common.state import State
 from pychfpga.common.ucorr_frame_receiver import UCorrFrameReceiver
 from pychfpga.common.udp_packet_receiver import UDPPacketReceiver
 
@@ -78,18 +79,18 @@ class UCORR(MMI):
 
 
     def get_config(self):
-        """ Return a dict containing the essential information required to receive and assemble correlator packets.
-        """
-
-        bin_map, prod_map = self.get_bin_map()
-        conf = dict(
-            NCHAN = self.NCHAN,
-            NCLK = self.NCLK,
-            bin_map = bin_map,
-            prod_map = prod_map,
-            firmware_integ_period = self.INTEGRATION_PERIOD + 1
-            )
-        return conf
+        """Return correlator geometry required to receive and assemble UCORR packets."""
+        conf = State(
+            NCHAN=int(self.NCHAN),
+            NCLK=int(self.NCLK),
+            firmware_integ_period=int(self.INTEGRATION_PERIOD + 1),
+        )
+        conf.CT_LEVEL = int(self.fpga.CT_LEVEL)
+        conf.NDECIM = int(self.NDECIM)
+        conf.fft_bin_map = self.get_input_bin_map()
+        conf.soft_integ_period = int(self.state._obj.get("soft_integ_period", 1) or 1)
+        self.update_corr_maps(conf)
+        return dict(conf._obj)
 
     def get_input_bin_map(self):
         return self.fpga.chan[0].FFT.get_bin_map()
@@ -311,10 +312,9 @@ class UCORR(MMI):
 
 
     @classmethod
-    def get_corr_receiver(cls, packet_receiver, config=None, pre_func=None):
-        """ Return an instance of a correlator packet receiver
-        """
-        return UCorrFrameReceiver(packet_receiver, config=config, pre_func=pre_func)
+    def get_corr_receiver(cls, packet_receiver, config=None):
+        """Return an instance of a correlator packet receiver."""
+        return UCorrFrameReceiver(packet_receiver, config=config)
 
     @classmethod
     def get_packet_receiver(cls, sock, n_packets=2048, max_packet_size=9000, verbose=0):

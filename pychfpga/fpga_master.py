@@ -7,6 +7,7 @@ engines of a radiotelescope.
 
 # Python Standard Library packages
 import collections
+import collections.abc
 import numpy
 import os
 import re
@@ -117,15 +118,29 @@ def sanitize_for_json(obj):
         - other objects stay the same.
 
     """
-    if isinstance(obj, collections.Mapping) or hasattr(obj, 'items'):
+    if isinstance(obj, collections.abc.Mapping) or hasattr(obj, 'items'):
         if not all(isinstance(k, str) for k in obj.keys()):
             return [(k, sanitize_for_json(v)) for k, v in obj.items()]
         else:
             return {str(k): sanitize_for_json(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
+    elif isinstance(obj, (list, tuple)):
         return [sanitize_for_json(v) for v in obj]
+    elif isinstance(obj, np.ndarray):
+        return sanitize_for_json(obj.tolist())
+    elif isinstance(obj, (np.integer, np.floating, np.bool_)):
+        return obj.item()
     else:
         return obj
+
+
+def firmware_config_for_rest(fw_config):
+    """JSON-safe firmware config for raw_acq REST start (omit derived corr maps)."""
+    config = sanitize_for_json(fw_config)
+    corr = config.get("corr")
+    if isinstance(corr, dict):
+        corr.pop("bin_map", None)
+        corr.pop("prod_map", None)
+    return config
 
 
 def reap_cached_sockets():
@@ -198,6 +213,14 @@ class FPGAMaster(object):
     # RAW_ACQ management methods
     #####################################
 
+
+    def _set_correlator_soft_integ_period(self, software_integration_period):
+        """Store software integration period on each board UCORR state for get_firmware_config()."""
+        soft = int(software_integration_period or 1)
+        for ib in self.fpgas.ib:
+            corr = getattr(getattr(ib, 'fpga', None), 'CORR', None)
+            if corr is not None and corr.state is not None:
+                corr.state.soft_integ_period = soft
 
     async def start_raw_acq_servers(self):
         """ Start raw data acquisition servers and set the FPGAs raw data transmit addresses.
@@ -298,6 +321,8 @@ class FPGAMaster(object):
                 name=recv_names[server_name],
                 ports=recv_ports[server_name],
                 stream_ids=self.raw_acq_stream_ids[server_name],
+                config=firmware_config_for_rest(
+                    self.raw_acq_ibs[server_name][0].fpga.get_firmware_config().as_dict()),
                 comet_broker=conf.common_config.comet_broker.as_dict(),
                 jump_thresholds=conf.common_config.jump_thresholds,
                 metrics_refresh_time=conf.common_config.metrics_refresh_time,
@@ -306,6 +331,7 @@ class FPGAMaster(object):
                 run_folder=self.run_folder,
                 run_name=self.run_name,
                 corr_name=self.corr_name,
+                no_ping=conf.get('no_ping', False),
                 )
             for server_name, raw_acq_server in self.raw_acq.items()])
 
@@ -846,16 +872,12 @@ class FPGAMaster(object):
         if not (conf.enable and capture_duration is not None):
             return
 
-        # Get the correlator geometry and configuration parameters
-        corr_params = self.fpgas.get_correlator_params()
-
-
         self.log.info(
             f'{self!r}: Starting corr HDF5 data capture for {capture_duration} '
             f'seconds (0 = infinite)')
 
         self.log.debug(
-            f'{self!r}: firmware integ={self.corr_firmware_integration_period}, corr_params={corr_params}')
+            f'{self!r}: firmware integ={self.corr_firmware_integration_period}')
         self.log.debug(f'{self!r}: Number of servers to iterate over: {len(self.raw_acq)}')
         await asyncio.gather(*[server.start_corr_hdf5(
             base_dir=capture_folder,
@@ -867,7 +889,6 @@ class FPGAMaster(object):
             software_integration_period=software_integration_period,
             firmware_integration_period=self.corr_firmware_integration_period, # also for time computation only
             frame0_irigb_time=self.frame0_irigb_time.nano if self.frame0_irigb_time else 0,  # update frame 0 time from last sync
-            **corr_params,  # add correlator parameters
             )         for server_name, server in self.raw_acq.items()])
 
 
@@ -1063,13 +1084,6 @@ class FPGAMaster(object):
         conf = self.config  # shortcut to shorten the code below
         fpga_array_params = conf.fpga.fpga_array_params
 
-        # Define some FPGA-related system constants
-        self.SAMPLING_FREQUENCY = float(fpga_array_params.samp_freq) * 1e6  # frequency in Hz
-        self.SAMPLES_PER_FRAME = fpga_array_params.samples_per_frame
-        self.SECONDS_PER_FRAME = self.SAMPLES_PER_FRAME / self.SAMPLING_FREQUENCY
-
-        self.log.info(f"Sampling frequency is {self.SAMPLING_FREQUENCY / 1e6:.3f} MHz.")
-
         # Create the FPGAArray object. This object will create a database of all FPGA boards, crates and
         # mezzanines as described by the ``fpga_array_params`` parameters.fpga_array_params If specified
         # in the parameters, the FPGAs will be loaded with their bitstream, communication with the FPGAs
@@ -1079,6 +1093,13 @@ class FPGAMaster(object):
         await ca.run()
 
         self.register_hardware()
+
+        if ca.ib:
+            fpga = ca.ib[0].fpga
+            self.SAMPLING_FREQUENCY = float(fpga._sampling_frequency)
+            self.SAMPLES_PER_FRAME = int(fpga.ADC_SAMPLES_PER_FRAME)
+            self.SECONDS_PER_FRAME = self.SAMPLES_PER_FRAME / self.SAMPLING_FREQUENCY
+            self.log.info(f"Sampling frequency is {self.SAMPLING_FREQUENCY / 1e6:.3f} MHz.")
 
         if not ca.ib: # if there are no boards in the array
             if conf.debug.get('allow_empty_fpga_array', False):
@@ -1126,37 +1147,29 @@ class FPGAMaster(object):
         self.log.info("Setting-up channelizers")
         await ca.set_channelizers_async(**conf.fpga.channelizer_params)
 
-
-        # Set-up raw_acq servers to receive data from the boards specified in
-        # the config. This will set-up the FPGA data transmission ports.
-        # self.log.info("Sending configuration to raw_acq server(s)")
-        if conf.raw_acq.enable:
-            self.log.info("Starting raw_acq servers")
-            await self.start_raw_acq_servers()
-        else:
-            self.log.info('raw_acq disabled. Not starting any raw_acq servers.')
-
-
         # Setup noise injection for normal operation
         # Allow the noise injection field to be omitted or null
         self.log.info("Setting up noise injection")
         self.setup_noise_injection(conf.fpga.get('noise_injection',{}))
 
-        # Start correlator data transmission if present in the FPGA-based
-        # firmware correlationlator is present in the FPGA
-
+        # Start correlator before raw_acq so get_firmware_config() snapshots the
+        # programmed integration period and soft_integ_period for UCORR assembly.
         corr_config = self.config.fpga.get('firmware_correlator', {})
 
         if corr_config and corr_config.enable:
-            self.log.info("Setting up firmware corelator")
+            self.log.info("Setting up firmware correlator")
             self.corr_firmware_integration_period = corr_config.firmware_integration_period
             self.corr_autocorr_only = corr_config.autocorr_only
+            self._set_correlator_soft_integ_period(
+                corr_config.get('software_integration_period', 1))
             await self.fpgas.start_correlators_async(
                 self.corr_firmware_integration_period,
                 autocorr_only=self.corr_autocorr_only)
             self.log.info(
-                f'{self!r}: Enabling corr with integ={self.corr_firmware_integration_period}'
-                f' and autocorr_only={self.corr_autocorr_only}')
+                f'{self!r}: Enabling corr with firmware_integ='
+                f'{self.corr_firmware_integration_period}, '
+                f'software_integ={corr_config.get("software_integration_period", 1)}, '
+                f'autocorr_only={self.corr_autocorr_only}')
         else:
             self.corr_firmware_integration_period = None
             self.corr_autocorr_only = None
@@ -1164,6 +1177,14 @@ class FPGAMaster(object):
                 f"{self!r}: Firmware corr is not enabled. "
                 f"Corr_config={corr_config!r}, "
                 f"enable={corr_config.enable if corr_config else 'none'}")
+
+        # Set-up raw_acq servers to receive data from the boards specified in
+        # the config. This will set-up the FPGA data transmission ports.
+        if conf.raw_acq.enable:
+            self.log.info("Starting raw_acq servers")
+            await self.start_raw_acq_servers()
+        else:
+            self.log.info('raw_acq disabled. Not starting any raw_acq servers.')
 
         if conf.raw_acq.enable:
             # Start raw_data capture
@@ -1232,7 +1253,7 @@ class FPGAMaster(object):
         self.fpga_conf = await self.fpgas.get_fpga_config_async(basic=True)
 
         # Take test Scaler data (debugging)
-        if conf.fpga.save_test_scaler_data:
+        if conf.fpga.get('save_test_scaler_data', False):
             self.log.info("Gathering a sample of Scaler data for debugging")
             
             r = ca.get_data_receiver()
@@ -2538,54 +2559,22 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
 
     @endpoint('get-monitoring-data')
     async def get_monitoring_data(self):
-        """ REST endpoint that returns the current metric values as a JSON dict.
-
-        Returns:
-
-            dict keyed by metric name, each value shaped as::
-
-                {
-                    "type": str or None,
-                    "doc":  str or None,
-                    "entries": [
-                        {"labels": {...}, "time": int_ms, "value": number},
-                        ...
-                    ],
-                }
+        """ REST endpoint that returns the current metric values in Prometheus text format.
 
         Example:
 
-            curl http://localhost:54321/get-monitoring-data
+            curl --compressed http://localhost:54321/get-monitoring-data
         """
         self.metrics_requests += 1
         t0 = time.time()
-
-        snapshot = {}
-        for metric_name, metric in self.metrics.metrics.items():
-            entries = []
-            for label_set, time_entries in metric['entries'].items():
-                if not time_entries:
-                    continue
-                latest_time = max(time_entries)
-                entries.append(dict(
-                    labels=dict(label_set),
-                    time=latest_time,
-                    value=time_entries[latest_time],
-                ))
-            snapshot[metric_name] = dict(
-                type=metric['type'],
-                doc=metric['doc'],
-                entries=entries,
-            )
-
-        self.metrics_request_last_number_of_metrics = sum(
-            len(m['entries']) for m in snapshot.values())
+        n_metrics = len(self.metrics)
+        self.metrics_request_last_number_of_metrics = n_metrics
         self.log.debug(
-            f'{self!r}: Returning {len(snapshot)} metrics '
-            f'({self.metrics_request_last_number_of_metrics} entries) '
+            f'{self!r}: Returning {n_metrics} metrics '
             f'built in {time.time() - t0:.3f}s')
-
-        return snapshot
+        return aiohttp.web.Response(
+            body=self.metrics.get_gzip(),
+            headers={'Content-Encoding': 'gzip'})
 
 
     @endpoint('get-hw-map')

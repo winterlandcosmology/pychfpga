@@ -1248,11 +1248,6 @@ class chFPGAArrayMethods(ArrayMethods):
         return sock
 
 
-    def get_correlator_params(self):
-        """ Returns the correlator geometry and configuration """
-        mb = self.ib[0]  # we assume all boards have correlators and they are all the same
-        return mb.get_correlator_params()
-
     def get_packet_receiver(self, port_number=None):
         """ Returns an existing UDP packet receiver or create a new one if none has been created yet.
 
@@ -1323,18 +1318,11 @@ class chFPGAArrayMethods(ArrayMethods):
             UCorrFrameReceiver instance
         """
 
-        def select_func(cr):
-            for b in self.ib:
-                b.CORR.select()
-
-            corr_config = self.ib[0].CORR.get_config()
-            cr.update_config(corr_config)
-
         corr_config = self.ib[0].CORR.get_config()
 
         if not self.fpga_array.corr_recv:
             pr = self.get_packet_receiver(port_number=port_number)
-            self.fpga_array.corr_recv = self.ib[0].CORR.get_corr_receiver(packet_receiver=pr, config=corr_config, pre_func=select_func)
+            self.fpga_array.corr_recv = self.ib[0].CORR.get_corr_receiver(packet_receiver=pr, config=corr_config)
         return self.fpga_array.corr_recv
 
 
@@ -2903,7 +2891,8 @@ class chFPGAArrayMethods(ArrayMethods):
 
         # Command errors
 
-        if self.fpga_array.sync_timestamps:
+        sync_timestamps = getattr(self, 'sync_timestamps', None)
+        if sync_timestamps:
             for i, mb in enumerate(self.ib):
                 try:
                     fn, ts = await mb.capture_frame_time_async(format='raw')
@@ -2914,13 +2903,13 @@ class chFPGAArrayMethods(ArrayMethods):
                     metrics.add('fpga_time_delta', ts.nano - ts0.nano, crate=crate, slot=slot)
                     metrics.add('fpga_frame_number_delta', fn - fn0, crate=crate, slot=slot)
                     metrics.add('fpga_time_error',
-                                ts.nano - (self.fpga_array.sync_timestamps[i].nano + fn * 2560),
+                                ts.nano - (sync_timestamps[i].nano + fn * 2560),
                                 crate=crate, slot=slot)
                     metrics.add('fpga_sync_time_delta',
-                                self.fpga_array.sync_timestamps[i].nano - self.fpga_array.sync_timestamps[0].nano,
+                                sync_timestamps[i].nano - sync_timestamps[0].nano,
                                 crate=crate, slot=slot)
                     metrics.add('fpga_sync_time_integer_second_offset',
-                                (self.fpga_array.sync_timestamps[i].nano % 1000000000) - 1000000000,
+                                (sync_timestamps[i].nano % 1000000000) - 1000000000,
                                 crate=crate, slot=slot)
                 except RuntimeError:
                     self.logger.error(f'{mb!r}: Timeout while capturing frame time')
