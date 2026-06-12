@@ -7,7 +7,6 @@ from random import randint
 from time import sleep
 from wtl.pytest_xreport import xr, get_xr_from
 from wtl.namespace import NameSpace
-from pathlib import Path
 import matplotlib.pyplot as plt
 from textwrap import wrap
 
@@ -130,11 +129,9 @@ class TestScaler:
         self.board = self.board_conn(xr)
         self.data.NUM_SAMPLES = self.board.ADC_SAMPLES_PER_FRAME
         self.data.NUM_BINS = self.board.NUMBER_OF_FREQUENCY_BINS
-        self.data.NUM_CHANNELIZERS = len(self.board.chan) #currently unused
         conn_logger_name = FPGAArray.__name__.rsplit('.', 1)[0] if '.' in __name__ else ''
         self.logger = logging.getLogger(conn_logger_name) #store logger in xr for future use
         self.logger.setLevel(xr.config.test_config.logleveltest)
-        self.plot_dir = Path('plots/')
         # check that fifo overflow doesn't go high either before or after test
         self.board.stop_data_capture()
         self.board.reset_scaler_overflow_flags()
@@ -213,14 +210,13 @@ class TestScaler:
         '''
         return np.full(int(self.data.NUM_BINS), float(gain), dtype=np.float64)
 
-    def _set_capture_scaler(self, func, double=False, read=True, get_flags=False, cap_data_type=None, **func_kwargs):
+    def _set_capture_scaler(self, func, read=True, get_flags=False, cap_data_type=None, **func_kwargs):
         '''
         Sets the function generator to output a specific set of values and then captures data from the scaler.
         '''
         logger = self.get_logger()
         if cap_data_type is None:
             cap_data_type = int(self.board.chan[0].SCALER.CAP_DATA_TYPE)
-        #receiver.flush()
         self.board.sync()
         source = self.gen_data(func, samples=self.data.NUM_SAMPLES, **func_kwargs) #setup has already been run, so self.data has been set
         self.board.set_data_source(source='arb', data=source)
@@ -228,7 +224,6 @@ class TestScaler:
         self.board.sync()
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv) #NOTE: must be after earlier calls for some reason
         receiver.flush()
-        #receiver.update_config(self.board.state.raw_capture)
         if not read:
             logger.debug(
                 f"_set_capture_scaler(read=False): func={func} cap_data_type={cap_data_type} source_shape={source.shape}"
@@ -249,11 +244,7 @@ class TestScaler:
             return source, data // (2**self.data.READOUT_SHIFT)
         #TODO: add capture mode for ucap
         else:
-            if double:
-                pytest.skip("Double resolution not supported on UCAP yet")
-            else:
-                 _, data, _ = receiver.read_raw_frames(ncap=1, flush=False, split=True, source=1, verbose=self.test_config.loglevelrecv)
-                 #data = data[:, ::2]
+            _, data, _ = receiver.read_raw_frames(ncap=1, flush=False, split=True, source=1, verbose=self.test_config.loglevelrecv)
             data = data[:, 0, :]
             assert np.all(np.equal(data[0], data))
             if get_flags:
@@ -327,16 +318,8 @@ class TestScaler:
         self.board.set_symmetric_saturation(symmetric_saturation)
 
         source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
-        '''source = self.gen_data('ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
-        self.board.set_data_source(source='arb', data=source)
-        self.board.start_data_capture(period=0.01, source='scaler', data_type=cap_data_type)
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
-        _, data, _ = receiver.read_raw_frames(ncap=1, split=False, source=1)
-        data = data[:, 0, :]
-        data = data // (2 ** self.data.READOUT_SHIFT)'''
 
         ref_data = np.clip(source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT + (symmetric_saturation), self.data.MAX_OUTPUT)
-        #ref_data = np.repeat(ref_data, 2)
         logger.debug(
             f"test_all_ones: postscaler={postscaler} "
             f"symmetric_saturation={symmetric_saturation}"
@@ -367,18 +350,8 @@ class TestScaler:
         self.board.set_gains(gains, postscaler=self.data.MAPPING_POSTSCALER)
 
         source, data = self._set_capture_scaler('periodic_ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
-        '''source = self.gen_data('periodic_ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
-        self.board.set_data_source(source='arb', data=source)
-        self.board.start_data_capture(period=0.01, source='scaler', data_type=0)
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
-        ts, data, count = receiver.read_raw_frames(ncap=1, split=False, source=1)
-        data = data[:, 0, :]
-        data = data // (2 ** self.data.READOUT_SHIFT)'''
 
         ref_data = np.clip(source * np.repeat(gains, 2) * 2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
-        #logger.debug(
-        #    f"test_alternating_gain: period={period} ts_shape={ts.shape} data_shape={data.shape} count_shape={count.shape}"
-        #)
         logger.debug(f"test_alternating_gain: gains_first32={gains[:32]}")
         logger.debug(f"test_alternating_gain: received_first16={data[0][:16]}")
         logger.debug(f"test_alternating_gain: reference_first16={ref_data[:16]}")
@@ -554,8 +527,6 @@ class TestScaler:
         logger = self.get_logger()
         if any(chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
             pytest.skip("Platform does not support floating point gains")
-        self.board.set_gains(np.ones(self.data.NUM_SAMPLES//2) * 2**self.data.MAPPING_POSTSCALER) #since postscaler=None, should automatically detect common factor
-        logger = self.get_logger()
         nfreq = int(self.board.NUMBER_OF_FREQUENCY_BINS)
         target_gain = 2 ** self.data.MAPPING_POSTSCALER
         self.board.set_gains((np.ones(nfreq) * target_gain, -1))
@@ -594,8 +565,6 @@ class TestScaler:
         common_log_gain = int(self.test_config.get('common_log_gain', 10))
         if any(chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
             pytest.skip("Platform does not support floating point gains")
-        gains = np.random.randint(0, 2**11, self.data.NUM_SAMPLES//2) * 2**np.random.randint(0, 2**5 - common_log_gain, self.data.NUM_SAMPLES//2) #11 bits linear, 5 bits log
-        gains = gains.astype(np.float64)
         if common_log_gain < 0 or common_log_gain > 31:
             pytest.skip(f"common_log_gain={common_log_gain} is outside supported range [0, 31]")
         nfreq = int(self.board.NUMBER_OF_FREQUENCY_BINS)
@@ -641,8 +610,6 @@ class TestScaler:
         logger = self.get_logger()
         if any(chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
             pytest.skip("Platform does not support floating point gains")
-        log_gains = self.gen_data('ramp', min=self.data.IDENTITY_POSTSCALER-11, max=self.data.IDENTITY_POSTSCALER+4, samples=self.data.NUM_SAMPLES//2)
-        lin_gains = self.gen_data('periodic_ramp', min=0, max=2**6-1, samples=self.data.NUM_SAMPLES//2) * 2**4
         nfreq = int(self.board.NUMBER_OF_FREQUENCY_BINS)
         log_gains = self.gen_data('ramp', min=self.data.IDENTITY_POSTSCALER-11, max=self.data.IDENTITY_POSTSCALER+4, samples=nfreq)
         lin_gains = self.gen_data('periodic_ramp', min=1, max=2**6-1, samples=nfreq) * 2**4
@@ -755,7 +722,6 @@ class TestScaler:
         '''
         logger = self.get_logger()
         if use_4bit_cap_mode:
-            self.board.set_scaler_output_modes(bypass=True, bypass_data_type=2, cap_data_type=3) #should generate same data as normal scaler output, even when output is outputting something else
             cap_data_type = 3
             self.board.set_scaler_output_modes(
                 bypass=True,
@@ -763,7 +729,6 @@ class TestScaler:
                 cap_data_type=cap_data_type,
             ) #should generate same data as normal scaler output, even when output is outputting something else
         else:
-            self.board.set_scaler_output_modes(bypass=False, bypass_data_type=0, cap_data_type=0)
             cap_data_type = 0
             self.board.set_scaler_output_modes(bypass=False, cap_data_type=cap_data_type)
         #ensure we can saturate with this number of fractional bits
@@ -917,13 +882,11 @@ class TestScaler:
             Uses scaler bypass output modes with capture mode 0 and validates the
             overflow/underflow flag mapping against host-computed saturation events.
         '''
-        self.board.set_scaler_output_modes(bypass=True, bypass_data_type=out_mode)
         logger = self.get_logger()
         cap_data_type = 0
         self.board.set_scaler_output_modes(bypass=True, bypass_data_type=out_mode, cap_data_type=cap_data_type)
         self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
         self.board.set_symmetric_saturation(symmetric_saturation)
-        source, data = self._set_capture_scaler('ramp', min=-8, max=8)
         source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=cap_data_type)
         source_i = source.astype(np.int64)
         if self.data.CAPTURE_WIDTH > 4: #even in 8bit mode, the 1 is placed in the 4th bit, so need to correct for that
@@ -939,9 +902,6 @@ class TestScaler:
             comp = scaled[out_mode-2::2] #either real or im depending on mode
             underflow = comp < self.data.MIN_OUTPUT + symmetric_saturation
             overflow = comp > self.data.MAX_OUTPUT
-            ref_data = np.zeros(self.data.NUM_SAMPLES)
-            ref_data[::2] = overflow
-            ref_data[1::2] = underflow
             ref_data = np.zeros(source.size, dtype=np.int64)
             ref_data[::2] = overflow.astype(np.int64)
             ref_data[1::2] = underflow.astype(np.int64)
@@ -971,7 +931,6 @@ class TestScaler:
         '''
         logger = self.get_logger()
         if bypass_to_output:
-            self.board.set_scaler_output_modes(bypass=True, bypass_data_type=0, cap_data_type=0) #send FFT to output and capture from output
             cap_data_type = 0
             self.board.set_scaler_output_modes(
                 bypass=True,
@@ -979,7 +938,6 @@ class TestScaler:
                 cap_data_type=cap_data_type,
             ) #send FFT to output and capture from output
         else:
-            self.board.set_scaler_output_modes(bypass=False, bypass_data_type=0, cap_data_type=1) #send FFT to capture directly
             cap_data_type = 1
             self.board.set_scaler_output_modes(
                 bypass=False,
@@ -1008,7 +966,7 @@ class TestScaler:
     @pytest.mark.parametrize("cap_data_type", (4, 5))
     def test_mult_resolution_capture(self, postscaler, cap_data_type, setup_scaler, xr):
         '''
-        Tests that the double resolution capture mode extracts the right bits of the FFT data from the right bins
+        Tests that mult-resolution capture modes extract the right bits of the FFT data from the right bins
 
         Parameters:
             postscaler (int): postscaler(s) to employ with this test
@@ -1021,7 +979,7 @@ class TestScaler:
         '''
         logger = self.get_logger()
         if self.data.CAPTURE_WIDTH < 8:
-            pytest.skip("Cannot use double resolution capture in 4-bit mode")
+            pytest.skip("Cannot use mult-resolution capture in 4-bit mode")
         self.board.set_scaler_output_modes(cap_data_type=cap_data_type)
         self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
 
@@ -1369,13 +1327,9 @@ class TestScaler:
             assert np.equal(flags_inj[0] & 0x1, 1).all()
     
     @pytest.mark.scaler
-    def test_gain_bank_switching(self, setup_scaler, xr, interval=int(1e6)): #10 000 frames
+    def test_gain_bank_switching(self, setup_scaler, xr):
         '''
-        Test that the gain bank switching works and happens at exactly the right moment. The test sets up both gain banks and programs a switch to occur at a precise interval, then collects frames in pairs of 2 with a period of 1/5th this interval. By inspecting the output data in each frame, it ensures that the switch occurs at some point and that the timestampes of the frame right before and after the switch occured are the interval and the interval+1.
-        This ensures that the gain bank switch happens at precisely the scheduled moment. It also ensures that the gain bank status variable reflects the switch.
-        
-        Parameters:
-            interval (int): How often (in frames) to capture data. Switch occurs after 5 intervals
+        Test that gain-bank switching takes effect and that the gain bank status variable reflects the switch.
 
         Notes:
             Uses a runtime flow for robustness with the current receiver API:
@@ -1383,7 +1337,6 @@ class TestScaler:
             another frame, and compare against before/after references.
         '''
         logger = self.get_logger()
-        _ = interval  # kept for compatibility with existing test parametrization
         self.board.set_scaler_output_modes(bypass=False, cap_data_type=0)
         self.board.set_gains(self._uniform_real_gains(2), postscaler=self.data.MAPPING_POSTSCALER, bank=1)
         self.board.set_gains(self._uniform_real_gains(1), postscaler=self.data.MAPPING_POSTSCALER, bank=0, when='now')
