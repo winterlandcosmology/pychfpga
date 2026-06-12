@@ -2330,6 +2330,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         active_pplf = fft_pplf if source == "scaler" else adc_pplf
         logical_frames_per_burst = max(1, pkt_frames_per_burst // active_pplf)
         bytes_per_frame = int(self.ADC_BYTES_PER_SAMPLE * self.ADC_SAMPLES_PER_FRAME)
+        capture_bits_per_word = 128 if capture_engine == "UCAP" else 32
 
         shared_geometry = dict(
             capture_engine=capture_engine,
@@ -2345,6 +2346,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             packets_per_channel_per_burst=int(pkt_frames_per_burst * number_of_subframes),
             logical_frames_per_burst=int(logical_frames_per_burst),
             fft_bins_per_word=int(fft_bins_per_word),
+            capture_bits_per_word=int(capture_bits_per_word),
             packet_header_format="raw-v1",
         )
 
@@ -3131,6 +3133,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         #             pr = self.recv.pr
         #         self.recv = None
 
+        fw = self.get_firmware_config(stream_ids=kwargs.get("stream_ids"))
         if not self.recv:
             if not isinstance(pr, UDPPacketReceiver):
                 pr_kwargs = {}
@@ -3142,10 +3145,10 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 self.logger.debug(f'{self!r}: Creating data receiver')
                 pr = UDPPacketReceiver(self.get_data_socket(port_number=port_number), **pr_kwargs)
 
-            fw = self.get_firmware_config(stream_ids=kwargs.get("stream_ids"))
             self.recv = RawFrameReceiver(pr, config=fw.raw, **kwargs)
         else:
             self.logger.debug(f'{self!r}: Fetching existing data receiver')
+            self.recv.update_config(fw.raw)
         return self.recv
 
 

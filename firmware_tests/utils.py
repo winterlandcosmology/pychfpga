@@ -26,9 +26,13 @@ def plot(datasets, split_complex=False, title="test"):
         if im and not split_complex:
             break
         if split_complex and not im:
-            ax.plot(datasets[i][::2], label=labels[i] + "(Re)")
+            d = datasets[i]
+            y = np.asarray(d.real, dtype=float) if np.iscomplexobj(d) else d[::2]
+            ax.plot(y, label=labels[i] + "(Re)")
         elif split_complex and im:
-            ax.plot(datasets[i % len(datasets)][1::2], label=labels[i % len(datasets)] + "(Im)")
+            d = datasets[i % len(datasets)]
+            y = np.asarray(d.imag, dtype=float) if np.iscomplexobj(d) else d[1::2]
+            ax.plot(y, label=labels[i % len(datasets)] + "(Im)")
         else:
             ax.plot(datasets[i], label=labels[i])
         ax.legend()

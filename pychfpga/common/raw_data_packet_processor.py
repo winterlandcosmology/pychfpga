@@ -203,6 +203,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
             self.config.update(config)
 
         state = self.config
+        if state.get("capture_bits_per_word") is None:
+            state.capture_bits_per_word = int(state.get("bytes_per_sample", 1) or 1) * 8
 
         # List if state attributes that do not change during normal operation and will require reallocation of internal buffers
         # The tuple is used both as a list of attributes and the context token
@@ -213,6 +215,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
             "samples_per_frame",
             "frames_per_burst",
             "fft_bins_per_word",
+            "capture_bits_per_word",
             "subframes_per_frame",
             "stream_ids",
             "packets_per_logical_frame",
@@ -250,6 +253,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
 
             self.CAPTURE_SOURCE = state.source
             self.FFT_BINS_PER_WORD = state.fft_bins_per_word or 1
+            self.CAPTURE_BITS_PER_WORD = int(state.capture_bits_per_word)
 
             self.NCHAN = len(self.stream_ids)
             # Map of stream IDs to stream index
@@ -311,15 +315,23 @@ class RawDataPacketProcessor(PacketProcessorBase):
                     complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // 2
                     interleave_factor = cf.fmt_interleave_factor
                     if interleave_factor > 2:
-                        raise ValueError(
-                            "Full-resolution complex raw capture with "
-                            f"fmt_interleave_factor={interleave_factor} is not supported yet."
+                        if self.CAPTURE_BITS_PER_WORD % cf.fmt_base_width:
+                            raise ValueError(
+                                f"capture_bits_per_word={self.CAPTURE_BITS_PER_WORD} must be a "
+                                f"multiple of fmt_base_width={cf.fmt_base_width}."
+                            )
+                        words_per_capture_word = max(1, self.CAPTURE_BITS_PER_WORD // cf.fmt_base_width)
+                        complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // words_per_capture_word
+                        cdata2_dims = (
+                            self.max_timestamps * self.FRAMES_PER_BURST // interleave_factor,
+                            self.NCHAN,
+                            complex_values_per_frame * (interleave_factor // 2),
                         )
-                    # interleaved_values_per_frame = complex_values_per_frame * interleaved_factor # 2 for interleaved, 1 for non-interleaved
+                    else:
+                        cdata2_dims = (self.max_timestamps * self.FRAMES_PER_BURST // interleave_factor, self.NCHAN, complex_values_per_frame * interleave_factor) # deinterleaved complex value storage buffer
                     cdata1_dims = (self.max_timestamps * self.FRAMES_PER_BURST, self.NCHAN, complex_values_per_frame) # complex value storage buffer
-                    cdata2_dims = (self.max_timestamps * self.FRAMES_PER_BURST // interleave_factor, self.NCHAN, complex_values_per_frame * interleave_factor) # deinterleaved complex value storage buffer  
-                    self.fmt_cdata1[source] = self.resize_buffer("fmt_cdata_buf1", cdata1_dims, element_dtype=out_dtype)
-                    self.fmt_cdata2[source] = self.resize_buffer("fmt_cdata_buf2", cdata2_dims, element_dtype=out_dtype)
+                    self.fmt_cdata1[source] = self.resize_buffer(("fmt_cdata_bufs1", source), cdata1_dims, element_dtype=out_dtype)
+                    self.fmt_cdata2[source] = self.resize_buffer(("fmt_cdata_bufs2", source), cdata2_dims, element_dtype=out_dtype)
             cf.ack(context=dynamic_state_attrs[source])
 
 
@@ -387,24 +399,44 @@ class RawDataPacketProcessor(PacketProcessorBase):
             return ts, data, counts
 
         # From here we have complex data, possibly with modifiers
+        interleave_factor = cf.fmt_interleave_factor
+        if interleave_factor > 2:  # full resolution
+            if interleave_factor % 2:
+                raise ValueError(f"Full-resolution complex interleave factor must be even, got {interleave_factor}.")
+            if data.shape[0] % interleave_factor:
+                raise ValueError(
+                    f"Full-resolution complex data has {data.shape[0]} physical rows, "
+                    f"not a multiple of fmt_interleave_factor={interleave_factor}."
+                )
+            if self.CAPTURE_BITS_PER_WORD % base:
+                raise ValueError(
+                    f"capture_bits_per_word={self.CAPTURE_BITS_PER_WORD} must be a multiple of fmt_base_width={base}."
+                )
+            words_per_capture_word = max(1, self.CAPTURE_BITS_PER_WORD // base)
+            if words_per_capture_word > 1:
+                data = data[:, :, ::words_per_capture_word]
+
+            logical_rows = data.shape[0] // interleave_factor
+            bins_per_word = interleave_factor // 2
+            v = data.reshape(logical_rows, interleave_factor, data.shape[1], data.shape[2])
+            out = self.fmt_cdata2[source][:logical_rows]
+            for lane in range(bins_per_word):
+                np.copyto(out[:, :, lane::bins_per_word].real, v[:, 2 * lane])
+                np.copyto(out[:, :, lane::bins_per_word].imag, v[:, 2 * lane + 1])
+            ts = ts.reshape(logical_rows, interleave_factor)[:, 0]
+            counts = counts.reshape(logical_rows, interleave_factor, counts.shape[1]).sum(axis=1)
+            return ts, out, counts
+
         cdata = self.fmt_cdata1[source]
         np.copyto(cdata.real, data[:, :, ::2])
         np.copyto(cdata.imag, data[:, :, 1::2])
 
-        interleave_factor = cf.fmt_interleave_factor
         if interleave_factor == 2:  # apply double resolution deinterleave ([[0,1,2,3], [4,5,6,7]] -> [[0 4 1 5 2 6 3 7]])
             s0, s1, s2 = cdata.shape
             v = cdata.reshape(s0, -1, interleave_factor, s2)
             data = self.fmt_cdata2[source]
             np.copyto(data[..., 0::2], v[..., 0, :])
             np.copyto(data[..., 1::2], v[..., 1, :])
-
-        elif interleave_factor > 2:  # full resolution
-            # Full resolution is dependent on the capture bus width (W) and number of bins per word (B).
-            # We send W-bit Re then W-bit Im, skipping 2*B bins between them. It takes 2B frames to get the full spectrum.
-            # ICE: W=32, B=2, 32+32-bit complex values, 2B= 4 frames (Max burst length = 4 frames)
-            # CRS: W=128, B=4, 128+128-bit complex values, 2B= 8 frames (use mode 2 (8 frames/2 channels) or more 3 (16 frames/1 channel))
-            raise NotImplementedError("Full resolution is not implemented yet")
 
         return ts, data, counts
 

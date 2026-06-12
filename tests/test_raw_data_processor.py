@@ -68,6 +68,7 @@ def default_config(format="8", frames_per_burst=1, **overrides):
         packets_per_logical_frame=1,
         logical_frames_per_burst=frames_per_burst,
         fft_bins_per_word=1,
+        capture_bits_per_word=8,
         capture_format=[cf0, _unused_capture_format_slot()],
         packet_header_format="raw-v1",
         receiver_recreate_attrs=(
@@ -529,6 +530,103 @@ def test_split_parameter_yields_samples_per_frame():
     assert split_rows.shape[-1] == 16384
     np.testing.assert_array_equal(split_ts, [100, 101])
     np.testing.assert_array_equal(split_counts, [[4], [4]])
+
+
+def test_full_resolution_complex_ice_interleave4():
+    cf1 = State(fmt_base_width=32, fmt_is_complex=True, fmt_interleave_factor=4)
+    processor, _pr = make_processor(
+        n_packets=4,
+        frames_per_burst=4,
+        bytes_per_sample=1,
+        samples_per_frame=12,
+        bytes_per_frame=12,
+        bytes_per_subframe=12,
+        packets_per_channel_per_burst=4,
+        packets_per_logical_frame=4,
+        logical_frames_per_burst=1,
+        fft_bins_per_word=2,
+        capture_bits_per_word=32,
+        source="scaler",
+        stream_ids=(10,),
+        channels=(0,),
+        capture_format=[_unused_capture_format_slot(), cf1],
+    )
+
+    components = np.asarray(
+        [
+            10, 20, 30,
+            1, 2, 3,
+            40, 50, 60,
+            4, 5, 6,
+        ],
+        dtype=">i4",
+    )
+    processor.raw_data[0, 0, :] = components.view(np.uint8)
+    processor.ts_array[0] = 20
+    processor.raw_data_count[0, 0, :] = 1
+    processor.raw_source[0, 0, :] = 1
+    processor.n_out = 1
+
+    ts, data, counts = processor.get_formatted_data(slice(0, 1), source=1)
+
+    expected = np.asarray([[[
+        10 + 1j, 40 + 4j,
+        20 + 2j, 50 + 5j,
+        30 + 3j, 60 + 6j,
+    ]]], dtype=np.complex64)
+    np.testing.assert_array_equal(ts, [20])
+    np.testing.assert_array_equal(counts, [[4]])
+    np.testing.assert_array_equal(data, expected)
+
+
+def test_full_resolution_complex_crs_interleave8_uses_msb_slot():
+    cf1 = State(fmt_base_width=32, fmt_is_complex=True, fmt_interleave_factor=8)
+    processor, _pr = make_processor(
+        n_packets=8,
+        frames_per_burst=8,
+        bytes_per_sample=2,
+        samples_per_frame=16,
+        bytes_per_frame=32,
+        bytes_per_subframe=32,
+        packets_per_channel_per_burst=8,
+        packets_per_logical_frame=8,
+        logical_frames_per_burst=1,
+        fft_bins_per_word=4,
+        capture_bits_per_word=128,
+        source="scaler",
+        stream_ids=(10,),
+        channels=(0,),
+        capture_format=[_unused_capture_format_slot(), cf1],
+    )
+
+    frame_components = (
+        (100, 200),
+        (1, 2),
+        (300, 400),
+        (3, 4),
+        (500, 600),
+        (5, 6),
+        (700, 800),
+        (7, 8),
+    )
+    slots = np.full((8, 8), -999, dtype=">i4")
+    for frame, values in enumerate(frame_components):
+        slots[frame, 0::4] = values
+    processor.raw_data[0, 0, :] = slots.reshape(-1).view(np.uint8)
+    processor.ts_array[0] = 100
+    processor.raw_data_count[0, 0, :] = 4
+    processor.raw_source[0, 0, :] = 1
+    processor.n_out = 1
+
+    ts, data, counts = processor.get_formatted_data(slice(0, 1), source=1)
+
+    expected = np.asarray([[[
+        100 + 1j, 300 + 3j, 500 + 5j, 700 + 7j,
+        200 + 2j, 400 + 4j, 600 + 6j, 800 + 8j,
+    ]]], dtype=np.complex64)
+    np.testing.assert_array_equal(ts, [100])
+    np.testing.assert_array_equal(counts, [[32]])
+    np.testing.assert_array_equal(data, expected)
 
 
 def test_split_format_core_and_modifiers_suffix():
