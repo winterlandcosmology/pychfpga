@@ -4170,8 +4170,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                     # Check what the bit level at the eye center is
                     changood.append( (((t[chan][:, offset])[chosendelay]) & mask) >> bit)
                 else:  # Sample is all zeros
-                    chosendelay = np.NaN
-                    changood.append(np.NaN)
+                    chosendelay = np.nan
+                    changood.append(np.nan)
                     problem = 1  # Can't find a good spot so indicate a problem is present
                 bitdelay.append(chosendelay)
                 # self.logger.info( 'Warning: Center of eye diagram on bit %i of channel %i has glitch ' % (bit, chan))
@@ -5324,5 +5324,4 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         print('*** TEST PASSED! ***')
         return True, None, None, None
-
 

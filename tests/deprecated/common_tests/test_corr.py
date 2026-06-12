@@ -24,7 +24,7 @@ class test_corr(test_BaseClass):
         Correlators to get all frequencies. Hopefully will see a pattern to put in for loop.  Also should change to 
         better support the actual data coming out
         '''
-        corr_output = np.zeros((10,256), dtype=np.complex)
+        corr_output = np.zeros((10,256), dtype=complex)
         corr_output[0,::2] = data[4,::4] #AA
         corr_output[0,1::2] = data[0,3::4] #AA
         corr_output[1,::2] = data[3,::4] #AB

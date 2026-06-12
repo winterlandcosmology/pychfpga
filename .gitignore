@@ -13,9 +13,9 @@
 out_*/
 /nbproject/
 /src/
-/venv/
+/venv*
 .py*venv/
-.venv/
+.venv*
 .venv-fmt/
 \.DS_Store
 .Xil

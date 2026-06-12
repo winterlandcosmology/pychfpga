@@ -44,8 +44,8 @@ class test_adc_spectrum(test_BaseClass):
         freqs = freqs[offset::1024/points_per_nyquist_band]
         indicies = indicies[offset::1024/points_per_nyquist_band]
         nchannels = len(channels)
-        datas = np.zeros([nchannels,freqs.size], dtype=np.complex)*np.NaN
-        all_timestreams = np.zeros([freqs.size,nchannels,2048])*np.NaN
+        datas = np.zeros([nchannels,freqs.size], dtype=complex)*np.nan
+        all_timestreams = np.zeros([freqs.size,nchannels,2048])*np.nan
         fl6062a.set_amplitude(amplitude_dBm, signal_generator)
         for i,freq in enumerate(freqs):
             #if (i % 7) == 0:
@@ -53,7 +53,7 @@ class test_adc_spectrum(test_BaseClass):
                 time.sleep(0.5)
                 #self.fpga_recv.flush()
                 data_ts = self.fpga_recv.read_frames(verbose=0,flush=True)
-                data = np.zeros((nchannels,1024), dtype=np.complex)*np.NaN# + 1e-8
+                data = np.zeros((nchannels,1024), dtype=complex)*np.nan# + 1e-8
                 for j in xrange(nchannels):
                     try:
                         data[j] = np.fft.fft(data_ts[channels[j]])[:1024]

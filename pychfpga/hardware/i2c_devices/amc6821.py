@@ -141,7 +141,7 @@ class AMC6821(object):
         else:
             mask = ((1 << width)-1) << bit
             old_value = self._i2c.write_read(self._address, data=[register], read_length=1)
-            new_value = (old_value & (~ mask)) | (value & mask)
+            new_value = (old_value & (~mask & 0xff)) | (value & mask)
             self._i2c.write_read(self._address, data=[register, new_value])
         self._i2c.select_bus('GPIO')    # close bus to fan controller i2c to avoid problems with the arm accessing it
 
@@ -192,7 +192,6 @@ class AMC6821(object):
             Any: Returned value.
         """
         return 100000*60/(self.read(0x08)+self.read(0x09)*256)  # returns fan speed in rpm
-
 
 
 

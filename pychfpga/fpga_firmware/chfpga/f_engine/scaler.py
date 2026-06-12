@@ -275,7 +275,7 @@ class SCALER(MMI):
             return self.cached_gain_table[bank]
 
         page_table = np.zeros(512, np.int8)
-        gain_table = []   # np.zeros(self.fpga.NUMBER_OF_FREQUENCY_BINS, np.complex)
+        gain_table = []   # np.zeros(self.fpga.NUMBER_OF_FREQUENCY_BINS, complex)
 
         if self.USE_COMPLEX_GAINS:
             pages_per_bank = 8
