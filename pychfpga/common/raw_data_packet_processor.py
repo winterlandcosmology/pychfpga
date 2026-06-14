@@ -428,53 +428,6 @@ class RawDataPacketProcessor(PacketProcessorBase):
         ts = np.empty((n_ts*ts_mult,), dtype=ts_.dtype)
         return ts, data, counts
 
-    # def process_packets(
-    #     self,
-    #     config: Optional[Union[Dict[str, Any], State]] = None,
-    #     verbose: Optional[int] = None,
-    # ) -> Optional[Tuple[np.ndarray, Any, np.ndarray]]:
-    #     """Process one active UDP packet block.
-
-    #     Parameters
-    #     ----------
-    #     config : dict or State: The configuration to use for the processor.
-
-    #     verbose : int: The verbosity level to use for the processor.
-
-    #     Returns
-    #     -------
-    #     tuple or None
-    #         ``(ts, data, data_count)`` views for complete timestamp rows in this batch,
-    #         or ``None`` when there is nothing to process.
-
-
-    #     Notes:
-
-    #     The packet processing flow is as follows:
-
-    #     - Compute the UDP buffer index (bix) for packets that match the followinf conditions:
-    #         - The packet header matches the cookie and packet size
-    #         - Target mode matches
-    #         - Timestamp is not too old
-    #         - Stream ID is valid
-    #         - Frame number and subframe number are within valid range
-    #         - Subframe number is within valid range
-    #         - Frame number is within valid range
-    #         - Subframe number is within valid range
-    #     - Run a loop for each unique timestamp in the buffer for valid packets to:
-    #         - Find the ringbuffer slot for the timestamp
-    #         - If the slot is not found, allocate a new slot
-    #         - Write the packet data to the ringbuffer slot
-    #         - Update the raw data count and raw data complete arrays
-    #         - If the slot is full, copy the slot to the output buffer
-    #         - If the output buffer is full, raise an error
-    #         - If the output buffer is not full, copy the slot to the output buffer
-    #         - If the output buffer is full, raise an error
-
-    #     """
-    #     return super().process_packets(config, verbose)
-
-
     def filter_packets(self, n):
         """Decode UCAP headers and return UDP row indices for packets to integrate."""
         # Select the packets to process by creating a boolean mask
