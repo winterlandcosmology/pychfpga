@@ -544,70 +544,178 @@ class GainCalc(object):
         # filtered_signal = (filtered.real).astype(int).astype(complex)
         return np.ma.array(filtered_signal, mask=masked_signal.mask)
 
-# def compute_gains(ca, number_of_averages=100, ch=3):
-#     """
-#     TODO: Function uses deprecated elements consider modification or removal
+
+# SCALER float-gain encoding limits (f_engine/scaler.py set_gain_table).
+_SCALER_FLOAT_MANTISSA_MAX = 2**11
+_SCALER_FLOAT_GAIN_MIN = 1.0
+_SCALER_FLOAT_GAIN_MAX = 2.0 ** 52
 
 
-#     Stand-alone compute_gains function for testing the gain calculation algorithm.
+def _ensure_scaler_float_encodable(row):
+    """Clip a 1-D gain vector so SCALER float encoding succeeds."""
+    row = np.asarray(row, dtype=np.float64)
+    for _ in range(8):
+        glog = (np.floor(np.log2(row)) - 10).astype(np.int32).clip(0, 63)
+        glog_common = int(np.min(glog).clip(0, 31))
+        glog_adj = glog - glog_common
+        denom = 2.0 ** (glog_adj + glog_common)
+        mantissa = row / denom
+        bad = mantissa >= _SCALER_FLOAT_MANTISSA_MAX
+        if not np.any(bad):
+            return row
+        row = row.copy()
+        row[bad] = (_SCALER_FLOAT_MANTISSA_MAX - 1) * denom[bad]
+    return np.clip(row, _SCALER_FLOAT_GAIN_MIN, _SCALER_FLOAT_GAIN_MAX)
 
-#     It starts data capture on all boards of the array, instantiate an raw_acq
-#     receiver and a gain computation object, and iterate the gain calculation
-#     process for the specified number of times.
 
-#     The same process is implemented in the fpga_master framework.
+def _sanitize_float_gains(g):
+    """Make gains positive, finite, and encodable by SCALER float mode."""
+    g = np.asarray(g, dtype=np.float64)
+    single_row = g.ndim == 1
+    rows = g[np.newaxis, :] if single_row else g.reshape(g.shape[0], -1)
+    out = rows.copy()
+    for row in out:
+        bad = ~np.isfinite(row) | (row <= 0)
+        if np.all(bad):
+            row[:] = _SCALER_FLOAT_GAIN_MIN
+            continue
+        fill = float(np.median(row[~bad]))
+        row[bad] = np.clip(fill, _SCALER_FLOAT_GAIN_MIN, _SCALER_FLOAT_GAIN_MAX)
+        row[:] = np.clip(row, _SCALER_FLOAT_GAIN_MIN, _SCALER_FLOAT_GAIN_MAX)
+        row[:] = _ensure_scaler_float_encodable(row)
+    return out[0] if single_row else out.reshape(g.shape)
 
-#     Parameters:
 
-#         ca (FPGAArray): A FPGAArray object containing the boards on which we
-#             want to compute digital gains. We operate only on the first board of the array.
+class DirectGainCalc(GainCalc):
+    """One-shot digital gain calculator using full-resolution FFT RMS and float gains.
 
-#         number_of_averages (int): Number of FFT averages that are captured by the
-#             receiver for each iteration
+    Computes linear floating-point gains directly from averaged RMS spectra
+    (``gain = target_full / rms``). Gains are returned in the format expected
+    by ``set_gains_async`` as ``(float_vector, -1)`` where ``-1`` selects
+    floating-point gain mode on the SCALER (no separate post-scaler tracking).
+    """
 
-#         ch (int): stream ID index on which we want to compute the gain (debug)
+    def __init__(
+            self,
+            channel_ids,
+            stream_ids,
+            target_rms=1.5 * np.sqrt(2),
+            post_gain_bits=44,
+            n_bins=None):
+        self.log = log.get_logger(self)
+        self.channel_ids = channel_ids
+        self.stream_ids = stream_ids
+        self.stream_id_map = {sid: i for i, sid in enumerate(self.stream_ids)}
+        self.nchan = len(self.channel_ids)
+        self.target_rms = target_rms
+        self.post_gain_bits = post_gain_bits
+        self.target_full = float(target_rms) * 2.0**post_gain_bits
+        self.n_bins = int(n_bins) if n_bins is not None else None
+        # Linear floating-point gain table (natural frequency bin order)
+        self.gains = None
+        self.done = np.zeros((self.nchan), dtype=bool)
+        if self.n_bins is not None:
+            self._alloc_gain_buffers(self.n_bins)
 
-#     """
-#     async def run():
-#         ca.set_sync_method('local_soft_trigger')
+    def _alloc_gain_buffers(self, n_bins):
+        n_bins = int(n_bins)
+        if self.n_bins is not None and n_bins != self.n_bins and self.done.any():
+            raise ValueError(
+                f'Cannot resize DirectGainCalc from {self.n_bins} to {n_bins} bins '
+                'after channels are already complete')
+        self.n_bins = n_bins
+        self.gains = np.zeros((self.nchan, self.n_bins), dtype=np.float64)
 
-#         ca.set_operational_mode('shuffle16', frames_per_packet=1)
-#         ca.ib.start_data_capture(period=.004, source='scaler')
+    def _ensure_n_bins(self, rms):
+        n_bins = int(np.asarray(rms).shape[-1])
+        if self.gains is None:
+            self._alloc_gain_buffers(n_bins)
+        elif self.n_bins is None:
+            if self.gains.shape[-1] != n_bins:
+                raise ValueError(
+                    f'RMS spectrum has {n_bins} bins but gain buffer has '
+                    f'{self.gains.shape[-1]} bins')
+            self.n_bins = n_bins
+        elif n_bins != self.n_bins:
+            raise ValueError(
+                f'RMS spectrum has {n_bins} bins but DirectGainCalc expects '
+                f'{self.n_bins} bins')
+        return n_bins
 
-#         stream_id_map = ca.get_stream_id_map()
-#         channel_ids = list(stream_id_map.keys())
-#         stream_ids = list(stream_id_map.values())
-#         bank = 0
+    def __repr__(self):
+        return f'{self.__class__.__name__}()'
 
-#         port_map = [dict(
-#             port=ca.ib[0].get_data_socket().getsockname()[1],
-#             sources=[(ca.ib[0].hostname, 80)])
-#             ]
-#         r = raw_acq.RawAcqReceiver()
-#         g = GainCalc(channel_ids=channel_ids, n_iterations=20)
-#         g.rms = np.empty((g.n_rms_iterations, 1024))
-#         g.gain = np.empty((g.n_rms_iterations, 1024))
-#         # Set all gains to their initial values
-#         await ca.set_gains_async(gains=g.get_gains(), bank=bank, when='now')
-#         i = 0
-#         try:
-#             await r.start_async(ports=port_map, stream_ids=stream_ids, start_thread=True)
+    def get_gains(self, ix=None):
+        """Return float linear gains for ``set_gains_async`` (glog=-1)."""
+        if ix is None:
+            ix = np.arange(self.nchan)
+        return {
+            tuple(self.channel_ids[i]): (self.gains[i].astype(np.float64), -1)
+            for i in ix
+        }
 
-#             while not g.is_done():
-#                 print('.')
-#                 ix, rms = r.get_fft_rms(stream_ids=stream_ids, target_gain_bank=bank, number_of_frames=number_of_averages)
-#                 g.rms[i, :] = rms[ch]
-#                 g.gain[i, :] = g.glin[ch] * 2.**g.glog[ch]
-#                 i += 1
-#                 new_gains = g.update_gains(ix, rms)
-#                 # bank ^= 1 # switch bank
-#                 await ca.set_gains_async(gains=new_gains, bank=bank, when='now')
-#             # Set the final gains
-#             filtered_gains, mask = g.get_filtered_gains()
-#             await ca.set_gains_async(gains=filtered_gains, bank=0, when='now')
-#         except Exception:
-#             raise
-#         finally:
-#             r.stop()
-#         return g, filtered_gains, mask
-#     g, filtered_gains, mask = asyncio.run(run())
+    def get_filtered_gains(self, ix=None):
+        """Return RFI-filtered float gains and a per-bin mask."""
+        if ix is None:
+            ix = np.arange(self.nchan)
+
+        ix_done = ix[self.done[ix]]
+        signal = self.gains[ix_done].astype(np.float64)
+        filtered_masked = self.iterative_poly_filter(signal)
+        in_arr = signal.copy()
+        in_arr[filtered_masked.mask] = filtered_masked[filtered_masked.mask]
+        filtered = self.fourier_filter(in_arr, num_components=50)
+        filtered = _sanitize_float_gains(filtered)
+        gains = {
+            tuple(self.channel_ids[j]): (filtered[i].astype(np.float64), -1)
+            for i, j in enumerate(ix_done)
+        }
+        return gains, filtered_masked.mask
+
+    def update_gains(self, stream_ids, rms):
+        """Compute final float gains from one RMS measurement per channel."""
+        try:
+            t1 = time.time()
+            ix = np.array([i for i, sid in enumerate(stream_ids) if sid in self.stream_id_map], dtype=np.int16)
+            bix = np.array([self.stream_id_map[sid] for sid in stream_ids[ix]], dtype=np.int16)
+            ix_done = ~self.done[bix]
+            ix = ix[ix_done]
+            bix = bix[ix_done]
+            if bix.size == 0:
+                return {}
+
+            self._ensure_n_bins(rms)
+            self.log.info(
+                f'{self!r}: Received RMS data from {rms.shape[0]} channels. '
+                f'Processing {bix.size} of those.')
+            rms_raw = np.asarray(rms[ix], dtype=np.float64)
+            min_rms = self.target_full / _SCALER_FLOAT_GAIN_MAX
+            n_capped = int(np.sum(rms_raw < min_rms))
+            rms_in = np.maximum(rms_raw, min_rms)
+            g = np.array(self.target_full / rms_in, dtype=np.float64)
+            bad_values = (g > _SCALER_FLOAT_GAIN_MAX) | ~np.isfinite(g)
+            bad_values[:, 0] = True  # DC bin
+            g[bad_values] = np.nan
+            finite = np.isfinite(g)
+            g[finite] = np.clip(g[finite], _SCALER_FLOAT_GAIN_MIN, _SCALER_FLOAT_GAIN_MAX)
+            if n_capped:
+                self.log.warning(
+                    f'{self!r}: floored RMS on {n_capped} bin(s) to avoid '
+                    f'unbounded gains (min_rms={min_rms:.3g})')
+            self.gains[bix] = g
+            self.done[bix] = True
+            t2 = time.time()
+            self.log.info(
+                f'{self!r}: Direct gain update time: {(t2 - t1) * 1000:0.3f} ms '
+                f'for {bix.size} channels')
+            return self.get_gains(bix)
+        except Exception as e:
+            self.log.error(f'{self!r}: Exception:\n{e!r}')
+            traceback.print_exc()
+            raise
+
+    def is_done(self):
+        return all(self.done)
+
+    def percent_done(self):
+        return float(sum(self.done)) / self.done.size * 100.0

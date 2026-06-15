@@ -193,8 +193,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.raw_data_count_buf = np.empty(0, dtype=np.int64)
         self.raw_source_buf = np.empty(0, dtype=np.uint8)
         self.formatted_data_bufs = [np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)]
-        self.fmt_cdata_bufs1 = [np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)]
-        self.fmt_cdata_bufs2 = [np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)]
+        self.fmt_cdata_buf1_0, self.fmt_cdata_buf1_1 = np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)
+        self.fmt_cdata_buf2_0, self.fmt_cdata_buf2_1 = np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)
         self.fmt_cdata1 = [None, None]
         self.fmt_cdata2 = [None, None]
 
@@ -293,6 +293,9 @@ class RawDataPacketProcessor(PacketProcessorBase):
             self._last_emitted_ts = 0
             self.n_out = 0
 
+            # Per (channel, frame_index) cell in ``raw_data_count``; used for carryover completion.
+            self.packets_per_frame = self.NUMBER_OF_SUBFRAMES
+            # Total subframe packets per channel across one full burst (all frame indices).
             self.expected_packets = self.FRAMES_PER_BURST * self.NUMBER_OF_SUBFRAMES
 
             state.ack(static_state_attrs, context=static_state_attrs)
@@ -313,8 +316,13 @@ class RawDataPacketProcessor(PacketProcessorBase):
                     bytes_per_integer = math.ceil(cf.fmt_base_width / 8)
                     out_dtype = np.dtype(np.complex128 if cf.fmt_base_width == 64 else np.complex64)
                     complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // 2
-                    interleave_factor = cf.fmt_interleave_factor
+                    interleave_factor = int(cf.fmt_interleave_factor or 1)
                     if interleave_factor > 2:
+                        if interleave_factor % 2:
+                            raise ValueError(
+                                f"Full-resolution complex interleave factor must be even, "
+                                f"got {interleave_factor}."
+                            )
                         if self.CAPTURE_BITS_PER_WORD % cf.fmt_base_width:
                             raise ValueError(
                                 f"capture_bits_per_word={self.CAPTURE_BITS_PER_WORD} must be a "
@@ -330,9 +338,34 @@ class RawDataPacketProcessor(PacketProcessorBase):
                     else:
                         cdata2_dims = (self.max_timestamps * self.FRAMES_PER_BURST // interleave_factor, self.NCHAN, complex_values_per_frame * interleave_factor) # deinterleaved complex value storage buffer
                     cdata1_dims = (self.max_timestamps * self.FRAMES_PER_BURST, self.NCHAN, complex_values_per_frame) # complex value storage buffer
-                    self.fmt_cdata1[source] = self.resize_buffer(("fmt_cdata_bufs1", source), cdata1_dims, element_dtype=out_dtype)
-                    self.fmt_cdata2[source] = self.resize_buffer(("fmt_cdata_bufs2", source), cdata2_dims, element_dtype=out_dtype)
+                    self.fmt_cdata1[source] = self.resize_buffer(f"fmt_cdata_buf1_{source}", cdata1_dims, element_dtype=out_dtype)
+                    self.fmt_cdata2[source] = self.resize_buffer(f"fmt_cdata_buf2_{source}", cdata2_dims, element_dtype=out_dtype)
             cf.ack(context=dynamic_state_attrs[source])
+
+    def _fft_offset_encoding_enabled(self):
+        """Return True if FFT offset-binary compensation is enabled in config."""
+        if self.config.get("offset_encoding") is not None:
+            return bool(self.config.offset_encoding)
+        return bool(self.config.get("fft_offset_encoding", False))
+
+    def _apply_fft_formatter_compensation(self, data, source, bit_width):
+        """Apply offset-binary decode and natural-order bin mapping for FFT spectra.
+
+        Downstream sinks assume natural frequency order with offset encoding removed.
+        """
+        if source != 1:
+            return data
+        if self._fft_offset_encoding_enabled():
+            # Offset-binary samples are unsigned around a midpoint; convert to signed.
+            bias = 1 << (int(bit_width) - 1)
+            data.real -= bias
+            data.imag -= bias
+        bin_map = self.config.get("fft_bin_map")
+        if bin_map is not None:
+            bin_map = np.asarray(bin_map, dtype=np.intp)
+            if bin_map.size and bin_map.size == data.shape[-1]:
+                data = data[..., bin_map]
+        return data
 
 
 
@@ -398,11 +431,17 @@ class RawDataPacketProcessor(PacketProcessorBase):
         if not is_complex:
             return ts, data, counts
 
-        # From here we have complex data, possibly with modifiers
-        interleave_factor = cf.fmt_interleave_factor
-        if interleave_factor > 2:  # full resolution
+        # From here we have complex data, possibly with modifiers.
+        interleave_factor = int(cf.fmt_interleave_factor or 1)
+        if interleave_factor > 2:
+            # Full resolution is dependent on the capture bus width (W) and number of bins per word (B).
+            # We send W-bit Re then W-bit Im, skipping 2*B bins between them. It takes 2B frames to get the full spectrum.
+            # ICE: W=32, B=2, 32+32-bit complex values, 2B= 4 frames (Max burst length = 4 frames)
+            # CRS: W=128, B=4, 128+128-bit complex values, 2B= 8 frames (use mode 2 (8 frames/2 channels) or more 3 (16 frames/1 channel))
             if interleave_factor % 2:
-                raise ValueError(f"Full-resolution complex interleave factor must be even, got {interleave_factor}.")
+                raise ValueError(
+                    f"Full-resolution complex interleave factor must be even, got {interleave_factor}."
+                )
             if data.shape[0] % interleave_factor:
                 raise ValueError(
                     f"Full-resolution complex data has {data.shape[0]} physical rows, "
@@ -410,7 +449,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
                 )
             if self.CAPTURE_BITS_PER_WORD % base:
                 raise ValueError(
-                    f"capture_bits_per_word={self.CAPTURE_BITS_PER_WORD} must be a multiple of fmt_base_width={base}."
+                    f"capture_bits_per_word={self.CAPTURE_BITS_PER_WORD} must be a multiple "
+                    f"of fmt_base_width={base}."
                 )
             words_per_capture_word = max(1, self.CAPTURE_BITS_PER_WORD // base)
             if words_per_capture_word > 1:
@@ -424,19 +464,34 @@ class RawDataPacketProcessor(PacketProcessorBase):
                 np.copyto(out[:, :, lane::bins_per_word].real, v[:, 2 * lane])
                 np.copyto(out[:, :, lane::bins_per_word].imag, v[:, 2 * lane + 1])
             ts = ts.reshape(logical_rows, interleave_factor)[:, 0]
-            counts = counts.reshape(logical_rows, interleave_factor, counts.shape[1]).sum(axis=1)
-            return ts, out, counts
+            counts = counts.reshape(logical_rows, interleave_factor, counts.shape[1]).min(axis=1)
+            data = out
+        else:
+            # fmt_cdata* are sized for max_timestamps; only slice the active row prefix.
+            n_rows = data.shape[0]
+            cdata = self.fmt_cdata1[source][:n_rows]
+            np.copyto(cdata.real, data[:, :, ::2])
+            np.copyto(cdata.imag, data[:, :, 1::2])
 
-        cdata = self.fmt_cdata1[source]
-        np.copyto(cdata.real, data[:, :, ::2])
-        np.copyto(cdata.imag, data[:, :, 1::2])
+            if interleave_factor == 1:
+                data = cdata
+            elif interleave_factor == 2:
+                # fft_2x: deinterleave pairs of consecutive physical frame rows (legacy ``32+32d``).
+                s0, nchan, s2 = cdata.shape
+                out_rows = s0 // interleave_factor
+                if out_rows * interleave_factor != s0:
+                    raise ValueError(
+                        f'Cannot deinterleave {s0} physical frame rows with '
+                        f'interleave_factor={interleave_factor}'
+                    )
+                data = self.fmt_cdata2[source][:out_rows]
+                v = cdata.reshape(out_rows, interleave_factor, nchan, s2)
+                data[:] = v.transpose(0, 2, 1, 3).reshape(
+                    out_rows, nchan, s2 * interleave_factor, order='F')
+                ts = ts.reshape(out_rows, interleave_factor)[:, 0]
+                counts = counts.reshape(out_rows, interleave_factor, nchan).min(axis=1)
 
-        if interleave_factor == 2:  # apply double resolution deinterleave ([[0,1,2,3], [4,5,6,7]] -> [[0 4 1 5 2 6 3 7]])
-            s0, s1, s2 = cdata.shape
-            v = cdata.reshape(s0, -1, interleave_factor, s2)
-            data = self.fmt_cdata2[source]
-            np.copyto(data[..., 0::2], v[..., 0, :])
-            np.copyto(data[..., 1::2], v[..., 1, :])
+        data = self._apply_fft_formatter_compensation(data, source, base)
 
         return ts, data, counts
 
@@ -464,53 +519,6 @@ class RawDataPacketProcessor(PacketProcessorBase):
         counts = np.empty((n_ts*ts_mult, nchan), dtype=counts_.dtype)
         ts = np.empty((n_ts*ts_mult,), dtype=ts_.dtype)
         return ts, data, counts
-
-    # def process_packets(
-    #     self,
-    #     config: Optional[Union[Dict[str, Any], State]] = None,
-    #     verbose: Optional[int] = None,
-    # ) -> Optional[Tuple[np.ndarray, Any, np.ndarray]]:
-    #     """Process one active UDP packet block.
-
-    #     Parameters
-    #     ----------
-    #     config : dict or State: The configuration to use for the processor.
-
-    #     verbose : int: The verbosity level to use for the processor.
-
-    #     Returns
-    #     -------
-    #     tuple or None
-    #         ``(ts, data, data_count)`` views for complete timestamp rows in this batch,
-    #         or ``None`` when there is nothing to process.
-
-
-    #     Notes:
-
-    #     The packet processing flow is as follows:
-
-    #     - Compute the UDP buffer index (bix) for packets that match the followinf conditions:
-    #         - The packet header matches the cookie and packet size
-    #         - Target mode matches
-    #         - Timestamp is not too old
-    #         - Stream ID is valid
-    #         - Frame number and subframe number are within valid range
-    #         - Subframe number is within valid range
-    #         - Frame number is within valid range
-    #         - Subframe number is within valid range
-    #     - Run a loop for each unique timestamp in the buffer for valid packets to:
-    #         - Find the ringbuffer slot for the timestamp
-    #         - If the slot is not found, allocate a new slot
-    #         - Write the packet data to the ringbuffer slot
-    #         - Update the raw data count and raw data complete arrays
-    #         - If the slot is full, copy the slot to the output buffer
-    #         - If the output buffer is full, raise an error
-    #         - If the output buffer is not full, copy the slot to the output buffer
-    #         - If the output buffer is full, raise an error
-
-    #     """
-    #     return super().process_packets(config, verbose)
-
 
     def filter_packets(self, n):
         """Decode UCAP headers and return UDP row indices for packets to integrate."""

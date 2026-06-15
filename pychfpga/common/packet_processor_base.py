@@ -185,15 +185,20 @@ class PacketProcessorBase(ABC):
         else:
             w = min(self.receive_window, n_ts) # w cannot be zero
             raw_counts_tail = self.raw_data_count[n_ts - w:n_ts]
+            # Raw UCAP rows are (timestamp, channel, frame_index); each cell counts
+            # subframes for one physical frame (``packets_per_frame``).  Do not use
+            # ``expected_packets`` (full burst total) per cell — that threshold is
+            # never reached and causes premature emit of incomplete bursts.
+            per_cell = getattr(self, 'packets_per_frame', None) or self.expected_packets
             if raw_counts_tail.ndim > 1:
                 # Collapse channel/frame (and any other) dims so argmax counts timestamp rows only.
                 complete_tail = (
-                    (raw_counts_tail >= self.expected_packets)
+                    (raw_counts_tail >= per_cell)
                     .reshape(w, -1)
                     .all(axis=-1)[::-1]
                 )
             else:
-                complete_tail = (raw_counts_tail >= self.expected_packets)[::-1]
+                complete_tail = (raw_counts_tail >= per_cell)[::-1]
             self.carry_len = int(np.argmax(complete_tail)) if complete_tail.size and complete_tail.any() else w
 
         # COmpute the number of packets to return,

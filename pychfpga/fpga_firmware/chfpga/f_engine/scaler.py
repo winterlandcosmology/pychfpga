@@ -119,7 +119,7 @@ class SCALER(MMI):
         'fft_gain': 2, # MSBs of post-gain FFT value with saturation\n"
         'fft_4bit': 3, # 4+4 bit scaled values\n"
         'fft_2x': 4, # Dual resolution FFT
-        'fft_4x': 5, # Quad resolution FFT
+        'fft_full': 5, # Full resolution FFT
     }
 
     def set_capture_data_type(self, data_type):

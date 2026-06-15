@@ -2299,24 +2299,18 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             fft_bit_width = 32 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 16
             fft_capture_format = State(
                 fmt_base_width=fft_bit_width,
-                fmt_is_complex=False,
+                fmt_is_complex=True,
                 fmt_interleave_factor=2,
             )
             fft_pplf = 2
-        elif cap_data_type == 5:
+        elif cap_data_type == 5: # Full resolution FFT
+            fft_bit_width = 128 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 32  # CRS: 128-bit complex, ICE: 32-bit complex. TODO: have this parametrized by the firmware
             fft_capture_format = State(
-                fmt_base_width=32,
+                fmt_base_width=fft_bit_width,
                 fmt_is_complex=True,
-                fmt_interleave_factor=max(2, 2 * fft_bins_per_word),
+                fmt_interleave_factor=2 * fft_bins_per_word,
             )
             fft_pplf = 2 * max(1, fft_bins_per_word)
-        elif cap_data_type == 6:
-            fft_capture_format = State(
-                fmt_base_width=16,
-                fmt_is_complex=False,
-                fmt_interleave_factor=1,
-            )
-            fft_pplf = 1
         else:
             fft_bit_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8
             fft_capture_format = State(
@@ -2350,6 +2344,12 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             packet_header_format="raw-v1",
         )
 
+        ref_chan = target_channels[0]
+        fft_bin_map = np.asarray(
+            self.chan[ref_chan].FFT.get_bin_map(flatten=True, reverse=True),
+            dtype=np.intp,
+        )
+
         raw = State(
             **shared_geometry,
             source=source,
@@ -2357,6 +2357,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             source_target_mode=[0, int(target_mode)],
             packets_per_logical_frame=int(active_pplf),
             packet_cookie=PACKET_COOKIE_FFT if source == "scaler" else PACKET_COOKIE_ADC,
+            fft_offset_encoding=bool(fft_offset_encoding),
+            offset_encoding=bool(fft_offset_encoding),
+            fft_bin_map=fft_bin_map,
         )
 
         adc = State(
@@ -2375,6 +2378,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             packets_per_logical_frame=int(fft_pplf),
             packet_cookie=PACKET_COOKIE_FFT,
             fft_offset_encoding=bool(fft_offset_encoding),
+            offset_encoding=bool(fft_offset_encoding),
+            fft_bin_map=fft_bin_map,
         )
 
         if self.CORR:
@@ -2423,7 +2428,16 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self.config.raw_capture_adc.update(adc.as_dict())
         self.config.raw_capture_fft.update(fft.as_dict())
 
-        return State(raw=raw, adc=adc, fft=fft, corr=corr)
+        result = State(raw=raw, adc=adc, fft=fft, corr=corr)
+        self._cached_firmware_config = result
+        return result
+
+    def get_cached_firmware_config(self):
+        """Return the last firmware config snapshot without re-reading hardware."""
+        cached = getattr(self, '_cached_firmware_config', None)
+        if cached is None:
+            return self.get_firmware_config()
+        return cached
 
     def get_raw_decoder_state(self, stream_ids=None, format=None):
         """Return the active raw capture profile as a plain dict (legacy REST helper)."""
@@ -3496,9 +3510,24 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             f'{self!r}: Setting dynamic capture parameters to '
             f'sub_period={sub_period} and source={source} for channels={channels}')
 
-        for chan in self.get_channelizers(channels):
-            chan.PROBER.set_data_source(source)
-            chan.PROBER.SUB_PERIOD = sub_period
+        if self.CAPTURE_TYPE == 'UCAP':
+            if isinstance(source, str):
+                if source not in self.UCAP.DATA_SOURCE_TABLE:
+                    valid = ', '.join(self.UCAP.DATA_SOURCE_TABLE)
+                    raise ValueError(
+                        f"Unknown data capture source {source!r}. Valid sources: {valid}.")
+                self.UCAP.SOURCE_SEL = self.UCAP.DATA_SOURCE_TABLE[source]
+            else:
+                self.UCAP.SOURCE_SEL = source
+            self.UCAP.SUB_PERIOD = sub_period
+        elif self.CAPTURE_TYPE == 'PROBER':
+            for chan in self.get_channelizers(channels):
+                chan.PROBER.set_data_source(source)
+                chan.PROBER.SUB_PERIOD = sub_period
+        else:
+            raise RuntimeError(
+                f'{self!r}: set_data_capture() is not supported for '
+                f'capture engine {self.CAPTURE_TYPE!r}')
         for ch in self._normalize_channels(channels):
             st = self.config.chan[ch]
             st.data_source = source
@@ -3617,7 +3646,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 normalized_cap_type = int(cap_data_type)
             self.logger.debug(f'Setting scaler capture data type to {cap_data_type} for channel {channels}')
             for ch in self._normalize_channels(channels):
-                self.chan[ch].SCALER.CAP_DATA_TYPE = cap_data_type
+                self.chan[ch].SCALER.CAP_DATA_TYPE = normalized_cap_type
                 self.config.chan[ch].scaler_cap_data_type = normalized_cap_type
             self.get_firmware_config(channels=channels)
 
