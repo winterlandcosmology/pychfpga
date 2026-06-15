@@ -1006,12 +1006,7 @@ class TestScaler:
 
         if cap_data_type == 4:
             ref_data = np.clip(raw_fft // (2 ** max(self.data.FFT_WIDTH - 16, 0)), -2**15, 2**15 - 1).astype(np.int64)
-            fft_words = ref_data.reshape(-1, 2 * fft_bins_per_word)
-            frame_indices = [
-                [4*i + 2*pos + j for i in range(fft_bins_per_word // 2) for j in range(2)]
-                for pos in range(2)
-            ]
-            ref_data = np.concatenate([fft_words[:, ix].reshape(-1) for ix in frame_indices])
+            ref_data = (ref_data[::2] + ref_data[1::2]*1j).astype(np.complex64)
         else:
             # Mode 5 is captured with msb_pad(..., 32): raw FFT component is placed in the
             # MSBs of the 32-bit word and LSBs are zero padded.
@@ -1029,7 +1024,7 @@ class TestScaler:
         logger.debug(f"test_mult_resolution_capture: received_first16={data[0][:16]}")
         logger.debug(f"test_mult_resolution_capture: reference_first16={ref_data[:16]}")
         #TODO: reparametrise for CRS
-        self.plot_and_test(xr, data, ref_data, f'Mult-resolution capture (postscaler = {postscaler}, capture mode = {cap_data_type})', split_complex=cap_data_type == 5)
+        self.plot_and_test(xr, data, ref_data, f'Mult-resolution capture (postscaler = {postscaler}, capture mode = {cap_data_type})', split_complex=True)
 
     @pytest.mark.scaler
     @pytest.mark.parametrize("ch", (0,))

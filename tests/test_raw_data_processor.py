@@ -550,6 +550,7 @@ def test_full_resolution_complex_ice_interleave4():
         stream_ids=(10,),
         channels=(0,),
         capture_format=[_unused_capture_format_slot(), cf1],
+        fft_bin_map=np.array([2, 0, 3, 1, 5, 4], dtype=np.intp),
     )
 
     components = np.asarray(
@@ -570,12 +571,12 @@ def test_full_resolution_complex_ice_interleave4():
     ts, data, counts = processor.get_formatted_data(slice(0, 1), source=1)
 
     expected = np.asarray([[[
-        10 + 1j, 40 + 4j,
-        20 + 2j, 50 + 5j,
-        30 + 3j, 60 + 6j,
+        20 + 2j, 10 + 1j,
+        50 + 5j, 40 + 4j,
+        60 + 6j, 30 + 3j,
     ]]], dtype=np.complex64)
     np.testing.assert_array_equal(ts, [20])
-    np.testing.assert_array_equal(counts, [[4]])
+    np.testing.assert_array_equal(counts, [[1]])
     np.testing.assert_array_equal(data, expected)
 
 
@@ -597,6 +598,7 @@ def test_full_resolution_complex_crs_interleave8_uses_msb_slot():
         stream_ids=(10,),
         channels=(0,),
         capture_format=[_unused_capture_format_slot(), cf1],
+        fft_bin_map=np.array([1, 0, 3, 2, 5, 4, 7, 6], dtype=np.intp),
     )
 
     frame_components = (
@@ -621,11 +623,11 @@ def test_full_resolution_complex_crs_interleave8_uses_msb_slot():
     ts, data, counts = processor.get_formatted_data(slice(0, 1), source=1)
 
     expected = np.asarray([[[
-        100 + 1j, 300 + 3j, 500 + 5j, 700 + 7j,
-        200 + 2j, 400 + 4j, 600 + 6j, 800 + 8j,
+        300 + 3j, 100 + 1j, 700 + 7j, 500 + 5j,
+        400 + 4j, 200 + 2j, 800 + 8j, 600 + 6j,
     ]]], dtype=np.complex64)
     np.testing.assert_array_equal(ts, [100])
-    np.testing.assert_array_equal(counts, [[32]])
+    np.testing.assert_array_equal(counts, [[4]])
     np.testing.assert_array_equal(data, expected)
 
 
