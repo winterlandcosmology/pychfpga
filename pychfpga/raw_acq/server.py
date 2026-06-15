@@ -154,17 +154,52 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
     @endpoint('start-fft-rms')
     async def start_fft_rms(self, stream_ids=[], target_gain_bank=0, number_of_frames=100):
         self.log.info(f'{self!r}: received start_fft_rms command')
-        await self.receiver.processors["raw"].fft.start_fft_rms_async(
+        raw_proc = self.receiver.processors.get("raw")
+        if raw_proc is None:
+            raise RuntimeError("raw processor is not running; call /start first")
+        fft = raw_proc.fft
+        await fft.start_fft_rms_async(
             stream_ids=stream_ids,
             target_gain_bank=target_gain_bank,
             number_of_frames=number_of_frames)
-        return
+        return dict(
+            stream_ids=stream_ids,
+            number_of_frames=number_of_frames,
+            target_gain_bank=target_gain_bank,
+        )
 
     @endpoint('get-fft-rms')
     async def get_fft_rms(self):
-        self.log.info(f'{self!r}: received get_fft_rms command')
-        ix, rms = await self.receiver.processors["raw"].fft.get_fft_rms_async()
+        raw_proc = self.receiver.processors.get("raw")
+        if raw_proc is None:
+            return ([], [])
+        ix, rms = await raw_proc.fft.get_fft_rms_async()
+        if ix.size:
+            self.log.info(f'{self!r}: get_fft_rms returning {ix.size} channel(s)')
         return (ix.tolist(), rms.tolist())
+
+    @endpoint('get-fft-rms-status')
+    async def get_fft_rms_status(self):
+        """Return in-progress FFT RMS acquisition state (for live monitoring)."""
+        raw_proc = self.receiver.processors.get("raw")
+        if raw_proc is None:
+            return []
+        fft = raw_proc.fft
+        diag = fft.get_acquisition_diagnostics()
+        with fft.fft_lock:
+            rows = []
+            for cix, sid in enumerate(fft.stream_id):
+                if not fft.fft_rms_started[cix]:
+                    continue
+                rows.append(dict(
+                    stream_id=int(sid),
+                    channel=cix,
+                    n_frames=int(fft.fft_n_frames[cix]),
+                    target=int(fft.fft_rms_average[cix]),
+                    done=bool(fft.fft_rms_done[cix]),
+                    n_bins=int(fft._fft_n_bins),
+                ))
+        return dict(channels=rows, diagnostics=diag)
 
     @endpoint('start-corr-hdf5')
     async def start_corr_hdf5(self,

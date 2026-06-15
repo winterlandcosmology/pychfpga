@@ -345,6 +345,7 @@ class FPGAMaster(object):
                     ip_addr, port, eth_addr = targets[(ib.hostname, ib.port)]
                     self.log.info(f'{self!r} Setting data transmission address of board {ib.get_id()} to {ip_addr}:{port}({eth_addr})')
                     await ib.set_udp_data_target_address_async(ip_addr, port, eth_addr)
+        await self._sync_raw_acq_firmware_config()
         self.log.info(f'{self!r}: RawAcq server setup successfully')
 
 
@@ -455,7 +456,212 @@ class FPGAMaster(object):
             await self.fpgas.set_gains_async({ib.get_id(chan):gain for ib, chans in ib_chans for chan in chans}, bank=0, when='now')
 
 
+    def _collect_gain_calc_server_maps(self, ib_chans):
+        """Map raw_acq servers to channel/stream IDs for gain computation."""
+        server_channel_ids = {}
+        server_stream_ids = {}
+        all_channel_ids = []
+        all_stream_ids = []
+        for server_name, ibs in self.raw_acq_ibs.items():
+            server_channel_ids[server_name] = []
+            server_stream_ids[server_name] = []
+            for (ib, channels) in ib_chans:
+                if ib in ibs:
+                    cids = ib.get_channel_ids(channels)
+                    sids = ib.get_stream_ids(channels)
+                    server_channel_ids[server_name].extend(cids)
+                    server_stream_ids[server_name].extend(sids)
+                    all_channel_ids.extend(cids)
+                    all_stream_ids.extend(sids)
+        sid_index_map = {sid: i for i, sid in enumerate(all_stream_ids)}
+        return server_channel_ids, server_stream_ids, all_channel_ids, all_stream_ids, sid_index_map
+
+    async def _sync_raw_acq_firmware_config(self):
+        """Push updated firmware decoder config to all raw_acq servers.
+        
+        *** TODO: check if we need this method.
+        """
+        if not self.raw_acq:
+            return
+        tasks = []
+        for server_name, server in self.raw_acq.items():
+            ibs = self.raw_acq_ibs.get(server_name)
+            if not ibs:
+                continue
+            fw = firmware_config_for_rest(
+                ibs[0].fpga.get_firmware_config().as_dict())
+            tasks.append(server.update_config(fw))
+        if tasks:
+            await asyncio.gather(*tasks)
+
+    async def _configure_gain_scaler_capture(self, targets, scaler_cap_data_type, capture_rate):
+        """Configure scaler bypass FFT capture and refresh raw_acq decoder state."""
+        ib_chans = self.fpgas.get_iceboards(targets, lane_type='chan').items()
+        for ib, channels in ib_chans:
+            ib.set_scaler_output_modes(
+                bypass=True,
+                cap_data_type=scaler_cap_data_type,
+                channels=channels)
+            ib.set_data_capture(
+                channels=channels,
+                sub_period=capture_rate,
+                source='scaler')
+            await asyncio.sleep(0)
+        # set_scaler_output_modes / set_data_capture already refreshed the cached
+        # firmware config; avoid another BSB read here (can timeout under load).
+        await self._sync_raw_acq_firmware_config()
+
     async def compute_gains(self,
+                            targets=None,
+                            method='direct',
+                            capture_rate=23,
+                            save_gains=False,
+                            enable=True,
+                            noise_injection=None,
+                            number_of_fft_averages=100,
+                            number_of_gain_update_iterations=20,
+                            weight=0.2,
+                            initial_gains=[('*', [1.0, 22])],
+                            scaler_cap_data_type='fft_2x',
+                            post_gain_bits=44,
+                            target_rms=None):
+        """Compute digital gains using the direct or legacy iterative method."""
+        if not enable:
+            return
+        if method == 'iterative':
+            return await self.compute_iterative_gains(
+                targets=targets,
+                capture_rate=capture_rate,
+                save_gains=save_gains,
+                noise_injection=noise_injection,
+                number_of_fft_averages=number_of_fft_averages,
+                number_of_gain_update_iterations=number_of_gain_update_iterations,
+                weight=weight,
+                initial_gains=initial_gains)
+        return await self.compute_direct_gains(
+            targets=targets,
+            capture_rate=capture_rate,
+            save_gains=save_gains,
+            noise_injection=noise_injection,
+            number_of_fft_averages=number_of_fft_averages,
+            scaler_cap_data_type=scaler_cap_data_type,
+            post_gain_bits=post_gain_bits,
+            target_rms=target_rms)
+
+    async def compute_direct_gains(self,
+                                   targets=None,
+                                   capture_rate=23,
+                                   save_gains=False,
+                                   noise_injection=None,
+                                   number_of_fft_averages=100,
+                                   scaler_cap_data_type='fft_2x',
+                                   post_gain_bits=44,
+                                   target_rms=None):
+        """Compute float digital gains in one shot from full-resolution FFT RMS."""
+        ib_chans = self.fpgas.get_iceboards(targets, lane_type='chan').items()
+        if not ib_chans:
+            self.log.error(
+                f'{self!r}: No target board was found for the specified '
+                f'targets {targets}. Available boards are '
+                f'{[ib.get_id() for ib in self.fpgas.ib]}')
+            raise RuntimeError('No target board was found for the specified patterns')
+
+        channels = ', '.join(str(ib.get_id()) + str(ch) for ib, ch in ib_chans)
+        self.log.info(
+            f'{self!r}: *** Gain calculator : Starting compute_direct_gains() '
+            f'on the following channels: {channels}')
+
+        if noise_injection is not None:
+            raise AttributeError('Noise injection settings are not yet '
+                                 'supported for gain computations')
+
+        await self._configure_gain_scaler_capture(
+            targets=targets,
+            scaler_cap_data_type=scaler_cap_data_type,
+            capture_rate=capture_rate)
+
+        server_channel_ids, server_stream_ids, _, _, sid_index_map = (
+            self._collect_gain_calc_server_maps(ib_chans))
+
+        first_ib, _ = next(iter(ib_chans))
+        n_bins = int(first_ib.fpga.NUMBER_OF_FREQUENCY_BINS)
+
+        if target_rms is None:
+            target_rms = 1.5 * np.sqrt(2)
+
+        wait_time = min(
+            2.56e-6 * 2**(capture_rate + 1) * number_of_fft_averages / 2, 1.0)
+
+        async def direct_gains(server, channel_ids, stream_ids):
+            self.log.info(
+                f'{self!r}: *** Gain calculator : Starting direct gain '
+                f'calculator process')
+            gc = calculate_gains.DirectGainCalc(
+                channel_ids=channel_ids,
+                stream_ids=stream_ids,
+                target_rms=target_rms,
+                post_gain_bits=post_gain_bits,
+                n_bins=n_bins)
+            await server.start_fft_rms(
+                stream_ids=stream_ids,
+                target_gain_bank=0,
+                number_of_frames=number_of_fft_averages)
+            while not gc.is_done():
+                self.log.info(
+                    f'{self!r}: *** Gain calculator : waiting for averaged '
+                    f'FFT RMS data from raw acq')
+                await asyncio.sleep(wait_time)
+                sids, rms = await server.get_fft_rms()
+                if not sids:
+                    continue
+                self.log.info(
+                    f'{self!r}: *** Gain calculator : Got FFT RMS values '
+                    f'for {len(sids)} channels')
+                gc.update_gains(np.array(sids), np.array(rms))
+                self.gain_calc_metrics.add('fpga_gains_done', value=np.sum(gc.done))
+                for j, sid in enumerate(sids):
+                    if sid not in sid_index_map:
+                        continue
+                    bix = sid_index_map[sid]
+                    cid = channel_ids[bix]
+                    self.gain_calc_metrics.add(
+                        'fpga_gain_calc_rms',
+                        stream_id=sid, channel_id=cid,
+                        value=np.mean(np.array(rms)[j, 1:]))
+                    self.gain_calc_metrics.add(
+                        'fpga_gain_calc_percent_complete',
+                        stream_id=sid, channel_id=cid,
+                        value=gc.percent_done())
+
+            filtered_gains, mask = gc.get_filtered_gains()
+            if channel_ids:
+                cid = channel_ids[0]
+                ib = self.fpgas.get_iceboard_from_id((cid[0], cid[1]))
+                inv_bin_map = ib.fpga.chan[cid[2]].FFT.get_bin_map(
+                    flatten=True, reverse=False)
+                filtered_gains = {
+                    chan_id: (gain_vec[inv_bin_map], glog)
+                    for chan_id, (gain_vec, glog) in filtered_gains.items()
+                }
+            await self.fpgas.set_gains_async(gains=filtered_gains, bank=0, when='now')
+            self.log.info(
+                f'{self!r}: *** Gain calculator : Finished computing direct '
+                f'gains for {len(filtered_gains)} channels.')
+
+        await asyncio.gather(*[
+            direct_gains(
+                raw_acq_server,
+                server_channel_ids[raw_acq_server_name],
+                server_stream_ids[raw_acq_server_name])
+            for raw_acq_server_name, raw_acq_server in self.raw_acq.items()])
+
+        await self.set_fpga_data_capture(targets=targets, source=None)
+
+        if save_gains:
+            self.log.info(f'{self!r}: *** Gain calculator : saving gains')
+            await self.save_gains(bank=0)
+
+    async def compute_iterative_gains(self,
                      targets=None,
                      capture_rate=23,
                      save_gains=False,
@@ -541,23 +747,8 @@ class FPGAMaster(object):
             raise AttributeError('Noise injection settings are not yet '
                                  'supported for gain computations')
 
-        # find the channel ID and stream ID associated with each raw_acq server
-        server_channel_ids = {} # will be returned with the new gains so set_gains can apply gains to the proper board
-        server_stream_ids = {} # will be used by raw_acq to select the proper channels
-        all_channel_ids = []
-        all_stream_ids = []
-        for server_name, ibs in self.raw_acq_ibs.items():
-            server_channel_ids[server_name] = []
-            server_stream_ids[server_name] = []
-            for (ib, channels) in ib_chans:
-                if ib in ibs:
-                    cids = ib.get_channel_ids(channels)
-                    sids = ib.get_stream_ids(channels)
-                    server_channel_ids[server_name].extend(cids)
-                    server_stream_ids[server_name].extend(sids)
-                    all_channel_ids.extend(cids)
-                    all_stream_ids.extend(sids)
-        sid_index_map = {sid:i for i,sid in enumerate(all_stream_ids)}
+        server_channel_ids, server_stream_ids, all_channel_ids, all_stream_ids, sid_index_map = (
+            self._collect_gain_calc_server_maps(ib_chans))
 
         # load the current gains as initial gains if an initial gain table is not provided.
         if not initial_gains:

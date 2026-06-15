@@ -97,26 +97,27 @@ class RawAcqReceiver(object):
         if not config:
             return
         sections = _firmware_config_sections(config)
-        if set(sections.keys()) >= set(FIRMWARE_CONFIG_KEYS):
-            raw_proc = self.processors.get("raw")
-            if raw_proc:
+
+        raw_proc = self.processors.get("raw")
+        if raw_proc is not None:
+            if any(k in sections for k in ("raw", "adc", "fft")):
                 raw_proc.update_config(
                     config=sections.get("raw"),
                     adc_config=sections.get("adc"),
                     fft_config=sections.get("fft"),
                 )
-            corr_proc = self.processors.get("corr")
-            if corr_proc is not None and sections.get("corr") is not None:
-                corr_proc.update_config(sections["corr"])
-            return
+            else:
+                raw_proc.update_config(config=sections)
+
         corr_proc = self.processors.get("corr")
-        if corr_proc is not None and (
-                'firmware_integ_period' in config or 'soft_integ_period' in config):
-            corr_proc.update_config(config)
-            return
-        raw_proc = self.processors.get("raw")
-        if raw_proc is not None:
-            raw_proc.update_config(config=config)
+        if corr_proc is not None:
+            if "corr" in sections:
+                corr_proc.update_config(sections["corr"])
+            elif (
+                "firmware_integ_period" in sections  # *** TODO: looks like an exception to he habdles some other way
+                or "soft_integ_period" in sections
+            ):
+                corr_proc.update_config(sections)
 
     async def start_async(
             self,

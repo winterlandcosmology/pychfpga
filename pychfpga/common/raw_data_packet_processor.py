@@ -193,8 +193,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.raw_data_count_buf = np.empty(0, dtype=np.int64)
         self.raw_source_buf = np.empty(0, dtype=np.uint8)
         self.formatted_data_bufs = [np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)]
-        self.fmt_cdata_bufs1 = [np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)]
-        self.fmt_cdata_bufs2 = [np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)]
+        self.fmt_cdata_buf1_0, self.fmt_cdata_buf1_1 = np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)
+        self.fmt_cdata_buf2_0, self.fmt_cdata_buf2_1 = np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)
         self.fmt_cdata1 = [None, None]
         self.fmt_cdata2 = [None, None]
 
@@ -289,6 +289,9 @@ class RawDataPacketProcessor(PacketProcessorBase):
             self._last_emitted_ts = 0
             self.n_out = 0
 
+            # Per (channel, frame_index) cell in ``raw_data_count``; used for carryover completion.
+            self.packets_per_frame = self.NUMBER_OF_SUBFRAMES
+            # Total subframe packets per channel across one full burst (all frame indices).
             self.expected_packets = self.FRAMES_PER_BURST * self.NUMBER_OF_SUBFRAMES
 
             state.ack(static_state_attrs, context=static_state_attrs)
@@ -313,9 +316,34 @@ class RawDataPacketProcessor(PacketProcessorBase):
                     # interleaved_values_per_frame = complex_values_per_frame * interleaved_factor # 2 for interleaved, 1 for non-interleaved
                     cdata1_dims = (self.max_timestamps * self.FRAMES_PER_BURST, self.NCHAN, complex_values_per_frame) # complex value storage buffer
                     cdata2_dims = (self.max_timestamps * self.FRAMES_PER_BURST // interleave_factor, self.NCHAN, complex_values_per_frame * interleave_factor) # deinterleaved complex value storage buffer  
-                    self.fmt_cdata1[source] = self.resize_buffer("fmt_cdata_buf1", cdata1_dims, element_dtype=out_dtype)
-                    self.fmt_cdata2[source] = self.resize_buffer("fmt_cdata_buf2", cdata2_dims, element_dtype=out_dtype)
+                    self.fmt_cdata1[source] = self.resize_buffer(f"fmt_cdata_buf1_{source}", cdata1_dims, element_dtype=out_dtype)
+                    self.fmt_cdata2[source] = self.resize_buffer(f"fmt_cdata_buf2_{source}", cdata2_dims, element_dtype=out_dtype)
             cf.ack(context=dynamic_state_attrs[source])
+
+    def _fft_offset_encoding_enabled(self):
+        """Return True if FFT offset-binary compensation is enabled in config."""
+        if self.config.get("offset_encoding") is not None:
+            return bool(self.config.offset_encoding)
+        return bool(self.config.get("fft_offset_encoding", False))
+
+    def _apply_fft_formatter_compensation(self, data, source, bit_width):
+        """Apply offset-binary decode and natural-order bin mapping for FFT spectra.
+
+        Downstream sinks assume natural frequency order with offset encoding removed.
+        """
+        if source != 1:
+            return data
+        if self._fft_offset_encoding_enabled():
+            # Offset-binary samples are unsigned around a midpoint; convert to signed.
+            bias = 1 << (int(bit_width) - 1)
+            data.real -= bias
+            data.imag -= bias
+        bin_map = self.config.get("fft_bin_map")
+        if bin_map is not None:
+            bin_map = np.asarray(bin_map, dtype=np.intp)
+            if bin_map.size and bin_map.size == data.shape[-1]:
+                data = data[..., bin_map]
+        return data
 
 
 
@@ -381,25 +409,48 @@ class RawDataPacketProcessor(PacketProcessorBase):
         if not is_complex:
             return ts, data, counts
 
-        # From here we have complex data, possibly with modifiers
-        cdata = self.fmt_cdata1[source]
+        # From here we have complex data, possibly with modifiers.
+        # fmt_cdata* are sized for max_timestamps; only slice the active row prefix.
+        n_rows = data.shape[0]
+        cdata = self.fmt_cdata1[source][:n_rows]
         np.copyto(cdata.real, data[:, :, ::2])
         np.copyto(cdata.imag, data[:, :, 1::2])
 
-        interleave_factor = cf.fmt_interleave_factor
-        if interleave_factor == 2:  # apply double resolution deinterleave ([[0,1,2,3], [4,5,6,7]] -> [[0 4 1 5 2 6 3 7]])
-            s0, s1, s2 = cdata.shape
-            v = cdata.reshape(s0, -1, interleave_factor, s2)
-            data = self.fmt_cdata2[source]
-            np.copyto(data[..., 0::2], v[..., 0, :])
-            np.copyto(data[..., 1::2], v[..., 1, :])
-
-        elif interleave_factor > 2:  # full resolution
+        interleave_factor = int(cf.fmt_interleave_factor)
+        if interleave_factor == 1:
+            data = cdata
+        elif interleave_factor == 2:
+            # fft_2x: deinterleave pairs of consecutive physical frame rows (legacy ``32+32d``).
+            s0, nchan, s2 = cdata.shape
+            out_rows = s0 // interleave_factor
+            if out_rows * interleave_factor != s0:
+                raise ValueError(
+                    f'Cannot deinterleave {s0} physical frame rows with interleave_factor={interleave_factor}'
+                )
+            data = self.fmt_cdata2[source][:out_rows]
+            v = cdata.reshape(out_rows, interleave_factor, nchan, s2)
+            data[:] = v.transpose(0, 2, 1, 3).reshape(out_rows, nchan, s2 * interleave_factor, order='F')
+            ts = ts.reshape(out_rows, interleave_factor)[:, 0]
+            counts = counts.reshape(out_rows, interleave_factor, nchan).min(axis=1)
+        else:  # full resolution (fft_4x and higher-order dual/quad capture modes)
             # Full resolution is dependent on the capture bus width (W) and number of bins per word (B).
             # We send W-bit Re then W-bit Im, skipping 2*B bins between them. It takes 2B frames to get the full spectrum.
             # ICE: W=32, B=2, 32+32-bit complex values, 2B= 4 frames (Max burst length = 4 frames)
             # CRS: W=128, B=4, 128+128-bit complex values, 2B= 8 frames (use mode 2 (8 frames/2 channels) or more 3 (16 frames/1 channel))
-            raise NotImplementedError("Full resolution is not implemented yet")
+            s0, nchan, s2 = cdata.shape
+            out_rows = s0 // interleave_factor
+            if out_rows * interleave_factor != s0:
+                raise ValueError(
+                    f'Cannot deinterleave {s0} physical frame rows with interleave_factor={interleave_factor}'
+                )
+            v = cdata.reshape(out_rows, interleave_factor, nchan, s2)
+            data = self.fmt_cdata2[source][:out_rows]
+            for k in range(interleave_factor):
+                data[..., k::interleave_factor] = v[:, k, :, :]
+            ts = ts.reshape(out_rows, interleave_factor)[:, 0]
+            counts = counts.reshape(out_rows, interleave_factor, nchan).min(axis=1)
+
+        data = self._apply_fft_formatter_compensation(data, source, base)
 
         return ts, data, counts
 

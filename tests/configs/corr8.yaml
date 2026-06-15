@@ -251,7 +251,7 @@ def: &default  # defaults, referenced below
             targets: # List of (crate,slot) tuples for which fains will be computed
               - ['*']
             capture_rate: 15
-            number_of_fft_averages: 100
+            number_of_fft_averages: 5
             number_of_gain_update_iterations: 20
             initial_gains: []
             # noise_injection : # noise injection parametrs used for gain calculations
@@ -384,13 +384,15 @@ corr8:
             max_file_size: 1000000000
 
         compute_gains:
-            enable: False
+            enable: True
+            method: direct
+            scaler_cap_data_type: fft_2x
             targets: # List of (crate,slot) tuples for which fains will be computed
               - ['*']
             initial_gains:
               - [['*'], [1.0, 22]] # Starting gain value, applied to all selected channels
             save_gains: True
-            capture_rate: 10  # period = (2**(capture_rate + 1) frames). DOn't recommend faster (less than 12) because we start losing packets due to REST HTTP encoding of the RMS vectors
+            capture_rate: 12  # period = (2**(capture_rate + 1) frames). DOn't recommend faster (less than 12) because we start losing packets due to REST HTTP encoding of the RMS vectors
               # Recommended rate codes to avoid :
               # 1 crate: 12
               # 2 crates: 13
@@ -410,8 +412,8 @@ corr8:
               # 14: 83.886 ms, 12 fps, delay <=160, tmux <=10
               # 15: 167.77s ms, 6 fps, delay <=320, tmux <= 21
               # 16: 335.544 ms, 3 fps, delay <=640, tmux <= 42
-            number_of_fft_averages: 100
-            number_of_gain_update_iterations: 30
+            number_of_fft_averages: 5
+            number_of_gain_update_iterations: 1
 
         firmware_correlator: # use only when mode=`corr16`
             # Static parameters - set once at initialization
