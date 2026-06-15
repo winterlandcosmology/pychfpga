@@ -1054,12 +1054,17 @@ class TestScaler:
         data[-1] = neg_overflow_marker
 
         _, _ = self._set_capture_scaler(read=False, func='arb', data=data, cap_data_type=0)
+        # SCALER stats are continuously accumulated in firmware; STATS_CAPTURE only
+        # exposes the next completed window. Discard one window after changing the
+        # input pattern so the asserted read reflects this test's waveform.
+        discard_overflow_stats, discard_adc_stats = self.board.get_channel_metrics(ch=ch, frame_cnt=frame_cnt)
         overflow_stats, adc_stats = self.board.get_channel_metrics(ch=ch, frame_cnt=frame_cnt)
         expected_overflows = 2 * frame_cnt
 
         logger.debug(
             f"test_scaler_overflow_stats: ch={ch} frame_cnt={frame_cnt} num_samples={self.data.NUM_SAMPLES} "
             f"pos_marker={pos_overflow_marker} neg_marker={neg_overflow_marker} "
+            f"discarded_overflows={discard_overflow_stats} discarded_adc_overflows={discard_adc_stats} "
             f"expected_overflows={expected_overflows} measured_overflows={overflow_stats} "
             f"measured_adc_overflows={adc_stats}"
         )
