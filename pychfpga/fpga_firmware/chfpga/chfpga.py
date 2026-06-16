@@ -3375,11 +3375,21 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         # round the burst period to an integer multiple of burst_period_frame_rounding
         burst_period_in_frames = (int(burst_period_in_frames) // burst_period_frame_rounding) * burst_period_frame_rounding
-
         if channels is None:
-                channels = self.default_channels
+                if self.CAPTURE_TYPE == "PROBER":
+                    channels = self.default_channels
+                elif self.CAPTURE_TYPE == "UCAP":
+                    #set default channels based on mode
+                    if mode == 0:
+                        channels = list(range(8))
+                    elif mode == 1:
+                        channels = list(range(4))
+                    elif mode == 2:
+                        channels = list(range(2))
+                    elif mode == 3:
+                        channels = list(range(1))
                 self.logger.info(f"The channels are not specified for data capture. "
-                                    f"Defaulting to {self.default_channels}.")
+                                    f"Defaulting to {channels}.")
  
         if verbose:
             self.logger.debug(

@@ -111,13 +111,9 @@ class UCAP(MMI):
             channels = [channels]
 
         if mode == 0:
-            if channels is None:
-                channels = list(range(8))
             if channels != list(range(8)):
                 raise RuntimeError('UCAP mode 0 can only capture channels 0-7, in that order')
         elif mode == 1:
-            if channels is None:
-                channels = list(range(4))
             if len(channels) != 4:
                 raise RuntimeError('UCAP mode 1 can only capture 4 channels')
             self.CH0 = channels[0]
@@ -125,15 +121,11 @@ class UCAP(MMI):
             self.CH2 = channels[2]
             self.CH3 = channels[3]
         elif mode == 2 :
-            if channels is None:
-                channels = list(range(2))
             if len(channels) != 2:
                 raise RuntimeError('UCAP mode 2 can only capture 2 channels')
             self.CH0 = channels[0]
             self.CH1 = channels[1]
         elif mode == 3:
-            if channels is None:
-                channels = list(range(1))
             if len(channels) != 1:
                 raise RuntimeError('UCAP mode 3 can only capture 1 channel')
             self.CH0 = channels[0]
@@ -433,7 +425,7 @@ class RawFrameReceiver(object):
 
         # Allocate destination buffer
 
-        data = np.zeros((nchan, ncap, self.FRAME_SIZE*16), dtype=np.int8)
+        data = np.zeros((nchan, ncap, self.FRAME_SIZE*int(frames_per_channel)), dtype=np.int8)
         data_count = np.zeros((nchan, ncap), dtype=np.uint16)
         ts = np.zeros((ncap,), dtype=np.uint64)
         ts_dict = {} # {timestamp:n, ...): keeps track of the known timestamps and associated capture slots
@@ -478,7 +470,7 @@ class RawFrameReceiver(object):
                     if verbose >= 3:
                         print(f'sid = {self.buf_stream_id[i] & 0xFFF:03x}, Ch={bix}, frame={frame}, subframe={subframe}')
                     if bix is not None:
-                        x = frame * self.FRAME_SIZE + subframe * self.DATA_SIZE
+                        x = int(frame) * self.FRAME_SIZE + int(subframe)*self.DATA_SIZE
                         data[bix, n, x:x+self.DATA_SIZE] = self.buf_data[i]
                         data_count[bix, n] += 1
             self.n = 0
@@ -527,7 +519,7 @@ class RawFrameReceiver(object):
             raise ValueError(f'Invalid format "{format}"')
             
         if split:
-            data = data.reshape((nchan, ncap*frames_per_channel,-1))
+            data = data.reshape((nchan, ncap*int(frames_per_channel),-1))
 
         if return_multiple_captures:
             return ts, data, data_count
