@@ -22,7 +22,7 @@ FFT_INFO = {
     2: dict(name='D3A', latency=12533, samples_per_frame=16384, bits_per_sample=14, bits_per_bin=18+18, bins_per_word=4, unscrambled=True),
     3: dict(name='CHORD', latency=10452, samples_per_frame=16384, bits_per_sample=14, bits_per_bin=32+32, bins_per_word=4, unscrambled=False),
     4: dict(name='HIRAX', latency=3230, samples_per_frame=2048, bits_per_sample=18+18, bits_per_bins=29+29, bins_per_word=2, unscrambled=False),
-    5: dict(name='HIRAX_3DSP', latency=3230, samples_per_frame=2048, bits_per_sample=18+18, bits_per_bins=29+29, bins_per_word=2, unscrambled=False)
+    5: dict(name='HIRAX_3DSP', latency=2733, samples_per_frame=2048, bits_per_sample=18+18, bits_per_bins=29+29, bins_per_word=2, unscrambled=False)
 }
 
 class FFT(MMI):
