@@ -2,6 +2,8 @@ connection_config:
     prog: 1                 # 0 - do not reprogram, 1 - reprogram if outdated, 2 - always reprogram
     mode: 'corr16'          # Do not change for a single board
     hwm: 'mb 509'           # For a different board change the serial number
+    # bitfile: /home/vbidula/pychfpga/pychfpga/fpga_firmware/bitstreams/chfpga_ice_corr16.bit
+    bitfile: /home/vbidula/pychfpga/pychfpga/fpga_firmware/bitstreams/chfpga_ice_corr16_jun16.bit
 
 test_config:
     loglevelconn: "INFO"   # Log level during connection to the board
