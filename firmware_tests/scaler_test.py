@@ -256,12 +256,12 @@ class TestScaler:
             if double:
                 pytest.skip("Double resolution not supported on UCAP yet")
             else:
-                 _, data, _ = receiver.read_raw_frames(ncap=1, flush=False, split=True, verbose=self.test_config.loglevelrecv)
+                 _, data, _ = receiver.read_raw_frames(ncap=1, flush=False, split=True, source=1, verbose=self.test_config.loglevelrecv)
                  #data = data[:, ::2]
             assert np.all(np.equal(data[0], data))
             if get_flags:
                 raise Exception("Flag feature not implemented on UCAP")
-            return source, (data[:, 0] // (2**self.data.READOUT_SHIFT)) #only return first frame of data
+            return source, (data[:, 0]) #only return first frame of data
         logger.debug("Initializing data receiver")
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
         ts, data, count = receiver.read_raw_frames(ncap=1, split_frames=False)
@@ -318,12 +318,7 @@ class TestScaler:
         logger = self.get_logger()
         self.board.set_gains(self._uniform_real_gains(0), postscaler=0)
 
-        source = self.gen_data('ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
-        self.board.set_data_source(source='arb', data=source)
-        self.board.start_data_capture(period=0.01, source='scaler', data_type=0)
-        receiver = self.board.get_data_receiver(verbose=2)
-        _, data, _ = receiver.read_raw_frames(ncap=1, split_frames=False)
-
+        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
         ref_data = source * 0
         logger.debug(
             f"test_all_zeroes: source_shape={source.shape} data_shape={data.shape} ref_shape={ref_data.shape}"
@@ -336,6 +331,7 @@ class TestScaler:
 
     @pytest.mark.scaler
     @pytest.mark.parametrize('symmetric_saturation', (False,))
+    #@pytest.mark.parametrize('cap_data_type', (1, 2, 3))
     def test_all_ones(self, postscaler, symmetric_saturation, setup_scaler, xr):
         '''
         Verify unity gain path for a full-range ramp
@@ -351,15 +347,7 @@ class TestScaler:
         self.board.set_symmetric_saturation(symmetric_saturation)
 
         source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
-        '''source = self.gen_data('ramp', samples=self.data.NUM_SAMPLES, min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
-        self.board.set_data_source(source='arb', data=source)
-        self.board.start_data_capture(period=0.01, source='scaler', data_type=cap_data_type)
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
-        _, data, _ = receiver.read_raw_frames(ncap=1, split_frames=False)
-        data = data // (2 ** self.data.READOUT_SHIFT)'''
-
         ref_data = np.clip(source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT + (symmetric_saturation), self.data.MAX_OUTPUT)
-        #ref_data = np.repeat(ref_data, 2)
         logger.debug(
             f"test_all_ones: postscaler={postscaler} "
             f"symmetric_saturation={symmetric_saturation}"
@@ -1025,9 +1013,8 @@ class TestScaler:
         
     
     @pytest.mark.scaler
-    @pytest.mark.parametrize("cap_data_type", (5,))
-    @pytest.mark.parametrize("is_complex", (False,))
-    def test_mult_resolution_capture(self, cap_data_type, is_complex, setup_scaler, xr):
+    @pytest.mark.parametrize("cap_data_type", (4, 5))
+    def test_mult_resolution_capture(self, cap_data_type, setup_scaler, xr):
         '''
         Tests that the double and full resolution capture modes extract the right bits of the FFT data from the right bins
 
@@ -1075,9 +1062,9 @@ class TestScaler:
             capture_bytes = self.data.CAPTURE_BUS_WIDTH // 8
             print(capture_bytes)
             if capture_bytes <= 8:
-                ref_data = raw_fft * 2**max(self.data.CAPTURE_BUS_WIDTH - self.data.FFT_WIDTH, 0)
+                ref_data = raw_fft
             else:
-                ref_data = raw_fft * 2**max(self.data.CAPTURE_BUS_WIDTH - self.data.FFT_WIDTH - 64, 0) #simulate dropping of 64 LSBs
+                ref_data = raw_fft
         ref_data = ref_data[::2] + ref_data[1::2]*1j
         print(
             f"test_double_resolution_capture: cap_data_type={cap_data_type} "

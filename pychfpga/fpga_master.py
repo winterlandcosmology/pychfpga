@@ -215,7 +215,7 @@ class FPGAMaster(object):
 
 
     def _set_correlator_soft_integ_period(self, software_integration_period):
-        """Store software integration period on each board UCORR state for get_firmware_config()."""
+        """Store software integration period on each board UCORR state for get_receiver_config()."""
         soft = int(software_integration_period or 1)
         for ib in self.fpgas.ib:
             corr = getattr(getattr(ib, 'fpga', None), 'CORR', None)
@@ -322,7 +322,7 @@ class FPGAMaster(object):
                 ports=recv_ports[server_name],
                 stream_ids=self.raw_acq_stream_ids[server_name],
                 config=firmware_config_for_rest(
-                    self.raw_acq_ibs[server_name][0].fpga.get_firmware_config().as_dict()),
+                    self.raw_acq_ibs[server_name][0].fpga.get_receiver_config().as_dict()),
                 comet_broker=conf.common_config.comet_broker.as_dict(),
                 jump_thresholds=conf.common_config.jump_thresholds,
                 metrics_refresh_time=conf.common_config.metrics_refresh_time,
@@ -489,7 +489,7 @@ class FPGAMaster(object):
             if not ibs:
                 continue
             fw = firmware_config_for_rest(
-                ibs[0].fpga.get_firmware_config().as_dict())
+                ibs[0].fpga.get_receiver_config().as_dict())
             tasks.append(server.update_config(fw))
         if tasks:
             await asyncio.gather(*tasks)
@@ -1343,7 +1343,7 @@ class FPGAMaster(object):
         self.log.info("Setting up noise injection")
         self.setup_noise_injection(conf.fpga.get('noise_injection',{}))
 
-        # Start correlator before raw_acq so get_firmware_config() snapshots the
+        # Start correlator before raw_acq so get_receiver_config() snapshots the
         # programmed integration period and soft_integ_period for UCORR assembly.
         corr_config = self.config.fpga.get('firmware_correlator', {})
 

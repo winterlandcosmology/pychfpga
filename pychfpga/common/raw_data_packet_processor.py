@@ -309,8 +309,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
                 state.capture_format[source] = cf
             if cf.has_changed(context=dynamic_state_attrs[source]):
                 if cf.fmt_is_complex:
-                    bytes_per_integer = math.ceil(cf.fmt_base_width / 8)
-                    out_dtype = np.dtype(np.complex128 if cf.fmt_base_width == 64 else np.complex64)
+                    bytes_per_integer = math.ceil(cf.fmt_bus_width / 8)
+                    out_dtype = np.dtype(np.complex128 if cf.fmt_bus_width == 64 else np.complex64)
                     complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // 2
                     interleave_factor = cf.fmt_interleave_factor
                     # interleaved_values_per_frame = complex_values_per_frame * interleaved_factor # 2 for interleaved, 1 for non-interleaved
@@ -375,17 +375,18 @@ class RawDataPacketProcessor(PacketProcessorBase):
             cf = self.config.capture_format[source]
             if cf is not None and not isinstance(cf, State):
                 cf = State(cf)
-        base = cf.fmt_base_width
+        base = cf.fmt_bus_width
         is_complex = cf.fmt_is_complex
 
         # derive format parameters
         scalar_bytes = math.ceil(base / 8)
         integer_dtype = np.dtype(f">i{scalar_bytes}") if scalar_bytes <= 8 else np.dtype(f'>i8')
-        right_shift = 8*scalar_bytes - base
+        right_shift = base - cf.fmt_data_width
         # View the buffer as N-byte integers
         data = raw_data.view(integer_dtype)
         if scalar_bytes > 8:
             data = data[..., ::2] #drop every second byte
+            right_shift -= 64
         if right_shift > 0:
             np.right_shift(data, right_shift, data)
 
@@ -411,16 +412,15 @@ class RawDataPacketProcessor(PacketProcessorBase):
         if not is_complex:
             return ts, data, counts
 
+        n_rows = data.shape[0]
+        cdata = self.fmt_cdata1[source][:n_rows]
+        np.copyto(cdata.real, data[:, :, ::2])
+        np.copyto(cdata.imag, data[:, :, 1::2])
         interleave_factor = int(cf.fmt_interleave_factor)
         if interleave_factor > 2:
             # Full resolution mode: each physical frame already contains Re/Im pairs
             # for one bin group. Consecutive frames carry even/odd FFT words for that
             # group, and 2*B frames cover all B bin groups.
-            n_rows = data.shape[0]
-            cdata = self.fmt_cdata1[source][:n_rows]
-            np.copyto(cdata.real, data[:, :, ::2])
-            np.copyto(cdata.imag, data[:, :, 1::2])
-
             s0, nchan, s2 = cdata.shape
             out_rows = s0 // interleave_factor
             if out_rows * interleave_factor != s0:
@@ -441,10 +441,6 @@ class RawDataPacketProcessor(PacketProcessorBase):
             counts = counts.reshape(out_rows, interleave_factor, nchan).min(axis=1)
         else:
             # fmt_cdata* are sized for max_timestamps; only slice the active row prefix.
-            n_rows = data.shape[0]
-            cdata = self.fmt_cdata1[source][:n_rows]
-            np.copyto(cdata.real, data[:, :, ::2])
-            np.copyto(cdata.imag, data[:, :, 1::2])
             if interleave_factor == 1:
                 data = cdata
             else:
