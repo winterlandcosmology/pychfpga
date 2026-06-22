@@ -26,9 +26,9 @@ def plot(datasets, split_complex=False, title="test"):
         if im and not split_complex:
             break
         if split_complex and not im:
-            ax.plot(datasets[i][::2], label=labels[i] + "(Re)")
+            ax.plot(datasets[i].real, label=labels[i] + "(Re)")
         elif split_complex and im:
-            ax.plot(datasets[i % len(datasets)][1::2], label=labels[i % len(datasets)] + "(Im)")
+            ax.plot(datasets[i % len(datasets)].imag, label=labels[i % len(datasets)] + "(Im)")
         else:
             ax.plot(datasets[i], label=labels[i])
         ax.legend()

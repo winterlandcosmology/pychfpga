@@ -380,10 +380,12 @@ class RawDataPacketProcessor(PacketProcessorBase):
 
         # derive format parameters
         scalar_bytes = math.ceil(base / 8)
-        integer_dtype = np.dtype(f">i{scalar_bytes}")
+        integer_dtype = np.dtype(f">i{scalar_bytes}") if scalar_bytes <= 8 else np.dtype(f'>i8')
         right_shift = 8*scalar_bytes - base
         # View the buffer as N-byte integers
         data = raw_data.view(integer_dtype)
+        if scalar_bytes > 8:
+            data = data[..., ::2] #drop every second byte
         if right_shift > 0:
             np.right_shift(data, right_shift, data)
 
@@ -409,46 +411,55 @@ class RawDataPacketProcessor(PacketProcessorBase):
         if not is_complex:
             return ts, data, counts
 
-        # From here we have complex data, possibly with modifiers.
-        # fmt_cdata* are sized for max_timestamps; only slice the active row prefix.
-        n_rows = data.shape[0]
-        cdata = self.fmt_cdata1[source][:n_rows]
-        np.copyto(cdata.real, data[:, :, ::2])
-        np.copyto(cdata.imag, data[:, :, 1::2])
-
         interleave_factor = int(cf.fmt_interleave_factor)
-        if interleave_factor == 1:
-            data = cdata
-        elif interleave_factor == 2:
-            # fft_2x: deinterleave pairs of consecutive physical frame rows (legacy ``32+32d``).
+        if interleave_factor > 2:
+            # Full resolution mode: each physical frame already contains Re/Im pairs
+            # for one bin group. Consecutive frames carry even/odd FFT words for that
+            # group, and 2*B frames cover all B bin groups.
+            n_rows = data.shape[0]
+            cdata = self.fmt_cdata1[source][:n_rows]
+            np.copyto(cdata.real, data[:, :, ::2])
+            np.copyto(cdata.imag, data[:, :, 1::2])
+
             s0, nchan, s2 = cdata.shape
             out_rows = s0 // interleave_factor
             if out_rows * interleave_factor != s0:
                 raise ValueError(
                     f'Cannot deinterleave {s0} physical frame rows with interleave_factor={interleave_factor}'
                 )
-            data = self.fmt_cdata2[source][:out_rows]
+            bins_per_word = interleave_factor // 2
             v = cdata.reshape(out_rows, interleave_factor, nchan, s2)
-            data[:] = v.transpose(0, 2, 1, 3).reshape(out_rows, nchan, s2 * interleave_factor, order='F')
-            ts = ts.reshape(out_rows, interleave_factor)[:, 0]
-            counts = counts.reshape(out_rows, interleave_factor, nchan).min(axis=1)
-        else:  # full resolution (fft_4x and higher-order dual/quad capture modes)
-            # Full resolution is dependent on the capture bus width (W) and number of bins per word (B).
-            # We send W-bit Re then W-bit Im, skipping 2*B bins between them. It takes 2B frames to get the full spectrum.
-            # ICE: W=32, B=2, 32+32-bit complex values, 2B= 4 frames (Max burst length = 4 frames)
-            # CRS: W=128, B=4, 128+128-bit complex values, 2B= 8 frames (use mode 2 (8 frames/2 channels) or more 3 (16 frames/1 channel))
-            s0, nchan, s2 = cdata.shape
-            out_rows = s0 // interleave_factor
-            if out_rows * interleave_factor != s0:
-                raise ValueError(
-                    f'Cannot deinterleave {s0} physical frame rows with interleave_factor={interleave_factor}'
+            data = self.fmt_cdata2[source][:out_rows]
+            for k in range(bins_per_word):
+                frame_pair = v[:, 2*k:2*k + 2, :, :]
+                data[..., k::bins_per_word] = (
+                    frame_pair
+                    .transpose(0, 2, 1, 3)
+                    .reshape(out_rows, nchan, 2 * s2, order='F')
                 )
-            v = cdata.reshape(out_rows, interleave_factor, nchan, s2)
-            data = self.fmt_cdata2[source][:out_rows]
-            for k in range(interleave_factor):
-                data[..., k::interleave_factor] = v[:, k, :, :]
             ts = ts.reshape(out_rows, interleave_factor)[:, 0]
             counts = counts.reshape(out_rows, interleave_factor, nchan).min(axis=1)
+        else:
+            # fmt_cdata* are sized for max_timestamps; only slice the active row prefix.
+            n_rows = data.shape[0]
+            cdata = self.fmt_cdata1[source][:n_rows]
+            np.copyto(cdata.real, data[:, :, ::2])
+            np.copyto(cdata.imag, data[:, :, 1::2])
+            if interleave_factor == 1:
+                data = cdata
+            else:
+                # fft_2x: deinterleave pairs of consecutive physical frame rows (legacy ``32+32d``).
+                s0, nchan, s2 = cdata.shape
+                out_rows = s0 // interleave_factor
+                if out_rows * interleave_factor != s0:
+                    raise ValueError(
+                        f'Cannot deinterleave {s0} physical frame rows with interleave_factor={interleave_factor}'
+                    )
+                data = self.fmt_cdata2[source][:out_rows]
+                v = cdata.reshape(out_rows, interleave_factor, nchan, s2)
+                data[:] = v.transpose(0, 2, 1, 3).reshape(out_rows, nchan, s2 * interleave_factor, order='F')
+                ts = ts.reshape(out_rows, interleave_factor)[:, 0]
+                counts = counts.reshape(out_rows, interleave_factor, nchan).min(axis=1)
 
         data = self._apply_fft_formatter_compensation(data, source, base)
 

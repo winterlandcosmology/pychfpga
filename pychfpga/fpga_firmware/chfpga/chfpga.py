@@ -3608,10 +3608,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 - 1: Output the input FFT data.
                 - 2: Output raw scaled FFT data, before rounding is applied. The data is saturated, but disregarding symmetric saturation.
                 - 3: Output 4+4 bit scaled FFT data (e.g. normal scaler output, even if the science output is set to another mode)
-                - 4: Output the input FFT data of the even bins only, at double the bitwidth.
-                - 5: Output the input FFT data of the odd bins only, at double the bitwidth.
-                - 6: Output the raw scaled FFT data (see above) of the even bins only, at double the bitwidth.
-                - 7: Output the raw scaled FFT data (see above) of the odd bins only, at double the bitwidth.
+                - 4: Output the input FFT data of the even bins and then the odd bins in an alternating fashion, at double the bitwidth.
+                - 5: Output the input FFT data of each Re and Im component one at a time, at the full bitwidth.
             For modes 4 and 5, one host logical frame is reconstructed from packets produced by consecutive
             physical frames (not from a single fully buffered physical frame).
         '''
