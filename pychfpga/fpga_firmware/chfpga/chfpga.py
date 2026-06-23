@@ -2289,7 +2289,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         #storage_dtype = f"i{self.ADC_BYTES_PER_SAMPLE}"
 
         adc_capture_format = State(
-            fmt_base_width=adc_bit_width,
+            fmt_bus_width=8*self.ADC_BYTES_PER_SAMPLE,
+            fmt_data_width=adc_bit_width,
             fmt_is_complex=False,
             fmt_interleave_factor=1,
         )
