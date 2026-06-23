@@ -2261,7 +2261,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             int(self.config.chan[ch].get("scaler_cap_data_type", 0))
             for ch in target_channels
         ]
-
         cap_data_type = cap_types[0] if cap_types else 0
         if any(ct != cap_data_type for ct in cap_types):
             raise ValueError("Selected channels have different raw capture data formats. Use separate receivers.")
@@ -2275,11 +2274,19 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 "Selected channels have different scaler offset-binary encoding settings. "
                 "Use separate receivers."
             )
-        fft_offset_encoding = offset_encodings[0] if offset_encodings else True
+        fft_offset_encoding = offset_encodings[0] if offset_encodings else False
 
-        adc_bit_width = 2**int(self.ADC_BYTES_PER_SAMPLE)
+        fft_bypass = [
+            bool(self.config.chan[ch].get("fft_bypass", False))
+            for ch in target_channels
+        ]
+        if fft_bypass and any(fb != fft_bypass[0] for fb in fft_bypass):
+            raise ValueError("Selected channels have different FFT bypass settings. Use separate receivers.")
+        fft_bypass = fft_bypass[0] if fft_bypass else False
+
+        adc_bit_width = self.ADC_BITS_PER_SAMPLE
         fft_bins_per_word = self.FFT_BINS_PER_WORD
-        storage_dtype = f"i{self.ADC_BYTES_PER_SAMPLE}"
+        #storage_dtype = f"i{self.ADC_BYTES_PER_SAMPLE}"
 
         adc_capture_format = State(
             fmt_base_width=adc_bit_width,
@@ -2292,23 +2299,23 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         #and the data length, which is the number of bits that actual contain the desired data. Since these are placed in the MSBs
         #of the bus, we must right shift by the difference to extract our desired data
 
-
+        fft_data_width = self.FFT_INFO[self.FFT_TYPE]['bits_per_bin']//2 #divide by 2 for real and imaginary
         if cap_data_type == 4:
-            fft_bus_width = 32 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 16
-            fft_data_width = self.FFT_INFO[self.FFT_TYPE]['bits_per_bin']//2 #divide by 2 for real and imaginary
+            capture_bus_width = 32 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 16
+            data_width = fft_data_width if not fft_bypass else adc_bit_width
             fft_capture_format = State(
-                fmt_bus_width=fft_bus_width,
-                fmt_data_width =fft_data_width,
+                fmt_bus_width=capture_bus_width,
+                fmt_data_width =data_width,
                 fmt_is_complex=True,
                 fmt_interleave_factor=2,
             )
             fft_pplf = 2
         elif cap_data_type == 5: # Full resolution FFT
-            fft_bus_width = 128 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 32  # CRS: 128-bit complex, ICE: 32-bit complex. TODO: have this parametrized by the firmware
-            fft_data_width = self.FFT_INFO[self.FFT_TYPE]['bits_per_bin']//2 #divide by 2 for real and imaginary
+            capture_bus_width = 128 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 32  # CRS: 128-bit complex, ICE: 32-bit complex. TODO: have this parametrized by the firmware
+            data_width = fft_data_width if not fft_bypass else adc_bit_width
             fft_capture_format = State(
-                fmt_bus_width=fft_bus_width,
-                fmt_data_width=fft_data_width,
+                fmt_bus_width=capture_bus_width,
+                fmt_data_width=data_width,
                 fmt_is_complex=True,
                 fmt_interleave_factor=2 * fft_bins_per_word,
             )
@@ -2319,10 +2326,10 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             eight_bit = eight_bit_capture_modes[0]
             if any(ebc != eight_bit for ebc in eight_bit_capture_modes):
                 raise ValueError("Selected channels have different eight-bit capture settings. Use separate receivers.")
-            fft_bus_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8 
+            capture_bus_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8 
             fft_data_width = 8 if eight_bit else 4
             fft_capture_format = State(
-                fmt_bus_width=fft_bus_width,
+                fmt_bus_width=capture_bus_width,
                 fmt_data_width=fft_data_width,
                 fmt_is_complex=False,
                 fmt_interleave_factor=1,
@@ -2689,7 +2696,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             scaler_bypass=None,
             scaler_cap_data_type=None,
             scaler_bypass_data_type=None,
-            gain=None,
+            gains=None,
             postscaler=None,
             scaler_eight_bit=None,
             scaler_rounding_mode=None,
@@ -2699,7 +2706,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             offset_binary_encoding=None,
             local_sync=True,
             channels=None,
-            gains=None,
             **function_kwargs):
         """
         Single command used to set all channelizer settings.
@@ -3515,9 +3521,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             st = self.config.chan[ch]
             st.data_source = source
             st.prober_sub_period = int(sub_period)
-        raw_capture = self.config.raw_capture
-        raw_capture.source = source
-        raw_capture.channels = tuple(self._normalize_channels(channels))
+        raw = self.raw
+        raw.source = source
+        raw.channels = tuple(self._normalize_channels(channels))
         self.get_receiver_config(channels=channels)
 
     def set_fft_bypass(self, bypass_mode, channels=None):
@@ -4462,7 +4468,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
     def set_scaler_eight_bit(
             self,
             scaler_eight_bit: bool,
-            prober_user_flags: bool,
+            prober_user_flags: bool = None,
             channels: List[int] = None,
     ):
         """
@@ -4508,6 +4514,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 )
                 if prober_user_flags is not None:
                     self.chan[ch].PROBER.PROBER_USER_FLAGS = prober_user_flags
+                    if prober_user_flags and not scaler_eight_bit:
+                        raise RuntimeError(f"Cannot output prober user flags in a channel not in 8-bit mode")
 
     def set_scaler_rounding_mode(
             self,

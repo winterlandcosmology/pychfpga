@@ -70,7 +70,7 @@ class FFTDataProcessor:
         if cf is not None and cf.fmt_is_complex and int(cf.fmt_interleave_factor or 1) > 1:
             # ``get_formatted_data`` already deinterleaves physical frame pairs.
             return 1
-        pplf = self.config.get('packets_per_logical_frame')
+        pplf = self.config.get('packets_per_logical_frame')[SOURCE_INDEX]
         if pplf is None:
             pplf = getattr(self.raw.config, 'packets_per_logical_frame', 1)
         return max(1, int(pplf or 1))
@@ -111,7 +111,8 @@ class FFTDataProcessor:
         if cf is None:
             return dict(fmt=None)
         return dict(
-            fmt_base_width=int(cf.fmt_base_width),
+            fmt_bus_width=int(cf.fmt_bus_width),
+            fmt_data_width=int(cf.fmt_data_width),
             fmt_is_complex=bool(cf.fmt_is_complex),
             fmt_interleave_factor=int(cf.fmt_interleave_factor or 1),
         )

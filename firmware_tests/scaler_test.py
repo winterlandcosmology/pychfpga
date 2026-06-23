@@ -1050,7 +1050,7 @@ class TestScaler:
         #interleave real and complex to make testing easier
 
         source_i = source.astype(np.int64)
-        raw_fft = source_i * (2 ** self.data.IMPLICIT_SHIFT)
+        raw_fft = source_i# * (2 ** self.data.IMPLICIT_SHIFT)
 
         if cap_data_type == 4:
             capture_width = self.data.CAPTURE_BUS_WIDTH // self.data.BINS_PER_WORD

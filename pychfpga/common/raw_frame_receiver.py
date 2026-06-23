@@ -73,7 +73,6 @@ class RawFrameReceiver(RawDataPacketProcessor):
         if config is not None:
             self.update_config(config)
 
-        print(ncap)
         ts, data, counts = self.create_output_buffer(n_ts=ncap, source=source, split=split, format=format)
         # ts.fill(0)
         # data.fill(0)
