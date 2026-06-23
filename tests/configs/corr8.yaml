@@ -324,7 +324,7 @@ corr8:
         <<: *default_fpga
         fpga_array_params:
             <<: *default_fpga_array_params
-            hwm: 'CRS 37:1' # ID of the board used. Can also use a direct IP
+            hwm: 'CRS 77:1' # ID of the board used. Can also use a direct IP
             mode: corr8  # shuffle 256 and 512 require crate numbers
             sync_method: local #  distributed_time # <-- For R232. Change to --> sync_method: distributed_time <-- for D3A. #local_soft_trigger
             sync_source: sma_a
@@ -332,7 +332,7 @@ corr8:
             # fpga_ip_addr_fn: '(a,b,c+1,d)'
 
         channelizer_params: # parameters used to set up the channelizers (CRS: no MGADC08/adcdaq keys)
-            data_source : 'adc' # Source of the function generator, as follows:
+            data_source : 'ramp' # Source of the function generator, as follows:
                 # 'adc': Sends the ADC data
                 # 'noise': Uniform white noise generator
                 # 'word_ctr_buffer_flags': 32-bit Frame/word counter, with ADC overflow from bit 0 of waveform buffer bytes
@@ -367,7 +367,7 @@ corr8:
             #     output: 'bp_sma' # Output to which to send the PWM signal. 'sma_a' (ICEBoard SMA) or 'bp_sma' (Backplace MMCX conector)
 
         raw_data_capture:
-            capture_source: 'funcgen'
+            capture_source: 'scaler'
             baseline_capture_rate: 10  # Frame per second. 0 = disable.
             tmux_factor: 3
 
@@ -384,7 +384,7 @@ corr8:
             max_file_size: 1000000000
 
         compute_gains:
-            enable: True
+            enable: False
             method: direct
             scaler_cap_data_type: fft_2x
             targets: # List of (crate,slot) tuples for which fains will be computed
