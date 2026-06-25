@@ -3127,6 +3127,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         #             pr = self.recv.pr
         #         self.recv = None
 
+        fw = self.get_receiver_config(stream_ids=kwargs.get("stream_ids"))
+
         if not self.recv:
             if not isinstance(pr, UDPPacketReceiver):
                 pr_kwargs = {}
@@ -3138,10 +3140,11 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 self.logger.debug(f'{self!r}: Creating data receiver')
                 pr = UDPPacketReceiver(self.get_data_socket(port_number=port_number), **pr_kwargs)
 
-            fw = self.get_receiver_config(stream_ids=kwargs.get("stream_ids"))
             self.recv = RawFrameReceiver(pr, config=fw.raw, **kwargs)
         else:
-            self.logger.debug(f'{self!r}: Fetching existing data receiver')
+            self.logger.debug(f'{self!r}: Updating existing data receiver config')
+            self.recv.update_config(fw.raw)
+            self.recv.current_row = 0
         return self.recv
 
 
