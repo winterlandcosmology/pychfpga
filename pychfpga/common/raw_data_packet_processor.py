@@ -461,8 +461,11 @@ class RawDataPacketProcessor(PacketProcessorBase):
             v = data.reshape(logical_rows, interleave_factor, data.shape[1], data.shape[2])
             out = self.fmt_cdata2[source][:logical_rows]
             for lane in range(bins_per_word):
-                np.copyto(out[:, :, lane::bins_per_word].real, v[:, 2 * lane])
-                np.copyto(out[:, :, lane::bins_per_word].imag, v[:, 2 * lane + 1])
+                for parity in range(2):
+                    row = v[:, 2 * lane + parity]
+                    bins = out[:, :, lane + parity * bins_per_word::interleave_factor]
+                    np.copyto(bins.real, row[:, :, ::2])
+                    np.copyto(bins.imag, row[:, :, 1::2])
             ts = ts.reshape(logical_rows, interleave_factor)[:, 0]
             counts = counts.reshape(logical_rows, interleave_factor, counts.shape[1]).min(axis=1)
             data = out
