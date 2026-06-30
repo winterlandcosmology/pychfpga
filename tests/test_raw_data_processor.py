@@ -538,9 +538,9 @@ def test_full_resolution_complex_ice_interleave4():
         n_packets=4,
         frames_per_burst=4,
         bytes_per_sample=1,
-        samples_per_frame=12,
-        bytes_per_frame=12,
-        bytes_per_subframe=12,
+        samples_per_frame=24,
+        bytes_per_frame=24,
+        bytes_per_subframe=24,
         packets_per_channel_per_burst=4,
         packets_per_logical_frame=4,
         logical_frames_per_burst=1,
@@ -550,15 +550,15 @@ def test_full_resolution_complex_ice_interleave4():
         stream_ids=(10,),
         channels=(0,),
         capture_format=[_unused_capture_format_slot(), cf1],
-        fft_bin_map=np.array([2, 0, 3, 1, 5, 4], dtype=np.intp),
+        fft_bin_map=np.array([0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11], dtype=np.intp),
     )
 
     components = np.asarray(
         [
-            10, 20, 30,
-            1, 2, 3,
-            40, 50, 60,
-            4, 5, 6,
+            0, 1000, 2, 1002, 4, 1004,
+            1, 1001, 3, 1003, 5, 1005,
+            6, 1006, 8, 1008, 10, 1010,
+            7, 1007, 9, 1009, 11, 1011,
         ],
         dtype=">i4",
     )
@@ -570,11 +570,8 @@ def test_full_resolution_complex_ice_interleave4():
 
     ts, data, counts = processor.get_formatted_data(slice(0, 1), source=1)
 
-    expected = np.asarray([[[
-        20 + 2j, 10 + 1j,
-        50 + 5j, 40 + 4j,
-        60 + 6j, 30 + 3j,
-    ]]], dtype=np.complex64)
+    expected_bins = np.arange(12, dtype=np.float32)
+    expected = (expected_bins + 1j * (1000 + expected_bins)).reshape(1, 1, -1).astype(np.complex64)
     np.testing.assert_array_equal(ts, [20])
     np.testing.assert_array_equal(counts, [[1]])
     np.testing.assert_array_equal(data, expected)
@@ -603,13 +600,13 @@ def test_full_resolution_complex_crs_interleave8_uses_msb_slot():
 
     frame_components = (
         (100, 200),
-        (1, 2),
-        (300, 400),
-        (3, 4),
-        (500, 600),
-        (5, 6),
-        (700, 800),
-        (7, 8),
+        (104, 204),
+        (101, 201),
+        (105, 205),
+        (102, 202),
+        (106, 206),
+        (103, 203),
+        (107, 207),
     )
     slots = np.full((8, 8), -999, dtype=">i4")
     for frame, values in enumerate(frame_components):
@@ -623,8 +620,8 @@ def test_full_resolution_complex_crs_interleave8_uses_msb_slot():
     ts, data, counts = processor.get_formatted_data(slice(0, 1), source=1)
 
     expected = np.asarray([[[
-        300 + 3j, 100 + 1j, 700 + 7j, 500 + 5j,
-        400 + 4j, 200 + 2j, 800 + 8j, 600 + 6j,
+        101 + 201j, 100 + 200j, 103 + 203j, 102 + 202j,
+        105 + 205j, 104 + 204j, 107 + 207j, 106 + 206j,
     ]]], dtype=np.complex64)
     np.testing.assert_array_equal(ts, [100])
     np.testing.assert_array_equal(counts, [[4]])

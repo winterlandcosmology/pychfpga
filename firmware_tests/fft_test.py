@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -6,6 +7,7 @@ import pytest
 from pychfpga.fpga_array import FPGAArray
 from wtl.namespace import NameSpace
 
+from .casper_simulations.caspersimtools import InputSignal, OutputSignal
 from .utils import plot
 
 
@@ -29,6 +31,14 @@ class TestFFT:
     FFT_COMPLEX_CAPTURE_MODE = 'fft_2x'
     FFT_COMPLEX_FRAMES_PER_BURST = 2
     FFT_SHIFT = 2047
+    FFT_FULL_CAPTURE_MODE = 'fft_full'
+    SIM_COMPARE_PLATFORM = 'ICE-8bit-r'
+    SIM_COMPARE_INSTRUMENT = 'hirax'
+    SIM_COMPARE_DATA_DIR = Path(__file__).resolve().parent / 'casper_simulations' / 'sim_data' / 'hirax'
+    SIM_COMPARE_OUTPUT_DTYPE = np.int32
+    SIM_COMPARE_FFT_SHIFT = 1984
+    SIM_COMPARE_CAPTURE_RIGHT_SHIFT = 8
+    SIM_COMPARE_CAPTURE_PERIOD = 0.01
 
     def get_logger(self):
         return self.logger
@@ -368,6 +378,243 @@ class TestFFT:
         if max_bin_abs is not None:
             assert bin_abs <= max_bin_abs
 
+    def setup_fft_simulation_compare(self, ch):
+        if self.test_config.platform != self.SIM_COMPARE_PLATFORM:
+            pytest.skip(
+                f"Exact simulation comparison is currently defined only for {self.SIM_COMPARE_PLATFORM}"
+            )
+        if self.data.PLATFORM != 'ICE':
+            pytest.skip("Exact simulation comparison currently targets ICE firmware")
+        if int(getattr(self.board, 'FFT_TYPE', 0)) == 0:
+            pytest.skip("Firmware reports no FFT implementation")
+
+        adc_bits = int(getattr(self.board, 'ADC_BITS_PER_SAMPLE', self.data.INPUT_WIDTH))
+        n_inputs = int(getattr(self.board, 'SAMPLES_PER_WORD', 0))
+        if adc_bits != 8:
+            pytest.skip(f"Exact simulation comparison expects 8-bit ADC input, got {adc_bits}")
+        if n_inputs != 4:
+            pytest.skip(f"Exact simulation comparison expects 4 ADC lanes, got {n_inputs}")
+
+        self.board.set_channelizer(
+            fft_bypass=False,
+            scaler_bypass=False,
+            data_source=None,
+            scaler_bypass_data_type=0,
+            scaler_cap_data_type=self.FFT_FULL_CAPTURE_MODE,
+            offset_binary_encoding=False,
+            scaler_eight_bit=True,
+            prober_user_flags=False,
+            scaler_rounding_mode=0,
+            symmetric_saturation=False,
+            channels=[ch],
+        )
+        self.board.set_scaler_output_modes(
+            bypass=False,
+            cap_data_type=self.FFT_FULL_CAPTURE_MODE,
+            channels=[ch],
+        )
+        self.board.chan[ch].FFT.FFT_SHIFT = self.SIM_COMPARE_FFT_SHIFT
+        self.board.chan[ch].FFT.reset_fft_overflow_count()
+
+        fft_info = self.board.FFT_INFO.get(int(self.board.FFT_TYPE), {})
+        self.logger.debug(
+            "Setup channelizer for exact full-resolution FFT simulation comparison "
+            f"(mode={self.FFT_FULL_CAPTURE_MODE}, fft_shift={self.SIM_COMPARE_FFT_SHIFT}, "
+            f"fft_type={int(self.board.FFT_TYPE)}, fft_info={fft_info})"
+        )
+
+    def load_fft_simulation_case(self, stem):
+        input_path = self.SIM_COMPARE_DATA_DIR / f'{stem}.bin'
+        output_path = self.SIM_COMPARE_DATA_DIR / f'{stem}_out.bin'
+        if not input_path.exists():
+            raise FileNotFoundError(input_path)
+        if not output_path.exists():
+            raise FileNotFoundError(output_path)
+
+        adc_bits = int(getattr(self.board, 'ADC_BITS_PER_SAMPLE', self.data.INPUT_WIDTH))
+        n_inputs = int(getattr(self.board, 'SAMPLES_PER_WORD', 0))
+        input_signal = InputSignal.from_binary(input_path, adc_bits=adc_bits, n_inputs=n_inputs)
+        nsamp = int(self.board.ADC_SAMPLES_PER_FRAME)
+        if input_signal.data.size < nsamp:
+            raise ValueError(
+                f"{input_path} contains {input_signal.data.size} samples, expected at least one "
+                f"{nsamp}-sample ADC frame"
+            )
+        funcgen_input = input_signal.data.T.ravel()[:nsamp].astype(np.int64, copy=False)
+
+        sim = OutputSignal.from_file(
+            output_path,
+            instrument=self.SIM_COMPARE_INSTRUMENT,
+            dtype=self.SIM_COMPARE_OUTPUT_DTYPE,
+        )
+        sync_idx = np.flatnonzero(sim.sync_out == 1)
+        if sync_idx.size != 1:
+            raise AssertionError(f"Expected exactly one sync_out pulse in {output_path}, got {sync_idx.size}")
+        sim_frame = sim.get_sync_frame()
+        sim_real, sim_imag = sim_frame.get_real_imag(descramble=True)
+        return {
+            'input_path': input_path,
+            'output_path': output_path,
+            'funcgen_input': funcgen_input,
+            'sync_idx': int(sync_idx[0]),
+            'sim_frame_rows': int(sim_frame.sync_out.size),
+            'sim_real': sim_real.astype(np.int64, copy=False),
+            'sim_imag': sim_imag.astype(np.int64, copy=False),
+        }
+
+    def integer_parts(self, values, label):
+        rounded = np.rint(values)
+        fraction = values - rounded
+        if np.any(fraction != 0):
+            raise AssertionError(
+                f"Captured {label} FFT output has non-integer values; "
+                f"max discarded fraction={float(np.max(np.abs(fraction)))}"
+            )
+        return rounded.astype(np.int64)
+
+    def capture_fft_simulation_frame(self, funcgen_input, *, ch=0, ncap=4):
+        logger = self.get_logger()
+        self.board.sync()
+        self.board.set_funcgen(
+            function='arb',
+            channels=[ch],
+            left_shift=0,
+            right_shift=0,
+            reset_chan=True,
+            data=funcgen_input,
+        )
+        self.board.set_scaler_output_modes(
+            bypass=False,
+            cap_data_type=self.FFT_FULL_CAPTURE_MODE,
+            channels=[ch],
+        )
+
+        fft_info = self.board.FFT_INFO[int(self.board.FFT_TYPE)]
+        fft_bins_per_word = int(fft_info.get('bins_per_word') or 1)
+        frames_per_burst = 2 * fft_bins_per_word
+        self.board.start_data_capture(
+            period=self.SIM_COMPARE_CAPTURE_PERIOD,
+            frames_per_burst=frames_per_burst,
+            channels=[ch],
+            source='scaler',
+            data_type=self.FFT_FULL_CAPTURE_MODE,
+        )
+        self.board.sync()
+
+        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        receiver.flush()
+        ts, data, count = receiver.read_raw_frames(
+            ncap=ncap,
+            source=1,
+            chan_first=False,
+        )
+        captured = data[-1, 0, :]
+        captured_real = self.integer_parts(captured.real, 'real')
+        captured_imag = self.integer_parts(captured.imag, 'imag')
+        overflow_count = int(self.board.chan[ch].FFT.get_fft_overflow_count())
+        logger.debug(
+            f"capture_fft_simulation_frame: ch={ch} ncap={ncap} frames_per_burst={frames_per_burst} "
+            f"ts_shape={ts.shape} data_shape={data.shape} count_shape={count.shape} "
+            f"captured_shape={captured.shape} overflow_count={overflow_count} "
+            f"funcgen_min={int(np.min(funcgen_input))} funcgen_max={int(np.max(funcgen_input))} "
+            f"funcgen_first16={funcgen_input[:16].tolist()}"
+        )
+        return {
+            'real': captured_real >> self.SIM_COMPARE_CAPTURE_RIGHT_SHIFT,
+            'imag': captured_imag >> self.SIM_COMPARE_CAPTURE_RIGHT_SHIFT,
+            'overflow_count': overflow_count,
+            'frames_per_burst': frames_per_burst,
+            'timestamp': int(ts[-1]),
+            'count': count[-1].tolist(),
+            'raw_shape': data.shape,
+            'raw_dtype': data.dtype,
+        }
+
+    def plot_simulation_comparison(self, xr, stem, captured_real, captured_imag, sim_real, sim_imag, real_residual, imag_residual):
+        logging.getLogger("matplotlib").setLevel(logging.WARNING)
+        xr.header(f"Full-resolution FFT simulation comparison: {stem}")
+        fig, axes = plt.subplots(3, 1, figsize=(13, 9), sharex=True)
+        axes[0].plot(sim_real, lw=1, label='simulation real')
+        axes[0].plot(captured_real, lw=1, alpha=0.8, label='captured real')
+        axes[0].set_ylabel('Real')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+
+        axes[1].plot(sim_imag, lw=1, label='simulation imag')
+        axes[1].plot(captured_imag, lw=1, alpha=0.8, label='captured imag')
+        axes[1].set_ylabel('Imag')
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
+
+        axes[2].plot(real_residual, lw=1, label='real residual')
+        axes[2].plot(imag_residual, lw=1, label='imag residual')
+        axes[2].set_xlabel('FFT bin')
+        axes[2].set_ylabel('Residual')
+        axes[2].legend()
+        axes[2].grid(True, alpha=0.3)
+
+        fig.suptitle(f"{stem} full-resolution FFT capture vs simulation")
+        fig.tight_layout()
+        xr.insert_plot()
+        plt.close(fig)
+
+    def assert_fft_matches_simulation(self, xr, stem, *, ch=0):
+        self.setup_fft_simulation_compare(ch)
+        sim_case = self.load_fft_simulation_case(stem)
+        captured = self.capture_fft_simulation_frame(sim_case['funcgen_input'], ch=ch)
+
+        captured_real = captured['real']
+        captured_imag = captured['imag']
+        sim_real = sim_case['sim_real']
+        sim_imag = sim_case['sim_imag']
+        assert captured_real.size == sim_real.size
+        assert captured_imag.size == sim_imag.size
+        assert captured_real.size == int(self.data.NUM_BINS)
+
+        real_residual = captured_real - sim_real
+        imag_residual = captured_imag - sim_imag
+        self.plot_simulation_comparison(
+            xr,
+            stem,
+            captured_real,
+            captured_imag,
+            sim_real,
+            sim_imag,
+            real_residual,
+            imag_residual,
+        )
+
+        real_max_abs = int(np.max(np.abs(real_residual)))
+        imag_max_abs = int(np.max(np.abs(imag_residual)))
+        real_sum = int(np.sum(real_residual, dtype=np.int64))
+        imag_sum = int(np.sum(imag_residual, dtype=np.int64))
+        real_nonzero = int(np.count_nonzero(real_residual))
+        imag_nonzero = int(np.count_nonzero(imag_residual))
+        print(f"\nExact FFT simulation comparison ({stem}, ch={ch})")
+        print(f"input bin:          {sim_case['input_path']}")
+        print(f"simulation out bin: {sim_case['output_path']}")
+        print(f"simulation sync:    index={sim_case['sync_idx']}, frame_rows={sim_case['sim_frame_rows']}")
+        print(
+            f"funcgen frame:      {sim_case['funcgen_input'].size} samples, "
+            f"min/max={int(np.min(sim_case['funcgen_input']))}/{int(np.max(sim_case['funcgen_input']))}"
+        )
+        print(f"captured shape:     {captured['raw_shape']}, dtype={captured['raw_dtype']}")
+        print(f"capture count:      {captured['count']}, timestamp={captured['timestamp']}")
+        print(f"frames_per_burst:   {captured['frames_per_burst']}")
+        print(f"FFT_SHIFT:          {self.SIM_COMPARE_FFT_SHIFT}")
+        print(f"capture scale:      captured >> {self.SIM_COMPARE_CAPTURE_RIGHT_SHIFT}")
+        print(f"overflow_count:     {captured['overflow_count']}")
+        print(
+            "residuals:          "
+            f"real max_abs={real_max_abs}, real sum={real_sum}, real nonzero={real_nonzero}; "
+            f"imag max_abs={imag_max_abs}, imag sum={imag_sum}, imag nonzero={imag_nonzero}; "
+            f"total sum={real_sum + imag_sum}"
+        )
+
+        assert captured['overflow_count'] == 0
+        np.testing.assert_array_equal(captured_real, sim_real)
+        np.testing.assert_array_equal(captured_imag, sim_imag)
+
     @pytest.mark.fft
     @pytest.mark.parametrize("ch", (0,))
     def test_fft_dc_peak(self, ch, setup_fft, xr):
@@ -451,3 +698,18 @@ class TestFFT:
             title=f"FFT seeded noise spectrum shape (ch={ch})",
             max_bin_l1=36.0,
         )
+
+    @pytest.mark.fft
+    @pytest.mark.parametrize("ch", (0,))
+    def test_compare_to_simulation_ramp(self, ch, setup, xr):
+        self.assert_fft_matches_simulation(xr, 'ramp', ch=ch)
+
+    @pytest.mark.fft
+    @pytest.mark.parametrize("ch", (0,))
+    def test_compare_to_simulation_two_tone(self, ch, setup, xr):
+        self.assert_fft_matches_simulation(xr, 'two_tone', ch=ch)
+
+    @pytest.mark.fft
+    @pytest.mark.parametrize("ch", (0,))
+    def test_compare_to_simulation_noise(self, ch, setup, xr):
+        self.assert_fft_matches_simulation(xr, 'noise', ch=ch)

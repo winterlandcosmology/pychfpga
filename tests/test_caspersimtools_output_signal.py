@@ -27,7 +27,7 @@ def test_output_signal_reads_hirax_binary_rows(tmp_path):
     np.testing.assert_array_equal(signal.imag, [[20, 22, 24], [21, 23, 25]])
     assert signal.instrument == "hirax"
     assert signal.fft_stages == 11
-    assert signal.n_parallel_bits == 1
+    assert signal.n_parallel_bits == 2
 
 
 def test_output_signal_reads_chord_binary_rows(tmp_path):
@@ -48,7 +48,7 @@ def test_output_signal_reads_chord_binary_rows(tmp_path):
     np.testing.assert_array_equal(signal.real, [[10, 14], [11, 15], [12, 16], [13, 17]])
     np.testing.assert_array_equal(signal.imag, [[20, 24], [21, 25], [22, 26], [23, 27]])
     assert signal.fft_stages == 14
-    assert signal.n_parallel_bits == 2
+    assert signal.n_parallel_bits == 3
 
 
 def test_output_signal_respects_dtype_parameter(tmp_path):
@@ -115,9 +115,9 @@ def test_output_signal_calc_fft_power_uses_interleaved_real_imag(tmp_path):
 
 
 def test_output_signal_descramble_changes_return_only(tmp_path):
-    interleaved_real = np.arange(2048, dtype=np.int32)
+    interleaved_real = np.arange(1024, dtype=np.int32)
     interleaved_imag = interleaved_real + 10000
-    rows = np.empty((1024, 6), dtype=np.int32)
+    rows = np.empty((512, 6), dtype=np.int32)
     rows[:, 0] = 0
     rows[:, 1] = interleaved_real[0::2]
     rows[:, 2] = interleaved_imag[0::2]
@@ -131,7 +131,7 @@ def test_output_signal_descramble_changes_return_only(tmp_path):
     stored_imag = signal.imag.copy()
 
     real, imag = signal.get_real_imag(descramble=True)
-    idxmap = casper_fft_descramble(11, 1)
+    idxmap = casper_fft_descramble(10, 1)
 
     np.testing.assert_array_equal(real, interleaved_real[idxmap])
     np.testing.assert_array_equal(imag, interleaved_imag[idxmap])
@@ -177,20 +177,20 @@ def test_output_signal_slice_and_strip_before_sync(tmp_path):
 
 
 def test_output_signal_get_sync_frame_returns_one_complete_frame(tmp_path):
-    interleaved_real = np.arange(2048, dtype=np.int32)
+    interleaved_real = np.arange(1024, dtype=np.int32)
     interleaved_imag = interleaved_real + 10000
-    rows = np.empty((1026, 6), dtype=np.int32)
+    rows = np.empty((514, 6), dtype=np.int32)
     rows[:, 0] = 0
     rows[:, 5] = 0
     rows[0, 0] = 1
-    rows[:, 1] = np.arange(1026, dtype=np.int32)
+    rows[:, 1] = np.arange(514, dtype=np.int32)
     rows[:, 2] = rows[:, 1] + 20000
     rows[:, 3] = rows[:, 1] + 30000
     rows[:, 4] = rows[:, 1] + 40000
-    rows[1:1025, 1] = interleaved_real[0::2]
-    rows[1:1025, 2] = interleaved_imag[0::2]
-    rows[1:1025, 3] = interleaved_real[1::2]
-    rows[1:1025, 4] = interleaved_imag[1::2]
+    rows[1:513, 1] = interleaved_real[0::2]
+    rows[1:513, 2] = interleaved_imag[0::2]
+    rows[1:513, 3] = interleaved_real[1::2]
+    rows[1:513, 4] = interleaved_imag[1::2]
     path = tmp_path / "hirax_frame.bin"
     rows.tofile(path)
     signal = OutputSignal.from_file(path, instrument="hirax", dtype=np.int32)
@@ -198,7 +198,7 @@ def test_output_signal_get_sync_frame_returns_one_complete_frame(tmp_path):
     frame = signal.get_sync_frame()
 
     assert isinstance(frame, OutputSignal)
-    assert frame.sync_out.size == 1024
+    assert frame.sync_out.size == 512
     real, imag = frame.get_real_imag()
     np.testing.assert_array_equal(real, interleaved_real)
     np.testing.assert_array_equal(imag, interleaved_imag)

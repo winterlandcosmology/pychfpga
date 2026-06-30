@@ -5,9 +5,9 @@ import numpy as np
 
 
 OUTPUT_PRESETS = {
-    "hirax": {"n_outputs": 2, "fft_stages": 11, "n_parallel_bits": 1},
-    "chime": {"n_outputs": 2, "fft_stages": 11, "n_parallel_bits": 1},
-    "chord": {"n_outputs": 4, "fft_stages": 14, "n_parallel_bits": 2},
+    "hirax": {"n_outputs": 2, "fft_stages": 11, "n_parallel_bits": 2},
+    "chime": {"n_outputs": 2, "fft_stages": 11, "n_parallel_bits": 2},
+    "chord": {"n_outputs": 4, "fft_stages": 14, "n_parallel_bits": 3},
 }
 
 
@@ -38,6 +38,10 @@ class OutputSignal:
     `real` and `imag` are two-dimensional arrays shaped
     `(n_outputs, nsamples)`, so `real[0]` is out00 real, `imag[0]` is out00
     imag, and so on.  No time axis is stored.
+
+    `n_outputs` is the number of saved complex output lanes.  `n_parallel_bits`
+    is the FFT scalar parallelism.  For HIRAX, each clock emits four scalar
+    values, saved as two complex outputs: out00 real/imag and out01 real/imag.
     """
 
     sync_out: np.ndarray
@@ -147,9 +151,11 @@ class OutputSignal:
         return real**2 + imag**2
 
     def _descramble_array(self, arr):
-        if arr.size % (1 << self.fft_stages):
+        frame_size = 1 << (self.fft_stages - 1)
+        complex_parallel_bits = self.n_parallel_bits - 1
+        if arr.size % frame_size:
             raise ValueError(
-                f"Cannot descramble {arr.size} values into {1 << self.fft_stages}-sample FFT frames"
+                f"Cannot descramble {arr.size} values into {frame_size}-sample FFT output frames"
             )
-        idxmap = casper_fft_descramble(self.fft_stages, self.n_parallel_bits)
-        return arr.reshape(-1, 1 << self.fft_stages)[:, idxmap].ravel()
+        idxmap = casper_fft_descramble(self.fft_stages - 1, complex_parallel_bits)
+        return arr.reshape(-1, frame_size)[:, idxmap].ravel()
