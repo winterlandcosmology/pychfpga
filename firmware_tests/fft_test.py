@@ -29,7 +29,6 @@ class TestFFT:
     SCALER_COMPLEX_GAIN = 1
     SCALER_COMPLEX_POSTSCALER = 20
     FFT_COMPLEX_CAPTURE_MODE = 'fft_2x'
-    FFT_COMPLEX_FRAMES_PER_BURST = 2
     FFT_SHIFT = 2047
     FFT_FULL_CAPTURE_MODE = 'fft_full'
     SIM_COMPARE_PLATFORM = 'ICE-8bit-r'
@@ -89,10 +88,6 @@ class TestFFT:
 
     @pytest.fixture(scope='function')
     def setup_fft(self, setup):
-        if self.data.PLATFORM != 'ICE':
-            pytest.skip("FFT full-resolution scaler capture test currently targets ICE/PROBER firmware")
-        if self.data.CAPTURE_WIDTH < 8:
-            pytest.skip("Full-resolution FFT capture is not available in 4-bit scaler capture mode")
         if int(getattr(self.board, 'FFT_TYPE', 0)) == 0:
             pytest.skip("Firmware reports no FFT implementation")
 
@@ -103,8 +98,8 @@ class TestFFT:
             scaler_bypass_data_type=0,
             scaler_cap_data_type=self.FFT_COMPLEX_CAPTURE_MODE,
             offset_binary_encoding=False,
-            scaler_eight_bit=True,
-            prober_user_flags=False,
+            scaler_eight_bit=self.scaler_eight_bit_enabled(),
+            prober_user_flags=False if self.data.PLATFORM == 'ICE' else None,
             scaler_rounding_mode=0,
             symmetric_saturation=False,
         )
@@ -126,9 +121,22 @@ class TestFFT:
             f"(mode={self.FFT_COMPLEX_CAPTURE_MODE}, gain={self.SCALER_COMPLEX_GAIN}, "
             f"postscaler={self.SCALER_COMPLEX_POSTSCALER}, fft_shift={self.FFT_SHIFT}, "
             f"fft_type={int(self.board.FFT_TYPE)}, fft_info={fft_info}, "
+            f"adc_lanes={self.adc_lane_count()}, scaler_eight_bit={self.scaler_eight_bit_enabled()}, "
             f"bin_map_is_identity={np.array_equal(bin_map, np.arange(bin_map.size))}, "
             f"bin_map_first16={bin_map[:16].tolist()})"
         )
+
+    def rtol(self):
+        return float(self.test_config.rtol)
+
+    def adc_lane_count(self):
+        return int(getattr(self.board, 'SAMPLES_PER_WORD', 1) or 1)
+
+    def scaler_eight_bit_enabled(self):
+        return bool(self.data.CAPTURE_WIDTH > 4 and self.data.PLATFORM == 'ICE')
+
+    def fft_complex_frames_per_burst(self):
+        return 2
 
     def gen_waveform(self, kind, *, amplitude=16, bins=(), seed=0):
         samples = self.data.NUM_SAMPLES
@@ -164,19 +172,19 @@ class TestFFT:
         return np.fft.rfft(waveform.astype(np.float64))[:-1]
 
     def pack_funcgen_adc_lanes(self, adc_lanes):
-        """Pack four parallel ADC lane streams into the FUNCGEN RAM layout.
+        """Pack parallel ADC lane streams into the FUNCGEN RAM layout.
 
         The arbitrary FUNCGEN API accepts a single one-dimensional buffer, but
         that buffer is not conceptually a serial scalar waveform when it feeds
         the channelizer. It is the RAM image consumed by the firmware's
-        parallel ADC/F-engine input interface. For the ICE CHIME FFT path one
-        channelizer clock contains four ADC samples, and the host buffer must
-        therefore be interleaved by lane:
+        parallel ADC/F-engine input interface. One channelizer clock contains
+        ``SAMPLES_PER_WORD`` ADC samples, and the host buffer must therefore be
+        interleaved by lane:
 
-            buffer[0::4] -> ADC/F-engine input lane 0
-            buffer[1::4] -> ADC/F-engine input lane 1
-            buffer[2::4] -> ADC/F-engine input lane 2
-            buffer[3::4] -> ADC/F-engine input lane 3
+            buffer[0::N] -> ADC/F-engine input lane 0
+            buffer[1::N] -> ADC/F-engine input lane 1
+            ...
+            buffer[N-1::N] -> ADC/F-engine input lane N-1
 
         This is the same convention shown in ``fft_sim_test_example.py`` for
         replaying CASPER simulation inputs: take 512 samples from each of the
@@ -196,8 +204,9 @@ class TestFFT:
         the reference spectrum.
         """
         adc_lanes = np.asarray(adc_lanes, dtype=np.int64)
-        if adc_lanes.ndim != 2 or adc_lanes.shape[0] != 4:
-            raise ValueError("adc_lanes must have shape (4, samples_per_lane)")
+        n_lanes = self.adc_lane_count()
+        if adc_lanes.ndim != 2 or adc_lanes.shape[0] != n_lanes:
+            raise ValueError(f"adc_lanes must have shape ({n_lanes}, samples_per_lane)")
         if adc_lanes.size != self.data.NUM_SAMPLES:
             raise ValueError(
                 f"adc_lanes must contain {self.data.NUM_SAMPLES} total samples, "
@@ -205,8 +214,8 @@ class TestFFT:
             )
 
         funcgen_input = np.empty(self.data.NUM_SAMPLES, dtype=np.int64)
-        for lane in range(4):
-            funcgen_input[lane::4] = adc_lanes[lane]
+        for lane in range(n_lanes):
+            funcgen_input[lane::n_lanes] = adc_lanes[lane]
         return funcgen_input
 
     def pack_scalar_waveform_for_funcgen(self, waveform):
@@ -216,15 +225,20 @@ class TestFFT:
         references are naturally written that way. Before programming FUNCGEN,
         split that scalar sequence at the parallel ADC boundary and call
         ``pack_funcgen_adc_lanes``. For a correctly ordered scalar waveform this
-        gives lane 0 samples ``0, 4, 8, ...``, lane 1 samples ``1, 5, 9, ...``,
-        and so on, then writes the explicit four-lane RAM image.
+        gives lane 0 samples ``0, N, 2N, ...``, lane 1 samples ``1, N+1, ...``,
+        and so on, then writes the explicit lane-interleaved RAM image.
         """
         waveform = np.asarray(waveform, dtype=np.int64)
         if waveform.ndim != 1 or waveform.size != self.data.NUM_SAMPLES:
             raise ValueError(
                 f"waveform must be a one-dimensional frame of {self.data.NUM_SAMPLES} samples"
             )
-        adc_lanes = waveform.reshape(-1, 4).T
+        n_lanes = self.adc_lane_count()
+        if waveform.size % n_lanes:
+            raise ValueError(
+                f"waveform size {waveform.size} is not divisible by adc lane count {n_lanes}"
+            )
+        adc_lanes = waveform.reshape(-1, n_lanes).T
         return self.pack_funcgen_adc_lanes(adc_lanes)
 
     def capture_fft_complex(self, waveform, *, ch=0, ncap=4):
@@ -251,7 +265,7 @@ class TestFFT:
             channels=[ch],
         )
 
-        frames_per_burst = self.FFT_COMPLEX_FRAMES_PER_BURST
+        frames_per_burst = self.fft_complex_frames_per_burst()
         self.board.start_data_capture(
             period=0.01,
             frames_per_burst=frames_per_burst,
@@ -282,6 +296,7 @@ class TestFFT:
             f"spectrum_real_max={float(np.max(spectrum.real))} spectrum_imag_min={float(np.min(spectrum.imag))} "
             f"spectrum_imag_max={float(np.max(spectrum.imag))} "
             f"gain={self.SCALER_COMPLEX_GAIN} postscaler={self.SCALER_COMPLEX_POSTSCALER} "
+            f"rtol={self.rtol()} "
             f"overflow_count={overflow_count} funcgen_left_shift={self.board.chan[ch].FUNCGEN.LEFT_SHIFT} "
             f"funcgen_right_shift={self.board.chan[ch].FUNCGEN.RIGHT_SHIFT} "
             f"receiver_bin_map_is_identity={bin_map_is_identity} "
@@ -317,32 +332,50 @@ class TestFFT:
         print(f"Sum of normalized magnitude residuals: {np.sum(np.abs(residuals))}")
         return hw_norm, ref_norm
 
-    def assert_spectrum_peaks(self, xr, hardware_fft, numpy_fft, expected_bins, *, title, peak_floor=0.45, max_outside=0.35):
+    def assert_spectrum_rtol(self, xr, hardware_fft, numpy_fft, *, title):
         logger = self.get_logger()
         hw_norm, ref_norm = self.plot_spectrum_comparison(xr, hardware_fft, numpy_fft, title)
+        residuals = hw_norm - ref_norm
+        data_scale = float(np.max(np.abs(ref_norm)))
+        if data_scale <= 0:
+            raise AssertionError("Cannot compute relative residual from a zero reference spectrum")
+        max_residual = float(np.max(np.abs(residuals)))
+        relative_residual = max_residual / data_scale
+        allowed_residual = data_scale * self.rtol()
+        largest_residual_bins = np.argsort(np.abs(residuals))[-8:][::-1]
+        logger.debug(
+            f"assert_spectrum_rtol: rtol={self.rtol()} "
+            f"data_scale={data_scale} max_residual={max_residual} "
+            f"allowed_residual={allowed_residual} relative_residual={relative_residual} "
+            f"largest_residual_bins={largest_residual_bins.tolist()} "
+            f"largest_residual_values={residuals[largest_residual_bins].tolist()}"
+        )
+        print(
+            "Max normalized magnitude residual: "
+            f"{max_residual:.6g}; allowed residual: {allowed_residual:.6g} "
+            f"(relative {relative_residual:.6g} <= rtol {self.rtol():.6g}; "
+            f"{100.0 * relative_residual:.3f}% of reference scale {data_scale:.6g})"
+        )
+        assert max_residual <= allowed_residual
+        return hw_norm, ref_norm
+
+    def assert_spectrum_peaks(self, xr, hardware_fft, numpy_fft, expected_bins, *, title):
+        logger = self.get_logger()
+        hw_norm, ref_norm = self.assert_spectrum_rtol(xr, hardware_fft, numpy_fft, title=title)
         expected_bins = tuple(int(b) for b in expected_bins)
-        protected = np.zeros(hw_norm.size, dtype=bool)
         for bin_idx in expected_bins:
             assert 0 <= bin_idx < hw_norm.size
-            lo = max(0, bin_idx - 1)
-            hi = min(hw_norm.size, bin_idx + 2)
-            protected[lo:hi] = True
 
         top_count = max(len(expected_bins) * 2, 4)
         top_hw_bins = np.argsort(hw_norm)[-top_count:][::-1]
         top_ref_bins = np.argsort(ref_norm)[-top_count:][::-1]
-        outside_max = float(np.max(hw_norm[~protected])) if np.any(~protected) else 0.0
         logger.debug(
-            f"assert_spectrum_peaks: expected_bins={expected_bins} peak_floor={peak_floor} "
-            f"max_outside={max_outside} outside_max={outside_max} "
+            f"assert_spectrum_peaks: expected_bins={expected_bins} "
             f"top_hw_bins={top_hw_bins.tolist()} top_hw_values={hw_norm[top_hw_bins].tolist()} "
             f"top_ref_bins={top_ref_bins.tolist()} top_ref_values={ref_norm[top_ref_bins].tolist()}"
         )
         for bin_idx in expected_bins:
-            assert hw_norm[bin_idx] >= peak_floor
-        for bin_idx in expected_bins:
             assert bin_idx in top_hw_bins
-        assert outside_max <= max_outside
 
     def assert_spectrum_shape(
         self,
@@ -351,12 +384,9 @@ class TestFFT:
         numpy_fft,
         *,
         title,
-        min_bin_cosine=None,
-        max_bin_l1=None,
-        max_bin_abs=None,
     ):
         logger = self.get_logger()
-        hw_norm, ref_norm = self.plot_spectrum_comparison(xr, hardware_fft, numpy_fft, title)
+        hw_norm, ref_norm = self.assert_spectrum_rtol(xr, hardware_fft, numpy_fft, title=title)
 
         # Use raw per-bin residuals so bin swaps and local spectral errors stay
         # visible in both the plots and the assertion diagnostics.
@@ -366,17 +396,10 @@ class TestFFT:
         bin_abs = float(np.max(np.abs(residuals)))
         largest_residual_bins = np.argsort(np.abs(residuals))[-8:][::-1]
         logger.debug(
-            f"assert_spectrum_shape: min_bin_cosine={min_bin_cosine} max_bin_l1={max_bin_l1} "
-            f"max_bin_abs={max_bin_abs} bin_cosine={bin_cosine} bin_l1={bin_l1} bin_abs={bin_abs} "
+            f"assert_spectrum_shape: bin_cosine={bin_cosine} bin_l1={bin_l1} bin_abs={bin_abs} "
             f"largest_residual_bins={largest_residual_bins.tolist()} "
             f"largest_residual_values={residuals[largest_residual_bins].tolist()}"
         )
-        if min_bin_cosine is not None:
-            assert bin_cosine >= min_bin_cosine
-        if max_bin_l1 is not None:
-            assert bin_l1 <= max_bin_l1
-        if max_bin_abs is not None:
-            assert bin_abs <= max_bin_abs
 
     def setup_fft_simulation_compare(self, ch):
         if self.test_config.platform != self.SIM_COMPARE_PLATFORM:
@@ -627,8 +650,6 @@ class TestFFT:
             numpy_fft,
             expected_bins=(0,),
             title=f"FFT DC peak (ch={ch})",
-            peak_floor=0.80,
-            max_outside=0.20,
         )
 
     @pytest.mark.fft
@@ -644,8 +665,6 @@ class TestFFT:
             numpy_fft,
             expected_bins=(tone_bin,),
             title=f"FFT single tone peak (bin={tone_bin}, ch={ch})",
-            peak_floor=0.55,
-            max_outside=0.40,
         )
 
     @pytest.mark.fft
@@ -661,8 +680,6 @@ class TestFFT:
             numpy_fft,
             expected_bins=tone_bins,
             title=f"FFT two tone peaks (bins={tone_bins}, ch={ch})",
-            peak_floor=0.35,
-            max_outside=0.45,
         )
 
     @pytest.mark.fft
@@ -679,7 +696,6 @@ class TestFFT:
             hardware_fft,
             numpy_fft,
             title=f"FFT ramp spectrum shape (ch={ch})",
-            max_bin_l1=6.0,
         )
 
     @pytest.mark.fft
@@ -696,7 +712,6 @@ class TestFFT:
             hardware_fft,
             numpy_fft,
             title=f"FFT seeded noise spectrum shape (ch={ch})",
-            max_bin_l1=36.0,
         )
 
     @pytest.mark.fft

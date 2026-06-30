@@ -11,10 +11,11 @@ test_config:
     loglevelrecv: 1        # 0-3
     conn_scope: "class"     # Select "function" to re-establish connection for each test or
                             # "class" if you want to reuse connection.
-    only_plot: False              #Don't compare results, only plot them 
+    only_plot: False              #Don't compare results, only plot them
 
     #parameters for scaler tests 
     platform: 'ICE-8bit-r'
+    rtol: 0.015
     global_postscaler: range(IDENTITY_POSTSCALER - 1, IDENTITY_POSTSCALER + 2) #range(SCALER_SHIFT - INPUT_WIDTH - IMPLICIT_SHIFT + 1, SCALED_WIDTH - IMPLICIT_SHIFT)
     global_frame_cnt: [100, 30000]
     alternating_gain:
@@ -53,5 +54,3 @@ test_config:
         expected_overflows_per_frame: [0, 1, 1000, 2000]
         stats_frames: [10]
         mode: ['word_ctr_buffer_flags', 'frame8', 'frame4']
-
-

@@ -5,7 +5,7 @@ import pytest
 import socket
 import psutil
 
-from .net_tools import ping_sources_async
+from .utils import ping_sources_async
 from functools import wraps 
 import matplotlib.pyplot as plt
 from pathlib import Path
