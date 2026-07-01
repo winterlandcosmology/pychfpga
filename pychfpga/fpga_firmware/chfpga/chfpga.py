@@ -639,7 +639,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             # Number of bits and bytes per ADC sample
             self.ADC_BITS_PER_SAMPLE = self.GPIO.ADC_BITS_PER_SAMPLE
             self.ADC_BYTES_PER_SAMPLE = (self.GPIO.ADC_BITS_PER_SAMPLE + 7) // 8  # round up to the nearest byte
-
+            self.FFT_BINS_PER_WORD = int(self.FFT_INFO.get(self.FFT_TYPE, {}).get("bins_per_word") or 1)
             # Number of bytes in a frame
             self.ADC_BYTES_PER_FRAME = self.FRAME_LENGTH * self.ADC_BYTES_PER_SAMPLE  # SAMPLES_PER_FRAME * BYTES_PER_SAMPLE
 
@@ -1110,7 +1110,19 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             self.get_data_receiver()
         # Update state
         # self.refresh_capture_state_from_hardware()
-        self.get_firmware_config()
+        try:
+            self.get_receiver_config()
+        except ValueError as exc:
+            if (
+                self.CAPTURE_TYPE != "PROBER"
+                or not str(exc).startswith("Selected channels have different ")
+            ):
+                raise
+            self.logger.debug(
+                f"{self!r}: Skipping initial receiver config cache because "
+                f"PROBER channels have mixed stale sources. Configure data "
+                f"capture before creating a receiver. ({exc})"
+            )
 
     def check_adc_frequencies(self, stage):
         """ Check the frequencies of the ADC clocks 
@@ -2163,11 +2175,11 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             return [channels]
         return list(channels)
 
-    def get_firmware_config(self, channels=None, stream_ids=None):
+    def get_receiver_config(self, channels=None, stream_ids=None):
         """Build processor configuration from current FPGA / channelizer state.
 
         Reads hardware and tracked ``config.chan`` state, then returns a
-        :class:`State` with ``raw``, ``adc``, ``fft``, and ``corr`` subtrees for
+        :class:`State` with ``raw``, and ``corr`` subtrees for
         :class:`~pychfpga.common.raw_data_packet_processor.RawDataPacketProcessor`,
         raw-acq sinks, and :class:`~pychfpga.common.ucorr_packet_processor.UCorrPacketProcessor`.
         ``capture_format`` entries are structured (no format strings).
@@ -2179,7 +2191,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 ``channels`` is omitted.
 
         Returns:
-            State with keys ``raw``, ``adc``, ``fft``, and ``corr``.
+            State with keys ``raw`` and ``corr``.
         """
         from pychfpga.common.raw_data_packet_processor import PACKET_COOKIE_ADC, PACKET_COOKIE_FFT
         from pychfpga.fpga_firmware.chfpga.x_engine.UCORR import UCORR
@@ -2246,27 +2258,40 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             state.funcgen_left_shift = int(chan.FUNCGEN.LEFT_SHIFT)
             state.funcgen_right_shift = int(chan.FUNCGEN.RIGHT_SHIFT)
 
-        if self.CAPTURE_TYPE == "UCAP":
-            raw_capture.target_mode = int(self.UCAP.MODE)
-            raw_capture.source = "scaler" if int(self.UCAP.SOURCE_SEL) == 255 else "funcgen"
-
         capture_engine = raw_capture.get("capture_engine", self.CAPTURE_TYPE) or self.CAPTURE_TYPE
-        source = raw_capture.get("source", "scaler") or "scaler"
-        if capture_engine == "UCAP":
-            target_mode = int(raw_capture.get("target_mode", 0) or 0)
+        if self.CAPTURE_TYPE == "UCAP":
+            target_mode = int(
+                self.config.get("mode", raw_capture.get("target_mode", 0) or 0)
+            )
+            raw_capture.target_mode = target_mode
+            source = self.config.get("source", raw_capture.get("source", "scaler")) or "scaler"
+            raw_capture.source = source
             ucap_mode_to_frames = {0: 2, 1: 4, 2: 8, 3: 16}
             if target_mode not in ucap_mode_to_frames:
                 raise ValueError(f"Invalid UCAP mode {target_mode}. Expected mode in range [0, 3].")
             pkt_frames_per_burst = ucap_mode_to_frames[target_mode]
             number_of_subframes = 4
-        else:
+        elif self.CAPTURE_TYPE == "PROBER":
             target_mode = 0
-            pkt_frames_per_burst = int(raw_capture.get("frames_per_burst", self._capture_pkt_frames_per_burst or 1) or 1)
+            raw_capture.target_mode = target_mode
+            pkt_frames_per_burst = int(
+                raw_capture.get("frames_per_burst", self._capture_pkt_frames_per_burst or 1) or 1
+            )
             number_of_subframes = 1
+            sources = [
+                getattr(self.config.chan[ch], "data_source", "scaler")
+                for ch in target_channels
+            ]
+            source = sources[0] if sources else raw_capture.get("source", "scaler")
+            if any(src != source for src in sources):
+                raise ValueError("Selected channels have different sources. Use separate receivers.")
+            raw_capture.source = source
+        else:
+            raise RuntimeError(f"Unsupported capture engine {self.CAPTURE_TYPE!r}")
 
         stream_ids_tuple = tuple(int(self.get_stream_id(ch)) for ch in target_channels)
         cap_types = [
-            int(getattr(self.config.chan[ch], "scaler_cap_data_type", self.chan[ch].SCALER.CAP_DATA_TYPE))
+            int(self.config.chan[ch].get("scaler_cap_data_type", 0))
             for ch in target_channels
         ]
         cap_data_type = cap_types[0] if cap_types else 0
@@ -2284,43 +2309,76 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             )
         fft_offset_encoding = offset_encodings[0] if offset_encodings else True
 
-        adc_bit_width = {1: 8, 2: 16, 4: 32, 8: 64}.get(int(self.ADC_BYTES_PER_SAMPLE), 8)
-        fft_bins_per_word = int(self.FFT_INFO.get(self.FFT_TYPE, {}).get("bins_per_word") or 1)
-        storage_dtype = {1: "i1", 2: "i2", 4: "i4", 8: "i8"}.get(int(self.ADC_BYTES_PER_SAMPLE), "i1")
+        fft_bypass = [
+            bool(self.config.chan[ch].get("fft_bypass", False))
+            for ch in target_channels
+        ]
+        if fft_bypass and any(fb != fft_bypass[0] for fb in fft_bypass):
+            raise ValueError("Selected channels have different FFT bypass settings. Use separate receivers.")
+        fft_bypass = fft_bypass[0] if fft_bypass else False
+
+        adc_bit_width = int(self.ADC_BITS_PER_SAMPLE)
+        fft_bins_per_word = int(
+            getattr(self, "FFT_BINS_PER_WORD", 0)
+            or self.FFT_INFO.get(self.FFT_TYPE, {}).get("bins_per_word")
+            or 1
+        )
+        #storage_dtype = f"i{self.ADC_BYTES_PER_SAMPLE}"
 
         adc_capture_format = State(
-            fmt_base_width=adc_bit_width,
+            fmt_bus_width=8*self.ADC_BYTES_PER_SAMPLE,
+            fmt_data_width=adc_bit_width,
             fmt_is_complex=False,
             fmt_interleave_factor=1,
         )
         adc_pplf = 1
 
+        #We store in the capture format both the bus width, which is the total number of bits available to send the captured data
+        #and the data length, which is the number of bits that actual contain the desired data. Since these are placed in the MSBs
+        #of the bus, we must right shift by the difference to extract our desired data
+
+        fft_data_width = self.FFT_INFO[self.FFT_TYPE]['bits_per_bin']//2 #divide by 2 for real and imaginary
         if cap_data_type == 4:
-            fft_bit_width = 32 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 16
+            capture_bus_width = 32 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 16
+            data_width = fft_data_width if not fft_bypass else adc_bit_width
             fft_capture_format = State(
-                fmt_base_width=fft_bit_width,
+                fmt_bus_width=capture_bus_width,
+                fmt_data_width =data_width,
                 fmt_is_complex=True,
                 fmt_interleave_factor=2,
             )
             fft_pplf = 2
         elif cap_data_type == 5: # Full resolution FFT
-            fft_bit_width = 128 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 32  # CRS: 128-bit complex, ICE: 32-bit complex. TODO: have this parametrized by the firmware
+            capture_bus_width = 128 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 32  # CRS: 128-bit complex, ICE: 32-bit complex. TODO: have this parametrized by the firmware
+            if self.PLATFORM_ID == self._PLATFORM_ID_CRS:
+                data_width = fft_data_width if not fft_bypass else adc_bit_width
+            else:
+                data_width = adc_bit_width if fft_bypass else capture_bus_width
             fft_capture_format = State(
-                fmt_base_width=fft_bit_width,
+                fmt_bus_width=capture_bus_width,
+                fmt_data_width=data_width,
                 fmt_is_complex=True,
                 fmt_interleave_factor=2 * fft_bins_per_word,
             )
             fft_pplf = 2 * max(1, fft_bins_per_word)
         else:
-            fft_bit_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8
+            #check if eight-bit is enabled (only on ICE)
+            eight_bit_capture_modes = [bool(self.config.chan[ch].scaler.get('eight_bit', False)) for ch in target_channels]
+            eight_bit = eight_bit_capture_modes[0]
+            if any(ebc != eight_bit for ebc in eight_bit_capture_modes):
+                raise ValueError("Selected channels have different eight-bit capture settings. Use separate receivers.")
+            capture_bus_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8
+            fft_data_width = 8 if eight_bit else 4
             fft_capture_format = State(
-                fmt_base_width=fft_bit_width,
+                fmt_bus_width=capture_bus_width,
+                fmt_data_width=fft_data_width,
                 fmt_is_complex=False,
                 fmt_interleave_factor=1,
             )
             fft_pplf = 1
+        fft_capture_format.add("use_offset_encoding")
+        fft_capture_format.use_offset_encoding = fft_offset_encoding
 
-        active_capture_format = fft_capture_format if source == "scaler" else adc_capture_format
         active_pplf = fft_pplf if source == "scaler" else adc_pplf
         logical_frames_per_burst = max(1, pkt_frames_per_burst // active_pplf)
         bytes_per_frame = int(self.ADC_BYTES_PER_SAMPLE * self.ADC_SAMPLES_PER_FRAME)
@@ -2330,9 +2388,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             capture_engine=capture_engine,
             channels=target_channels,
             stream_ids=stream_ids_tuple,
-            frames_per_burst=int(pkt_frames_per_burst),
+            frames_per_burst=pkt_frames_per_burst,
+            target_mode=target_mode,
             subframes_per_frame=int(number_of_subframes),
-            target_mode=int(target_mode),
             bytes_per_sample=int(self.ADC_BYTES_PER_SAMPLE),
             samples_per_frame=int(self.ADC_SAMPLES_PER_FRAME),
             bytes_per_frame=bytes_per_frame,
@@ -2350,33 +2408,14 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             dtype=np.intp,
         )
 
+        self.config.capture_format = [adc_capture_format, fft_capture_format]
         raw = State(
             **shared_geometry,
             source=source,
             capture_format=[adc_capture_format, fft_capture_format],
             source_target_mode=[0, int(target_mode)],
-            packets_per_logical_frame=int(active_pplf),
-            packet_cookie=PACKET_COOKIE_FFT if source == "scaler" else PACKET_COOKIE_ADC,
-            fft_offset_encoding=bool(fft_offset_encoding),
-            offset_encoding=bool(fft_offset_encoding),
-            fft_bin_map=fft_bin_map,
-        )
-
-        adc = State(
-            **shared_geometry,
-            source="funcgen",
-            capture_format=[adc_capture_format, None],
-            storage_dtype=storage_dtype,
-            packets_per_logical_frame=int(adc_pplf),
-            packet_cookie=PACKET_COOKIE_ADC,
-        )
-
-        fft = State(
-            **shared_geometry,
-            source="scaler",
-            capture_format=[None, fft_capture_format],
-            packets_per_logical_frame=int(fft_pplf),
-            packet_cookie=PACKET_COOKIE_FFT,
+            packets_per_logical_frame=[adc_pplf, fft_pplf],
+            packet_cookie=[PACKET_COOKIE_ADC, PACKET_COOKIE_FFT],
             fft_offset_encoding=bool(fft_offset_encoding),
             offset_encoding=bool(fft_offset_encoding),
             fft_bin_map=fft_bin_map,
@@ -2413,35 +2452,22 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         else:
             corr = State()
 
-        raw_capture.update(
-            **shared_geometry,
-            source=source,
-            capture_format=[adc_capture_format, fft_capture_format],
-            packets_per_logical_frame=int(active_pplf),
-            packet_cookie=PACKET_COOKIE_FFT if source == "scaler" else PACKET_COOKIE_ADC,
-        )
+        raw_capture.update(raw.as_dict())
 
-        if "raw_capture_adc" not in self.config:
-            self.config.add("raw_capture_adc")
-        if "raw_capture_fft" not in self.config:
-            self.config.add("raw_capture_fft")
-        self.config.raw_capture_adc.update(adc.as_dict())
-        self.config.raw_capture_fft.update(fft.as_dict())
-
-        result = State(raw=raw, adc=adc, fft=fft, corr=corr)
-        self._cached_firmware_config = result
+        result = State(raw=raw, corr=corr)
+        self._cached_receiver_config = result
         return result
 
-    def get_cached_firmware_config(self):
+    def get_cached_receiver_config(self):
         """Return the last firmware config snapshot without re-reading hardware."""
-        cached = getattr(self, '_cached_firmware_config', None)
+        cached = getattr(self, '_cached_receiver_config', None)
         if cached is None:
-            return self.get_firmware_config()
+            return self.get_receiver_config()
         return cached
 
     def get_raw_decoder_state(self, stream_ids=None, format=None):
         """Return the active raw capture profile as a plain dict (legacy REST helper)."""
-        fw = self.get_firmware_config(stream_ids=stream_ids)
+        fw = self.get_receiver_config(stream_ids=stream_ids)
         if format is not None:
             self.logger.warning(
                 "get_raw_decoder_state(format=...) is deprecated; use structured capture_format."
@@ -2716,7 +2742,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             scaler_bypass=None,
             scaler_cap_data_type=None,
             scaler_bypass_data_type=None,
-            gain=None,
+            gains=None,
             postscaler=None,
             scaler_eight_bit=None,
             scaler_rounding_mode=None,
@@ -2726,7 +2752,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             offset_binary_encoding=None,
             local_sync=True,
             channels=None,
-            gains=None,
             **function_kwargs):
         """
         Single command used to set all channelizer settings.
@@ -2911,7 +2936,19 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 st.funcgen_left_shift = int(left_shift)
             if right_shift is not None:
                 st.funcgen_right_shift = int(right_shift)
-        self.get_firmware_config(channels=channels)
+        try:
+            self.get_receiver_config(channels=channels)
+        except ValueError as exc:
+            if (
+                self.CAPTURE_TYPE != "PROBER"
+                or not str(exc).startswith("Selected channels have different ")
+            ):
+                raise
+            self.logger.debug(
+                f"{self!r}: Skipping receiver config cache refresh after "
+                f"set_funcgen because PROBER channels have mixed stale "
+                f"sources. ({exc})"
+            )
 
     # set_funcgen_function = set_funcgen # for backwards compatibility
 
@@ -3147,7 +3184,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         #             pr = self.recv.pr
         #         self.recv = None
 
-        fw = self.get_firmware_config(stream_ids=kwargs.get("stream_ids"))
+        stream_ids = kwargs.pop("stream_ids", None)
+        fw = self.get_receiver_config(stream_ids=stream_ids)
         if not self.recv:
             if not isinstance(pr, UDPPacketReceiver):
                 pr_kwargs = {}
@@ -3158,7 +3196,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
                 self.logger.debug(f'{self!r}: Creating data receiver')
                 pr = UDPPacketReceiver(self.get_data_socket(port_number=port_number), **pr_kwargs)
-
             self.recv = RawFrameReceiver(pr, config=fw.raw, **kwargs)
         else:
             self.logger.debug(f'{self!r}: Fetching existing data receiver')
@@ -3277,7 +3314,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         for ch, stream_id in stream_ids.items():
             self.chan[ch].PROBER.STREAM_ID = stream_id
-        self.get_firmware_config(channels=list(stream_ids.keys()))
+        self.get_receiver_config(channels=list(stream_ids.keys()))
 
     def start_data_capture(
             self,
@@ -3379,11 +3416,21 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         # round the burst period to an integer multiple of burst_period_frame_rounding
         burst_period_in_frames = (int(burst_period_in_frames) // burst_period_frame_rounding) * burst_period_frame_rounding
-
         if channels is None:
-                channels = self.default_channels
+                if self.CAPTURE_TYPE == "PROBER":
+                    channels = self.default_channels
+                elif self.CAPTURE_TYPE == "UCAP":
+                    #set default channels based on mode
+                    if mode == 0:
+                        channels = list(range(8))
+                    elif mode == 1:
+                        channels = list(range(4))
+                    elif mode == 2:
+                        channels = list(range(2))
+                    elif mode == 3:
+                        channels = list(range(1))
                 self.logger.info(f"The channels are not specified for data capture. "
-                                    f"Defaulting to {self.default_channels}.")
+                                    f"Defaulting to {channels}.")
  
         if verbose:
             self.logger.debug(
@@ -3392,7 +3439,19 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 f'with first frame offset of {offset} frames ({offset * self.FRAME_PERIOD * 1000:.3f} ms)'
                 f'and a send delay factor of {send_delay} ({send_delay * 65536 / 125e6 * 1000:.3f} ms).')
 
-        self.get_firmware_config()
+        try:
+            self.get_receiver_config()
+        except ValueError as exc:
+            if (
+                self.CAPTURE_TYPE != "PROBER"
+                or not str(exc).startswith("Selected channels have different ")
+            ):
+                raise
+            self.logger.debug(
+                f"{self!r}: Skipping receiver config cache refresh before "
+                f"start_data_capture because PROBER channels have mixed "
+                f"stale sources. ({exc})"
+            )
 
         if data_type is not None:
             if source == 'scaler':
@@ -3409,7 +3468,19 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                     self.chan[ch].SCALER.set_capture_data_type(data_type)
                 for ch in self._normalize_channels(channels):
                     self.config.chan[ch].scaler_cap_data_type = normalized_cap_type
-                self.get_firmware_config(channels=channels)
+                try:
+                    self.get_receiver_config(channels=channels)
+                except ValueError as exc:
+                    if (
+                        self.CAPTURE_TYPE != "PROBER"
+                        or not str(exc).startswith("Selected channels have different ")
+                    ):
+                        raise
+                    self.logger.debug(
+                        f"{self!r}: Skipping receiver config cache refresh after "
+                        f"scaler capture type update because PROBER channels "
+                        f"have mixed stale settings. ({exc})"
+                    )
             else:
                 raise RuntimeError(f"'data_type' can be specified only for source='scaler'")
         else:
@@ -3419,7 +3490,19 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                     self.chan[ch].SCALER.set_capture_data_type(0)
                 for ch in self._normalize_channels(channels):
                     self.config.chan[ch].scaler_cap_data_type = 0
-                self.get_firmware_config(channels=channels)
+                try:
+                    self.get_receiver_config(channels=channels)
+                except ValueError as exc:
+                    if (
+                        self.CAPTURE_TYPE != "PROBER"
+                        or not str(exc).startswith("Selected channels have different ")
+                    ):
+                        raise
+                    self.logger.debug(
+                        f"{self!r}: Skipping receiver config cache refresh after "
+                        f"default scaler capture type update because PROBER "
+                        f"channels have mixed stale settings. ({exc})"
+                    )
 
         # stop data from going into the PROBER and MASTER to minimize the risk
         # of malformed packets and unstable communications
@@ -3430,8 +3513,14 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         if self.CAPTURE_TYPE == 'UCAP':
             self.UCAP.set_data_capture(source=source, mode=mode, channels=channels, select=select, periods=[burst_period_in_frames-1, burst_period_in_frames-1])
+            self.config.mode = mode
+            self.config.source = source
+            self.config.raw_capture.target_mode = int(mode)
+            self.config.raw_capture.source = source
+            self.config.raw_capture.channels = tuple(self._normalize_channels(channels))
             self.UCAP.USER_RESET = 0
             self._capture_pkt_frames_per_burst = None
+            self.get_receiver_config(channels=channels)
             
 
         elif self.CAPTURE_TYPE =='PROBER':
@@ -3473,7 +3562,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 st = self.config.chan[ch]
                 st.data_source = source
                 st.prober_sub_period = 23
-            self.get_firmware_config(channels=channels)
+            self.config.raw_capture.source = source
+            self.config.raw_capture.channels = tuple(self._normalize_channels(channels))
+            self.get_receiver_config(channels=channels)
 
         # ** line below no longer supported by firmware *** enables data transmission if continuous mode is selected
         self.set_trig(1)
@@ -3535,7 +3626,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         raw_capture = self.config.raw_capture
         raw_capture.source = source
         raw_capture.channels = tuple(self._normalize_channels(channels))
-        self.get_firmware_config(channels=channels)
+        self.get_receiver_config(channels=channels)
 
     def set_fft_bypass(self, bypass_mode, channels=None):
         """
@@ -3564,7 +3655,19 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         if configured_channels:
             for ch in configured_channels:
                 self.config.chan[ch].fft_bypass = bool(bypass_mode)
-            self.get_firmware_config(channels=list(configured_channels))
+            try:
+                self.get_receiver_config(channels=list(configured_channels))
+            except ValueError as exc:
+                if (
+                    self.CAPTURE_TYPE != "PROBER"
+                    or not str(exc).startswith("Selected channels have different ")
+                ):
+                    raise
+                self.logger.debug(
+                    f"{self!r}: Skipping receiver config cache refresh after "
+                    f"set_fft_bypass because PROBER channels have mixed stale "
+                    f"sources. ({exc})"
+                )
         # self.reset()
         # self.sync()
 
@@ -3603,10 +3706,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 - 1: Output the input FFT data.
                 - 2: Output raw scaled FFT data, before rounding is applied. The data is saturated, but disregarding symmetric saturation.
                 - 3: Output 4+4 bit scaled FFT data (e.g. normal scaler output, even if the science output is set to another mode)
-                - 4: Output the input FFT data of the even bins only, at double the bitwidth.
-                - 5: Output the input FFT data of the odd bins only, at double the bitwidth.
-                - 6: Output the raw scaled FFT data (see above) of the even bins only, at double the bitwidth.
-                - 7: Output the raw scaled FFT data (see above) of the odd bins only, at double the bitwidth.
+                - 4: Output the input FFT data of the even bins and then the odd bins in an alternating fashion, at double the bitwidth.
+                - 5: Output the input FFT data of each Re and Im component one at a time, at the full bitwidth.
             For modes 4 and 5, one host logical frame is reconstructed from packets produced by consecutive
             physical frames (not from a single fully buffered physical frame).
         '''
@@ -3614,6 +3715,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         if channels is None:
             channels = self.default_channels
 
+        refresh_receiver_config = False
         if bypass == False:
             self.logger.debug(f'Setting scaler bypass to 0 for channel {channels}')
             for ch in channels:
@@ -3623,7 +3725,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 st = self.config.chan[ch]
                 st.scaler_bypass = False
                 st.scaler_bypass_data_type = 0
-            self.get_firmware_config(channels=channels)
+            refresh_receiver_config = True
         elif bypass_data_type is not None:
             self.logger.debug(f'Setting scaler output data type to {bypass_data_type} for channel {channels}')
             for ch in self._normalize_channels(channels):
@@ -3632,7 +3734,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 st = self.config.chan[ch]
                 st.scaler_bypass = True
                 st.scaler_bypass_data_type = int(bypass_data_type)
-            self.get_firmware_config(channels=channels)
+            refresh_receiver_config = True
 
         if cap_data_type is not None:
             if isinstance(cap_data_type, str):
@@ -3648,7 +3750,22 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             for ch in self._normalize_channels(channels):
                 self.chan[ch].SCALER.CAP_DATA_TYPE = normalized_cap_type
                 self.config.chan[ch].scaler_cap_data_type = normalized_cap_type
-            self.get_firmware_config(channels=channels)
+            refresh_receiver_config = True
+
+        if refresh_receiver_config:
+            try:
+                self.get_receiver_config(channels=channels)
+            except ValueError as exc:
+                if (
+                    self.CAPTURE_TYPE != "PROBER"
+                    or not str(exc).startswith("Selected channels have different ")
+                ):
+                    raise
+                self.logger.debug(
+                    f"{self!r}: Skipping receiver config cache refresh after "
+                    f"set_scaler_output_modes because PROBER channels have "
+                    f"mixed stale sources. ({exc})"
+                )
 
 
 
@@ -4481,7 +4598,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
     def set_scaler_eight_bit(
             self,
             scaler_eight_bit: bool,
-            prober_user_flags: bool,
+            prober_user_flags: bool = None,
             channels: List[int] = None,
     ):
         """
@@ -4521,12 +4638,14 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             if ch in channels:
                 self.logger.debug(f"Setting scaler of channel {ch} to 8-bit mode.")
                 self.chan[ch].SCALER.FOUR_BITS = not scaler_eight_bit
-
+                self.config.chan[ch].scaler.eight_bit = scaler_eight_bit
                 self.logger.debug(
                     f"{'Adding' if prober_user_flags else 'Removing'} user flags from scaler data of channel {ch}."
                 )
                 if prober_user_flags is not None:
                     self.chan[ch].PROBER.PROBER_USER_FLAGS = prober_user_flags
+                    if prober_user_flags and not scaler_eight_bit:
+                        raise RuntimeError(f"Cannot output prober user flags in a channel not in 8-bit mode")
 
     def set_scaler_rounding_mode(
             self,

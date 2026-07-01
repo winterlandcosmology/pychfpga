@@ -96,7 +96,7 @@ class _MockRawProcessor:
         packets_per_logical_frame=1,
         capture_format=[
             None,
-            State(fmt_base_width=32, fmt_is_complex=True, fmt_interleave_factor=2),
+            State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=2),
         ],
     )
 
@@ -164,8 +164,8 @@ def test_merge_fft_decoder_into_raw_complex_format():
     raw = State(
         source='funcgen',
         capture_format=[
-            State(fmt_base_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
-            State(fmt_base_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
+            State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
+            State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
         ],
         packets_per_logical_frame=1,
     )
@@ -173,7 +173,7 @@ def test_merge_fft_decoder_into_raw_complex_format():
         source='scaler',
         capture_format=[
             None,
-            State(fmt_base_width=32, fmt_is_complex=True, fmt_interleave_factor=2),
+            State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=2),
         ],
         packets_per_logical_frame=2,
         offset_encoding=True,
@@ -190,8 +190,8 @@ def test_start_fft_rms_rejects_non_complex_decoder():
     mock_raw.config = State(
         packets_per_logical_frame=1,
         capture_format=[
-            State(fmt_base_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
-            State(fmt_base_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
+            State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
+            State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
         ],
     )
     proc = FFTDataProcessor(_DummyPacketReceiver(), mock_raw, stream_ids=(10,))
@@ -246,7 +246,7 @@ def test_fft_rms_accepts_ucap_split_frame_counts():
         packets_per_logical_frame=2,
         capture_format=[
             None,
-            State(fmt_base_width=32, fmt_is_complex=True, fmt_interleave_factor=1),
+            State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=1),
         ],
     )
     proc = FFTDataProcessor(_DummyPacketReceiver(), mock_raw, stream_ids=(10,))
@@ -310,8 +310,9 @@ def test_full_resolution_complex_formatter_reconstructs_lanes():
     proc.config = State(
         capture_format=[
             None,
-            State(fmt_base_width=32, fmt_is_complex=True, fmt_interleave_factor=4),
+            State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=4),
         ],
+        fft_bin_map=np.array([0, 2, 1, 3], dtype=np.intp),
         offset_encoding=False,
     )
     proc.FRAMES_PER_BURST = 4
@@ -320,10 +321,10 @@ def test_full_resolution_complex_formatter_reconstructs_lanes():
         [
             [
                 [
-                    10, 30,  # lane 0 real -> bins 0, 2
-                    1, 3,    # lane 0 imag -> bins 0, 2
-                    20, 40,  # lane 1 real -> bins 1, 3
-                    2, 4,    # lane 1 imag -> bins 1, 3
+                    10, 1,   # frame 0: bin 0 Re/Im
+                    20, 2,   # frame 1: bin 1 Re/Im
+                    30, 3,   # frame 2: bin 2 Re/Im
+                    40, 4,   # frame 3: bin 3 Re/Im
                 ],
             ],
         ],
@@ -332,6 +333,10 @@ def test_full_resolution_complex_formatter_reconstructs_lanes():
     proc.ts_array = np.array([100], dtype=np.uint64)
     proc.raw_data_count = np.ones((1, 1, 4), dtype=np.int64)
     proc.raw_source = np.ones((1, 1, 4), dtype=np.uint8)
+    proc.fmt_cdata1 = [
+        None,
+        np.empty((4, 1, 1), dtype=np.complex64),
+    ]
     proc.fmt_cdata2 = [
         None,
         np.empty((1, 1, 4), dtype=np.complex64),

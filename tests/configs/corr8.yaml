@@ -227,6 +227,7 @@ def: &default  # defaults, referenced below
             fft_bypass : False
             fft_shift : 1367 # 0b10101010111->1367 (~4bit noise to ~3bit noise) 2^5 - 1 -> old, might be ideal.  2^10-1 safest, but add a bit of noise
             scaler_bypass : False
+            scaler_cap_data_type: 4
             offset_binary_encoding : True
 
         raw_data_capture:
@@ -246,7 +247,7 @@ def: &default  # defaults, referenced below
             max_file_size: 1000000000
 
         compute_gains:
-            enable: True # False
+            enable: True
             save_gains: True
             targets: # List of (crate,slot) tuples for which fains will be computed
               - ['*']
@@ -324,7 +325,7 @@ corr8:
         <<: *default_fpga
         fpga_array_params:
             <<: *default_fpga_array_params
-            hwm: 'CRS 37:1' # ID of the board used. Can also use a direct IP
+            hwm: 'CRS 77:1' # ID of the board used. Can also use a direct IP
             mode: corr8  # shuffle 256 and 512 require crate numbers
             sync_method: local #  distributed_time # <-- For R232. Change to --> sync_method: distributed_time <-- for D3A. #local_soft_trigger
             sync_source: sma_a
@@ -367,7 +368,7 @@ corr8:
             #     output: 'bp_sma' # Output to which to send the PWM signal. 'sma_a' (ICEBoard SMA) or 'bp_sma' (Backplace MMCX conector)
 
         raw_data_capture:
-            capture_source: 'funcgen'
+            capture_source: 'scaler'
             baseline_capture_rate: 10  # Frame per second. 0 = disable.
             tmux_factor: 3
 
@@ -384,7 +385,7 @@ corr8:
             max_file_size: 1000000000
 
         compute_gains:
-            enable: True
+            enable: False
             method: direct
             scaler_cap_data_type: fft_2x
             targets: # List of (crate,slot) tuples for which fains will be computed

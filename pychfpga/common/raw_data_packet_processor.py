@@ -29,8 +29,9 @@ def decode_format_string(format):
         format: Format string such as ``"16"``, ``"32+32"``, or ``"32+32d"``.
 
     Returns:
-        State with ``fmt_base_width``, ``fmt_is_complex``, and
-        ``fmt_interleave_factor`` (same fields as ``config.capture_format[i]``).
+        State with ``fmt_bus_width``, ``fmt_data_width``, ``fmt_is_complex``,
+        and ``fmt_interleave_factor`` (same fields as
+        ``config.capture_format[i]``).
 
     Raises:
         ValueError: If the format string is invalid.
@@ -42,9 +43,9 @@ def decode_format_string(format):
     base = int(m.group(1))
     second = m.group(2)
     suffix = m.group(3) or ""
-    if base not in (8, 14, 16, 32, 64):
+    if base not in (8, 14, 16, 32, 64, 128):
         raise ValueError(
-            f"Invalid bit width in data format {format!r}: must be 8, 14, 16, 32, or 64"
+            f"Invalid bit width in data format {format!r}: must be 8, 14, 16, 32, 64, or 128"
         )
     is_complex = second is not None
     if is_complex:
@@ -57,8 +58,10 @@ def decode_format_string(format):
         raise ValueError(f"Modifiers {suffix!r} are not supported for non-complex data")
 
     deinterleave = "d" in suffix
+    bus_width = 8 * math.ceil(base / 8)
     return State(
-        fmt_base_width=base,
+        fmt_bus_width=bus_width,
+        fmt_data_width=base,
         fmt_is_complex=is_complex,
         fmt_interleave_factor=2 if deinterleave else 1,
     )
@@ -92,7 +95,7 @@ def decode_format_string(format):
     #             raise ValueError(f"Invalid raw data format {self.format!r}: second width must be the same as the base width")
     #     self.fmt_modifiers = m.group(3) or ""
 
-    #     self.fmt_base_width = base
+    #     self.fmt_bus_width = base
     #     self.fmt_scalar_bytes = math.ceil(base / 8)
     #     self.fmt_integer_dtype = np.dtype(f">i{self.fmt_scalar_bytes}")  # integer number format
 
@@ -313,8 +316,9 @@ class RawDataPacketProcessor(PacketProcessorBase):
                 state.capture_format[source] = cf
             if cf.has_changed(context=dynamic_state_attrs[source]):
                 if cf.fmt_is_complex:
-                    bytes_per_integer = math.ceil(cf.fmt_base_width / 8)
-                    out_dtype = np.dtype(np.complex128 if cf.fmt_base_width == 64 else np.complex64)
+                    fmt_bus_width = int(cf.fmt_bus_width)
+                    bytes_per_integer = math.ceil(fmt_bus_width / 8)
+                    out_dtype = np.dtype(np.complex128 if fmt_bus_width == 64 else np.complex64)
                     complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // 2
                     interleave_factor = int(cf.fmt_interleave_factor or 1)
                     if interleave_factor > 2:
@@ -323,12 +327,12 @@ class RawDataPacketProcessor(PacketProcessorBase):
                                 f"Full-resolution complex interleave factor must be even, "
                                 f"got {interleave_factor}."
                             )
-                        if self.CAPTURE_BITS_PER_WORD % cf.fmt_base_width:
+                        if self.CAPTURE_BITS_PER_WORD % fmt_bus_width:
                             raise ValueError(
                                 f"capture_bits_per_word={self.CAPTURE_BITS_PER_WORD} must be a "
-                                f"multiple of fmt_base_width={cf.fmt_base_width}."
+                                f"multiple of fmt_bus_width={fmt_bus_width}."
                             )
-                        words_per_capture_word = max(1, self.CAPTURE_BITS_PER_WORD // cf.fmt_base_width)
+                        words_per_capture_word = max(1, self.CAPTURE_BITS_PER_WORD // fmt_bus_width)
                         complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // words_per_capture_word
                         cdata2_dims = (
                             self.max_timestamps * self.FRAMES_PER_BURST // interleave_factor,
@@ -397,15 +401,18 @@ class RawDataPacketProcessor(PacketProcessorBase):
             cf = self.config.capture_format[source]
             if cf is not None and not isinstance(cf, State):
                 cf = State(cf)
-        base = cf.fmt_base_width
+        base = cf.fmt_bus_width
         is_complex = cf.fmt_is_complex
 
         # derive format parameters
         scalar_bytes = math.ceil(base / 8)
-        integer_dtype = np.dtype(f">i{scalar_bytes}")
-        right_shift = 8*scalar_bytes - base
+        integer_dtype = np.dtype(f">i{scalar_bytes}") if scalar_bytes <= 8 else np.dtype(f'>i8')
+        right_shift = base - cf.fmt_data_width
         # View the buffer as N-byte integers
         data = raw_data.view(integer_dtype)
+        if scalar_bytes > 8:
+            data = data[..., ::2] #drop every second byte
+            right_shift -= 64
         if right_shift > 0:
             np.right_shift(data, right_shift, data)
 
@@ -450,7 +457,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
             if self.CAPTURE_BITS_PER_WORD % base:
                 raise ValueError(
                     f"capture_bits_per_word={self.CAPTURE_BITS_PER_WORD} must be a multiple "
-                    f"of fmt_base_width={base}."
+                    f"of fmt_bus_width={base}."
                 )
             words_per_capture_word = max(1, self.CAPTURE_BITS_PER_WORD // base)
             if words_per_capture_word > 1:
@@ -460,12 +467,19 @@ class RawDataPacketProcessor(PacketProcessorBase):
             bins_per_word = interleave_factor // 2
             v = data.reshape(logical_rows, interleave_factor, data.shape[1], data.shape[2])
             out = self.fmt_cdata2[source][:logical_rows]
+            # Full-resolution frames carry Re/Im pairs in each physical row.
+            complex_values_per_frame = data.shape[2] // 2
+            cdata = self.fmt_cdata1[source][:data.shape[0], :, :complex_values_per_frame]
+            np.copyto(cdata.real, data[:, :, ::2])
+            np.copyto(cdata.imag, data[:, :, 1::2])
+            cv = cdata.reshape(logical_rows, interleave_factor, data.shape[1], cdata.shape[2])
             for lane in range(bins_per_word):
-                for parity in range(2):
-                    row = v[:, 2 * lane + parity]
-                    bins = out[:, :, lane + parity * bins_per_word::interleave_factor]
-                    np.copyto(bins.real, row[:, :, ::2])
-                    np.copyto(bins.imag, row[:, :, 1::2])
+                frame_pair = cv[:, 2 * lane:2 * lane + 2, :, :]
+                out[..., lane::bins_per_word] = (
+                    frame_pair
+                    .transpose(0, 2, 1, 3)
+                    .reshape(logical_rows, data.shape[1], 2 * cdata.shape[2], order='F')
+                )
             ts = ts.reshape(logical_rows, interleave_factor)[:, 0]
             counts = counts.reshape(logical_rows, interleave_factor, counts.shape[1]).min(axis=1)
             data = out
