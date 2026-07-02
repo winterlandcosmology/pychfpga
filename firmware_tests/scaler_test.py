@@ -64,7 +64,7 @@ platforms = {
     #    {'INPUT_WIDTH': 14, 'CAPTURE_WIDTH': 16, 'FFT_WIDTH': 32, 'SCALED_WIDTH': 48, 'READOUT_SHIFT': 0, 'BINS_PER_WORD': 4}
 }
 
-class TestScaler:
+class TestScaler(TestModule):
 
 
     ROUNDING_MODES = ['truncation', 'normal', 'convergent']
@@ -203,20 +203,22 @@ class TestScaler:
                 split=False,
                 source=1,
                 verbose=self.test_config.loglevelrecv,
+                complex_override=False,
             )
-            data = data[:, 0, :]
             assert np.all(np.equal(data[0], data))
             if get_flags:
                 return source, data & (2**self.data.READOUT_SHIFT-1)
             return source, data // (2**self.data.READOUT_SHIFT)
         #TODO: add capture mode for ucap
         else:
-            _, data, _ = receiver.read_raw_frames(ncap=1, flush=False, split=True, source=1, verbose=self.test_config.loglevelrecv)
+            _, data, _ = receiver.read_raw_frames(ncap=1, flush=False, split=True, source=1, verbose=self.test_config.loglevelrecv, complex_override=False)
             data = data[:, 0, :]
+            print(data[0][:16])
+            print(data[1][:16])
             assert np.all(np.equal(data[0], data))
             if get_flags:
                 raise Exception("Flag feature not implemented on UCAP")
-            return source, (data // (2**self.data.READOUT_SHIFT)) #only return first frame of data
+            return source, data #only return first frame of data
 
     def plot_and_test(self, xr, data, ref_data, title, **kwargs):
         logging.getLogger("matplotlib").setLevel(logging.WARNING)

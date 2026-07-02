@@ -3721,12 +3721,12 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             self.logger.debug(f'Setting scaler bypass to 0 for channel {channels}')
             for ch in channels:
                 self.chan[ch].SCALER.set_scaler_output(data_type=0, bypass=False)
-            self.get_receiver_config(channels=channels)
+            refresh_receiver_config = True
         elif bypass_data_type is not None:
             self.logger.debug(f'Setting scaler output data type to {bypass_data_type} for channel {channels}')
             for ch in self._normalize_channels(channels):
                 self.chan[ch].SCALER.set_scaler_output(data_type=bypass_data_type, bypass=True)
-            self.get_receiver_config(channels=channels)
+            refresh_receiver_config = True
 
         if cap_data_type is not None:
             if isinstance(cap_data_type, str):
@@ -3741,8 +3741,10 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             self.logger.debug(f'Setting scaler capture data type to {cap_data_type} for channel {channels}')
             for ch in self._normalize_channels(channels):
                 self.chan[ch].SCALER.set_capture_data_type(normalized_cap_type)
-            self.get_receiver_config(channels=channels)
+            refresh_receiver_config = True
 
+        if refresh_receiver_config:
+            self.get_receiver_config(channels=channels)
 
 
     def reset_scaler_overflow_flags(self, channels=None):
