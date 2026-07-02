@@ -539,7 +539,7 @@ def test_split_parameter_yields_samples_per_frame():
 
 
 def test_full_resolution_complex_ice_interleave4():
-    cf1 = State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=4)
+    cf1 = State(fmt_bus_width=32, fmt_data_width=29, fmt_is_complex=True, fmt_interleave_factor=4)
     processor, _pr = make_processor(
         n_packets=4,
         frames_per_burst=4,
@@ -559,7 +559,7 @@ def test_full_resolution_complex_ice_interleave4():
         fft_bin_map=np.array([0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11], dtype=np.intp),
     )
 
-    components = np.asarray(
+    payload = np.asarray(
         [
             # Re/Im pairs in frame-pair order: lane 0 frames, then lane 1 frames.
             # The bin map below then converts the lane-grouped transport order to natural bins.
@@ -568,8 +568,9 @@ def test_full_resolution_complex_ice_interleave4():
             6, 1006, 8, 1008, 10, 1010,
             7, 1007, 9, 1009, 11, 1011,
         ],
-        dtype=">i4",
+        dtype=np.int32,
     )
+    components = (payload << 3).astype(">i4")
     processor.raw_data[0, 0, :] = components.view(np.uint8)
     processor.ts_array[0] = 20
     processor.raw_data_count[0, 0, :] = 1

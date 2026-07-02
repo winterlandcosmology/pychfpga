@@ -36,7 +36,7 @@ class TestFFT:
     SIM_COMPARE_DATA_DIR = Path(__file__).resolve().parent / 'casper_simulations' / 'sim_data' / 'hirax'
     SIM_COMPARE_OUTPUT_DTYPE = np.int32
     SIM_COMPARE_FFT_SHIFT = 1984
-    SIM_COMPARE_CAPTURE_RIGHT_SHIFT = 8
+    SIM_COMPARE_CAPTURE_RIGHT_SHIFT = 5
     SIM_COMPARE_CAPTURE_PERIOD = 0.01
 
     def get_logger(self):

@@ -2340,7 +2340,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         fft_data_width = self.FFT_INFO[self.FFT_TYPE]['bits_per_bin']//2 #divide by 2 for real and imaginary
         if cap_data_type == 4:
             capture_bus_width = 32 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 16
-            data_width = fft_data_width if not fft_bypass else adc_bit_width
+            data_width = adc_bit_width if fft_bypass else min(fft_data_width, capture_bus_width)
             fft_capture_format = State(
                 fmt_bus_width=capture_bus_width,
                 fmt_data_width =data_width,
@@ -2350,10 +2350,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             fft_pplf = 2
         elif cap_data_type == 5: # Full resolution FFT
             capture_bus_width = 128 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 32  # CRS: 128-bit complex, ICE: 32-bit complex. TODO: have this parametrized by the firmware
-            if self.PLATFORM_ID == self._PLATFORM_ID_CRS:
-                data_width = fft_data_width if not fft_bypass else adc_bit_width
-            else:
-                data_width = adc_bit_width if fft_bypass else capture_bus_width
+            data_width = adc_bit_width if fft_bypass else min(fft_data_width, capture_bus_width)
             fft_capture_format = State(
                 fmt_bus_width=capture_bus_width,
                 fmt_data_width=data_width,

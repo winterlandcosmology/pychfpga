@@ -310,14 +310,14 @@ def test_full_resolution_complex_formatter_reconstructs_lanes():
     proc.config = State(
         capture_format=[
             None,
-            State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=4),
+            State(fmt_bus_width=32, fmt_data_width=29, fmt_is_complex=True, fmt_interleave_factor=4),
         ],
         fft_bin_map=np.array([0, 2, 1, 3], dtype=np.intp),
         offset_encoding=False,
     )
     proc.FRAMES_PER_BURST = 4
     proc.CAPTURE_BITS_PER_WORD = 32
-    proc.raw_data = np.array(
+    payload = np.array(
         [
             [
                 [
@@ -328,8 +328,9 @@ def test_full_resolution_complex_formatter_reconstructs_lanes():
                 ],
             ],
         ],
-        dtype=">i4",
-    ).view(np.uint8)
+        dtype=np.int32,
+    )
+    proc.raw_data = (payload << 3).astype(">i4").view(np.uint8)
     proc.ts_array = np.array([100], dtype=np.uint64)
     proc.raw_data_count = np.ones((1, 1, 4), dtype=np.int64)
     proc.raw_source = np.ones((1, 1, 4), dtype=np.uint8)

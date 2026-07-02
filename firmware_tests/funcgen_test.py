@@ -480,12 +480,13 @@ class TestFuncgen:
                                             frames_per_burst = frames_per_burst,
                                             number_of_bursts = number_of_bursts,
                                             burst_period_in_frames = burst_period_in_frames,
+                                            keep_all_frames=True,
                                             seed = seeds[i]).astype(self.FG_DTYPE_SIGNED)
             # Selecting only a single channel
             data = data[0, ...]
             psd_a[i] = (np.abs(np.fft.fft(data.ravel())))**2
 
-            sim_data = self.sim_random_gen(frames_per_burst, number_of_bursts)
+            sim_data = self.sim_random_gen(frames_per_burst * number_of_bursts)
             sim_psd_a[i] = (np.abs(np.fft.fft(sim_data)))**2
             
         psd_avg = np.mean(psd_a, axis=0)
@@ -518,11 +519,12 @@ class TestFuncgen:
             period=None,
             frames_per_burst=frames_per_burst, 
             number_of_bursts=number_of_bursts,
-            burst_period_in_frames=burst_period_in_frames
+            burst_period_in_frames=burst_period_in_frames,
+            keep_all_frames=True,
         )[0, ...].ravel()
 
         words_per_frame = self.SAMPLES_PER_FRAME // self.board.SAMPLES_PER_WORD
-        words_per_burst = words_per_frame
+        words_per_burst = words_per_frame * frames_per_burst
         words_per_cap = words_per_burst * number_of_bursts
 
         #process data to get word count and frame count
@@ -655,7 +657,8 @@ class TestFuncgen:
     def test_frame_counter(self, xr, frames_per_burst, number_of_bursts, burst_period_in_frames, mode):
         """Test frame counter encoding and sequence for mode: 'frame8' and 'frame4'."""
         for chan in self.board.chan.values():
-            chan.FUNCGEN.reset()
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
             # Keep shifts neutral so the sample encoding matches firmware definitions exactly.
             chan.FUNCGEN.LEFT_SHIFT = 0
             chan.FUNCGEN.RIGHT_SHIFT = 0
@@ -705,7 +708,8 @@ class TestFuncgen:
         Test mode "nibble4": low nibble of buffer on one frame, high nibble on the next, alternating every frame.
         """
         for chan in self.board.chan.values():
-            chan.FUNCGEN.reset()
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
             # Keep output shifting neutral so nibble placement matches firmware behavior exactly.
             chan.FUNCGEN.LEFT_SHIFT = 0
             chan.FUNCGEN.RIGHT_SHIFT = 0
@@ -778,7 +782,8 @@ class TestFuncgen:
         self.board.stop_data_capture()
         logger.debug(f"Stopped data capture")
         for chan in self.board.chan.values():
-            chan.FUNCGEN.reset()
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
             logger.debug(f"Channelizer {chan} reset")
         sleep(0.01)
 
@@ -791,8 +796,9 @@ class TestFuncgen:
 
     def test_delay_capture(self, xr):
         """Test delay capture"""
-        for chan in self.board.chan:
-            chan.FUNCGEN.reset()
+        for chan in self.board.chan.values():
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
         self._set_capture_funcgen('ramp')
         delay_ctrs = [ch.FUNCGEN.DELAY_CTR for ch in self.board.chan.values()]
         assert(len(set(delay_ctrs)) == 1) #ensure all delay counters are the same
@@ -892,7 +898,8 @@ class TestFuncgen:
         for chan in self.board.chan.values():
             chan.FUNCGEN.set_output_shifting(left_shift=0, right_shift=0)
             chan.FUNCGEN.STATS_ENABLE = 0
-            chan.FUNCGEN.reset()
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
 
         # Configure FUNCGEN source directly; capture is not required for overflow counter updates.
         self.board.set_channelizer(
