@@ -58,7 +58,8 @@ def decode_format_string(format):
 
     deinterleave = "d" in suffix
     return State(
-        fmt_base_width=base,
+        fmt_bus_width=base,
+        fmt_data_width=base,
         fmt_is_complex=is_complex,
         fmt_interleave_factor=2 if deinterleave else 1,
     )
@@ -349,7 +350,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
 
 
 
-    def get_formatted_data(self, rows=slice(None), source=0, split=False, format=None):
+    def get_formatted_data(self, rows=slice(None), source=0, split=False, format=None, complex_override=None):
         """Transform assembled raw rows into ``(ts, data, counts)`` for source ``source``.
 
         Parameters
@@ -377,6 +378,9 @@ class RawDataPacketProcessor(PacketProcessorBase):
                 cf = State(cf)
         base = cf.fmt_bus_width
         is_complex = cf.fmt_is_complex
+        if complex_override is not None:
+            is_complex = complex_override
+
 
         # derive format parameters
         scalar_bytes = math.ceil(base / 8)
@@ -462,7 +466,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         return ts, data, counts
 
 
-    def create_output_buffer(self, n_ts, source=0, split=False, format=None):
+    def create_output_buffer(self, n_ts, source=0, split=False, format=None, complex_override=None):
         """Create arrays to store the timestamps, formatted data, and data counts returned by process_packets.
 
         This is used by applications that need to crate a storage space for the formatted data returned by the process_packets method.
@@ -479,7 +483,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
             Tuple of ``ts`` ``(n_ts,)``, ``data``, and ``counts`` ``(n_ts, nchan)``.
         """
         # format a dummy 1-row buffer to get the shape of the data and counts
-        ts_, data_, counts_ = self.get_formatted_data(slice(0, 1), source=source, split=split, format=format)
+        ts_, data_, counts_ = self.get_formatted_data(slice(0, 1), source=source, split=split, format=format, complex_override=complex_override)
         ts_mult, nchan, nvalues = data_.shape  # ts_mult indicates how many formatted rowswe get from a single burst
         data = np.empty((n_ts*ts_mult, nchan, nvalues), dtype=data_.dtype)
         counts = np.empty((n_ts*ts_mult, nchan), dtype=counts_.dtype)

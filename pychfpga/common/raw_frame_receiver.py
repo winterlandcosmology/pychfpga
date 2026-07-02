@@ -46,6 +46,7 @@ class RawFrameReceiver(RawDataPacketProcessor):
         chan_first: bool = True,
         config=None,
         format=None,
+        complex_override=None,
         verbose=None,
     ):
         """
@@ -73,7 +74,7 @@ class RawFrameReceiver(RawDataPacketProcessor):
         if config is not None:
             self.update_config(config)
 
-        ts, data, counts = self.create_output_buffer(n_ts=ncap, source=source, split=split, format=format)
+        ts, data, counts = self.create_output_buffer(n_ts=ncap, source=source, split=split, format=format, complex_override=complex_override)
         # ts.fill(0)
         # data.fill(0)
         # counts.fill(0)
@@ -91,7 +92,7 @@ class RawFrameReceiver(RawDataPacketProcessor):
                 n = min(ncap - raw_rows_completed, self.n_out - self.current_row)
                 #print(f"Taking  {n} rows from raw buffer {self.current_row} to {self.current_row + n}")
                 rows = slice(self.current_row, self.current_row + n)
-                ts_, data_, counts_ = self.get_formatted_data(rows, source=source, split=split, format=format)
+                ts_, data_, counts_ = self.get_formatted_data(rows, source=source, split=split, format=format, complex_override=complex_override)
                 raw_rows_completed += n
                 n_fmt = ts_.shape[0]  # number of formatted rows to store
                 fmt_rows = slice(fmt_rows_completed, fmt_rows_completed + n_fmt)
