@@ -16,6 +16,7 @@ from wtl.pytest_xreport import xr, get_xr_from
 from wtl.namespace import NameSpace
 from pychfpga.fpga_array import FPGAArray
 import sys
+from .module_test import TestModule
 
 pytestmark = pytest.mark.funcgen
 
@@ -25,7 +26,7 @@ pytestmark = pytest.mark.funcgen
 #3. overflow buffer can be programmed from set_data_source
 #4. noise seeds can be set in set_data_source
 
-class TestFuncgen:
+class TestFuncgen(TestModule):
     """
     1. When pytest is run on the command line, the pytest.ini file provides the config file as a command-line argument
     2. In a session start hook, xr parses this config file and converts it to a namespace in xr.config
@@ -42,33 +43,9 @@ class TestFuncgen:
           2. Separate config files for each module if config.yaml becomes too convoluted.  
     """
 
-    def pytest_generate_tests(self, metafunc):
-        xr = get_xr_from(metafunc)
-        test_config = xr.config.test_config
-        test_name = metafunc.function.__name__[5:] #get rid of test_ prefix
-        for fixture in metafunc.fixturenames:
-            #find global default, if there is
-            global_param = 'global_' + fixture
-            found_param = False
-            if global_param in test_config.keys():
-                value = test_config[global_param]
-                found_param = True
-            if test_name in test_config.keys(): #not elif, so global will be overriden if applicable
-                test_params = test_config[test_name]
-                if fixture in test_params:
-                    value = test_params[fixture]
-                    found_param = True
-            if found_param:
-                print(f'Parametrising {fixture}')
-                metafunc.parametrize(fixture, value) 
+    def get_widths(_, test_config):
+        return {}
 
-    def board_conn(self, xr):
-        if 'board' in xr.data: #check if board is cached to avoid unnecessary reconnection
-            return xr.data.board
-        ca = FPGAArray(**self.connection_config)
-        xr.data.board = ca.ib[0]
-        return xr.data.board
-        
     @pytest.fixture(scope='function', autouse=True)
     def setup(self, xr):
         self.data = xr.data
@@ -146,14 +123,20 @@ class TestFuncgen:
     async def test_mtu_size(self, xr):
         logger = self.get_logger()
         logger.debug("Getting the board's address")
+        ping_port = self.board.mb.port
         port_map = dict(
             port=self.board.get_data_socket().getsockname()[1],
-            sources=[(self.board.hostname, 80)]
+            sources=[(self.board.hostname, ping_port)]
         )
-        logger.debug(f"The board located at {port_map['sources'][0][0]}")
+        logger.debug(f"The board located at {port_map['sources'][0][0]}:{ping_port}")
         logger.debug("Pinging the board to determine interface used")
         src_if_addrs = await ping_sources_async([port_map])
         if_ip = list(src_if_addrs.values())[0]
+        if if_ip is None:
+            raise RuntimeError(
+                f"Could not establish a TCP connection with {self.board.hostname}:{ping_port} "
+                f"to determine the local network interface. Check network connectivity."
+            )
         logger.debug(f"Interface address: {if_ip[0]}:{if_ip[1]}")
         if_addrs = psutil.net_if_addrs()
         if_name = None
@@ -198,11 +181,8 @@ class TestFuncgen:
         logger.debug(f"Setting data source to {source.upper()}")
         self.board.set_channelizer(data_source=source, fft_bypass=1, scaler_bypass=1, **func_kwargs)
         logger.debug("Initializing data receiver")
-        #fmt = "8" if self.PLATFORM == "MGK7MB" else "16"
         receiver = self.board.get_data_receiver(
-            #format=fmt,
             verbose=self.loglevelrecv,
-            #pkt_frames_per_burst=frames_per_burst,
         )
         receiver.flush()
         self.board.sync()
@@ -210,7 +190,6 @@ class TestFuncgen:
         #Returns data in shape (ncap, nchannels, nframes_per_cap, nsamples)
         _, data, _ = receiver.read_raw_frames(ncap=number_of_bursts, split=True)
         logger.debug(f"Received {len(data)} packets from FUNCGEN")
-        #data = data >> self.FG_LSHIFT
         if keep_all_frames:
             return data
         else:
@@ -288,7 +267,6 @@ class TestFuncgen:
         seed = np.random.randint(-2 ** 15, 2 ** 15 - 1) #seed is 16-bit value
         self.board.start_data_capture(period=1, source='funcgen', frames_per_burst=2, mode=0)
         self.board.set_channelizer(data_source='noise', seed = seed)
-        #fmt = "8" if self.PLATFORM == "MGK7MB" else "16"
         receiver = self.board.get_data_receiver()
         #self.board.chan[0].FUNCGEN.reset_noise()
         sleep(0.1)
@@ -343,22 +321,22 @@ class TestFuncgen:
                                             seed=self.seeds[i]
                                             )[0].astype(self.FG_DTYPE_SIGNED)
             bit_sum = self._monobit_bit_sum(data)
-            print(bit_sum)
+            #print(bit_sum)
             sn = abs(bit_sum) / math.sqrt(data.size * self.ADC_BITS_PER_SAMPLE)
             #print(math.sqrt(data.size * self.ADC_BITS_PER_SAMPLE))
             #print(sn)
             p_val = math.erfc(sn/np.sqrt(2))
             p_vals[i] = p_val
-            print(f"Calculated pval = {p_val}")
+            #print(f"Calculated pval = {p_val}")
         plt.hist(p_vals, 'auto')
-        plt.ylabel("p-val")
+        plt.ylabel("p-value")
         plt.xlabel("seed")
         plt.title(f"Histogram of p-values with {number_of_bursts} bursts")
         xr.insert_plot()
         plt.close()
         success_proportion = np.sum(p_vals >= p_val_threshold) / len(self.seeds)
-        print(f"Number of successful pvals (greater than 0.01): {np.sum(p_vals >= p_val_threshold)}")
-        print(f"Percentage of successful runs: {success_proportion * 100}%")
+        print(f"Number of good p-values (greater than 0.01): {np.sum(p_vals >= p_val_threshold)}")
+        print(f"Percentage of good p-values: {success_proportion * 100}%")
         std_dev = math.sqrt(p_val_threshold * (1 - p_val_threshold) / len(self.seeds))
         assert (1 - p_val_threshold - 3 * std_dev) <= success_proportion <= (1 - p_val_threshold + 3 * std_dev)
 
@@ -664,8 +642,7 @@ class TestFuncgen:
     def test_frame_counter_byte(self, xr, fmt, frames_per_burst, burst_period_in_frames, number_of_bursts):
         """Test frame counter encoding and sequence for mode: 'frame8' and 'frame4'."""
         for chan in self.board.chan.values():
-            chan.FUNCGEN.RESET = 1
-            chan.FUNCGEN.RESET = 0
+            chan.FUNCGEN.reset()
             # Keep shifts neutral so the sample encoding matches firmware definitions exactly.
             chan.FUNCGEN.LEFT_SHIFT = 0
             chan.FUNCGEN.RIGHT_SHIFT = 0
@@ -721,8 +698,7 @@ class TestFuncgen:
         Test mode "nibble4": low nibble of buffer on one frame, high nibble on the next, alternating every frame.
         """
         for chan in self.board.chan.values():
-            chan.FUNCGEN.RESET = 1
-            chan.FUNCGEN.RESET = 0
+            chan.FUNCGEN.reset()
             # Keep output shifting neutral so nibble placement matches firmware behavior exactly.
             chan.FUNCGEN.LEFT_SHIFT = 0
             chan.FUNCGEN.RIGHT_SHIFT = 0
@@ -800,9 +776,8 @@ class TestFuncgen:
         self.board.stop_data_capture()
         logger.debug(f"Stopped data capture")
         for chan in self.board.chan.values():
-            chan.FUNCGEN.RESET = 1
             logger.debug(f"Channelizer {chan} reset")
-            chan.FUNCGEN.RESET = 0
+            chan.FUNCGEN.reset()
         sleep(0.01)
         for chan in self.board.chan.values():
             # RAMP_CTR/FRAME_CTR are debug counters that resume counting immediately after reset,
@@ -814,8 +789,7 @@ class TestFuncgen:
     def test_delay_capture(self, xr):
         """Test delay capture"""
         for chan in self.board.chan:
-            chan.FUNCGEN.RESET = 1
-            chan.FUNCGEN.RESET = 0
+            chan.FUNCGEN.reset()
         self._set_capture_funcgen('ramp')
         delay_ctrs = [ch.FUNCGEN.DELAY_CTR for ch in self.board.chan.values()]
         assert(len(set(delay_ctrs)) == 1) #ensure all delay counters are the same
@@ -915,8 +889,7 @@ class TestFuncgen:
         for chan in self.board.chan.values():
             chan.FUNCGEN.set_output_shifting(left_shift=0, right_shift=0)
             chan.FUNCGEN.STATS_ENABLE = 0
-            chan.FUNCGEN.RESET = 1
-            chan.FUNCGEN.RESET = 0
+            chan.FUNCGEN.reset()
 
         # Configure FUNCGEN source directly; capture is not required for overflow counter updates.
         self.board.set_channelizer(

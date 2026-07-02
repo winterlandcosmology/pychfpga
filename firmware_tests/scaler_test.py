@@ -10,6 +10,7 @@ from wtl.namespace import NameSpace
 from pathlib import Path
 import matplotlib.pyplot as plt
 from textwrap import wrap
+from .module_test import TestModule
 
 '''
 Control flow
@@ -70,7 +71,7 @@ def split_imag(array):
     '''
     return np.stack((np.real(array), np.imag(array)), axis=1).reshape(-1).astype(np.int64)
 
-class TestScaler:
+class TestScaler(TestModule):
 
 
     ROUNDING_MODES = ['truncation', 'normal', 'convergent']
@@ -92,42 +93,6 @@ class TestScaler:
         widths.MAPPING_POSTSCALER = widths.IDENTITY_POSTSCALER - (widths.INPUT_WIDTH - widths.CAPTURE_WIDTH) # postscaler such that the range of possible inputs is mapped to the range of possible captured outputs
         widths.READOUT_SHIFT = widths.CAPTURE_BUS_WIDTH / (2 * widths.BINS_PER_WORD) - widths.CAPTURE_WIDTH #multiply by two for Re and Im components
         return widths
-
-    def pytest_generate_tests(self, metafunc):
-        """ This pytest hook is called before each test to allow dynamic generation of test parameters.
-
-        It parameterises each argument corresponding to a parameter in the config file with an arbitrary python expression from that file
-        """
-        xr = get_xr_from(metafunc)
-        test_config = xr.config.test_config
-        widths = self.get_widths(test_config)
-        xr.data.update(widths) #store all these parameters in xr
-        test_name = metafunc.function.__name__[5:] #get rid of test_ prefix
-        for fixture in metafunc.fixturenames:
-            #find global default, if there is
-            global_param = 'global_' + fixture
-            found_param = False
-            if global_param in test_config.keys():
-                value = test_config[global_param]
-                found_param = True
-            if test_name in test_config.keys(): #not elif, so global will be overriden if applicable
-                test_params = test_config[test_name]
-                if fixture in test_params:
-                    value = test_params[fixture]
-                    found_param = True
-            if found_param:
-                if isinstance(value, str):
-                    value = eval(value, widths.as_dict()) #pass widths as globals so that user can acess them
-                print(f'Parametrising {fixture}')
-                metafunc.parametrize(fixture, value) 
-
-    
-    def board_conn(self, xr):
-        if  'board' in xr.data: #check if board is cached to avoid unnecessary reconnection
-            return xr.data.board
-        ca = FPGAArray(**self.connection_config)
-        xr.data.board = ca.ib[0]
-        return xr.data.board
 
     @pytest.fixture(scope='function', autouse=True)
     def setup(self, xr):
@@ -256,7 +221,7 @@ class TestScaler:
             if double:
                 pytest.skip("Double resolution not supported on UCAP yet")
             else:
-                 _, data, _ = receiver.read_raw_frames(ncap=1, flush=False, split=True, source=1, verbose=self.test_config.loglevelrecv)
+                 _, data, _ = receiver.read_raw_frames(ncap=1, flush=False, split=True, source=1, verbose=self.test_config.loglevelrecv, complex_override=False)
                  #data = data[:, ::2]
             assert np.all(np.equal(data[0], data))
             if get_flags:
