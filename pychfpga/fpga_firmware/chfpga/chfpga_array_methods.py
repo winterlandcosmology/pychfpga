@@ -1318,11 +1318,20 @@ class chFPGAArrayMethods(ArrayMethods):
             UCorrFrameReceiver instance
         """
 
-        corr_config = self.ib[0].CORR.get_config()
+        def select_func(cr):
+            for b in self.ib:
+                b.CORR.select()
+
+            self.ib[0].CORR.get_bin_map()
+            corr_config = self.ib[0].CORR.config
+            cr.update_config(corr_config)
+
+        self.ib[0].CORR.get_bin_map()
+        corr_config = self.ib[0].CORR.config
 
         if not self.fpga_array.corr_recv:
             pr = self.get_packet_receiver(port_number=port_number)
-            self.fpga_array.corr_recv = self.ib[0].CORR.get_corr_receiver(packet_receiver=pr, config=corr_config)
+            self.fpga_array.corr_recv = self.ib[0].CORR.get_corr_receiver(packet_receiver=pr, config=corr_config, pre_func=select_func)
         return self.fpga_array.corr_recv
 
 

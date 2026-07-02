@@ -7,6 +7,7 @@ CORR.py module
 """
 import time
 import logging
+import warnings
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -53,21 +54,29 @@ class UCORR(MMI):
 
     def __init__(self, *, router, router_port, state, verbose=0):
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = state
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
-        self.corr_config_id = 0  # Number that is increased each time the correlator configuration is changed.
-        self.bin_map = None  # cached maps
-        self.prod_map = None
-        self.last_fft_config_id = None
+        self.config.update(
+            corr_config_id=0,
+            bin_map=None,
+            prod_map=None,
+            last_fft_config_id=None,
+            soft_integ_period=1,
+        )
 
     def init(self):
         """ Inisializes all modules of a correlator block."""
         self.CORR_ID = (self.fpga.slot-1) if self.fpga.slot else 0
-        self.bins_per_frame = self.fpga.FRAME_LENGTH // 2 # total number of bins at the output of the channelizers
-        self.NCLK = self.BIN_DECIMATION_FACTOR * self.NCLK_PER_BIN  # Number of clocks available to compute all the products. Will reduce the number of required CMACs, but increase the number of products per CMAC
-        self.NPROD = self.NCHAN * (self.NCHAN + 1) // 2 # total number of computed products
-        self.NDECIM = self.BIN_DECIMATION_FACTOR
+        self.config.update(
+            bins_per_frame=self.fpga.FRAME_LENGTH // 2, # total number of bins at the output of the channelizers
+            NCHAN=int(self.NCHAN),
+            NCLK=int(self.BIN_DECIMATION_FACTOR * self.NCLK_PER_BIN),  # Number of clocks available to compute all the products. Will reduce the number of required CMACs, but increase the number of products per CMAC
+            NDECIM=int(self.BIN_DECIMATION_FACTOR),
+            CT_LEVEL=int(self.fpga.CT.CT_LEVEL),
+            firmware_integ_period=int(self.INTEGRATION_PERIOD + 1),
+        )
+        self.config.NPROD = self.config.NCHAN * (self.config.NCHAN + 1) // 2 # total number of computed products
 
     def status(self):
         """Displays the status of the correlator array"""
@@ -79,21 +88,38 @@ class UCORR(MMI):
 
 
     def get_config(self):
-        """Return correlator geometry required to receive and assemble UCORR packets."""
-        conf = State(
-            NCHAN=int(self.NCHAN),
-            NCLK=int(self.NCLK),
-            firmware_integ_period=int(self.INTEGRATION_PERIOD + 1),
+        """Return the correlator config dict. Deprecated: use ``config`` directly."""
+        warnings.warn(
+            "UCORR.get_config() is deprecated; use UCORR.config directly.",
+            DeprecationWarning,
+            stacklevel=2,
         )
-        conf.CT_LEVEL = int(self.fpga.CT_LEVEL)
-        conf.NDECIM = int(self.NDECIM)
-        conf.fft_bin_map = self.get_input_bin_map()
-        conf.soft_integ_period = int(self.state._obj.get("soft_integ_period", 1) or 1)
-        self.update_corr_maps(conf)
-        return dict(conf._obj)
+        self.get_bin_map()
+        return self.config.as_dict()
 
     def get_input_bin_map(self):
         return self.fpga.chan[0].FFT.get_bin_map()
+
+    def get_bin_map(self):
+        fft = self.fpga.chan[0].FFT
+        if (
+            fft.config_id == self.config.last_fft_config_id
+            and self.config.bin_map is not None
+            and self.config.prod_map is not None
+        ):
+            return self.config.bin_map, self.config.prod_map
+
+        self.config.update(
+            CT_LEVEL=int(self.fpga.CT.CT_LEVEL),
+            NDECIM=int(self.config.NDECIM),
+            NCHAN=int(self.config.NCHAN),
+            NCLK=int(self.config.NCLK),
+            firmware_integ_period=int(self.INTEGRATION_PERIOD + 1),
+            fft_bin_map=fft.get_bin_map(),
+        )
+        self.update_corr_maps(self.config)
+        self.config.last_fft_config_id = fft.config_id
+        return self.config.bin_map, self.config.prod_map
 
     @classmethod
     def update_corr_maps(cls, config):
@@ -295,26 +321,37 @@ class UCORR(MMI):
         self.NO_ACCUM = no_accum
         if bin_set is None:
             self.AUTO_BIN_SET = 1
+            active_bin_set = None
         else:
             self.AUTO_BIN_SET = 1
             self.BIN_SET = bin_set
+            active_bin_set = int(bin_set)
 
         if correlators is not None:
             raise RuntimeError("'correlators' argument is not supported by UCORR")
         if bandwidth_limit is not None:
             self.logger.warn(f"{self!r}: 'bandwidth_limit' argument is not yet supported by UCORR")
         self.verbose = verbose
-        self.corr_config_id += 1  # indicate that some parameters (i.e. integration period) might have changed
+        self.config.update(
+            firmware_integ_period=int(integration_period),
+            autocorr_only=bool(autocorr_only),
+            no_accum=bool(no_accum),
+            auto_bin_set=True,
+            bin_set=active_bin_set,
+            verbose=verbose,
+            corr_config_id=int(self.config.corr_config_id) + 1,  # indicate that some parameters (i.e. integration period) might have changed
+        )
 
     def get_data_receiver(self, sock):
         packet_receiver = UDPPacketReceiver(sock)
-        return UCorrFrameReceiver(packet_receiver, config=self.get_config())
+        self.get_bin_map()
+        return UCorrFrameReceiver(packet_receiver, config=self.config)
 
 
     @classmethod
-    def get_corr_receiver(cls, packet_receiver, config=None):
+    def get_corr_receiver(cls, packet_receiver, config=None, pre_func=None):
         """Return an instance of a correlator packet receiver."""
-        return UCorrFrameReceiver(packet_receiver, config=config)
+        return UCorrFrameReceiver(packet_receiver, config=config, pre_func=pre_func)
 
     @classmethod
     def get_packet_receiver(cls, sock, n_packets=2048, max_packet_size=9000, verbose=0):

@@ -70,9 +70,11 @@ class FFTDataProcessor:
         if cf is not None and cf.fmt_is_complex and int(cf.fmt_interleave_factor or 1) > 1:
             # ``get_formatted_data`` already deinterleaves physical frame pairs.
             return 1
-        pplf = self.config.get('packets_per_logical_frame')[SOURCE_INDEX]
+        pplf = self.config.get('packets_per_logical_frame')
         if pplf is None:
             pplf = getattr(self.raw.config, 'packets_per_logical_frame', 1)
+        if isinstance(pplf, (list, tuple)):
+            pplf = pplf[SOURCE_INDEX]
         return max(1, int(pplf or 1))
 
     def update_config(self, config=None):

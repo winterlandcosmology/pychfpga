@@ -13,9 +13,9 @@
 out_*/
 /nbproject/
 /src/
-/venv/
+/venv*
 .py*venv/
-.venv/
+.venv*
 .venv-fmt/
 \.DS_Store
 .Xil
@@ -29,3 +29,7 @@ docker-data/
 .codex
 .env
 xreport.xml
+.vscode
+*__pycache__*
+fw_test_results/
+firmware_tests/fft_of_data

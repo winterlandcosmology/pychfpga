@@ -85,7 +85,7 @@ if __name__ == "__main__":
     est_clk = 65
     acc_len = 2*11
     write_header(fout, est_clk, acc_len)
-    accumulator = np.zeros(((nchan*(nchan+1))/2,length/2), dtype=np.complex)
+    accumulator = np.zeros(((nchan*(nchan+1))/2,length/2), dtype=complex)
     #pdata = 
     tsdata = np.load('testing_600MHz.npy')
     tsdata = tsdata.reshape((2048,8,4096))

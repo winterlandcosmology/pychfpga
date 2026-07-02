@@ -100,7 +100,7 @@ class ina230(object):
 
         if (mask & 0xffff) != 0xffff:
             old_value = self.read(register)  # Read word from register
-            new_value = (old_value & (~ mask)) | (value & mask)
+            new_value = (old_value & (~mask & 0xffff)) | (value & mask)
         else:
             new_value = value
 

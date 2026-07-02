@@ -72,7 +72,7 @@ def convert_types(val):
         if not isinstance(val[0], str):
             try:
                 if val[0].dtype.kind in ('i', 'u', 'f'):
-                    val = list(numpy.asscalar(x) for x in val)
+                    val = list(x.item() for x in val)
             except:
                 if type(val[0]) == bool:
                     val = list(int(x) for x in val)
@@ -101,7 +101,7 @@ def convert_types(val):
         elif not isinstance(val, str):
             try:
                 if val.dtype.kind in ('i', 'u', 'f', 'b'):
-                    val = numpy.asscalar(val)
+                    val = val.item()
             except:
                     # Hopefully already a int/float
                     pass
@@ -478,7 +478,7 @@ class FPGAMaster(object):
 
     async def _sync_raw_acq_firmware_config(self):
         """Push updated firmware decoder config to all raw_acq servers.
-        
+
         *** TODO: check if we need this method.
         """
         if not self.raw_acq:

@@ -100,9 +100,15 @@ class RawAcqReceiver(object):
 
         raw_proc = self.processors.get("raw")
         if raw_proc is not None:
-            if any(k in sections for k in ("raw", "adc", "fft")):
+            if "raw" in sections:
                 raw_proc.update_config(
-                    config=sections.get("raw"),
+                    config=sections["raw"],
+                    adc_config=sections["raw"],
+                    fft_config=sections["raw"],
+                )
+            elif any(k in sections for k in ("adc", "fft")):
+                raw_proc.update_config(
+                    config=None,
                     adc_config=sections.get("adc"),
                     fft_config=sections.get("fft"),
                 )
@@ -845,5 +851,4 @@ class RawAcqReceiver(object):
         }
         fields.update(extra_fields)
         return os.path.expanduser(path.format(**fields) % fields)
-
 

@@ -5,7 +5,7 @@ import pytest
 import socket
 import psutil
 
-from .net_tools import ping_sources_async
+from .utils import ping_sources_async
 from functools import wraps 
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -340,7 +340,6 @@ class TestFuncgen(TestModule):
         std_dev = math.sqrt(p_val_threshold * (1 - p_val_threshold) / len(self.seeds))
         assert (1 - p_val_threshold - 3 * std_dev) <= success_proportion <= (1 - p_val_threshold + 3 * std_dev)
 
-   
     def sim_random_gen(self, number_of_frames):
         """Python simulation of noise generator"""
         num_samples = number_of_frames * self.SAMPLES_PER_FRAME
@@ -458,12 +457,14 @@ class TestFuncgen(TestModule):
                                             frames_per_burst = 4,
                                             mode=1,
                                             number_of_bursts = number_of_bursts,
-                                            burst_period_in_frames = self.BURST_PERIOD,
+                                            burst_period_in_frames = burst_period_in_frames,
                                             keep_all_frames=True,
-                                            seed = seeds[i])[0].astype(self.FG_DTYPE_SIGNED)
+                                            seed = seeds[i]).astype(self.FG_DTYPE_SIGNED)
+            # Selecting only a single channel
+            data = data[0, ...]
             psd_a[i] = (np.abs(np.fft.fft(data.ravel())))**2
 
-            sim_data = self.sim_random_gen(4 * number_of_bursts)
+            sim_data = self.sim_random_gen(frames_per_burst * number_of_bursts)
             sim_psd_a[i] = (np.abs(np.fft.fft(sim_data)))**2
             
         psd_avg = np.mean(psd_a, axis=0)
@@ -497,12 +498,12 @@ class TestFuncgen(TestModule):
             frames_per_burst=4,
             mode = 1,
             number_of_bursts=number_of_bursts,
-            burst_period_in_frames=self.BURST_PERIOD,
-            keep_all_frames=True
-        )[0].astype(self.FG_DTYPE).ravel()
+            burst_period_in_frames=burst_period_in_frames,
+            keep_all_frames=True,
+        )[0, ...].ravel()
 
         words_per_frame = self.SAMPLES_PER_FRAME // self.board.SAMPLES_PER_WORD
-        words_per_burst = 4 * words_per_frame
+        words_per_burst = words_per_frame * frames_per_burst
         words_per_cap = words_per_burst * number_of_bursts
 
         #process data to get word count and frame count
@@ -642,16 +643,13 @@ class TestFuncgen(TestModule):
     def test_frame_counter_byte(self, xr, fmt, frames_per_burst, burst_period_in_frames, number_of_bursts):
         """Test frame counter encoding and sequence for mode: 'frame8' and 'frame4'."""
         for chan in self.board.chan.values():
-            chan.FUNCGEN.reset()
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
             # Keep shifts neutral so the sample encoding matches firmware definitions exactly.
             chan.FUNCGEN.LEFT_SHIFT = 0
             chan.FUNCGEN.RIGHT_SHIFT = 0
-        
-        frames_to_mode = {2: 0, 4: 1, 8: 2, 16: 3}
-        mode = frames_to_mode.get(frames_per_burst, -1)
-        if mode == -1 and self.PLATFORM == 'CRS':
-            raise ValueError(f'UCAP does not support {frames_per_burst} frames per burst')
-        # Capture with split_frames=True to keep explicit (frame, sample) boundaries.
+
+        # Keep explicit (frame, sample) boundaries.
         raw_data = self._set_capture_funcgen(
             source=fmt,
             period=None,
@@ -698,7 +696,8 @@ class TestFuncgen(TestModule):
         Test mode "nibble4": low nibble of buffer on one frame, high nibble on the next, alternating every frame.
         """
         for chan in self.board.chan.values():
-            chan.FUNCGEN.reset()
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
             # Keep output shifting neutral so nibble placement matches firmware behavior exactly.
             chan.FUNCGEN.LEFT_SHIFT = 0
             chan.FUNCGEN.RIGHT_SHIFT = 0
@@ -776,6 +775,8 @@ class TestFuncgen(TestModule):
         self.board.stop_data_capture()
         logger.debug(f"Stopped data capture")
         for chan in self.board.chan.values():
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
             logger.debug(f"Channelizer {chan} reset")
             chan.FUNCGEN.reset()
         sleep(0.01)
@@ -788,8 +789,9 @@ class TestFuncgen(TestModule):
 
     def test_delay_capture(self, xr):
         """Test delay capture"""
-        for chan in self.board.chan:
-            chan.FUNCGEN.reset()
+        for chan in self.board.chan.values():
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
         self._set_capture_funcgen('ramp')
         delay_ctrs = [ch.FUNCGEN.DELAY_CTR for ch in self.board.chan.values()]
         assert(len(set(delay_ctrs)) == 1) #ensure all delay counters are the same
@@ -809,6 +811,7 @@ class TestFuncgen(TestModule):
                 frames_per_burst=1,
                 number_of_bursts=1,
                 buffer=injected_data,
+                keep_all_frames=False,
             )[0]
             self.plot_and_test(
                 xr,
@@ -889,7 +892,8 @@ class TestFuncgen(TestModule):
         for chan in self.board.chan.values():
             chan.FUNCGEN.set_output_shifting(left_shift=0, right_shift=0)
             chan.FUNCGEN.STATS_ENABLE = 0
-            chan.FUNCGEN.reset()
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
 
         # Configure FUNCGEN source directly; capture is not required for overflow counter updates.
         self.board.set_channelizer(
