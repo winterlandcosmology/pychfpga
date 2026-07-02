@@ -169,7 +169,7 @@ class FUNCGEN(MMI):
         # '4bit_complex_ramp': (12, lambda self=None: (((np.arange(self.NS // 2) & 0xf0) << 8) + ((np.arange(self.NS // 2) & 0xf) << 4)).astype('>u2').view('u1')),  # Generates the ramp: 0x00, 0x00, 0x00, 0x10, 0x00, 0x20 ... 0xF0, 0xF0. The corner turn interpret these as (0+0j), (0+1j,) ...  (0+15j), (1+0j), ... (15+15j)
         '4bit_complex_ramp':  (12, FN_BUFFER, lambda self: np.ravel([((i>>4) & 0xf , i & 0xf) for i in range(self.NS//2)]) << (self.Nbits - 4)),  # Generates the ramp: 0x00, 0x00, 0x00, 0x10, 0x00, 0x20 ... 0xF0, 0xF0. The corner turn interpret these as (0+0j), (0+1j,) ...  (0+15j), (1+0j), ... (15+15j)
         '4bit_real_a':        (13, FN_BUFFER, lambda self, a: np.full((self.NB//2, 2), (a, 0)).ravel() << (self.Nbits - 4)),  # Generates the complex value (a+0j) in 4-bit mode. Not offset encoded.
-        '4bit_complex_ab':    (14, FN_BUFFER, lambda self, a, b: np.full((self.NB//2, 2), (a, b)).ravel() << (self.Nbits - 4)),  # Generates the complex value (a+jb) in 4-bit mode. Not offset encoded.
+        '4bit_complex_ab':    (14, FN_BUFFER, lambda self, a, b: np.full((self.NS//2, 2), (a, b)).ravel() << (self.Nbits - 4)),  # Generates the complex value (a+jb) in 4-bit mode. Not offset encoded.
         }
 
     # List the arguments used by the functions so we can validate those even if we don't call the function
@@ -497,3 +497,7 @@ class FUNCGEN(MMI):
         print(f' Function number: {int(self.FUNCTION)}')
         print(' Ramp counter status:')
         print(f'    RAMP_CTR: {int(self.RAMP_CTR)}')
+
+    def reset(self):
+        self.RESET = 1
+        self.RESET = 0

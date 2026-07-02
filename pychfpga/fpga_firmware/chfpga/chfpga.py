@@ -2258,7 +2258,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         stream_ids_tuple = tuple(int(self.get_stream_id(ch)) for ch in target_channels)
         cap_types = [
-            int(self.config.chan[ch].get("scaler_cap_data_type", 0))
+            int(self.config.chan[ch].scaler.get("cap_data_type", 0))
             for ch in target_channels
         ]
         cap_data_type = cap_types[0] if cap_types else 0
@@ -2266,7 +2266,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             raise ValueError("Selected channels have different raw capture data formats. Use separate receivers.")
 
         offset_encodings = [
-            bool((self.config.chan[ch].get("scaler_use_offset_binary", False)))
+            bool((self.config.chan[ch].scaler.get("use_offset_binary", False)))
             for ch in target_channels
         ]
         if offset_encodings and any(e != offset_encodings[0] for e in offset_encodings):
@@ -2328,17 +2328,19 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             if any(ebc != eight_bit for ebc in eight_bit_capture_modes):
                 raise ValueError("Selected channels have different eight-bit capture settings. Use separate receivers.")
             capture_bus_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8 
-            fft_data_width = 8 if eight_bit else 4
+            if cap_data_type > 0: #1 or 2
+                data_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 4
+            else:
+                data_width = 8 if eight_bit else 4
             fft_capture_format = State(
                 fmt_bus_width=capture_bus_width,
-                fmt_data_width=fft_data_width,
-                fmt_is_complex=False,
+                fmt_data_width=data_width,
+                fmt_is_complex=True,
                 fmt_interleave_factor=1,
             )
             fft_pplf = 1
         fft_capture_format.add("use_offset_encoding")
         fft_capture_format.use_offset_encoding = fft_offset_encoding
-
         active_pplf = fft_pplf if source == "scaler" else adc_pplf
         logical_frames_per_burst = max(1, pkt_frames_per_burst // active_pplf)
         bytes_per_frame = int(self.ADC_BYTES_PER_SAMPLE * self.ADC_SAMPLES_PER_FRAME)
@@ -3183,7 +3185,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             port_number = port_number or 0
             self.logger.debug(f'{self!r}: Binding data socket at port {port_number} to interface IP {self.interface_ip_addr}')
             try:
-                    sock.bind((self.interface_ip_addr, port_number))
+                sock.bind((self.interface_ip_addr, port_number))
             except OSError:
                 raise OSError(f'Socket at port {port_number} is already in use on interface {self.interface_ip_addr}. On Linux, use "netstat -ulpe" to find which user/process has the port already open')
             # store the socket in the main module so it will live persistently until the Python session is closed.
@@ -3398,7 +3400,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 else:
                     normalized_cap_type = int(data_type)
                 for ch in channels:
-                    self.chan[ch].SCALER.set_capture_data_type(data_type)
+                    self.chan[ch].SCALER.set_capture_data_type(normalized_cap_type)
                 for ch in self._normalize_channels(channels):
                     self.config.chan[ch].scaler_cap_data_type = normalized_cap_type
                 self.get_receiver_config(channels=channels)
@@ -3608,21 +3610,12 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         if bypass == False:
             self.logger.debug(f'Setting scaler bypass to 0 for channel {channels}')
             for ch in channels:
-                self.chan[ch].SCALER.DATA_TYPE = 0
-                self.chan[ch].SCALER.BYPASS = False
-            for ch in self._normalize_channels(channels):
-                st = self.config.chan[ch]
-                st.scaler_bypass = False
-                st.scaler_bypass_data_type = 0
+                self.chan[ch].SCALER.set_scaler_output(data_type=0, bypass=False)
             self.get_receiver_config(channels=channels)
         elif bypass_data_type is not None:
             self.logger.debug(f'Setting scaler output data type to {bypass_data_type} for channel {channels}')
             for ch in self._normalize_channels(channels):
-                self.chan[ch].SCALER.DATA_TYPE = bypass_data_type
-                self.chan[ch].SCALER.BYPASS = True
-                st = self.config.chan[ch]
-                st.scaler_bypass = True
-                st.scaler_bypass_data_type = int(bypass_data_type)
+                self.chan[ch].SCALER.set_scaler_output(data_type=bypass_data_type, bypass=True)
             self.get_receiver_config(channels=channels)
 
         if cap_data_type is not None:
@@ -3637,8 +3630,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 normalized_cap_type = int(cap_data_type)
             self.logger.debug(f'Setting scaler capture data type to {cap_data_type} for channel {channels}')
             for ch in self._normalize_channels(channels):
-                self.chan[ch].SCALER.CAP_DATA_TYPE = normalized_cap_type
-                self.config.chan[ch].scaler_cap_data_type = normalized_cap_type
+                self.chan[ch].SCALER.set_capture_data_type(normalized_cap_type)
             self.get_receiver_config(channels=channels)
 
 
@@ -3651,8 +3643,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             channels (list of int): channels to reset. if None, the default channel list (all channels) is used.
         """
         for ch in channels or self.default_channels:
-            self.chan[ch].SCALER.CHAN_FIFO_OVERFLOW_RESET = 1
-            self.chan[ch].SCALER.CHAN_FIFO_OVERFLOW_RESET = 0
+            self.chan[ch].SCALER.reset_overflow_flags()
 
 
     def set_global_trigger(self, trigger_state):
@@ -4350,7 +4341,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             raise ValueError("Channels must be a list")
         # Set the scaler to use offset binary
         for channel in channels:
-            self.chan[channel].SCALER.USE_OFFSET_BINARY = offset
+            self.chan[channel].SCALER.set_offset_binary_encoding(offset)
 
     def set_send_flags(self, send_flags=True, crossbar_outputs=None, sync=True):
         """

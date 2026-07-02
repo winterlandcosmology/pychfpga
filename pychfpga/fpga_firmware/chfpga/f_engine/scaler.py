@@ -112,6 +112,11 @@ class SCALER(MMI):
         self.STATS_CAPTURE = 1
         self.STATS_FRAME_COUNT = int(800e6 / 2048 * 30)
 
+    def set_scaler_output(self, data_type, bypass):
+        self.BYPASS = bypass
+        self.DATA_TYPE = data_type
+        self.state.scaler_bypass = bypass
+        self.state.scaler_bypass_data_type = int(data_type)
 
     CAPTURE_DATA_TYPES = {
         'out': 0, # same as main data output
@@ -125,11 +130,21 @@ class SCALER(MMI):
     def set_capture_data_type(self, data_type):
         if data_type in self.CAPTURE_DATA_TYPES:
             self.CAP_DATA_TYPE = self.CAPTURE_DATA_TYPES[data_type]
+            self.state.cap_data_type = self.CAPTURE_DATA_TYPES[data_type]
         elif data_type in self.CAPTURE_DATA_TYPES.values():
             self.CAP_DATA_TYPE = data_type
+            self.state.cap_data_type = int(data_type)
         else:
             valid_values = [f'{v}:{k}' for k,v in self.CAPTURE_DATA_TYPES.items()]
             raise RuntimeError(f"Invalid capture data type. Valid values are {', '.join(valid_values)}")
+
+    def set_offset_binary_encoding(self, offset):
+        self.USE_OFFSET_BINARY = offset 
+        self.state.use_offset_binary = offset
+
+    def reset_overflow_flags(self):
+        self.CHAN_FIFO_OVERFLOW_RESET = 1
+        self.CHAN_FIFO_OVERFLOW_RESET = 0
 
     def set_page(self, page):
         self.WRITE_COEFF_BANK_A = page & 0b1111
