@@ -32,8 +32,10 @@ class TestFFT:
     FFT_SHIFT = 2047
     FFT_FULL_CAPTURE_MODE = 'fft_full'
     SIM_COMPARE_PLATFORM = 'ICE-8bit-r'
-    SIM_COMPARE_INSTRUMENT = 'hirax'
-    SIM_COMPARE_DATA_DIR = Path(__file__).resolve().parent / 'casper_simulations' / 'sim_data' / 'hirax'
+    SIM_COMPARE_INSTRUMENT = 'ice'
+    SIM_COMPARE_DATA_DIR = Path(__file__).resolve().parent / 'casper_simulations' / 'sim_data' / 'ice'
+    SIM_COMPARE_INPUT_DIR = SIM_COMPARE_DATA_DIR / 'inputs'
+    SIM_COMPARE_OUTPUT_DIR = SIM_COMPARE_DATA_DIR / 'outputs'
     SIM_COMPARE_OUTPUT_DTYPE = np.int32
     SIM_COMPARE_FFT_SHIFT = 1984
     SIM_COMPARE_CAPTURE_RIGHT_SHIFT = 5
@@ -447,8 +449,8 @@ class TestFFT:
         )
 
     def load_fft_simulation_case(self, stem):
-        input_path = self.SIM_COMPARE_DATA_DIR / f'{stem}.bin'
-        output_path = self.SIM_COMPARE_DATA_DIR / f'{stem}_out.bin'
+        input_path = self.SIM_COMPARE_INPUT_DIR / f'{stem}.bin'
+        output_path = self.SIM_COMPARE_OUTPUT_DIR / f'{stem}_out.bin'
         if not input_path.exists():
             raise FileNotFoundError(input_path)
         if not output_path.exists():

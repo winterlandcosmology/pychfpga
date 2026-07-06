@@ -1,6 +1,6 @@
 """Convenience waveform generators for CASPER simulation input binaries.
 
-These helpers build time-ordered ADC sample streams for common instrument
+These helpers build time-ordered ADC sample streams for supported board
 geometries, then hand them to `InputSignal.from_array()` for signed lane
 packing.  Frequencies are specified in MHz, and amplitudes are signed ADC
 counts, not normalized fractions.  By default, one ADC frame is generated and
@@ -33,9 +33,8 @@ class InstrumentPreset:
 
 
 INSTRUMENT_PRESETS = {
-    "hirax": InstrumentPreset(adc_bits=8, n_inputs=4, fft_stages=11, sample_rate_mhz=800.0),
-    "chime": InstrumentPreset(adc_bits=8, n_inputs=4, fft_stages=11, sample_rate_mhz=800.0),
-    "chord": InstrumentPreset(adc_bits=12, n_inputs=8, fft_stages=14, sample_rate_mhz=1200.0),
+    "ice": InstrumentPreset(adc_bits=8, n_inputs=4, fft_stages=11, sample_rate_mhz=800.0),
+    "crs": InstrumentPreset(adc_bits=12, n_inputs=8, fft_stages=14, sample_rate_mhz=1200.0),
 }
 
 
