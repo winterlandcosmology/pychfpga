@@ -317,8 +317,11 @@ class RawDataPacketProcessor(PacketProcessorBase):
             if cf.has_changed(context=dynamic_state_attrs[source]):
                 if cf.fmt_is_complex:
                     fmt_bus_width = int(cf.fmt_bus_width)
+                    fmt_data_width = int(cf.fmt_data_width)
                     bytes_per_integer = math.ceil(fmt_bus_width / 8)
-                    out_dtype = np.dtype(np.complex128 if fmt_bus_width == 64 else np.complex64)
+                    # Use the meaningful Re/Im width for output precision. The bus width
+                    # may include padding, while float32 cannot exactly hold >24-bit ints.
+                    out_dtype = np.dtype(np.complex128 if fmt_data_width > 24 else np.complex64)
                     complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // 2
                     interleave_factor = int(cf.fmt_interleave_factor or 1)
                     if interleave_factor > 2:

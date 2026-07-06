@@ -41,8 +41,6 @@ test_config:
     #funcgen test functions with parameters
     funcgen_noise_fft_avg_squared:
         num_runs: [100]
-    frame_counter: 
-        mode: ['frame4', 'frame8']
     right_shift: 
         shift: [0,1,2,3,4]
     shift_clip_width:

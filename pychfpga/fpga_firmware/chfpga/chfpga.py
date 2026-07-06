@@ -2364,9 +2364,11 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             eight_bit = eight_bit_capture_modes[0]
             if any(ebc != eight_bit for ebc in eight_bit_capture_modes):
                 raise ValueError("Selected channels have different eight-bit capture settings. Use separate receivers.")
-            capture_bus_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8 
-            if cap_data_type > 0: #1 or 2
-                data_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 4
+            capture_bus_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8
+            if cap_data_type in (1, 2):
+                # Raw and post-gain FFT capture modes use the full Re/Im
+                # component width available on the scaler capture bus.
+                data_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8
             else:
                 data_width = 8 if eight_bit else 4
             fft_capture_format = State(

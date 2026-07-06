@@ -1331,10 +1331,15 @@ class TestScaler(TestModule):
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
         receiver.flush()
 
-        ts_before, data_before, count_before = receiver.read_raw_frames(ncap=1, split=True, source=1)
+        ts_before, data_before, count_before = receiver.read_raw_frames(
+            ncap=1,
+            split=False,
+            source=1,
+            complex_override=False,
+        )
         if self.data.READOUT_SHIFT > 0:
             data_before //= 2**self.data.READOUT_SHIFT
-        before_frame = data_before[0, 0]
+        before_frame = np.asarray(data_before[0]).reshape(-1)
         before_ts = int(ts_before[0])
 
         self.board.switch_gains(bank=1, when='now')
@@ -1343,10 +1348,15 @@ class TestScaler(TestModule):
         sleep(1.0)
         receiver.flush()
 
-        ts_after, data_after, count_after = receiver.read_raw_frames(ncap=1, split=True, source=1)
+        ts_after, data_after, count_after = receiver.read_raw_frames(
+            ncap=1,
+            split=False,
+            source=1,
+            complex_override=False,
+        )
         if self.data.READOUT_SHIFT > 0:
             data_after //= 2**self.data.READOUT_SHIFT
-        after_frame = data_after[0, 0]
+        after_frame = np.asarray(data_after[0]).reshape(-1)
         after_ts = int(ts_after[0])
 
         assert all(ch.SCALER.CURRENT_GAIN_BANK == 1 for ch in self.board.chan)
