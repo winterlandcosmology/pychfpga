@@ -53,11 +53,19 @@ class PacketProcessorBase(ABC):
         if nel == 0:
             return np.empty(dims, dtype=dt)
         nbytes = nel * dt.itemsize
+        buf_index = None
+        if isinstance(buf_name, tuple):
+            buf_name, buf_index = buf_name
         buf = getattr(self, buf_name)
+        if buf_index is not None:
+            buf = buf[buf_index]
         raw = buf.view(np.uint8).reshape(-1) if buf.size else np.empty(0, dtype=np.uint8)
         if nbytes > raw.size:
             raw = np.zeros(nbytes, dtype=np.uint8)
-            setattr(self, buf_name, raw)
+            if buf_index is None:
+                setattr(self, buf_name, raw)
+            else:
+                getattr(self, buf_name)[buf_index] = raw
         return raw[:nbytes].view(dt).reshape(dims)
 
     @abstractmethod

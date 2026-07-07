@@ -63,7 +63,7 @@ class FixedPointType:
         '''Convert the provided integer or numpy integer array into
         the its floating-point value according to the bit width and
         binary point of this data type.'''
-        # data = self._mask_bitwidth(data).astype(np.float)
+        # data = self._mask_bitwidth(data).astype(float)
         data = self._mask_bitwidth(data).astype(float)
         data /= 2 ** self.bin_point
         return data

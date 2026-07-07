@@ -21,7 +21,7 @@ from pychfpga.common.state import State
 from .corr_data_processor import CorrDataProcessor
 from .raw_data_processor import RawDataProcessor
 
-FIRMWARE_CONFIG_KEYS = ("raw", "adc", "fft", "corr")
+FIRMWARE_CONFIG_KEYS = ("raw", "corr")
 CAPTURE_CONFIG_KEYS = FIRMWARE_CONFIG_KEYS  # legacy alias
 
 
@@ -100,9 +100,15 @@ class RawAcqReceiver(object):
 
         raw_proc = self.processors.get("raw")
         if raw_proc is not None:
-            if any(k in sections for k in ("raw", "adc", "fft")):
+            if "raw" in sections:
                 raw_proc.update_config(
-                    config=sections.get("raw"),
+                    config=sections["raw"],
+                    adc_config=sections["raw"],
+                    fft_config=sections["raw"],
+                )
+            elif any(k in sections for k in ("adc", "fft")):
+                raw_proc.update_config(
+                    config=None,
                     adc_config=sections.get("adc"),
                     fft_config=sections.get("fft"),
                 )
@@ -304,8 +310,8 @@ class RawAcqReceiver(object):
         raw_proc = RawDataProcessor(
             self,
             config=sections["raw"],
-            adc_config=sections["adc"],
-            fft_config=sections["fft"],
+            adc_config=sections["raw"],
+            fft_config=sections["raw"],
             stream_ids=stream_ids,
             metrics_refresh_time=metrics_refresh_time,
             adc_rms_refresh_count=adc_rms_refresh_count,
@@ -845,5 +851,4 @@ class RawAcqReceiver(object):
         }
         fields.update(extra_fields)
         return os.path.expanduser(path.format(**fields) % fields)
-
 

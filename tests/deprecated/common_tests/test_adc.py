@@ -27,7 +27,7 @@ class test_adc(test_BaseClass):
         '''
         Checks that dc level injected is what is returned.
         '''
-        original_bypass = np.zeros((8,), dtype=np.int)
+        original_bypass = np.zeros((8,), dtype=int)
         for i in range(8):
             original_bypass[i] = self.fpga_ctrl.chan[i].FFT.BYPASS
             self.fpga_ctrl.chan[i].FFT.BYPASS=1
@@ -110,4 +110,3 @@ class test_adc(test_BaseClass):
         pylab.ylim(-60,0)
         pylab.savefig('Measured_vs_sim_binshape.pdf')
         return x, spectra, tone, xs, sim_spec
-

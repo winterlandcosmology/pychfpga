@@ -19,7 +19,7 @@ def capture_format_for_tests(format="8"):
 
 def _unused_capture_format_slot():
     """Placeholder for dual-source ``capture_format[1]`` when tests only use source 0."""
-    return State(fmt_base_width=8, fmt_is_complex=False, fmt_interleave_factor=1)
+    return State(fmt_bus_width=8, fmt_data_width=8, fmt_is_complex=False, fmt_interleave_factor=1)
 
 
 def process_and_get(processor, source=0, config=None, verbose=None, with_indices=False):
@@ -68,6 +68,7 @@ def default_config(format="8", frames_per_burst=1, **overrides):
         packets_per_logical_frame=1,
         logical_frames_per_burst=frames_per_burst,
         fft_bins_per_word=1,
+        capture_bits_per_word=8,
         capture_format=[cf0, _unused_capture_format_slot()],
         packet_header_format="raw-v1",
         receiver_recreate_attrs=(
@@ -212,8 +213,13 @@ def test_read_raw_frames_omitting_verbose_preserves_constructor():
     """read_raw_frames must not reset verbose when omitted (use constructor / get_data_receiver value)."""
     pr = DummyPacketReceiver()
     r = RawFrameReceiver(pr, config=default_config(format="8"), verbose=4)
+    for i, tsv in enumerate((100, 101, 102, 103)):
+        write_burst(r, pr, 2 * i, ts=tsv, payload_base=10 * i)
     r.read_raw_frames(ncap=1, flush=False)
     assert r.verbose == 4
+    r.flush()
+    for i, tsv in enumerate((200, 201, 202, 203)):
+        write_burst(r, pr, 2 * i, ts=tsv, payload_base=40 + 10 * i)
     r.read_raw_frames(ncap=1, flush=False, verbose=1)
     assert r.verbose == 1
 
@@ -456,7 +462,8 @@ def test_output_only_reconfiguration_reuses_raw_buffer():
     process_and_get(processor, config=State(cfg))
 
     assert processor.raw_data is raw_data
-    assert processor.config.capture_format[0].fmt_base_width == 14
+    assert processor.config.capture_format[0].fmt_bus_width == 16
+    assert processor.config.capture_format[0].fmt_data_width == 14
 
 
 def test_geometry_reconfiguration_reallocates_when_shape_changes():
@@ -490,8 +497,8 @@ def test_read_raw_frames_split_kwarg_yields_per_frame_width():
     )
     pr = DummyPacketReceiver(n_packets=16, max_packet_size=32)
     r = RawFrameReceiver(pr, config=cfg, verbose=0)
-    write_burst(r, pr, 0, ts=5, payload_base=10)
-    write_burst(r, pr, 2, ts=6, payload_base=20)
+    for i, tsv in enumerate((5, 6, 7, 8, 9)):
+        write_burst(r, pr, 2 * i, ts=tsv, payload_base=10 * (i + 1))
     ts, data, counts = r.read_raw_frames(ncap=2, split=1, flush=False)
     assert data.shape[-1] == 8, f"expected 8 samples per frame, got shape {data.shape}"
 
@@ -529,6 +536,105 @@ def test_split_parameter_yields_samples_per_frame():
     assert split_rows.shape[-1] == 16384
     np.testing.assert_array_equal(split_ts, [100, 101])
     np.testing.assert_array_equal(split_counts, [[4], [4]])
+
+
+def test_full_resolution_complex_ice_interleave4():
+    cf1 = State(fmt_bus_width=32, fmt_data_width=29, fmt_is_complex=True, fmt_interleave_factor=4)
+    processor, _pr = make_processor(
+        n_packets=4,
+        frames_per_burst=4,
+        bytes_per_sample=1,
+        samples_per_frame=24,
+        bytes_per_frame=24,
+        bytes_per_subframe=24,
+        packets_per_channel_per_burst=4,
+        packets_per_logical_frame=4,
+        logical_frames_per_burst=1,
+        fft_bins_per_word=2,
+        capture_bits_per_word=32,
+        source="scaler",
+        stream_ids=(10,),
+        channels=(0,),
+        capture_format=[_unused_capture_format_slot(), cf1],
+        fft_bin_map=np.array([0, 2, 4, 6, 8, 10, 1, 3, 5, 7, 9, 11], dtype=np.intp),
+    )
+
+    payload = np.asarray(
+        [
+            # Re/Im pairs in frame-pair order: lane 0 frames, then lane 1 frames.
+            # The bin map below then converts the lane-grouped transport order to natural bins.
+            0, 1000, 2, 1002, 4, 1004,
+            1, 1001, 3, 1003, 5, 1005,
+            6, 1006, 8, 1008, 10, 1010,
+            7, 1007, 9, 1009, 11, 1011,
+        ],
+        dtype=np.int32,
+    )
+    components = (payload << 3).astype(">i4")
+    processor.raw_data[0, 0, :] = components.view(np.uint8)
+    processor.ts_array[0] = 20
+    processor.raw_data_count[0, 0, :] = 1
+    processor.raw_source[0, 0, :] = 1
+    processor.n_out = 1
+
+    ts, data, counts = processor.get_formatted_data(slice(0, 1), source=1)
+
+    expected_bins = np.arange(12, dtype=np.float32)
+    expected = (expected_bins + 1j * (1000 + expected_bins)).reshape(1, 1, -1).astype(np.complex64)
+    np.testing.assert_array_equal(ts, [20])
+    np.testing.assert_array_equal(counts, [[1]])
+    np.testing.assert_array_equal(data, expected)
+
+
+def test_full_resolution_complex_crs_interleave8_uses_msb_slot():
+    cf1 = State(fmt_bus_width=128, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=8)
+    processor, _pr = make_processor(
+        n_packets=8,
+        frames_per_burst=8,
+        bytes_per_sample=2,
+        samples_per_frame=16,
+        bytes_per_frame=32,
+        bytes_per_subframe=32,
+        packets_per_channel_per_burst=8,
+        packets_per_logical_frame=8,
+        logical_frames_per_burst=1,
+        fft_bins_per_word=4,
+        capture_bits_per_word=128,
+        source="scaler",
+        stream_ids=(10,),
+        channels=(0,),
+        capture_format=[_unused_capture_format_slot(), cf1],
+        fft_bin_map=np.array([1, 0, 3, 2, 5, 4, 7, 6], dtype=np.intp),
+    )
+
+    frame_components = (
+        (100, 200),
+        (104, 204),
+        (101, 201),
+        (105, 205),
+        (102, 202),
+        (106, 206),
+        (103, 203),
+        (107, 207),
+    )
+    slots = np.full((8, 8), -999, dtype=">i4")
+    for frame, values in enumerate(frame_components):
+        slots[frame, 0::4] = values
+    processor.raw_data[0, 0, :] = slots.reshape(-1).view(np.uint8)
+    processor.ts_array[0] = 100
+    processor.raw_data_count[0, 0, :] = 4
+    processor.raw_source[0, 0, :] = 1
+    processor.n_out = 1
+
+    ts, data, counts = processor.get_formatted_data(slice(0, 1), source=1)
+
+    expected = np.asarray([[[
+        101 + 201j, 100 + 200j, 103 + 203j, 102 + 202j,
+        105 + 205j, 104 + 204j, 107 + 207j, 106 + 206j,
+    ]]], dtype=np.complex64)
+    np.testing.assert_array_equal(ts, [100])
+    np.testing.assert_array_equal(counts, [[4]])
+    np.testing.assert_array_equal(data, expected)
 
 
 def test_split_format_core_and_modifiers_suffix():

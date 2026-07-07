@@ -356,7 +356,7 @@ class GainCalc(object):
         glin[glin > 2**14] = 2**14
         # truncate to integer, and convert to complex (necessary?)
         # np.floor(glin, out=glin)
-        # glin = glin.astype(np.int).astype(np.complex)
+        # glin = glin.astype(int).astype(complex)
 
         return glin, glog
 
@@ -541,7 +541,7 @@ class GainCalc(object):
                 degree += 2
         np.exp(filtered_signal, out=filtered_signal)
         np.floor(filtered_signal, out=filtered_signal)
-        # filtered_signal = (filtered.real).astype(np.int).astype(np.complex)
+        # filtered_signal = (filtered.real).astype(int).astype(complex)
         return np.ma.array(filtered_signal, mask=masked_signal.mask)
 
 
@@ -719,4 +719,3 @@ class DirectGainCalc(GainCalc):
 
     def percent_done(self):
         return float(sum(self.done)) / self.done.size * 100.0
-

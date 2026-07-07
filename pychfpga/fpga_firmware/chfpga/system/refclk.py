@@ -248,7 +248,7 @@ class REFCLK(MMI):
             elif fe >= 0:
                 rising_edges[i] = (fe + stable_time + period / 2.0) % period
             else:
-                rising_edges[i] = np.NaN
+                rising_edges[i] = np.nan
         return rising_edges
 
     def find_centers(self, edge_map, threshold=4):

@@ -11,7 +11,7 @@ from .fft_data_processor import FFTDataProcessor
 
 def _merge_fft_decoder_into_raw(raw_config, fft_config):
     """Apply the FFT/scaler decoder profile to the shared raw assembly config.
-    
+
     *** TODO: This method should not be necessary if the config file was strucutred properly.
     """
     raw = State(raw_config).deepcopy() if not isinstance(raw_config, State) else raw_config.deepcopy()

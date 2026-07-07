@@ -1533,7 +1533,9 @@ class chFPGAArrayMethods(ArrayMethods):
             UCorrFrameReceiver instance
         """
 
-        corr_config = self.ib[0].CORR.get_config()
+        def select_func(cr):
+            for b in self.ib:
+                b.CORR.select()
 
         if not self._corr_recv:
             pr = self.get_packet_receiver(port_number=port_number)

@@ -5,7 +5,7 @@ import pytest
 import socket
 import psutil
 
-from .net_tools import ping_sources_async
+from .utils import ping_sources_async
 from functools import wraps 
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -16,6 +16,7 @@ from wtl.pytest_xreport import xr, get_xr_from
 from wtl.namespace import NameSpace
 from pychfpga.fpga_array import FPGAArray
 import sys
+from .module_test import TestModule
 
 pytestmark = pytest.mark.funcgen
 
@@ -25,7 +26,7 @@ pytestmark = pytest.mark.funcgen
 #3. overflow buffer can be programmed from set_data_source
 #4. noise seeds can be set in set_data_source
 
-class TestFuncgen:
+class TestFuncgen(TestModule):
     """
     1. When pytest is run on the command line, the pytest.ini file provides the config file as a command-line argument
     2. In a session start hook, xr parses this config file and converts it to a namespace in xr.config
@@ -42,33 +43,9 @@ class TestFuncgen:
           2. Separate config files for each module if config.yaml becomes too convoluted.  
     """
 
-    def pytest_generate_tests(self, metafunc):
-        xr = get_xr_from(metafunc)
-        test_config = xr.config.test_config
-        test_name = metafunc.function.__name__[5:] #get rid of test_ prefix
-        for fixture in metafunc.fixturenames:
-            #find global default, if there is
-            global_param = 'global_' + fixture
-            found_param = False
-            if global_param in test_config.keys():
-                value = test_config[global_param]
-                found_param = True
-            if test_name in test_config.keys(): #not elif, so global will be overriden if applicable
-                test_params = test_config[test_name]
-                if fixture in test_params:
-                    value = test_params[fixture]
-                    found_param = True
-            if found_param:
-                print(f'Parametrising {fixture}')
-                metafunc.parametrize(fixture, value) 
+    def get_widths(_, test_config):
+        return {}
 
-    def board_conn(self, xr):
-        if 'board' in xr.data: #check if board is cached to avoid unnecessary reconnection
-            return xr.data.board
-        ca = FPGAArray(**self.connection_config)
-        xr.data.board = ca.ib[0]
-        return xr.data.board
-        
     @pytest.fixture(scope='function', autouse=True)
     def setup(self, xr):
         self.data = xr.data
@@ -88,6 +65,7 @@ class TestFuncgen:
         self.logger = logging.getLogger(conn_logger_name) #store logger in xr for future use
         self.logger.setLevel(xr.config.test_config.logleveltest)
         
+        self.BURST_PERIOD = 10000 #frames between bursts
         # Should throw an exception when ADC_BYTES_PER_FRAME not 1 or 2 but the connection does it itself
         if self.board.ADC_BYTES_PER_SAMPLE == 1:
             self.FG_DTYPE = 'u1'
@@ -145,14 +123,20 @@ class TestFuncgen:
     async def test_mtu_size(self, xr):
         logger = self.get_logger()
         logger.debug("Getting the board's address")
+        ping_port = self.board.mb.port
         port_map = dict(
             port=self.board.get_data_socket().getsockname()[1],
-            sources=[(self.board.hostname, 80)]
+            sources=[(self.board.hostname, ping_port)]
         )
-        logger.debug(f"The board located at {port_map['sources'][0][0]}")
+        logger.debug(f"The board located at {port_map['sources'][0][0]}:{ping_port}")
         logger.debug("Pinging the board to determine interface used")
         src_if_addrs = await ping_sources_async([port_map])
         if_ip = list(src_if_addrs.values())[0]
+        if if_ip is None:
+            raise RuntimeError(
+                f"Could not establish a TCP connection with {self.board.hostname}:{ping_port} "
+                f"to determine the local network interface. Check network connectivity."
+            )
         logger.debug(f"Interface address: {if_ip[0]}:{if_ip[1]}")
         if_addrs = psutil.net_if_addrs()
         if_name = None
@@ -184,34 +168,37 @@ class TestFuncgen:
         assert np.all(count[0]), (f"Missing packages from ICE board. Received {count[0]} packets (per channel). "
                                f"Check connection and system configuration.")
 
-    def _set_capture_funcgen(self, source: str, period: float = 1, frames_per_burst: int = 1, number_of_bursts: int = 1,
-                             burst_period_in_frames=None, split_frames = True, **func_kwargs):
+    def _set_capture_funcgen(self, source: str, period: float = 1, frames_per_burst: int = 1, mode = 0, number_of_bursts: int = 1,
+                             burst_period_in_frames=None, keep_all_frames = False, **func_kwargs):
         """
         Set funcgen to specified data output and capture outcoming data within specified period.
+
+        if keep_all_frames is False, only the first frame is returned
         """
         logger = self.get_logger()
         logger.debug("Starting data capture from FUNCGEN")
-        self.board.start_data_capture(period=period, source='funcgen', frames_per_burst=frames_per_burst, burst_period_in_frames=burst_period_in_frames)
+        self.board.start_data_capture(period=period, source='funcgen', frames_per_burst=frames_per_burst, mode=mode, burst_period_in_frames=burst_period_in_frames)
         logger.debug(f"Setting data source to {source.upper()}")
         self.board.set_channelizer(data_source=source, fft_bypass=1, scaler_bypass=1, **func_kwargs)
         logger.debug("Initializing data receiver")
-        fmt = "8" if self.PLATFORM == "MGK7MB" else "16"
         receiver = self.board.get_data_receiver(
-            format=fmt,
             verbose=self.loglevelrecv,
-            pkt_frames_per_burst=frames_per_burst,
         )
+        receiver.flush()
+        self.board.sync()
 
         #Returns data in shape (ncap, nchannels, nframes_per_cap, nsamples)
-        _, data, _ = receiver.read_raw_frames(ncap=number_of_bursts, split_frames=split_frames)
+        _, data, _ = receiver.read_raw_frames(ncap=number_of_bursts, split=True)
         logger.debug(f"Received {len(data)} packets from FUNCGEN")
-        data = data >> self.FG_LSHIFT
-        return data
+        if keep_all_frames:
+            return data
+        else:
+            return data[:, 0]
 
     @pytest.mark.funcgen_patterns
     def test_funcgen_ramp(self, xr):
         expected_data = (np.arange(self.SAMPLES_PER_FRAME) - self.Nvalues / 2) % self.Nvalues - self.Nvalues / 2
-        data = self._set_capture_funcgen('ramp', split_frames=False)[0]
+        data = self._set_capture_funcgen('ramp')[0]
         self.plot_and_test(xr, 
             data, 
             expected_data, 
@@ -222,7 +209,7 @@ class TestFuncgen:
     def test_funcgen_sin(self, xr):
         sin_freq = 1
         expected_data = (np.sin(np.arange(self.SAMPLES_PER_FRAME) * 2 * np.pi / self.SAMPLES_PER_FRAME * sin_freq) * 127).astype(self.FG_DTYPE_SIGNED)
-        data = self._set_capture_funcgen('sin', freq=sin_freq, ampl=127, split_frames=False)[0]
+        data = self._set_capture_funcgen('sin', freq=sin_freq, ampl=127)[0]
         self.plot_and_test(xr, 
             data, 
             expected_data, 
@@ -232,7 +219,7 @@ class TestFuncgen:
     @pytest.mark.funcgen_patterns
     def test_funcgen_arb(self, xr):
         expected_data = np.ones(self.SAMPLES_PER_FRAME)
-        data = self._set_capture_funcgen('arb', data=expected_data, split_frames=False)[0]
+        data = self._set_capture_funcgen('arb', data=expected_data)[0]
         logger = self.get_logger()
         self.plot_and_test(xr, 
             data, 
@@ -244,7 +231,7 @@ class TestFuncgen:
     def test_funcgen_const(self, xr):
         a = 13
         expected_data = np.full(self.SAMPLES_PER_FRAME, a, self.FG_DTYPE).astype(self.FG_DTYPE_SIGNED)
-        data = self._set_capture_funcgen('a', a=a, split_frames=False)[0]
+        data = self._set_capture_funcgen('a', a=a)[0]
         self.plot_and_test(xr, 
             data, 
             expected_data, 
@@ -256,7 +243,7 @@ class TestFuncgen:
         a = 0 
         b = 42
         expected_data = np.tile(np.array((a, b), self.FG_DTYPE), self.SAMPLES_PER_FRAME // 2).astype(self.FG_DTYPE_SIGNED)
-        data = self._set_capture_funcgen('ab', a=a, b=b, split_frames=False)[0]
+        data = self._set_capture_funcgen('ab', a=a, b=b)[0]
         self.plot_and_test(xr, 
             data, 
             expected_data, 
@@ -266,7 +253,7 @@ class TestFuncgen:
     @pytest.mark.funcgen_patterns
     def test_funcgen_real_ramp(self, xr):
         expected_data = np.ravel([(i,0) for i in range(self.SAMPLES_PER_FRAME//2)]).astype(self.FG_DTYPE_SIGNED)
-        data = self._set_capture_funcgen('real_ramp', split_frames=False)[0] # First burst, first channel
+        data = self._set_capture_funcgen('real_ramp')[0] # First burst, first channel
         self.plot_and_test(xr, 
             data, 
             expected_data, 
@@ -278,13 +265,12 @@ class TestFuncgen:
         """Test that the noise generator resets with rst_lfsr and that the captured
             data between each run are identical for the same seed"""
         seed = np.random.randint(-2 ** 15, 2 ** 15 - 1) #seed is 16-bit value
-        self.board.start_data_capture(period=1, source='adc', frames_per_burst=2)
+        self.board.start_data_capture(period=1, source='funcgen', frames_per_burst=2, mode=0)
         self.board.set_channelizer(data_source='noise', seed = seed)
-        fmt = "8" if self.PLATFORM == "MGK7MB" else "16"
-        receiver = self.board.get_data_receiver(format=fmt)
-        self.board.chan[0].FUNCGEN.reset_noise()
+        receiver = self.board.get_data_receiver()
+        #self.board.chan[0].FUNCGEN.reset_noise()
         sleep(0.1)
-        _, data, _ = receiver.read_raw_frames()
+        _, data, _ = receiver.read_raw_frames(split=True)
         assert not np.all(np.equal(data[0, 0], data[0, 1]))
 
     # @pytest.mark.funcgen_noise_gen
@@ -297,188 +283,171 @@ class TestFuncgen:
     #     print(f"Binary values of the random noise generated are saved at {Path('../../fw_test_results/test_results_assets')}")
     #     np.savetxt(Path('../../fw_test_results/random.txt'), processed_data, fmt='%.1d', delimiter=' ', newline='')
 
+    def _monobit_bit_sum(self, data: np.ndarray) -> int:
+        """Sum of (+1 for each 1-bit, -1 for each 0-bit) over ADC_BITS_PER_SAMPLE low bits per sample."""
+        nbits = self.ADC_BITS_PER_SAMPLE
+        mask = (1 << nbits) - 1
+        samples = data.ravel().astype(np.int64) & mask
+
+        if nbits <= 8:
+            bits = np.unpackbits(samples.astype(np.uint8), bitorder="little").reshape(-1, 8)[:, :nbits]
+        else:
+            u16 = samples.astype(np.uint16)
+            bytes_le = u16.view(np.uint8).reshape(-1, 2) #groups of two bytes
+            bits = np.unpackbits(bytes_le, bitorder="little").reshape(-1, 16)[:, :nbits]
+
+        return int(2 * int(bits.sum()) - bits.size)
 
     @pytest.mark.funcgen_noise_gen
-    def test_funcgen_random_pval(self, xr, frames_per_burst, number_of_bursts, burst_period_in_frames):
+    def test_funcgen_random_pval(self, xr, number_of_bursts):
         """Monobit test (from NIST's Statistical Test Suite for Random and Pseudorandom
             Number Generatorson funcgen noise generator). The generated noise is considered
             random when ``p_val_threshold`` percent of the total test runs have a P-val > ``p_val_threshold``. """
         p_val_threshold = 0.01
         number_runs = len(self.seeds)
-        p_val_l= np.zeros(number_runs)
+        p_vals= np.zeros(number_runs)
         logger = self.get_logger()
         for i in range(number_runs):
             logger.info(f"Random Pval test run {i} / {number_runs}")
-            # Returns data in shape (ncap, nchannels, nframes_per_cap, nsamples)
+            # Returns data in shape (nchannels, ncap*nframes_per_cap, nsamples)
+            #self.board.set_funcgen(function='noise', seed = self.seeds[i])
             data = self._set_capture_funcgen('noise',
                                             period=None,
-                                            frames_per_burst=frames_per_burst,
+                                            frames_per_burst=4,
+                                            mode=1, #4 frames on both ICE and CRS
                                             number_of_bursts=number_of_bursts,
-                                            burst_period_in_frames=burst_period_in_frames,
-                                            seed = self.seeds[i],
-                                            split_frames=False,
-                                            )[0].astype(self.FG_DTYPE)
-            bits = np.unpackbits(self.noise_data_process(data, self.board.ADC_BITS_PER_SAMPLE))
-            bits_sum = np.sum(np.where(bits == 0, -1, 1))
-            sn = abs(bits_sum) / math.sqrt(bits.size)
+                                            burst_period_in_frames=self.BURST_PERIOD,
+                                            keep_all_frames=True,
+                                            seed=self.seeds[i]
+                                            )[0].astype(self.FG_DTYPE_SIGNED)
+            bit_sum = self._monobit_bit_sum(data)
+            #print(bit_sum)
+            sn = abs(bit_sum) / math.sqrt(data.size * self.ADC_BITS_PER_SAMPLE)
+            #print(math.sqrt(data.size * self.ADC_BITS_PER_SAMPLE))
+            #print(sn)
             p_val = math.erfc(sn/np.sqrt(2))
-            p_val_l[i] = p_val
-            logger.info(f"Calculated pval = {p_val}")
-        plt.plot(self.seeds, p_val_l, marker='o', linestyle='None')
-        plt.ylabel("p-val")
+            p_vals[i] = p_val
+            #print(f"Calculated pval = {p_val}")
+        plt.hist(p_vals, 'auto')
+        plt.ylabel("p-value")
         plt.xlabel("seed")
-        plt.title(f"p-val for each seed with: \n{frames_per_burst} frames per burst, {number_of_bursts} bursts and {burst_period_in_frames} frames between bursts")
+        plt.title(f"Histogram of p-values with {number_of_bursts} bursts")
         xr.insert_plot()
         plt.close()
-        p = 1 - p_val_threshold
-        success_proportion = np.sum(p_val_l >= p_val_threshold) / len(self.seeds)
-        print(success_proportion)
-        print(f"Number of successful pvals (greater than 0.01): {np.sum(p_val_l >= p_val_threshold)}")
-        print(f"Percentage of successful runs: {success_proportion * 100}%")
-        assert (p - 3 * math.sqrt(p * (1 - p) / len(self.seeds))) <= success_proportion <= (p + 3 * math.sqrt(p * (1 - p) / len(self.seeds)))
+        success_proportion = np.sum(p_vals >= p_val_threshold) / len(self.seeds)
+        print(f"Number of good p-values (greater than 0.01): {np.sum(p_vals >= p_val_threshold)}")
+        print(f"Percentage of good p-values: {success_proportion * 100}%")
+        std_dev = math.sqrt(p_val_threshold * (1 - p_val_threshold) / len(self.seeds))
+        assert (1 - p_val_threshold - 3 * std_dev) <= success_proportion <= (1 - p_val_threshold + 3 * std_dev)
 
-    def noise_data_process(self, data, bits_per_sample):
-        """
-        Transforms data of numpy type 'u2' into 'u1',
-        where only the 14 LSBs of each u2 sample are processed
-        and packed into bytes.
-        """
-        assert bits_per_sample <= 16, "Invalid bits_per_sample"
-        total_bits = bits_per_sample * data.size
-        total_bytes = math.ceil(total_bits / 8)
-        processed_data = np.zeros(total_bytes, dtype='u1')
-
-        bit_buffer = 0
-        bit_count = 0
-        byte_idx = 0
-
-        for sample in data.ravel():
-            sample &= (1 << bits_per_sample) - 1  # keep only lowest `bits_per_sample` bits
-            bit_buffer = (bit_buffer << bits_per_sample) | sample
-            bit_count += bits_per_sample
-
-            while bit_count >= 8:
-                #TODO: this pads the result with zeros if bit size is not a multiple of 8?
-                bit_count -= 8
-                byte = (bit_buffer >> bit_count) & 0xFF
-                processed_data[byte_idx] = byte
-                byte_idx += 1
-
-        # If any bits remain (pad the last byte)
-        if bit_count > 0:
-            processed_data[byte_idx] = (bit_buffer << (8 - bit_count)) & 0xFF
-        return processed_data
-    
-    def sim_random_gen(self, frames_per_burst, number_of_bursts):
+    def sim_random_gen(self, number_of_frames):
         """Python simulation of noise generator"""
-        num_samples = frames_per_burst * number_of_bursts * self.SAMPLES_PER_FRAME
+        num_samples = number_of_frames * self.SAMPLES_PER_FRAME
         data = np.zeros(num_samples)
         for i in range(len(data)):
             data[i] = np.random.randint(-(2**(self.ADC_BITS_PER_SAMPLE - 1)), 2**(self.ADC_BITS_PER_SAMPLE - 1) -1)
         return data
-    
-    def plot_histogram(self, data):
-        unique, counts = np.unique(data, return_counts=True)
-        std_deviation = np.std(counts)
-        avg = np.average(counts)
-        upper_deviation = avg + std_deviation
-        lower_deviation = avg - std_deviation
-
-        plt.scatter(unique, counts, s=1)
-        plt.axhline(y=upper_deviation, color="g", linestyle="--", label=r'+ 1$\sigma$')
-        plt.axhline(y=lower_deviation, color="r", linestyle="--", label=r'- 1$\sigma$')
-        plt.xlabel("noise value")
-        plt.ylabel("count")
-        plt.legend()
         
     
     @pytest.mark.funcgen_noise_gen
-    def test_funcgen_noise_histogram(self, xr, frames_per_burst, number_of_bursts, burst_period_in_frames):
+    def test_funcgen_noise_histogram(self, xr, number_of_bursts):
         "Plot a histogram of noise generated by funcgen and noise generated by python simulation"
         seed = np.random.randint(-2 ** 15, 2 ** 15 - 1) #seed is 16-bit value
 
         data = self._set_capture_funcgen('noise',
                                         period=None,
-                                        frames_per_burst = frames_per_burst,
+                                        frames_per_burst = 4,
+                                        mode=1,
+                                        keep_all_frames=True,
                                         number_of_bursts = number_of_bursts,
-                                        burst_period_in_frames = burst_period_in_frames,
-                                        seed = seed).astype(self.FG_DTYPE_SIGNED)
+                                        burst_period_in_frames = self.BURST_PERIOD,
+                                        seed = seed)[0].astype(self.FG_DTYPE_SIGNED)
 
-        sim_data = self.sim_random_gen(frames_per_burst, number_of_bursts)
+        print(data.shape, data.size)
+        sim_data = self.sim_random_gen(4 * number_of_bursts) #same for CRS and ICE, see above
 
         plt.subplot(2, 1, 1)
-        self.plot_histogram(data)
-        plt.title(f"Measured noise value frequencies with {seed=}")
+        _, counts = np.unique(data, return_counts=True)
+        plt.hist(counts, bins=np.unique(counts).size)
+        plt.xlabel("Occurences in stream")
+        plt.ylabel("Number of values")
+        plt.title(f"Occurence distribution with {seed=}")
 
         plt.subplot(2, 1, 2)
-        self.plot_histogram(sim_data)
-        plt.title(f"Simulated noise value frequencies")
+        _, counts = np.unique(sim_data, return_counts=True)
+        plt.hist(counts, bins=np.unique(counts).size)
+        plt.xlabel("Occurences in stream")
+        plt.ylabel("Number of values")
+        plt.title(f"Occurence distribution with numpy random")
 
         plt.tight_layout()
         xr.insert_plot()
         plt.close()
 
-    def plot_min_max_count(self, data):
-        unique, counts = np.unique(data, return_counts=True)
-        min_count = np.min(counts)
-        max_count = np.max(counts)
-        min_values = [unique[idx] for idx, value in enumerate(counts) if counts[idx] == min_count]
-        max_values = [unique[idx] for idx, value in enumerate(counts) if counts[idx]== max_count]
-        plt.scatter(min_values, np.full(len(min_values), min_count), label = "values with min count", s=1)
-        plt.scatter(max_values, np.full(len(max_values), max_count), label = "values with max count", s=1)
-        plt.xlabel("noise value")
-        plt.ylabel("count")
-        plt.legend()
-
     @pytest.mark.funcgen_noise_gen
-    def test_funcgen_noise_min_max(self, xr, frames_per_burst, number_of_bursts, burst_period_in_frames):
+    def test_funcgen_noise_min_max(self, xr, number_of_bursts, n=10):
         """Plot the noise values that appear the least often and the most often"""
         seed = np.random.randint(-2 ** 15, 2 ** 15 - 1) #seed is 16-bit value
         data = self._set_capture_funcgen('noise',
                                         period=None,
-                                        frames_per_burst = frames_per_burst,
+                                        frames_per_burst = 4,
+                                        keep_all_frames=True,
+                                        mode=1,
                                         number_of_bursts = number_of_bursts,
-                                        burst_period_in_frames = burst_period_in_frames,
-                                        seed = seed).astype(self.FG_DTYPE_SIGNED)
-        plt.subplot(2,1,1)
-        self.plot_min_max_count(data)
-        plt.title(f"Measured noise values with lowest and highest count with {seed=}")
+                                        burst_period_in_frames = self.BURST_PERIOD,
+                                        seed = seed)[0].astype(self.FG_DTYPE_SIGNED)
+        
+        unique, counts = np.unique(data, return_counts=True)
+        sorted_counts = np.sort(counts)
+        top_n_counts = sorted_counts[sorted_counts.size - n:]
+        bottom_n_counts = sorted_counts[:n]
+        print("Distinct counts: " + str(len(set(counts))))
+        print("Range of counts: " + str(sorted_counts[0]) + " - " + str(sorted_counts[-1]))
+        top_n_pairs = [(unique[idx], value) for idx, value in enumerate(counts) if value in top_n_counts] #can be larger than n if multiple values have the same lowest count
+        bottom_n_pairs = [(unique[idx], value) for idx, value in enumerate(counts) if value in bottom_n_counts]
 
-        plt.subplot(2,1,2)
-        sim_data = self.sim_random_gen(frames_per_burst, number_of_bursts)
-        self.plot_min_max_count(sim_data)
-        plt.title(f"Simulated noise values with lowest and highest count")
+        #print("Most common values: " + str(top_n_pairs))
+        #print("Least common values: " + str(bottom_n_pairs))
+        plt.scatter(*list(zip(*top_n_pairs)), label = f"values with {n} highest counts", s=1)
+        plt.scatter(*list(zip(*bottom_n_pairs)), label = f"values with {n} lowest counts", s=1)
+        plt.xlabel("noise value")
+        plt.ylabel("count")
+        plt.legend()
 
         plt.tight_layout()
         xr.insert_plot()
+        plt.clf()
 
     @pytest.mark.funcgen_noise_gen
-    def test_funcgen_noise_psd(self, xr, frames_per_burst, number_of_bursts, burst_period_in_frames):
+    def test_funcgen_noise_psd(self, xr, number_of_bursts):
         """Plot the spectrum of measured noise vs spectrum of simulated noise using plt.pds"""
         seed = np.random.randint(-2 ** 15, 2 ** 15 - 1) #seed is 16-bit value
         data = self._set_capture_funcgen('noise',
                                         period=None,
-                                        frames_per_burst = frames_per_burst,
+                                        frames_per_burst = 4,
+                                        mode=1,
                                         number_of_bursts = number_of_bursts,
-                                        burst_period_in_frames = burst_period_in_frames,
+                                        burst_period_in_frames = self.BURST_PERIOD,
                                         seed = seed).astype(self.FG_DTYPE_SIGNED)
         plt.subplot(2,1,1)
         plt.psd(data)
-        plt.title(f"Measured Power Spectrum Density of noise with {seed=}")
+        plt.title(f"Power Spectrum Density of Measured Noise with {seed=}")
 
         plt.subplot(2,1,2)
-        sim_data = self.sim_random_gen(frames_per_burst, number_of_bursts)
+        sim_data = self.sim_random_gen(4 * number_of_bursts)
         plt.psd(sim_data)
-        plt.title(f"Simulated Power Spectrum Density of noise")
+        plt.title(f"Power Spectrum Density of Simulated Noise")
 
         plt.tight_layout()
         xr.insert_plot()
         plt.close()
 
     @pytest.mark.funcgen_noise_gen
-    def test_funcgen_noise_fft_avg_squared(self, xr, frames_per_burst, number_of_bursts, burst_period_in_frames, num_runs):
+    def test_funcgen_noise_fft_avg_squared(self, xr, number_of_bursts, num_runs):
         """Plot the spectrum of measured noise vs spectrum of simulated noise by averaging the |fft|^2 of the measured/simulated noise over ``num_runs`` runs"""
         seeds = [np.random.randint(-2 ** 15, 2 ** 15 - 1) for _ in range(num_runs)]
+        frames_per_burst = 4
+        burst_period_in_frames = self.BURST_PERIOD
         total_samples = frames_per_burst * number_of_bursts * self.SAMPLES_PER_FRAME
         psd_a = np.empty((num_runs, total_samples))
         sim_psd_a = np.empty((num_runs, total_samples))
@@ -488,14 +457,16 @@ class TestFuncgen:
             data = self._set_capture_funcgen('noise',
                                             period=None,
                                             frames_per_burst = frames_per_burst,
+                                            mode=1,
                                             number_of_bursts = number_of_bursts,
                                             burst_period_in_frames = burst_period_in_frames,
+                                            keep_all_frames=True,
                                             seed = seeds[i]).astype(self.FG_DTYPE_SIGNED)
             # Selecting only a single channel
             data = data[0, ...]
             psd_a[i] = (np.abs(np.fft.fft(data.ravel())))**2
 
-            sim_data = self.sim_random_gen(frames_per_burst, number_of_bursts)
+            sim_data = self.sim_random_gen(frames_per_burst * number_of_bursts)
             sim_psd_a[i] = (np.abs(np.fft.fft(sim_data)))**2
             
         psd_avg = np.mean(psd_a, axis=0)
@@ -506,42 +477,47 @@ class TestFuncgen:
         plt.ylim(0, max(psd_avg))
         plt.xlabel("frequency")
         plt.ylabel("magnitude")
-        plt.title(f"Measured Average Fourier Transform of noise")
+        plt.title(f"Fourier Transform Magnitude of Measured Noise")
 
         plt.subplot(2,1,2)
         plt.plot(sim_psd_avg)
         plt.ylim(0, max(sim_psd_avg))
         plt.xlabel("frequency")
         plt.ylabel("magnitude")
-        plt.title(f"Simulated Average Fourier Transform of noise")
+        plt.title(f"Fourier Transform Magnitude of Simulated Noise")
 
         plt.tight_layout()
         xr.insert_plot()
         plt.close()
 
     @pytest.mark.funcgen_counters
-    def test_word_and_frame_ctr(self, xr, frames_per_burst, number_of_bursts, burst_period_in_frames):
+    def test_word_and_frame_ctr(self, xr, number_of_bursts):
         """Test for mode: "word_ctr_buffer_flags". Test that frame counter and word counter have the correct count according to the number of bursts and frames per burst."""
         logger = self.get_logger()
+        frames_per_burst = 4
+        burst_period_in_frames = self.BURST_PERIOD
         data = self._set_capture_funcgen(
             "word_ctr_buffer_flags",
             period=None,
-            frames_per_burst=frames_per_burst, 
+            frames_per_burst=frames_per_burst,
+            mode = 1,
             number_of_bursts=number_of_bursts,
-            burst_period_in_frames=burst_period_in_frames
+            burst_period_in_frames=burst_period_in_frames,
+            keep_all_frames=True,
         )[0, ...].ravel()
 
         words_per_frame = self.SAMPLES_PER_FRAME // self.board.SAMPLES_PER_WORD
-        words_per_burst = words_per_frame
+        words_per_burst = words_per_frame * frames_per_burst
         words_per_cap = words_per_burst * number_of_bursts
 
         #process data to get word count and frame count
         packed_samples = np.zeros(data.size // self.board.SAMPLES_PER_WORD, dtype = np.uint32)
+        sample_mask = (1 << self.board.ADC_BITS_PER_SAMPLE) - 1
         if self.PLATFORM == "CRS":
             #For CRS, the 32 LSBs of each word contains is split into frame counter (word[31:11]) and word counter (word[10:0])            
-            K = (32 + self.board.ADC_BITS_PER_SAMPLE + 1) // self.board.ADC_BITS_PER_SAMPLE #ceiling
+            K = self.board.SAMPLES_PER_WORD
             for i in range(len(packed_samples)):
-                packed_samples[i] = sum(int(data[self.board.SAMPLES_PER_WORD * (i + 1) - 1 - w]) << (self.board.ADC_BITS_PER_SAMPLE * w) for w in range(K))        
+                packed_samples[i] = sum((int(data[self.board.SAMPLES_PER_WORD * (i + 1) - 1 - w]) & sample_mask) << (self.board.ADC_BITS_PER_SAMPLE * w) for w in range(K))        
             word_counter_mask = 0x7FF #11 LSBs
             frame_counter_mask = 0x1FFFFF
             word_bits = 11
@@ -560,19 +536,23 @@ class TestFuncgen:
         #Process bits for word counter
         word_count = np.bitwise_and(packed_samples, word_counter_mask)
 
-        cn = (np.arange(words_per_cap) // (frames_per_burst * words_per_frame)) * burst_period_in_frames
-        expected_frame_count = (np.arange(words_per_cap) // words_per_frame) % frames_per_burst + frame_count[0] + cn 
+        cn = (np.arange(words_per_cap) // (words_per_burst)) * burst_period_in_frames
+        expected_frame_count = (np.arange(words_per_cap) // words_per_frame) % frames_per_burst + frame_count[0] + cn
         expected_word_count = np.tile(np.arange(words_per_frame), frames_per_burst * number_of_bursts)
         
         plt.figure(f"{number_of_bursts}")
+        plt.subplot(2, 1, 1)
         plt.plot(expected_frame_count, marker='.', label="expected frame count")
-        plt.plot(frame_count, label="Measured frame count")
-        plt.plot(expected_word_count, marker=".",label="expected word count")
-        plt.plot(word_count, label="Measured word count")
-        plt.legend()
+        plt.plot(frame_count, label="measured frame count")
         plt.xlabel("Sample Count")
-        plt.ylabel("Word/Frame Count")
-        plt.title(f"Frame/Word Count with: \n{frames_per_burst} frames per burst, {number_of_bursts} bursts and {burst_period_in_frames} frames between bursts")
+        plt.ylabel("Frame Count")
+        plt.subplot(2, 1, 2)
+        plt.plot(expected_word_count, marker=".",label="expected word count")
+        plt.plot(word_count, label="measured word count")
+        plt.xlabel("Sample Count")
+        plt.ylabel("Word Count")
+        plt.legend()
+        plt.suptitle(f"Frame/Word Count with: \n{frames_per_burst} frames per burst, {number_of_bursts} bursts and {burst_period_in_frames} frames between bursts")
         xr.insert_plot()
         plt.close()
 
@@ -581,7 +561,7 @@ class TestFuncgen:
         np.testing.assert_array_equal(word_count, expected_word_count)
         logger.debug(f"Word count matches expected word count")
 
-    def _extract_counter_samples(self, raw_data, mode):
+    def _extract_counter_samples(self, raw_data, fmt):
         """
         Extract frame-counter values from raw FUNCGEN samples.
 
@@ -589,15 +569,15 @@ class TestFuncgen:
         - frame8: frame_ctr[ADC_BITS_PER_SAMPLE-3:0] in bits [ADC_BITS_PER_SAMPLE-1:2].
         - frame4: frame_ctr[3:0] in the 4 MSBs of each sample.
         """
-        if mode == "frame4":
+        if fmt == "frame4":
             counter_bits = 4
             shift = self.board.ADC_BITS_PER_SAMPLE - 4
             decoded = (raw_data >> shift) & 0xF
-        elif mode == "frame8":
+        elif fmt == "frame8":
             counter_bits = self.board.ADC_BITS_PER_SAMPLE - 2
             decoded = (raw_data >> 2) & ((1 << counter_bits) - 1)
         else:
-            raise ValueError(f"Unsupported frame-counter mode: {mode}")
+            raise ValueError(f"Unsupported frame-counter format: {fmt}")
 
         counter_mod = 1 << counter_bits
         return decoded, counter_bits, counter_mod
@@ -662,22 +642,32 @@ class TestFuncgen:
         return np.tile(pattern, (total_frames + 1) // 2)[:total_frames]
 
     @pytest.mark.funcgen_counters
-    def test_frame_counter(self, xr, frames_per_burst, number_of_bursts, burst_period_in_frames, mode):
+    @pytest.mark.parametrize("fmt", ("frame8", "frame4"))
+    @pytest.mark.parametrize("frames_per_burst", (2, 4, 8, 16))
+    def test_frame_counter_byte(self, xr, fmt, frames_per_burst, burst_period_in_frames, number_of_bursts):
         """Test frame counter encoding and sequence for mode: 'frame8' and 'frame4'."""
+        if getattr(self.board, "CAPTURE_TYPE", None) == "PROBER" and frames_per_burst > 4:
+            pytest.skip(f"PROBER supports at most 4 frames per burst, got {frames_per_burst}.")
+
+        frames_to_mode = {2: 0, 4: 1, 8: 2, 16: 3}
+        mode = 0 if getattr(self.board, "CAPTURE_TYPE", None) == "PROBER" else frames_to_mode[frames_per_burst]
+
         for chan in self.board.chan.values():
-            chan.FUNCGEN.reset()
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
             # Keep shifts neutral so the sample encoding matches firmware definitions exactly.
             chan.FUNCGEN.LEFT_SHIFT = 0
             chan.FUNCGEN.RIGHT_SHIFT = 0
 
-        # Capture with split_frames=True to keep explicit (frame, sample) boundaries.
+        # Keep explicit (frame, sample) boundaries.
         raw_data = self._set_capture_funcgen(
-            mode,
+            source=fmt,
             period=None,
             frames_per_burst=frames_per_burst,
+            mode=mode,
             number_of_bursts=number_of_bursts,
             burst_period_in_frames=burst_period_in_frames,
-            split_frames=True,
+            keep_all_frames=True,
         ).astype(self.FG_DTYPE)
 
         # Use one deterministic channel for sequence checks.
@@ -685,7 +675,7 @@ class TestFuncgen:
         total_frames = frames_per_burst * number_of_bursts
 
         # Decode mode-specific counter bits from each sample.
-        decoded_samples, counter_bits, counter_mod = self._extract_counter_samples(channel_data, mode)
+        decoded_samples, counter_bits, counter_mod = self._extract_counter_samples(channel_data, fmt=fmt)
 
         # Reduce to one frame ID per frame and verify per-frame constancy.
         measured_frame_ids = self._samples_to_frame_ids(decoded_samples, total_frames)
@@ -703,19 +693,24 @@ class TestFuncgen:
             xr,
             measured_frame_ids,
             expected_frame_ids,
-            title=f"Frame Counter ({mode}, {counter_bits}-bit)\n"
+            title=f"Frame Counter (format={fmt}, {counter_bits}-bit)\n"
                   f"{frames_per_burst} frames/burst, {number_of_bursts} bursts, period {burst_period_in_frames}",
             xlabel="Frame index",
             ylabel="Frame ID",
         )
 
     @pytest.mark.funcgen_counters
+    @pytest.mark.parametrize("frames_per_burst", (2, 4, 8, 16))
     def test_frame_counter_nibble(self, xr, frames_per_burst, number_of_bursts, burst_period_in_frames):
         """
         Test mode "nibble4": low nibble of buffer on one frame, high nibble on the next, alternating every frame.
         """
+        if getattr(self.board, "CAPTURE_TYPE", None) == "PROBER" and frames_per_burst > 4:
+            pytest.skip(f"PROBER supports at most 4 frames per burst, got {frames_per_burst}.")
+
         for chan in self.board.chan.values():
-            chan.FUNCGEN.reset()
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
             # Keep output shifting neutral so nibble placement matches firmware behavior exactly.
             chan.FUNCGEN.LEFT_SHIFT = 0
             chan.FUNCGEN.RIGHT_SHIFT = 0
@@ -729,14 +724,19 @@ class TestFuncgen:
         # Validate alternation within each burst; one frame per burst is insufficient to check this.
         capture_frames_per_burst = max(frames_per_burst, 2)
 
+        frames_to_mode = {2: 0, 4: 1, 8: 2, 16: 3}
+        mode = 0 if getattr(self.board, "CAPTURE_TYPE", None) == "PROBER" else frames_to_mode.get(frames_per_burst, -1)
+        if mode == -1 and self.PLATFORM == 'CRS':
+            raise ValueError(f'UCAP does not support {frames_per_burst} frames per burst')
         raw_data = self._set_capture_funcgen(
             "nibble4",
             period=None,
-            frames_per_burst=capture_frames_per_burst,
+            frames_per_burst=frames_per_burst,
+            mode=mode,
             number_of_bursts=number_of_bursts,
             burst_period_in_frames=burst_period_in_frames,
             buffer=injected_data,
-            split_frames=True,
+            keep_all_frames=True,
         ).astype(self.FG_DTYPE)
 
         # Use a deterministic channel and keep explicit (frame, sample) shape.
@@ -788,10 +788,11 @@ class TestFuncgen:
         self.board.stop_data_capture()
         logger.debug(f"Stopped data capture")
         for chan in self.board.chan.values():
-            chan.FUNCGEN.reset()
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
             logger.debug(f"Channelizer {chan} reset")
+            chan.FUNCGEN.reset()
         sleep(0.01)
-
         for chan in self.board.chan.values():
             # RAMP_CTR/FRAME_CTR are debug counters that resume counting immediately after reset,
             # so they are not guaranteed to still read as zero at software read time.
@@ -801,8 +802,9 @@ class TestFuncgen:
 
     def test_delay_capture(self, xr):
         """Test delay capture"""
-        for chan in self.board.chan:
-            chan.FUNCGEN.reset()
+        for chan in self.board.chan.values():
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
         self._set_capture_funcgen('ramp')
         delay_ctrs = [ch.FUNCGEN.DELAY_CTR for ch in self.board.chan.values()]
         assert(len(set(delay_ctrs)) == 1) #ensure all delay counters are the same
@@ -822,7 +824,7 @@ class TestFuncgen:
                 frames_per_burst=1,
                 number_of_bursts=1,
                 buffer=injected_data,
-                split_frames=False,
+                keep_all_frames=False,
             )[0]
             self.plot_and_test(
                 xr,
@@ -879,7 +881,7 @@ class TestFuncgen:
                 frames_per_burst=1,
                 number_of_bursts=1,
                 buffer=injected_data,
-                split_frames=False,
+                keep_all_frames=False,
             )[0]
             self.plot_and_test(
                 xr,
@@ -889,7 +891,8 @@ class TestFuncgen:
             )
 
     @pytest.mark.funcgen_counters
-    def test_overflow_ctr(self, xr, expected_overflows_per_frame, stats_frames, mode):
+    @pytest.mark.parametrize('fmt', ('word_ctr_buffer_flags', 'frame8', 'frame4'))
+    def test_overflow_ctr(self, xr, fmt, expected_overflows_per_frame, stats_frames):
         """Test that overfow counter from funcgen works correctly by simulating ```expected_overflows_per_frame``` overflows per frame.
          Overflows can be simulated with frame8, frame4, and  word_ctr_buffer_flags by injecting '1's into the buffer.
          Each 1 injected in the buffer represents an overflow in the sample. The number of frames over which we count the number of overflows is
@@ -902,11 +905,12 @@ class TestFuncgen:
         for chan in self.board.chan.values():
             chan.FUNCGEN.set_output_shifting(left_shift=0, right_shift=0)
             chan.FUNCGEN.STATS_ENABLE = 0
-            chan.FUNCGEN.reset()
+            chan.FUNCGEN.RESET = 1
+            chan.FUNCGEN.RESET = 0
 
         # Configure FUNCGEN source directly; capture is not required for overflow counter updates.
         self.board.set_channelizer(
-            data_source=mode,
+            data_source=fmt,
             fft_bypass=1,
             scaler_bypass=1,
             overflow_buffer=injected_data,

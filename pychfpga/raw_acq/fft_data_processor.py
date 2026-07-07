@@ -73,6 +73,8 @@ class FFTDataProcessor:
         pplf = self.config.get('packets_per_logical_frame')
         if pplf is None:
             pplf = getattr(self.raw.config, 'packets_per_logical_frame', 1)
+        if isinstance(pplf, (list, tuple)):
+            pplf = pplf[SOURCE_INDEX]
         return max(1, int(pplf or 1))
 
     def update_config(self, config=None):
@@ -111,7 +113,8 @@ class FFTDataProcessor:
         if cf is None:
             return dict(fmt=None)
         return dict(
-            fmt_base_width=int(cf.fmt_base_width),
+            fmt_bus_width=int(cf.fmt_bus_width),
+            fmt_data_width=int(cf.fmt_data_width),
             fmt_is_complex=bool(cf.fmt_is_complex),
             fmt_interleave_factor=int(cf.fmt_interleave_factor or 1),
         )

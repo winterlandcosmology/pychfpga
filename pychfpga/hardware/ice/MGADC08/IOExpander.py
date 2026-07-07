@@ -150,7 +150,7 @@ class IOExpander_base(object):
         mask = 1 << bit_def.bit
         # print 'Writing data: old_data=%X, port %i, addr=%X, bit=%x'
         #       % (old_data, bit_def.port,self.REG_GPIOA+bit_def.port,bit_def.bit)
-        new_data = (old_data & ~mask) | (bool(data) * mask)
+        new_data = (old_data & (~mask & 0xff)) | (bool(data) * mask)
         data = self.write(self.REG_GPIOA + bit_def.port, new_data)
 
     def wait_for_bit(self, bit_name, timeout=1):

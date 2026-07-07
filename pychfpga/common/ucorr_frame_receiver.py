@@ -84,9 +84,11 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
         self,
         packet_receiver,
         config=None,
+        pre_func=None,
         receive_window=3,
         verbose=0,
     ):
+        self.pre_func = pre_func
         super().__init__(packet_receiver, config=config, receive_window=receive_window, verbose=verbose)
         self.current_row = 0
 
@@ -127,6 +129,8 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
             if verbose >= 2:
                 print(f"UCorrFrameReceiver: verbose={verbose}")
 
+        if self.pre_func:
+            self.pre_func(self)
         if config is not None:
             self.update_config(config)
         if soft_integ_period != self.soft_integ_period:

@@ -46,6 +46,7 @@ class RawFrameReceiver(RawDataPacketProcessor):
         chan_first: bool = True,
         config=None,
         format=None,
+        complex_override=None,
         verbose=None,
     ):
         """
@@ -73,8 +74,7 @@ class RawFrameReceiver(RawDataPacketProcessor):
         if config is not None:
             self.update_config(config)
 
-
-        ts, data, counts = self.create_output_buffer(n_ts=ncap, source=source, split=split, format=format)
+        ts, data, counts = self.create_output_buffer(n_ts=ncap, source=source, split=split, format=format, complex_override=complex_override)
         # ts.fill(0)
         # data.fill(0)
         # counts.fill(0)
@@ -90,25 +90,25 @@ class RawFrameReceiver(RawDataPacketProcessor):
         while raw_rows_completed < ncap:
             if self.current_row < self.n_out:
                 n = min(ncap - raw_rows_completed, self.n_out - self.current_row)
-                print(f"Taking  {n} rows from raw buffer {self.current_row} to {self.current_row + n}")
+                #print(f"Taking  {n} rows from raw buffer {self.current_row} to {self.current_row + n}")
                 rows = slice(self.current_row, self.current_row + n)
-                ts_, data_, counts_ = self.get_formatted_data(rows, source=source, split=split, format=format)
+                ts_, data_, counts_ = self.get_formatted_data(rows, source=source, split=split, format=format, complex_override=complex_override)
                 raw_rows_completed += n
                 n_fmt = ts_.shape[0]  # number of formatted rows to store
                 fmt_rows = slice(fmt_rows_completed, fmt_rows_completed + n_fmt)
                 ts[fmt_rows], data[fmt_rows], counts[fmt_rows] = ts_, data_, counts_
                 fmt_rows_completed += n_fmt
                 self.current_row += n
-            print(f"{raw_rows_completed=}  {fmt_rows_completed=} {ncap=} {self.current_row=} {self.n_out=}")
+            #print(f"{raw_rows_completed=}  {fmt_rows_completed=} {ncap=} {self.current_row=} {self.n_out=}")
             if raw_rows_completed >= ncap:
                 break
             while True:  # Wait nutil we have new data
-                print(f"Receiving packets. current_row is {self.current_row}, {self.n_out=} rows in buffer")
+                #print(f"Receiving packets. current_row is {self.current_row}, {self.n_out=} rows in buffer")
                 self.pr.receive_packets(verbose=self.verbose)
                 self.current_row = 0
                 if self.pr.n_stored:
                     self.process_udp_packets()
-                    print(f"Received {self.n_out} rows from raw buffer")
+                    #print(f"Received {self.n_out} rows from raw buffer")
                     if self.n_out:
                         break
 

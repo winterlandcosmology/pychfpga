@@ -99,7 +99,7 @@ class BitField(object):
         if self.page == self.DRP:
             old_data = obj.read_drp(self._addr)  # read 16-bit value
             mask = (2 ** self.width - 1) << self.bit
-            new_data = old_data & ~mask
+            new_data = old_data & (~mask & 0xffff)
             new_data |= ((value << self.bit) & mask)
             obj.write_drp(self._addr, new_data)
         elif self.page == self.CONTROL:

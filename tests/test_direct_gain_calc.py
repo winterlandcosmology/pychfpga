@@ -96,7 +96,7 @@ class _MockRawProcessor:
         packets_per_logical_frame=1,
         capture_format=[
             None,
-            State(fmt_base_width=32, fmt_is_complex=True, fmt_interleave_factor=2),
+            State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=2),
         ],
     )
 
@@ -164,8 +164,8 @@ def test_merge_fft_decoder_into_raw_complex_format():
     raw = State(
         source='funcgen',
         capture_format=[
-            State(fmt_base_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
-            State(fmt_base_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
+            State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
+            State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
         ],
         packets_per_logical_frame=1,
     )
@@ -173,7 +173,7 @@ def test_merge_fft_decoder_into_raw_complex_format():
         source='scaler',
         capture_format=[
             None,
-            State(fmt_base_width=32, fmt_is_complex=True, fmt_interleave_factor=2),
+            State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=2),
         ],
         packets_per_logical_frame=2,
         offset_encoding=True,
@@ -190,8 +190,8 @@ def test_start_fft_rms_rejects_non_complex_decoder():
     mock_raw.config = State(
         packets_per_logical_frame=1,
         capture_format=[
-            State(fmt_base_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
-            State(fmt_base_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
+            State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
+            State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
         ],
     )
     proc = FFTDataProcessor(_DummyPacketReceiver(), mock_raw, stream_ids=(10,))
@@ -246,7 +246,7 @@ def test_fft_rms_accepts_ucap_split_frame_counts():
         packets_per_logical_frame=2,
         capture_format=[
             None,
-            State(fmt_base_width=32, fmt_is_complex=True, fmt_interleave_factor=1),
+            State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=1),
         ],
     )
     proc = FFTDataProcessor(_DummyPacketReceiver(), mock_raw, stream_ids=(10,))
@@ -302,6 +302,53 @@ def test_formatter_bin_map_and_offset_encoding():
     out = proc._apply_fft_formatter_compensation(data, source=1, bit_width=16)
     expected = np.array([300 + 0j, 100 + 0j, 400 + 0j, 200 + 0j], dtype=np.complex64)
     np.testing.assert_allclose(out[0, 0], expected, rtol=0, atol=1e-3)
+
+
+def test_full_resolution_complex_formatter_reconstructs_lanes():
+    """Mode-5/full-resolution rows are reconstructed from Re/Im lane frames."""
+    proc = object.__new__(RawDataPacketProcessor)
+    proc.config = State(
+        capture_format=[
+            None,
+            State(fmt_bus_width=32, fmt_data_width=29, fmt_is_complex=True, fmt_interleave_factor=4),
+        ],
+        fft_bin_map=np.array([0, 2, 1, 3], dtype=np.intp),
+        offset_encoding=False,
+    )
+    proc.FRAMES_PER_BURST = 4
+    proc.CAPTURE_BITS_PER_WORD = 32
+    payload = np.array(
+        [
+            [
+                [
+                    10, 1,   # frame 0: bin 0 Re/Im
+                    20, 2,   # frame 1: bin 1 Re/Im
+                    30, 3,   # frame 2: bin 2 Re/Im
+                    40, 4,   # frame 3: bin 3 Re/Im
+                ],
+            ],
+        ],
+        dtype=np.int32,
+    )
+    proc.raw_data = (payload << 3).astype(">i4").view(np.uint8)
+    proc.ts_array = np.array([100], dtype=np.uint64)
+    proc.raw_data_count = np.ones((1, 1, 4), dtype=np.int64)
+    proc.raw_source = np.ones((1, 1, 4), dtype=np.uint8)
+    proc.fmt_cdata1 = [
+        None,
+        np.empty((4, 1, 1), dtype=np.complex64),
+    ]
+    proc.fmt_cdata2 = [
+        None,
+        np.empty((1, 1, 4), dtype=np.complex64),
+    ]
+
+    ts, data, counts = proc.get_formatted_data(source=1)
+
+    np.testing.assert_array_equal(ts, np.array([100], dtype=np.uint64))
+    np.testing.assert_array_equal(counts, np.array([[1]], dtype=np.int64))
+    expected = np.array([10 + 1j, 20 + 2j, 30 + 3j, 40 + 4j], dtype=np.complex64)
+    np.testing.assert_allclose(data[0, 0], expected, rtol=0, atol=0)
 
 
 def test_end_to_end_direct_gain_from_fft_rms(two_channel_calc, fft_processor):

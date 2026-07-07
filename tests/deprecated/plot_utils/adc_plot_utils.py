@@ -92,7 +92,7 @@ def get_histogram(fpgarec, frames_per_plot):
     '''
     
     bin_edges = np.linspace(-128.5, 127.5, 257) # Edges for histogram
-    hist_array = np.zeros((16, 256), dtype = np.float) #Each row is a different ADC channel. Each histogram has 256 bins
+    hist_array = np.zeros((16, 256), dtype = float) #Each row is a different ADC channel. Each histogram has 256 bins
     data_array = np.zeros((16, 2048*frames_per_plot), dtype = np.int8)
     for i in range(frames_per_plot):
         data_array[:, 2048*i:2048*(i+1)] = get_adc_frames(fpgarec)
