@@ -139,7 +139,8 @@ class CRS(Motherboard):
         return await crs_discovery.set_platform_firmware(
             boards=boards or [],
             required_version=cls.REQUIRED_TCPIPE_VERSION,
-            firmware_pathname=firmware_pathname or cls.DEFAULT_ARM_FIRMWARE_PATHNAME)
+            firmware_pathname=firmware_pathname or cls.DEFAULT_ARM_FIRMWARE_PATHNAME,
+            **kwargs)
 
 
     async def open_platform_async(self, **kwargs):

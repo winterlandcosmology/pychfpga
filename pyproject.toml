@@ -1,6 +1,6 @@
 [build-system]
     requires = [
-        "setuptools>=64", # >=64 required for setuptools-scm
+        "setuptools>=64,<82", # >=64 required for setuptools-scm, <82 required for pymeasure (pulled in py labpy) because of missing pkg_resources
         "setuptools-scm>=8.0", # automatically manages version number from git
         "wheel"
         ]
@@ -24,7 +24,7 @@
     readme = "README"
 
     dependencies = [
-        "setuptools>=64", # required by setuptools-scm
+        "setuptools>=64,<82", # required by setuptools-scm, <82 required for pymeasure (pulled in py labpy) because of missing pkg_resources
         "setuptools-scm>=8.0",
 
         # Private packages
@@ -49,6 +49,7 @@
         "PyYAML",  # was 3.13, testing 5.3.1
         "psutil",  # was ==5.4.7, now testing 5.7.3
         "netifaces",   # was not specified, now using 0.10.9
+        "xmodem",  # CRS U-Boot netconsole firmware upload
         "zeroconf==0.34.3",  # new, was tested with 0.34.3
         "freetype-py", # For CRS LCD fonts
         ]
