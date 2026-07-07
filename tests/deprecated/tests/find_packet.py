@@ -190,8 +190,8 @@ def sync_timing_test(ca, Nsync=10, Nscan=1):
             for trial in range(3):
                 try:
                     ca.sync(delay = 3 - delay/1e9)
-                    sync_time.append(ca.sync_start_time.nano)
-                    frame0_time.append(ca.sync_timestamps.nano)
+                    sync_time.append(ca.get_sync_start_time().nano)
+                    frame0_time.append(ca.get_sync_timestamps().nano)
                     delay_list.append(delay)
                     break
                 except RuntimeError as e:
