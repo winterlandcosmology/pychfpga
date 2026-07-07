@@ -2295,7 +2295,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         )
         adc_pplf = 1
 
-        if cap_data_type == 4:
+        if cap_data_type == 4:  # dual resolution FFT
             fft_bit_width = 32 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 16
             fft_capture_format = State(
                 fmt_base_width=fft_bit_width,
@@ -2310,7 +2310,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 fmt_is_complex=True,
                 fmt_interleave_factor=2 * fft_bins_per_word,
             )
-            fft_pplf = 2 * max(1, fft_bins_per_word)
+            fft_pplf = 2 * max(1, fft_bins_per_word) # 2 packets per logical frame for full resolution FFT . TODO: Seems wrong to me; review.
         else:
             fft_bit_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8
             fft_capture_format = State(
@@ -2426,11 +2426,14 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self.config.raw_capture_fft.update(fft.as_dict())
 
         result = State(raw=raw, adc=adc, fft=fft, corr=corr)
-        self._cached_firmware_config = result
+        self._cached_firmware_config = result # *** TODO: remove
         return result
 
     def get_cached_firmware_config(self):
-        """Return the last firmware config snapshot without re-reading hardware."""
+        """Return the last firmware config snapshot without re-reading hardware.
+        
+        *** TODO: get rid of the cache, sees unnecessary.
+        """
         cached = getattr(self, '_cached_firmware_config', None)
         if cached is None:
             return self.get_firmware_config()
@@ -3505,6 +3508,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             f'{self!r}: Setting dynamic capture parameters to '
             f'sub_period={sub_period} and source={source} for channels={channels}')
 
+        # *** TODO: rewrite the UCAP block below to use the new UCAP.set_data_capture() method.
         if self.CAPTURE_TYPE == 'UCAP':
             if isinstance(source, str):
                 if source not in self.UCAP.DATA_SOURCE_TABLE:
