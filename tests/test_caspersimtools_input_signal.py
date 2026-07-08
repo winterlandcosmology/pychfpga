@@ -114,7 +114,7 @@ def test_input_signal_from_binary_rejects_bad_raw_length(tmp_path):
     ("instrument", "adc_bits", "n_inputs", "frame_size"),
     [
         ("ice", 8, 4, 2048),
-        ("crs", 12, 8, 16384),
+        ("crs", 14, 8, 16384),
     ],
 )
 def test_shortcuts_use_instrument_presets(instrument, adc_bits, n_inputs, frame_size):

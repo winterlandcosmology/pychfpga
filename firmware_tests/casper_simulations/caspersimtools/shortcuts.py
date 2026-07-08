@@ -34,7 +34,7 @@ class InstrumentPreset:
 
 INSTRUMENT_PRESETS = {
     "ice": InstrumentPreset(adc_bits=8, n_inputs=4, fft_stages=11, sample_rate_mhz=800.0),
-    "crs": InstrumentPreset(adc_bits=12, n_inputs=8, fft_stages=14, sample_rate_mhz=1200.0),
+    "crs": InstrumentPreset(adc_bits=14, n_inputs=8, fft_stages=14, sample_rate_mhz=1200.0),
 }
 
 

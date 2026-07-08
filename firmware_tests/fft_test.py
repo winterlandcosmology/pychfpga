@@ -43,12 +43,11 @@ class TestFFT:
             'scaler_eight_bit': True,
             'prober_user_flags': False,
             'frames_per_burst': 'full',
-            'compare_atol': 0,
         },
         'CRS': {
             'instrument': 'crs',
             'capture_mode': 'fft_2x',
-            'adc_bits': 12,
+            'adc_bits': 14,
             'n_inputs': 8,
             'fft_shift': 0,
             'capture_right_shift': 0,
@@ -57,7 +56,6 @@ class TestFFT:
             'scaler_eight_bit': False,
             'prober_user_flags': None,
             'frames_per_burst': 2,
-            'compare_atol': 128,
         },
     }
 
@@ -713,7 +711,6 @@ class TestFFT:
         print(f"UCAP mode:          {captured['ucap_mode']}")
         print(f"FFT_SHIFT:          {captured['fft_shift']}")
         print(f"capture scale:      captured >> {captured['capture_right_shift']}")
-        print(f"comparison atol:    {sim_config.compare_atol}")
         print(f"overflow_count:     {captured['overflow_count']}")
         print(
             "residuals:          "
@@ -723,15 +720,8 @@ class TestFFT:
         )
 
         assert captured['overflow_count'] == 0
-        compare_atol = int(sim_config.compare_atol)
-        if compare_atol == 0:
-            np.testing.assert_array_equal(captured_real, sim_real)
-            np.testing.assert_array_equal(captured_imag, sim_imag)
-        else:
-            assert real_max_abs <= compare_atol
-            assert imag_max_abs <= compare_atol
-            np.testing.assert_allclose(captured_real, sim_real, rtol=0, atol=compare_atol)
-            np.testing.assert_allclose(captured_imag, sim_imag, rtol=0, atol=compare_atol)
+        np.testing.assert_array_equal(captured_real, sim_real)
+        np.testing.assert_array_equal(captured_imag, sim_imag)
 
     @pytest.mark.fft
     @pytest.mark.parametrize("ch", (0,))
