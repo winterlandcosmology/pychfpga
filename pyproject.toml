@@ -131,6 +131,7 @@ errors-only = true
         ]
 
 [project.scripts]
+    adc_monitor = "pychfpga.monitoring_tools.adc_monitor:main"
     fpga_master = "pychfpga.fpga_master:main"
     pychfpga_gps = "pychfpga.gps:main"
     pychfpga_raw_acq = "pychfpga.raw_acq.__main__:main"
