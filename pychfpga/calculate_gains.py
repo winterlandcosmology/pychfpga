@@ -441,8 +441,7 @@ class GainCalc(object):
         # We eliminate all high frequency beyond num_components
         f_signal[..., num_components: -num_components] = 0
         filtered = np.fft.ifft(f_signal, axis=-1)[..., signal_length // 2: -signal_length // 2 + 1]
-        filtered = (filtered.real).astype(np.int32).astype(np.complex64)
-        return filtered
+        return np.asarray(filtered.real, dtype=np.complex64)
 
     def mask_rfi(self, signal, filtered_signal, threshold):
         """
@@ -601,7 +600,8 @@ class DirectGainCalc(GainCalc):
             stream_ids,
             target_rms=1.5 * np.sqrt(2),
             post_gain_bits=44,
-            n_bins=None):
+            n_bins=None,
+            smooth_gains=True):
         self.log = log.get_logger(self)
         self.channel_ids = channel_ids
         self.stream_ids = stream_ids
@@ -610,6 +610,7 @@ class DirectGainCalc(GainCalc):
         self.target_rms = target_rms
         self.post_gain_bits = post_gain_bits
         self.target_full = float(target_rms) * 2.0**post_gain_bits
+        self.smooth_gains = bool(smooth_gains)
         self.n_bins = int(n_bins) if n_bins is not None else None
         # Linear floating-point gain table (natural frequency bin order)
         self.gains = None
@@ -664,7 +665,15 @@ class DirectGainCalc(GainCalc):
         filtered_masked = self.iterative_poly_filter(signal)
         in_arr = signal.copy()
         in_arr[filtered_masked.mask] = filtered_masked[filtered_masked.mask]
-        filtered = self.fourier_filter(in_arr, num_components=50)
+        if self.smooth_gains:
+            # Direct gains can span many orders of magnitude for sparse spectra.
+            # Smooth multiplicative gain structure in log space; linear-domain FFT
+            # filtering rings badly and can overdrive the 4-bit scaler output.
+            filtered_log = self.fourier_filter(np.log(in_arr), num_components=50)
+            filtered = np.exp(np.asarray(filtered_log.real, dtype=np.float64))
+            np.floor(filtered, out=filtered)
+        else:
+            filtered = in_arr
         filtered = _sanitize_float_gains(filtered)
         gains = {
             tuple(self.channel_ids[j]): (filtered[i].astype(np.float64), -1)

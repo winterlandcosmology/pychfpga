@@ -524,7 +524,8 @@ class FPGAMaster(object):
                             initial_gains=[('*', [1.0, 22])],
                             scaler_cap_data_type='fft_2x',
                             post_gain_bits=44,
-                            target_rms=None):
+                            target_rms=None,
+                            smooth_gains=True):
         """Compute digital gains using the direct or legacy iterative method."""
         if not enable:
             return
@@ -546,7 +547,8 @@ class FPGAMaster(object):
             number_of_fft_averages=number_of_fft_averages,
             scaler_cap_data_type=scaler_cap_data_type,
             post_gain_bits=post_gain_bits,
-            target_rms=target_rms)
+            target_rms=target_rms,
+            smooth_gains=smooth_gains)
 
     async def compute_direct_gains(self,
                                    targets=None,
@@ -556,7 +558,8 @@ class FPGAMaster(object):
                                    number_of_fft_averages=100,
                                    scaler_cap_data_type='fft_2x',
                                    post_gain_bits=44,
-                                   target_rms=None):
+                                   target_rms=None,
+                                   smooth_gains=True):
         """Compute float digital gains in one shot from full-resolution FFT RMS."""
         ib_chans = self.fpgas.get_iceboards(targets, lane_type='chan').items()
         if not ib_chans:
@@ -589,6 +592,10 @@ class FPGAMaster(object):
         if target_rms is None:
             target_rms = 1.5 * np.sqrt(2)
 
+        self.log.info(
+            f'{self!r}: *** Gain calculator : direct gain smoothing '
+            f'{"enabled" if smooth_gains else "disabled"}')
+
         wait_time = min(
             2.56e-6 * 2**(capture_rate + 1) * number_of_fft_averages / 2, 1.0)
 
@@ -601,7 +608,8 @@ class FPGAMaster(object):
                 stream_ids=stream_ids,
                 target_rms=target_rms,
                 post_gain_bits=post_gain_bits,
-                n_bins=n_bins)
+                n_bins=n_bins,
+                smooth_gains=smooth_gains)
             await server.start_fft_rms(
                 stream_ids=stream_ids,
                 target_gain_bank=0,

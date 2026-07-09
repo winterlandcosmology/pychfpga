@@ -88,6 +88,78 @@ def test_direct_gain_get_filtered_gains(two_channel_calc):
     assert mask.shape == (1, NBINS)
 
 
+def test_direct_gain_filtered_gains_preserve_large_float_scale():
+    gc = DirectGainCalc(
+        channel_ids=[(0, 1, 0)],
+        stream_ids=[0],
+        post_gain_bits=36,
+        n_bins=NBINS,
+    )
+    rms = np.full((1, NBINS), np.sqrt(5), dtype=np.float32)
+    gc.update_gains(np.array([0]), rms)
+
+    filtered, mask = gc.get_filtered_gains()
+    gain_vec, glog = filtered[(0, 1, 0)]
+    expected = gc.target_full / np.sqrt(5)
+
+    assert glog == -1
+    assert mask.shape == (1, NBINS)
+    np.testing.assert_allclose(np.median(gain_vec[1:]), expected, rtol=0.01)
+
+
+def test_fourier_filter_returns_real_part_as_complex_without_int_truncation():
+    gc = GainCalc(channel_ids=[], stream_ids=[])
+    signal = np.full((1, 32), 6.5e10 + 2.5j, dtype=np.complex128)
+
+    filtered = gc.fourier_filter(signal, num_components=4)
+
+    assert filtered.dtype == np.complex64
+    assert np.iscomplexobj(filtered)
+    assert np.median(filtered.real) > 1e10
+    np.testing.assert_array_equal(filtered.imag, np.zeros_like(filtered.imag))
+
+
+def test_direct_gain_can_disable_smoothing():
+    n_bins = 32
+    gc = DirectGainCalc(
+        channel_ids=[(0, 1, 0)],
+        stream_ids=[0],
+        post_gain_bits=10,
+        n_bins=n_bins,
+        smooth_gains=False,
+    )
+    rms = np.linspace(500.0, 1500.0, n_bins, dtype=np.float32)[np.newaxis, :]
+    gc.update_gains(np.array([0]), rms)
+
+    filtered, mask = gc.get_filtered_gains()
+    gain_vec, glog = filtered[(0, 1, 0)]
+    valid = ~np.asarray(mask[0], dtype=bool)
+    valid[0] = False
+
+    assert glog == -1
+    np.testing.assert_allclose(gain_vec[valid], gc.gains[0, valid], rtol=0, atol=0)
+
+
+def test_direct_gain_no_smoothing_still_sanitizes_bad_bins():
+    gc = DirectGainCalc(
+        channel_ids=[(0, 1, 0)],
+        stream_ids=[0],
+        n_bins=16,
+        smooth_gains=False,
+    )
+    rms = np.zeros((1, 16), dtype=np.float32)
+    rms[0, 5:10] = 500.0
+    gc.update_gains(np.array([0]), rms)
+
+    filtered, _ = gc.get_filtered_gains()
+    filt_vec, glog = filtered[(0, 1, 0)]
+
+    assert glog == -1
+    assert np.all(np.isfinite(filt_vec))
+    assert np.all(filt_vec > 0)
+    _ensure_scaler_float_encodable(filt_vec)
+
+
 class _MockRawProcessor:
     NCHAN = 1
     stream_ids = (10,)
