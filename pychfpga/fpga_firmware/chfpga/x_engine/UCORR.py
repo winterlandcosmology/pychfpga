@@ -150,6 +150,7 @@ class UCORR(MMI):
         map_attrs = ('CT_LEVEL', 'NDECIM', 'NCHAN', 'NCLK', 'fft_bin_map')
         if not config.has_changed(map_attrs, context=map_attrs):
             return
+        logger = logging.getLogger(__name__)
 
         # Extract relevant configuration parameters for convenience
         ct_level = config.CT_LEVEL
@@ -160,7 +161,9 @@ class UCORR(MMI):
         # Derive useful parameters
         NPROD = NCHAN * (NCHAN + 1) // 2
         NPROD_PER_BINCLK =  NPROD // NCLK # number of products for each binclk, i.e number of products in each packet
-        print(f"{NCHAN=}, {NCLK=}, {NPROD_PER_BINCLK=}, {NPROD=}")
+        logger.debug(
+            "NCHAN=%s, NCLK=%s, NPROD_PER_BINCLK=%s, NPROD=%s",
+            NCHAN, NCLK, NPROD_PER_BINCLK, NPROD)
 
 
         # Map to convert a (i,j) coordinate in a NCHANxNCHAN matrix to a common-sense linearized product index (pix)
@@ -205,7 +208,7 @@ class UCORR(MMI):
             # ct2_bins: (lane, binid) = bin, ct2_bins.shape = (4,1984), 1984=2048-256/4
             ct_bin_map = np.array([[b for clk,b in enumerate(lane_bins) if not (clk < 256 and clk & 0b11 == lane)] for lane, lane_bins in enumerate(ct_bin_map)])
             chan_map = np.arange(NCHAN)
-            print(f'CT2 bin_map={ct_bin_map.shape}')
+            logger.debug('CT2 bin_map=%s', ct_bin_map.shape)
 
         # Get CT Level 3 bin map
         if ct_level >= 3:
@@ -224,13 +227,13 @@ class UCORR(MMI):
             #  clock 1 = (high half of low channels + high half of high channels)  = CH16-31 + CH48-63
             chan_map = np.array([i+NCHAN//4*clk + NCHAN//2*lane for clk in range(2) for lane in range(2) for i in range(NCHAN//4)], dtype=np.intp)
             # ct_bin_map = ct_bin_map[[0,4,1,5,2,6,3,7]] # take into account the cabling
-            print(f'CT3 bin_map={ct_bin_map.shape}')
+            logger.debug('CT3 bin_map=%s', ct_bin_map.shape)
 
 
-         # Compute a map that lists the bins seen by each CMAC after decimation
+        # Compute a map that lists the bins seen by each CMAC after decimation
         # corr_bins[bin_set, corr, bix] = bin
         corr_bins = np.array([ct_bin_map[:, bs::NDECIM] for bs in range(NDECIM)])
-        print(f'Post Corr decimation corr_bins={corr_bins.shape}, {NDECIM=}')
+        logger.debug('Post Corr decimation corr_bins=%s, NDECIM=%s', corr_bins.shape, NDECIM)
 
 
 
@@ -245,7 +248,7 @@ class UCORR(MMI):
         # Compute the linearized product index corresponding to every product of every packet sent by each correlator.
         # We take into account the real channel numbers provided into the CMAC input vector position.
         # cmac_out_pix[clk, prod] = pix
-        print(f'{cmac_out_ij.shape=}, {chan_map=}')
+        logger.debug('cmac_out_ij.shape=%s, chan_map=%r', cmac_out_ij.shape, chan_map)
         cmac_out_pix = ij_to_pix_map[chan_map[cmac_out_ij[...,0]], chan_map[cmac_out_ij[...,1]]]
 
         # Compute the linearized product index for each (corr, clkbin, prod) data sent by the correlator
@@ -255,7 +258,7 @@ class UCORR(MMI):
         #     prod: 0 .. NPROD/NCLK, each product in a packet
         prod_map = np.array([[[cmac_out_pix[clk, clkprod] for clkprod in range(NPROD_PER_BINCLK)] for _ in lane_bins for clk in range(NCLK)] for lane_bins in corr_bins[0]])
 
-        print(f'bin_map={bin_map.shape}, prod_map={prod_map.shape}')
+        logger.debug('bin_map=%s, prod_map=%s', bin_map.shape, prod_map.shape)
         config.bin_map = bin_map
         config.prod_map = prod_map
         config.NDECIM, config.NCORRS, config.NPROD_PER_CMAC, config.NCMAC = bin_map.shape
