@@ -29,8 +29,8 @@ INPUT_DIR = HERE
 # The actual bitstream comes from firmware_tests/config_ice.yaml. Change that
 # file between runs, not this script.
 # ============================================================================
-FFT_SHIFT = 1367
-FFT_OUTPUT_BITS = 18
+FFT_SHIFT = 1984
+FFT_OUTPUT_BITS = 24
 INPUT_STEMS = ("ramp", "two_tone", "noise")
 CHANNEL = 0
 NCAP = 4

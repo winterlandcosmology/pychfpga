@@ -38,7 +38,7 @@ class TestFFT:
     SIM_COMPARE_OUTPUT_DIR = SIM_COMPARE_DATA_DIR / 'outputs'
     SIM_COMPARE_OUTPUT_DTYPE = np.int32
     SIM_COMPARE_FFT_SHIFT = 1984
-    SIM_COMPARE_CAPTURE_RIGHT_SHIFT = 5
+    SIM_COMPARE_CAPTURE_RIGHT_SHIFT = 0
     SIM_COMPARE_CAPTURE_PERIOD = 0.01
 
     def get_logger(self):
@@ -89,7 +89,7 @@ class TestFFT:
         assert all(v == 0 for v in post_flags_after)
 
     @pytest.fixture(scope='function')
-    def setup_fft(self, setup):
+    def setup_fft(self, setup, ch):
         if int(getattr(self.board, 'FFT_TYPE', 0)) == 0:
             pytest.skip("Firmware reports no FFT implementation")
 
@@ -104,19 +104,20 @@ class TestFFT:
             prober_user_flags=False if self.data.PLATFORM == 'ICE' else None,
             scaler_rounding_mode=0,
             symmetric_saturation=False,
+            channels=[ch],
         )
         self.board.set_gains(
             np.full(int(self.data.NUM_BINS), self.SCALER_COMPLEX_GAIN, dtype=np.float64),
             postscaler=self.SCALER_COMPLEX_POSTSCALER,
+            channels=[ch],
         )
-        for chan in self.board.chan:
-            # Set the FFT stage shift schedule explicitly so the tests do not
-            # depend on whichever bitshift was left by firmware init or a prior
-            # hardware run. 2047 is b11111111111, i.e. shift enabled on all 11
-            # FFT stages.
-            chan.FFT.FFT_SHIFT = self.FFT_SHIFT
-            chan.FFT.reset_fft_overflow_count()
-        bin_map = np.asarray(self.board.chan[0].FFT.get_bin_map(flatten=True, reverse=True), dtype=np.intp)
+        # Set the FFT stage shift schedule explicitly so the tests do not
+        # depend on whichever bitshift was left by firmware init or a prior
+        # hardware run. 2047 is b11111111111, i.e. shift enabled on all 11
+        # FFT stages.
+        self.board.chan[ch].FFT.FFT_SHIFT = self.FFT_SHIFT
+        self.board.chan[ch].FFT.reset_fft_overflow_count()
+        bin_map = np.asarray(self.board.chan[ch].FFT.get_bin_map(flatten=True, reverse=True), dtype=np.intp)
         fft_info = self.board.FFT_INFO.get(int(self.board.FFT_TYPE), {})
         self.logger.debug(
             "Setup channelizer for receiver-formatted complex FFT capture "
