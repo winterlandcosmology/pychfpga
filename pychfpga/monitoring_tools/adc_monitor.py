@@ -74,12 +74,31 @@ class StandaloneAdcMonitorResources:
 
     @classmethod
     def create(cls, iceboard_id, capture_period_s, mode):
-        state = LatestCaptureState(INPUT_NAMES)
         config = build_connection_config(iceboard_id=iceboard_id, mode=mode)
         fpga_array = FPGAArray(**config)
         board = fpga_array.ib[0]
+        channels = list(range(min(len(board.chan), len(INPUT_NAMES))))
+        state = LatestCaptureState(INPUT_NAMES[:len(channels)])
         board.set_adc_delays()
-        board.start_data_capture(period=capture_period_s, source='adc')
+
+        offset_binary_encoding = False
+        if board.CORR:
+            offset_binary_encoding = bool(board.CORR.REQUIRES_OFFSET_BINARY_ENCODING)
+
+        # The standalone monitor uses one receiver for all ADC channels, so keep
+        # the receiver-relevant channelizer settings homogeneous before capture.
+        board.set_channelizer(
+            data_source='adc',
+            funcgen_left_shift=0,
+            funcgen_right_shift=0,
+            fft_bypass=True,
+            reset_chan=True,
+            channels=channels,
+        )
+        board.set_scaler_eight_bit(scaler_eight_bit=True, prober_user_flags=False, channels=channels)
+        board.set_offset_binary_encoding(offset=offset_binary_encoding, channels=channels)
+        board.set_scaler_output_modes(bypass_data_type=0, cap_data_type=0, channels=channels)
+        board.start_data_capture(period=capture_period_s, source='adc', channels=channels)
 
         for channel in board.chan:
             channel.SCALER.STATS_FRAME_COUNT = 390625
@@ -105,6 +124,8 @@ class StandaloneAdcMonitorResources:
         self.stop_event.set()
 
         receiver_socket = getattr(self.receiver, 'socket', None)
+        if receiver_socket is None:
+            receiver_socket = getattr(getattr(self.receiver, 'pr', None), 'sock', None)
         if receiver_socket is not None:
             try:
                 receiver_socket.close()
