@@ -6,7 +6,6 @@ import hashlib
 import logging
 import re
 import socket
-import threading
 import time
 import netifaces
 from pathlib import Path
@@ -31,7 +30,13 @@ BEACON_REQUEST_PAYLOAD = b"BEACONREQ"
 # Fixed HTTP port so host firewalls can allow inbound TCP once (ephemeral ports
 # are often blocked while UDP netconsole still works).
 DEFAULT_FIRMWARE_HTTP_PORT = 19875
-FIRMWARE_HTTP_CONNECT_TIMEOUT = 30.0
+# After wget, poll the shell with Enter until U-Boot reprints a prompt.
+# Netconsole is often silent while lwIP runs; do not couple to the HTTP server.
+WGET_PROMPT_POLL_INTERVAL = 0.2
+BOOTELF_IDLE = 1.0
+# After bootelf, wait for the board's TCPIPE UDP beacon before opening TCP.
+TCPIPE_BEACON_WAIT_TIMEOUT = 60.0
+TCPIPE_BEACON_REQUEST_INTERVAL = 2.0
 
 UPLOAD_METHODS = frozenset({"xmodem", "xmodem_pipe", "loads", "wget"})
 DEFAULT_UPLOAD_METHOD = "wget"
@@ -124,6 +129,26 @@ async def _async_sock_recvfrom(sock, bufsize, timeout):
         raise
 
 
+async def _async_sock_recv(sock, bufsize, timeout):
+    """Recv on a connected non-blocking UDP socket."""
+    loop = asyncio.get_running_loop()
+    future = loop.create_future()
+
+    def _reader():
+        loop.remove_reader(sock.fileno())
+        try:
+            future.set_result(sock.recv(bufsize))
+        except Exception as exc:
+            future.set_exception(exc)
+
+    loop.add_reader(sock.fileno(), _reader)
+    try:
+        return await asyncio.wait_for(future, timeout)
+    except asyncio.TimeoutError:
+        loop.remove_reader(sock.fileno())
+        raise
+
+
 _NETCONSOLE_BINARY_UPLOAD = {
     "xmodem": {
         "cmd": b"loadx\n",
@@ -160,6 +185,7 @@ class NetConsole:
         self._sock = None
         self.ncip = None
         self.port = None
+        self._rx_buf = ""
 
     def __enter__(self):
         self.open()
@@ -186,11 +212,11 @@ class NetConsole:
             return
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 256 * 1024)
-        sock.settimeout(30)
         sock.bind((self.bind, 0))
         self.port = sock.getsockname()[1]
         sock.connect((self.board_ip, self.port))
         self.ncip = sock.getsockname()[0]
+        sock.setblocking(False)
         self._sock = sock
         self.log.debug(
             "%r: bound local port %d, ncip=%s, board=%s fwreq_port=%d",
@@ -214,54 +240,108 @@ class NetConsole:
         return max(60.0, nbytes / 8192.0 + 15.0)
 
     @staticmethod
-    def _combined_wget_md5_timeout(nbytes):
-        return (
-            NetConsole._wget_timeout_for_size(nbytes)
-            + NetConsole._md5_timeout_for_size(nbytes)
-        )
+    def _wget_timeout_for_size(nbytes):
+        # Allow ~50 KB/s effective rate plus margin; U-Boot wget is silent on netconsole.
+        return max(120.0, nbytes / 51200.0 + 30.0)
 
     def _log_console(self, buf):
         text = buf.strip()
         if text:
             self.log.debug("%r: console:\n%s", self, text)
 
-    def drain(self, timeout=0.5, idle=0.05):
-        """Drain console output until ``idle`` seconds pass with no data."""
+    async def _recv(self, timeout):
+        """Receive one UDP datagram, or ``None`` on timeout."""
+        try:
+            return await _async_sock_recv(self._sock, self.BUF_SIZE, timeout)
+        except asyncio.TimeoutError:
+            return None
+        except OSError:
+            return None
+
+    async def read_line(self, timeout=1.0):
+        """Accumulate console bytes until a newline, or return partial on timeout.
+
+        Returns the line including the trailing newline when one arrives; on
+        timeout returns whatever is buffered (possibly empty). Leftover bytes
+        after the first newline stay in ``_rx_buf`` for the next call.
+        """
         deadline = time.monotonic() + timeout
-        self._sock.settimeout(idle)
+        while True:
+            nl = self._rx_buf.find("\n")
+            if nl >= 0:
+                line, self._rx_buf = self._rx_buf[:nl + 1], self._rx_buf[nl + 1:]
+                return line
+            wait = max(0.0, deadline - time.monotonic())
+            if wait <= 0:
+                line, self._rx_buf = self._rx_buf, ""
+                return line
+            chunk = await self._recv(wait)
+            if chunk:
+                self._rx_buf += chunk.decode(errors="replace")
+
+    async def drain(self, timeout=0.2, idle=0.05):
+        """Discard console output until ``idle`` seconds pass with no data."""
+        deadline = time.monotonic() + timeout
+        self._rx_buf = ""
         while time.monotonic() < deadline:
-            try:
-                self._sock.recv(self.BUF_SIZE)
-            except socket.timeout:
+            wait = min(idle, max(0.0, deadline - time.monotonic()))
+            if wait <= 0:
+                break
+            line = await self.read_line(timeout=wait)
+            if not line:
                 return
 
-    def wait_for_prompt(self, timeout=5.0):
+    async def wait_for_prompt(self, timeout=5.0, send_enter=False, poll_interval=None):
+        """Wait until a U-Boot shell prompt appears on netconsole.
+
+        If ``send_enter`` is true, periodically send a bare newline so an idle
+        shell reprints ``ZynqMP>``. Useful after ``wget``, when lwIP often
+        suppresses console output until the shell is free again.
+        """
+        if poll_interval is None:
+            poll_interval = WGET_PROMPT_POLL_INTERVAL if send_enter else 0.2
         deadline = time.monotonic() + timeout
+        next_enter_at = time.monotonic()
         buf = ""
-        self._sock.settimeout(0.2)
         while time.monotonic() < deadline:
-            try:
-                buf += self._sock.recv(self.BUF_SIZE).decode(errors="replace")
-                if self._has_uboot_prompt(buf):
-                    self._log_console(buf)
-                    return buf
-            except socket.timeout:
+            if send_enter and time.monotonic() >= next_enter_at:
+                try:
+                    print('.', end='', flush=True)
+                    self._sock.send(b"\n")
+                except OSError:
+                    break
+                next_enter_at = time.monotonic() + poll_interval
+            wait = min(poll_interval, max(0.0, deadline - time.monotonic()))
+            if wait <= 0:
+                break
+            line = await self.read_line(timeout=wait)
+            if not line:
                 continue
-        self.log.debug("%r: prompt wait timed out after %ss", self, timeout)
+            buf += line
+            if self._has_uboot_prompt(buf):
+                self._log_console(buf)
+                return buf
+        self.log.debug(
+            "%r: prompt wait timed out after %ss (send_enter=%s)",
+            self, timeout, send_enter,
+        )
         if buf:
             self._log_console(buf)
         return buf
 
-    def send_cmd(self, cmd, timeout=0.1):
-        self._sock.settimeout(timeout)
+    async def send_cmd(self, cmd, timeout=0.1):
         self.log.debug("%r: >>> %s", self, cmd)
         self._sock.send((cmd + "\n").encode("utf-8"))
         reply = ""
-        while True:
-            try:
-                reply += self._sock.recv(self.BUF_SIZE).decode()
-            except socket.timeout:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            wait = max(0.0, deadline - time.monotonic())
+            if wait <= 0:
                 break
+            line = await self.read_line(timeout=wait)
+            if not line:
+                break
+            reply += line
         output = reply.replace(cmd, "", 1).strip()
         if output:
             self.log.debug("%r: <<< %s", self, output)
@@ -286,85 +366,17 @@ class NetConsole:
         match = re.search(r"==>\s*([0-9a-fA-F]{32})\b", output)
         return match.group(1).lower() if match else None
 
-    @staticmethod
-    def _parse_wget_bytes(output):
-        match = re.search(r"Bytes transferred = (\d+)", output)
-        return int(match.group(1)) if match else None
-
-    _WGET_ERRORS = (
-        "Unknown command", "HTTP client error", "HTTP server error",
-        "wget error", "Could not",
-    )
-
-    def _recv_wget_complete(
-            self,
-            timeout,
-            http_connect_timeout=None,
-            http_transfer_complete=None):
-        """Read netconsole during ``wget`` until the host HTTP transfer finishes.
-
-        U-Boot wget runs lwIP and drops almost all netconsole output (including
-        ``Bytes transferred``); rely on ``http_transfer_complete`` and a short
-        post-transfer grace period instead of console text.
-        """
-        deadline = time.monotonic() + timeout
-        connect_deadline = time.monotonic() + FIRMWARE_HTTP_CONNECT_TIMEOUT
-        transfer_seen_at = None
-        buf = ""
-        self._sock.settimeout(0.2)
-        while time.monotonic() < deadline:
-            if (
-                    http_connect_timeout is not None
-                    and not http_connect_timeout.is_set()
-                    and time.monotonic() >= connect_deadline
-            ):
-                self.log.error(
-                    "%r: board did not connect to HTTP server within %ss — "
-                    "allow inbound TCP to the firmware HTTP port on this host "
-                    "(UDP netconsole can work while TCP wget is blocked)",
-                    self, FIRMWARE_HTTP_CONNECT_TIMEOUT,
-                )
-                self._sock.send(b"\x03")
-                self._drain_console(timeout=5.0)
-                return False, buf
-            try:
-                buf += self._sock.recv(self.BUF_SIZE).decode(errors="replace")
-            except socket.timeout:
-                pass
-            if any(err in buf for err in self._WGET_ERRORS):
-                self._log_console(buf)
-                return False, buf
-            if http_transfer_complete is not None and http_transfer_complete.is_set():
-                if transfer_seen_at is None:
-                    transfer_seen_at = time.monotonic()
-                    self.log.info("%r: HTTP transfer complete", self)
-            if transfer_seen_at is not None:
-                if self._has_uboot_prompt(buf):
-                    self._log_console(buf)
-                    return True, buf
-                if time.monotonic() - transfer_seen_at >= 5.0:
-                    self._log_console(buf)
-                    return True, buf
-        self.log.error(
-            "%r: timed out after %ss waiting for wget (HTTP transfer=%s)",
-            self,
-            timeout,
-            http_transfer_complete.is_set() if http_transfer_complete else "n/a",
-        )
-        if buf:
-            self._log_console(buf)
-        return False, buf
-
-    def _recv_md5_response(self, timeout):
+    async def _recv_md5_response(self, timeout):
         """Read netconsole until ``md5sum`` prints a digest and the shell prompt."""
         deadline = time.monotonic() + timeout
         buf = ""
-        self._sock.settimeout(0.2)
         while time.monotonic() < deadline:
-            try:
-                buf += self._sock.recv(self.BUF_SIZE).decode(errors="replace")
-            except socket.timeout:
-                pass
+            wait = min(0.2, max(0.0, deadline - time.monotonic()))
+            if wait <= 0:
+                break
+            line = await self.read_line(timeout=wait)
+            if line:
+                buf += line
             if self._parse_uboot_md5(buf) is not None and self._has_uboot_prompt(buf):
                 self._log_console(buf)
                 return buf
@@ -375,59 +387,49 @@ class NetConsole:
             self._log_console(buf)
         return buf
 
-    def _recv_until_prompt(self, timeout=600.0, idle=5.0):
+    async def _recv_until_prompt(self, timeout=600.0, idle=5.0):
         """Collect console output until the U-Boot prompt returns."""
         deadline = time.monotonic() + timeout
         buf = ""
         last_data = time.monotonic()
-        self._sock.settimeout(1.0)
         while time.monotonic() < deadline:
-            try:
-                buf += self._sock.recv(self.BUF_SIZE).decode(errors="replace")
+            wait = min(1.0, max(0.0, deadline - time.monotonic()))
+            if wait <= 0:
+                break
+            line = await self.read_line(timeout=wait)
+            if line:
+                buf += line
                 last_data = time.monotonic()
                 if self._has_uboot_prompt(buf):
                     self._log_console(buf)
                     return buf
-            except socket.timeout:
-                if buf and (time.monotonic() - last_data) >= idle:
-                    if self._has_uboot_prompt(buf):
-                        self._log_console(buf)
-                        return buf
+            elif buf and (time.monotonic() - last_data) >= idle:
+                if self._has_uboot_prompt(buf):
+                    self._log_console(buf)
+                    return buf
         self.log.error("%r: timed out after %ss waiting for U-Boot prompt", self, timeout)
         if buf:
             self._log_console(buf)
         return buf
 
-    def _drain_console(self, timeout=10.0, idle=1.0):
-        """Collect console output until idle (no prompt required)."""
-        deadline = time.monotonic() + timeout
-        buf = ""
-        last_data = time.monotonic()
-        self._sock.settimeout(1.0)
-        while time.monotonic() < deadline:
-            try:
-                buf += self._sock.recv(self.BUF_SIZE).decode(errors="replace")
-                last_data = time.monotonic()
-            except socket.timeout:
-                if (time.monotonic() - last_data) >= idle:
-                    break
-        if buf:
-            self._log_console(buf)
-        return buf
-
-    def _recv_after_bootelf(self, timeout=15.0, idle=3.0):
+    async def _recv_after_bootelf(self, timeout=15.0, idle=None):
         """Collect post-bootelf console output.
 
         Successful ``bootelf`` hands off to the loaded image; U-Boot does not
         return a shell prompt, so a short idle period with no error text is OK.
         """
+        if idle is None:
+            idle = BOOTELF_IDLE
         deadline = time.monotonic() + timeout
         buf = ""
         last_data = time.monotonic()
-        self._sock.settimeout(1.0)
         while time.monotonic() < deadline:
-            try:
-                buf += self._sock.recv(self.BUF_SIZE).decode(errors="replace")
+            wait = min(1.0, max(0.0, deadline - time.monotonic()))
+            if wait <= 0:
+                break
+            line = await self.read_line(timeout=wait)
+            if line:
+                buf += line
                 last_data = time.monotonic()
                 if any(err in buf for err in self._BOOTELF_ERRORS):
                     self._log_console(buf)
@@ -435,49 +437,56 @@ class NetConsole:
                 if self._has_uboot_prompt(buf):
                     self._log_console(buf)
                     return buf
-            except socket.timeout:
-                if (time.monotonic() - last_data) >= idle:
-                    if buf:
-                        self._log_console(buf)
-                    return buf
+            elif (time.monotonic() - last_data) >= idle:
+                if buf:
+                    self._log_console(buf)
+                return buf
         if buf:
             self._log_console(buf)
         return buf
 
-    def send_cmd_until_prompt(self, cmd, timeout=600.0, idle=5.0):
+    async def send_cmd_until_prompt(self, cmd, timeout=600.0, idle=5.0):
         """Send a command and wait until the shell prompt returns."""
         self.log.info("%r: >>> %s", self, cmd)
         self._sock.send((cmd + "\n").encode("utf-8"))
-        output = self._recv_until_prompt(timeout=timeout, idle=idle)
+        output = await self._recv_until_prompt(timeout=timeout, idle=idle)
         if cmd in output:
             output = output.replace(cmd, "", 1)
         return output.strip()
 
-    @staticmethod
-    def _wget_timeout_for_size(nbytes):
-        # Allow ~50 KB/s effective rate plus margin; U-Boot wget is silent on netconsole.
-        return max(120.0, nbytes / 51200.0 + 30.0)
-
-    def xmodem_send(self, filename):
+    async def xmodem_send(self, filename):
         self.log.debug("%r: starting XMODEM send of %s", self, filename)
-        ok = xmodem1k_send(self._sock, filename, log=self.log)
+        # Binary protocols need a blocking socket; restore after transfer.
+        self._sock.setblocking(True)
+        try:
+            ok = xmodem1k_send(self._sock, filename, log=self.log)
+        finally:
+            self._sock.setblocking(False)
         self.log.debug("%r: XMODEM send %s", self, "ok" if ok else "failed")
         return ok
 
-    def xmodem_pipe_send(self, filename, pipe_depth=8):
+    async def xmodem_pipe_send(self, filename, pipe_depth=8):
         self.log.debug("%r: starting XMODEM pipe send of %s", self, filename)
-        ok = xmodem1k_pipe_send(
-            self._sock, filename, pipe_depth=pipe_depth, log=self.log)
+        self._sock.setblocking(True)
+        try:
+            ok = xmodem1k_pipe_send(
+                self._sock, filename, pipe_depth=pipe_depth, log=self.log)
+        finally:
+            self._sock.setblocking(False)
         self.log.debug("%r: XMODEM pipe send %s", self, "ok" if ok else "failed")
         return ok
 
-    def loads_send(self, filename, line_batch=1):
+    async def loads_send(self, filename, line_batch=1):
         self.log.debug("%r: starting loads send of %s", self, filename)
-        ok = Loads(self._sock, log=self.log).send(filename, line_batch=line_batch)
+        self._sock.setblocking(True)
+        try:
+            ok = Loads(self._sock, log=self.log).send(filename, line_batch=line_batch)
+        finally:
+            self._sock.setblocking(False)
         self.log.debug("%r: loads send %s", self, "ok" if ok else "failed")
         return ok
 
-    def verify_loaded_md5(self, expected_md5, timeout=None, file_size=None):
+    async def verify_loaded_md5(self, expected_md5, timeout=None, file_size=None):
         """Check U-Boot ``md5sum $loadaddr $filesize`` matches the host digest."""
         nbytes = file_size or 0
         if timeout is None:
@@ -488,7 +497,7 @@ class NetConsole:
             self, cmd, nbytes, timeout,
         )
         self._sock.send((cmd + "\n").encode("utf-8"))
-        output = self._recv_md5_response(timeout)
+        output = await self._recv_md5_response(timeout)
         return self._check_md5_output(output, expected_md5)
 
     def _check_md5_output(self, output, expected_md5):
@@ -502,28 +511,7 @@ class NetConsole:
         self.log.info("%r: MD5 OK (%s)", self, expected_md5)
         return True
 
-    def _check_wget_output(self, output, expected_size, http_transfer_complete):
-        if any(err in output for err in self._WGET_ERRORS):
-            self.log.error("%r: wget failed: %s", self, output or "(no reply)")
-            return False
-        if http_transfer_complete is not None and not http_transfer_complete.is_set():
-            self.log.error("%r: HTTP firmware transfer did not complete", self)
-            return False
-        loaded_size = self._parse_wget_bytes(output)
-        if loaded_size is not None:
-            self.log.info("%r: wget reported %d bytes on console", self, loaded_size)
-            if loaded_size != expected_size:
-                self.log.warning(
-                    "%r: console reported %d bytes, host ELF is %d bytes",
-                    self, loaded_size, expected_size,
-                )
-        else:
-            self.log.info(
-                "%r: wget OK (%d bytes served over HTTP)", self, expected_size,
-            )
-        return True
-
-    def upload_and_boot_elf(self, elf_path, verify_md5=False, upload_method="xmodem"):
+    async def upload_and_boot_elf(self, elf_path, verify_md5=False, upload_method="xmodem"):
         """Send ELF over netconsole and boot it with bootelf.
 
         ``upload_method`` may be ``xmodem``, ``xmodem_pipe``, or ``loads``.
@@ -542,15 +530,15 @@ class NetConsole:
         expected_md5 = _file_md5(elf_path)
 
         self.send_fwresp()
-        self.wait_for_prompt()
-        self.drain(timeout=0.5, idle=0.05)
+        await self.wait_for_prompt()
+        t_upload = time.monotonic()
         if upload_cfg["cmd"] is not None:
             self._sock.send(upload_cfg["cmd"])
             self.log.debug("%r: sent %r", self, upload_cfg["cmd"])
         try:
             t0 = time.monotonic()
             send_fn = getattr(self, upload_cfg["send"])
-            if not send_fn(elf_path):
+            if not await send_fn(elf_path):
                 self.log.error(
                     "%r: %s transfer failed for %s",
                     self, upload_cfg["label"], elf_path.name)
@@ -562,14 +550,14 @@ class NetConsole:
                 expected_size / transfer_s / 1024,
             )
             if upload_method == "loads":
-                self.wait_for_prompt(timeout=5.0)
+                await self.wait_for_prompt(timeout=5.0)
             else:
-                self.drain(timeout=0.5, idle=0.05)
+                await self.drain(timeout=0.2, idle=0.05)
         except OSError as exc:
             self.log.error("%r: failed to upload %s: %s", self, elf_path, exc)
             return False
 
-        load_info = self.send_cmd("printenv loadaddr filesize", timeout=2)
+        load_info = await self.send_cmd("printenv loadaddr filesize", timeout=2)
         self.log.info("%r: loaded %s: %s", self, elf_path.name, load_info or "(no reply)")
         if "filesize=" in load_info:
             try:
@@ -582,30 +570,31 @@ class NetConsole:
             except ValueError:
                 pass
 
-        if not self.verify_loaded_md5(expected_md5, file_size=expected_size):
+        if not await self.verify_loaded_md5(expected_md5, file_size=expected_size):
             return False
+        self.log.info(
+            "%r: firmware upload took %.2fs", self, time.monotonic() - t_upload)
 
-        output = self.send_cmd(self.BOOTELF_CMD, timeout=10)
+        t_boot = time.monotonic()
+        output = await self.send_cmd(self.BOOTELF_CMD, timeout=10)
         if output:
             self.log.info("%r: boot response: %s", self, output)
-        return self._bootelf_ok(output)
+        ok = self._bootelf_ok(output)
+        if ok:
+            self.log.info(
+                "%r: bootelf handoff took %.2fs", self, time.monotonic() - t_boot)
+        return ok
 
-    def upload_and_boot_via_wget(
-            self,
-            url,
-            elf_path,
-            http_connect_timeout=None,
-            http_transfer_complete=None,
-            verify_md5=False):
+    async def upload_and_boot_via_wget(self, url, elf_path, verify_md5=False):
         """Send FWRESP/1, download ELF via wget over netconsole, verify MD5, and boot.
 
         Modern U-Boot no longer accepts shell commands in the FWRESP body, so wget is
         executed on the netconsole session after FWRESP/1 establishes the link.
 
-        U-Boot wget runs lwIP and drops almost all wget progress on netconsole.
-        Wget success is confirmed from the host HTTP transfer; ``md5sum`` is a
-        separate command whose reply is collected on its own.  After ``bootelf``,
-        silence means success because the board has left U-Boot.
+        U-Boot wget drops most console output while lwIP runs. Success is inferred
+        when the shell prompt returns (polled with Enter); ``md5sum`` then verifies
+        the loaded image. After ``bootelf``, silence means U-Boot handed off; the
+        uploader still waits for a TCPIPE beacon before opening TCP.
         """
         del verify_md5  # MD5 is always verified, same as other netconsole binary paths.
         elf_path = Path(elf_path)
@@ -617,33 +606,36 @@ class NetConsole:
         wget_timeout = self._wget_timeout_for_size(expected_size)
 
         self.send_fwresp()
-        self.wait_for_prompt()
-        self.drain(timeout=0.5, idle=0.05)
+        await self.wait_for_prompt()
 
+        t_upload = time.monotonic()
         wget_cmd = f"setenv autostart yes; wget ${{loadaddr}} {url}"
         self.log.info("%r: >>> %s", self, wget_cmd)
         self._sock.send((wget_cmd + "\n").encode("utf-8"))
-        wget_ok, wget_out = self._recv_wget_complete(
-            wget_timeout,
-            http_connect_timeout=http_connect_timeout,
-            http_transfer_complete=http_transfer_complete,
-        )
-        if not wget_ok:
-            return False
-        if not self._check_wget_output(
-                wget_out, expected_size, http_transfer_complete):
-            return False
 
-        self.drain(timeout=0.5, idle=0.05)
-        if not self.verify_loaded_md5(expected_md5, file_size=expected_size):
+        # Poll with Enter until the shell is free again (HTTP server is independent).
+        prompt = await self.wait_for_prompt(
+            timeout=wget_timeout, send_enter=True)
+        if not self._has_uboot_prompt(prompt):
+            self.log.error(
+                "%r: U-Boot prompt did not return after wget", self)
             return False
+        if not await self.verify_loaded_md5(expected_md5, file_size=expected_size):
+            return False
+        self.log.info(
+            "%r: firmware upload took %.2fs", self, time.monotonic() - t_upload)
 
+        t_boot = time.monotonic()
         self.log.info("%r: >>> %s", self, self.BOOTELF_CMD)
         self._sock.send((self.BOOTELF_CMD + "\n").encode("utf-8"))
-        output = self._recv_after_bootelf()
+        output = await self._recv_after_bootelf()
         if output:
             self.log.info("%r: boot response: %s", self, output)
-        return self._bootelf_ok(output)
+        ok = self._bootelf_ok(output)
+        if ok:
+            self.log.info(
+                "%r: bootelf handoff took %.2fs", self, time.monotonic() - t_boot)
+        return ok
 
     def _bootelf_ok(self, output):
         if any(err in output for err in self._BOOTELF_ERRORS):
@@ -651,47 +643,25 @@ class NetConsole:
             return False
         return True
 
-    def _upload_and_run_sync(
-            self,
-            elf_path,
-            upload_method,
-            wget_url=None,
-            verify_md5=False,
-            http_connect_timeout=None,
-            http_transfer_complete=None):
-        if upload_method in _NETCONSOLE_BINARY_UPLOAD:
-            return self.upload_and_boot_elf(
-                elf_path, verify_md5=verify_md5, upload_method=upload_method)
-        if upload_method == "wget":
-            if wget_url is None:
-                raise ValueError("wget_url is required when upload_method='wget'")
-            return self.upload_and_boot_via_wget(
-                wget_url,
-                elf_path=elf_path,
-                http_connect_timeout=http_connect_timeout,
-                http_transfer_complete=http_transfer_complete,
-                verify_md5=verify_md5,
-            )
-        raise ValueError(f"upload_method must be one of {sorted(UPLOAD_METHODS)}")
-
     async def upload_and_run(
             self,
             elf_path,
             upload_method=DEFAULT_UPLOAD_METHOD,
             wget_url=None,
-            verify_md5=False,
-            http_connect_timeout=None,
-            http_transfer_complete=None):
-        """Upload platform firmware over netconsole and boot it (async wrapper)."""
-        return await asyncio.to_thread(
-            self._upload_and_run_sync,
-            elf_path,
-            upload_method,
-            wget_url,
-            verify_md5,
-            http_connect_timeout,
-            http_transfer_complete,
-        )
+            verify_md5=False):
+        """Upload platform firmware over netconsole and boot it."""
+        if upload_method in _NETCONSOLE_BINARY_UPLOAD:
+            return await self.upload_and_boot_elf(
+                elf_path, verify_md5=verify_md5, upload_method=upload_method)
+        if upload_method == "wget":
+            if wget_url is None:
+                raise ValueError("wget_url is required when upload_method='wget'")
+            return await self.upload_and_boot_via_wget(
+                wget_url,
+                elf_path=elf_path,
+                verify_md5=verify_md5,
+            )
+        raise ValueError(f"upload_method must be one of {sorted(UPLOAD_METHODS)}")
 
 
 class CRSBeacon:
@@ -1101,7 +1071,7 @@ class CRSArmFirmwareUploader:
                 bind_host = (
                     self._iface_address_for(targets[0].hostname)
                     if targets else self.bind)
-                http_site = _FirmwareHTTPSite(firmware, bind=bind_host)
+                http_site = HTTPFirmwareServer(firmware, bind=bind_host)
                 await http_site.start()
                 self.logger.info(
                     "%r: serving %s on http://%s:%d/%s",
@@ -1120,6 +1090,7 @@ class CRSArmFirmwareUploader:
                 ],
                 return_exceptions=True,
             )
+            booted = []
             for board, result in zip(targets, results):
                 if isinstance(result, Exception):
                     self.logger.error(
@@ -1129,6 +1100,25 @@ class CRSArmFirmwareUploader:
                     self.logger.error(
                         "%r: upload failed for %s @ %s",
                         self, board.serial, board.hostname)
+                else:
+                    booted.append(board)
+
+            if booted:
+                # bootelf silence only means U-Boot handed off; TCP is not ready
+                # until TCPipe is up and advertising. Wait before open_platform.
+                ready = await self._wait_for_tcpipe_beacons(fwreq_sock, booted)
+                for board in booted:
+                    if board.hostname in ready:
+                        board.tcpipe_version = self.required_tcpipe_version
+                        self.logger.info(
+                            "%r: TCPipe ready on SN%s @ %s (boot %.2fs after handoff)",
+                            self, board.serial, board.hostname,
+                            ready[board.hostname],
+                        )
+                    else:
+                        self.logger.error(
+                            "%r: TCPipe beacon not seen for SN%s @ %s after bootelf",
+                            self, board.serial, board.hostname)
         finally:
             fwreq_sock.close()
             if http_site is not None:
@@ -1185,6 +1175,59 @@ class CRSArmFirmwareUploader:
                 self, ", ".join(sorted(pending)))
         return reply_ports
 
+    async def _wait_for_tcpipe_beacons(
+            self, sock, boards, timeout=TCPIPE_BEACON_WAIT_TIMEOUT):
+        """Wait until each board emits a TCPIPE beacon after bootelf.
+
+        Returns ``{hostname: seconds_since_wait_start}`` for boards seen.
+        """
+        pending = {board.hostname: board for board in boards}
+        ready = {}
+        t0 = time.monotonic()
+        deadline = t0 + timeout
+        next_request_at = t0
+        self.logger.info(
+            "%r: waiting up to %.0fs for TCPIPE beacons from %s",
+            self, timeout, ", ".join(sorted(pending)),
+        )
+        while pending and time.monotonic() < deadline:
+            now = time.monotonic()
+            if now >= next_request_at:
+                request_beacon()
+                next_request_at = now + TCPIPE_BEACON_REQUEST_INTERVAL
+            wait = min(1.0, deadline - time.monotonic())
+            if wait <= 0:
+                break
+            try:
+                data, addr = await _async_sock_recvfrom(sock, 4096, wait)
+            except asyncio.TimeoutError:
+                continue
+            if not data.startswith(b"TCPIPE"):
+                continue
+            board_ip = addr[0]
+            board = pending.get(board_ip)
+            if board is None:
+                continue
+            try:
+                beacon = CRSBeacon(data, address=board_ip)
+            except (UnicodeDecodeError, ValueError):
+                continue
+            if not _match_token(str(board.serial), beacon.board_serial, match_integers=True):
+                continue
+            elapsed = time.monotonic() - t0
+            ready[board_ip] = elapsed
+            pending.pop(board_ip)
+            self.logger.info(
+                "%r: TCPIPE %s beacon from SN%s @ %s after %.2fs",
+                self, beacon.version, beacon.board_serial, board_ip, elapsed,
+            )
+
+        if pending:
+            self.logger.error(
+                "%r: timed out waiting for TCPIPE beacon from %s",
+                self, ", ".join(sorted(pending)))
+        return ready
+
     async def _upload_board(self, board, firmware, http_site, fwreq_port):
         short_path = os.path.relpath(
             self.firmware_pathname,
@@ -1213,18 +1256,13 @@ class CRSArmFirmwareUploader:
                 upload_method=self.upload_method,
                 wget_url=wget_url,
                 verify_md5=self.verify_md5,
-                http_connect_timeout=(
-                    http_site.request_received if http_site is not None else None),
-                http_transfer_complete=(
-                    http_site.transfer_complete if http_site is not None else None),
             )
         finally:
             nc.close()
 
         if ok:
-            board.tcpipe_version = self.required_tcpipe_version
             self.logger.info(
-                "%r: uploaded and booted TCPipe firmware on SN%s @ %s",
+                "%r: bootelf accepted for SN%s @ %s; waiting for TCPIPE beacon",
                 self, board.serial, board.hostname)
         return ok
 
@@ -1238,7 +1276,7 @@ class CRSArmFirmwareUploader:
             sock.close()
 
 
-class _FirmwareHTTPSite:
+class HTTPFirmwareServer:
     """Async HTTP server for a single firmware ELF (aiohttp, no threads)."""
 
     def __init__(self, firmware_path, bind=DEFAULT_BIND, port=DEFAULT_FIRMWARE_HTTP_PORT):
@@ -1248,8 +1286,6 @@ class _FirmwareHTTPSite:
         self.port = None
         self._runner = None
         self._site = None
-        self.request_received = threading.Event()
-        self.transfer_complete = threading.Event()
         self._log = logging.getLogger(__name__)
 
     async def start(self):
@@ -1263,13 +1299,10 @@ class _FirmwareHTTPSite:
                 "firmware HTTP GET %s from %s",
                 request.path, peer[0] if peer else "?",
             )
-            self.request_received.set()
-            response = web.Response(
+            return web.Response(
                 body=firmware_data,
                 headers={"Content-Length": str(len(firmware_data))},
             )
-            self.transfer_complete.set()
-            return response
 
         app = web.Application()
         app.router.add_get(route, handle)

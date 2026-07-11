@@ -242,11 +242,14 @@ def test_arm_firmware_uploader_marks_board_ready_after_upload(monkeypatch):
         return {board.hostname: 10132 for board in targets}
 
     async def fake_upload_and_run(
-            self, elf_path, upload_method, wget_url=None, verify_md5=False,
-            http_connect_timeout=None, http_transfer_complete=None):
+            self, elf_path, upload_method, wget_url=None, verify_md5=False):
         return True
 
+    async def fake_wait_beacons(self, sock, boards, timeout=60):
+        return {board.hostname: 0.5 for board in boards}
+
     monkeypatch.setattr(CRSArmFirmwareUploader, "_collect_fwreq_ports", fake_collect)
+    monkeypatch.setattr(CRSArmFirmwareUploader, "_wait_for_tcpipe_beacons", fake_wait_beacons)
     monkeypatch.setattr(NetConsole, "upload_and_run", fake_upload_and_run)
     monkeypatch.setattr(NetConsole, "open", lambda self: None)
     monkeypatch.setattr(NetConsole, "close", lambda self: None)
@@ -257,11 +260,43 @@ def test_arm_firmware_uploader_marks_board_ready_after_upload(monkeypatch):
         boards=[board],
         required_version=CRS.REQUIRED_TCPIPE_VERSION,
         firmware_pathname=CRS.DEFAULT_ARM_FIRMWARE_PATHNAME,
+        upload_method="xmodem",
     )
 
     asyncio.run(runner.run())
 
     assert board.tcpipe_version == CRS.REQUIRED_TCPIPE_VERSION
+
+
+def test_arm_firmware_uploader_does_not_mark_ready_without_tcpipe_beacon(monkeypatch):
+    async def fake_collect(self, sock, targets, timeout=60):
+        return {board.hostname: 10132 for board in targets}
+
+    async def fake_upload_and_run(
+            self, elf_path, upload_method, wget_url=None, verify_md5=False):
+        return True
+
+    async def fake_wait_beacons(self, sock, boards, timeout=60):
+        return {}
+
+    monkeypatch.setattr(CRSArmFirmwareUploader, "_collect_fwreq_ports", fake_collect)
+    monkeypatch.setattr(CRSArmFirmwareUploader, "_wait_for_tcpipe_beacons", fake_wait_beacons)
+    monkeypatch.setattr(NetConsole, "upload_and_run", fake_upload_and_run)
+    monkeypatch.setattr(NetConsole, "open", lambda self: None)
+    monkeypatch.setattr(NetConsole, "close", lambda self: None)
+
+    board = CRS(serial="0037", hostname="192.0.2.11")
+    board.tcpipe_version = None
+    runner = CRSArmFirmwareUploader(
+        boards=[board],
+        required_version=CRS.REQUIRED_TCPIPE_VERSION,
+        firmware_pathname=CRS.DEFAULT_ARM_FIRMWARE_PATHNAME,
+        upload_method="xmodem",
+    )
+
+    asyncio.run(runner.run())
+
+    assert board.tcpipe_version is None
 
 
 def test_has_uboot_prompt_rejects_md5sum_arrow():
@@ -271,43 +306,69 @@ def test_has_uboot_prompt_rejects_md5sum_arrow():
 
 
 def test_recv_until_prompt_waits_for_md5_digest():
-    sock = _MockSock([
+    nc = NetConsole("192.0.2.1", 9875)
+    nc._sock = types.SimpleNamespace(send=lambda data: None)
+    _install_async_recv(nc, [
         b"md5 for 08000000 ... 081a8897 ==> ",
         b"e55261bbcecddbf1b9dbc7fc601d4ed4\n",
         b"ZynqMP> ",
     ])
-    nc = NetConsole("192.0.2.1", 9875)
-    nc._sock = sock
-    buf = nc._recv_until_prompt(timeout=5.0, idle=0.05)
+    buf = asyncio.run(nc._recv_until_prompt(timeout=5.0, idle=0.05))
     assert "e55261bbcecddbf1b9dbc7fc601d4ed4" in buf
 
 
 def test_netconsole_verify_loaded_md5_accepts_matching_digest():
     nc = NetConsole("192.0.2.1", 9875)
     nc._sock = types.SimpleNamespace(send=lambda data: None)
-    nc._recv_md5_response = lambda timeout: (
-        "md5 for 08000000 ... 081a8897 ==> abcd1234deadbeefcafebabe12345678\nZynqMP>"
-    )
 
-    assert nc.verify_loaded_md5("abcd1234deadbeefcafebabe12345678")
+    async def _recv_md5(timeout):
+        return (
+            "md5 for 08000000 ... 081a8897 ==> abcd1234deadbeefcafebabe12345678\nZynqMP>"
+        )
+
+    nc._recv_md5_response = _recv_md5
+    assert asyncio.run(nc.verify_loaded_md5("abcd1234deadbeefcafebabe12345678"))
 
 
 def test_netconsole_verify_loaded_md5_rejects_mismatch():
     nc = NetConsole("192.0.2.1", 9875)
     nc._sock = types.SimpleNamespace(send=lambda data: None)
-    nc._recv_md5_response = lambda timeout: (
-        "md5 for 08000000 ... 081a8897 ==> deadbeefcafebabe12345678abcd1234\nZynqMP>"
-    )
 
-    assert not nc.verify_loaded_md5("abcd1234deadbeefcafebabe12345678")
+    async def _recv_md5(timeout):
+        return (
+            "md5 for 08000000 ... 081a8897 ==> deadbeefcafebabe12345678abcd1234\nZynqMP>"
+        )
+
+    nc._recv_md5_response = _recv_md5
+    assert not asyncio.run(nc.verify_loaded_md5("abcd1234deadbeefcafebabe12345678"))
 
 
 def test_netconsole_verify_loaded_md5_rejects_partial_md5_line():
     nc = NetConsole("192.0.2.1", 9875)
     nc._sock = types.SimpleNamespace(send=lambda data: None)
-    nc._recv_md5_response = lambda timeout: "md5 for 08000000 ... 081a8897 ==>"
 
-    assert not nc.verify_loaded_md5("abcd1234deadbeefcafebabe12345678")
+    async def _recv_md5(timeout):
+        return "md5 for 08000000 ... 081a8897 ==>"
+
+    nc._recv_md5_response = _recv_md5
+    assert not asyncio.run(nc.verify_loaded_md5("abcd1234deadbeefcafebabe12345678"))
+
+
+def _patch_async_console(nc):
+    nc.send_fwresp = lambda: None
+    nc.wait_for_prompt = (
+        lambda timeout=5.0, send_enter=False, poll_interval=None:
+        _async_const("ZynqMP>")
+    )
+    nc.drain = lambda timeout=0.5, idle=0.05: _async_const(None)
+
+
+def test_read_line_returns_on_newline_and_keeps_remainder():
+    nc = NetConsole("192.0.2.1", 9875)
+    nc._sock = types.SimpleNamespace(send=lambda data: None)
+    _install_async_recv(nc, [b"hello\nZynqMP> "])
+    assert asyncio.run(nc.read_line(timeout=1.0)) == "hello\n"
+    assert asyncio.run(nc.read_line(timeout=0.05)) == "ZynqMP> "
 
 
 def test_upload_and_boot_elf_skips_bootelf_when_md5_fails(tmp_path, monkeypatch):
@@ -319,16 +380,14 @@ def test_upload_and_boot_elf_skips_bootelf_when_md5_fails(tmp_path, monkeypatch)
     )
 
     nc = NetConsole("192.0.2.1", 9875)
-    nc.send_fwresp = lambda: None
-    nc.wait_for_prompt = lambda timeout=5.0: "ZynqMP>"
-    nc.drain = lambda timeout=0.5, idle=0.05: None
+    _patch_async_console(nc)
     nc._sock = types.SimpleNamespace(send=lambda data: None)
-    nc.xmodem_send = lambda filename: True
-    nc.verify_loaded_md5 = lambda expected_md5, **kwargs: False
+    nc.xmodem_send = lambda filename: _async_const(True)
+    nc.verify_loaded_md5 = lambda expected_md5, **kwargs: _async_const(False)
     boot_calls = []
-    nc.send_cmd = lambda cmd, timeout=0.1: boot_calls.append(cmd) or ""
+    nc.send_cmd = lambda cmd, timeout=0.1: boot_calls.append(cmd) or _async_const("")
 
-    assert not nc.upload_and_boot_elf(elf_path, verify_md5=False)
+    assert not asyncio.run(nc.upload_and_boot_elf(elf_path, verify_md5=False))
     assert boot_calls == ["printenv loadaddr filesize"]
 
 
@@ -342,15 +401,18 @@ def test_upload_and_boot_elf_always_verifies_md5(tmp_path, monkeypatch):
     md5_calls = []
 
     nc = NetConsole("192.0.2.1", 9875)
-    nc.send_fwresp = lambda: None
-    nc.wait_for_prompt = lambda timeout=5.0: "ZynqMP>"
-    nc.drain = lambda timeout=0.5, idle=0.05: None
+    _patch_async_console(nc)
     nc._sock = types.SimpleNamespace(send=lambda data: None)
-    nc.xmodem_send = lambda filename: True
-    nc.verify_loaded_md5 = lambda expected_md5, **kwargs: md5_calls.append(expected_md5) or True
-    nc.send_cmd = lambda cmd, timeout=0.1: ""
+    nc.xmodem_send = lambda filename: _async_const(True)
 
-    assert nc.upload_and_boot_elf(elf_path, verify_md5=False)
+    async def _verify(expected_md5, **kwargs):
+        md5_calls.append(expected_md5)
+        return True
+
+    nc.verify_loaded_md5 = _verify
+    nc.send_cmd = lambda cmd, timeout=0.1: _async_const("")
+
+    assert asyncio.run(nc.upload_and_boot_elf(elf_path, verify_md5=False))
     assert md5_calls == ["abcd1234"]
 
 
@@ -363,16 +425,16 @@ def test_upload_and_boot_elf_runs_bootelf_after_md5_ok(tmp_path, monkeypatch):
     )
 
     nc = NetConsole("192.0.2.1", 9875)
-    nc.send_fwresp = lambda: None
-    nc.wait_for_prompt = lambda timeout=5.0: "ZynqMP>"
-    nc.drain = lambda timeout=0.5, idle=0.05: None
+    _patch_async_console(nc)
     nc._sock = types.SimpleNamespace(send=lambda data: None)
-    nc.xmodem_send = lambda filename: True
-    nc.verify_loaded_md5 = lambda expected_md5, **kwargs: expected_md5 == "abcd1234"
+    nc.xmodem_send = lambda filename: _async_const(True)
+    nc.verify_loaded_md5 = (
+        lambda expected_md5, **kwargs: _async_const(expected_md5 == "abcd1234")
+    )
     boot_calls = []
-    nc.send_cmd = lambda cmd, timeout=0.1: boot_calls.append(cmd) or ""
+    nc.send_cmd = lambda cmd, timeout=0.1: boot_calls.append(cmd) or _async_const("")
 
-    assert nc.upload_and_boot_elf(elf_path, verify_md5=True)
+    assert asyncio.run(nc.upload_and_boot_elf(elf_path, verify_md5=True))
     assert boot_calls == [
         "printenv loadaddr filesize",
         NetConsole.BOOTELF_CMD,
@@ -389,15 +451,15 @@ def test_upload_and_boot_elf_uses_xmodem_pipe(tmp_path, monkeypatch):
     pipe_calls = []
 
     nc = NetConsole("192.0.2.1", 9875)
-    nc.send_fwresp = lambda: None
-    nc.wait_for_prompt = lambda timeout=5.0: "ZynqMP>"
-    nc.drain = lambda timeout=0.5, idle=0.05: None
+    _patch_async_console(nc)
     nc._sock = types.SimpleNamespace(send=lambda data: None)
-    nc.xmodem_pipe_send = lambda filename, pipe_depth=8: pipe_calls.append(filename) or True
-    nc.verify_loaded_md5 = lambda expected_md5, **kwargs: True
-    nc.send_cmd = lambda cmd, timeout=0.1: ""
+    nc.xmodem_pipe_send = (
+        lambda filename, pipe_depth=8: pipe_calls.append(filename) or _async_const(True)
+    )
+    nc.verify_loaded_md5 = lambda expected_md5, **kwargs: _async_const(True)
+    nc.send_cmd = lambda cmd, timeout=0.1: _async_const("")
 
-    assert nc.upload_and_boot_elf(elf_path, upload_method="xmodem_pipe")
+    assert asyncio.run(nc.upload_and_boot_elf(elf_path, upload_method="xmodem_pipe"))
     assert pipe_calls == [elf_path]
 
 
@@ -411,14 +473,14 @@ def test_upload_and_boot_elf_uses_loads(tmp_path, monkeypatch):
     loads_calls = []
 
     nc = NetConsole("192.0.2.1", 9875)
-    nc.send_fwresp = lambda: None
-    nc.wait_for_prompt = lambda timeout=5.0: "ZynqMP>"
-    nc.drain = lambda timeout=0.5, idle=0.05: None
-    nc.loads_send = lambda filename, line_batch=16: loads_calls.append(filename) or True
-    nc.verify_loaded_md5 = lambda expected_md5, **kwargs: True
-    nc.send_cmd = lambda cmd, timeout=0.1: ""
+    _patch_async_console(nc)
+    nc.loads_send = (
+        lambda filename, line_batch=16: loads_calls.append(filename) or _async_const(True)
+    )
+    nc.verify_loaded_md5 = lambda expected_md5, **kwargs: _async_const(True)
+    nc.send_cmd = lambda cmd, timeout=0.1: _async_const("")
 
-    assert nc.upload_and_boot_elf(elf_path, upload_method="loads")
+    assert asyncio.run(nc.upload_and_boot_elf(elf_path, upload_method="loads"))
     assert loads_calls == [elf_path]
 
 
@@ -452,6 +514,9 @@ class _MockSock:
     def settimeout(self, timeout):
         self._timeout = timeout
 
+    def setblocking(self, flag):
+        return None
+
     def recv(self, size):
         if not self.recv_chunks:
             raise socket.timeout
@@ -460,8 +525,29 @@ class _MockSock:
             raise socket.timeout
         return chunk
 
+    def send(self, data):
+        self.sent.append(data)
+        return len(data)
+
     def sendall(self, data):
         self.sent.append(data)
+
+
+def _install_async_recv(nc, chunks):
+    """Drive NetConsole async reads from a chunk list (``None`` = timeout)."""
+    pending = list(chunks)
+
+    async def _recv(timeout):
+        if not pending:
+            return None
+        return pending.pop(0)
+
+    nc._recv = _recv
+    return pending
+
+
+async def _async_const(value, *args, **kwargs):
+    return value
 
 
 def test_xmodem_send_sends_blocks_and_eot(tmp_path):
@@ -542,7 +628,7 @@ def test_arm_firmware_runner_xmodem_pipe_method(monkeypatch, tmp_path):
     assert upload_calls == ["xmodem_pipe"]
 
 
-def test_upload_and_boot_via_wget_waits_for_http_and_verifies_md5(tmp_path, monkeypatch):
+def test_upload_and_boot_via_wget_polls_prompt_and_verifies_md5(tmp_path, monkeypatch):
     elf_path = tmp_path / "tcpipe_rtos.elf"
     elf_path.write_bytes(b"payload")
     expected_md5 = "abcd1234deadbeefcafebabe12345678"
@@ -550,112 +636,99 @@ def test_upload_and_boot_via_wget_waits_for_http_and_verifies_md5(tmp_path, monk
         "pychfpga.hardware.crs.crs_discovery._file_md5",
         lambda path: expected_md5,
     )
-    http_received = __import__("threading").Event()
-    http_complete = __import__("threading").Event()
     sent = []
+    prompt_calls = []
 
+    async def exercise():
+        nc = NetConsole("192.0.2.1", 9875)
+        nc.send_fwresp = lambda: None
+
+        async def _wait_for_prompt(timeout=5.0, send_enter=False, poll_interval=None):
+            prompt_calls.append({"timeout": timeout, "send_enter": send_enter})
+            return "ZynqMP>"
+
+        nc.wait_for_prompt = _wait_for_prompt
+        nc._sock = types.SimpleNamespace(send=lambda data: sent.append(data))
+        nc._recv_after_bootelf = lambda timeout=15.0, idle=None: _async_const("")
+        nc.verify_loaded_md5 = (
+            lambda expected_md5, **kwargs: _async_const(
+                expected_md5 == "abcd1234deadbeefcafebabe12345678"
+            )
+        )
+
+        return await nc.upload_and_boot_via_wget(
+            "http://10.0.0.1:19875/tcpipe_rtos.elf",
+            elf_path,
+        )
+
+    assert asyncio.run(exercise())
+    assert any(b"bootelf" in data for data in sent)
+    assert any(call["send_enter"] for call in prompt_calls)
+
+
+def test_wait_for_prompt_send_enter_polls_until_prompt():
     nc = NetConsole("192.0.2.1", 9875)
-    nc.send_fwresp = lambda: None
-    nc.wait_for_prompt = lambda timeout=5.0: "ZynqMP>"
-    nc.drain = lambda timeout=0.5, idle=0.05: None
-    nc._sock = types.SimpleNamespace(
-        send=lambda data: (
-            http_received.set() if b"wget" in data else sent.append(data)
-        ),
-    )
-    nc._recv_wget_complete = lambda timeout, http_connect_timeout=None, http_transfer_complete=None: (
-        True, "ZynqMP>"
-    )
-    nc._recv_after_bootelf = lambda timeout=15.0, idle=3.0: ""
-    http_complete.set()
-
-    nc.verify_loaded_md5 = lambda expected_md5, **kwargs: (
-        expected_md5 == "abcd1234deadbeefcafebabe12345678"
-    )
-
-    assert nc.upload_and_boot_via_wget(
-        "http://10.0.0.1:19875/tcpipe_rtos.elf",
-        elf_path,
-        http_connect_timeout=http_received,
-        http_transfer_complete=http_complete,
-    )
-    assert sent == [(nc.BOOTELF_CMD + "\n").encode("utf-8")]
-
-
-def test_recv_wget_md5_response_returns_when_md5_and_prompt_seen():
-    http_received = __import__("threading").Event()
-    http_received.set()
-    http_complete = __import__("threading").Event()
-    http_complete.set()
-    sock = _MockSock([
-        b"ZynqMP> ",
-    ])
-    nc = NetConsole("192.0.2.1", 9875)
+    sock = _MockSock([])
     nc._sock = sock
-    ok, output = nc._recv_wget_complete(
-        timeout=5.0,
-        http_connect_timeout=http_received,
-        http_transfer_complete=http_complete,
+    _install_async_recv(nc, [None, None, b"ZynqMP> "])
+    buf = asyncio.run(
+        nc.wait_for_prompt(timeout=5.0, send_enter=True, poll_interval=0.01)
     )
-    assert ok
-    assert nc._has_uboot_prompt(output)
+    assert nc._has_uboot_prompt(buf)
+    assert b"\n" in sock.sent
 
 
 def test_recv_md5_response_returns_digest():
-    sock = _MockSock([
+    nc = NetConsole("192.0.2.1", 9875)
+    nc._sock = types.SimpleNamespace(send=lambda data: None)
+    _install_async_recv(nc, [
         b"md5 for 08000000 ... 08000006 ==> ",
         b"abcd1234deadbeefcafebabe12345678\n",
         b"ZynqMP> ",
     ])
-    nc = NetConsole("192.0.2.1", 9875)
-    nc._sock = sock
-    output = nc._recv_md5_response(timeout=5.0)
+    output = asyncio.run(nc._recv_md5_response(timeout=5.0))
     assert "abcd1234deadbeefcafebabe12345678" in output
     assert nc._parse_uboot_md5(output) == "abcd1234deadbeefcafebabe12345678"
 
 
 def test_recv_after_bootelf_treats_silence_as_success():
     nc = NetConsole("192.0.2.1", 9875)
-    nc._sock = _MockSock([None, None, None])
-    nc._sock.settimeout = lambda timeout: None
-    assert nc._recv_after_bootelf(timeout=0.2, idle=0.05) == ""
+    nc._sock = types.SimpleNamespace(send=lambda data: None)
+    _install_async_recv(nc, [None, None, None])
+    assert asyncio.run(nc._recv_after_bootelf(timeout=0.2, idle=0.05)) == ""
 
 
 def test_recv_after_bootelf_detects_boot_error():
     nc = NetConsole("192.0.2.1", 9875)
-    nc._sock = _MockSock([b"Unknown command 'bootelf'\nZynqMP> "])
-    nc._sock.settimeout = lambda timeout: None
-    output = nc._recv_after_bootelf(timeout=1.0, idle=0.05)
+    nc._sock = types.SimpleNamespace(send=lambda data: None)
+    _install_async_recv(nc, [b"Unknown command 'bootelf'\nZynqMP> "])
+    output = asyncio.run(nc._recv_after_bootelf(timeout=1.0, idle=0.05))
     assert "Unknown command" in output
     assert not nc._bootelf_ok(output)
 
 
-def test_upload_and_boot_via_wget_fails_when_http_unreachable(tmp_path, monkeypatch):
+def test_upload_and_boot_via_wget_fails_when_prompt_missing(tmp_path, monkeypatch):
     elf_path = tmp_path / "tcpipe_rtos.elf"
     elf_path.write_bytes(b"payload")
     monkeypatch.setattr(
         "pychfpga.hardware.crs.crs_discovery._file_md5",
         lambda path: "abcd1234",
     )
-    monkeypatch.setattr(
-        "pychfpga.hardware.crs.crs_discovery.FIRMWARE_HTTP_CONNECT_TIMEOUT",
-        0.01,
-    )
-    sent = []
 
-    nc = NetConsole("192.0.2.1", 9875)
-    nc.send_fwresp = lambda: None
-    nc.wait_for_prompt = lambda timeout=5.0: "ZynqMP>"
-    nc.drain = lambda timeout=0.5, idle=0.05: None
-    nc._sock = _MockSock([None] * 50)
-    nc._sock.send = lambda data: sent.append(data)
+    async def exercise():
+        nc = NetConsole("192.0.2.1", 9875)
+        nc.send_fwresp = lambda: None
+        nc.wait_for_prompt = (
+            lambda timeout=5.0, send_enter=False, poll_interval=None:
+            _async_const("")
+        )
+        nc._sock = types.SimpleNamespace(send=lambda data: None)
+        return await nc.upload_and_boot_via_wget(
+            "http://10.0.0.1:19875/tcpipe_rtos.elf",
+            elf_path,
+        )
 
-    assert not nc.upload_and_boot_via_wget(
-        "http://10.0.0.1:19875/tcpipe_rtos.elf",
-        elf_path,
-        http_connect_timeout=__import__("threading").Event(),
-    )
-    assert sent[-1] == b"\x03"
+    assert not asyncio.run(exercise())
 
 
 def test_arm_firmware_runner_wget_method_passes_url(monkeypatch, tmp_path):
@@ -667,13 +740,16 @@ def test_arm_firmware_runner_wget_method_passes_url(monkeypatch, tmp_path):
         return {board.hostname: 10132 for board in targets}
 
     async def fake_upload_and_run(
-            self, elf_path, upload_method, wget_url=None, verify_md5=False,
-            http_connect_timeout=None, http_transfer_complete=None):
+            self, elf_path, upload_method, wget_url=None, verify_md5=False):
         captured["upload_method"] = upload_method
         captured["wget_url"] = wget_url
         return True
 
+    async def fake_wait_beacons(self, sock, boards, timeout=60):
+        return {board.hostname: 0.1 for board in boards}
+
     monkeypatch.setattr(CRSArmFirmwareUploader, "_collect_fwreq_ports", fake_collect)
+    monkeypatch.setattr(CRSArmFirmwareUploader, "_wait_for_tcpipe_beacons", fake_wait_beacons)
     monkeypatch.setattr(NetConsole, "upload_and_run", fake_upload_and_run)
     monkeypatch.setattr(NetConsole, "open", lambda self: None)
     monkeypatch.setattr(NetConsole, "close", lambda self: None)
