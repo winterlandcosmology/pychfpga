@@ -12,6 +12,8 @@ import time
 import numpy as np
 
 from pychfpga.common.array_methods import ArrayMethods
+from pychfpga.common.raw_frame_receiver import RawFrameReceiver
+from pychfpga.common.state import State
 from pychfpga.common.udp_packet_receiver import UDPPacketReceiver
 
 
@@ -93,19 +95,19 @@ class chFPGAArrayMethods(ArrayMethods):
         if not self.ib:
             return
 
-        platform_firmware_groups = {}
-        for mb in self.ib:
-            if mb.hostname:
-                platform_firmware_groups.setdefault(mb.__class__, []).append(mb)
-        if platform_firmware_groups:
-            platform_names = ', '.join(cls.__name__ for cls in platform_firmware_groups)
-            self.logger.debug(
-                f'{self!r}: Loading platform firmware on the following '
-                f'motherboards as needed: {platform_names}')
-            for board_cls, boards in platform_firmware_groups.items():
-                await board_cls.set_platform_firmware(
-                    boards=boards,
-                    firmware_pathname=platform_firmware_pathname)
+        # platform_firmware_groups = {}
+        # for mb in self.ib:
+        #     if mb.hostname:
+        #         platform_firmware_groups.setdefault(mb.__class__, []).append(mb)
+        # if platform_firmware_groups:
+        #     platform_names = ', '.join(cls.__name__ for cls in platform_firmware_groups)
+        #     self.logger.debug(
+        #         f'{self!r}: Loading platform firmware on the following '
+        #         f'motherboards as needed: {platform_names}')
+        #     for board_cls, boards in platform_firmware_groups.items():
+        #         await board_cls.set_platform_firmware(
+        #             boards=boards,
+        #             firmware_pathname=platform_firmware_pathname)
 
         if open is not None and init is None:
             if open == 0:
@@ -1482,11 +1484,15 @@ class chFPGAArrayMethods(ArrayMethods):
             self._packet_receiver = UDPPacketReceiver(sock) # ***todo: move packet receiver to utils (can be used by raw capture also)
         return self._packet_receiver
 
-    def get_data_receiver(self, port_number=None):
-        """ Returns a raw data receiver.
+    def get_data_receiver(self, port_number=None, **kwargs):
+        """ Returns a raw data receiver for the whole array.
 
         A UDP packet receiver and associated socket will be created if none already exist, otherwise the existing ones will be reused.
         The correlator packet receiver and the raw data receiver share the same socket and UDP packet receiver.
+
+        The receiver is configured from :meth:`get_receiver_config`, which
+        aggregates board configs (concatenated ``stream_ids``, otherwise
+        identical attributes).
 
 
         Parameters:
@@ -1495,15 +1501,21 @@ class chFPGAArrayMethods(ArrayMethods):
                 - If ``None``, attempts to open a socket at the destination port currently programmed in the FPGA. If that port is zero, act as if ``port_number`` =0.
                 - If zero, open a socket at a random  (OS-provided) port, and set the corresponding destination port in the FPGA.
                 - If non-zero, get a socket bound to the specified port. An exception will be raised if that port is already used by another program.
+            **kwargs: Forwarded to :class:`~pychfpga.common.raw_frame_receiver.RawFrameReceiver`
+                when creating the receiver (e.g. ``verbose``, ``ring_buffer_size``).
 
         Returns:
 
-            A PROBER or UCAP data receiver instance (RawFrameReceiver)
+            :class:`~pychfpga.common.raw_frame_receiver.RawFrameReceiver`
         """
+        fw = self.get_receiver_config()
 
         if not self._data_recv:
             pr = self.get_packet_receiver(port_number=port_number)
-            self._data_recv = self.ib[0].get_data_receiver(pr)
+            self._data_recv = RawFrameReceiver(pr, config=fw.raw, **kwargs)
+        else:
+            self._data_recv.update_config(fw.raw)
+            self._data_recv.current_row = 0
         return self._data_recv
 
     def start_data_capture(self, *args, sync=None, **kwargs):
@@ -1533,9 +1545,7 @@ class chFPGAArrayMethods(ArrayMethods):
             UCorrFrameReceiver instance
         """
 
-        def select_func(cr):
-            for b in self.ib:
-                b.CORR.select()
+        corr_config = self.ib[0].CORR.get_config()
 
         if not self._corr_recv:
             pr = self.get_packet_receiver(port_number=port_number)
@@ -3593,3 +3603,76 @@ class chFPGAArrayMethods(ArrayMethods):
             self.logger.warning(f'{self!r}: Stream IDs are not unique!')
 
         return stream_id_map
+
+    def get_receiver_config(self):
+        """Aggregate board receiver configs into one array-wide config.
+
+        Calls each board's ``get_receiver_config()`` and returns a single
+        :class:`~pychfpga.common.state.State` with the same structure as a
+        single-board result. Board ``raw.stream_ids`` are concatenated (must be
+        unique across the array); every other attribute must be identical on
+        all boards.
+
+        Returns:
+            State with ``raw`` and ``corr`` subtrees.
+
+        Raises:
+            RuntimeError: If the array has no boards.
+            ValueError: If ``stream_ids`` are not unique, or if any other
+                config attribute differs between boards.
+        """
+        boards = list(self.ib)
+        if not boards:
+            raise RuntimeError(
+                f'{self.fpga_array!r}: No boards available to build receiver config'
+            )
+
+        configs = [mb.get_receiver_config() for mb in boards]
+        all_stream_ids = []
+        for cfg in configs:
+            all_stream_ids.extend(int(sid) for sid in cfg.raw.stream_ids)
+
+        if len(all_stream_ids) != len(set(all_stream_ids)):
+            raise ValueError(
+                f'{self.fpga_array!r}: stream_ids are not unique across the array: '
+                f'{all_stream_ids}'
+            )
+
+        ref = configs[0]
+        ref_dict = ref.as_dict()
+        for mb, cfg in zip(boards[1:], configs[1:]):
+            diff = self._receiver_config_diff(ref_dict, cfg.as_dict())
+            if diff is not None:
+                raise ValueError(
+                    f'{self.fpga_array!r}: receiver config attribute {diff!r} differs '
+                    f'between boards {boards[0].get_id()} and {mb.get_id()}'
+                )
+
+        result = ref.deepcopy()
+        result.raw.stream_ids = tuple(all_stream_ids)
+        return result
+
+    @staticmethod
+    def _receiver_config_diff(left, right, path=''):
+        """Return dotted path of the first differing key, ignoring ``raw.stream_ids``."""
+        if path == 'raw.stream_ids':
+            return None
+
+        if isinstance(left, dict) and isinstance(right, dict):
+            keys = set(left) | set(right)
+            for key in sorted(keys, key=str):
+                child_path = f'{path}.{key}' if path else str(key)
+                if child_path == 'raw.stream_ids':
+                    continue
+                if key not in left or key not in right:
+                    return child_path
+                diff = chFPGAArrayMethods._receiver_config_diff(
+                    left[key], right[key], child_path
+                )
+                if diff is not None:
+                    return diff
+            return None
+
+        if not State._values_equal(left, right):
+            return path or '<root>'
+        return None
