@@ -133,6 +133,8 @@ class TCPipe:
     _UDP_DATA_PORT_REG = 2
     #: Deprecated alias for `_UDP_DATA_PORT_REG` (prefer :meth:`set_local_data_port_number`).
     CORE_REG_UDP_DATA_PORT = 2
+    #: Fixed board-side TCP data listen port (matches firmware ``DATA_TCP_DEFAULT_PORT``).
+    DEFAULT_TCP_DATA_PORT = 41002
 
     opened_sockets = {}
 

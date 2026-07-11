@@ -15,6 +15,7 @@ from pychfpga.common.array_methods import ArrayMethods
 from pychfpga.common.raw_frame_receiver import RawFrameReceiver
 from pychfpga.common.state import State
 from pychfpga.common.udp_packet_receiver import UDPPacketReceiver
+from pychfpga.common.tcp_packet_receiver import TCPPacketReceiver
 
 
 class chFPGAArrayMethods(ArrayMethods):
@@ -1464,31 +1465,80 @@ class chFPGAArrayMethods(ArrayMethods):
             b.set_data_socket(sock)
         return sock
 
+    def get_tcp_data_sockets(self, port_number=None, rcvbuf=8 * 1024 * 1024):
+        """Return TCP sockets connected to each board's data listen port.
 
-    def get_packet_receiver(self, port_number=None):
-        """ Returns an existing UDP packet receiver or create a new one if none has been created yet.
+        Delegates to each board's :meth:`~chFPGA.get_tcp_data_socket` (cached there).
+        The board listens on a fixed well-known port; no TCPipe register is programmed.
 
-        Parameters:
+        Parameters
+        ----------
+        port_number : int or None
+            Board listen port. ``None`` uses :attr:`TCPipe.DEFAULT_TCP_DATA_PORT`.
+        rcvbuf : int
+            ``SO_RCVBUF`` size so the kernel can absorb bursts between
+            ``receive_packets`` / process calls.
 
-            port_number (int): Specifies the port to use if a socket has not already been allocated.
+        Returns
+        -------
+        list[socket.socket]
+            One connected TCP socket per board in ``self.ib`` order.
+        """
+        return [
+            b.get_tcp_data_socket(port_number=port_number, rcvbuf=rcvbuf)
+            for b in self.ib
+        ]
+
+    def get_packet_receiver(self, port_number=None, *, tcp=False, rcvbuf=8 * 1024 * 1024):
+        """Return the shared packet receiver (UDP or TCP), creating it if needed.
+
+        Only one transport is active. If a receiver already exists, it must match
+        the requested ``tcp`` mode or a ``RuntimeError`` is raised.
+
+        Parameters
+        ----------
+        port_number : int or None
+            For UDP: 
                 - If ``None``, attempts to open a socket at the destination port currently programmed in the FPGA. If that port is zero, act as if ``port_number`` =0.
                 - If zero, open a socket at a random  (OS-provided) port, and set the corresponding destination port in the FPGA.
                 - If non-zero, get a socket bound to the specified port. An exception will be raised if that port is already used by another program.
+            For TCP: board listen port (``None`` = default).
+        tcp : bool
+            If True, create a :class:`~pychfpga.common.tcp_packet_receiver.TCPPacketReceiver`.
+            If False, create a :class:`~pychfpga.common.udp_packet_receiver.UDPPacketReceiver`.
+        rcvbuf : int
+            TCP ``SO_RCVBUF`` when ``tcp=True``.
 
-        Returns:
-
-            UDPPacketReceiver instance
+        Returns
+        -------
+        UDPPacketReceiver or TCPPacketReceiver
         """
-        if not self._packet_receiver:
+        want_tcp = bool(tcp)
+        if self._packet_receiver is not None:
+            have_tcp = isinstance(self._packet_receiver, TCPPacketReceiver)
+            if have_tcp != want_tcp:
+                have = "TCP" if have_tcp else "UDP"
+                want = "TCP" if want_tcp else "UDP"
+                raise RuntimeError(
+                    f"{self!r}: packet receiver is already {have}, cannot switch to {want}"
+                )
+            return self._packet_receiver
+
+        if want_tcp:
+            socks = self.get_tcp_data_sockets(port_number=port_number, rcvbuf=rcvbuf)
+            self._packet_receiver = TCPPacketReceiver(socks)
+        else:
             sock = self.get_data_socket(port_number=port_number)
-            self._packet_receiver = UDPPacketReceiver(sock) # ***todo: move packet receiver to utils (can be used by raw capture also)
+            self._packet_receiver = UDPPacketReceiver(sock)
         return self._packet_receiver
 
-    def get_data_receiver(self, port_number=None, **kwargs):
+    def get_data_receiver(self, port_number=None, tcp=False, **kwargs):
         """ Returns a raw data receiver for the whole array.
 
-        A UDP packet receiver and associated socket will be created if none already exist, otherwise the existing ones will be reused.
-        The correlator packet receiver and the raw data receiver share the same socket and UDP packet receiver.
+        A packet receiver and associated socket(s) will be created if none
+        already exist, otherwise the existing ones will be reused.
+        The correlator packet receiver and the raw data receiver share the same
+        packet receiver (UDP or TCP — not both).
 
         The receiver is configured from :meth:`get_receiver_config`, which
         aggregates board configs (concatenated ``stream_ids``, otherwise
@@ -1497,10 +1547,14 @@ class chFPGAArrayMethods(ArrayMethods):
 
         Parameters:
 
-            port_number (int): Specifies the port to use if a socket has not already been allocated for the UDP packet receiver.
-                - If ``None``, attempts to open a socket at the destination port currently programmed in the FPGA. If that port is zero, act as if ``port_number`` =0.
-                - If zero, open a socket at a random  (OS-provided) port, and set the corresponding destination port in the FPGA.
-                - If non-zero, get a socket bound to the specified port. An exception will be raised if that port is already used by another program.
+            port_number (int): Specifies the port to use if a socket has not already been allocated for the packet receiver.
+                - For UDP (``tcp=False``):
+                    - If ``None``, attempts to open a socket at the destination port currently programmed in the FPGA. If that port is zero, act as if ``port_number`` =0.
+                    - If zero, open a socket at a random (OS-provided) port, and set the corresponding destination port in the FPGA.
+                    - If non-zero, get a socket bound to the specified port. An exception will be raised if that port is already used by another program.
+                - For TCP (``tcp=True``): board listen port; ``None`` uses the default TCPipe TCP data port.
+            tcp (bool): If ``False`` (default), use UDP (:class:`~pychfpga.common.udp_packet_receiver.UDPPacketReceiver`).
+                If ``True``, use TCP (:class:`~pychfpga.common.tcp_packet_receiver.TCPPacketReceiver`).
             **kwargs: Forwarded to :class:`~pychfpga.common.raw_frame_receiver.RawFrameReceiver`
                 when creating the receiver (e.g. ``verbose``, ``ring_buffer_size``).
 
@@ -1511,9 +1565,11 @@ class chFPGAArrayMethods(ArrayMethods):
         fw = self.get_receiver_config()
 
         if not self._data_recv:
-            pr = self.get_packet_receiver(port_number=port_number)
+            pr = self.get_packet_receiver(port_number=port_number, tcp=tcp)
             self._data_recv = RawFrameReceiver(pr, config=fw.raw, **kwargs)
         else:
+            # Ensure an existing packet receiver matches the requested transport.
+            self.get_packet_receiver(port_number=port_number, tcp=tcp)
             self._data_recv.update_config(fw.raw)
             self._data_recv.current_row = 0
         return self._data_recv

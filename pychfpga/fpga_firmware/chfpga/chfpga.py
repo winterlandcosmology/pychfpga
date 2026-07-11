@@ -841,6 +841,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                     self.ANT_FMC_IS_PRESENT[chan_number] = True
 
             self._data_socket = None
+            self._tcp_data_socket = None
 
         except Exception as e:
             self.logger.error(f'****Exception during open!****** =  {e!r}')
@@ -3247,6 +3248,52 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             # store the socket in the main module so it will live persistently until the Python session is closed.
 
         self.set_data_socket(sock)
+        return sock
+
+    def get_tcp_data_socket(self, port_number=None, rcvbuf=8 * 1024 * 1024):
+        """Return a cached TCP socket connected to this board's fixed data listen port.
+
+        The board always listens on a well-known port (host-initiated); no TCPipe
+        register programming is required. ``get_data_receiver`` still uses UDP.
+
+        Parameters
+        ----------
+        port_number : int or None
+            Board listen port. ``None`` uses :attr:`TCPipe.DEFAULT_TCP_DATA_PORT`.
+        rcvbuf : int
+            ``SO_RCVBUF`` so the kernel can absorb bursts between process calls.
+
+        Returns
+        -------
+        socket.socket
+            Connected TCP stream socket.
+        """
+        from pychfpga.hardware.interfaces.tcpipe import TCPipe
+
+        if port_number is None:
+            port_number = TCPipe.DEFAULT_TCP_DATA_PORT
+        port_number = int(port_number)
+
+        host = self.mb.hostname
+        if not host:
+            raise RuntimeError(f"{self!r}: no hostname for TCP data connect")
+
+        opened = __main__.__dict__.setdefault("__opened_tcp_data_sockets__", {})
+        key = (host, port_number)
+        sock = opened.get(key)
+        if sock is not None:
+            self._tcp_data_socket = sock
+            self.logger.debug(f"{self!r}: Reusing TCP data socket {sock} for {host}:{port_number}")
+            return sock
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, int(rcvbuf))
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.logger.debug(f"{self!r}: Connecting TCP data socket to {host}:{port_number}")
+        sock.connect((host, port_number))
+        sock.settimeout(0.1)
+        opened[key] = sock
+        self._tcp_data_socket = sock
         return sock
 
     def set_data_socket(self, sock, force=False):
