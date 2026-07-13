@@ -3746,7 +3746,19 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             refresh_receiver_config = True
 
         if refresh_receiver_config:
-            self.get_receiver_config(channels=channels)
+            try:
+                self.get_receiver_config(channels=channels)
+            except ValueError as exc:
+                if (
+                    self.CAPTURE_TYPE != "PROBER"
+                    or not str(exc).startswith("Selected channels have different sources.")
+                ):
+                    raise
+                self.logger.debug(
+                    f"{self!r}: Skipping receiver config cache refresh after "
+                    f"scaler output mode update because PROBER channels have "
+                    f"mixed stale sources. ({exc})"
+                )
 
 
     def reset_scaler_overflow_flags(self, channels=None):
@@ -4445,8 +4457,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         """
         if self.CORR and offset != self.CORR.REQUIRES_OFFSET_BINARY_ENCODING:
-            self.logger.warning(f'Offset binary encoding is set to {bool(offset)}. The correlator required it to be {self.CORR.REQUIRES_OFFSET_BINARY_ENCODING}. Correlator output will not make sense.')
-            raise RuntimeError()
+            msg = f'Offset binary encoding is set to {bool(offset)}. The correlator requires it to be {self.CORR.REQUIRES_OFFSET_BINARY_ENCODING}. Correlator output will not make sense.'
+            self.logger.warning(msg)
+            raise RuntimeError(msg)
 
         if channels is None:
             channels = self.default_channels

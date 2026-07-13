@@ -223,7 +223,7 @@ def: &default  # defaults, referenced below
             fft_bypass : False
             fft_shift : 1367 # 0b10101010111->1367 (~4bit noise to ~3bit noise) 2^5 - 1 -> old, might be ideal.  2^10-1 safest, but add a bit of noise
             scaler_bypass : False
-            offset_binary_encoding : True
+            offset_binary_encoding : False
 
         raw_data_capture:
             capture_source: 'adc' # initial source. Can be changed dynamically during operations
@@ -267,6 +267,8 @@ def: &default  # defaults, referenced below
             #         period: 4
 
     raw_acq: &default_raw_acq
+        enable: True
+        no_ping: False  # ICE raw_acq needs ping/interface/MAC discovery.
         logging:
             dict_config:
                 formatters:
@@ -361,7 +363,7 @@ UAPISHKA:
             fft_bypass : False
             fft_shift : 1367 # 0b10101010111->1367 (~4bit noise to ~3bit noise) 2^5 - 1 -> old, might be ideal.  2^10-1 safest, but add a bit of noise
             scaler_bypass : False
-            offset_binary_encoding : True  # Must be True for compute_gains!
+            offset_binary_encoding : False  # UCORR requires twos-complement (ICE CORR used True)
 
 
         noise_injection:

@@ -215,12 +215,12 @@ class FPGAMaster(object):
 
 
     def _set_correlator_soft_integ_period(self, software_integration_period):
-        """Store software integration period on each board UCORR state for get_receiver_config()."""
+        """Store software integration period on each board UCORR config for get_receiver_config()."""
         soft = int(software_integration_period or 1)
         for ib in self.fpgas.ib:
             corr = getattr(getattr(ib, 'fpga', None), 'CORR', None)
-            if corr is not None and corr.state is not None:
-                corr.state.soft_integ_period = soft
+            if corr is not None and corr.config is not None:
+                corr.config.soft_integ_period = soft
 
     async def start_raw_acq_servers(self):
         """ Start raw data acquisition servers and set the FPGAs raw data transmit addresses.
@@ -343,6 +343,12 @@ class FPGAMaster(object):
             targets = {tuple(src_addr): target_addr for src_addr, target_addr in start_result['target_addr']}
             for ib in self.raw_acq_ibs[server_name]:
                     ip_addr, port, eth_addr = targets[(ib.hostname, ib.port)]
+                    if (getattr(ib, 'BSB_TRANSPORT', None) == getattr(ib, 'BSB_TRANSPORT_UDP', 'udp')
+                            and (not ip_addr or ip_addr == '0.0.0.0' or not eth_addr)):
+                        raise RuntimeError(
+                            f'{self!r}: raw_acq returned invalid UDP target address for board {ib.get_id()}: '
+                            f'{ip_addr}:{port}({eth_addr}). ICE/UDP raw_acq requires raw_acq.no_ping: False '
+                            f'so the receiver can discover the interface IP and MAC address.')
                     self.log.info(f'{self!r} Setting data transmission address of board {ib.get_id()} to {ip_addr}:{port}({eth_addr})')
                     await ib.set_udp_data_target_address_async(ip_addr, port, eth_addr)
         await self._sync_raw_acq_firmware_config()
@@ -1076,10 +1082,14 @@ class FPGAMaster(object):
         conf = self.config.fpga.firmware_correlator
         capture_folder = capture_folder or conf.hdf5_capture_folder or '.'
         capture_filename = capture_filename or conf.hdf5_capture_filename
-        capture_duration = capture_duration or conf.hdf5_capture_duration
-        capture_elements_per_file = capture_elements_per_file or conf.hdf5_capture_elements_per_file
-        capture_n_inputs = capture_n_inputs or conf.hdf5_capture_n_inputs
-        autocorr_only = autocorr_only or conf.autocorr_only
+        if capture_duration is None:
+            capture_duration = conf.hdf5_capture_duration
+        if capture_elements_per_file is None:
+            capture_elements_per_file = conf.hdf5_capture_elements_per_file
+        if capture_n_inputs is None:
+            capture_n_inputs = conf.hdf5_capture_n_inputs
+        if autocorr_only is None:
+            autocorr_only = conf.autocorr_only
         software_integration_period = conf.software_integration_period
 
         if not (conf.enable and capture_duration is not None):
