@@ -1,6 +1,8 @@
+import asyncio
 import logging
 
 import pytest
+from wtl.metrics import Metrics
 
 from pychfpga.fpga_firmware.chfpga.chfpga import chFPGA
 
@@ -25,6 +27,25 @@ class _FakeChannel:
 
 class _FakeCorr:
     REQUIRES_OFFSET_BINARY_ENCODING = False
+
+
+class _FakeCT:
+    def __init__(self, cb1, cb2):
+        self.CROSSBAR = cb1
+        self.CROSSBAR2 = cb2
+
+
+class _NoMetricsCrossbar:
+    pass
+
+
+class _MetricsCrossbar:
+    def __init__(self):
+        self.calls = []
+
+    async def get_metrics(self, reset=True):
+        self.calls.append(reset)
+        return Metrics()
 
 
 def _firmware(capture_type, receiver_exc):
@@ -78,3 +99,22 @@ def test_offset_binary_mismatch_raises_clear_error():
 
     with pytest.raises(RuntimeError, match="correlator requires it to be False"):
         fw.set_offset_binary_encoding(offset=True, channels=[0, 1])
+
+
+def test_crossbar_metrics_skips_crossbars_without_metrics(caplog):
+    fw = object.__new__(chFPGA)
+    fw.logger = logging.getLogger(__name__)
+    cb = _MetricsCrossbar()
+    fw.CT = _FakeCT(_NoMetricsCrossbar(), cb)
+    fw.is_open = lambda: True
+
+    async def clear_fpga_udp_errors():
+        return None
+
+    fw.clear_fpga_udp_errors = clear_fpga_udp_errors
+
+    with caplog.at_level(logging.ERROR):
+        asyncio.run(fw.get_crossbar_metrics_async(reset=False))
+
+    assert cb.calls == [False]
+    assert "Unhandled error while" not in caplog.text

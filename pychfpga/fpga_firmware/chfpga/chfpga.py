@@ -5337,7 +5337,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                     crossbars.append(self.CT.CROSSBAR3)
                 
                 for cb in crossbars:
-                    if cb:  # make sure the crossbar is in this firmware
+                    if cb and hasattr(cb, "get_metrics"):  # make sure the crossbar is in this firmware
                         metrics += await cb.get_metrics(reset=reset)
         except IOError as e:
             self.logger.error(f'{self!r}: Error getting FPGA crossbar metrics. Error is {e!r}\n\n{traceback.format_exc()}')

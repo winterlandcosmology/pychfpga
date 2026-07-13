@@ -1433,9 +1433,10 @@ class FPGAMaster(object):
 
         self.log.info("Synchronizing the array...")
         self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% This is the last SYNC %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-        if conf.fpga.sync_params.enable:
+        sync_params = conf.fpga.get('sync_params', {})
+        if sync_params.get('enable', False):
             # Use config params
-            ca.sync(**conf.fpga.sync_params)
+            ca.sync(**sync_params)
         else:
             # Use default params
             ca.sync()
@@ -2743,10 +2744,13 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             self.log.debug(f'{self!r}: Starting to gather a new set of ARM metrics')
             # print('************ Getting ARM Metrics!')
             try:
-                if self.fpga_master and self.fpga_master.fpgas:
+                if self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas:
                     self.metrics.add(self.fpga_master.gain_calc_metrics.pop()) # add whatever gain calc metrics we have
                     await self.fpga_master.fpgas.get_arm_metrics_async(self.metrics)
                     self.log.debug(f'{self!r}: Successfully got ARM metrics')
+                else:
+                    self.log.debug(
+                        f'{self!r}: We are not yet ready to scrape ARM metrics. Ignoring.')
             except Exception as e:
                 self.log.warning(
                     f'{self!r}: Error getting ARM metrics. '
