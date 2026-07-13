@@ -26,18 +26,17 @@ platforms = {
 
 class TestGain:
     SIM_DATA_DIR = Path(__file__).resolve().parent / 'casper_simulations' / 'sim_data' / 'ice'
-    RAMP_INPUT = SIM_DATA_DIR / 'inputs' / 'ramp.bin'
+    NOISE_INPUT = SIM_DATA_DIR / 'inputs' / 'noise.bin'
     FFT_FULL_CAPTURE_MODE = 'fft_full'
     FFT_SHIFT = 1984
     CHANNEL = 0
-    FULLRES_NCAP = 8
+    FULLRES_NCAP = 100
     SCALER_NCAP = 16
     ADC_NCAP = 4
     CAPTURE_PERIOD = 0.01
     FLOAT_GAIN_BITS = 16
     FOUR_BIT_OUTPUT_WIDTH = 4
     ADC_SIGNAL_MIN_FRACTION = 0.25
-    DIRECT_GAIN_SMOOTH_GAINS = False
     RMS_ATOL = 0.35
 
     def get_logger(self):
@@ -102,16 +101,16 @@ class TestGain:
         if any(chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
             pytest.skip("DirectGainCalc writes floating point gains; firmware is using complex gains")
 
-    def load_ramp_input(self):
-        if not self.RAMP_INPUT.exists():
-            raise FileNotFoundError(self.RAMP_INPUT)
+    def load_noise_input(self):
+        if not self.NOISE_INPUT.exists():
+            raise FileNotFoundError(self.NOISE_INPUT)
 
         adc_bits = int(getattr(self.board, 'ADC_BITS_PER_SAMPLE', self.data.INPUT_WIDTH))
         n_inputs = int(getattr(self.board, 'SAMPLES_PER_WORD', 0))
-        signal = InputSignal.from_binary(self.RAMP_INPUT, adc_bits=adc_bits, n_inputs=n_inputs)
+        signal = InputSignal.from_binary(self.NOISE_INPUT, adc_bits=adc_bits, n_inputs=n_inputs)
         if signal.data.size < self.data.NUM_SAMPLES:
             raise ValueError(
-                f"{self.RAMP_INPUT} contains {signal.data.size} samples, expected at least one "
+                f"{self.NOISE_INPUT} contains {signal.data.size} samples, expected at least one "
                 f"{self.data.NUM_SAMPLES}-sample ADC frame")
         return signal.data.T.ravel()[:self.data.NUM_SAMPLES].astype(np.int64, copy=False)
 
@@ -242,7 +241,6 @@ class TestGain:
             stream_ids=[stream_id],
             post_gain_bits=post_gain_bits,
             n_bins=self.data.NUM_BINS,
-            smooth_gains=self.DIRECT_GAIN_SMOOTH_GAINS,
         )
         calc.update_gains(np.array([stream_id]), rms[np.newaxis, :])
         filtered_gains, mask = calc.get_filtered_gains()
@@ -257,7 +255,6 @@ class TestGain:
         self.logger.debug(
             f"calculate_direct_gains: ch={ch} stream_id={stream_id} channel_id={channel_id} "
             f"target_rms={calc.target_rms} post_gain_bits={post_gain_bits} glog={glog} "
-            f"smooth_gains={calc.smooth_gains} "
             f"rms_median={float(np.median(rms[valid_window])):.6g} "
             f"gain_min={float(np.min(gain_vec[valid_window])):.6g} "
             f"gain_median={float(np.median(gain_vec[valid_window])):.6g} "
@@ -291,7 +288,9 @@ class TestGain:
         self.board.chan[ch].FFT.FFT_SHIFT = self.FFT_SHIFT
         self.board.chan[ch].FFT.reset_fft_overflow_count()
 
-    def capture_scaler_mode0(self, ch):
+    def capture_scaler_mode0(self, ch, ncap=None):
+        if ncap is None:
+            ncap = self.SCALER_NCAP
         self.board.start_data_capture(
             period=self.CAPTURE_PERIOD,
             channels=[ch],
@@ -302,7 +301,7 @@ class TestGain:
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
         receiver.flush()
         ts, data, count = receiver.read_raw_frames(
-            ncap=self.SCALER_NCAP,
+            ncap=ncap,
             source=1,
             chan_first=False,
         )
@@ -315,8 +314,8 @@ class TestGain:
     @pytest.mark.gain
     @pytest.mark.floating
     @pytest.mark.parametrize("ch", (0,))
-    def test_direct_gain_ramp_rms(self, ch, setup_gain):
-        funcgen_input = self.load_ramp_input()
+    def test_direct_gain_noise_rms(self, ch, setup_gain):
+        funcgen_input = self.load_noise_input()
         self.configure_fullres_capture(ch)
         fullres_spectra, fullres_overflows, fullres_shape = self.capture_fullres_fft(funcgen_input, ch)
         assert fullres_overflows == 0
@@ -329,11 +328,10 @@ class TestGain:
             scaler_spectra[:, valid_window].real.astype(np.float64)**2
             + scaler_spectra[:, valid_window].imag.astype(np.float64)**2)))
 
-        print("\nDirect gain ramp RMS")
-        print(f"input bin:          {self.RAMP_INPUT}")
+        print("\nDirect gain noise RMS")
+        print(f"input bin:          {self.NOISE_INPUT}")
         print(f"FFT_SHIFT:          {self.FFT_SHIFT}")
         print(f"post_gain_bits:     {post_gain_bits}")
-        print(f"smooth gains:       {self.DIRECT_GAIN_SMOOTH_GAINS}")
         print(f"target RMS:         {expected_rms:.6f}")
         print(f"observed RMS:       {observed_rms:.6f}")
         print(f"valid bins:         {int(np.count_nonzero(valid_window))}/{valid_window.size}")
@@ -372,7 +370,6 @@ class TestGain:
         print(f"ADC threshold:      {adc_threshold:.6f}")
         print(f"FFT_SHIFT:          {self.FFT_SHIFT}")
         print(f"post_gain_bits:     {post_gain_bits}")
-        print(f"smooth gains:       {self.DIRECT_GAIN_SMOOTH_GAINS}")
         print(f"target RMS:         {expected_rms:.6f}")
         print(f"observed RMS:       {observed_rms:.6f}")
         print(f"valid bins:         {int(np.count_nonzero(valid_window))}/{valid_window.size}")

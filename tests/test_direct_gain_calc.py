@@ -13,11 +13,82 @@ from pychfpga.calculate_gains import (
 )
 from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
 from pychfpga.common.state import State
+from pychfpga.fpga_master import FPGAMaster
 from pychfpga.raw_acq.fft_data_processor import FFTDataProcessor
 from pychfpga.raw_acq.raw_data_processor import _merge_fft_decoder_into_raw
 
 
 NBINS = GainCalc.NBINS
+
+
+class _DummyLog:
+    def info(self, *args, **kwargs):
+        pass
+
+
+class _GainDispatchDummy:
+    def __init__(self):
+        self.log = _DummyLog()
+        self.calls = []
+
+    async def compute_direct_gains(self, **kwargs):
+        self.calls.append(('direct', kwargs))
+        return 'direct-result'
+
+    async def compute_iterative_gains(self, **kwargs):
+        self.calls.append(('iterative', kwargs))
+        return 'iterative-result'
+
+
+def test_fpga_master_compute_gains_dispatches_direct_method():
+    dummy = _GainDispatchDummy()
+
+    result = asyncio.run(FPGAMaster.compute_gains(
+        dummy,
+        method='direct',
+        number_of_fft_averages=7,
+        number_of_gain_update_iterations=3,
+        post_gain_bits=36,
+    ))
+
+    assert result == 'direct-result'
+    assert dummy.calls[0][0] == 'direct'
+    assert dummy.calls[0][1]['number_of_fft_averages'] == 7
+    assert dummy.calls[0][1]['post_gain_bits'] == 36
+
+
+def test_fpga_master_compute_gains_defaults_to_direct_method():
+    dummy = _GainDispatchDummy()
+
+    result = asyncio.run(FPGAMaster.compute_gains(dummy))
+
+    assert result == 'direct-result'
+    assert dummy.calls[0][0] == 'direct'
+
+
+def test_fpga_master_compute_gains_dispatches_iterative_method():
+    dummy = _GainDispatchDummy()
+
+    result = asyncio.run(FPGAMaster.compute_gains(
+        dummy,
+        method='iterative',
+        number_of_fft_averages=7,
+        number_of_gain_update_iterations=3,
+        post_gain_bits=36,
+    ))
+
+    assert result == 'iterative-result'
+    assert dummy.calls[0][0] == 'iterative'
+    assert dummy.calls[0][1]['number_of_fft_averages'] == 7
+    assert dummy.calls[0][1]['number_of_gain_update_iterations'] == 3
+    assert 'post_gain_bits' not in dummy.calls[0][1]
+
+
+def test_fpga_master_compute_gains_rejects_unknown_method():
+    dummy = _GainDispatchDummy()
+
+    with pytest.raises(ValueError, match='Unknown gain calculation method'):
+        asyncio.run(FPGAMaster.compute_gains(dummy, method='not-a-method'))
 
 
 @pytest.fixture
@@ -92,7 +163,7 @@ def test_direct_gain_filtered_gains_preserve_large_float_scale():
     gc = DirectGainCalc(
         channel_ids=[(0, 1, 0)],
         stream_ids=[0],
-        post_gain_bits=36,
+        post_gain_bits=20,
         n_bins=NBINS,
     )
     rms = np.full((1, NBINS), np.sqrt(5), dtype=np.float32)
@@ -119,42 +190,46 @@ def test_fourier_filter_returns_real_part_as_complex_without_int_truncation():
     np.testing.assert_array_equal(filtered.imag, np.zeros_like(filtered.imag))
 
 
-def test_direct_gain_can_disable_smoothing():
+def test_direct_gain_always_uses_legacy_smoothing():
     n_bins = 32
     gc = DirectGainCalc(
         channel_ids=[(0, 1, 0)],
         stream_ids=[0],
         post_gain_bits=10,
         n_bins=n_bins,
-        smooth_gains=False,
     )
-    rms = np.linspace(500.0, 1500.0, n_bins, dtype=np.float32)[np.newaxis, :]
+    rms = np.linspace(500.0, 1500.0, n_bins, dtype=np.float32)
+    rms[6] = 10000.0
+    rms[18] = 300.0
+    rms = rms[np.newaxis, :]
     gc.update_gains(np.array([0]), rms)
 
     filtered, mask = gc.get_filtered_gains()
     gain_vec, glog = filtered[(0, 1, 0)]
-    valid = ~np.asarray(mask[0], dtype=bool)
-    valid[0] = False
 
     assert glog == -1
-    np.testing.assert_allclose(gain_vec[valid], gc.gains[0, valid], rtol=0, atol=0)
+    assert mask.shape == (1, n_bins)
+    assert np.all(np.isfinite(gain_vec))
+    assert np.all(gain_vec > 0)
+    assert not np.allclose(gain_vec, gc.gains[0], rtol=0, atol=0)
+    _ensure_scaler_float_encodable(gain_vec)
 
 
-def test_direct_gain_no_smoothing_still_sanitizes_bad_bins():
+def test_direct_gain_filtering_still_sanitizes_bad_bins():
     gc = DirectGainCalc(
         channel_ids=[(0, 1, 0)],
         stream_ids=[0],
         n_bins=16,
-        smooth_gains=False,
     )
     rms = np.zeros((1, 16), dtype=np.float32)
     rms[0, 5:10] = 500.0
     gc.update_gains(np.array([0]), rms)
 
-    filtered, _ = gc.get_filtered_gains()
+    filtered, mask = gc.get_filtered_gains()
     filt_vec, glog = filtered[(0, 1, 0)]
 
     assert glog == -1
+    assert mask.shape == (1, 16)
     assert np.all(np.isfinite(filt_vec))
     assert np.all(filt_vec > 0)
     _ensure_scaler_float_encodable(filt_vec)
