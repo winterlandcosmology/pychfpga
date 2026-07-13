@@ -287,6 +287,19 @@ class _FakeCorrServer:
         self.calls.append(kwargs)
 
 
+class _FakeStoppedRawHDF5Server:
+    async def stop_raw_hdf5(self):
+        raise RuntimeError("HDF5 dataWriter is not running. Cannot stop it.")
+
+
+class _FakeRawHDF5Server:
+    def __init__(self):
+        self.stop_calls = 0
+
+    async def stop_raw_hdf5(self):
+        self.stop_calls += 1
+
+
 def test_corr_hdf5_capture_preserves_explicit_falsey_overrides():
     server = _FakeCorrServer()
     fm = fpga_master_mod.FPGAMaster()
@@ -325,3 +338,48 @@ def test_corr_hdf5_capture_preserves_explicit_falsey_overrides():
     assert call["capture_n_inputs"] == []
     assert call["autocorr_only"] is False
     assert call["elements_per_file"] == 0
+
+
+def test_stop_allows_missing_iceboard_callback(monkeypatch):
+    monkeypatch.setattr(fpga_master_mod, "reap_cached_sockets", lambda: None)
+    fm = fpga_master_mod.FPGAMaster()
+    fm.state = "on"
+    fm.logging_handlers = {}
+    fm.raw_acq = {}
+    fm.gain_hdf5 = None
+
+    asyncio.run(fm.stop())
+
+    assert fm.state == "off"
+
+
+def test_stop_allows_raw_hdf5_not_running(monkeypatch):
+    monkeypatch.setattr(fpga_master_mod, "reap_cached_sockets", lambda: None)
+    fm = fpga_master_mod.FPGAMaster()
+    fm.state = "on"
+    fm.logging_handlers = {}
+    fm.raw_acq = {"raw_acq0": _FakeStoppedRawHDF5Server()}
+    fm.gain_hdf5 = None
+
+    asyncio.run(fm.stop())
+
+    assert fm.state == "off"
+    assert fm.raw_acq == {}
+
+
+def test_stop_skips_raw_hdf5_stop_when_config_duration_is_none(monkeypatch):
+    monkeypatch.setattr(fpga_master_mod, "reap_cached_sockets", lambda: None)
+    server = _FakeRawHDF5Server()
+    fm = fpga_master_mod.FPGAMaster()
+    fm.state = "on"
+    fm.logging_handlers = {}
+    fm.raw_acq = {"raw_acq0": server}
+    fm.gain_hdf5 = None
+    fm.config = NameSpace(
+        {"raw_acq": {"common_config": {"hdf5_capture_duration": None}}}
+    )
+
+    asyncio.run(fm.stop())
+
+    assert fm.state == "off"
+    assert server.stop_calls == 0

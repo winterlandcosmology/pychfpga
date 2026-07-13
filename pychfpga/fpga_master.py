@@ -1687,7 +1687,8 @@ class FPGAMaster(object):
         if self.state == 'on':
             self.state = 'stopping'
             self.log.info("stopping acquisition")
-            self.iceboard_cb.stop()
+            if hasattr(self, 'iceboard_cb'):
+                self.iceboard_cb.stop()
             log.stop_logging(self.logging_handlers) # remove the handlers that were created by setup_logging()
             reap_cached_sockets()
 
@@ -1698,9 +1699,20 @@ class FPGAMaster(object):
                 self.gain_hdf5 = None
 
             # Stop writing raw_acq to hdf5
+            stop_raw_hdf5 = True
+            if self.config is not None:
+                stop_raw_hdf5 = self.config.raw_acq.common_config.get('hdf5_capture_duration', None) is not None
             while self.raw_acq:
                 server_name, server = self.raw_acq.popitem()
-                msg = await server.stop_raw_hdf5()
+                if stop_raw_hdf5:
+                    try:
+                        msg = await server.stop_raw_hdf5()
+                    except RuntimeError as e:
+                        if 'HDF5 dataWriter is not running. Cannot stop it.' not in str(e):
+                            raise
+                        msg = str(e)
+                else:
+                    msg = 'raw hdf5 capture was not started'
                 self.log.info(f'{self!r}: stopping hdf5 writing for {server_name}: {msg}')
 
             self.start_time = None
