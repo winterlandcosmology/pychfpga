@@ -331,7 +331,17 @@ class RawAcqReceiver(object):
             src_if_addrs = {}
             for port_info in self.ports:
                 for src in port_info["sources"]:
-                    source_key, _ping_addr = self._parse_source(src, self.ping_port)
+                    if isinstance(src, dict):
+                        host = src["host"]
+                        key_port = int(src.get("port", src.get("key_port", 0)))
+                    else:
+                        src = list(src)
+                        if len(src) < 2:
+                            raise ValueError(
+                                f"source entry must be [host, key_port] or [host, key_port, ping_port]: {src!r}")
+                        host = src[0]
+                        key_port = int(src[1])
+                    source_key = (host, key_port)
                     src_if_addrs[source_key] = ('0.0.0.0', 0)
         else:
             src_if_addrs = await self.ping_sources_async()
@@ -375,9 +385,20 @@ class RawAcqReceiver(object):
             ports = [(port_info['port'] if port_info['port'] else (f'_random_port_{i}'))
                      for i, _ in enumerate(port_info['sources'])]
             for port, src in zip(ports, port_info['sources']):
-                socket_sources.setdefault(port, []).append(src)
+                if isinstance(src, dict):
+                    host = src["host"]
+                    key_port = int(src.get("port", src.get("key_port", 0)))
+                else:
+                    src = list(src)
+                    if len(src) < 2:
+                        raise ValueError(
+                            f"source entry must be [host, key_port] or [host, key_port, ping_port]: {src!r}")
+                    host = src[0]
+                    key_port = int(src[1])
+                source_key = (host, key_port)
+                socket_sources.setdefault(port, []).append(source_key)
                 # get the set of IPs for this port, or create one if there is none yet
-                if_ip = '0.0.0.0' if self.listen_to_all_interfaces else src_if_addrs[tuple(src)][0]
+                if_ip = '0.0.0.0' if self.listen_to_all_interfaces else src_if_addrs[source_key][0]
                 # Check if we have multiple interfaces associated with specified or named ports
                 if port in socket_if_ip and socket_if_ip[port] != if_ip:
                     raise RuntimeError(
@@ -426,11 +447,11 @@ class RawAcqReceiver(object):
         dest_ifs = []
         for port_name, sources in socket_sources.items():
             dest_port = actual_socket_port[port_name]
-            for src in sources:
-                dest_if_ip = src_if_addrs[tuple(src)][0]
+            for source_key in sources:
+                dest_if_ip = src_if_addrs[source_key][0]
                 dest_mac = mac[dest_if_ip]
                 dest = (dest_if_ip, dest_port, dest_mac)
-                dest_ifs.append((tuple(src), dest))
+                dest_ifs.append((source_key, dest))
 
         result = dict(
             status='started',
@@ -488,32 +509,6 @@ class RawAcqReceiver(object):
 
         return if_addr
 
-    @staticmethod
-    def _parse_source(src, default_ping_port=DEFAULT_PING_PORT):
-        """Return ``(source_key, ping_addr)`` for a port source entry.
-
-        ``source_key`` is ``(host, port)`` used in ``target_addr`` and must match the
-        FPGA/iceboard identity expected by ``fpga_master`` (often the board UDP source port).
-
-        ``ping_addr`` is ``(host, tcp_port)`` for switch MAC learning. CRS boards use TCP
-        echo on port 7; do not use the ephemeral UDP source port (e.g. 62510) for ping.
-
-        Accepted forms: ``[host, key_port]``, ``[host, key_port, ping_port]``, or a dict
-        with ``host``, ``port``/``key_port``, and optional ``ping_port``.
-        """
-        if isinstance(src, dict):
-            host = src["host"]
-            key_port = int(src.get("port", src.get("key_port", 0)))
-            ping_port = int(src.get("ping_port", default_ping_port))
-        else:
-            src = list(src)
-            if len(src) < 2:
-                raise ValueError(f"source entry must be [host, key_port] or [host, key_port, ping_port]: {src!r}")
-            host = src[0]
-            key_port = int(src[1])
-            ping_port = int(src[2]) if len(src) > 2 else int(default_ping_port)
-        return (host, key_port), (host, ping_port)
-
     async def ping_sources_async(self):
         if not self.ports:
             return None
@@ -524,7 +519,20 @@ class RawAcqReceiver(object):
         ping_addrs = []
         for port_info in self.ports:
             for src in port_info["sources"]:
-                source_key, ping_addr = self._parse_source(src, self.ping_port)
+                if isinstance(src, dict):
+                    host = src["host"]
+                    key_port = int(src.get("port", src.get("key_port", 0)))
+                    ping_port = int(src.get("ping_port", self.ping_port))
+                else:
+                    src = list(src)
+                    if len(src) < 2:
+                        raise ValueError(
+                            f"source entry must be [host, key_port] or [host, key_port, ping_port]: {src!r}")
+                    host = src[0]
+                    key_port = int(src[1])
+                    ping_port = int(src[2]) if len(src) > 2 else int(self.ping_port)
+                source_key = (host, key_port)
+                ping_addr = (host, ping_port)
                 source_keys.append(source_key)
                 ping_addrs.append(ping_addr)
         ping_results = await asyncio.gather(*[self._ping_async(addr) for addr in ping_addrs])
@@ -851,4 +859,3 @@ class RawAcqReceiver(object):
         }
         fields.update(extra_fields)
         return os.path.expanduser(path.format(**fields) % fields)
-

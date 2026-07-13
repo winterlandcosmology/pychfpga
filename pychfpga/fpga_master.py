@@ -313,11 +313,20 @@ class FPGAMaster(object):
                     for ib in port_entry.iceboards:
                         (crate, slot) = ib.get_id(default_crate=0, default_slot=0)
                         port_id = 42400 + 100 * crate + slot
-                        recv_ports[server_name].append(dict(port=port_id, sources=[(ib.hostname, ib.port)]))
+                        if getattr(ib, 'BSB_TRANSPORT', None) == getattr(ib, 'BSB_TRANSPORT_UDP', 'udp'):
+                            sources = [(ib.hostname, ib.port, ib.port)]
+                        else:
+                            sources = [(ib.hostname, ib.port)]
+                        recv_ports[server_name].append(dict(port=port_id, sources=sources))
                 else:
                     # Port number is non-zero, so we ask the receiver to use this exact port
                     port_id = port_entry.port or 0
-                    src_addresses = [(ib.hostname, ib.port) for ib in port_entry.iceboards]
+                    src_addresses = []
+                    for ib in port_entry.iceboards:
+                        if getattr(ib, 'BSB_TRANSPORT', None) == getattr(ib, 'BSB_TRANSPORT_UDP', 'udp'):
+                            src_addresses.append((ib.hostname, ib.port, ib.port))
+                        else:
+                            src_addresses.append((ib.hostname, ib.port))
                     recv_ports[server_name].append(dict(port=port_id, sources=src_addresses))
 
 
