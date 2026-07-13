@@ -278,6 +278,12 @@ class FPGAMaster(object):
                 for ib in ibs:
                     self.raw_acq_stream_ids[server_name].extend(ib.get_stream_ids())
 
+        capture_source = self.config.fpga.raw_data_capture.capture_source
+        for ibs in self.raw_acq_ibs.values():
+            for ib in ibs:
+                if getattr(getattr(ib, 'fpga', None), 'CAPTURE_TYPE', None) == 'PROBER':
+                    ib.set_data_capture(channels=ib.get_channels(), source=capture_source)
+
         # Start each RawAcq server with a port for each assigned iceboard. For each port, we provide
         # the address of the (only) source FPGA board. The server will ping this address back to
         # set-up the switches routing tables and figure out on which interface the data will be

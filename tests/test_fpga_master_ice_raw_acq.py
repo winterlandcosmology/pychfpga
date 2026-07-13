@@ -59,17 +59,30 @@ class _FakeBoard:
     BSB_TRANSPORT_UDP = "udp"
     BSB_TRANSPORT_TCPIPE = "tcpipe"
 
-    def __init__(self, transport):
+    def __init__(self, transport, capture_type=None):
         self.hostname = "fpga.example"
         self.port = 80
         self.BSB_TRANSPORT = transport
+        self.CAPTURE_TYPE = capture_type
         self.fpga = self
         self.target_addr = None
+        self.capture_source = "mixed"
+        self.set_data_capture_calls = []
 
-    def get_stream_ids(self):
-        return [10]
+    def get_channels(self):
+        return [0, 1]
+
+    def get_stream_ids(self, channels=None):
+        channels = channels or self.get_channels()
+        return [10 + ch for ch in channels]
+
+    def set_data_capture(self, channels=None, source="adc"):
+        self.set_data_capture_calls.append((channels, source))
+        self.capture_source = source
 
     def get_receiver_config(self):
+        if self.CAPTURE_TYPE == "PROBER" and self.capture_source == "mixed":
+            raise ValueError("Selected channels have different sources. Use separate receivers.")
         return _FakeReceiverConfig()
 
     def get_id(self, default_crate=0, default_slot=0):
@@ -108,7 +121,12 @@ def _master_with_board(board):
                     "metrics_refresh_time": 1,
                     "adc_rms_refresh_count": 1,
                 },
-            }
+            },
+            "fpga": {
+                "raw_data_capture": {
+                    "capture_source": "adc",
+                },
+            },
         }
     )
     fm.fpgas = _FakeFPGAs(board)
@@ -160,6 +178,34 @@ def test_tcpipe_raw_acq_allows_no_ping_target(monkeypatch):
     asyncio.run(fm.start_raw_acq_servers())
 
     assert board.target_addr == ("0.0.0.0", 54322, None)
+
+
+def test_prober_raw_acq_normalizes_capture_source_before_config_snapshot(monkeypatch):
+    board = _FakeBoard("tcpipe", capture_type="PROBER")
+    _FakeRawAcqClient.target_addr = [
+        ((board.hostname, board.port), ("0.0.0.0", 54322, None))
+    ]
+    monkeypatch.setattr(fpga_master_mod, "RawAcqAsyncRESTClient", _FakeRawAcqClient)
+
+    fm = _master_with_board(board)
+
+    asyncio.run(fm.start_raw_acq_servers())
+
+    assert board.set_data_capture_calls == [([0, 1], "adc")]
+
+
+def test_non_prober_raw_acq_does_not_normalize_capture_source(monkeypatch):
+    board = _FakeBoard("tcpipe", capture_type="UCAP")
+    _FakeRawAcqClient.target_addr = [
+        ((board.hostname, board.port), ("0.0.0.0", 54322, None))
+    ]
+    monkeypatch.setattr(fpga_master_mod, "RawAcqAsyncRESTClient", _FakeRawAcqClient)
+
+    fm = _master_with_board(board)
+
+    asyncio.run(fm.start_raw_acq_servers())
+
+    assert board.set_data_capture_calls == []
 
 
 class _FakeCorrServer:
