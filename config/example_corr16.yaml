@@ -243,13 +243,13 @@ def: &default  # defaults, referenced below
 
         compute_gains:
             enable: True # False
+            method: direct
             save_gains: True
             targets: # List of (crate,slot) tuples for which fains will be computed
               - ['*']
             capture_rate: 15
             number_of_fft_averages: 100
             number_of_gain_update_iterations: 20
-            smooth_gains: True
             initial_gains: []
             # noise_injection : # noise injection parametrs used for gain calculations
             #     cyl0.1: # cylinder noise source (name is arbitrary)
@@ -386,6 +386,7 @@ EXAMPLE:
 
         compute_gains:
             enable: True
+            method: direct
             targets: # List of (crate,slot) tuples for which fains will be computed
               - ['*']
             initial_gains:
@@ -413,7 +414,6 @@ EXAMPLE:
               # 16: 335.544 ms, 3 fps, delay <=640, tmux <= 42
             number_of_fft_averages: 100
             number_of_gain_update_iterations: 30
-            smooth_gains: True
 
         firmware_correlator: # use only when mode=`corr16`
             # Static parameters - set once at initialization

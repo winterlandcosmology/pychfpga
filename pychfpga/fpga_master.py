@@ -524,11 +524,20 @@ class FPGAMaster(object):
                             initial_gains=[('*', [1.0, 22])],
                             scaler_cap_data_type='fft_2x',
                             post_gain_bits=44,
-                            target_rms=None,
-                            smooth_gains=True):
+                            target_rms=None):
         """Compute digital gains using the direct or legacy iterative method."""
+        method = str(method).lower()
+        if method not in ('direct', 'iterative'):
+            raise ValueError(
+                f"Unknown gain calculation method {method!r}; expected "
+                "'direct' or 'iterative'")
         if not enable:
             return
+        self.log.info(
+            f'{self!r}: *** Gain calculator : selected method={method} '
+            f'number_of_fft_averages={number_of_fft_averages} '
+            f'number_of_gain_update_iterations={number_of_gain_update_iterations} '
+            f'target_rms={target_rms} post_gain_bits={post_gain_bits}')
         if method == 'iterative':
             return await self.compute_iterative_gains(
                 targets=targets,
@@ -547,8 +556,7 @@ class FPGAMaster(object):
             number_of_fft_averages=number_of_fft_averages,
             scaler_cap_data_type=scaler_cap_data_type,
             post_gain_bits=post_gain_bits,
-            target_rms=target_rms,
-            smooth_gains=smooth_gains)
+            target_rms=target_rms)
 
     async def compute_direct_gains(self,
                                    targets=None,
@@ -558,8 +566,7 @@ class FPGAMaster(object):
                                    number_of_fft_averages=100,
                                    scaler_cap_data_type='fft_2x',
                                    post_gain_bits=44,
-                                   target_rms=None,
-                                   smooth_gains=True):
+                                   target_rms=None):
         """Compute float digital gains in one shot from full-resolution FFT RMS."""
         ib_chans = self.fpgas.get_iceboards(targets, lane_type='chan').items()
         if not ib_chans:
@@ -593,8 +600,11 @@ class FPGAMaster(object):
             target_rms = 1.5 * np.sqrt(2)
 
         self.log.info(
-            f'{self!r}: *** Gain calculator : direct gain smoothing '
-            f'{"enabled" if smooth_gains else "disabled"}')
+            f'{self!r}: *** Gain calculator : direct settings '
+            f'number_of_fft_averages={number_of_fft_averages} '
+            f'target_rms={target_rms} post_gain_bits={post_gain_bits} '
+            f'scaler_cap_data_type={scaler_cap_data_type} '
+            f'smoothing=legacy_hybrid')
 
         wait_time = min(
             2.56e-6 * 2**(capture_rate + 1) * number_of_fft_averages / 2, 1.0)
@@ -608,8 +618,7 @@ class FPGAMaster(object):
                 stream_ids=stream_ids,
                 target_rms=target_rms,
                 post_gain_bits=post_gain_bits,
-                n_bins=n_bins,
-                smooth_gains=smooth_gains)
+                n_bins=n_bins)
             await server.start_fft_rms(
                 stream_ids=stream_ids,
                 target_gain_bank=0,
@@ -745,6 +754,11 @@ class FPGAMaster(object):
         self.log.info(
             f'{self!r}: *** Gain calculator : Starting compute_gains() '
             f'on the following channels: {channels}')
+        self.log.info(
+            f'{self!r}: *** Gain calculator : iterative settings '
+            f'number_of_fft_averages={number_of_fft_averages} '
+            f'number_of_gain_update_iterations={number_of_gain_update_iterations} '
+            f'weight={weight}')
 
         # Set the source and data capture rate for target channels
         await self.set_fpga_data_capture(targets=targets,

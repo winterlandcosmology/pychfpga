@@ -243,6 +243,7 @@ def: &default  # defaults, referenced below
 
         compute_gains:
             enable: True # False
+            method: direct
             save_gains: True
             targets: # List of (crate,slot) tuples for which fains will be computed
               - ['*']
@@ -394,6 +395,7 @@ UAPISHKA:
 
         compute_gains:
             enable: True
+            method: direct
             targets: # List of (crate,slot) tuples for which fains will be computed
               - ['*']
             initial_gains:

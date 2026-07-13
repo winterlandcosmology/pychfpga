@@ -600,8 +600,7 @@ class DirectGainCalc(GainCalc):
             stream_ids,
             target_rms=1.5 * np.sqrt(2),
             post_gain_bits=44,
-            n_bins=None,
-            smooth_gains=True):
+            n_bins=None):
         self.log = log.get_logger(self)
         self.channel_ids = channel_ids
         self.stream_ids = stream_ids
@@ -610,7 +609,6 @@ class DirectGainCalc(GainCalc):
         self.target_rms = target_rms
         self.post_gain_bits = post_gain_bits
         self.target_full = float(target_rms) * 2.0**post_gain_bits
-        self.smooth_gains = bool(smooth_gains)
         self.n_bins = int(n_bins) if n_bins is not None else None
         # Linear floating-point gain table (natural frequency bin order)
         self.gains = None
@@ -656,30 +654,21 @@ class DirectGainCalc(GainCalc):
         }
 
     def get_filtered_gains(self, ix=None):
-        """Return RFI-filtered float gains and a per-bin mask."""
+        """Return float gains and a per-bin mask."""
         if ix is None:
             ix = np.arange(self.nchan)
 
         ix_done = ix[self.done[ix]]
         signal = self.gains[ix_done].astype(np.float64)
-        filtered_masked = self.iterative_poly_filter(signal)
-        in_arr = signal.copy()
-        in_arr[filtered_masked.mask] = filtered_masked[filtered_masked.mask]
-        if self.smooth_gains:
-            # Direct gains can span many orders of magnitude for sparse spectra.
-            # Smooth multiplicative gain structure in log space; linear-domain FFT
-            # filtering rings badly and can overdrive the 4-bit scaler output.
-            filtered_log = self.fourier_filter(np.log(in_arr), num_components=50)
-            filtered = np.exp(np.asarray(filtered_log.real, dtype=np.float64))
-            np.floor(filtered, out=filtered)
-        else:
-            filtered = in_arr
+        filtered_masked = self.filter_gains(signal, filter_type='hybrid', num_components=50)
+        filtered = np.asarray(filtered_masked.real, dtype=np.float64)
+        mask = np.ma.getmaskarray(filtered_masked)
         filtered = _sanitize_float_gains(filtered)
         gains = {
             tuple(self.channel_ids[j]): (filtered[i].astype(np.float64), -1)
             for i, j in enumerate(ix_done)
         }
-        return gains, filtered_masked.mask
+        return gains, mask
 
     def update_gains(self, stream_ids, rms):
         """Compute final float gains from one RMS measurement per channel."""
