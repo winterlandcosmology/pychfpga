@@ -511,6 +511,15 @@ class FPGAMaster(object):
                 continue
             fw = firmware_config_for_rest(
                 ibs[0].fpga.get_receiver_config().as_dict())
+            raw = fw.get('raw', {})
+            caps = raw.get('capture_format') or []
+            fft_format = caps[1] if len(caps) > 1 else None
+            self.log.info(
+                f'{self!r}: Pushing raw-acq decoder to {server_name}: '
+                f'source={raw.get("source")}, '
+                f'frames_per_burst={raw.get("frames_per_burst")}, '
+                f'packets_per_logical_frame={raw.get("packets_per_logical_frame")}, '
+                f'fft_format={fft_format}')
             tasks.append(server.update_config(fw))
         if tasks:
             await asyncio.gather(*tasks)

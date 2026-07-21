@@ -81,7 +81,13 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
         return result
 
     async def update_config(self, config):
-        return await self.post('update-config', **config)
+        self.log.info(
+            f'{self!r}: sending firmware config update with keys '
+            f'{list(config.keys())}')
+        # AsyncRESTClient.post() reserves the keyword ``raw`` for selecting an
+        # undecoded HTTP response. Keep the firmware raw section inside an
+        # explicit envelope so it cannot be consumed as that transport flag.
+        return await self.post('update-config', config=config)
 
     async def get_packets(self):
         data = await self.get('get-packets')
