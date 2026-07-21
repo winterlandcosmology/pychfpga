@@ -21,8 +21,8 @@ def load_config(path, name):
 @pytest.mark.parametrize(
     "path,name",
     [
+        ("config/config_icebox.yaml", "ICEBOX"),
         ("config/example_corr16.yaml", "EXAMPLE"),
-        ("config/config_dlite.yaml", "UAPISHKA"),
         ("config/config_test.yaml", "TEST"),
     ],
 )
