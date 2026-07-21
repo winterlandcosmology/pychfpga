@@ -835,7 +835,9 @@ class FPGAMaster(object):
                 channel_ids=channel_ids,
                 stream_ids=stream_ids,
                 target=target,
-                target_shift=[target_shifts[tuple(cid)] for cid in channel_ids])
+                target_shift=[target_shifts[tuple(cid)] for cid in channel_ids],
+                # TEMP DEBUG: keep gain-calculation plots beside this run's logs.
+                debug_plot_dir=getattr(self, 'run_folder', None))
             await server.start_fft_rms(
                 stream_ids=stream_ids,
                 target_gain_bank=0,

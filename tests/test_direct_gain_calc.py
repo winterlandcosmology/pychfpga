@@ -856,6 +856,26 @@ def test_direct_gain_formula_uses_rms_and_target_shift():
     assert not mask.any()
 
 
+def test_direct_gain_debug_plot_is_saved(tmp_path):
+    gc = DirectGainCalc(
+        channel_ids=[(0, 1, 0)],
+        stream_ids=[10],
+        target=2.0,
+        target_shift=36,
+        n_bins=4,
+        debug_plot_dir=tmp_path,
+    )
+
+    gc.update_gains(
+        np.array([10]),
+        np.array([[100.0, 200.0, 400.0, 800.0]]),
+    )
+
+    plots = list(tmp_path.glob('direct_gain_debug_streams_*.png'))
+    assert len(plots) == 1
+    assert plots[0].stat().st_size > 0
+
+
 def test_direct_gain_supports_per_channel_target_shift():
     gc = DirectGainCalc(
         channel_ids=[(0, 1, 0), (0, 1, 1)],
