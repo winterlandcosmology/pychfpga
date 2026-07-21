@@ -200,6 +200,7 @@ class FPGAMaster(object):
 
         self.gain_calc_metrics = Metrics()
         self.gain_hdf5 = None
+        self._gain_operation_lock = asyncio.Lock()
 
 
     def __repr__(self):
@@ -911,224 +912,106 @@ class FPGAMaster(object):
             self.log.info(f'{self!r}: *** Gain calculator : saving gains')
             await self.save_gains(bank=0)
 
-    async def compute_iterative_gains(self,
-                     targets=None,
-                     capture_rate=23,
-                     save_gains=False,
-                     enable=True,
-                     noise_injection=None,
-                     number_of_fft_averages=100,
-                     number_of_gain_update_iterations=20,
-                     weight=0.2,
-                     initial_gains=[ ('*', [1.0, 22])]):
-        """
-        Perform the iterative process of computing the optimal digital gains on the FPGA to acheive the target RMS on specified target channels.
-
-        Parameters:
-
-            targets: list of tuples (or dict) describing the (crate, board,
-                channel) (or {crate:c, board:b, channel:ch}) whose gains needs
-                to be recomputed. Missing elements, `None` or  ``"*"`` is treated
-                as a wildcard.
-
-            capture_rate (int): Sets how fast the data is to be temporarily
-                transmitted and captured for the selected channel. This sets
-                the number of frames between captures, which is a power of 2
-                set by ``Nframes=2**(capture_rate+1)``. Independently of this,
-                the rate cannot be slower than the promary capture rate set at
-                FPGA initialization.
-
-            enable (bool): if False, nothing is done.
-
-            noise_injection: noise injection parameters to be set for these
-                gains computations. If it evaluates to False, noise injection
-                parameters are not set. Note that multiple channels might be
-                affected by this, not just the sleected channels.
-
-            number_of_fft_averages (int): Number of FFT frames that will be
-                captured and averaged before returning the averages spectrum
-                that will be used to perform a gain update iteration. Defaults
-                to 100. This parameter and the capture rate affects the speed
-                at which the gain computations will occur
-
-            number_of_gain_update_iterations: Number of incremental gain
-                updates that will be performed before the final gain solution.
-
-            weight (float). NUmber between 0 and 1. Indicates the weigh of the
-                new data in theevolving gain solution.
-
-            initial_gains (list):  list of [(target, (glin, glog)),...] describing the initial
-                gains to be used to start computing new gains.
-
-
-        Examples:
-
-            chan_id = [(0,1), (1,3,4)] or [{crate:0, slot:1}, {crate:1, slot:3, channel:4}] # Select all channels of board in crate 0 slot 1, and channel 4 of crate 1 slot 3.
-            chan_id = None # Selects all boards and channels in the array
-            chan_id = [(4,'*', 5)] or [(4, None, 5)] or [{crate:4, channel:5}, {crate:4, slot:'*', channel:5}  # select channel 5 of all boards in crate 4
-
-        """
-
-        # Make sure gain calculation is enabled
-        if not enable:
-            return
-
-        # Get a {iceboard:[list_of_channels]} dict of selected channels
-        ib_chans = self.fpgas.get_iceboards(targets, lane_type='chan').items()
-
-        if not ib_chans:
-            self.log.error(
-                f'{self!r}: No target board was found for the specified '
-                f'targets {targets}. Available boards are '
-                f'{[ib.get_id() for ib in self.fpgas.ib]}')
-            raise RuntimeError('No target board was found for the specified patterns')
-
-        channels = ', '.join(str(ib.get_id()) + str(ch) for ib, ch in ib_chans)
-        self.log.info(
-            f'{self!r}: *** Gain calculator : Starting compute_gains() '
-            f'on the following channels: {channels}')
-        self.log.info(
-            f'{self!r}: *** Gain calculator : iterative settings '
-            f'number_of_fft_averages={number_of_fft_averages} '
-            f'number_of_gain_update_iterations={number_of_gain_update_iterations} '
-            f'weight={weight}')
-
-        # Set the source and data capture rate for target channels
-        await self.set_fpga_data_capture(targets=targets,
-                                         capture_rate=capture_rate,
-                                         source='scaler')
-
-        if noise_injection is not None:
-            raise AttributeError('Noise injection settings are not yet '
-                                 'supported for gain computations')
-
-        server_channel_ids, server_stream_ids, all_channel_ids, all_stream_ids, sid_index_map = (
-            self._collect_gain_calc_server_maps(ib_chans))
-
-        # load the current gains as initial gains if an initial gain table is not provided.
-        if not initial_gains:
-            initial_gains = [(cid, gains) for cid, gains in (await self.fpgas.get_gains_async(bank=0)).items() if cid in all_channel_ids]
-
-        # compute an approxitame amount of time to wait for the data, which is 1/2 of the time it should date to accumulate
-        wait_time = min(2.56e-6 * 2**(capture_rate + 1) * number_of_fft_averages / 2, 1.0)
-
-
-        async def iterate_gains(server, channel_ids, stream_ids):
-
-            self.log.info(
-                f'{self!r}: *** Gain calculator : Starting gain calculator '
-                f'iterator process')
-            # Greate a gain calculator engine
-            gc = calculate_gains.GainCalc(
-                channel_ids=channel_ids,
-                stream_ids=stream_ids,
-                n_iterations=number_of_gain_update_iterations,
-                weight=weight,
-                initial_gains=initial_gains)
-            # Set all the initial gains on bank 0
-            bank = 0
-
-
-            # print(f'compute_gains: setting the initial gain of {gc.get_gains()}')
-            await self.fpgas.set_gains_async(gains=gc.get_gains(),
-                                             bank=bank,
-                                             when='now')
-            # start the integration of FFT data for specified channels
-            # We will iterate until all channels have a solution, or until we have reached an iteration limit
-            iteration = 0
-            fft_rms_requested = {sid:False for sid in stream_ids}
-
-            while True:
+    async def _stop_hdf5_for_gain_calculation(self):
+        """Stop configured science writers before a runtime gain phase."""
+        raw_enabled = (
+            self.config.raw_acq.common_config.get(
+                'hdf5_capture_duration', None) is not None)
+        corr_config = self.config.fpga.get('firmware_correlator', {})
+        corr_enabled = bool(
+            corr_config and corr_config.get('enable', False)
+            and corr_config.get('hdf5_capture_duration', None) is not None)
+        for server_name, server in self.raw_acq.items():
+            if raw_enabled:
+                try:
+                    await server.stop_raw_hdf5()
+                except RuntimeError as exc:
+                    if 'not running' not in str(exc).lower():
+                        raise
                 self.log.info(
-                    f'{self!r}: *** Gain calculator: '
-                    f'Acquiring data block {iteration}')
-                required_sids = [sid for (sid, requested)
-                                 in fft_rms_requested.items() if not requested]
-                await server.start_fft_rms(
-                    stream_ids=required_sids,
-                    target_gain_bank=bank,
-                    number_of_frames=number_of_fft_averages)
-                # Flag the stream IDs that that we required. They may or may not come in immediatly on the next poll.
-                for sid in required_sids:
-                    fft_rms_requested[sid] = True
-
-                while True:
-                    self.log.info(
-                        f'{self!r}: *** Gain calculator : waiting for '
-                        f'averaged FFT data from raw acq')
-                    await asyncio.sleep(wait_time)
-                    sids, rms = await server.get_fft_rms()
-                    if sids:
-                        break
-                # self.log.info('%r: *** Gain calculator : Got FFT RMS values for Channel ID: Stream ID%s' % (self,
-                #     ', '.join('%s:%i' % (channel_ids[sid_index_map[sid]], sid) for sid in sids if sid in sid_index_map)))
+                    f'{self!r}: Stopped raw HDF5 for gain calculation on '
+                    f'{server_name}')
+            if corr_enabled:
+                try:
+                    await server.stop_corr_hdf5()
+                except RuntimeError as exc:
+                    if 'not running' not in str(exc).lower():
+                        raise
                 self.log.info(
-                    f'{self!r}: *** Gain calculator : Got FFT RMS values '
-                    f'for {len(sids)} channels')
-                new_gains = gc.update_gains(np.array(sids), np.array(rms))
-                # bank ^= 1 # switch bank  # Can't do that right now: the formware does not switch glog
-                await self.fpgas.set_gains_async(gains=new_gains, bank=bank, when='now')
-                # Indicate we need to request new rms values for the channels that were just processed
-                for sid in sids:
-                    fft_rms_requested[sid] = False
+                    f'{self!r}: Stopped corr HDF5 for gain calculation on '
+                    f'{server_name}')
+        return raw_enabled, corr_enabled
 
-                self.gain_calc_metrics.add('fpga_gains_done', value=np.sum(gc.done))
-                # generate some metrics
+    async def runtime_compute_gains(
+            self, data_capture=None, _serial_targets=False, **overrides):
+        """Run a YAML-driven gain phase while the master is operational."""
+        if not self.config.raw_acq.get('enable', False) or not self.raw_acq:
+            raise RuntimeError(
+                'Runtime gain calculation requires enabled and running '
+                'raw_acq servers for FFT capture')
+        if self._gain_operation_lock.locked():
+            raise RuntimeError('A gain calculation is already in progress')
 
-                for cid, (glin, glog) in new_gains.items():
-                    self.gain_calc_metrics.add(
-                        'fpga_gain_value',
-                        channel_id=cid,
-                        value=np.mean(glin[1:]) * 2**glog)
+        gain_config = self.config.fpga.compute_gains.as_dict()
+        yaml_capture = gain_config.pop('data_capture')
+        gain_config.pop('enable', None)
+        gain_config.update(overrides)
+        capture_config = dict(yaml_capture)
+        if data_capture:
+            capture_config.update(
+                data_capture.as_dict()
+                if hasattr(data_capture, 'as_dict') else dict(data_capture))
 
-                for j, sid in enumerate(sids):
-                    if sid not in sid_index_map:
-                        continue
-                    bix = sid_index_map[sid]
-                    cid = channel_ids[bix]
-                    self.gain_calc_metrics.add(
-                        'fpga_gain_calc_rms',
-                        stream_id=sid, channel_id=cid,
-                        value=np.mean(np.array(rms)[j, 1:]))
-                    self.gain_calc_metrics.add(
-                        'fpga_gain_calc_iteration',
-                        value=iteration)
-                    self.gain_calc_metrics.add(
-                        'fpga_gain_calc_channel_iteration',
-                        stream_id=sid, channel_id=cid,
-                        value=gc.iteration_number[bix])
-                    self.gain_calc_metrics.add(
-                        'fpga_gain_calc_percent_complete',
-                        stream_id=sid, channel_id=cid,
-                        value=gc.iteration_number[bix] / number_of_gain_update_iterations * 100.0)
-                # if gc.is_done() or (iteration > 2 * number_of_gain_update_iterations):
-                if gc.is_done():
-                    break
-                iteration += 1
-                await asyncio.sleep(1)
+        async with self._gain_operation_lock:
+            raw_enabled, corr_enabled = (
+                await self._stop_hdf5_for_gain_calculation())
+            try:
+                await self.program_data_capture(
+                    capture_config,
+                    push_decoder=True,
+                    sync=True,
+                    gain_capture=True)
+                if _serial_targets:
+                    targets = gain_config.pop('targets', None)
+                    if targets is None:
+                        targets = [
+                            [crate.crate_number, '*', '*']
+                            for crate in self.fpgas.ic]
+                    for group in targets:
+                        self.log.info(
+                            '%r: Computing gains serially for target %r',
+                            self, group)
+                        await self.compute_gains(
+                            targets=[group], **gain_config)
+                else:
+                    await self.compute_gains(**gain_config)
+            except Exception as gain_error:
+                try:
+                    await self.program_data_capture(
+                        self.config.fpga.raw_data_capture,
+                        push_decoder=True,
+                        sync=True,
+                        gain_capture=False)
+                    self.frame0_irigb_time = self.fpgas.sync_timestamp
+                except Exception as restore_error:
+                    self.log.exception(
+                        'Failed to program normal capture after gain '
+                        'calculation failed: %s', restore_error)
+                    gain_error.add_note(
+                        'Normal capture recovery also failed: '
+                        f'{restore_error!r}')
+                raise
 
-            filtered_gains, mask = gc.get_filtered_gains()
-            await self.fpgas.set_gains_async(gains=filtered_gains, bank=0, when='now')
-
-            self.log.info(
-                f'{self!r}: *** Gain calculator : Finished computing gains. '
-                f'Gain calculations completed successfully for '
-                f'{len(filtered_gains)} channels.')
-
-        # Perform the gain iterations in parallel on all raw acq servers
-        await asyncio.gather(*[iterate_gains(
-            raw_acq_server, server_channel_ids[raw_acq_server_name],
-            server_stream_ids[raw_acq_server_name])
-            for raw_acq_server_name, raw_acq_server in self.raw_acq.items()])
-
-        # Return the data capture of the selected channels to the source set in the config and to the baseline capture rate
-        await self.set_fpga_data_capture(targets=targets, source=None)
-
-        # If requested save the gains
-        if save_gains:
-            self.log.info(f'{self!r}: *** Gain calculator : saving gains')
-            await self.save_gains(bank=0)
-
+            await self.program_data_capture(
+                self.config.fpga.raw_data_capture,
+                push_decoder=True,
+                sync=True,
+                gain_capture=False)
+            self.frame0_irigb_time = self.fpgas.sync_timestamp
+            if raw_enabled:
+                await self.start_hdf5_capture()
+            if corr_enabled:
+                await self.start_corr_hdf5_capture()
 
     async def save_gains(self, bank=0):
         """
@@ -1162,31 +1045,9 @@ class FPGAMaster(object):
 
 
     async def serial_compute_gains(self, **params):
-        """
-        Wrapper for `compute_gains` that computes the gains for the target channels in serial.
-
-        Parameters:
-
-            targets: list of tuples (or dict) describing the ``(crate, board,
-                channel)`` or ``{crate:c, board:b, channel:ch}`` whose gains needs
-                to be recomputed. Missing elements, ``None`` or ``"*"`` are treated
-                as a wildcard.  List will be iterated over and the channels matching
-                each element of the list will have their gains computed in parallel.
-                If not provided, then will default to  a list of the crates.
-
-            ** accepts all other parameters for `compute_gains` **
-
-        """
-
-        targets = params.pop('targets', None)
-        # If no targets were provided then we default to computing gains for one crate at a time
-        if targets is None:
-            targets = [[icecrate.crate_number, "*", "*"] for icecrate in self.fpgas.ic]
-
-        # Loop over targets
-        for group in targets:
-            self.log.info(f"{self!r}: serial_compute_gains: Computing gains for target: {group}")
-            await self.compute_gains(targets=[group], **params)
+        """Run the normal runtime phase while calculating target groups serially."""
+        return await self.runtime_compute_gains(
+            _serial_targets=True, **params)
 
 
     async def start_hdf5_capture(self,
@@ -2375,6 +2236,16 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
                 raise
         else:
             result['start_result'] = None
+        gain_future = getattr(self, 'compute_gains_future', None)
+        if gain_future is None:
+            result['gain_calculation'] = None
+        elif not gain_future.done():
+            result['gain_calculation'] = dict(state='running', error=None)
+        else:
+            gain_error = gain_future.exception()
+            result['gain_calculation'] = dict(
+                state='failed' if gain_error else 'complete',
+                error=str(gain_error) if gain_error else None)
         return result
 
     @endpoint('config')
@@ -2578,23 +2449,27 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
                 Missing tuple elements, ``"*"`` and `None` are considered to be a
                 wildcard.
 
-            **accepts all other parameters for `FPGAMaster.compute_gains` **
+            data_capture (dict): Optional fields merged over
+                ``fpga.compute_gains.data_capture`` for this operation only.
+
+            **accepts the gain-math parameters for `FPGAMaster.compute_gains` **
 
         Example::
 
-            curl  -H "Content-Type: application/json" -X POST http://localhost:54321/compute-gains -d '{"targets": [[0, 0, "*"]]}'
+            curl -H "Content-Type: application/json" -X POST http://localhost:54321/compute-gains -d '{"targets": [[0, 0, "*"]], "data_capture": {"capture_rate": 14}}'
         """
         if not (self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas):
             self.log.warning(f"{self!r}: FPGA array is not ready to accept command")
             return dict(message="FPGA not ready")
 
-        try:
-            # Run compute_gains() in the background so we can return immediately.
-            self.compute_gains_future = asyncio.create_task(self.fpga_master.compute_gains(**params))
-            return dict(message='Gains update in progress')
-        except Exception as e:
-            self.log.error(f'{self!r}: compute_gains error: {e}')
-            raise
+        current = getattr(self, 'compute_gains_future', None)
+        if current is not None and not current.done():
+            return aiohttp.web.json_response(
+                dict(error='A gain calculation is already in progress'),
+                status=409)
+        self.compute_gains_future = asyncio.create_task(
+            self.fpga_master.runtime_compute_gains(**params))
+        return dict(message='Gains update in progress')
 
     @endpoint('set-data-capture')
     async def set_data_capture(self, **params):
@@ -2671,7 +2546,8 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
                 each element of the list will have their gains computed in parallel.
                 If not provided, then will default to  a list of the crates.
 
-            ** accepts all other parameters for `FPGAMaster.compute_gains` **
+            data_capture: Optional nested gain-capture override. Flat capture
+                arguments are not accepted.
 
         Example::
 
@@ -2682,16 +2558,14 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             self.log.warning(f"{self!r}: FPGA array is not ready to accept command")
             return dict(message="FPGA not ready")
 
-        # Set any `compute_gain` keyword arguments not provided in the endpoint call
-        # to the value in the config file
-        for key, val in self.fpga_master.config.fpga.compute_gains.items():
-            if (key not in params) and (key != 'targets'):
-                params[key] = val
-
-        # Compute gains
-        self.compute_gains_future = self.fpga_master.serial_compute_gains(**params)
-
-        return dict(message='Serial gain update in progress')
+        current = getattr(self, 'compute_gains_future', None)
+        if current is not None and not current.done():
+            return aiohttp.web.json_response(
+                dict(error='A gain calculation is already in progress'),
+                status=409)
+        self.compute_gains_future = asyncio.create_task(
+            self.fpga_master.serial_compute_gains(**params))
+        return dict(message='Serial gains update in progress')
 
 
     @endpoint('get-frame-time')

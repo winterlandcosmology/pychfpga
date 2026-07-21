@@ -298,6 +298,7 @@ def _fake_master(ib, server=None):
         ),
     )
     master.SECONDS_PER_FRAME = 0
+    master._gain_operation_lock = asyncio.Lock()
     master.capture_reset_calls = []
     master.raw_acq_sync_count = 0
 
@@ -423,6 +424,158 @@ def test_program_crs_capture_rejects_prober_burst_field():
             master, profile, iceboards=[ib], gain_capture=True))
 
     assert ib.start_calls == []
+
+
+class _RuntimeHDFServer:
+    def __init__(self, events):
+        self.events = events
+
+    async def stop_raw_hdf5(self):
+        self.events.append('stop-raw-hdf')
+
+    async def stop_corr_hdf5(self):
+        self.events.append('stop-corr-hdf')
+
+
+def _runtime_master(*, fail_gain=False, block_gain=None):
+    events = []
+    master = object.__new__(FPGAMaster)
+    master.log = _DummyLog()
+    master._gain_operation_lock = asyncio.Lock()
+    master.fpgas = State(sync_timestamp='science-sync')
+    master.frame0_irigb_time = None
+    master.config = State(
+        raw_acq=State(
+            enable=True,
+            common_config=State(hdf5_capture_duration=0),
+        ),
+        fpga=State(
+            compute_gains=State(
+                enable=True,
+                targets=[('*',)],
+                number_of_fft_averages=1000,
+                target=DEFAULT_GAIN_TARGET,
+                save_gains=True,
+                data_capture=_ice_capture_profile(gain=True),
+            ),
+            raw_data_capture=_ice_capture_profile(gain=False),
+            firmware_correlator=State(
+                enable=True,
+                hdf5_capture_duration=0,
+            ),
+        ),
+    )
+    master.raw_acq = {'raw0': _RuntimeHDFServer(events)}
+
+    async def program(config, **kwargs):
+        events.append(
+            ('program-gain' if kwargs['gain_capture'] else 'program-normal',
+             config.as_dict() if hasattr(config, 'as_dict') else dict(config)))
+
+    async def compute(**kwargs):
+        events.append(('compute', kwargs))
+        if block_gain is not None:
+            await block_gain.wait()
+        if fail_gain:
+            raise ValueError('gain input RMS is invalid')
+
+    async def start_raw():
+        events.append('start-raw-hdf')
+
+    async def start_corr():
+        events.append('start-corr-hdf')
+
+    master.program_data_capture = program
+    master.compute_gains = compute
+    master.start_hdf5_capture = start_raw
+    master.start_corr_hdf5_capture = start_corr
+    return master, events
+
+
+def test_runtime_gain_phase_stops_writers_and_restarts_new_files():
+    master, events = _runtime_master()
+
+    asyncio.run(FPGAMaster.runtime_compute_gains(
+        master,
+        target=3.0,
+        data_capture={'capture_rate': 14},
+    ))
+
+    assert [event if isinstance(event, str) else event[0] for event in events] == [
+        'stop-raw-hdf',
+        'stop-corr-hdf',
+        'program-gain',
+        'compute',
+        'program-normal',
+        'start-raw-hdf',
+        'start-corr-hdf',
+    ]
+    assert events[2][1]['capture_rate'] == 14
+    assert events[3][1]['target'] == 3.0
+    assert events[4][1]['capture_rate'] == 23
+    assert master.config.fpga.raw_data_capture.capture_rate == 23
+    assert master.frame0_irigb_time == 'science-sync'
+
+
+def test_runtime_gain_failure_restores_normal_profile_without_hdf_restart():
+    master, events = _runtime_master(fail_gain=True)
+
+    with pytest.raises(ValueError, match='gain input RMS is invalid'):
+        asyncio.run(FPGAMaster.runtime_compute_gains(master))
+
+    assert [event if isinstance(event, str) else event[0] for event in events] == [
+        'stop-raw-hdf',
+        'stop-corr-hdf',
+        'program-gain',
+        'compute',
+        'program-normal',
+    ]
+
+
+def test_runtime_gain_rejects_a_second_active_request():
+    async def exercise():
+        release = asyncio.Event()
+        master, events = _runtime_master(block_gain=release)
+        first = asyncio.create_task(FPGAMaster.runtime_compute_gains(master))
+        while not master._gain_operation_lock.locked():
+            await asyncio.sleep(0)
+        with pytest.raises(RuntimeError, match='already in progress'):
+            await FPGAMaster.runtime_compute_gains(master)
+        release.set()
+        await first
+        return events
+
+    events = asyncio.run(exercise())
+    assert sum(event == 'stop-raw-hdf' for event in events) == 1
+
+
+def test_runtime_gain_requires_running_raw_acq():
+    master, events = _runtime_master()
+    master.raw_acq = {}
+
+    with pytest.raises(RuntimeError, match='requires enabled and running raw_acq'):
+        asyncio.run(FPGAMaster.runtime_compute_gains(master))
+
+    assert events == []
+
+
+def test_runtime_serial_gain_uses_one_capture_phase_for_all_groups():
+    master, events = _runtime_master()
+    master.config.fpga.compute_gains.targets = [
+        (0, '*', '*'),
+        (1, '*', '*'),
+    ]
+
+    asyncio.run(FPGAMaster.serial_compute_gains(master))
+
+    compute_events = [event for event in events if isinstance(event, tuple)
+                      and event[0] == 'compute']
+    assert [event[1]['targets'] for event in compute_events] == [
+        [[0, '*', '*']],
+        [[1, '*', '*']],
+    ]
+    assert sum(event == 'stop-raw-hdf' for event in events) == 1
+    assert sum(event == 'start-raw-hdf' for event in events) == 1
 
 
 @pytest.mark.parametrize('removed_argument', ['capture_rate', 'scaler_cap_data_type'])
