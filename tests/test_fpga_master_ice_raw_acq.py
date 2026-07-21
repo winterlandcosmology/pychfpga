@@ -1,6 +1,7 @@
 import asyncio
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from wtl.config import load_yaml_config
@@ -249,6 +250,22 @@ class _FakeSocket:
 
     def getsockname(self):
         return self.addr
+
+
+class _ProcessorThatMustNotBeFlushed:
+    def flush(self):
+        raise AssertionError("RawAcqReceiver.flush() must not flush processors")
+
+
+def test_raw_acq_receiver_flush_only_clears_packet_buffer():
+    receiver = raw_acq_receiver_mod.RawAcqReceiver()
+    receiver.n_stored = 2
+    receiver.pkt_len = np.array([64, 64, 0], dtype=np.uint32)
+    receiver.processors = {"raw": _ProcessorThatMustNotBeFlushed()}
+
+    assert receiver.flush() == 0
+    assert receiver.n_stored == 0
+    np.testing.assert_array_equal(receiver.pkt_len, np.zeros(3, dtype=np.uint32))
 
 
 def test_raw_acq_receiver_three_field_sources_return_source_key(monkeypatch):

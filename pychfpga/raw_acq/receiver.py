@@ -92,6 +92,29 @@ class RawAcqReceiver(object):
 
     def update_config(self, config=None, **kwargs):
         """Apply firmware or per-processor configuration patches without merging subtrees."""
+        # TODO: Investigate serializing live configuration updates against packet
+        # reception and processing. This method runs in the REST event-loop thread,
+        # while receive_packets()/process_packets() run in the UDP background thread.
+        # Both paths access mutable processor configuration, assembly and formatted
+        # scratch buffers, carry-over state, and receiver bookkeeping such as
+        # n_stored. A configuration update can resize or replace NumPy arrays while
+        # a packet batch is decoding; the Python GIL does not make that multi-step
+        # transition atomic, and NumPy operations may release the GIL. Plausible
+        # failures include mixing decoder generations, malformed full-resolution
+        # spectra, persistent fixed-bin corruption, exceptions, and dropped or
+        # misclassified packets. This race is suspected, but has not been proven to
+        # cause the observed zero RMS values at natural-order bins 1 and 513.
+        #
+        # A future fix should use the existing RLock to serialize update_config(),
+        # recv_into/n_stored bookkeeping, process_packets(), and flush(), while
+        # leaving select.select() and network waits outside the lock. It must define
+        # how partially accumulated packets, timestamp carry-over, and partial
+        # multi-frame FFT groups are discarded at a configuration boundary. Also
+        # separate processor-local assembly reset from parent socket draining:
+        # processor flush currently calls back to the parent receiver, so naively
+        # locking and flushing here risks recursive flush behavior. Add deterministic
+        # two-thread ordering, generation-boundary, and deadlock tests before enabling
+        # this synchronization in production.
         if kwargs:
             config = {**(config or {}), **kwargs}
         if not config:
@@ -706,9 +729,8 @@ class RawAcqReceiver(object):
         """
         self.n_stored = 0
         self.pkt_len[:] = 0
-        for key, proc in self.processors.items():
-            if proc is not None:
-                proc.flush()
+        # Processor.flush() calls back into its packet receiver, so flushing
+        # processors here recurses.
         return 0
 
     async def get_metrics_async(self):
