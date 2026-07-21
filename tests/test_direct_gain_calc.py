@@ -13,6 +13,8 @@ from pychfpga.calculate_gains import (
 from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
 from pychfpga.common.state import State
 from pychfpga.fpga_master import FPGAMaster
+from pychfpga.fpga_firmware.chfpga.chfpga import chFPGA
+from pychfpga.fpga_firmware.chfpga.f_engine.scaler import SCALER
 from pychfpga.raw_acq.fft_data_processor import FFTDataProcessor
 from pychfpga.raw_acq.raw_data_processor import _merge_fft_decoder_into_raw
 
@@ -424,6 +426,227 @@ def test_program_crs_capture_rejects_prober_burst_field():
             master, profile, iceboards=[ib], gain_capture=True))
 
     assert ib.start_calls == []
+
+
+class _NaturalOrderFFT:
+    def __init__(self, bin_map):
+        self.bin_map = np.asarray(bin_map)
+
+    def get_bin_map(self, flatten=True, reverse=True):
+        assert flatten is True
+        assert reverse is True
+        return self.bin_map
+
+
+def test_float_gain_word_decode_returns_quantized_natural_order_values():
+    scaler = object.__new__(SCALER)
+    object.__setattr__(scaler, 'fpga', State(
+        chan={0: State(FFT=_NaturalOrderFFT([2, 0, 3, 1]))},
+    ))
+    words = np.array([
+        (0 << 11) | 100,
+        (1 << 11) | 200,
+        (2 << 11) | 300,
+        (3 << 11) | 400,
+    ], dtype=np.uint16)
+
+    decoded = SCALER._decode_float_gain_words(
+        scaler, words, shift_left=4)
+
+    firmware_order = np.array([
+        100 * 2**4,
+        200 * 2**5,
+        300 * 2**6,
+        400 * 2**7,
+    ], dtype=float)
+    np.testing.assert_array_equal(
+        decoded, firmware_order[[2, 0, 3, 1]])
+
+
+def test_set_float_gain_table_caches_decoded_quantized_values():
+    class FakeScaler:
+        USE_COMPLEX_GAINS = False
+
+        def __init__(self):
+            self.fpga = State(
+                NUMBER_OF_FREQUENCY_BINS=256,
+                chan={0: State(FFT=_NaturalOrderFFT(np.arange(256)))},
+            )
+            self.cached_gain_table = {}
+            self.cached_gain_log = {}
+            self.cached_gain_timestamp = {}
+            self.writes = []
+
+        def _decode_float_gain_words(self, words, shift_left):
+            return SCALER._decode_float_gain_words(self, words, shift_left)
+
+        def set_page(self, page):
+            self.page = page
+
+        def write_ram(self, addr, data):
+            self.writes.append((self.page, addr, bytes(data)))
+
+    scaler = FakeScaler()
+    requested = np.linspace(2**20, 3 * 2**20, 256)
+
+    SCALER.set_gain_table(
+        scaler, requested, bank=0, gain_timestamp=123.0, log_gain=None)
+
+    assert len(scaler.writes) == 1
+    assert scaler.cached_gain_log[0] == -1
+    assert scaler.cached_gain_timestamp[0] == 123.0
+    assert scaler.cached_gain_table[0].shape == (256,)
+    assert np.all(scaler.cached_gain_table[0] > 2**19)
+    assert not np.array_equal(
+        scaler.cached_gain_table[0],
+        np.frombuffer(scaler.writes[0][2], dtype='<u2').astype(float),
+    )
+
+
+def test_uncached_real_gain_read_uses_firmware_bin_count():
+    class FakeScaler:
+        cached_gain_table = {}
+        USE_COMPLEX_GAINS = False
+        USE_FLOAT_GAINS = False
+        fpga = State(NUMBER_OF_FREQUENCY_BINS=1024)
+
+        def __init__(self):
+            self.reads = []
+
+        def read_ram(self, addr, length, type):
+            self.reads.append((addr, length, type))
+            return np.arange(length, dtype=np.uint16)
+
+    scaler = FakeScaler()
+
+    gains = SCALER.get_gain_table(scaler, bank=0, use_cache=False)
+
+    assert len(scaler.reads) == 4
+    assert gains.shape == (1024,)
+
+
+def test_board_cached_gain_getter_does_not_read_gain_mode_registers():
+    class ReadFreeScaler:
+        cached_gain_log = {0: -1}
+
+        @property
+        def USE_FLOAT_GAINS(self):
+            raise AssertionError('USE_FLOAT_GAINS register was read')
+
+        @property
+        def SHIFT_LEFT(self):
+            raise AssertionError('SHIFT_LEFT register was read')
+
+        def get_gain_table(self, bank, use_cache):
+            assert bank == 0
+            assert use_cache is True
+            return np.array([10.0, 20.0])
+
+    board = State(
+        slot=0,
+        logger=_DummyLog(),
+        get_channelizers=lambda: [State(
+            chan_number=3,
+            SCALER=ReadFreeScaler(),
+        )],
+    )
+
+    gains = chFPGA.get_gains(board, bank=0, use_cache=True)
+
+    assert gains[0][0] == 3
+    np.testing.assert_array_equal(gains[0][1][0], [10.0, 20.0])
+    assert gains[0][1][1] == -1
+
+
+def test_save_gains_uses_decoded_quantized_scaler_cache():
+    class FakeFpgas:
+        def __init__(self):
+            self.use_cache = None
+
+        async def get_gains_async(self, bank, use_cache):
+            self.use_cache = use_cache
+            return {(0, 1, 0): (np.array([10.0, 20.0]), -1)}
+
+        async def get_gain_timestamps_async(self, bank):
+            return {(0, 1, 0): 123.0}
+
+    class FakeArchive:
+        archive_files = ['/tmp/gains.h5']
+
+        def set_gain(self, gains, compute_time):
+            self.gains = gains
+            self.compute_time = compute_time
+
+        def write(self, smp, run_name):
+            self.write_args = (smp, run_name)
+
+    master = object.__new__(FPGAMaster)
+    master.log = _DummyLog()
+    master.fpgas = FakeFpgas()
+    master.gain_hdf5 = FakeArchive()
+    master.run_name = 'test-run'
+    master._chan_id_to_serial_number = lambda cid: f'input-{cid[-1]}'
+
+    asyncio.run(FPGAMaster.save_gains(master, bank=0))
+
+    assert master.fpgas.use_cache is True
+    np.testing.assert_array_equal(
+        master.gain_hdf5.gains['input-0'][0], [10.0, 20.0])
+
+
+def test_load_gains_scrambles_natural_order_archive_for_firmware():
+    channel_id = (0, 1, 0)
+    board = _FakeBoard(_FakeFPGA(bin_map=[2, 0, 3, 1]))
+
+    class FakeFpgas:
+        ib = [board]
+
+        def __init__(self):
+            self.set_call = None
+
+        def get_channel_ids(self):
+            return [channel_id]
+
+        def get_iceboard_from_id(self, board_id):
+            assert tuple(board_id) == channel_id[:2]
+            return board
+
+        async def set_gains_async(self, gains, **kwargs):
+            self.set_call = (gains, kwargs)
+
+    class FakeArchive:
+        last_update = 'latest'
+        reader = State(last_value=State(filename='/tmp/gains.h5'))
+
+        def read(self, update_id, field):
+            assert (update_id, field) == ('latest', 'update_id')
+            return 'gain-uid'
+
+        def read_gain(self, update_id):
+            assert update_id == 'gain-uid'
+            return (
+                {'input-0': (np.array([10., 20., 30., 40.]), -1)},
+                {'input-0': 123.},
+            )
+
+    master = object.__new__(FPGAMaster)
+    master.log = _DummyLog()
+    master.fpgas = FakeFpgas()
+    master.gain_hdf5 = FakeArchive()
+    master._chan_id_to_serial_number = lambda cid: f'input-{cid[-1]}'
+
+    uid = asyncio.run(FPGAMaster.load_gains(master))
+
+    gains, kwargs = master.fpgas.set_call
+    np.testing.assert_array_equal(
+        gains[channel_id][0], [30., 10., 40., 20.])
+    assert gains[channel_id][1] == -1
+    assert kwargs == {
+        'bank': 0,
+        'when': 'now',
+        'gain_timestamps': {channel_id: 123.},
+    }
+    assert uid == 'gain-uid'
 
 
 class _RuntimeHDFServer:

@@ -91,6 +91,7 @@ class SCALER(MMI):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
         self.state = state
         self.cached_gain_table = {}
+        self.cached_gain_log = {}
         self.cached_gain_timestamp = {}
 
     def reset(self):
@@ -150,6 +151,16 @@ class SCALER(MMI):
         self.WRITE_COEFF_BANK_A = page & 0b1111
         self.WRITE_COEFF_BANK_B = (page >> 4) & 1
         self.WRITE_COEFF_BANK_C = (page >> 5) & 1
+
+    def _decode_float_gain_words(self, gain_words, shift_left):
+        """Decode packed scaler words exactly as the floating-gain firmware does."""
+        gain_words = np.asarray(gain_words, dtype=np.uint16).reshape(-1)
+        mantissa = (gain_words & 0x7FF).astype(float)
+        exponent = ((gain_words >> 11) + int(shift_left)).astype(float)
+        decoded = mantissa * 2.0**exponent
+        bin_map = self.fpga.chan[0].FFT.get_bin_map(
+            flatten=True, reverse=True)
+        return decoded[bin_map]
 
     def set_gain_table(self, gain_list, bank=0, gain_timestamp=None, log_gain=None):
         """
@@ -214,8 +225,7 @@ class SCALER(MMI):
             if len(gains) != total_bins:
                 raise ValueError(f'Either a scalar gain or a {total_bins} element gain vector must be provided')
 
-            self.cached_gain_table[bank] = gains
-            self.cached_gain_timestamp[bank] = time.time() if gain_timestamp is None else gain_timestamp
+            cached_gains = gains.copy()
 
             gain_string = np.reshape(np.vstack((gains.imag, gains.real)).T, 2 * total_bins).astype('<i2').tobytes()
 
@@ -244,14 +254,14 @@ class SCALER(MMI):
                     raise ValueError(f'Floating point gain exponent of {max(glog)} exceeds 31 even after removal of the common exponent of {glog_common}')
 
                 gains = (glog.astype(np.uint16) << 11) | gains.astype(np.uint16)
+                cached_gains = self._decode_float_gain_words(
+                    gains, glog_common)
 
             else: # use linear + log gains
                 self.USE_FLOAT_GAINS = 0
                 if any(gains < 0) or any(gains > 65535) or any(gains != gains.astype('<u2')):
                     raise ValueError('All gains must be integers between 0 and 65535')
-
-            self.cached_gain_table[bank] = gains.astype(float)
-            self.cached_gain_timestamp[bank] = time.time() if gain_timestamp is None else gain_timestamp
+                cached_gains = gains.astype(float)
 
             gain_string = gains.astype('<i2').tobytes()
 
@@ -261,6 +271,15 @@ class SCALER(MMI):
             self.write_ram(0, gain_string[512 * page: 512 * (page + 1)])
 
         self.READ_COEFF_BANK = bank
+        # Cache only after every RAM page and the active-bank register were
+        # written successfully. Floating gains are cached as decoded,
+        # quantized values in natural frequency order, matching readback.
+        self.cached_gain_table[bank] = cached_gains
+        self.cached_gain_log[bank] = -1 if (
+            not use_complex_gains and (log_gain is None or log_gain < 0)
+        ) else int(self.SHIFT_LEFT)
+        self.cached_gain_timestamp[bank] = (
+            time.time() if gain_timestamp is None else gain_timestamp)
 
     def get_gain_table(self, bank=0, use_cache=False):
         """Gets the scaler's complex gain table for the specified bank. Converts to numpy array.
@@ -271,8 +290,9 @@ class SCALER(MMI):
 
             use_cache (bool): if True, the gain table will be returned from the cache if it exists, without reading from the FPGA. If False, the gain table will be read from the FPGA. 
 
-                NOTE: if the CRS platform with bitgrowth FFT is used, the gain cache will correspond to the frequency bin ordering of the FPGA, and will require the user to 
-                apply the bin mapping transformation from fft.py to recover the gains in standard frequency ordering. 
+                Floating-point cache entries are decoded quantized gains in
+                natural frequency order, matching uncached readback. Fixed
+                real and complex gain caches retain their native table order.
 
         Returns:
 
@@ -293,7 +313,8 @@ class SCALER(MMI):
         gain_table = []   # np.zeros(self.fpga.NUMBER_OF_FREQUENCY_BINS, complex)
 
         if self.USE_COMPLEX_GAINS:
-            pages_per_bank = 8
+            pages_per_bank = (
+                self.fpga.NUMBER_OF_FREQUENCY_BINS * 4 + 511) // 512
             for page in range(pages_per_bank):  # there are 8 pages of coefficients per bank
                 self.WRITE_COEFF_BANK = pages_per_bank * bank + page  # Sets which page/bank being read? Not sure if will work...
 
@@ -306,8 +327,9 @@ class SCALER(MMI):
             gain_table = np.array(gain_table)
 
         else: # if not self.USE_COMPLEX_GAINS
-            pages_per_bank = 32
-            for page in range(32):  # there are 32 pages of coefficients per bank
+            pages_per_bank = (
+                self.fpga.NUMBER_OF_FREQUENCY_BINS * 2 + 511) // 512
+            for page in range(pages_per_bank):
 
                 abs_page = pages_per_bank * bank + page
 
@@ -319,17 +341,11 @@ class SCALER(MMI):
                 # for ix in range(256):  # there are 256 coefficients per page (2 bytes per coeff = 512 bytes total per page)
                 #     g = struct.unpack('<hh', page_table[2 * ix: 2 * ix + 2])
                 gain_table.append(page_table.tolist())
+            gain_table = np.asarray(gain_table, dtype=np.uint16).reshape(-1)
 
         if self.USE_FLOAT_GAINS:
-            # Additional processing to return floating point gains as a single value for each frequency bin
-            gain_table = (np.array(gain_table) & 0xFFFF).flatten() # Full 16-bit value, meaningless without being processed
-            gain_mant = (gain_table & 0x7FF).astype(float) # Lower 11 bits, linear (mantissa) component
-            gain_exp = ((gain_table >> 11) + self.SHIFT_LEFT).astype(float) # Upper 5 bits, logarithmic (exponential) component, plus common log component
-            gain_table = gain_mant * 2**gain_exp # Full gain can be expressed as a single value 
-
-            # Get the bin map and apply to the gain_table (can be recovered from any channelizer)
-            bin_map = self.fpga.chan[0].FFT.get_bin_map(flatten=True, reverse=True)
-            gain_table = gain_table[bin_map]
+            gain_table = self._decode_float_gain_words(
+                gain_table, self.SHIFT_LEFT)
 
         return gain_table
 

@@ -1028,6 +1028,8 @@ class FPGAMaster(object):
             self.log.error(f'{self!r}: {msg}')
             raise RuntimeError(msg)
 
+        # SCALER caches the decoded, quantized values derived from the exact
+        # words written to RAM. Avoid a large and fragile BSB gain-RAM readback.
         gains = await self.fpgas.get_gains_async(bank=bank, use_cache=True)
         gains = {self._chan_id_to_serial_number(key): val for key, val in gains.items()}
 
@@ -1943,17 +1945,14 @@ class FPGAMaster(object):
         self.log.info(f"{self!r}: Reading digital gains from archive (update_id = {uid})")
         gains, gain_timestamps = self.gain_hdf5.read_gain(update_id=uid)
 
-        # Convert the keys from serial numbers to (crate, slot, chan) tuples
-        if self.config.fpga.fpga_array_params.mode == 'shuffle8':
-            # Gains are stored in human-friendly frequency ordering, so we apply the inverse bin map to the gains if using CHORD firmware
-            ca = self.fpgas
-            inv_bin_map = ca.ib[0].chan[0].FFT.get_bin_map(flatten = True, reverse = False) # get the inverse bin map
-            gains = {key_to_chan_id_map[key]: [val[0][inv_bin_map], val[1]]
-                     for key, val in gains.items() if key in key_to_chan_id_map}
-        else:
-            # No bin mapping
-            gains = {key_to_chan_id_map[key]: val
-                     for key, val in gains.items() if key in key_to_chan_id_map}
+        # Gain archives use natural frequency order. Translate each channel to
+        # its firmware FFT order before writing on every platform.
+        gains = {
+            key_to_chan_id_map[key]: val
+            for key, val in gains.items()
+            if key in key_to_chan_id_map
+        }
+        gains = self._scramble_gains_for_firmware_order(gains)
             
         gain_timestamps = {key_to_chan_id_map[key]: val
                            for key, val in gain_timestamps.items() if key in key_to_chan_id_map}

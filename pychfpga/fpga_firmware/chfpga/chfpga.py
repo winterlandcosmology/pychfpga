@@ -4935,10 +4935,14 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         """
         gain_list = []
         for chan in self.get_channelizers():
-
-            fp_gains_enabled = chan.SCALER.USE_FLOAT_GAINS
-
             glin = chan.SCALER.get_gain_table(bank=bank, use_cache=use_cache)
+            cached_log = getattr(chan.SCALER, 'cached_gain_log', {}).get(bank)
+            if use_cache and cached_log is not None:
+                glog = cached_log
+                fp_gains_enabled = glog == -1
+            else:
+                fp_gains_enabled = chan.SCALER.USE_FLOAT_GAINS
+                glog = -1 if fp_gains_enabled else chan.SCALER.SHIFT_LEFT
 
             if fp_gains_enabled:
                 '''
@@ -4947,10 +4951,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 necessary to use glog).
                 '''
                 self.logger.debug(f'Floating point gains enabled on slot {self.slot}, channel {chan.chan_number}')
-                glog = -1
-
-            else:
-                glog = chan.SCALER.SHIFT_LEFT
 
             gain_list.append([chan.chan_number, [glin, glog]])
 
