@@ -269,18 +269,17 @@ class UCorrPacketProcessor(PacketProcessorBase):
         #   imag: bits 17:0  of buf_data_l  -> shift<<14 then >>14 sign-extends from bit 31.
         np.left_shift(self.buf_data_h[bix], 4, out=temp32)
         np.right_shift(temp32, 14, out=temp32)
-        # Fancy-index += matches the original behavior; relies on (tix, bin_set, corr, bin) tuples
-        # being unique within a single batch (one packet per (corr,bin) per soft integration).
-        self.acc_re[tix, bin_set, corr, bin_] += temp32
+        # Advanced-index += loses writes when multiple packets in one batch target the same slot.
+        np.add.at(self.acc_re, (tix, bin_set, corr, bin_), temp32)
 
         np.left_shift(self.buf_data_l[bix], 14, out=temp32)
         np.right_shift(temp32, 14, out=temp32)
-        self.acc_im[tix, bin_set, corr, bin_] += temp32
+        np.add.at(self.acc_im, (tix, bin_set, corr, bin_), temp32)
 
         # Sat counters: bit 0x20 = real saturation, bit 0x10 = imag saturation. Increment each cmac lane.
         sat_pkt = self.buf_data_sat[bix]
-        self.sat[tix, bin_set, corr, bin_, :, 0] += sat_pkt & 0x20
-        self.sat[tix, bin_set, corr, bin_, :, 1] += sat_pkt & 0x10
+        np.add.at(self.sat[..., 0], (tix, bin_set, corr, bin_), sat_pkt & 0x20)
+        np.add.at(self.sat[..., 1], (tix, bin_set, corr, bin_), sat_pkt & 0x10)
 
         np.add.at(self.raw_data_count, tix, 1)
 
@@ -351,5 +350,6 @@ class UCorrPacketProcessor(PacketProcessorBase):
             self.ts_array.fill(0)
         self.n_ts = 0
         self.carry_len = 0
+        self.n_out = 0
         self._last_emitted_ts = np.uint64(0)
         self.overrun = 0
