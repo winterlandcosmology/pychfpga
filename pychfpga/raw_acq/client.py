@@ -104,6 +104,17 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
         ix, rms = await self.get('get-fft-rms')
         return (ix, rms)
 
+    async def start_fft_mean_amplitude(self, stream_ids=[], target_gain_bank=0, number_of_frames=100):
+        """Compatibility alias; products are RMS values."""
+        await self.start_fft_rms(
+            stream_ids=stream_ids,
+            target_gain_bank=target_gain_bank,
+            number_of_frames=number_of_frames)
+
+    async def get_fft_mean_amplitude(self):
+        """Compatibility alias; products are RMS values."""
+        return await self.get_fft_rms()
+
     async def start_raw_hdf5(self,
                              base_dir=None,
                              base_filename=None,

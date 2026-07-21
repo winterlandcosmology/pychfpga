@@ -217,12 +217,13 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
             return ([], [])
         ix, rms = await raw_proc.fft.get_fft_rms_async()
         if ix.size:
-            self.log.info(f'{self!r}: get_fft_rms returning {ix.size} channel(s)')
+            self.log.info(
+                f'{self!r}: get_fft_rms returning {ix.size} channel(s)')
         return (ix.tolist(), rms.tolist())
 
     @endpoint('get-fft-rms-status')
     async def get_fft_rms_status(self):
-        """Return in-progress FFT RMS acquisition state (for live monitoring)."""
+        """Return in-progress FFT RMS acquisition state."""
         raw_proc = self.receiver.processors.get("raw")
         if raw_proc is None:
             return []
@@ -242,6 +243,24 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
                     n_bins=int(fft._fft_n_bins),
                 ))
         return dict(channels=rows, diagnostics=diag)
+
+    @endpoint('start-fft-mean-amplitude')
+    async def start_fft_mean_amplitude(self, stream_ids=[], target_gain_bank=0, number_of_frames=100):
+        """Compatibility endpoint; products are RMS values."""
+        return await self.start_fft_rms(
+            stream_ids=stream_ids,
+            target_gain_bank=target_gain_bank,
+            number_of_frames=number_of_frames)
+
+    @endpoint('get-fft-mean-amplitude')
+    async def get_fft_mean_amplitude(self):
+        """Compatibility endpoint; products are RMS values."""
+        return await self.get_fft_rms()
+
+    @endpoint('get-fft-mean-amplitude-status')
+    async def get_fft_mean_amplitude_status(self):
+        """Compatibility endpoint; acquisition state is RMS."""
+        return await self.get_fft_rms_status()
 
     @endpoint('start-corr-hdf5')
     async def start_corr_hdf5(self,

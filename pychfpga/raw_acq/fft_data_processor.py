@@ -205,9 +205,9 @@ class FFTDataProcessor:
         self.fft_rms_started = np.zeros(nchan, dtype=bool)
         self.fft_rms_done = np.zeros(nchan, dtype=np.int8)
         self.fft_target_bank = np.zeros(nchan, dtype=np.int8)
-        # Running sum of re^2+im^2 per bin (float32 for bandwidth / CPU efficiency)
-        self.fft_power_sum = np.zeros((nchan, self._fft_n_bins), dtype=np.float32)
-        self.fft_power_current = np.zeros((nchan, self._fft_n_bins), dtype=np.float32)
+        # Running sum of |re + 1j*im|**2 per bin.
+        self.fft_power_sum = np.zeros((nchan, self._fft_n_bins), dtype=np.float64)
+        self.fft_power_current = np.zeros((nchan, self._fft_n_bins), dtype=np.float64)
         self.fft_n_frames = np.zeros(nchan, dtype=np.int32)
         self.fft_rms_average = np.zeros(nchan, dtype=np.int32) + 100
         self.fft_rms = np.zeros((nchan, self._fft_n_bins), dtype=np.float32)
@@ -223,15 +223,24 @@ class FFTDataProcessor:
             self.fft_rms_average[:n] = saved['average'][:n]
             self.fft_power_sum[:n, :use_bins] = saved['power_sum'][:n, :use_bins]
 
+    def _alloc_fft_mean_amplitude_buffers(self, nchan, n_bins, preserve_acquisition=False):
+        """Compatibility alias; the resulting products are RMS values."""
+        self._alloc_fft_rms_buffers(nchan, n_bins, preserve_acquisition)
+
     @staticmethod
     def _bin_power(row) -> np.ndarray:
-        """Per-bin power vector (re^2+im^2) from one natural-order complex spectrum row."""
+        """Per-bin power from one natural-order complex spectrum row."""
         row = np.asarray(row).reshape(-1)
         if not np.iscomplexobj(row):
             raise TypeError('FFT RMS acquisition expects complex spectra from the data formatter')
-        re = row.real
-        im = row.imag
-        return re * re + im * im
+        real = row.real.astype(np.float64, copy=False)
+        imag = row.imag.astype(np.float64, copy=False)
+        return real * real + imag * imag
+
+    @staticmethod
+    def _bin_amplitude(row) -> np.ndarray:
+        """Compatibility helper returning one-frame RMS amplitude."""
+        return np.sqrt(FFTDataProcessor._bin_power(row))
 
     def _feed_logical_spectrum(self, cix, row):
         """Buffer split physical frames until a full logical spectrum is ready."""
@@ -241,7 +250,7 @@ class FFTDataProcessor:
             return
         pfl = self.physical_frames_per_logical
         if pfl <= 1:
-            self._accumulate_spectrum_power(cix, row)
+            self._accumulate_spectrum_rms(cix, row)
             return
         parts = self._logical_frame_parts[cix]
         parts.append(row)
@@ -249,10 +258,10 @@ class FFTDataProcessor:
             return
         combined = np.concatenate(parts, axis=-1)
         self._logical_frame_parts[cix] = []
-        self._accumulate_spectrum_power(cix, combined)
+        self._accumulate_spectrum_rms(cix, combined)
 
-    def _accumulate_spectrum_power(self, cix, row):
-        """Add one logical spectrum to the running RMS acquisition for a channel."""
+    def _accumulate_spectrum_rms(self, cix, row):
+        """Add one logical spectrum to the running per-bin RMS acquisition."""
         power = self._bin_power(row)
         n_bins = power.size
         if n_bins != self._fft_n_bins:
@@ -279,14 +288,16 @@ class FFTDataProcessor:
         self.log.info(
             f'{self!r}: FFT RMS stream_id={sid} ch={cix}: '
             f'completed {target} averages ({n_bins} bins)')
-        np.sqrt(
-            self.fft_power_sum[cix] / self.fft_n_frames[cix],
+        np.divide(
+            self.fft_power_sum[cix],
+            self.fft_n_frames[cix],
             out=self.fft_rms[cix],
         )
+        np.sqrt(self.fft_rms[cix], out=self.fft_rms[cix])
         self.fft_power_sum[cix] = 0
 
     def _process_fft_emitted(self, ts, data, counts, indices):
-        """Update FFT RMS acquisition and metrics from one ``get_formatted_data`` emission."""
+        """Update FFT RMS acquisition and metrics from one emission."""
         n_out = ts.shape[0]
         packet_inc = int(counts[:n_out].sum())
         self.processed_packets += packet_inc
@@ -314,19 +325,19 @@ class FFTDataProcessor:
         self._maybe_log_acquisition_progress()
 
     def _validate_fft_decoder_for_rms(self):
-        """FFT RMS needs the raw assembly decoder (capture_format[1]) to be complex."""
+        """FFT RMS needs capture_format[1] to be complex."""
         summary = self._capture_format_summary()
         if not summary.get('fmt_is_complex'):
             raise RuntimeError(
                 f'{self!r}: FFT RMS requires complex capture_format[1] on the raw '
                 f'assembly config (got {summary}). Configure the scaler capture mode '
-                'on the FPGA (e.g. fft_2x) and push firmware config to raw_acq via '
-                'fpga_master update-config before starting FFT RMS acquisition.'
+                'on the FPGA and push firmware config to raw_acq via fpga_master '
+                'update-config before starting FFT RMS acquisition.'
             )
         return summary
 
     async def start_fft_rms_async(self, stream_ids, target_gain_bank, number_of_frames=100):
-        """Start averaged RMS acquisition for the given stream IDs and scaler bank."""
+        """Start averaged per-bin RMS acquisition for stream IDs and scaler bank."""
         decoder = self._validate_fft_decoder_for_rms()
         ix = [self.sid_map[int(sid)] for sid in stream_ids if int(sid) in self.sid_map]
         if not ix:
@@ -354,15 +365,28 @@ class FFTDataProcessor:
         self._diag_rows_incomplete = 0
         self._diag_max_count = 0
 
+    async def start_fft_mean_amplitude_async(self, stream_ids, target_gain_bank, number_of_frames=100):
+        """Compatibility alias; products are RMS values."""
+        await self.start_fft_rms_async(
+            stream_ids=stream_ids,
+            target_gain_bank=target_gain_bank,
+            number_of_frames=number_of_frames)
+
     async def get_fft_rms_async(self, all_done=True):
-        """Return FFT RMS data products that are ready."""
+        """Return per-bin FFT RMS products that are ready."""
         with self.fft_lock:
             ix = np.logical_and(self.fft_rms_started, self.fft_rms_done)
             sid = self.stream_id[ix]
             rms = self.fft_rms[ix]
             self.fft_rms_started[ix] = False
-        self.log.info(f'{self!r}: get_fft_rms returned FFT RMS vectors from {sid.size} channels')
+        self.log.info(
+            f'{self!r}: get_fft_rms returned FFT RMS '
+            f'vectors from {sid.size} channels')
         return sid, rms
+
+    async def get_fft_mean_amplitude_async(self, all_done=True):
+        """Compatibility alias; products are RMS values."""
+        return await self.get_fft_rms_async(all_done=all_done)
 
     def consume(self, result):
         """Update FFT RMS / metrics from a ``get_formatted_data(1)`` result.
