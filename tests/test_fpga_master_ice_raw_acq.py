@@ -60,15 +60,23 @@ class _FakeReceiverConfig:
 class _FakeBoard:
     BSB_TRANSPORT_UDP = "udp"
     BSB_TRANSPORT_TCPIPE = "tcpipe"
+    _PLATFORM_ID_MGK7MB_REV0 = 2
+    _PLATFORM_ID_MGK7MB_REV2 = 3
+    _PLATFORM_ID_CRS = 5
 
     def __init__(self, transport, capture_type=None):
         self.hostname = "fpga.example"
         self.port = 80
         self.BSB_TRANSPORT = transport
         self.CAPTURE_TYPE = capture_type
+        self.PLATFORM_ID = (
+            self._PLATFORM_ID_CRS if capture_type == "UCAP"
+            else self._PLATFORM_ID_MGK7MB_REV2)
         self.fpga = self
         self.target_addr = None
         self.capture_source = "mixed"
+        self.scaler_calls = []
+        self.start_data_capture_calls = []
         self.set_data_capture_calls = []
 
     def get_channels(self):
@@ -78,8 +86,18 @@ class _FakeBoard:
         channels = channels or self.get_channels()
         return [10 + ch for ch in channels]
 
-    def set_data_capture(self, channels=None, source="adc"):
-        self.set_data_capture_calls.append((channels, source))
+    def set_scaler_output_modes(self, **kwargs):
+        self.scaler_calls.append(kwargs)
+
+    def start_data_capture(self, **kwargs):
+        self.start_data_capture_calls.append(kwargs)
+        self.capture_source = kwargs["source"]
+
+    def stop_data_capture(self):
+        pass
+
+    def set_data_capture(self, channels=None, source="adc", sub_period=23):
+        self.set_data_capture_calls.append((channels, source, sub_period))
         self.capture_source = source
 
     def get_receiver_config(self):
@@ -127,7 +145,13 @@ def _master_with_board(board):
             "fpga": {
                 "raw_data_capture": {
                     "capture_source": "adc",
+                    "baseline_capture_rate": 10,
+                    "capture_rate": 23,
+                    "tmux_factor": 3,
+                    "scaler_cap_data_type": 0,
+                    "frames_per_burst": 1,
                 },
+                "sync_params": {"enable": False},
             },
         }
     )
@@ -203,7 +227,7 @@ def test_udp_raw_acq_sources_include_explicit_ping_port(monkeypatch):
     ]
 
 
-def test_prober_raw_acq_normalizes_capture_source_before_config_snapshot(monkeypatch):
+def test_raw_acq_initial_decoder_follows_programmed_gain_profile(monkeypatch):
     board = _FakeBoard("tcpipe", capture_type="PROBER")
     _FakeRawAcqClient.start_calls = []
     _FakeRawAcqClient.target_addr = [
@@ -213,9 +237,25 @@ def test_prober_raw_acq_normalizes_capture_source_before_config_snapshot(monkeyp
 
     fm = _master_with_board(board)
 
-    asyncio.run(fm.start_raw_acq_servers())
+    gain_capture = NameSpace({
+        "capture_source": "scaler",
+        "baseline_capture_rate": 10,
+        "capture_rate": 12,
+        "tmux_factor": 3,
+        "scaler_cap_data_type": "fft_full",
+        "frames_per_burst": 4,
+    })
+    asyncio.run(fm.start_raw_acq_servers(
+        initial_capture_config=gain_capture,
+        gain_capture=True))
 
-    assert board.set_data_capture_calls == [([0, 1], "adc")]
+    assert board.scaler_calls == [{
+        "cap_data_type": "fft_full",
+        "channels": [0, 1],
+    }]
+    assert board.start_data_capture_calls[0]["frames_per_burst"] == 4
+    assert board.start_data_capture_calls[0]["source"] == "scaler"
+    assert board.set_data_capture_calls == [([0, 1], "scaler", 12)]
 
 
 def test_non_prober_raw_acq_does_not_normalize_capture_source(monkeypatch):

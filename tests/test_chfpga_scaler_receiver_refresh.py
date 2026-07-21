@@ -4,6 +4,7 @@ import logging
 import pytest
 from wtl.metrics import Metrics
 
+from pychfpga.common.state import State
 from pychfpga.fpga_firmware.chfpga.chfpga import chFPGA
 
 
@@ -21,8 +22,25 @@ class _FakeScaler:
 
 
 class _FakeChannel:
-    def __init__(self):
+    def __init__(self, prober=None):
         self.SCALER = _FakeScaler()
+        self.PROBER = prober
+
+
+class _FakeProber:
+    def __init__(self, reset=0):
+        self._reset = int(reset)
+        self.reset_writes = []
+        self.BURST_LENGTH = 0
+
+    @property
+    def RESET(self):
+        return self._reset
+
+    @RESET.setter
+    def RESET(self, value):
+        self._reset = int(value)
+        self.reset_writes.append(int(value))
 
 
 class _FakeCorr:
@@ -99,6 +117,61 @@ def test_offset_binary_mismatch_raises_clear_error():
 
     with pytest.raises(RuntimeError, match="correlator requires it to be False"):
         fw.set_offset_binary_encoding(offset=True, channels=[0, 1])
+
+
+def _prober_firmware(reset_states=(0, 1)):
+    fw = object.__new__(chFPGA)
+    fw.CAPTURE_TYPE = 'PROBER'
+    fw.default_channels = [0, 1]
+    fw.chan = {
+        ch: _FakeChannel(_FakeProber(reset=reset_states[ch]))
+        for ch in fw.default_channels
+    }
+    fw._capture_pkt_frames_per_burst = 1
+    fw.config = State(
+        raw_capture=State(frames_per_burst=1),
+        chan={ch: State() for ch in fw.default_channels},
+    )
+    fw.receiver_refreshes = []
+
+    def get_receiver_config(channels=None):
+        fw.receiver_refreshes.append(list(channels))
+        return 'receiver-config'
+
+    fw.get_receiver_config = get_receiver_config
+    return fw
+
+
+def test_set_data_capture_frames_per_burst_updates_prober_and_metadata():
+    fw = _prober_firmware()
+
+    result = fw.set_data_capture_frames_per_burst(4, channels=[0, 1])
+
+    assert result == 'receiver-config'
+    assert [fw.chan[ch].PROBER.BURST_LENGTH for ch in [0, 1]] == [3, 3]
+    assert fw.chan[0].PROBER.reset_writes == [1, 0]
+    assert fw.chan[1].PROBER.reset_writes == [1, 1]
+    assert fw._capture_pkt_frames_per_burst == 4
+    assert fw.config.raw_capture.frames_per_burst == 4
+    assert fw.receiver_refreshes == [[0, 1]]
+
+
+@pytest.mark.parametrize('frames_per_burst', [0, 5])
+def test_set_data_capture_frames_per_burst_rejects_invalid_values(frames_per_burst):
+    fw = _prober_firmware()
+
+    with pytest.raises(ValueError, match=r'range \[1, 4\]'):
+        fw.set_data_capture_frames_per_burst(frames_per_burst)
+
+    assert fw.chan[0].PROBER.reset_writes == []
+
+
+def test_set_data_capture_frames_per_burst_rejects_ucap():
+    fw = _prober_firmware()
+    fw.CAPTURE_TYPE = 'UCAP'
+
+    with pytest.raises(RuntimeError, match='only by PROBER'):
+        fw.set_data_capture_frames_per_burst(4)
 
 
 def test_crossbar_metrics_skips_crossbars_without_metrics(caplog):

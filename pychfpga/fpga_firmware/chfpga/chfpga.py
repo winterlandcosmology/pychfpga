@@ -3631,6 +3631,37 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         raw_capture.channels = tuple(self._normalize_channels(channels))
         self.get_receiver_config(channels=channels)
 
+    def set_data_capture_frames_per_burst(self, frames_per_burst, channels=None):
+        """Set contiguous PROBER frames per burst and refresh decoder metadata."""
+        if self.CAPTURE_TYPE != 'PROBER':
+            raise RuntimeError(
+                'set_data_capture_frames_per_burst() is supported only by PROBER capture')
+
+        frames_per_burst = int(frames_per_burst)
+        if not 1 <= frames_per_burst <= 4:
+            raise ValueError(
+                'PROBER frames_per_burst must be in range [1, 4], '
+                f'got {frames_per_burst}')
+
+        channels = self._normalize_channels(channels)
+        probers = [self.chan[ch].PROBER for ch in channels]
+        reset_states = [int(prober.RESET) for prober in probers]
+        try:
+            for prober in probers:
+                prober.RESET = 1
+            for prober in probers:
+                # BURST_LENGTH encodes the number of additional frames.
+                prober.BURST_LENGTH = frames_per_burst - 1
+        finally:
+            for prober, reset_state in zip(probers, reset_states):
+                prober.RESET = reset_state
+
+        self._capture_pkt_frames_per_burst = frames_per_burst
+        if 'raw_capture' not in self.config:
+            self.config.add('raw_capture')
+        self.config.raw_capture.frames_per_burst = frames_per_burst
+        return self.get_receiver_config(channels=channels)
+
     def set_fft_bypass(self, bypass_mode, channels=None):
         """
         Sets the BYPASS flag on both the FFT modules.
