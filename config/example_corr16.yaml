@@ -228,7 +228,10 @@ def: &default  # defaults, referenced below
         raw_data_capture:
             capture_source: 'adc' # initial source. Can be changed dynamically during operations
             baseline_capture_rate: 1  # In frames/s. 0 = disable data capture. (will prevent raw_acq from getting any data)
+            capture_rate: 23
             tmux_factor: 4 # factor to apply to the slot number set the send delay
+            scaler_cap_data_type: 0
+            frames_per_burst: 1
 
         reset_stats: True
 
@@ -243,14 +246,18 @@ def: &default  # defaults, referenced below
 
         compute_gains:
             enable: True # False
-            method: direct
             save_gains: True
             targets: # List of (crate,slot) tuples for which fains will be computed
               - ['*']
-            capture_rate: 15
             number_of_fft_averages: 100
-            number_of_gain_update_iterations: 20
-            initial_gains: []
+            target: 2.1213203436
+            data_capture:
+                capture_source: scaler
+                baseline_capture_rate: 1
+                capture_rate: 15
+                tmux_factor: 4
+                scaler_cap_data_type: fft_full
+                frames_per_burst: 4
             # noise_injection : # noise injection parametrs used for gain calculations
             #     cyl0.1: # cylinder noise source (name is arbitrary)
             #         board : '' # Board that controls the noise gating PWM signal for noise injection
@@ -372,7 +379,10 @@ EXAMPLE:
         raw_data_capture:
             capture_source: 'adc'
             baseline_capture_rate: 10  # Frame per second. 0 = disable.
+            capture_rate: 23
             tmux_factor: 3
+            scaler_cap_data_type: 0
+            frames_per_burst: 1
 
         initial_gains:  # overwritten by load initial gains and compute gains if enabled
             - [['*'], [0.0, 20]]
@@ -388,19 +398,19 @@ EXAMPLE:
 
         compute_gains:
             enable: True
-            method: direct
             targets: # List of (crate,slot) tuples for which fains will be computed
               - ['*']
-            initial_gains:
-              - [['*'], [1.0, 22]] # Starting gain value, applied to all selected channels
             save_gains: True
-            capture_rate: 10  # period = (2**(capture_rate + 1) frames). DOn't recommend faster (less than 12) because we start losing packets due to REST HTTP encoding of the RMS vectors
+            target: 2.1213203436
+            data_capture:
+              capture_source: scaler
+              baseline_capture_rate: 10
+              capture_rate: 10  # period = (2**(capture_rate + 1) frames). Don't use less than 12; full-resolution four-frame bursts lose packets at faster rates.
               # Recommended rate codes to avoid :
               # 1 crate: 12
               # 2 crates: 13
               # 4 crates: 14
               # 8 crates: 15
-            weight: 0.2
               # Capture rates
               #  5: 0.163 ms, 6104 fps, delay=0
               #  6: 0.327 ms, 3052 fps, delay=0
@@ -414,8 +424,10 @@ EXAMPLE:
               # 14: 83.886 ms, 12 fps, delay <=160, tmux <=10
               # 15: 167.77s ms, 6 fps, delay <=320, tmux <= 21
               # 16: 335.544 ms, 3 fps, delay <=640, tmux <= 42
+              tmux_factor: 3
+              scaler_cap_data_type: fft_full
+              frames_per_burst: 4
             number_of_fft_averages: 100
-            number_of_gain_update_iterations: 30
 
         firmware_correlator: # use only when mode=`corr16`
             # Static parameters - set once at initialization

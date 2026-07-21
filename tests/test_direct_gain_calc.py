@@ -1,4 +1,4 @@
-"""Tests for DirectGainCalc and FFT RMS acquisition used by direct gain computation."""
+"""Tests for direct RMS gain calculation."""
 
 import asyncio
 
@@ -6,10 +6,9 @@ import numpy as np
 import pytest
 
 from pychfpga.calculate_gains import (
+    DEFAULT_GAIN_TARGET,
     DirectGainCalc,
-    GainCalc,
-    _ensure_scaler_float_encodable,
-    _sanitize_float_gains,
+    derive_target_shift,
 )
 from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
 from pychfpga.common.state import State
@@ -18,221 +17,490 @@ from pychfpga.raw_acq.fft_data_processor import FFTDataProcessor
 from pychfpga.raw_acq.raw_data_processor import _merge_fft_decoder_into_raw
 
 
-NBINS = GainCalc.NBINS
+NBINS = 16
 
 
 class _DummyLog:
+    def debug(self, *args, **kwargs):
+        pass
+
     def info(self, *args, **kwargs):
         pass
 
+    def warning(self, *args, **kwargs):
+        pass
 
-class _GainDispatchDummy:
+    def error(self, *args, **kwargs):
+        pass
+
+    def exception(self, *args, **kwargs):
+        pass
+
+
+class _DummyMetrics:
     def __init__(self):
-        self.log = _DummyLog()
-        self.calls = []
+        self.rows = []
 
-    async def compute_direct_gains(self, **kwargs):
-        self.calls.append(('direct', kwargs))
-        return 'direct-result'
-
-    async def compute_iterative_gains(self, **kwargs):
-        self.calls.append(('iterative', kwargs))
-        return 'iterative-result'
+    def add(self, *args, **kwargs):
+        self.rows.append((args, kwargs))
 
 
-def test_fpga_master_compute_gains_dispatches_direct_method():
-    dummy = _GainDispatchDummy()
+class _FakeFFT:
+    def __init__(self, bin_map=None):
+        self.bin_map = np.asarray(bin_map if bin_map is not None else np.arange(4))
 
-    result = asyncio.run(FPGAMaster.compute_gains(
-        dummy,
-        method='direct',
-        number_of_fft_averages=7,
-        number_of_gain_update_iterations=3,
-        post_gain_bits=36,
-    ))
-
-    assert result == 'direct-result'
-    assert dummy.calls[0][0] == 'direct'
-    assert dummy.calls[0][1]['number_of_fft_averages'] == 7
-    assert dummy.calls[0][1]['post_gain_bits'] == 36
+    def get_bin_map(self, flatten=True, reverse=False):
+        assert flatten is True
+        assert reverse is False
+        return self.bin_map
 
 
-def test_fpga_master_compute_gains_defaults_to_direct_method():
-    dummy = _GainDispatchDummy()
+class _FakeScaler:
+    CAPTURE_DATA_TYPES = {
+        'fft_2x': 4,
+        'fft_full': 5,
+    }
 
-    result = asyncio.run(FPGAMaster.compute_gains(dummy))
-
-    assert result == 'direct-result'
-    assert dummy.calls[0][0] == 'direct'
-
-
-def test_fpga_master_compute_gains_dispatches_iterative_method():
-    dummy = _GainDispatchDummy()
-
-    result = asyncio.run(FPGAMaster.compute_gains(
-        dummy,
-        method='iterative',
-        number_of_fft_averages=7,
-        number_of_gain_update_iterations=3,
-        post_gain_bits=36,
-    ))
-
-    assert result == 'iterative-result'
-    assert dummy.calls[0][0] == 'iterative'
-    assert dummy.calls[0][1]['number_of_fft_averages'] == 7
-    assert dummy.calls[0][1]['number_of_gain_update_iterations'] == 3
-    assert 'post_gain_bits' not in dummy.calls[0][1]
+    def __init__(self, four_bits=1):
+        self.FOUR_BITS = four_bits
 
 
-def test_fpga_master_compute_gains_rejects_unknown_method():
-    dummy = _GainDispatchDummy()
+class _FakeProber:
+    def __init__(self, reset=0):
+        self.reset_writes = []
+        self._reset = int(reset)
 
-    with pytest.raises(ValueError, match='Unknown gain calculation method'):
-        asyncio.run(FPGAMaster.compute_gains(dummy, method='not-a-method'))
+    @property
+    def RESET(self):
+        return self._reset
+
+    @RESET.setter
+    def RESET(self, value):
+        self._reset = int(value)
+        self.reset_writes.append(self._reset)
 
 
-@pytest.fixture
-def two_channel_calc():
-    channel_ids = [(0, 1, 0), (0, 1, 1)]
-    stream_ids = [256, 257]
-    return DirectGainCalc(
-        channel_ids=channel_ids,
-        stream_ids=stream_ids,
-        target_rms=1.5 * np.sqrt(2),
-        post_gain_bits=44,
+class _FakeChan:
+    def __init__(self, four_bits=1, bin_map=None, prober_reset=0):
+        self.SCALER = _FakeScaler(four_bits=four_bits)
+        self.FFT = _FakeFFT(bin_map=bin_map)
+        self.PROBER = _FakeProber(reset=prober_reset)
+
+
+class _FakeGPIO:
+    def __init__(self, adc_or=0, adc_ov=0, adc_sequence=None):
+        object.__setattr__(self, 'clear_writes', [])
+        object.__setattr__(self, '_adc_or', adc_or)
+        object.__setattr__(self, '_adc_ov', adc_ov)
+        object.__setattr__(self, '_adc_sequence', list(adc_sequence or []))
+        object.__setattr__(self, '_clear_count', -1)
+
+    def __setattr__(self, name, value):
+        if name in ('ADC_OR_CLEAR', 'ADC_OV_CLEAR'):
+            self.clear_writes.append((name, value))
+            if name == 'ADC_OV_CLEAR' and value == 0 and self._adc_sequence:
+                object.__setattr__(self, '_clear_count', self._clear_count + 1)
+                ix = min(self._clear_count, len(self._adc_sequence) - 1)
+                object.__setattr__(self, '_adc_or', self._adc_sequence[ix])
+                object.__setattr__(self, '_adc_ov', 0)
+        object.__setattr__(self, name, value)
+
+    @property
+    def ADC_OR(self):
+        return self._adc_or
+
+    @ADC_OR.setter
+    def ADC_OR(self, value):
+        object.__setattr__(self, '_adc_or', value)
+
+    @property
+    def ADC_OV(self):
+        return self._adc_ov
+
+    @ADC_OV.setter
+    def ADC_OV(self, value):
+        object.__setattr__(self, '_adc_ov', value)
+
+
+class _FakeUCAP:
+    def __init__(self):
+        self.outputs = []
+
+    def select_output(self, output):
+        self.outputs.append(output)
+
+
+class _FakeFPGA:
+    _PLATFORM_ID_MGK7MB_REV0 = 2
+    _PLATFORM_ID_MGK7MB_REV2 = 3
+    _PLATFORM_ID_CRS = 5
+
+    def __init__(
+            self, bits_per_bin=48, platform_id=2, four_bits=1, bin_map=None,
+            gpio=None, required_capture_frames=None, prober_resets=None):
+        self.FFT_TYPE = 0
+        self.FFT_INFO = {0: {'bits_per_bin': bits_per_bin, 'bins_per_word': 2}}
+        self.PLATFORM_ID = platform_id
+        self.CAPTURE_TYPE = (
+            'UCAP' if platform_id == self._PLATFORM_ID_CRS else 'PROBER')
+        self.GPIO = gpio or _FakeGPIO()
+        self.UCAP = _FakeUCAP()
+        prober_resets = prober_resets or {}
+        self.chan = {
+            0: _FakeChan(
+                four_bits=four_bits, bin_map=bin_map,
+                prober_reset=prober_resets.get(0, 0)),
+            1: _FakeChan(
+                four_bits=four_bits, bin_map=bin_map,
+                prober_reset=prober_resets.get(1, 0)),
+        }
+        self.default_channels = [0, 1]
+        self._capture_pkt_frames_per_burst = 1
+        self.required_capture_frames = required_capture_frames
+        self.config = State(
+            raw_capture=State(
+                channels=(0, 1),
+                source='adc',
+                frames_per_burst=1,
+            ),
+            chan={
+                ch: State(
+                    data_source='adc',
+                    prober_sub_period=23,
+                    scaler=State(cap_data_type=0),
+                )
+                for ch in self.default_channels
+            },
+        )
+
+    def get_receiver_config(self, channels=None):
+        cap_type = int(self.config.chan[int((channels or [0])[0])].scaler.cap_data_type)
+        required = self.required_capture_frames
+        if required is None:
+            required = 4 if cap_type == 5 else 2 if cap_type == 4 else 1
+        return State(raw=State(
+            packets_per_logical_frame=[1, required],
+            capture_format=[
+                State(fmt_interleave_factor=1),
+                State(fmt_interleave_factor=required),
+            ],
+        ))
+
+
+class _FakeBoard:
+    def __init__(self, fpga=None):
+        self.fpga = fpga or _FakeFPGA()
+        self.scaler_calls = []
+        self.start_calls = []
+        self.stop_count = 0
+        self.capture_calls = []
+        self.burst_calls = []
+
+    def get_id(self, ch=None, default_crate=None, default_slot=None):
+        if ch is None:
+            return (0, 1)
+        return (0, 1, ch)
+
+    def get_channels(self):
+        return list(self.fpga.default_channels)
+
+    def get_channel_ids(self, channels):
+        return [self.get_id(ch) for ch in channels]
+
+    def get_stream_ids(self, channels):
+        return [10 + int(ch) for ch in channels]
+
+    def set_scaler_output_modes(self, **kwargs):
+        self.scaler_calls.append(kwargs)
+        if 'cap_data_type' in kwargs:
+            cap_type = kwargs['cap_data_type']
+            if isinstance(cap_type, str):
+                cap_type = _FakeScaler.CAPTURE_DATA_TYPES[cap_type]
+            for ch in kwargs.get('channels', self.fpga.default_channels):
+                self.fpga.config.chan[int(ch)].scaler.cap_data_type = int(cap_type)
+
+    def set_data_capture(self, **kwargs):
+        self.capture_calls.append(kwargs)
+        channels = kwargs.get('channels', self.fpga.default_channels)
+        for ch in channels:
+            self.fpga.config.chan[int(ch)].data_source = kwargs['source']
+            self.fpga.config.chan[int(ch)].prober_sub_period = int(kwargs['sub_period'])
+        self.fpga.config.raw_capture.channels = tuple(channels)
+        self.fpga.config.raw_capture.source = kwargs['source']
+
+    def start_data_capture(self, **kwargs):
+        self.start_calls.append(kwargs)
+        channels = list(kwargs['channels'])
+        self.fpga.config.raw_capture.channels = tuple(channels)
+        self.fpga.config.raw_capture.source = kwargs['source']
+        if self.fpga.CAPTURE_TYPE == 'PROBER':
+            frames = int(kwargs['frames_per_burst'])
+            self.fpga._capture_pkt_frames_per_burst = frames
+            self.fpga.config.raw_capture.frames_per_burst = frames
+
+    def stop_data_capture(self):
+        self.stop_count += 1
+
+    def set_data_capture_frames_per_burst(self, frames_per_burst, channels=None):
+        channels = list(channels or self.fpga.default_channels)
+        self.burst_calls.append((int(frames_per_burst), channels))
+        self.fpga._capture_pkt_frames_per_burst = int(frames_per_burst)
+        self.fpga.config.raw_capture.frames_per_burst = int(frames_per_burst)
+
+
+class _FakeFpgas:
+    def __init__(self, ib):
+        self.ib = [ib]
+        self.ib_by_id = {ib.get_id(): ib}
+        self.set_calls = []
+        self.sync_count = 0
+
+    def get_iceboards(self, targets, lane_type='chan'):
+        assert lane_type == 'chan'
+        return {self.ib[0]: [0]}
+
+    def sync(self, **kwargs):
+        self.sync_count += 1
+
+    def get_iceboard_from_id(self, board_id):
+        return self.ib_by_id[tuple(board_id)]
+
+    async def set_gains_async(self, gains, bank=0, when='now'):
+        self.set_calls.append((gains, bank, when))
+
+
+class _FakeGainServer:
+    def __init__(self, rms):
+        self.rms = np.asarray(rms, dtype=np.float64)
+        self.starts = []
+
+    async def start_fft_rms(self, **kwargs):
+        self.starts.append(kwargs)
+
+    async def get_fft_rms(self):
+        return [10], self.rms.tolist()
+
+
+def _fake_master(ib, server=None):
+    master = object.__new__(FPGAMaster)
+    master.log = _DummyLog()
+    master.gain_calc_metrics = _DummyMetrics()
+    master.gain_hdf5 = None
+    master.fpgas = _FakeFpgas(ib)
+    master.raw_acq = {'raw0': server} if server is not None else {}
+    master.raw_acq_ibs = {'raw0': [ib]} if server is not None else {}
+    master.config = State(
+        fpga=State(
+            compute_gains=State(
+                data_capture=State(capture_rate=0),
+            ),
+            sync_params=State(enable=False),
+        ),
+    )
+    master.SECONDS_PER_FRAME = 0
+    master.capture_reset_calls = []
+    master.raw_acq_sync_count = 0
+
+    async def sync_raw_acq_config():
+        master.raw_acq_sync_count += 1
+
+    async def set_fpga_data_capture(**kwargs):
+        master.capture_reset_calls.append(kwargs)
+
+    master._sync_raw_acq_firmware_config = sync_raw_acq_config
+    master.set_fpga_data_capture = set_fpga_data_capture
+    return master
+
+
+def _ice_capture_profile(*, gain):
+    return State(
+        capture_source='scaler' if gain else 'adc',
+        baseline_capture_rate=10,
+        capture_rate=12 if gain else 23,
+        tmux_factor=3,
+        scaler_cap_data_type='fft_full' if gain else 0,
+        frames_per_burst=4 if gain else 1,
     )
 
 
-def test_direct_gain_formula(two_channel_calc):
-    gc = two_channel_calc
-    target_full = gc.target_full
-    rms = np.full((1, NBINS), 1000.0, dtype=np.float32)
-    rms[0, 0] = 1e6  # DC bin — masked in gain table
+def _crs_capture_profile(*, gain):
+    return State(
+        capture_source='scaler' if gain else 'adc',
+        baseline_capture_rate=10,
+        capture_rate=12 if gain else 23,
+        tmux_factor=3,
+        scaler_cap_data_type='fft_2x' if gain else 0,
+        ucap_mode=0,
+        ucap_output='cap' if gain else 'corr',
+    )
 
-    gains = gc.update_gains(np.array([256]), rms)
-    assert gc.is_done() is False
-    assert gc.percent_done() == 50.0
+
+def test_program_gain_capture_uses_ice_full_resolution_geometry():
+    ib = _FakeBoard(_FakeFPGA(
+        platform_id=_FakeFPGA._PLATFORM_ID_MGK7MB_REV2))
+    master = _fake_master(ib)
+
+    asyncio.run(FPGAMaster.program_data_capture(
+        master, _ice_capture_profile(gain=True),
+        iceboards=[ib], gain_capture=True))
+
+    assert ib.scaler_calls == [{
+        'cap_data_type': 'fft_full',
+        'channels': [0, 1],
+    }]
+    assert ib.start_calls[0]['frames_per_burst'] == 4
+    assert ib.start_calls[0]['source'] == 'scaler'
+    assert ib.capture_calls == [{
+        'channels': [0, 1],
+        'sub_period': 12,
+        'source': 'scaler',
+    }]
+    assert master.raw_acq_sync_count == 1
+    assert master.fpgas.sync_count == 1
+
+
+def test_program_normal_capture_uses_yaml_instead_of_previous_state():
+    ib = _FakeBoard(_FakeFPGA())
+    master = _fake_master(ib)
+
+    asyncio.run(FPGAMaster.program_data_capture(
+        master, _ice_capture_profile(gain=True),
+        iceboards=[ib], gain_capture=True))
+    asyncio.run(FPGAMaster.program_data_capture(
+        master, _ice_capture_profile(gain=False),
+        iceboards=[ib], gain_capture=False))
+
+    assert [call['frames_per_burst'] for call in ib.start_calls] == [4, 1]
+    assert [call['source'] for call in ib.start_calls] == ['scaler', 'adc']
+    assert [call['sub_period'] for call in ib.capture_calls] == [12, 23]
+    assert [call['cap_data_type'] for call in ib.scaler_calls] == [
+        'fft_full', 0]
+    assert master.raw_acq_sync_count == 2
+
+
+def test_program_gain_capture_rejects_wrong_ice_burst_before_writes():
+    ib = _FakeBoard(_FakeFPGA())
+    master = _fake_master(ib)
+    profile = _ice_capture_profile(gain=True)
+    profile.frames_per_burst = 3
+
+    with pytest.raises(ValueError, match='requires frames_per_burst=4'):
+        asyncio.run(FPGAMaster.program_data_capture(
+            master, profile, iceboards=[ib], gain_capture=True))
+
+    assert ib.scaler_calls == []
+    assert ib.start_calls == []
+
+
+def test_program_gain_and_normal_capture_select_crs_ucap_outputs():
+    ib = _FakeBoard(_FakeFPGA(
+        bits_per_bin=64, platform_id=_FakeFPGA._PLATFORM_ID_CRS))
+    master = _fake_master(ib)
+
+    asyncio.run(FPGAMaster.program_data_capture(
+        master, _crs_capture_profile(gain=True),
+        iceboards=[ib], gain_capture=True))
+    asyncio.run(FPGAMaster.program_data_capture(
+        master, _crs_capture_profile(gain=False),
+        iceboards=[ib], gain_capture=False))
+
+    assert ib.fpga.UCAP.outputs == ['cap', 'corr']
+    assert ib.burst_calls == []
+    assert [call['select'] for call in ib.start_calls] == [True, False]
+    assert [call['source'] for call in ib.start_calls] == [
+        'scaler', 'funcgen']
+
+
+def test_program_crs_capture_rejects_prober_burst_field():
+    ib = _FakeBoard(_FakeFPGA(
+        bits_per_bin=64, platform_id=_FakeFPGA._PLATFORM_ID_CRS))
+    master = _fake_master(ib)
+    profile = _crs_capture_profile(gain=True)
+    profile.frames_per_burst = 2
+
+    with pytest.raises(ValueError, match='PROBER-only'):
+        asyncio.run(FPGAMaster.program_data_capture(
+            master, profile, iceboards=[ib], gain_capture=True))
+
+    assert ib.start_calls == []
+
+
+@pytest.mark.parametrize('removed_argument', ['capture_rate', 'scaler_cap_data_type'])
+def test_compute_gains_rejects_removed_flat_capture_arguments(removed_argument):
+    ib = _FakeBoard(_FakeFPGA())
+    master = _fake_master(ib)
+
+    with pytest.raises(TypeError, match=removed_argument):
+        FPGAMaster.compute_gains(master, **{removed_argument: 12})
+
+
+def test_derive_target_shift_uses_fft_metadata():
+    ice = _FakeFPGA(bits_per_bin=48)
+    crs = _FakeFPGA(bits_per_bin=64, platform_id=_FakeFPGA._PLATFORM_ID_CRS)
+
+    assert derive_target_shift(ice) == 36
+    assert derive_target_shift(crs) == 44
+
+
+def test_fpga_master_target_shift_rejects_non_four_bit_corr_output():
+    ib = _FakeBoard(_FakeFPGA(four_bits=0))
+    master = _fake_master(ib)
+
+    with pytest.raises(RuntimeError, match='4-bit corr output'):
+        FPGAMaster._derive_gain_target_shifts(master, [(0, 1, 0)])
+
+
+def test_fpga_master_validates_platform_capture_modes():
+    ice = _FakeBoard(_FakeFPGA(platform_id=_FakeFPGA._PLATFORM_ID_MGK7MB_REV2))
+    crs = _FakeBoard(_FakeFPGA(bits_per_bin=64, platform_id=_FakeFPGA._PLATFORM_ID_CRS))
+    master = _fake_master(ice)
+
+    FPGAMaster._validate_gain_capture_data_type(master, [(ice, [0])], 'fft_full')
+    FPGAMaster._validate_gain_capture_data_type(master, [(crs, [0])], 'fft_2x')
+    with pytest.raises(RuntimeError, match='expected'):
+        FPGAMaster._validate_gain_capture_data_type(master, [(ice, [0])], 'fft_2x')
+
+
+def test_direct_gain_formula_uses_rms_and_target_shift():
+    gc = DirectGainCalc(
+        channel_ids=[(0, 1, 0)],
+        stream_ids=[10],
+        target=2.0,
+        target_shift=36,
+        n_bins=4,
+    )
+    rms = np.array([[100.0, 200.0, 400.0, 800.0]])
+    gains = gc.update_gains(np.array([10]), rms)
 
     gain_vec, glog = gains[(0, 1, 0)]
     assert glog == -1
-    assert gain_vec.shape == (NBINS,)
-    assert np.isnan(gain_vec[0])
-    np.testing.assert_allclose(gain_vec[1], target_full / 1000.0, rtol=1e-5)
-
-
-def test_direct_gain_completes_all_channels(two_channel_calc):
-    gc = two_channel_calc
-    rms = np.full((2, NBINS), 500.0, dtype=np.float32)
-
-    gc.update_gains(np.array([256, 257]), rms)
-    assert gc.is_done()
-    assert gc.percent_done() == 100.0
-
-    for cid in gc.channel_ids:
-        gain_vec, glog = gc.get_gains()[cid]
-        assert glog == -1
-        assert gain_vec.shape == (NBINS,)
-
-
-def test_direct_gain_skips_already_done_channels(two_channel_calc):
-    gc = two_channel_calc
-    rms = np.full((1, NBINS), 1000.0, dtype=np.float32)
-    gc.update_gains(np.array([256]), rms)
-
-    rms2 = np.full((2, NBINS), 2000.0, dtype=np.float32)
-    gc.update_gains(np.array([256, 257]), rms2)
-
-    assert gc.gains[0, 1] == pytest.approx(gc.target_full / 1000.0)
-    assert gc.gains[1, 1] == pytest.approx(gc.target_full / 2000.0)
-
-
-def test_direct_gain_get_filtered_gains(two_channel_calc):
-    gc = two_channel_calc
-    rms = np.full((1, NBINS), 1000.0, dtype=np.float32)
-    gc.update_gains(np.array([256]), rms)
-
+    np.testing.assert_allclose(gain_vec, 2.0 * 2**36 / rms[0])
     filtered, mask = gc.get_filtered_gains()
-    assert (0, 1, 0) in filtered
-    gain_vec, glog = filtered[(0, 1, 0)]
-    assert glog == -1
-    assert gain_vec.shape == (NBINS,)
-    assert mask.shape == (1, NBINS)
+    np.testing.assert_allclose(filtered[(0, 1, 0)][0], gain_vec)
+    assert not mask.any()
 
 
-def test_direct_gain_filtered_gains_preserve_large_float_scale():
+def test_direct_gain_supports_per_channel_target_shift():
     gc = DirectGainCalc(
-        channel_ids=[(0, 1, 0)],
-        stream_ids=[0],
-        post_gain_bits=20,
-        n_bins=NBINS,
+        channel_ids=[(0, 1, 0), (0, 1, 1)],
+        stream_ids=[10, 11],
+        target=1.0,
+        target_shift=[36, 44],
+        n_bins=4,
     )
-    rms = np.full((1, NBINS), np.sqrt(5), dtype=np.float32)
-    gc.update_gains(np.array([0]), rms)
+    rms = np.full((2, 4), 2.0)
+    gc.update_gains(np.array([10, 11]), rms)
 
-    filtered, mask = gc.get_filtered_gains()
-    gain_vec, glog = filtered[(0, 1, 0)]
-    expected = gc.target_full / np.sqrt(5)
-
-    assert glog == -1
-    assert mask.shape == (1, NBINS)
-    np.testing.assert_allclose(np.median(gain_vec[1:]), expected, rtol=0.01)
+    assert gc.gains[0, 0] == pytest.approx(2**36 / 2.0)
+    assert gc.gains[1, 0] == pytest.approx(2**44 / 2.0)
 
 
-def test_fourier_filter_returns_real_part_as_complex_without_int_truncation():
-    gc = GainCalc(channel_ids=[], stream_ids=[])
-    signal = np.full((1, 32), 6.5e10 + 2.5j, dtype=np.complex128)
+def test_direct_gain_rejects_zero_or_nonfinite_rms():
+    gc = DirectGainCalc(channel_ids=[(0, 1, 0)], stream_ids=[10], n_bins=4)
+    rms = np.array([[1.0, 0.0, np.nan, 4.0]])
 
-    filtered = gc.fourier_filter(signal, num_components=4)
-
-    assert filtered.dtype == np.complex64
-    assert np.iscomplexobj(filtered)
-    assert np.median(filtered.real) > 1e10
-    np.testing.assert_array_equal(filtered.imag, np.zeros_like(filtered.imag))
-
-
-def test_direct_gain_always_uses_legacy_smoothing():
-    n_bins = 32
-    gc = DirectGainCalc(
-        channel_ids=[(0, 1, 0)],
-        stream_ids=[0],
-        post_gain_bits=10,
-        n_bins=n_bins,
-    )
-    rms = np.linspace(500.0, 1500.0, n_bins, dtype=np.float32)
-    rms[6] = 10000.0
-    rms[18] = 300.0
-    rms = rms[np.newaxis, :]
-    gc.update_gains(np.array([0]), rms)
-
-    filtered, mask = gc.get_filtered_gains()
-    gain_vec, glog = filtered[(0, 1, 0)]
-
-    assert glog == -1
-    assert mask.shape == (1, n_bins)
-    assert np.all(np.isfinite(gain_vec))
-    assert np.all(gain_vec > 0)
-    assert not np.allclose(gain_vec, gc.gains[0], rtol=0, atol=0)
-    _ensure_scaler_float_encodable(gain_vec)
-
-
-def test_direct_gain_filtering_still_sanitizes_bad_bins():
-    gc = DirectGainCalc(
-        channel_ids=[(0, 1, 0)],
-        stream_ids=[0],
-        n_bins=16,
-    )
-    rms = np.zeros((1, 16), dtype=np.float32)
-    rms[0, 5:10] = 500.0
-    gc.update_gains(np.array([0]), rms)
-
-    filtered, mask = gc.get_filtered_gains()
-    filt_vec, glog = filtered[(0, 1, 0)]
-
-    assert glog == -1
-    assert mask.shape == (1, 16)
-    assert np.all(np.isfinite(filt_vec))
-    assert np.all(filt_vec > 0)
-    _ensure_scaler_float_encodable(filt_vec)
+    with pytest.raises(ValueError, match='zero, negative, or non-finite'):
+        gc.update_gains(np.array([10]), rms)
 
 
 class _MockRawProcessor:
@@ -248,6 +516,20 @@ class _MockRawProcessor:
     )
 
 
+class _DummyPacketReceiver:
+    def __init__(self, n_packets=4, max_packet_size=256):
+        self.n_packets = n_packets
+        self.max_packet_size = max_packet_size
+        self.buf = np.zeros((n_packets, max_packet_size), dtype=np.uint8)
+        self.pkt_len = np.zeros((n_packets,), dtype=np.uint32)
+        self.n_stored = 0
+
+    def flush(self, **kwargs):
+        self.pkt_len.fill(0)
+        self.n_stored = 0
+        return 0
+
+
 @pytest.fixture
 def fft_processor():
     mock_raw = _MockRawProcessor()
@@ -255,41 +537,22 @@ def fft_processor():
 
 
 def _start_fft_rms(proc, n_bins, n_frames):
-    """Pre-size RMS buffers so the first frame does not reset acquisition state."""
     proc._alloc_fft_rms_buffers(proc.NCHAN, n_bins)
-    asyncio.run(proc.start_fft_rms_async(list(proc.stream_ids), target_gain_bank=0, number_of_frames=n_frames))
+    asyncio.run(proc.start_fft_rms_async(
+        list(proc.stream_ids),
+        target_gain_bank=0,
+        number_of_frames=n_frames))
 
 
 def _emit_complex_frames(proc, spectra, counts_val=1):
-    """Feed complex spectra shaped (n_frames, nchan, n_bins) into the processor."""
-    n_frames, nchan, n_bins = spectra.shape
+    n_frames, nchan, _ = spectra.shape
     ts = np.arange(n_frames, dtype=np.uint64)
     counts = np.full((n_frames, nchan), counts_val, dtype=np.int64)
     indices = np.arange(n_frames)
     proc.consume((ts, spectra, counts, indices))
 
 
-def test_fft_rms_accumulation(fft_processor):
-    proc = fft_processor
-    n_bins = 8
-    n_frames = 5
-
-    _start_fft_rms(proc, n_bins, n_frames)
-
-    re = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], dtype=np.float32)
-    im = np.array([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0], dtype=np.float32)
-    spectrum = re + 1j * im
-    expected_power = re * re + im * im
-    expected_rms = np.sqrt(expected_power)
-
-    spectra = np.tile(spectrum, (n_frames, 1, 1))
-    _emit_complex_frames(proc, spectra)
-
-    assert proc.fft_rms_done[0]
-    np.testing.assert_allclose(proc.fft_rms[0], expected_rms, rtol=1e-5)
-
-
-def test_fft_rms_averages_multiple_frames(fft_processor):
+def test_fft_rms_averages_power_across_multiple_frames(fft_processor):
     proc = fft_processor
     n_bins = 4
     n_frames = 3
@@ -302,34 +565,21 @@ def test_fft_rms_averages_multiple_frames(fft_processor):
     spectra = np.stack([frame0, frame1, frame2])[:, np.newaxis, :]
     _emit_complex_frames(proc, spectra)
 
-    power_sum = frame0.real**2 + frame1.real**2 + frame2.real**2
-    expected_rms = np.sqrt(power_sum / n_frames)
-    np.testing.assert_allclose(proc.fft_rms[0], expected_rms, rtol=1e-5)
+    expected = np.sqrt(
+        (np.abs(frame0)**2 + np.abs(frame1)**2 + np.abs(frame2)**2) / n_frames)
+    assert proc.fft_rms_done[0]
+    np.testing.assert_allclose(proc.fft_rms[0], expected, rtol=1e-5)
 
 
-def test_merge_fft_decoder_into_raw_complex_format():
-    raw = State(
-        source='funcgen',
-        capture_format=[
-            State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
-            State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
-        ],
-        packets_per_logical_frame=1,
-    )
-    fft = State(
-        source='scaler',
-        capture_format=[
-            None,
-            State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=2),
-        ],
-        packets_per_logical_frame=2,
-        offset_encoding=True,
-    )
-    merged = _merge_fft_decoder_into_raw(raw, fft)
-    assert merged.source == 'scaler'
-    assert merged.packets_per_logical_frame == 2
-    assert merged.capture_format[1].fmt_is_complex is True
-    assert merged.capture_format[1].fmt_interleave_factor == 2
+def test_get_fft_rms_returns_completed_channels(fft_processor):
+    proc = fft_processor
+    _start_fft_rms(proc, n_bins=4, n_frames=1)
+    _emit_complex_frames(proc, np.array([[[1 + 1j, 2 + 0j, 3 + 0j, 4 + 0j]]], dtype=np.complex64))
+
+    sid, rms = asyncio.run(proc.get_fft_rms_async())
+
+    assert sid.tolist() == [10]
+    np.testing.assert_allclose(rms[0, 0], np.sqrt(2), rtol=1e-5)
 
 
 def test_start_fft_rms_rejects_non_complex_decoder():
@@ -346,47 +596,7 @@ def test_start_fft_rms_rejects_non_complex_decoder():
         asyncio.run(proc.start_fft_rms_async([10], target_gain_bank=0, number_of_frames=2))
 
 
-def test_direct_gain_caps_zero_rms_bins():
-    gc = DirectGainCalc(
-        channel_ids=[(0, 1, 0)],
-        stream_ids=[0],
-        n_bins=16,
-    )
-    rms = np.zeros((1, 16), dtype=np.float32)
-    rms[0, 5:10] = 500.0
-    gc.update_gains(np.array([0]), rms)
-    gain_vec, glog = gc.get_gains()[(0, 1, 0)]
-    assert glog == -1
-    assert np.isnan(gain_vec[0])  # DC masked
-    assert np.all(np.isfinite(gain_vec[1:]))
-    assert np.all(gain_vec[1:] > 0)
-    filtered, _ = gc.get_filtered_gains()
-    filt_vec, _ = filtered[(0, 1, 0)]
-    _ensure_scaler_float_encodable(filt_vec)  # must not raise
-
-
-def test_sanitize_float_gains_handles_all_zero():
-  row = _sanitize_float_gains(np.zeros(8))
-  assert np.all(row == 1.0)
-
-
-def test_direct_gain_accepts_full_resolution_rms():
-    n_bins = 8192
-    gc = DirectGainCalc(
-        channel_ids=[(0, 1, 0)],
-        stream_ids=[0],
-        n_bins=n_bins,
-    )
-    rms = np.full((1, n_bins), 500.0, dtype=np.float32)
-    gc.update_gains(np.array([0]), rms)
-    assert gc.is_done()
-    gain_vec, glog = gc.get_gains()[(0, 1, 0)]
-    assert gain_vec.shape == (n_bins,)
-    assert glog == -1
-
-
 def test_fft_rms_accepts_ucap_split_frame_counts():
-    """Split complex rows carry per-frame counts (4), not burst totals (8)."""
     mock_raw = _MockRawProcessor()
     mock_raw.NUMBER_OF_SUBFRAMES = 4
     mock_raw.config = State(
@@ -418,22 +628,32 @@ def test_fft_rms_rejects_non_complex():
         FFTDataProcessor._bin_power(np.arange(8, dtype=np.float32))
 
 
-class _DummyPacketReceiver:
-    def __init__(self, n_packets=4, max_packet_size=256):
-        self.n_packets = n_packets
-        self.max_packet_size = max_packet_size
-        self.buf = np.zeros((n_packets, max_packet_size), dtype=np.uint8)
-        self.pkt_len = np.zeros((n_packets,), dtype=np.uint32)
-        self.n_stored = 0
-
-    def flush(self, **kwargs):
-        self.pkt_len.fill(0)
-        self.n_stored = 0
-        return 0
+def test_merge_fft_decoder_into_raw_complex_format():
+    raw = State(
+        source='funcgen',
+        capture_format=[
+            State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
+            State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
+        ],
+        packets_per_logical_frame=1,
+    )
+    fft = State(
+        source='scaler',
+        capture_format=[
+            None,
+            State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=2),
+        ],
+        packets_per_logical_frame=2,
+        offset_encoding=True,
+    )
+    merged = _merge_fft_decoder_into_raw(raw, fft)
+    assert merged.source == 'scaler'
+    assert merged.packets_per_logical_frame == 2
+    assert merged.capture_format[1].fmt_is_complex is True
+    assert merged.capture_format[1].fmt_interleave_factor == 2
 
 
 def test_formatter_bin_map_and_offset_encoding():
-    """Formatter unscrambles bins and removes offset-binary bias on FFT source."""
     proc = object.__new__(RawDataPacketProcessor)
     proc.config = State(
         offset_encoding=True,
@@ -452,7 +672,6 @@ def test_formatter_bin_map_and_offset_encoding():
 
 
 def test_full_resolution_complex_formatter_reconstructs_lanes():
-    """Mode-5/full-resolution rows are reconstructed from Re/Im lane frames."""
     proc = object.__new__(RawDataPacketProcessor)
     proc.config = State(
         capture_format=[
@@ -468,10 +687,10 @@ def test_full_resolution_complex_formatter_reconstructs_lanes():
         [
             [
                 [
-                    10, 1,   # frame 0: bin 0 Re/Im
-                    20, 2,   # frame 1: bin 1 Re/Im
-                    30, 3,   # frame 2: bin 2 Re/Im
-                    40, 4,   # frame 3: bin 3 Re/Im
+                    10, 1,
+                    20, 2,
+                    30, 3,
+                    40, 4,
                 ],
             ],
         ],
@@ -498,33 +717,95 @@ def test_full_resolution_complex_formatter_reconstructs_lanes():
     np.testing.assert_allclose(data[0, 0], expected, rtol=0, atol=0)
 
 
-def test_end_to_end_direct_gain_from_fft_rms(two_channel_calc, fft_processor):
-    """DirectGainCalc consumes RMS values produced by FFTDataProcessor."""
-    gc = two_channel_calc
-    proc = fft_processor
-    n_bins = NBINS
-    n_frames = 4
-    re_val = 1000.0
+def test_fpga_master_scrambles_gains_before_firmware_write():
+    ib = _FakeBoard(_FakeFPGA(bin_map=[2, 0, 3, 1]))
+    master = _fake_master(ib)
+    gains = {
+        (0, 1, 0): (np.array([10.0, 20.0, 30.0, 40.0]), -1),
+    }
 
-    _start_fft_rms(proc, n_bins, n_frames)
-    spectrum = np.full(n_bins, re_val + 0j, dtype=np.complex64)
-    spectra = np.tile(spectrum, (n_frames, 1, 1))
-    _emit_complex_frames(proc, spectra)
+    mapped = FPGAMaster._scramble_gains_for_firmware_order(master, gains)
 
-    sid, rms = asyncio.run(proc.get_fft_rms_async())
-    assert sid[0] == 10
-    np.testing.assert_allclose(rms[0, 1], re_val, rtol=1e-5)
+    np.testing.assert_array_equal(mapped[(0, 1, 0)][0], np.array([30.0, 10.0, 40.0, 20.0]))
+    assert mapped[(0, 1, 0)][1] == -1
 
-    # Wire stream 10 to first channel in gain calc for this smoke test
-    gc.stream_id_map = {10: 0}
-    gc.stream_ids = [10]
-    gc.channel_ids = [(0, 1, 0)]
-    gc.nchan = 1
-    gc.gains = np.zeros((1, NBINS), dtype=np.float64)
-    gc.done = np.zeros(1, dtype=bool)
 
-    gc.update_gains(np.array([10]), rms)
-    assert gc.is_done()
-    gain_vec, glog = gc.get_gains()[(0, 1, 0)]
+def test_adc_guard_clears_and_reports_flags():
+    gpio = _FakeGPIO(adc_or=0b10, adc_ov=0)
+    ib = _FakeBoard(_FakeFPGA(gpio=gpio))
+    master = _fake_master(ib)
+
+    FPGAMaster._clear_gain_adc_flags(master, [(ib, [1])])
+    reports = FPGAMaster._read_gain_adc_flag_reports(master, [(ib, [1])])
+
+    assert gpio.clear_writes == [
+        ('ADC_OR_CLEAR', 0xff),
+        ('ADC_OR_CLEAR', 0),
+        ('ADC_OV_CLEAR', 0xff),
+        ('ADC_OV_CLEAR', 0),
+    ]
+    assert reports[0]['adc_or'] == 0b10
+    assert 'ADC_OR=0x02' in FPGAMaster._format_adc_flag_reports(reports)
+
+
+def test_compute_gains_retries_adc_flags_and_writes_firmware_order():
+    gpio = _FakeGPIO(adc_sequence=[1, 0])
+    ib = _FakeBoard(_FakeFPGA(bin_map=[1, 0, 3, 2], gpio=gpio))
+    rms = np.array([[100.0, 200.0, 400.0, 800.0]])
+    server = _FakeGainServer(rms)
+    master = _fake_master(ib, server)
+
+    asyncio.run(FPGAMaster.compute_gains(
+        master,
+        targets=[('*',)],
+        number_of_fft_averages=1,
+        target=DEFAULT_GAIN_TARGET,
+    ))
+
+    assert len(server.starts) == 2
+    assert len(master.fpgas.set_calls) == 1
+    gains, bank, when = master.fpgas.set_calls[0]
+    assert bank == 0
+    assert when == 'now'
+    gain_vec, glog = gains[(0, 1, 0)]
+    natural = DEFAULT_GAIN_TARGET * 2**36 / rms[0]
+    np.testing.assert_allclose(gain_vec, natural[[1, 0, 3, 2]])
     assert glog == -1
-    assert gain_vec[1] == pytest.approx(gc.target_full / re_val, rel=1e-5)
+    assert ib.start_calls == []
+    assert master.raw_acq_sync_count == 0
+
+
+def test_compute_gains_fails_after_adc_guard_retries():
+    gpio = _FakeGPIO(adc_sequence=[1] * 10)
+    ib = _FakeBoard(_FakeFPGA(gpio=gpio))
+    server = _FakeGainServer(np.array([[100.0, 200.0, 400.0, 800.0]]))
+    master = _fake_master(ib, server)
+
+    with pytest.raises(RuntimeError, match='ADC flags remained set after 10'):
+        asyncio.run(FPGAMaster.compute_gains(
+            master,
+            targets=[('*',)],
+            number_of_fft_averages=1,
+        ))
+
+    assert len(server.starts) == 10
+    assert master.fpgas.set_calls == []
+    assert ib.start_calls == []
+    assert master.raw_acq_sync_count == 0
+
+
+def test_compute_gains_rejects_invalid_rms_without_capture_mutation():
+    ib = _FakeBoard(_FakeFPGA())
+    server = _FakeGainServer(np.array([[100.0, 0.0, 400.0, 800.0]]))
+    master = _fake_master(ib, server)
+
+    with pytest.raises(ValueError, match='zero, negative, or non-finite'):
+        asyncio.run(FPGAMaster.compute_gains(
+            master,
+            targets=[('*',)],
+            number_of_fft_averages=1,
+        ))
+
+    assert master.fpgas.set_calls == []
+    assert ib.start_calls == []
+    assert master.raw_acq_sync_count == 0

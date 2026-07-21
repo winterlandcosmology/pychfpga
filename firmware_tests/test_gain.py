@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from pychfpga.calculate_gains import DirectGainCalc
+from pychfpga.calculate_gains import DirectGainCalc, derive_target_shift
 from pychfpga.fpga_array import FPGAArray
 from wtl.namespace import NameSpace
 
@@ -118,10 +118,11 @@ class TestGain:
         fft_info = self.board.FFT_INFO[int(self.board.FFT_TYPE)]
         return int(fft_info.get('bins_per_word') or 1)
 
-    def derive_post_gain_bits(self):
-        fft_info = self.board.FFT_INFO[int(self.board.FFT_TYPE)]
-        fft_component_bits = int(fft_info['bits_per_bin']) // 2
-        return fft_component_bits + self.FLOAT_GAIN_BITS - self.FOUR_BIT_OUTPUT_WIDTH
+    def derive_target_shift(self):
+        return derive_target_shift(
+            self.board,
+            scaler_gain_bits=self.FLOAT_GAIN_BITS,
+            scaler_output_component_bits=self.FOUR_BIT_OUTPUT_WIDTH)
 
     def configure_fullres_capture(self, ch, data_source=None):
         self.board.stop_data_capture()
@@ -231,15 +232,13 @@ class TestGain:
     def calculate_direct_gains(self, fullres_spectra, ch):
         stream_id = int(self.board.get_stream_id(ch))
         channel_id = tuple(self.board.get_channel_ids([ch])[0])
-        post_gain_bits = self.derive_post_gain_bits()
-        rms = np.sqrt(np.mean(
-            fullres_spectra.real.astype(np.float64)**2 + fullres_spectra.imag.astype(np.float64)**2,
-            axis=0,
-        ))
+        target_shift = self.derive_target_shift()
+        spectra = fullres_spectra.astype(np.complex128)
+        rms = np.sqrt(np.mean(spectra.real**2 + spectra.imag**2, axis=0))
         calc = DirectGainCalc(
             channel_ids=[channel_id],
             stream_ids=[stream_id],
-            post_gain_bits=post_gain_bits,
+            target_shift=target_shift,
             n_bins=self.data.NUM_BINS,
         )
         calc.update_gains(np.array([stream_id]), rms[np.newaxis, :])
@@ -248,18 +247,18 @@ class TestGain:
         valid_window = np.isfinite(gain_vec) & ~np.asarray(mask[0], dtype=bool)
         valid_window[0] = False
         if not np.any(valid_window):
-            raise AssertionError("Direct gain calculation produced no finite non-DC bins for RMS validation")
+            raise AssertionError("Direct gain calculation produced no finite non-DC bins for validation")
         inv_bin_map = self.board.chan[ch].FFT.get_bin_map(flatten=True, reverse=False)
         mapped_gain = gain_vec[inv_bin_map]
         self.board.set_gains({ch: (mapped_gain, glog)}, bank=0, when='now', channels=[ch])
         self.logger.debug(
             f"calculate_direct_gains: ch={ch} stream_id={stream_id} channel_id={channel_id} "
-            f"target_rms={calc.target_rms} post_gain_bits={post_gain_bits} glog={glog} "
+            f"target={calc.target} target_shift={target_shift} glog={glog} "
             f"rms_median={float(np.median(rms[valid_window])):.6g} "
             f"gain_min={float(np.min(gain_vec[valid_window])):.6g} "
             f"gain_median={float(np.median(gain_vec[valid_window])):.6g} "
             f"gain_max={float(np.max(gain_vec[valid_window])):.6g}")
-        return calc.target_rms, valid_window, post_gain_bits
+        return calc.target, valid_window, target_shift
 
     def configure_four_bit_scaler_capture(self, ch, data_source=None):
         self.board.stop_data_capture()
@@ -320,18 +319,17 @@ class TestGain:
         fullres_spectra, fullres_overflows, fullres_shape = self.capture_fullres_fft(funcgen_input, ch)
         assert fullres_overflows == 0
 
-        expected_rms, valid_window, post_gain_bits = self.calculate_direct_gains(fullres_spectra, ch)
+        expected_rms, valid_window, target_shift = self.calculate_direct_gains(fullres_spectra, ch)
         self.configure_four_bit_scaler_capture(ch)
         scaler_spectra, scaler_shape = self.capture_scaler_mode0(ch)
         scaler_overflows = int(self.board.chan[ch].FFT.get_fft_overflow_count())
-        observed_rms = float(np.sqrt(np.mean(
-            scaler_spectra[:, valid_window].real.astype(np.float64)**2
-            + scaler_spectra[:, valid_window].imag.astype(np.float64)**2)))
+        scaler_valid = scaler_spectra[:, valid_window].astype(np.complex128)
+        observed_rms = float(np.sqrt(np.mean(scaler_valid.real**2 + scaler_valid.imag**2)))
 
         print("\nDirect gain noise RMS")
         print(f"input bin:          {self.NOISE_INPUT}")
         print(f"FFT_SHIFT:          {self.FFT_SHIFT}")
-        print(f"post_gain_bits:     {post_gain_bits}")
+        print(f"target_shift:       {target_shift}")
         print(f"target RMS:         {expected_rms:.6f}")
         print(f"observed RMS:       {observed_rms:.6f}")
         print(f"valid bins:         {int(np.count_nonzero(valid_window))}/{valid_window.size}")
@@ -355,13 +353,12 @@ class TestGain:
         fullres_spectra, fullres_overflows, fullres_shape = self.capture_fullres_fft(None, ch)
         assert fullres_overflows == 0
 
-        expected_rms, valid_window, post_gain_bits = self.calculate_direct_gains(fullres_spectra, ch)
+        expected_rms, valid_window, target_shift = self.calculate_direct_gains(fullres_spectra, ch)
         self.configure_four_bit_scaler_capture(ch, data_source='adc')
         scaler_spectra, scaler_shape = self.capture_scaler_mode0(ch)
         scaler_overflows = int(self.board.chan[ch].FFT.get_fft_overflow_count())
-        observed_rms = float(np.sqrt(np.mean(
-            scaler_spectra[:, valid_window].real.astype(np.float64)**2
-            + scaler_spectra[:, valid_window].imag.astype(np.float64)**2)))
+        scaler_valid = scaler_spectra[:, valid_window].astype(np.complex128)
+        observed_rms = float(np.sqrt(np.mean(scaler_valid.real**2 + scaler_valid.imag**2)))
 
         print("\nDirect gain external ADC RMS")
         print(f"ADC channel:        {ch}")
@@ -369,7 +366,7 @@ class TestGain:
         print(f"ADC peak:           {adc_peak:.6f}")
         print(f"ADC threshold:      {adc_threshold:.6f}")
         print(f"FFT_SHIFT:          {self.FFT_SHIFT}")
-        print(f"post_gain_bits:     {post_gain_bits}")
+        print(f"target_shift:       {target_shift}")
         print(f"target RMS:         {expected_rms:.6f}")
         print(f"observed RMS:       {observed_rms:.6f}")
         print(f"valid bins:         {int(np.count_nonzero(valid_window))}/{valid_window.size}")

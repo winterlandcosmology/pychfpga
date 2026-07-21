@@ -32,6 +32,9 @@ def test_ice_corr16_configs_enable_raw_acq_with_ping(path, name):
     assert conf.raw_acq.enable is True
     assert conf.raw_acq.no_ping is False
     assert conf.fpga.channelizer_params.offset_binary_encoding is False
+    assert conf.fpga.compute_gains.data_capture.scaler_cap_data_type == "fft_full"
+    assert conf.fpga.compute_gains.data_capture.frames_per_burst == 4
+    assert conf.fpga.raw_data_capture.frames_per_burst == 1
 
 
 def test_crs_raw_acq_config_keeps_current_settings():
@@ -40,6 +43,17 @@ def test_crs_raw_acq_config_keeps_current_settings():
     assert conf.raw_acq.enable is True
     assert conf.raw_acq.no_ping is True
     assert conf.fpga.channelizer_params.offset_binary_encoding is False
+    assert conf.fpga.compute_gains.data_capture.scaler_cap_data_type == "fft_2x"
+    assert conf.fpga.compute_gains.data_capture.ucap_output == "cap"
+    assert conf.fpga.raw_data_capture.ucap_output == "corr"
+
+
+def test_dlite_crs_capture_profiles_select_ucap_outputs():
+    conf = load_config("config/config_dlite.yaml", "UAPISHKA")
+
+    assert conf.fpga.compute_gains.data_capture.scaler_cap_data_type == "fft_2x"
+    assert conf.fpga.compute_gains.data_capture.ucap_output == "cap"
+    assert conf.fpga.raw_data_capture.ucap_output == "corr"
 
 
 def test_correlator_soft_integ_period_updates_corr_config():

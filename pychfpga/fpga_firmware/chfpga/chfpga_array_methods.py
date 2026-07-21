@@ -1617,7 +1617,7 @@ class chFPGAArrayMethods(ArrayMethods):
             gain_folder='/home/chime/ch_acq/gains'):
         """
         *** NOT FUNCTIONAL ***
-        Should be updated to use the new GainCalc object
+        Gain computation is handled by FPGAMaster.compute_gains().
 
         Compute the gains of the SCALER module so that the conversion of the FFT output
         to (4+4) bit complex values stays within range for the current signal conditions.

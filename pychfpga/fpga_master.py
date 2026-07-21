@@ -787,62 +787,12 @@ class FPGAMaster(object):
 
     async def compute_gains(self,
                             targets=None,
-                            method='direct',
-                            capture_rate=23,
                             save_gains=False,
-                            enable=True,
                             noise_injection=None,
                             number_of_fft_averages=100,
-                            number_of_gain_update_iterations=20,
-                            weight=0.2,
-                            initial_gains=[('*', [1.0, 22])],
-                            scaler_cap_data_type='fft_2x',
-                            post_gain_bits=44,
-                            target_rms=None):
-        """Compute digital gains using the direct or legacy iterative method."""
-        method = str(method).lower()
-        if method not in ('direct', 'iterative'):
-            raise ValueError(
-                f"Unknown gain calculation method {method!r}; expected "
-                "'direct' or 'iterative'")
-        if not enable:
-            return
-        self.log.info(
-            f'{self!r}: *** Gain calculator : selected method={method} '
-            f'number_of_fft_averages={number_of_fft_averages} '
-            f'number_of_gain_update_iterations={number_of_gain_update_iterations} '
-            f'target_rms={target_rms} post_gain_bits={post_gain_bits}')
-        if method == 'iterative':
-            return await self.compute_iterative_gains(
-                targets=targets,
-                capture_rate=capture_rate,
-                save_gains=save_gains,
-                noise_injection=noise_injection,
-                number_of_fft_averages=number_of_fft_averages,
-                number_of_gain_update_iterations=number_of_gain_update_iterations,
-                weight=weight,
-                initial_gains=initial_gains)
-        return await self.compute_direct_gains(
-            targets=targets,
-            capture_rate=capture_rate,
-            save_gains=save_gains,
-            noise_injection=noise_injection,
-            number_of_fft_averages=number_of_fft_averages,
-            scaler_cap_data_type=scaler_cap_data_type,
-            post_gain_bits=post_gain_bits,
-            target_rms=target_rms)
-
-    async def compute_direct_gains(self,
-                                   targets=None,
-                                   capture_rate=23,
-                                   save_gains=False,
-                                   noise_injection=None,
-                                   number_of_fft_averages=100,
-                                   scaler_cap_data_type='fft_2x',
-                                   post_gain_bits=44,
-                                   target_rms=None):
-        """Compute float digital gains in one shot from full-resolution FFT RMS."""
-        ib_chans = self.fpgas.get_iceboards(targets, lane_type='chan').items()
+                            target=calculate_gains.DEFAULT_GAIN_TARGET):
+        """Compute and apply float digital gains from the active FFT capture."""
+        ib_chans = list(self.fpgas.get_iceboards(targets, lane_type='chan').items())
         if not ib_chans:
             self.log.error(
                 f'{self!r}: No target board was found for the specified '
@@ -852,101 +802,110 @@ class FPGAMaster(object):
 
         channels = ', '.join(str(ib.get_id()) + str(ch) for ib, ch in ib_chans)
         self.log.info(
-            f'{self!r}: *** Gain calculator : Starting compute_direct_gains() '
+            f'{self!r}: *** Gain calculator : Starting compute_gains() '
             f'on the following channels: {channels}')
 
         if noise_injection is not None:
             raise AttributeError('Noise injection settings are not yet '
                                  'supported for gain computations')
 
-        await self._configure_gain_scaler_capture(
-            targets=targets,
-            scaler_cap_data_type=scaler_cap_data_type,
-            capture_rate=capture_rate)
-
-        server_channel_ids, server_stream_ids, _, _, sid_index_map = (
-            self._collect_gain_calc_server_maps(ib_chans))
-
-        first_ib, _ = next(iter(ib_chans))
-        n_bins = int(first_ib.fpga.NUMBER_OF_FREQUENCY_BINS)
-
-        if target_rms is None:
-            target_rms = 1.5 * np.sqrt(2)
-
         self.log.info(
             f'{self!r}: *** Gain calculator : direct settings '
             f'number_of_fft_averages={number_of_fft_averages} '
-            f'target_rms={target_rms} post_gain_bits={post_gain_bits} '
-            f'scaler_cap_data_type={scaler_cap_data_type} '
-            f'smoothing=legacy_hybrid')
+            f'target={target}')
 
+        capture_rate = int(getattr(
+            self,
+            '_active_gain_capture_rate',
+            self.config.fpga.compute_gains.data_capture.capture_rate))
         wait_time = min(
-            2.56e-6 * 2**(capture_rate + 1) * number_of_fft_averages / 2, 1.0)
+            self.SECONDS_PER_FRAME * 2**(capture_rate + 1)
+            * number_of_fft_averages / 2,
+            1.0)
 
-        async def direct_gains(server, channel_ids, stream_ids):
+        async def direct_gains(server, channel_ids, stream_ids, target_shifts):
+            if not channel_ids:
+                return {}
+            local_sid_index_map = {sid: i for i, sid in enumerate(stream_ids)}
             self.log.info(
                 f'{self!r}: *** Gain calculator : Starting direct gain '
                 f'calculator process')
             gc = calculate_gains.DirectGainCalc(
                 channel_ids=channel_ids,
                 stream_ids=stream_ids,
-                target_rms=target_rms,
-                post_gain_bits=post_gain_bits,
-                n_bins=n_bins)
+                target=target,
+                target_shift=[target_shifts[tuple(cid)] for cid in channel_ids])
             await server.start_fft_rms(
                 stream_ids=stream_ids,
                 target_gain_bank=0,
                 number_of_frames=number_of_fft_averages)
             while not gc.is_done():
                 self.log.info(
-                    f'{self!r}: *** Gain calculator : waiting for averaged '
-                    f'FFT RMS data from raw acq')
+                    f'{self!r}: *** Gain calculator : waiting for averaged FFT '
+                    f'RMS data from raw acq')
                 await asyncio.sleep(wait_time)
                 sids, rms = await server.get_fft_rms()
-                if not sids:
+                if len(sids) == 0:
                     continue
                 self.log.info(
-                    f'{self!r}: *** Gain calculator : Got FFT RMS values '
+                    f'{self!r}: *** Gain calculator : Got FFT RMS '
                     f'for {len(sids)} channels')
                 gc.update_gains(np.array(sids), np.array(rms))
                 self.gain_calc_metrics.add('fpga_gains_done', value=np.sum(gc.done))
                 for j, sid in enumerate(sids):
-                    if sid not in sid_index_map:
+                    if sid not in local_sid_index_map:
                         continue
-                    bix = sid_index_map[sid]
+                    bix = local_sid_index_map[sid]
                     cid = channel_ids[bix]
                     self.gain_calc_metrics.add(
                         'fpga_gain_calc_rms',
                         stream_id=sid, channel_id=cid,
-                        value=np.mean(np.array(rms)[j, 1:]))
+                        value=np.mean(np.array(rms)[j]))
                     self.gain_calc_metrics.add(
                         'fpga_gain_calc_percent_complete',
                         stream_id=sid, channel_id=cid,
                         value=gc.percent_done())
 
             filtered_gains, mask = gc.get_filtered_gains()
-            if channel_ids:
-                cid = channel_ids[0]
-                ib = self.fpgas.get_iceboard_from_id((cid[0], cid[1]))
-                inv_bin_map = ib.fpga.chan[cid[2]].FFT.get_bin_map(
-                    flatten=True, reverse=False)
-                filtered_gains = {
-                    chan_id: (gain_vec[inv_bin_map], glog)
-                    for chan_id, (gain_vec, glog) in filtered_gains.items()
-                }
-            await self.fpgas.set_gains_async(gains=filtered_gains, bank=0, when='now')
             self.log.info(
                 f'{self!r}: *** Gain calculator : Finished computing direct '
                 f'gains for {len(filtered_gains)} channels.')
+            return filtered_gains
 
-        await asyncio.gather(*[
-            direct_gains(
-                raw_acq_server,
-                server_channel_ids[raw_acq_server_name],
-                server_stream_ids[raw_acq_server_name])
-            for raw_acq_server_name, raw_acq_server in self.raw_acq.items()])
-
-        await self.set_fpga_data_capture(targets=targets, source=None)
+        server_channel_ids, server_stream_ids, all_channel_ids, _, _ = (
+            self._collect_gain_calc_server_maps(ib_chans))
+        target_shifts = self._derive_gain_target_shifts(all_channel_ids)
+        last_reports = []
+        for attempt in range(1, 11):
+            self._clear_gain_adc_flags(ib_chans)
+            tasks = [
+                direct_gains(
+                    raw_acq_server,
+                    server_channel_ids[raw_acq_server_name],
+                    server_stream_ids[raw_acq_server_name],
+                    target_shifts)
+                for raw_acq_server_name, raw_acq_server in self.raw_acq.items()
+                if server_channel_ids[raw_acq_server_name]
+            ]
+            gain_sets = await asyncio.gather(*tasks)
+            last_reports = self._read_gain_adc_flag_reports(ib_chans)
+            if not last_reports:
+                filtered_gains = {}
+                for gains in gain_sets:
+                    filtered_gains.update(gains)
+                filtered_gains = self._scramble_gains_for_firmware_order(
+                    filtered_gains)
+                await self.fpgas.set_gains_async(
+                    gains=filtered_gains, bank=0, when='now')
+                break
+            self.log.warning(
+                f'{self!r}: ADC flags were raised during direct gain capture '
+                f'attempt {attempt}/10; retrying. '
+                f'{self._format_adc_flag_reports(last_reports)}')
+        else:
+            raise RuntimeError(
+                f'ADC flags remained set after 10 direct gain capture attempts: '
+                f'{self._format_adc_flag_reports(last_reports)}')
 
         if save_gains:
             self.log.info(f'{self!r}: *** Gain calculator : saving gains')
@@ -1669,50 +1628,6 @@ class FPGAMaster(object):
                 f"Corr_config={corr_config!r}, "
                 f"enable={corr_config.enable if corr_config else 'none'}")
 
-        # Set-up raw_acq servers to receive data from the boards specified in
-        # the config. This will set-up the FPGA data transmission ports.
-        if conf.raw_acq.enable:
-            self.log.info("Starting raw_acq servers")
-            await self.start_raw_acq_servers()
-        else:
-            self.log.info('raw_acq disabled. Not starting any raw_acq servers.')
-
-        if conf.raw_acq.enable:
-            # Start raw_data capture
-            self.log.info("Starting baseline raw data data capture")
-            await self.start_fpga_raw_data_transmission(sync=False)
-        else:
-            self.log.info("raw_acq disabled. Not starting baseline raw data data capture")
-
-        self.log.info("Synchronizing the array...")
-        self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% This is the last SYNC %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-        sync_params = conf.fpga.get('sync_params', {})
-        if sync_params.get('enable', False):
-            # Use config params
-            ca.sync(**sync_params)
-        else:
-            # Use default params
-            ca.sync()
-        self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Last SYNC is done %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-
-        # save the time of frame0 after sync
-        self.frame0_irigb_time = self.fpgas.sync_timestamp
-
-
-        #######
-        # Fom now on, we do not have to sync the array anymore
-        #######
-
-
-        # Clear errors accumulated during start and initialization
-        self.log.info("Resetting FPGA statistics counters")
-        self.reset_fpga_stats()
-        if ca.mode in ['shuffle16', 'shuffle128', 'shuffle256', 'shuffle512']: # FIXME. Temporary hack to bypass crossbar and bp_shuffle stats for CRS platform.
-            self.reset_crossbar_stats()
-            self.reset_bp_shuffle_stats()
-
-
-
         # Set default initial gains. Will be overriden below
         if 'initial_gains' in conf.fpga:
             # Get a {iceboard:[list_of_channels]} dict of selected channels
@@ -1732,9 +1647,115 @@ class FPGAMaster(object):
         if conf.fpga.load_initial_gains and self.gain_hdf5:
             await self.load_gains(update_id=None, bank=0, when='now') # update_id = None loads the most recent gains
 
-        # Compute new gains if requested
-        if self.config.fpga.compute_gains.enable:
-            await self.compute_gains(**conf.fpga.compute_gains)
+        gain_config = conf.fpga.compute_gains
+        gain_enabled = bool(gain_config.enable)
+        if gain_enabled and not conf.raw_acq.enable:
+            raise RuntimeError(
+                'fpga.compute_gains.enable is true, but raw_acq is disabled; '
+                'direct gain calculation requires raw_acq FFT capture')
+        if gain_enabled and not (conf.raw_acq.servers or {}):
+            raise RuntimeError(
+                'fpga.compute_gains.enable is true, but no raw_acq servers '
+                'are configured for FFT capture')
+
+        # raw_acq starts with the decoder for the first capture phase. No
+        # previous hardware state is consulted; both phases come from YAML.
+        if conf.raw_acq.enable:
+            initial_capture = (
+                gain_config.data_capture
+                if gain_enabled else conf.fpga.raw_data_capture)
+            self.log.info(
+                'Starting raw_acq servers with %s capture configuration',
+                'gain' if gain_enabled else 'normal')
+            try:
+                await self.start_raw_acq_servers(
+                    initial_capture_config=initial_capture,
+                    gain_capture=gain_enabled)
+            except Exception as gain_error:
+                if gain_enabled:
+                    self.log.error(
+                        'Gain-capture startup failed; programming normal '
+                        'capture and aborting startup')
+                    try:
+                        await self.program_data_capture(
+                            conf.fpga.raw_data_capture,
+                            iceboards=list(ca.ib),
+                            push_decoder=bool(getattr(self, 'raw_acq', {})),
+                            sync=True,
+                            gain_capture=False)
+                        self.frame0_irigb_time = self.fpgas.sync_timestamp
+                    except Exception as restore_error:
+                        self.log.exception(
+                            'Failed to program normal capture after gain '
+                            'capture startup failed: %s', restore_error)
+                        gain_error.add_note(
+                            'Normal capture recovery also failed: '
+                            f'{restore_error!r}')
+                raise
+        else:
+            self.log.info(
+                'raw_acq disabled. Programming normal capture without '
+                'starting raw_acq servers.')
+            await self.program_data_capture(
+                conf.fpga.raw_data_capture,
+                iceboards=list(ca.ib),
+                push_decoder=False,
+                sync=False,
+                gain_capture=False)
+
+        if gain_enabled:
+            self.log.info('Synchronizing gain-capture phase')
+            sync_params = conf.fpga.get('sync_params', {})
+            if sync_params.get('enable', False):
+                ca.sync(**sync_params)
+            else:
+                ca.sync()
+            gain_params = gain_config.as_dict()
+            gain_params.pop('enable', None)
+            gain_params.pop('data_capture', None)
+            try:
+                await self.compute_gains(**gain_params)
+            except Exception as gain_error:
+                self.log.error(
+                    'Gain calculation failed; programming normal capture and '
+                    'aborting startup without starting HDF5 acquisition')
+                try:
+                    await self.program_data_capture(
+                        conf.fpga.raw_data_capture,
+                        push_decoder=True,
+                        sync=True,
+                        gain_capture=False)
+                    self.frame0_irigb_time = self.fpgas.sync_timestamp
+                except Exception as restore_error:
+                    self.log.exception(
+                        'Failed to program normal capture after startup gain '
+                        'calculation failed: %s', restore_error)
+                    gain_error.add_note(
+                        'Normal capture recovery also failed: '
+                        f'{restore_error!r}')
+                raise
+            await self.program_data_capture(
+                conf.fpga.raw_data_capture,
+                push_decoder=True,
+                sync=True,
+                gain_capture=False)
+        else:
+            self.log.info('Synchronizing normal capture phase')
+            sync_params = conf.fpga.get('sync_params', {})
+            if sync_params.get('enable', False):
+                ca.sync(**sync_params)
+            else:
+                ca.sync()
+
+        self.frame0_irigb_time = self.fpgas.sync_timestamp
+        self.log.info('Final normal-capture synchronization is complete')
+
+        # Clear errors accumulated during start and gain acquisition.
+        self.log.info("Resetting FPGA statistics counters")
+        self.reset_fpga_stats()
+        if ca.mode in ['shuffle16', 'shuffle128', 'shuffle256', 'shuffle512']: # FIXME. Temporary hack to bypass crossbar and bp_shuffle stats for CRS platform.
+            self.reset_crossbar_stats()
+            self.reset_bp_shuffle_stats()
 
         # self.log.info("Waiting for 2 seconds")
         # await asyncio.sleep(2)
