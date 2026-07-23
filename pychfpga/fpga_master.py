@@ -599,25 +599,6 @@ class FPGAMaster(object):
         if tasks:
             await asyncio.gather(*tasks)
 
-    @staticmethod
-    def _fpga_from_iceboard(ib):
-        return getattr(ib, 'fpga', ib)
-
-    def _derive_gain_target_shifts(self, channel_ids):
-        target_shifts = {}
-        for cid in channel_ids:
-            ib = self.fpgas.get_iceboard_from_id((cid[0], cid[1]))
-            fpga = self._fpga_from_iceboard(ib)
-            chan = fpga.chan[int(cid[2])]
-            four_bits = int(getattr(chan.SCALER, 'FOUR_BITS', 1))
-            if four_bits != 1:
-                raise RuntimeError(
-                    f'Direct gain calculation targets 4-bit corr output, but '
-                    f'board {(cid[0], cid[1])} channel {cid[2]} has '
-                    f'SCALER.FOUR_BITS={four_bits}')
-            target_shifts[tuple(cid)] = calculate_gains.derive_target_shift(fpga)
-        return target_shifts
-
     def _scramble_gains_for_firmware_order(self, gains):
         firmware_order_gains = {}
         for chan_id, (gain_vec, glog) in gains.items():
@@ -626,48 +607,6 @@ class FPGAMaster(object):
                 flatten=True, reverse=False)
             firmware_order_gains[chan_id] = (np.asarray(gain_vec)[inv_bin_map], glog)
         return firmware_order_gains
-
-    @staticmethod
-    def _adc_flag_mask(channels):
-        mask = 0
-        for ch in channels:
-            ch = int(ch)
-            if 0 <= ch < 8:
-                mask |= 1 << ch
-        return mask or 0xff
-
-    def _clear_gain_adc_flags(self, ib_chans):
-        for ib, channels in ib_chans:
-            gpio = self._fpga_from_iceboard(ib).GPIO
-            gpio.ADC_OR_CLEAR = 0xff
-            gpio.ADC_OR_CLEAR = 0
-            gpio.ADC_OV_CLEAR = 0xff
-            gpio.ADC_OV_CLEAR = 0
-
-    def _read_gain_adc_flag_reports(self, ib_chans):
-        reports = []
-        for ib, channels in ib_chans:
-            gpio = self._fpga_from_iceboard(ib).GPIO
-            adc_or = int(gpio.ADC_OR)
-            adc_ov = int(gpio.ADC_OV)
-            mask = self._adc_flag_mask(channels)
-            if (adc_or | adc_ov) & mask:
-                reports.append(dict(
-                    board=ib.get_id(),
-                    channels=list(channels),
-                    mask=mask,
-                    adc_or=adc_or,
-                    adc_ov=adc_ov,
-                ))
-        return reports
-
-    @staticmethod
-    def _format_adc_flag_reports(reports):
-        return '; '.join(
-            f'board={report["board"]} channels={report["channels"]} '
-            f'mask=0x{report["mask"]:02x} ADC_OR=0x{report["adc_or"]:02x} '
-            f'ADC_OV=0x{report["adc_ov"]:02x}'
-            for report in reports)
 
     async def compute_gains(self,
                             targets=None,
@@ -718,9 +657,7 @@ class FPGAMaster(object):
                 channel_ids=channel_ids,
                 stream_ids=stream_ids,
                 target=target,
-                target_shift=[target_shifts[tuple(cid)] for cid in channel_ids],
-                # TEMP DEBUG: keep gain-calculation plots beside this run's logs.
-                debug_plot_dir=getattr(self, 'run_folder', None))
+                target_shift=[target_shifts[tuple(cid)] for cid in channel_ids])
             await server.start_fft_rms(
                 stream_ids=stream_ids,
                 target_gain_bank=0,
@@ -760,10 +697,27 @@ class FPGAMaster(object):
 
         server_channel_ids, server_stream_ids, all_channel_ids, _, _ = (
             self._collect_gain_calc_server_maps(ib_chans))
-        target_shifts = self._derive_gain_target_shifts(all_channel_ids)
+        target_shifts = {}
+        for cid in all_channel_ids:
+            ib = self.fpgas.get_iceboard_from_id((cid[0], cid[1]))
+            fpga = getattr(ib, 'fpga', ib)
+            four_bits = int(getattr(
+                fpga.chan[int(cid[2])].SCALER, 'FOUR_BITS', 1))
+            if four_bits != 1:
+                raise RuntimeError(
+                    f'Direct gain calculation targets 4-bit corr output, but '
+                    f'board {(cid[0], cid[1])} channel {cid[2]} has '
+                    f'SCALER.FOUR_BITS={four_bits}')
+            target_shifts[tuple(cid)] = calculate_gains.derive_target_shift(fpga)
+
         last_reports = []
         for attempt in range(1, 11):
-            self._clear_gain_adc_flags(ib_chans)
+            for ib, _ in ib_chans:
+                gpio = getattr(ib, 'fpga', ib).GPIO
+                gpio.ADC_OR_CLEAR = 0xff
+                gpio.ADC_OR_CLEAR = 0
+                gpio.ADC_OV_CLEAR = 0xff
+                gpio.ADC_OV_CLEAR = 0
             tasks = [
                 direct_gains(
                     raw_acq_server,
@@ -774,7 +728,15 @@ class FPGAMaster(object):
                 if server_channel_ids[raw_acq_server_name]
             ]
             gain_sets = await asyncio.gather(*tasks)
-            last_reports = self._read_gain_adc_flag_reports(ib_chans)
+            last_reports = []
+            for ib, channels in ib_chans:
+                gpio = getattr(ib, 'fpga', ib).GPIO
+                adc_or = int(gpio.ADC_OR)
+                adc_ov = int(gpio.ADC_OV)
+                mask = sum(1 << int(channel) for channel in channels)
+                if (adc_or | adc_ov) & mask:
+                    last_reports.append((
+                        ib.get_id(), list(channels), mask, adc_or, adc_ov))
             if not last_reports:
                 filtered_gains = {}
                 for gains in gain_sets:
@@ -784,48 +746,21 @@ class FPGAMaster(object):
                 await self.fpgas.set_gains_async(
                     gains=filtered_gains, bank=0, when='now')
                 break
+            details = '; '.join(
+                f'board={board} channels={channels} mask=0x{mask:02x} '
+                f'ADC_OR=0x{adc_or:02x} ADC_OV=0x{adc_ov:02x}'
+                for board, channels, mask, adc_or, adc_ov in last_reports)
             self.log.warning(
                 f'{self!r}: ADC flags were raised during direct gain capture '
-                f'attempt {attempt}/10; retrying. '
-                f'{self._format_adc_flag_reports(last_reports)}')
+                f'attempt {attempt}/10; retrying. {details}')
         else:
             raise RuntimeError(
                 f'ADC flags remained set after 10 direct gain capture attempts: '
-                f'{self._format_adc_flag_reports(last_reports)}')
+                f'{details}')
 
         if save_gains:
             self.log.info(f'{self!r}: *** Gain calculator : saving gains')
             await self.save_gains(bank=0)
-
-    async def _stop_hdf5_for_gain_calculation(self):
-        """Stop configured science writers before a runtime gain phase."""
-        raw_enabled = (
-            self.config.raw_acq.common_config.get(
-                'hdf5_capture_duration', None) is not None)
-        corr_config = self.config.fpga.get('firmware_correlator', {})
-        corr_enabled = bool(
-            corr_config and corr_config.get('enable', False)
-            and corr_config.get('hdf5_capture_duration', None) is not None)
-        for server_name, server in self.raw_acq.items():
-            if raw_enabled:
-                try:
-                    await server.stop_raw_hdf5()
-                except RuntimeError as exc:
-                    if 'not running' not in str(exc).lower():
-                        raise
-                self.log.info(
-                    f'{self!r}: Stopped raw HDF5 for gain calculation on '
-                    f'{server_name}')
-            if corr_enabled:
-                try:
-                    await server.stop_corr_hdf5()
-                except RuntimeError as exc:
-                    if 'not running' not in str(exc).lower():
-                        raise
-                self.log.info(
-                    f'{self!r}: Stopped corr HDF5 for gain calculation on '
-                    f'{server_name}')
-        return raw_enabled, corr_enabled
 
     async def runtime_compute_gains(
             self, data_capture=None, _serial_targets=False, **overrides):
@@ -848,8 +783,27 @@ class FPGAMaster(object):
                 if hasattr(data_capture, 'as_dict') else dict(data_capture))
 
         async with self._gain_operation_lock:
-            raw_enabled, corr_enabled = (
-                await self._stop_hdf5_for_gain_calculation())
+            raw_enabled = (
+                self.config.raw_acq.common_config.get(
+                    'hdf5_capture_duration', None) is not None)
+            corr_config = self.config.fpga.get('firmware_correlator', {})
+            corr_enabled = bool(
+                corr_config and corr_config.get('enable', False)
+                and corr_config.get('hdf5_capture_duration', None) is not None)
+            for server_name, server in self.raw_acq.items():
+                for enabled, stop, data_type in (
+                        (raw_enabled, server.stop_raw_hdf5, 'raw'),
+                        (corr_enabled, server.stop_corr_hdf5, 'corr')):
+                    if not enabled:
+                        continue
+                    try:
+                        await stop()
+                    except RuntimeError as exc:
+                        if 'not running' not in str(exc).lower():
+                            raise
+                    self.log.info(
+                        f'{self!r}: Stopped {data_type} HDF5 for gain '
+                        f'calculation on {server_name}')
             try:
                 await self.start_fpga_raw_data_transmission(
                     capture_config=capture_config,
@@ -1406,39 +1360,56 @@ class FPGAMaster(object):
                 'fpga.compute_gains.enable is true, but no raw_acq servers '
                 'are configured for FFT capture')
 
-        # raw_acq starts with the decoder for the first capture phase. No
-        # previous hardware state is consulted; both phases come from YAML.
-        if conf.raw_acq.enable:
-            initial_capture = (
-                gain_config.data_capture
-                if gain_enabled else conf.fpga.raw_data_capture)
+        if gain_enabled:
             self.log.info(
-                'Starting raw_acq servers with %s capture configuration',
-                'gain' if gain_enabled else 'normal')
+                'Starting raw_acq servers with gain capture configuration')
             try:
                 await self.start_raw_acq_servers(
-                    initial_capture_config=initial_capture,
-                    gain_capture=gain_enabled)
+                    initial_capture_config=gain_config.data_capture,
+                    gain_capture=True)
+
+                self.log.info('Synchronizing gain-capture phase')
+                sync_params = conf.fpga.get('sync_params', {})
+                if sync_params.get('enable', False):
+                    ca.sync(**sync_params)
+                else:
+                    ca.sync()
+
+                gain_params = gain_config.as_dict()
+                gain_params.pop('enable', None)
+                gain_params.pop('data_capture', None)
+                await self.compute_gains(**gain_params)
             except Exception as gain_error:
-                if gain_enabled:
-                    self.log.error(
-                        'Gain-capture startup failed; programming normal '
-                        'capture and aborting startup')
-                    try:
-                        await self.start_fpga_raw_data_transmission(
-                            capture_config=conf.fpga.raw_data_capture,
-                            push_decoder=bool(getattr(self, 'raw_acq', {})),
-                            sync=True,
-                            gain_capture=False)
-                        self.frame0_irigb_time = self.fpgas.sync_timestamp
-                    except Exception as restore_error:
-                        self.log.exception(
-                            'Failed to program normal capture after gain '
-                            'capture startup failed: %s', restore_error)
-                        gain_error.add_note(
-                            'Normal capture recovery also failed: '
-                            f'{restore_error!r}')
+                self.log.error(
+                    'Startup gain phase failed; programming normal capture '
+                    'and aborting without starting HDF5 acquisition')
+                try:
+                    await self.start_fpga_raw_data_transmission(
+                        capture_config=conf.fpga.raw_data_capture,
+                        push_decoder=bool(getattr(self, 'raw_acq', {})),
+                        sync=True,
+                        gain_capture=False)
+                    self.frame0_irigb_time = self.fpgas.sync_timestamp
+                except Exception as restore_error:
+                    self.log.exception(
+                        'Failed to program normal capture after startup gain '
+                        'phase failed: %s', restore_error)
+                    gain_error.add_note(
+                        'Normal capture recovery also failed: '
+                        f'{restore_error!r}')
                 raise
+
+            await self.start_fpga_raw_data_transmission(
+                capture_config=conf.fpga.raw_data_capture,
+                push_decoder=True,
+                sync=True,
+                gain_capture=False)
+        elif conf.raw_acq.enable:
+            self.log.info(
+                'Starting raw_acq servers with normal capture configuration')
+            await self.start_raw_acq_servers(
+                initial_capture_config=conf.fpga.raw_data_capture,
+                gain_capture=False)
         else:
             self.log.info(
                 'raw_acq disabled. Programming normal capture without '
@@ -1449,43 +1420,7 @@ class FPGAMaster(object):
                 sync=False,
                 gain_capture=False)
 
-        if gain_enabled:
-            self.log.info('Synchronizing gain-capture phase')
-            sync_params = conf.fpga.get('sync_params', {})
-            if sync_params.get('enable', False):
-                ca.sync(**sync_params)
-            else:
-                ca.sync()
-            gain_params = gain_config.as_dict()
-            gain_params.pop('enable', None)
-            gain_params.pop('data_capture', None)
-            try:
-                await self.compute_gains(**gain_params)
-            except Exception as gain_error:
-                self.log.error(
-                    'Gain calculation failed; programming normal capture and '
-                    'aborting startup without starting HDF5 acquisition')
-                try:
-                    await self.start_fpga_raw_data_transmission(
-                        capture_config=conf.fpga.raw_data_capture,
-                        push_decoder=True,
-                        sync=True,
-                        gain_capture=False)
-                    self.frame0_irigb_time = self.fpgas.sync_timestamp
-                except Exception as restore_error:
-                    self.log.exception(
-                        'Failed to program normal capture after startup gain '
-                        'calculation failed: %s', restore_error)
-                    gain_error.add_note(
-                        'Normal capture recovery also failed: '
-                        f'{restore_error!r}')
-                raise
-            await self.start_fpga_raw_data_transmission(
-                capture_config=conf.fpga.raw_data_capture,
-                push_decoder=True,
-                sync=True,
-                gain_capture=False)
-        else:
+        if not gain_enabled:
             self.log.info('Synchronizing normal capture phase')
             sync_params = conf.fpga.get('sync_params', {})
             if sync_params.get('enable', False):

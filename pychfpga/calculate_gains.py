@@ -4,7 +4,6 @@
 
 import time
 import traceback
-from pathlib import Path
 
 import numpy as np
 
@@ -40,8 +39,7 @@ class DirectGainCalc(object):
             stream_ids,
             target=DEFAULT_GAIN_TARGET,
             target_shift=44,
-            n_bins=None,
-            debug_plot_dir=None):
+            n_bins=None):
         self.log = log.get_logger(self)
         self.channel_ids = channel_ids
         self.stream_ids = stream_ids
@@ -58,8 +56,6 @@ class DirectGainCalc(object):
         self.target_shift = target_shift
         self.target_full = self.target * np.power(2.0, self.target_shift)
         self.n_bins = int(n_bins) if n_bins is not None else None
-        self.debug_plot_dir = (
-            Path(debug_plot_dir).expanduser() if debug_plot_dir is not None else None)
         self.gains = None
         self.done = np.zeros((self.nchan), dtype=bool)
         if self.n_bins is not None:
@@ -114,67 +110,6 @@ class DirectGainCalc(object):
         mask = np.zeros((ix_done.size, self.n_bins), dtype=bool)
         return self.get_gains(ix_done), mask
 
-    def _save_debug_plot(self, stream_ids, rms, gains):
-        # TEMP DEBUG: save direct-gain inputs/results for the corr16 startup failure.
-        # Remove this method and debug_plot_dir plumbing after the zero-bin issue is resolved.
-        if self.debug_plot_dir is None:
-            return
-        try:
-            import matplotlib
-            matplotlib.use('Agg')
-            import matplotlib.pyplot as plt
-
-            self.debug_plot_dir.mkdir(parents=True, exist_ok=True)
-            stream_ids = np.asarray(stream_ids)
-            rms = np.asarray(rms, dtype=np.float64)
-            gains = np.asarray(gains, dtype=np.float64)
-            bins = np.arange(rms.shape[-1])
-
-            fig, axes = plt.subplots(2, 1, figsize=(14, 9), sharex=True)
-            for row, sid in enumerate(stream_ids[:2]):
-                axes[0].plot(
-                    bins, np.where(rms[row] > 0, rms[row], np.nan),
-                    linewidth=0.8, alpha=0.65, label=f'stream {int(sid)}')
-                axes[1].plot(
-                    bins, np.where(np.isfinite(gains[row]) & (gains[row] > 0), gains[row], np.nan),
-                    linewidth=0.8, alpha=0.65)
-
-            bad_rows, bad_bins = np.where(~np.isfinite(rms) | (rms <= 0))
-            if bad_bins.size:
-                positive_rms = rms[np.isfinite(rms) & (rms > 0)]
-                finite_gains = gains[np.isfinite(gains) & (gains > 0)]
-                rms_marker_y = float(np.min(positive_rms)) * 0.5 if positive_rms.size else 1.0
-                gain_marker_y = float(np.max(finite_gains)) if finite_gains.size else 1.0
-                axes[0].scatter(
-                    bad_bins, np.full(bad_bins.size, rms_marker_y),
-                    marker='x', color='red', s=28, label='zero/invalid RMS')
-                axes[1].scatter(
-                    bad_bins, np.full(bad_bins.size, gain_marker_y),
-                    marker='x', color='red', s=28, label='infinite/invalid gain')
-
-            axes[0].set_yscale('log')
-            axes[1].set_yscale('log')
-            axes[0].set_ylabel('Accumulated FFT RMS')
-            axes[1].set_ylabel('Calculated full gain')
-            axes[1].set_xlabel('Natural-order FFT bin')
-            axes[0].grid(True, which='both', alpha=0.25)
-            axes[1].grid(True, which='both', alpha=0.25)
-            axes[0].legend(loc='best', fontsize='small', ncol=2)
-            if bad_bins.size:
-                axes[1].legend(loc='best', fontsize='small')
-            fig.suptitle(
-                'TEMP DEBUG: direct gain calculation input and result '
-                f'({rms.shape[0]} streams, {rms.shape[1]} bins)')
-            fig.tight_layout()
-
-            sid_text = '-'.join(str(int(sid)) for sid in stream_ids)
-            filename = self.debug_plot_dir / f'direct_gain_debug_streams_{sid_text}.png'
-            fig.savefig(filename, dpi=150)
-            plt.close(fig)
-            self.log.warning(f'{self!r}: TEMP DEBUG plot saved to {filename}')
-        except Exception:
-            self.log.exception(f'{self!r}: Failed to save TEMP DEBUG direct-gain plot')
-
     def update_gains(self, stream_ids, rms):
         """Compute final float gains from one per-bin RMS spectrum per channel."""
         try:
@@ -199,7 +134,6 @@ class DirectGainCalc(object):
             rms_selected = rms[ix]
             with np.errstate(divide='ignore', invalid='ignore', over='ignore'):
                 calculated_gains = self.target_full[bix, np.newaxis] / rms_selected
-            self._save_debug_plot(stream_ids[ix], rms_selected, calculated_gains)
             bad = ~np.isfinite(rms_selected) | (rms_selected <= 0)
             if np.any(bad):
                 bad_rows, bad_bins = np.where(bad)

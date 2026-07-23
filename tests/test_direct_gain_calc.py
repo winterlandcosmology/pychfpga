@@ -797,10 +797,15 @@ def test_derive_target_shift_uses_fft_metadata():
 
 def test_fpga_master_target_shift_rejects_non_four_bit_corr_output():
     ib = _FakeBoard(_FakeFPGA(four_bits=0))
-    master = _fake_master(ib)
+    server = _FakeGainServer(np.ones((1, 4)))
+    master = _fake_master(ib, server)
 
     with pytest.raises(RuntimeError, match='4-bit corr output'):
-        FPGAMaster._derive_gain_target_shifts(master, [(0, 1, 0)])
+        asyncio.run(FPGAMaster.compute_gains(
+            master,
+            targets=[('*',)],
+            number_of_fft_averages=1,
+        ))
 
 
 def test_direct_gain_formula_uses_rms_and_target_shift():
@@ -820,26 +825,6 @@ def test_direct_gain_formula_uses_rms_and_target_shift():
     filtered, mask = gc.get_filtered_gains()
     np.testing.assert_allclose(filtered[(0, 1, 0)][0], gain_vec)
     assert not mask.any()
-
-
-def test_direct_gain_debug_plot_is_saved(tmp_path):
-    gc = DirectGainCalc(
-        channel_ids=[(0, 1, 0)],
-        stream_ids=[10],
-        target=2.0,
-        target_shift=36,
-        n_bins=4,
-        debug_plot_dir=tmp_path,
-    )
-
-    gc.update_gains(
-        np.array([10]),
-        np.array([[100.0, 200.0, 400.0, 800.0]]),
-    )
-
-    plots = list(tmp_path.glob('direct_gain_debug_streams_*.png'))
-    assert len(plots) == 1
-    assert plots[0].stat().st_size > 0
 
 
 def test_direct_gain_supports_per_channel_target_shift():
@@ -1092,24 +1077,6 @@ def test_fpga_master_scrambles_gains_before_firmware_write():
     assert mapped[(0, 1, 0)][1] == -1
 
 
-def test_adc_guard_clears_and_reports_flags():
-    gpio = _FakeGPIO(adc_or=0b10, adc_ov=0)
-    ib = _FakeBoard(_FakeFPGA(gpio=gpio))
-    master = _fake_master(ib)
-
-    FPGAMaster._clear_gain_adc_flags(master, [(ib, [1])])
-    reports = FPGAMaster._read_gain_adc_flag_reports(master, [(ib, [1])])
-
-    assert gpio.clear_writes == [
-        ('ADC_OR_CLEAR', 0xff),
-        ('ADC_OR_CLEAR', 0),
-        ('ADC_OV_CLEAR', 0xff),
-        ('ADC_OV_CLEAR', 0),
-    ]
-    assert reports[0]['adc_or'] == 0b10
-    assert 'ADC_OR=0x02' in FPGAMaster._format_adc_flag_reports(reports)
-
-
 def test_compute_gains_retries_adc_flags_and_writes_firmware_order():
     gpio = _FakeGPIO(adc_sequence=[1, 0])
     ib = _FakeBoard(_FakeFPGA(bin_map=[1, 0, 3, 2], gpio=gpio))
@@ -1133,6 +1100,12 @@ def test_compute_gains_retries_adc_flags_and_writes_firmware_order():
     natural = DEFAULT_GAIN_TARGET * 2**36 / rms[0]
     np.testing.assert_allclose(gain_vec, natural[[1, 0, 3, 2]])
     assert glog == -1
+    assert gpio.clear_writes[:4] == [
+        ('ADC_OR_CLEAR', 0xff),
+        ('ADC_OR_CLEAR', 0),
+        ('ADC_OV_CLEAR', 0xff),
+        ('ADC_OV_CLEAR', 0),
+    ]
     assert ib.start_calls == []
     assert master.raw_acq_sync_count == 0
 
