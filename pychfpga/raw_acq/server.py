@@ -100,55 +100,12 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
 
     @endpoint('update-config')
     async def update_config(self, config=None, **sections):
-        if config is not None:
-            if sections:
-                raise ValueError(
-                    "update-config accepts either a 'config' envelope or "
-                    "top-level processor sections, not both")
-            payload = config
-        else:
-            # Preserve direct REST patches such as {"raw": {...}} and
-            # {"corr": {...}} for diagnostics and external callers.
-            payload = sections
+        # The envelope is authoritative when present. Top-level sections remain
+        # available for direct REST diagnostics.
+        payload = config if config is not None else sections
         self.log.info(
             f'{self!r}: received config update with keys {list(payload.keys())}')
-        incoming_raw = payload.get('raw') or {}
-        incoming_caps = incoming_raw.get('capture_format') or []
-        incoming_fft_format = incoming_caps[1] if len(incoming_caps) > 1 else None
-        self.log.info(
-            f'{self!r}: received raw decoder: '
-            f'source={incoming_raw.get("source")}, '
-            f'frames_per_burst={incoming_raw.get("frames_per_burst")}, '
-            f'packets_per_logical_frame='
-            f'{incoming_raw.get("packets_per_logical_frame")}, '
-            f'fft_format={incoming_fft_format}')
         self.receiver.update_config(payload)
-        raw_proc = self.receiver.processors.get("raw")
-        decoder_summary = None
-        if raw_proc is not None:
-            caps = raw_proc.config.get('capture_format') or []
-            fft_format = caps[1] if len(caps) > 1 else None
-            decoder_summary = dict(
-                source=raw_proc.config.get('source'),
-                frames_per_burst=raw_proc.config.get('frames_per_burst'),
-                packets_per_logical_frame=raw_proc.config.get(
-                    'packets_per_logical_frame'),
-                fft_format=fft_format.as_dict()
-                if hasattr(fft_format, 'as_dict') else fft_format,
-            )
-            self.log.info(
-                f'{self!r}: applied raw decoder: '
-                f'source={raw_proc.config.get("source")}, '
-                f'frames_per_burst={raw_proc.config.get("frames_per_burst")}, '
-                f'packets_per_logical_frame='
-                f'{raw_proc.config.get("packets_per_logical_frame")}, '
-                f'fft_format={fft_format}')
-        return dict(
-            adc_configured=self.receiver.processors.get("adc") is not None,
-            fft_configured=self.receiver.processors.get("fft") is not None,
-            corr_configured=self.receiver.processors.get("corr") is not None,
-            raw_decoder=decoder_summary,
-        )
 
     @endpoint('start-raw-hdf5')
     async def start_raw_hdf5(
@@ -243,24 +200,6 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
                     n_bins=int(fft._fft_n_bins),
                 ))
         return dict(channels=rows, diagnostics=diag)
-
-    @endpoint('start-fft-mean-amplitude')
-    async def start_fft_mean_amplitude(self, stream_ids=[], target_gain_bank=0, number_of_frames=100):
-        """Compatibility endpoint; products are RMS values."""
-        return await self.start_fft_rms(
-            stream_ids=stream_ids,
-            target_gain_bank=target_gain_bank,
-            number_of_frames=number_of_frames)
-
-    @endpoint('get-fft-mean-amplitude')
-    async def get_fft_mean_amplitude(self):
-        """Compatibility endpoint; products are RMS values."""
-        return await self.get_fft_rms()
-
-    @endpoint('get-fft-mean-amplitude-status')
-    async def get_fft_mean_amplitude_status(self):
-        """Compatibility endpoint; acquisition state is RMS."""
-        return await self.get_fft_rms_status()
 
     @endpoint('start-corr-hdf5')
     async def start_corr_hdf5(self,

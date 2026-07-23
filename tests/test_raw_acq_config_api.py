@@ -1,7 +1,5 @@
 import asyncio
 
-import pytest
-
 from pychfpga.raw_acq.client import RawAcqAsyncRESTClient
 from pychfpga.raw_acq.server import RawAcqAsyncRESTServer
 
@@ -66,12 +64,14 @@ def test_raw_acq_server_preserves_direct_section_patches():
     assert server.receiver.updates == [{"raw": raw}]
 
 
-def test_raw_acq_server_rejects_mixed_update_shapes():
+def test_raw_acq_server_prefers_enveloped_config():
     server = object.__new__(RawAcqAsyncRESTServer)
     server.log = _Log()
     server.address = "localhost"
     server.port = 54322
     server.receiver = _Receiver()
+    config = {"raw": {"frames_per_burst": 4}}
 
-    with pytest.raises(ValueError, match="either a 'config' envelope"):
-        asyncio.run(server.update_config(config={"raw": {}}, corr={}))
+    asyncio.run(server.update_config(config=config, corr={"NCHAN": 16}))
+
+    assert server.receiver.updates == [config]

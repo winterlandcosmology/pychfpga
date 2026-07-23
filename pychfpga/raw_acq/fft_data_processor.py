@@ -223,10 +223,6 @@ class FFTDataProcessor:
             self.fft_rms_average[:n] = saved['average'][:n]
             self.fft_power_sum[:n, :use_bins] = saved['power_sum'][:n, :use_bins]
 
-    def _alloc_fft_mean_amplitude_buffers(self, nchan, n_bins, preserve_acquisition=False):
-        """Compatibility alias; the resulting products are RMS values."""
-        self._alloc_fft_rms_buffers(nchan, n_bins, preserve_acquisition)
-
     @staticmethod
     def _bin_power(row) -> np.ndarray:
         """Per-bin power from one natural-order complex spectrum row."""
@@ -236,11 +232,6 @@ class FFTDataProcessor:
         real = row.real.astype(np.float64, copy=False)
         imag = row.imag.astype(np.float64, copy=False)
         return real * real + imag * imag
-
-    @staticmethod
-    def _bin_amplitude(row) -> np.ndarray:
-        """Compatibility helper returning one-frame RMS amplitude."""
-        return np.sqrt(FFTDataProcessor._bin_power(row))
 
     def _feed_logical_spectrum(self, cix, row):
         """Buffer split physical frames until a full logical spectrum is ready."""
@@ -365,13 +356,6 @@ class FFTDataProcessor:
         self._diag_rows_incomplete = 0
         self._diag_max_count = 0
 
-    async def start_fft_mean_amplitude_async(self, stream_ids, target_gain_bank, number_of_frames=100):
-        """Compatibility alias; products are RMS values."""
-        await self.start_fft_rms_async(
-            stream_ids=stream_ids,
-            target_gain_bank=target_gain_bank,
-            number_of_frames=number_of_frames)
-
     async def get_fft_rms_async(self, all_done=True):
         """Return per-bin FFT RMS products that are ready."""
         with self.fft_lock:
@@ -383,10 +367,6 @@ class FFTDataProcessor:
             f'{self!r}: get_fft_rms returned FFT RMS '
             f'vectors from {sid.size} channels')
         return sid, rms
-
-    async def get_fft_mean_amplitude_async(self, all_done=True):
-        """Compatibility alias; products are RMS values."""
-        return await self.get_fft_rms_async(all_done=all_done)
 
     def consume(self, result):
         """Update FFT RMS / metrics from a ``get_formatted_data(1)`` result.
