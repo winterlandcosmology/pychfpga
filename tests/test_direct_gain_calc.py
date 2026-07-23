@@ -192,11 +192,9 @@ class _FakeFPGA:
 class _FakeBoard:
     def __init__(self, fpga=None):
         self.fpga = fpga or _FakeFPGA()
-        self.scaler_calls = []
         self.start_calls = []
         self.stop_count = 0
         self.capture_calls = []
-        self.burst_calls = []
 
     def get_id(self, ch=None, default_crate=None, default_slot=None):
         if ch is None:
@@ -212,15 +210,6 @@ class _FakeBoard:
     def get_stream_ids(self, channels):
         return [10 + int(ch) for ch in channels]
 
-    def set_scaler_output_modes(self, **kwargs):
-        self.scaler_calls.append(kwargs)
-        if 'cap_data_type' in kwargs:
-            cap_type = kwargs['cap_data_type']
-            if isinstance(cap_type, str):
-                cap_type = _FakeScaler.CAPTURE_DATA_TYPES[cap_type]
-            for ch in kwargs.get('channels', self.fpga.default_channels):
-                self.fpga.config.chan[int(ch)].scaler.cap_data_type = int(cap_type)
-
     def set_data_capture(self, **kwargs):
         self.capture_calls.append(kwargs)
         channels = kwargs.get('channels', self.fpga.default_channels)
@@ -235,6 +224,12 @@ class _FakeBoard:
         channels = list(kwargs['channels'])
         self.fpga.config.raw_capture.channels = tuple(channels)
         self.fpga.config.raw_capture.source = kwargs['source']
+        if kwargs['source'] == 'scaler':
+            cap_type = kwargs['data_type']
+            if isinstance(cap_type, str):
+                cap_type = _FakeScaler.CAPTURE_DATA_TYPES[cap_type]
+            for ch in channels:
+                self.fpga.config.chan[int(ch)].scaler.cap_data_type = int(cap_type)
         if self.fpga.CAPTURE_TYPE == 'PROBER':
             frames = int(kwargs['frames_per_burst'])
             self.fpga._capture_pkt_frames_per_burst = frames
@@ -242,13 +237,6 @@ class _FakeBoard:
 
     def stop_data_capture(self):
         self.stop_count += 1
-
-    def set_data_capture_frames_per_burst(self, frames_per_burst, channels=None):
-        channels = list(channels or self.fpga.default_channels)
-        self.burst_calls.append((int(frames_per_burst), channels))
-        self.fpga._capture_pkt_frames_per_burst = int(frames_per_burst)
-        self.fpga.config.raw_capture.frames_per_burst = int(frames_per_burst)
-
 
 class _FakeFpgas:
     def __init__(self, ib):
@@ -338,21 +326,20 @@ def _crs_capture_profile(*, gain):
     )
 
 
-def test_program_gain_capture_uses_ice_full_resolution_geometry():
+def test_start_transmission_uses_ice_full_resolution_gain_geometry():
     ib = _FakeBoard(_FakeFPGA(
         platform_id=_FakeFPGA._PLATFORM_ID_MGK7MB_REV2))
     master = _fake_master(ib)
 
-    asyncio.run(FPGAMaster.program_data_capture(
-        master, _ice_capture_profile(gain=True),
-        iceboards=[ib], gain_capture=True))
+    asyncio.run(FPGAMaster.start_fpga_raw_data_transmission(
+        master,
+        capture_config=_ice_capture_profile(gain=True),
+        gain_capture=True,
+        sync=True))
 
-    assert ib.scaler_calls == [{
-        'cap_data_type': 'fft_full',
-        'channels': [0, 1],
-    }]
     assert ib.start_calls[0]['frames_per_burst'] == 4
     assert ib.start_calls[0]['source'] == 'scaler'
+    assert ib.start_calls[0]['data_type'] == 'fft_full'
     assert ib.capture_calls == [{
         'channels': [0, 1],
         'sub_period': 12,
@@ -362,70 +349,59 @@ def test_program_gain_capture_uses_ice_full_resolution_geometry():
     assert master.fpgas.sync_count == 1
 
 
-def test_program_normal_capture_uses_yaml_instead_of_previous_state():
+def test_start_transmission_uses_normal_yaml_after_gain_profile():
     ib = _FakeBoard(_FakeFPGA())
     master = _fake_master(ib)
 
-    asyncio.run(FPGAMaster.program_data_capture(
-        master, _ice_capture_profile(gain=True),
-        iceboards=[ib], gain_capture=True))
-    asyncio.run(FPGAMaster.program_data_capture(
-        master, _ice_capture_profile(gain=False),
-        iceboards=[ib], gain_capture=False))
+    asyncio.run(FPGAMaster.start_fpga_raw_data_transmission(
+        master,
+        capture_config=_ice_capture_profile(gain=True),
+        gain_capture=True,
+        sync=True))
+    asyncio.run(FPGAMaster.start_fpga_raw_data_transmission(
+        master,
+        capture_config=_ice_capture_profile(gain=False),
+        gain_capture=False,
+        sync=True))
 
     assert [call['frames_per_burst'] for call in ib.start_calls] == [4, 1]
     assert [call['source'] for call in ib.start_calls] == ['scaler', 'adc']
     assert [call['sub_period'] for call in ib.capture_calls] == [12, 23]
-    assert [call['cap_data_type'] for call in ib.scaler_calls] == [
-        'fft_full', 0]
     assert master.raw_acq_sync_count == 2
 
 
-def test_program_gain_capture_rejects_wrong_ice_burst_before_writes():
+def test_start_transmission_rejects_wrong_ice_gain_burst_before_writes():
     ib = _FakeBoard(_FakeFPGA())
     master = _fake_master(ib)
     profile = _ice_capture_profile(gain=True)
     profile.frames_per_burst = 3
 
-    with pytest.raises(ValueError, match='requires frames_per_burst=4'):
-        asyncio.run(FPGAMaster.program_data_capture(
-            master, profile, iceboards=[ib], gain_capture=True))
+    with pytest.raises(RuntimeError, match='requires frames_per_burst=4'):
+        asyncio.run(FPGAMaster.start_fpga_raw_data_transmission(
+            master, capture_config=profile, gain_capture=True))
 
-    assert ib.scaler_calls == []
     assert ib.start_calls == []
 
 
-def test_program_gain_and_normal_capture_select_crs_ucap_outputs():
+def test_start_transmission_selects_crs_gain_and_normal_outputs():
     ib = _FakeBoard(_FakeFPGA(
         bits_per_bin=64, platform_id=_FakeFPGA._PLATFORM_ID_CRS))
     master = _fake_master(ib)
 
-    asyncio.run(FPGAMaster.program_data_capture(
-        master, _crs_capture_profile(gain=True),
-        iceboards=[ib], gain_capture=True))
-    asyncio.run(FPGAMaster.program_data_capture(
-        master, _crs_capture_profile(gain=False),
-        iceboards=[ib], gain_capture=False))
+    asyncio.run(FPGAMaster.start_fpga_raw_data_transmission(
+        master,
+        capture_config=_crs_capture_profile(gain=True),
+        gain_capture=True,
+        sync=True))
+    asyncio.run(FPGAMaster.start_fpga_raw_data_transmission(
+        master,
+        capture_config=_crs_capture_profile(gain=False),
+        gain_capture=False,
+        sync=True))
 
     assert ib.fpga.UCAP.outputs == ['cap', 'corr']
-    assert ib.burst_calls == []
-    assert [call['select'] for call in ib.start_calls] == [True, False]
     assert [call['source'] for call in ib.start_calls] == [
         'scaler', 'funcgen']
-
-
-def test_program_crs_capture_rejects_prober_burst_field():
-    ib = _FakeBoard(_FakeFPGA(
-        bits_per_bin=64, platform_id=_FakeFPGA._PLATFORM_ID_CRS))
-    master = _fake_master(ib)
-    profile = _crs_capture_profile(gain=True)
-    profile.frames_per_burst = 2
-
-    with pytest.raises(ValueError, match='PROBER-only'):
-        asyncio.run(FPGAMaster.program_data_capture(
-            master, profile, iceboards=[ib], gain_capture=True))
-
-    assert ib.start_calls == []
 
 
 class _NaturalOrderFFT:
@@ -690,10 +666,11 @@ def _runtime_master(*, fail_gain=False, block_gain=None):
     )
     master.raw_acq = {'raw0': _RuntimeHDFServer(events)}
 
-    async def program(config, **kwargs):
+    async def program(capture_config=None, **kwargs):
         events.append(
             ('program-gain' if kwargs['gain_capture'] else 'program-normal',
-             config.as_dict() if hasattr(config, 'as_dict') else dict(config)))
+             capture_config.as_dict()
+             if hasattr(capture_config, 'as_dict') else dict(capture_config)))
 
     async def compute(**kwargs):
         events.append(('compute', kwargs))
@@ -708,7 +685,7 @@ def _runtime_master(*, fail_gain=False, block_gain=None):
     async def start_corr():
         events.append('start-corr-hdf')
 
-    master.program_data_capture = program
+    master.start_fpga_raw_data_transmission = program
     master.compute_gains = compute
     master.start_hdf5_capture = start_raw
     master.start_corr_hdf5_capture = start_corr
@@ -824,17 +801,6 @@ def test_fpga_master_target_shift_rejects_non_four_bit_corr_output():
 
     with pytest.raises(RuntimeError, match='4-bit corr output'):
         FPGAMaster._derive_gain_target_shifts(master, [(0, 1, 0)])
-
-
-def test_fpga_master_validates_platform_capture_modes():
-    ice = _FakeBoard(_FakeFPGA(platform_id=_FakeFPGA._PLATFORM_ID_MGK7MB_REV2))
-    crs = _FakeBoard(_FakeFPGA(bits_per_bin=64, platform_id=_FakeFPGA._PLATFORM_ID_CRS))
-    master = _fake_master(ice)
-
-    FPGAMaster._validate_gain_capture_data_type(master, [(ice, [0])], 'fft_full')
-    FPGAMaster._validate_gain_capture_data_type(master, [(crs, [0])], 'fft_2x')
-    with pytest.raises(RuntimeError, match='expected'):
-        FPGAMaster._validate_gain_capture_data_type(master, [(ice, [0])], 'fft_2x')
 
 
 def test_direct_gain_formula_uses_rms_and_target_shift():

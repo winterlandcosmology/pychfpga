@@ -89,7 +89,6 @@ class _FakeBoard:
         self.fpga = self
         self.target_addr = None
         self.capture_source = "mixed"
-        self.scaler_calls = []
         self.start_data_capture_calls = []
         self.set_data_capture_calls = []
 
@@ -99,9 +98,6 @@ class _FakeBoard:
     def get_stream_ids(self, channels=None):
         channels = channels or self.get_channels()
         return [10 + ch for ch in channels]
-
-    def set_scaler_output_modes(self, **kwargs):
-        self.scaler_calls.append(kwargs)
 
     def start_data_capture(self, **kwargs):
         self.start_data_capture_calls.append(kwargs)
@@ -263,12 +259,9 @@ def test_raw_acq_initial_decoder_follows_programmed_gain_profile(monkeypatch):
         initial_capture_config=gain_capture,
         gain_capture=True))
 
-    assert board.scaler_calls == [{
-        "cap_data_type": "fft_full",
-        "channels": [0, 1],
-    }]
     assert board.start_data_capture_calls[0]["frames_per_burst"] == 4
     assert board.start_data_capture_calls[0]["source"] == "scaler"
+    assert board.start_data_capture_calls[0]["data_type"] == "fft_full"
     assert board.set_data_capture_calls == [([0, 1], "scaler", 12)]
 
 

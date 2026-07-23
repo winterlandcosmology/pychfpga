@@ -281,14 +281,8 @@ class FPGAMaster(object):
                     self.raw_acq_stream_ids[server_name].extend(ib.get_stream_ids())
 
         if initial_capture_config is not None:
-            all_ibs = []
-            for ibs in self.raw_acq_ibs.values():
-                for ib in ibs:
-                    if ib not in all_ibs:
-                        all_ibs.append(ib)
-            await self.program_data_capture(
-                initial_capture_config,
-                iceboards=all_ibs,
+            await self.start_fpga_raw_data_transmission(
+                capture_config=initial_capture_config,
                 push_decoder=False,
                 sync=False,
                 gain_capture=gain_capture)
@@ -379,7 +373,16 @@ class FPGAMaster(object):
         self.log.info(f'{self!r}: RawAcq server setup successfully')
 
 
-    async def start_fpga_raw_data_transmission(self, capture_rate=None, capture_source=None, tmux_factor=None, sync=False):
+    async def start_fpga_raw_data_transmission(
+            self,
+            capture_rate=None,
+            capture_source=None,
+            tmux_factor=None,
+            sync=False,
+            *,
+            capture_config=None,
+            gain_capture=False,
+            push_decoder=True):
         """ Configure the FPGAs to transmit raw data.
 
         This is the static baseline data capture configuration that cannot be
@@ -396,35 +399,107 @@ class FPGAMaster(object):
             tmux_factor (int): Number between 0 and 64.  Raw data transmission is staggered across FPGAs in the array
                 with a step size equal to tmux_factor * 524.288 microsec.
 
+            capture_config: Complete YAML capture profile. The legacy arguments
+                above override the corresponding profile values when provided.
+
+            gain_capture: Validate and program the platform's gain-capture mode.
+
+            push_decoder: Push the resulting firmware decoder to raw_acq.
+
         If no arguments are provided, the FPGA will be set to transmit data at the idle rate and from source defined in the config file.
         """
-        conf = self.config.fpga.raw_data_capture
-        capture_source = capture_source or conf.capture_source
-        capture_rate = capture_rate or conf.baseline_capture_rate
-        tmux_factor = tmux_factor or conf.tmux_factor
-        capture_period = (1 / capture_rate) if capture_rate else 0 #Py3: guaranteed to be a float
+        profile = capture_config or self.config.fpga.raw_data_capture
+        profile = NameSpace(
+            profile.as_dict() if hasattr(profile, 'as_dict') else dict(profile))
+        if capture_rate is not None:
+            profile.baseline_capture_rate = capture_rate
+        if capture_source is not None:
+            profile.capture_source = capture_source
+        if tmux_factor is not None:
+            profile.tmux_factor = tmux_factor
 
-        for server_name, ibs in self.raw_acq_ibs.items():
-            # Compute a transmission delay for each board to prevent them from sending their data all at the same time
+        iceboards = []
+        for ibs in getattr(self, 'raw_acq_ibs', {}).values():
             for ib in ibs:
-                (crate, slot) = ib.get_id(default_crate=0, default_slot=0)
-                # send_delay = int(tmux_factor * (16 * crate + slot))
-                send_delay = int(tmux_factor * (slot))
+                if ib not in iceboards:
+                    iceboards.append(ib)
+        if not iceboards:
+            iceboards = list(self.fpgas.ib)
 
-                self.log.info(
-                    f'{self!r}: Starting data capture on {ib!r} '
-                    f'with period={capture_period}, source={capture_source}, '
-                    f'send_delay={send_delay}')
+        if gain_capture:
+            for ib in iceboards:
+                fpga = getattr(ib, 'fpga', ib)
+                expected = {
+                    'PROBER': 'fft_full',
+                    'UCAP': 'fft_2x',
+                }.get(fpga.CAPTURE_TYPE)
+                if profile.scaler_cap_data_type != expected:
+                    raise RuntimeError(
+                        f'Gain capture on {fpga.CAPTURE_TYPE} requires '
+                        f'scaler_cap_data_type={expected!r}, got '
+                        f'{profile.scaler_cap_data_type!r}')
+                if (
+                        fpga.CAPTURE_TYPE == 'PROBER'
+                        and int(profile.frames_per_burst) != 4):
+                    raise RuntimeError(
+                        'PROBER fft_full gain capture requires '
+                        'frames_per_burst=4')
+            self._active_gain_capture_rate = int(profile.capture_rate)
 
-                if capture_period:
-                    ib.start_data_capture(period=capture_period, source=capture_source, send_delay=send_delay)
-                else:
-                    ib.stop_data_capture()
+        period = (
+            1.0 / float(profile.baseline_capture_rate)
+            if float(profile.baseline_capture_rate) else 0)
+        for ib in iceboards:
+            fpga = getattr(ib, 'fpga', ib)
+            channels = list(ib.get_channels())
+            source = str(profile.capture_source)
+            if fpga.CAPTURE_TYPE == 'UCAP' and source == 'adc':
+                source = 'funcgen'
+            ucap_output = profile.get('ucap_output', 'corr')
+            if fpga.CAPTURE_TYPE == 'UCAP':
+                expected_output = 'cap' if gain_capture else 'corr'
+                if ucap_output != expected_output:
+                    raise RuntimeError(
+                        f'{"Gain" if gain_capture else "Normal"} UCAP capture '
+                        f'requires ucap_output={expected_output!r}, got '
+                        f'{ucap_output!r}')
+            _, slot = ib.get_id(default_crate=0, default_slot=0)
+            send_delay = int(profile.tmux_factor) * int(slot)
+            self.log.info(
+                f'{self!r}: Starting data capture on {ib!r} '
+                f'with period={period}, source={source}, '
+                f'send_delay={send_delay}')
 
-        # If not done explicitely later, we must issue sync command after starting raw data capture,
-        # otherwise raw frames will not be synced across boards.
-        if capture_period and sync:
-            self.fpgas.sync()
+            if period:
+                ib.start_data_capture(
+                    period=period,
+                    frames_per_burst=int(profile.get('frames_per_burst', 1)),
+                    channels=channels,
+                    source=source,
+                    data_type=(
+                        profile.scaler_cap_data_type
+                        if source == 'scaler' else None),
+                    sync=False,
+                    send_delay=send_delay,
+                    mode=int(profile.get('ucap_mode', 0)))
+            else:
+                ib.stop_data_capture()
+            ib.set_data_capture(
+                channels=channels,
+                sub_period=int(profile.capture_rate),
+                source=source)
+            if fpga.CAPTURE_TYPE == 'UCAP':
+                fpga.UCAP.select_output(ucap_output)
+            await asyncio.sleep(0)
+
+        if push_decoder:
+            await self._sync_raw_acq_firmware_config()
+        if period and sync:
+            sync_params = self.config.fpga.get('sync_params', {})
+            if sync_params.get('enable', False):
+                self.fpgas.sync(**sync_params)
+            else:
+                self.fpgas.sync()
 
 
     async def set_fpga_data_capture(self, targets=None, capture_rate=23, source=None):
@@ -520,205 +595,13 @@ class FPGAMaster(object):
                 continue
             fw = firmware_config_for_rest(
                 ibs[0].fpga.get_receiver_config().as_dict())
-            raw = fw.get('raw', {})
-            caps = raw.get('capture_format') or []
-            fft_format = caps[1] if len(caps) > 1 else None
-            self.log.info(
-                f'{self!r}: Pushing raw-acq decoder to {server_name}: '
-                f'source={raw.get("source")}, '
-                f'frames_per_burst={raw.get("frames_per_burst")}, '
-                f'packets_per_logical_frame={raw.get("packets_per_logical_frame")}, '
-                f'fft_format={fft_format}')
             tasks.append(server.update_config(fw))
         if tasks:
-            results = await asyncio.gather(*tasks)
-            self.log.info(f'{self!r}: Raw-acq decoder acknowledgements: {results!r}')
-
-    async def program_data_capture(
-            self,
-            capture_config,
-            *,
-            iceboards=None,
-            push_decoder=True,
-            sync=True,
-            gain_capture=False):
-        """Program one complete YAML-defined raw capture phase."""
-        config = NameSpace(
-            capture_config.as_dict()
-            if hasattr(capture_config, 'as_dict') else dict(capture_config))
-        required = {
-            'capture_source', 'baseline_capture_rate', 'capture_rate',
-            'tmux_factor', 'scaler_cap_data_type'}
-        missing = sorted(required.difference(config.keys()))
-        if missing:
-            raise ValueError(
-                f'Data capture profile is missing required fields: {missing}')
-
-        if iceboards is None:
-            iceboards = []
-            for ibs in getattr(self, 'raw_acq_ibs', {}).values():
-                for ib in ibs:
-                    if ib not in iceboards:
-                        iceboards.append(ib)
-            if not iceboards:
-                iceboards = list(self.fpgas.ib)
-
-        board_channels = [(ib, list(ib.get_channels())) for ib in iceboards]
-        if gain_capture:
-            self._validate_gain_capture_data_type(
-                board_channels, config.scaler_cap_data_type)
-            self._active_gain_capture_rate = int(config.capture_rate)
-
-        # Validate the complete profile before writing any board registers.
-        for ib, _ in board_channels:
-            fpga = self._fpga_from_iceboard(ib)
-            capture_type = getattr(fpga, 'CAPTURE_TYPE', None)
-            if capture_type == 'PROBER':
-                if 'frames_per_burst' not in config:
-                    raise ValueError(
-                        'PROBER data capture profiles require '
-                        f'frames_per_burst (board {ib.get_id()})')
-                frames_per_burst = int(config.frames_per_burst)
-                if not 1 <= frames_per_burst <= 4:
-                    raise ValueError(
-                        'PROBER frames_per_burst must be in range [1, 4], '
-                        f'got {frames_per_burst} for board {ib.get_id()}')
-                if gain_capture:
-                    capture_name = self._capture_data_type_name(
-                        ib, config.scaler_cap_data_type, ib.get_channels())
-                    expected_frames = {'fft_2x': 2, 'fft_full': 4}[
-                        capture_name]
-                    if frames_per_burst != expected_frames:
-                        raise ValueError(
-                            f'Gain capture mode {config.scaler_cap_data_type!r} '
-                            f'requires frames_per_burst={expected_frames} on '
-                            f'board {ib.get_id()}, got {frames_per_burst}')
-            elif capture_type == 'UCAP':
-                if 'frames_per_burst' in config:
-                    raise ValueError(
-                        'frames_per_burst is PROBER-only and must be omitted '
-                        f'from UCAP data capture profiles (board {ib.get_id()})')
-                if 'ucap_output' not in config:
-                    raise ValueError(
-                        'UCAP data capture profiles require ucap_output '
-                        f'(board {ib.get_id()})')
-                ucap_output = str(config.ucap_output)
-                if ucap_output == 'capture':
-                    ucap_output = 'cap'
-                if ucap_output not in ('cap', 'ucap', 'aux', 'corr'):
-                    raise ValueError(
-                        f'Invalid UCAP output {config.ucap_output!r} for '
-                        f'board {ib.get_id()}')
-                expected_output = 'cap' if gain_capture else 'corr'
-                normalized_output = (
-                    'cap' if ucap_output in ('cap', 'ucap') else 'corr')
-                if normalized_output != expected_output:
-                    raise ValueError(
-                        f'{"Gain" if gain_capture else "Normal"} UCAP '
-                        f'capture requires ucap_output={expected_output!r}, '
-                        f'got {config.ucap_output!r} for board {ib.get_id()}')
-            else:
-                raise RuntimeError(
-                    f'Unsupported capture engine {capture_type!r} on '
-                    f'board {ib.get_id()}')
-
-        period = (
-            1.0 / float(config.baseline_capture_rate)
-            if float(config.baseline_capture_rate) else 0)
-        for ib, channels in board_channels:
-            fpga = self._fpga_from_iceboard(ib)
-            capture_type = getattr(fpga, 'CAPTURE_TYPE', None)
-            source = str(config.capture_source)
-            if capture_type == 'UCAP' and source == 'adc':
-                source = 'funcgen'
-            _, slot = ib.get_id(default_crate=0, default_slot=0)
-            send_delay = int(config.tmux_factor) * int(slot)
-            ucap_output = str(config.get('ucap_output', 'corr'))
-            if ucap_output == 'capture':
-                ucap_output = 'cap'
-
-            ib.set_scaler_output_modes(
-                cap_data_type=config.scaler_cap_data_type,
-                channels=channels)
-            if period:
-                ib.start_data_capture(
-                    period=period,
-                    frames_per_burst=int(config.get('frames_per_burst', 1)),
-                    channels=channels,
-                    source=source,
-                    select=(capture_type == 'UCAP' and ucap_output in (
-                        'cap', 'ucap')),
-                    data_type=(
-                        config.scaler_cap_data_type
-                        if source == 'scaler' else None),
-                    sync=False,
-                    send_delay=send_delay,
-                    mode=int(config.get('ucap_mode', 0)))
-            else:
-                ib.stop_data_capture()
-            ib.set_data_capture(
-                channels=channels,
-                sub_period=int(config.capture_rate),
-                source=source)
-            if capture_type == 'UCAP':
-                fpga.UCAP.select_output(ucap_output)
-            await asyncio.sleep(0)
-
-        if push_decoder:
-            await self._sync_raw_acq_firmware_config()
-        if sync and period:
-            sync_params = self.config.fpga.get('sync_params', {})
-            if sync_params.get('enable', False):
-                self.fpgas.sync(**sync_params)
-            else:
-                self.fpgas.sync()
+            await asyncio.gather(*tasks)
 
     @staticmethod
     def _fpga_from_iceboard(ib):
         return getattr(ib, 'fpga', ib)
-
-    @staticmethod
-    def _capture_data_type_name(ib, data_type, channels):
-        if isinstance(data_type, str):
-            return data_type
-        fpga = FPGAMaster._fpga_from_iceboard(ib)
-        type_map = {}
-        for ch in channels:
-            scaler = getattr(fpga.chan[int(ch)], 'SCALER', None)
-            type_map = getattr(scaler, 'CAPTURE_DATA_TYPES', {}) or {}
-            if type_map:
-                break
-        reverse_map = {int(v): k for k, v in type_map.items()}
-        return reverse_map.get(int(data_type), data_type)
-
-    @staticmethod
-    def _expected_gain_capture_data_type(fpga):
-        platform_id = getattr(fpga, 'PLATFORM_ID', None)
-        ice_ids = {
-            getattr(fpga, '_PLATFORM_ID_MGK7MB_REV0', None),
-            getattr(fpga, '_PLATFORM_ID_MGK7MB_REV2', None),
-        }
-        if platform_id in ice_ids:
-            return 'fft_full'
-        if platform_id == getattr(fpga, '_PLATFORM_ID_CRS', None):
-            return 'fft_2x'
-        return None
-
-    def _validate_gain_capture_data_type(self, ib_chans, scaler_cap_data_type):
-        for ib, channels in ib_chans:
-            fpga = self._fpga_from_iceboard(ib)
-            expected = self._expected_gain_capture_data_type(fpga)
-            if expected is None:
-                platform_id = getattr(fpga, 'PLATFORM_ID', None)
-                raise RuntimeError(
-                    f'Gain calculation capture mode is not defined for '
-                    f'platform_id={platform_id!r} on board {ib.get_id()}')
-            actual = self._capture_data_type_name(ib, scaler_cap_data_type, channels)
-            if actual != expected:
-                raise RuntimeError(
-                    f'Gain calculation capture mode {actual!r} is invalid for '
-                    f'board {ib.get_id()} platform_id={getattr(fpga, "PLATFORM_ID", None)!r}; '
-                    f'expected {expected!r}')
 
     def _derive_gain_target_shifts(self, channel_ids):
         target_shifts = {}
@@ -968,8 +851,8 @@ class FPGAMaster(object):
             raw_enabled, corr_enabled = (
                 await self._stop_hdf5_for_gain_calculation())
             try:
-                await self.program_data_capture(
-                    capture_config,
+                await self.start_fpga_raw_data_transmission(
+                    capture_config=capture_config,
                     push_decoder=True,
                     sync=True,
                     gain_capture=True)
@@ -989,8 +872,8 @@ class FPGAMaster(object):
                     await self.compute_gains(**gain_config)
             except Exception as gain_error:
                 try:
-                    await self.program_data_capture(
-                        self.config.fpga.raw_data_capture,
+                    await self.start_fpga_raw_data_transmission(
+                        capture_config=self.config.fpga.raw_data_capture,
                         push_decoder=True,
                         sync=True,
                         gain_capture=False)
@@ -1004,8 +887,8 @@ class FPGAMaster(object):
                         f'{restore_error!r}')
                 raise
 
-            await self.program_data_capture(
-                self.config.fpga.raw_data_capture,
+            await self.start_fpga_raw_data_transmission(
+                capture_config=self.config.fpga.raw_data_capture,
                 push_decoder=True,
                 sync=True,
                 gain_capture=False)
@@ -1542,9 +1425,8 @@ class FPGAMaster(object):
                         'Gain-capture startup failed; programming normal '
                         'capture and aborting startup')
                     try:
-                        await self.program_data_capture(
-                            conf.fpga.raw_data_capture,
-                            iceboards=list(ca.ib),
+                        await self.start_fpga_raw_data_transmission(
+                            capture_config=conf.fpga.raw_data_capture,
                             push_decoder=bool(getattr(self, 'raw_acq', {})),
                             sync=True,
                             gain_capture=False)
@@ -1561,9 +1443,8 @@ class FPGAMaster(object):
             self.log.info(
                 'raw_acq disabled. Programming normal capture without '
                 'starting raw_acq servers.')
-            await self.program_data_capture(
-                conf.fpga.raw_data_capture,
-                iceboards=list(ca.ib),
+            await self.start_fpga_raw_data_transmission(
+                capture_config=conf.fpga.raw_data_capture,
                 push_decoder=False,
                 sync=False,
                 gain_capture=False)
@@ -1585,8 +1466,8 @@ class FPGAMaster(object):
                     'Gain calculation failed; programming normal capture and '
                     'aborting startup without starting HDF5 acquisition')
                 try:
-                    await self.program_data_capture(
-                        conf.fpga.raw_data_capture,
+                    await self.start_fpga_raw_data_transmission(
+                        capture_config=conf.fpga.raw_data_capture,
                         push_decoder=True,
                         sync=True,
                         gain_capture=False)
@@ -1599,8 +1480,8 @@ class FPGAMaster(object):
                         'Normal capture recovery also failed: '
                         f'{restore_error!r}')
                 raise
-            await self.program_data_capture(
-                conf.fpga.raw_data_capture,
+            await self.start_fpga_raw_data_transmission(
+                capture_config=conf.fpga.raw_data_capture,
                 push_decoder=True,
                 sync=True,
                 gain_capture=False)
