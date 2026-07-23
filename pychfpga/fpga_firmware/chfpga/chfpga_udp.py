@@ -73,6 +73,17 @@ class chFPGA_UDP:
             fpga_ip_addr=self.fpga_ip_addr,
             fpga_port_number=self.fpga_control_port_number)
 
+        data_target = await self.mb.fpga_core_reg_spi_read_async(
+            self._FPGA_DATA_DEST_MAC_ADDR_MSW_IP_PORT_ADDR)
+        if (data_target & 0xFFFF) == self.local_control_port_number:
+            self.logger.warning(
+                f'{self!r}: Clearing stale FPGA data destination port '
+                f'{self.local_control_port_number}; it matches the MMI '
+                f'control port')
+            await self.mb.fpga_core_reg_spi_write_async(
+                self._FPGA_DATA_DEST_MAC_ADDR_MSW_IP_PORT_ADDR,
+                data_target & 0xFFFF0000)
+
         for trial in range(10):
             self.logger.debug(
                 f"{self!r}: Initializing SFP in SGMII mode with autonegociation (trial {trial+1})")

@@ -3227,8 +3227,20 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         """
         # Make sure there is a list of opened sockets
 
+        requested_port = port_number
         if port_number is None:
             port_number = run_async(self.get_local_data_port_number_async())
+        if (
+                self.BSB_TRANSPORT == self.BSB_TRANSPORT_UDP
+                and port_number == self.local_control_port_number):
+            if requested_port is not None:
+                raise ValueError(
+                    f'Data port {port_number} is already used by the FPGA MMI '
+                    'control socket')
+            self.logger.warning(
+                f'{self!r}: FPGA data destination port {port_number} matches '
+                'the MMI control port; selecting a new data port')
+            port_number = 0
 
         opened_sockets = __main__.__dict__.setdefault('__opened_sockets__', {})
 
