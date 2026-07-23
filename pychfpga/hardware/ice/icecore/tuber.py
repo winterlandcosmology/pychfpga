@@ -574,11 +574,24 @@ class TuberObject:
             return session
 
     @classmethod
-    async def _tuber_close_client_sessions_async(cls):
-        """
-        Close all client sessions
-        """
-        await asyncio.gather(*[c.close() for c in cls._tuber_client_sessions.values()])
+    def _tuber_close_client_sessions(cls):
+        """Close cached client sessions on the loops that created them."""
+        sessions = list(cls._tuber_client_sessions.items())
+        cls._tuber_client_sessions.clear()
+
+        for loop, session in sessions:
+            if session.closed:
+                continue
+            if loop.is_closed():
+                cls._tuber_log.warning(
+                    "Cannot close Tuber client session because its event loop "
+                    "has already been closed"
+                )
+                continue
+            if loop.is_running():
+                asyncio.run_coroutine_threadsafe(session.close(), loop).result()
+            else:
+                loop.run_until_complete(session.close())
 
     @classmethod
     def _tuber_json_encode(cls, data):
@@ -740,7 +753,7 @@ class TuberObject:
             )
         return invoke
 
-atexit.register(sync_wrap(TuberObject._tuber_close_client_sessions_async))
+atexit.register(TuberObject._tuber_close_client_sessions)
 
 
 # JFC: Disables block below. nest_async io is initialized by fpga_array. But maybe the try/except block is needed for some cases, so leaving it here for now.

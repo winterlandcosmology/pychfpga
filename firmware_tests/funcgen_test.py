@@ -14,6 +14,7 @@ import time
 from time import sleep
 from wtl.pytest_xreport import xr, get_xr_from
 from wtl.namespace import NameSpace
+from pychfpga.common import run_async
 from pychfpga.fpga_array import FPGAArray
 import sys
 from .module_test import TestModule
@@ -119,8 +120,7 @@ class TestFuncgen(TestModule):
                 "net.ipv4.udp_mem='26214400 26214400 26214400' net.ipv4.udp_rmem_min=26214400"
             )
 
-    @pytest.mark.asyncio
-    async def test_mtu_size(self, xr):
+    def test_mtu_size(self, xr):
         logger = self.get_logger()
         logger.debug("Getting the board's address")
         ping_port = self.board.mb.port
@@ -130,7 +130,7 @@ class TestFuncgen(TestModule):
         )
         logger.debug(f"The board located at {port_map['sources'][0][0]}:{ping_port}")
         logger.debug("Pinging the board to determine interface used")
-        src_if_addrs = await ping_sources_async([port_map])
+        src_if_addrs = run_async(ping_sources_async([port_map]))
         if_ip = list(src_if_addrs.values())[0]
         if if_ip is None:
             raise RuntimeError(
