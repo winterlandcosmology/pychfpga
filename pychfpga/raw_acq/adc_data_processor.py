@@ -177,7 +177,7 @@ class ADCDataProcessor:
     def _process_adc_emitted(self, ts, data, counts) -> None:
         """Feed HDF5, metrics, and averaged RMS from one ``get_formatted_data(0)`` emission."""
         n_out = ts.shape[0]
-        packet_inc = int(counts[:n_out].sum())
+        packet_inc = int(np.maximum(counts[:n_out], 0).sum())
         self.processed_packets += packet_inc
         self.adc_processed_packets += packet_inc
         self.adc_current_processed_packets += packet_inc
@@ -186,7 +186,7 @@ class ADCDataProcessor:
             timestamp = np.uint64(ts[tix])
             for cix in range(self.NCHAN):
                 n_pkt = int(counts[tix, cix])
-                if n_pkt < self.expected_packets:
+                if n_pkt != self.expected_packets:
                     self.metrics_incomplete_frames[cix] += 1
                     continue
                 frame = np.asarray(data[tix, cix], dtype=self.adc_storage_dtype)

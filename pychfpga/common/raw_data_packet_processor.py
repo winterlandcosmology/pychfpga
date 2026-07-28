@@ -195,6 +195,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.raw_data_buf = np.empty(0, dtype=np.uint8)
         self.raw_data_count_buf = np.empty(0, dtype=np.int64)
         self.raw_source_buf = np.empty(0, dtype=np.uint8)
+        self.raw_subframe_mask_buf = np.empty(0, dtype=np.uint8)
+        self.raw_source_mask_buf = np.empty(0, dtype=np.uint8)
         self.formatted_data_bufs = [np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)]
         self.fmt_cdata_buf1_0, self.fmt_cdata_buf1_1 = np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)
         self.fmt_cdata_buf2_0, self.fmt_cdata_buf2_1 = np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)
@@ -237,6 +239,10 @@ class RawDataPacketProcessor(PacketProcessorBase):
             self.SAMPLES_PER_FRAME = state.samples_per_frame
             self.FRAMES_PER_BURST = state.frames_per_burst
             self.NUMBER_OF_SUBFRAMES = state.subframes_per_frame or state.number_of_subframes or 1
+            if self.NUMBER_OF_SUBFRAMES > 64:
+                raise ValueError(
+                    "subframes_per_frame must be at most 64 for unique-packet tracking"
+                )
             self.stream_ids = state.stream_ids
 
             if len(set(self.stream_ids)) != len(self.stream_ids):
@@ -287,7 +293,19 @@ class RawDataPacketProcessor(PacketProcessorBase):
                 (self.max_timestamps, self.NCHAN, self.FRAMES_PER_BURST),
                 element_dtype=np.uint8,
             )
+            self.raw_subframe_mask = self.resize_buffer(
+                'raw_subframe_mask_buf',
+                (self.max_timestamps, self.NCHAN, self.FRAMES_PER_BURST),
+                element_dtype=np.uint64,
+            )
+            self.raw_source_mask = self.resize_buffer(
+                'raw_source_mask_buf',
+                (self.max_timestamps, self.NCHAN, self.FRAMES_PER_BURST),
+                element_dtype=np.uint8,
+            )
             self.raw_source.fill(RAW_SOURCE_EMPTY)
+            self.raw_subframe_mask.fill(0)
+            self.raw_source_mask.fill(0)
 
 
             # No carryover
@@ -438,8 +456,9 @@ class RawDataPacketProcessor(PacketProcessorBase):
             sources = sources.swapaxes(-1,-2).reshape(n_ts * frames_per_burst, -1)
             counts = counts.swapaxes(-1,-2).reshape(n_ts * frames_per_burst, -1) * (sources==source)
         else:
-            sources = (sources==source).any(axis=-1)
-            counts = counts.sum(axis=-1)
+            source_frames = sources == source
+            sources = source_frames.any(axis=-1)
+            counts = (counts * source_frames).sum(axis=-1)
 
         if not is_complex:
             return ts, data, counts
@@ -596,11 +615,14 @@ class RawDataPacketProcessor(PacketProcessorBase):
         if self.verbose and rejected_packets:
             print(f"RawDataPacketProcessor: process_packets: rejected {rejected_packets} packets at or before the latest timestamp already returned (monotonic emits). {self._last_emitted_ts=} {self.pkt_ts[:n].min() =}.")
 
-        # Byte offset: reuse pkt_frame / pkt_subframe (already decoded above) — no temp arrays.
+        # Compute each payload byte offset while preserving the decoded frame
+        # and subframe numbers for unique-packet/source validation below.
         # Only ``pkt_off[bix]`` is read later; entries where ``bix_mask`` is false are left undefined.
         np.multiply(self.pkt_frame[:n], self.BYTES_PER_FRAME, out=self.pkt_off[:n], where=bix_mask)
-        np.multiply(self.pkt_subframe[:n], self.BYTES_PER_SUBFRAME, out=self.pkt_subframe[:n], where=bix_mask)
-        np.add(self.pkt_off[:n], self.pkt_subframe[:n], out=self.pkt_off[:n], where=bix_mask)
+        # Keep pkt_subframe as the decoded subframe number. Unique-subframe
+        # accounting in store_packets() needs it to distinguish duplicates
+        # from a complete set of packets.
+        self.pkt_off[:n] += self.pkt_subframe[:n] * self.BYTES_PER_SUBFRAME
 
         # Find the indices of the packets to process
         return np.flatnonzero(bix_mask)
@@ -631,15 +653,19 @@ class RawDataPacketProcessor(PacketProcessorBase):
             self.raw_data_count[dst_tix] = self.raw_data_count[src_tix] # Fancy indexing on the RHS cretes a copy, so no danger if source and destination overlap
             self.raw_data[dst_tix] = self.raw_data[src_tix]
             self.raw_source[dst_tix] = self.raw_source[src_tix]
+            self.raw_subframe_mask[dst_tix] = self.raw_subframe_mask[src_tix]
+            self.raw_source_mask[dst_tix] = self.raw_source_mask[src_tix]
             tix_to_clear[dst_tix] = False  # don't clear the carryover rows
 
         n = tix_to_clear.size
         self.raw_data_count[:n][tix_to_clear] = 0
         self.raw_data[:n][tix_to_clear] = 0
         self.raw_source[:n][tix_to_clear] = RAW_SOURCE_EMPTY
+        self.raw_subframe_mask[:n][tix_to_clear] = 0
+        self.raw_source_mask[:n][tix_to_clear] = 0
 
     def store_packets(self, bix, tix):
-        """Scatter subframe bytes into ``raw_data`` and update per-channel packet counts."""
+        """Scatter payloads and update unique-subframe/source completeness state."""
         # Now that we have all the info we need to copy data from the UDP buffer and reassemble it into the output buffer.
         # This is done in a very efficient single vectorized operation.
         self.raw_data[
@@ -648,10 +674,59 @@ class RawDataPacketProcessor(PacketProcessorBase):
             self.pkt_off[bix, None] + np.arange(self.BYTES_PER_SUBFRAME, dtype=self.pkt_off.dtype),
         ] = self.buf_data[bix, :self.BYTES_PER_SUBFRAME] # copy the payload bytes from the UDP buffer to the output buffer
 
-        self.raw_source[tix, self.pkt_six[bix], self.pkt_frame[bix]] = self.buf_cookie[bix] & 1
+        six = self.pkt_six[bix]
+        frame = self.pkt_frame[bix]
+        subframe = self.pkt_subframe[bix]
+        cell = (tix * self.NCHAN + six) * self.FRAMES_PER_BURST + frame
+        subframe_key = cell * self.NUMBER_OF_SUBFRAMES + subframe
+        _, first, subframe_repeats = np.unique(
+            subframe_key, return_index=True, return_counts=True
+        )
+        repeated_cells = cell[first[subframe_repeats > 1]]
 
-        # Update the raw data count and raw data complete arrays
-        np.add.at(self.raw_data_count, (tix, self.pkt_six[bix], self.pkt_frame[bix]), 1)
+        subframe_bit = np.left_shift(
+            np.uint64(1), subframe.astype(np.uint64, copy=False)
+        )
+        old_subframe_mask = self.raw_subframe_mask[tix, six, frame]
+        duplicate_cells = cell[(old_subframe_mask & subframe_bit) != 0]
+        np.bitwise_or.at(
+            self.raw_subframe_mask, (tix, six, frame), subframe_bit
+        )
+
+        source_bit = np.left_shift(
+            np.uint8(1), (self.buf_cookie[bix] & 1).astype(np.uint8, copy=False)
+        )
+        np.bitwise_or.at(self.raw_source_mask, (tix, six, frame), source_bit)
+
+        affected = np.unique(cell)
+        affected_frame = affected % self.FRAMES_PER_BURST
+        affected_stream = (
+            affected // self.FRAMES_PER_BURST
+        ) % self.NCHAN
+        affected_timestamp = affected // (
+            self.FRAMES_PER_BURST * self.NCHAN
+        )
+        affected_index = (
+            affected_timestamp, affected_stream, affected_frame
+        )
+        subframe_masks = self.raw_subframe_mask[affected_index]
+        source_masks = self.raw_source_mask[affected_index]
+        counts = np.fromiter(
+            (int(mask).bit_count() for mask in subframe_masks),
+            dtype=np.int64,
+            count=affected.size,
+        )
+        invalid = self.raw_data_count[affected_index] < 0
+        invalid |= np.isin(affected, duplicate_cells)
+        invalid |= np.isin(affected, repeated_cells)
+        invalid |= (source_masks & (source_masks - 1)) != 0
+        counts[invalid] = -1
+        self.raw_data_count[affected_index] = counts
+        self.raw_source[affected_index] = np.where(
+            source_masks == 1,
+            0,
+            np.where(source_masks == 2, 1, RAW_SOURCE_EMPTY),
+        )
 
     def flush(self, flush_timeout=None):
         """Flush UDP receiver and clear assembled-buffer state."""
@@ -665,6 +740,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.raw_data.fill(0)
         self.raw_data_count.fill(0)
         self.raw_source.fill(RAW_SOURCE_EMPTY)
+        self.raw_subframe_mask.fill(0)
+        self.raw_source_mask.fill(0)
         self.n_ts = 0
         self.carry_len = 0
         self._last_emitted_ts = 0

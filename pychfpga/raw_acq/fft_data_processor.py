@@ -290,7 +290,7 @@ class FFTDataProcessor:
     def _process_fft_emitted(self, ts, data, counts, indices):
         """Update FFT RMS acquisition and metrics from one emission."""
         n_out = ts.shape[0]
-        packet_inc = int(counts[:n_out].sum())
+        packet_inc = int(np.maximum(counts[:n_out], 0).sum())
         self.processed_packets += packet_inc
         self.fft_processed_packets += packet_inc
         self.fft_current_processed_packets += packet_inc
@@ -304,7 +304,7 @@ class FFTDataProcessor:
         for tix in range(n_out):
             for cix in range(self.NCHAN):
                 n_pkt = int(counts[tix, cix])
-                if n_pkt < exp:
+                if n_pkt != exp:
                     self.metrics_incomplete_frames[cix] += 1
                     self._diag_rows_incomplete += 1
                     continue

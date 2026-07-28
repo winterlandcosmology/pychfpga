@@ -6,6 +6,8 @@ import pytest
 
 from pychfpga.common.raw_data_packet_processor import (
     PACKET_COOKIE_ADC,
+    PACKET_COOKIE_FFT,
+    RAW_SOURCE_EMPTY,
     RawDataPacketProcessor,
     decode_format_string,
 )
@@ -102,12 +104,21 @@ def make_processor(n_packets=16, format="8", frames_per_burst=1, receive_window=
     ), pr
 
 
-def write_packet(processor, pr, ix, stream_id, ts, frame=0, payload=None):
+def write_packet(
+        processor,
+        pr,
+        ix,
+        stream_id,
+        ts,
+        frame=0,
+        subframe=0,
+        cookie=PACKET_COOKIE_ADC,
+        payload=None):
     payload = np.asarray(payload if payload is not None else np.arange(4), dtype=np.uint8)
-    pr.buf[ix, 0] = PACKET_COOKIE_ADC
+    pr.buf[ix, 0] = cookie
     pr.buf[ix, 1] = ((frame & 0xF) << 4) | ((stream_id >> 8) & 0xF)
     pr.buf[ix, 2] = stream_id & 0xFF
-    pr.buf[ix, 3] = 0
+    pr.buf[ix, 3] = subframe & 0x3
     pr.buf[ix, 4:10] = np.frombuffer(int(ts).to_bytes(6, "big"), dtype=np.uint8)
     pr.buf[ix, 10:14] = payload
     pr.pkt_len[ix] = processor.PACKET_SIZE
@@ -117,6 +128,75 @@ def write_packet(processor, pr, ix, stream_id, ts, frame=0, payload=None):
 def write_burst(processor, pr, start_ix, ts, payload_base=0):
     write_packet(processor, pr, start_ix, stream_id=10, ts=ts, payload=[payload_base + 1] * 4)
     write_packet(processor, pr, start_ix + 1, stream_id=11, ts=ts, payload=[payload_base + 2] * 4)
+
+
+def test_duplicate_subframe_does_not_complete_missing_subframe():
+    """A repeated UCAP subframe must not stand in for a missing packet."""
+    processor, pr = make_processor(
+        n_packets=4,
+        stream_ids=(10,),
+        channels=(0,),
+        samples_per_frame=8,
+        bytes_per_frame=8,
+        bytes_per_subframe=4,
+        subframes_per_frame=2,
+    )
+    write_packet(processor, pr, 0, stream_id=10, ts=100, subframe=0)
+    processor.process_udp_packets()
+    assert processor.raw_data_count[0, 0, 0] == 1
+
+    pr.n_stored = 0
+    pr.pkt_len.fill(0)
+    write_packet(processor, pr, 0, stream_id=10, ts=100, subframe=0)
+    write_packet(processor, pr, 1, stream_id=10, ts=100, subframe=1)
+    processor.process_udp_packets()
+
+    assert processor.raw_subframe_mask[0, 0, 0] == 0b11
+    assert processor.raw_data_count[0, 0, 0] == -1
+
+
+def test_mixed_adc_fft_subframes_invalidate_physical_frame():
+    """A source transition must not assemble one frame from A0 and A1 packets."""
+    processor, pr = make_processor(
+        n_packets=4,
+        stream_ids=(10,),
+        channels=(0,),
+        samples_per_frame=8,
+        bytes_per_frame=8,
+        bytes_per_subframe=4,
+        subframes_per_frame=2,
+    )
+    write_packet(
+        processor, pr, 0, stream_id=10, ts=100, subframe=0,
+        cookie=PACKET_COOKIE_ADC)
+    write_packet(
+        processor, pr, 1, stream_id=10, ts=100, subframe=1,
+        cookie=PACKET_COOKIE_FFT)
+    processor.process_udp_packets()
+
+    assert processor.raw_source_mask[0, 0, 0] == 0b11
+    assert processor.raw_source[0, 0, 0] == RAW_SOURCE_EMPTY
+    assert processor.raw_data_count[0, 0, 0] == -1
+
+
+def test_noncomplex_formatter_excludes_other_source_counts():
+    """ADC formatting must not report a complete row assembled from FFT packets."""
+    processor, pr = make_processor(
+        n_packets=2,
+        stream_ids=(10,),
+        channels=(0,),
+    )
+    write_packet(
+        processor, pr, 0, stream_id=10, ts=100,
+        cookie=PACKET_COOKIE_FFT)
+    processor.process_udp_packets()
+
+    _, _, adc_counts = processor.get_formatted_data(
+        slice(0, processor.n_out), source=0)
+    _, _, fft_counts = processor.get_formatted_data(
+        slice(0, processor.n_out), source=1)
+    np.testing.assert_array_equal(adc_counts, [[0]])
+    np.testing.assert_array_equal(fft_counts, [[1]])
 
 
 def test_duplicate_stream_ids_rejected():
