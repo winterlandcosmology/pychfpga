@@ -69,6 +69,8 @@ class DirectGainCalc(object):
                 'after channels are already complete')
         self.n_bins = n_bins
         self.gains = np.zeros((self.nchan, self.n_bins), dtype=np.float64)
+        self.resolution_limited = np.zeros(
+            (self.nchan, self.n_bins), dtype=bool)
 
     def _ensure_n_bins(self, rms):
         n_bins = int(np.asarray(rms).shape[-1])
@@ -99,19 +101,28 @@ class DirectGainCalc(object):
         }
 
     def get_filtered_gains(self, ix=None):
-        """Return exact float gains and an all-False mask.
+        """Return exact float gains and the resolution-limited-bin mask.
 
         The method name is retained for the fpga_master call site, but this no
-        longer filters, smooths, masks, clips, or sanitizes the direct result.
+        longer filters or smooths the direct result. Masked gains are still
+        returned and applied; the mask identifies bins whose RMS was below one
+        full-resolution FFT count and therefore used the one-LSB floor.
         """
         if ix is None:
             ix = np.arange(self.nchan)
         ix_done = ix[self.done[ix]]
-        mask = np.zeros((ix_done.size, self.n_bins), dtype=bool)
+        mask = self.resolution_limited[ix_done].copy()
         return self.get_gains(ix_done), mask
 
     def update_gains(self, stream_ids, rms):
-        """Compute final float gains from one per-bin RMS spectrum per channel."""
+        """Compute final float gains from one per-bin RMS spectrum per channel.
+
+        Full-resolution capture is taken before the SCALER gain. An RMS below
+        one FFT count is therefore below the useful capture resolution and
+        cannot be recovered by increasing the downstream gain. Such values use
+        one count for the division so that the first observable FFT count maps
+        to the requested target without producing an excessive gain.
+        """
         try:
             t1 = time.time()
             stream_ids = np.asarray(stream_ids)
@@ -130,11 +141,8 @@ class DirectGainCalc(object):
             rms = np.asarray(rms, dtype=np.float64)
             if rms.ndim == 1:
                 rms = rms[np.newaxis, :]
-            self._ensure_n_bins(rms)
             rms_selected = rms[ix]
-            with np.errstate(divide='ignore', invalid='ignore', over='ignore'):
-                calculated_gains = self.target_full[bix, np.newaxis] / rms_selected
-            bad = ~np.isfinite(rms_selected) | (rms_selected <= 0)
+            bad = ~np.isfinite(rms_selected) | (rms_selected < 0)
             if np.any(bad):
                 bad_rows, bad_bins = np.where(bad)
                 examples = [
@@ -142,13 +150,29 @@ class DirectGainCalc(object):
                     for row, bin_ in zip(bad_rows[:8], bad_bins[:8])
                 ]
                 raise ValueError(
-                    'RMS spectra contain zero, negative, or non-finite '
+                    'RMS spectra contain negative or non-finite '
                     f'values; example (stream_id, bin) entries: {examples}')
+
+            self._ensure_n_bins(rms)
+            resolution_limited = rms_selected < 1.0
+            rms_for_gain = rms_selected.copy()
+            rms_for_gain[resolution_limited] = 1.0
+            calculated_gains = (
+                self.target_full[bix, np.newaxis] / rms_for_gain)
 
             self.log.info(
                 f'{self!r}: Received RMS data from '
                 f'{rms.shape[0]} channels. Processing {bix.size} of those.')
+            for row, bins in enumerate(resolution_limited):
+                limited_bins = np.flatnonzero(bins)
+                if limited_bins.size:
+                    self.log.warning(
+                        f'{self!r}: Stream ID {int(stream_ids[ix[row]])} has '
+                        f'{limited_bins.size} RMS bins below one FFT count; '
+                        f'using the one-LSB gain floor. Example bins: '
+                        f'{limited_bins[:8].tolist()}')
             self.gains[bix] = calculated_gains
+            self.resolution_limited[bix] = resolution_limited
             self.done[bix] = True
             t2 = time.time()
             self.log.info(

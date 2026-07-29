@@ -439,7 +439,8 @@ def test_float_gain_word_decode_returns_quantized_natural_order_values():
         decoded, firmware_order[[2, 0, 3, 1]])
 
 
-def test_set_float_gain_table_caches_decoded_quantized_values():
+@pytest.mark.parametrize('target_shift', [36, 44])
+def test_set_float_gain_table_encodes_ice_and_crs_one_lsb_gains(target_shift):
     class FakeScaler:
         USE_COMPLEX_GAINS = False
 
@@ -463,7 +464,8 @@ def test_set_float_gain_table_caches_decoded_quantized_values():
             self.writes.append((self.page, addr, bytes(data)))
 
     scaler = FakeScaler()
-    requested = np.linspace(2**20, 3 * 2**20, 256)
+    one_lsb_gain = DEFAULT_GAIN_TARGET * 2**target_shift
+    requested = np.linspace(one_lsb_gain / 4, one_lsb_gain, 256)
 
     SCALER.set_gain_table(
         scaler, requested, bank=0, gain_timestamp=123.0, log_gain=None)
@@ -472,7 +474,9 @@ def test_set_float_gain_table_caches_decoded_quantized_values():
     assert scaler.cached_gain_log[0] == -1
     assert scaler.cached_gain_timestamp[0] == 123.0
     assert scaler.cached_gain_table[0].shape == (256,)
-    assert np.all(scaler.cached_gain_table[0] > 2**19)
+    assert np.all(np.isfinite(scaler.cached_gain_table[0]))
+    np.testing.assert_allclose(
+        scaler.cached_gain_table[0], requested, rtol=2 / 2**11)
     assert not np.array_equal(
         scaler.cached_gain_table[0],
         np.frombuffer(scaler.writes[0][2], dtype='<u2').astype(float),
@@ -835,19 +839,50 @@ def test_direct_gain_supports_per_channel_target_shift():
         target_shift=[36, 44],
         n_bins=4,
     )
-    rms = np.full((2, 4), 2.0)
+    rms = np.array([
+        [0.0, 0.1, 0.999, 1.0],
+        [0.0, 0.1, 0.999, 2.0],
+    ])
     gc.update_gains(np.array([10, 11]), rms)
 
-    assert gc.gains[0, 0] == pytest.approx(2**36 / 2.0)
-    assert gc.gains[1, 0] == pytest.approx(2**44 / 2.0)
+    expected_rms = np.maximum(rms, 1.0)
+    np.testing.assert_allclose(
+        gc.gains,
+        np.array([2**36, 2**44])[:, np.newaxis] / expected_rms,
+    )
+    _, mask = gc.get_filtered_gains()
+    np.testing.assert_array_equal(mask, rms < 1.0)
 
 
-def test_direct_gain_rejects_zero_or_nonfinite_rms():
-    gc = DirectGainCalc(channel_ids=[(0, 1, 0)], stream_ids=[10], n_bins=4)
-    rms = np.array([[1.0, 0.0, np.nan, 4.0]])
+def test_direct_gain_mask_rows_follow_completed_channel_order():
+    gc = DirectGainCalc(
+        channel_ids=[(0, 1, 0), (0, 1, 1)],
+        stream_ids=[10, 11],
+        target=1.0,
+        target_shift=[36, 44],
+        n_bins=4,
+    )
+    gc.update_gains(np.array([11]), np.array([[0.0, 1.0, 0.5, 2.0]]))
 
-    with pytest.raises(ValueError, match='zero, negative, or non-finite'):
+    gains, mask = gc.get_filtered_gains()
+
+    assert list(gains) == [(0, 1, 1)]
+    np.testing.assert_array_equal(mask, [[True, False, True, False]])
+
+
+@pytest.mark.parametrize('invalid_rms', [-1.0, np.nan, np.inf, -np.inf])
+def test_direct_gain_rejects_negative_or_nonfinite_rms_without_mutation(
+        invalid_rms):
+    gc = DirectGainCalc(channel_ids=[(0, 1, 0)], stream_ids=[10])
+    rms = np.array([[1.0, 0.0, invalid_rms, 4.0]])
+
+    with pytest.raises(ValueError, match='negative or non-finite'):
         gc.update_gains(np.array([10]), rms)
+
+    assert gc.gains is None
+    assert gc.n_bins is None
+    assert not hasattr(gc, 'resolution_limited')
+    assert not gc.done.any()
 
 
 class _MockRawProcessor:
@@ -1129,18 +1164,28 @@ def test_compute_gains_fails_after_adc_guard_retries():
     assert master.raw_acq_sync_count == 0
 
 
-def test_compute_gains_rejects_invalid_rms_without_capture_mutation():
+def test_compute_gains_applies_one_lsb_floor_to_sub_lsb_rms():
     ib = _FakeBoard(_FakeFPGA())
-    server = _FakeGainServer(np.array([[100.0, 0.0, 400.0, 800.0]]))
+    rms = np.array([[100.0, 0.0, 0.5, 1.0]])
+    server = _FakeGainServer(rms)
     master = _fake_master(ib, server)
 
-    with pytest.raises(ValueError, match='zero, negative, or non-finite'):
-        asyncio.run(FPGAMaster.compute_gains(
-            master,
-            targets=[('*',)],
-            number_of_fft_averages=1,
-        ))
+    asyncio.run(FPGAMaster.compute_gains(
+        master,
+        targets=[('*',)],
+        number_of_fft_averages=1,
+    ))
 
-    assert master.fpgas.set_calls == []
+    assert len(master.fpgas.set_calls) == 1
+    gains, bank, when = master.fpgas.set_calls[0]
+    gain_vec, glog = gains[(0, 1, 0)]
+    target_full = DEFAULT_GAIN_TARGET * 2**36
+    np.testing.assert_allclose(
+        gain_vec,
+        target_full / np.maximum(rms[0], 1.0),
+    )
+    assert glog == -1
+    assert bank == 0
+    assert when == 'now'
     assert ib.start_calls == []
     assert master.raw_acq_sync_count == 0
