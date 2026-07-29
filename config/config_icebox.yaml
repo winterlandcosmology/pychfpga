@@ -418,7 +418,7 @@ ICEBOX:
             data_capture:
               capture_source: scaler
               baseline_capture_rate: 10
-              capture_rate: 8  # period = (2**(capture_rate + 1) frames)
+              capture_rate: 10  # period = (2**(capture_rate + 1) frames)
               # Capture rates
               #  5: 0.163 ms, 6104 fps, delay=0
               #  6: 0.327 ms, 3052 fps, delay=0
@@ -435,7 +435,7 @@ ICEBOX:
               tmux_factor: 3
               scaler_cap_data_type: fft_full
               frames_per_burst: 4
-            number_of_fft_averages: 1000
+            number_of_fft_averages: 100
 
         firmware_correlator: # use only when mode=`corr16`
             # Static parameters - set once at initialization
@@ -492,7 +492,7 @@ ICEBOX:
 
             metrics_refresh_time: 1
             adc_rms_refresh_count: 60
-            input_number_map: [12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 4] # Translates FPGA channel number into CHIME input #. Used to label metrics in more user-friendly way
+            input_number_map: [12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3] # Translates FPGA channel number into CHIME input #. Used to label metrics in more user-friendly way
             jump_thresholds: [ 24, 48, 96] # thresholds used to generate signal jump counter metrics
 
 
