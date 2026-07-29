@@ -33,3 +33,4 @@ xreport.xml
 *__pycache__*
 fw_test_results/
 firmware_tests/fft_of_data
+tmp_*

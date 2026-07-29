@@ -204,6 +204,8 @@ def: &default  # defaults, referenced below
             adc_mode : 'data'  # Mode of the ADC *chip*: 'data' (digitized analog inputs), 'ramp' or 'pulse'
             adcdaq_mode : 'data' # 'data': data from the ADC chip;  or 'ramp': Ramp is generated in the FPGA (ADC chip is ignored)
             data_source : 'adc' # Source of the function generator, as follows:
+            funcgen_left_shift: 0
+            funcgen_right_shift: 0
                 # 'adc': Sends the ADC data
                 # 'noise': Uniform white noise generator
                 # 'word_ctr_buffer_flags': 32-bit Frame/word counter, with ADC overflow from bit 0 of waveform buffer bytes
@@ -351,6 +353,8 @@ ICEBOX:
             adc_bandwidth: 2 # 0:500 MHz, 1: 600 MHz, 2:1500MHz, 3:2 GHz.
             adcdaq_mode : 'data' # 'data': data from the ADC chip;  or 'ramp': Ramp is generated in the FPGA (ADC chip is ignored)
             data_source : 'adc' # Source of the function generator, as follows:
+            funcgen_left_shift: 0
+            funcgen_right_shift: 0
                 # 'adc': Sends the ADC data
                 # 'noise': Uniform white noise generator
                 # 'word_ctr_buffer_flags': 32-bit Frame/word counter, with ADC overflow from bit 0 of waveform buffer bytes
@@ -414,12 +418,7 @@ ICEBOX:
             data_capture:
               capture_source: scaler
               baseline_capture_rate: 10
-              capture_rate: 12  # period = (2**(capture_rate + 1) frames). Don't use less than 12; full-resolution four-frame bursts lose packets at faster rates.
-              # Recommended rate codes to avoid :
-              # 1 crate: 12
-              # 2 crates: 13
-              # 4 crates: 14
-              # 8 crates: 15
+              capture_rate: 8  # period = (2**(capture_rate + 1) frames)
               # Capture rates
               #  5: 0.163 ms, 6104 fps, delay=0
               #  6: 0.327 ms, 3052 fps, delay=0
