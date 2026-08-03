@@ -517,6 +517,7 @@ class chFPGA(FPGAFirmware):
         self.fpga_mac_addr = await self.set_fpga_control_networking_parameters_async(
             fpga_ip_addr=self.fpga_ip_addr,
             fpga_port_number=self.fpga_control_port_number)
+        await self._clear_stale_data_port_collision_async()
 
         for trial in range(10):
             # Make sure the PMA core uses the SGMII protocol with autonegociation
@@ -555,6 +556,19 @@ class chFPGA(FPGAFirmware):
 
 
         return self.mmi
+
+    async def _clear_stale_data_port_collision_async(self):
+        """Clear an ICE data destination that reuses the MMI control port."""
+        data_target = await self.mb.fpga_core_reg_spi_read_async(
+            self._FPGA_DATA_DEST_MAC_ADDR_MSW_IP_PORT_ADDR)
+        if (data_target & 0xFFFF) == self.local_control_port_number:
+            self.logger.warning(
+                f'{self!r}: Clearing stale FPGA data destination port '
+                f'{self.local_control_port_number}; it matches the MMI '
+                f'control port')
+            await self.mb.fpga_core_reg_spi_write_async(
+                self._FPGA_DATA_DEST_MAC_ADDR_MSW_IP_PORT_ADDR,
+                data_target & 0xFFFF0000)
 
 
 
@@ -3079,7 +3093,19 @@ class chFPGA(FPGAFirmware):
 
 
         if not self._data_socket:
+            requested_port = port_number
             port_number = port_number or run_async(self.get_local_data_port_number_async())
+            if (
+                    self.mb.part_number == "MGK7MB"
+                    and port_number == self.local_control_port_number):
+                if requested_port:
+                    raise ValueError(
+                        f'Data port {port_number} is already used by the FPGA '
+                        'MMI control socket')
+                self.logger.warning(
+                    f'{self!r}: FPGA data destination port {port_number} '
+                    'matches the MMI control port; selecting a new data port')
+                port_number = 0
             opened_sockets = __main__.__dict__.setdefault('__opened_sockets__', {})
 
             # If we want to use a specific local port that was previously reserved, use its socket.
