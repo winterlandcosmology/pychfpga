@@ -628,7 +628,7 @@ def test_arm_firmware_runner_xmodem_pipe_method(monkeypatch, tmp_path):
     assert upload_calls == ["xmodem_pipe"]
 
 
-def test_upload_and_boot_via_wget_polls_prompt_and_verifies_md5(tmp_path, monkeypatch):
+def test_upload_and_boot_via_wget_waits_for_prompt_and_verifies_md5(tmp_path, monkeypatch):
     elf_path = tmp_path / "tcpipe_rtos.elf"
     elf_path.write_bytes(b"payload")
     expected_md5 = "abcd1234deadbeefcafebabe12345678"
@@ -663,7 +663,17 @@ def test_upload_and_boot_via_wget_polls_prompt_and_verifies_md5(tmp_path, monkey
 
     assert asyncio.run(exercise())
     assert any(b"bootelf" in data for data in sent)
-    assert any(call["send_enter"] for call in prompt_calls)
+    assert prompt_calls
+    assert all(not call["send_enter"] for call in prompt_calls)
+
+
+def test_wait_for_prompt_detects_prompt_without_newline():
+    nc = NetConsole("192.0.2.1", 9875)
+    nc._sock = _MockSock([])
+    _install_async_recv(nc, [b"ZynqMP> "])
+    buf = asyncio.run(nc.wait_for_prompt(timeout=1.0, poll_interval=0.01))
+    assert nc._has_uboot_prompt(buf)
+    assert "ZynqMP>" in buf
 
 
 def test_wait_for_prompt_send_enter_polls_until_prompt():
