@@ -23,16 +23,15 @@ DEFAULT_DISCOVERY_PORT = 9875
 DEFAULT_BIND = "0.0.0.0"
 BEACON_REQUEST_PAYLOAD = b"BEACONREQ"
 
-# Wget upload: ``wget ${loadaddr} <url>`` (host HTTP transfer confirms download),
+# Wget upload: ``wget ${loadaddr} <url>``, wait for the U-Boot prompt (progress
+# and ``Bytes transferred`` arrive on netconsole with current lwIP netconsole),
 # then ``md5sum $loadaddr $filesize``, then ``bootelf -p $loadaddr``.
-# U-Boot drops most wget progress on netconsole while lwIP is busy; do not rely
-# on seeing ``Bytes transferred`` over UDP netconsole.
 # Fixed HTTP port so host firewalls can allow inbound TCP once (ephemeral ports
 # are often blocked while UDP netconsole still works).
 DEFAULT_FIRMWARE_HTTP_PORT = 19875
-# After wget, poll the shell with Enter until U-Boot reprints a prompt.
-# Netconsole is often silent while lwIP runs; do not couple to the HTTP server.
-WGET_PROMPT_POLL_INTERVAL = 0.2
+# How often to poll the UDP socket while waiting for a prompt. Keep short: the
+# ``ZynqMP>`` prompt often arrives without a trailing newline.
+PROMPT_POLL_INTERVAL = 0.05
 BOOTELF_IDLE = 1.0
 # After bootelf, wait for the board's TCPIPE UDP beacon before opening TCP.
 TCPIPE_BEACON_WAIT_TIMEOUT = 60.0
@@ -241,8 +240,8 @@ class NetConsole:
 
     @staticmethod
     def _wget_timeout_for_size(nbytes):
-        # Allow ~50 KB/s effective rate plus margin; U-Boot wget is silent on netconsole.
-        return max(120.0, nbytes / 51200.0 + 30.0)
+        # Upper bound only; success is the spontaneous U-Boot prompt after wget.
+        return max(60.0, nbytes / 51200.0 + 15.0)
 
     def _log_console(self, buf):
         text = buf.strip()
@@ -294,19 +293,18 @@ class NetConsole:
     async def wait_for_prompt(self, timeout=5.0, send_enter=False, poll_interval=None):
         """Wait until a U-Boot shell prompt appears on netconsole.
 
-        If ``send_enter`` is true, periodically send a bare newline so an idle
-        shell reprints ``ZynqMP>``. Useful after ``wget``, when lwIP often
-        suppresses console output until the shell is free again.
+        Detects ``ZynqMP>`` even when it arrives without a trailing newline.
+        ``send_enter`` is optional (wake a quiet shell); wget uploads do not
+        need it with current U-Boot lwIP netconsole.
         """
         if poll_interval is None:
-            poll_interval = WGET_PROMPT_POLL_INTERVAL if send_enter else 0.2
+            poll_interval = PROMPT_POLL_INTERVAL
         deadline = time.monotonic() + timeout
         next_enter_at = time.monotonic()
         buf = ""
         while time.monotonic() < deadline:
             if send_enter and time.monotonic() >= next_enter_at:
                 try:
-                    print('.', end='', flush=True)
                     self._sock.send(b"\n")
                 except OSError:
                     break
@@ -314,13 +312,23 @@ class NetConsole:
             wait = min(poll_interval, max(0.0, deadline - time.monotonic()))
             if wait <= 0:
                 break
-            line = await self.read_line(timeout=wait)
-            if not line:
-                continue
-            buf += line
-            if self._has_uboot_prompt(buf):
+            chunk = await self._recv(wait)
+            if chunk:
+                self._rx_buf += chunk.decode(errors="replace")
+            while True:
+                nl = self._rx_buf.find("\n")
+                if nl < 0:
+                    break
+                buf += self._rx_buf[:nl + 1]
+                self._rx_buf = self._rx_buf[nl + 1:]
+            if self._has_uboot_prompt(buf + self._rx_buf):
+                buf = buf + self._rx_buf
+                self._rx_buf = ""
                 self._log_console(buf)
                 return buf
+        if self._rx_buf:
+            buf += self._rx_buf
+            self._rx_buf = ""
         self.log.debug(
             "%r: prompt wait timed out after %ss (send_enter=%s)",
             self, timeout, send_enter,
@@ -591,8 +599,8 @@ class NetConsole:
         Modern U-Boot no longer accepts shell commands in the FWRESP body, so wget is
         executed on the netconsole session after FWRESP/1 establishes the link.
 
-        U-Boot wget drops most console output while lwIP runs. Success is inferred
-        when the shell prompt returns (polled with Enter); ``md5sum`` then verifies
+        Waits for the spontaneous U-Boot prompt after wget (progress and
+        ``Bytes transferred`` are visible on netconsole). ``md5sum`` then verifies
         the loaded image. After ``bootelf``, silence means U-Boot handed off; the
         uploader still waits for a TCPIPE beacon before opening TCP.
         """
@@ -613,9 +621,7 @@ class NetConsole:
         self.log.info("%r: >>> %s", self, wget_cmd)
         self._sock.send((wget_cmd + "\n").encode("utf-8"))
 
-        # Poll with Enter until the shell is free again (HTTP server is independent).
-        prompt = await self.wait_for_prompt(
-            timeout=wget_timeout, send_enter=True)
+        prompt = await self.wait_for_prompt(timeout=wget_timeout)
         if not self._has_uboot_prompt(prompt):
             self.log.error(
                 "%r: U-Boot prompt did not return after wget", self)
