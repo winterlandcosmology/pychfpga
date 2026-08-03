@@ -42,6 +42,21 @@ FWREQ_BEACON = (
     b"\n"
 )
 
+TCPIPE_BEACON = (
+    b"TCPIPE/1\n"
+    b"Manufacturer: t0\n"
+    b"Product: crs\n"
+    b"Revision: 4\n"
+    b"Serial: 0037\n"
+    b"Bootloader: tcpipe\n"
+    b"Bootloader Version: 1.0\n"
+    b"Backplane-Part: CRS\n"
+    b"Backplane-Serial: BP001\n"
+    b"Backplane-Slot: 4\n"
+    b"Crate-Number: 2\n"
+    b"\n"
+)
+
 
 @pytest.fixture(autouse=True)
 def clear_hardware_map():
@@ -67,38 +82,40 @@ def test_legacy_fwreq_format_is_rejected():
         CRSBeacon(b"FWREQ 1.0 unknown-t0-crs-rev? 0037")
 
 
-def test_parse_tcpipe_beacon_with_crs_metadata():
-    beacon = CRSBeacon(
-        b"TCPIPE 1.0 CRS 003 "
-        b"backplane-part=CRS backplane-serial=BP001 "
-        b"backplane-slot=4 crate-number=2")
+def test_parse_tcpipe_beacon():
+    beacon = CRSBeacon(TCPIPE_BEACON)
 
     assert beacon.kind == "TCPIPE"
     assert beacon.version == "1.0"
+    assert beacon.identifier == "t0-crs-rev4"
     assert beacon.board_part == "CRS"
-    assert beacon.board_serial == "003"
+    assert beacon.board_serial == "0037"
+    assert beacon.fields["bootloader"] == "tcpipe"
+    assert beacon.fields["bootloader-version"] == "1.0"
     assert beacon.crate_part == "CRS"
     assert beacon.crate_serial == "BP001"
     assert beacon.slot == 4
     assert beacon.crate_number == 2
 
 
+def test_legacy_tcpipe_beacon_is_rejected():
+    with pytest.raises(ValueError, match="CRS discovery beacon"):
+        CRSBeacon(b"TCPIPE 1.0 CRS 003")
+
+
 def test_crs_discovery_updates_board_crate_and_slot_from_beacon():
     discovery = CRSDiscovery(
-        board_targets=[("CRS", "003")],
+        board_targets=[("CRS", "0037")],
         crate_targets=[],
         timeout=0)
-    beacon = CRSBeacon(
-        b"TCPIPE 1.0 CRS 003 "
-        b"backplane-part=CRS backplane-serial=BP001 "
-        b"backplane-slot=4 crate-number=2")
+    beacon = CRSBeacon(TCPIPE_BEACON)
     beacon.address = "192.0.2.10"
 
     mb = discovery._update_hardware_map(beacon, tcpipe_version=beacon.version)
 
     assert isinstance(mb, CRS)
     assert mb.hostname == "192.0.2.10"
-    assert mb.serial == "003"
+    assert mb.serial == "0037"
     assert mb.tcpipe_version == "1.0"
     assert mb.slot == 4
     assert isinstance(mb.crate, CRSBackplane)
@@ -159,11 +176,11 @@ def test_fwreq_matches_crs_target_by_serial():
 
 def test_tcpipe_adds_matching_board_to_hardware_map():
     discovery = CRSDiscovery(
-        board_targets=[("CRS", "003")],
+        board_targets=[("CRS", "0037")],
         crate_targets=[],
         timeout=0,
     )
-    beacon = CRSBeacon(b"TCPIPE 1.0 CRS 003", address="127.0.0.1")
+    beacon = CRSBeacon(TCPIPE_BEACON, address="127.0.0.1")
 
     handled_kind = discovery._process_beacon(None, beacon, ("127.0.0.1", 9875))
 
@@ -171,7 +188,7 @@ def test_tcpipe_adds_matching_board_to_hardware_map():
     assert handled_kind == "TCPIPE"
     assert mb.hostname == "127.0.0.1"
     assert mb.tcpipe_version == "1.0"
-    assert discovery.discovered_serials == {"003"}
+    assert discovery.discovered_serials == {"0037"}
 
 
 def test_arm_firmware_runner_uploads_elf_for_uboot_board(monkeypatch):
@@ -821,13 +838,23 @@ def test_fpga_array_routes_crs_crates_to_crs_network_discovery():
     assert CRS.get_network_discovery_function().__name__ == "discover_crs"
 
 
-def test_discovery_rejects_unexpected_tcpipe_version():
+def test_discovery_records_tcpipe_version():
     discovery = CRSDiscovery(
         board_targets=[("CRS", "003")],
         crate_targets=[],
         timeout=0,
     )
-    beacon = CRSBeacon(b"TCPIPE 0.9 CRS 003", address="192.0.2.10")
+    beacon = CRSBeacon(
+        b"TCPIPE/1\n"
+        b"Manufacturer: t0\n"
+        b"Product: crs\n"
+        b"Revision: 4\n"
+        b"Serial: 003\n"
+        b"Bootloader: tcpipe\n"
+        b"Bootloader Version: 0.9\n"
+        b"\n",
+        address="192.0.2.10",
+    )
 
     handled_kind = discovery._process_beacon(None, beacon, ("192.0.2.10", 9875))
     [mb] = Motherboard.get_all_registered_instances()

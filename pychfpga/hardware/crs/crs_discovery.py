@@ -81,15 +81,15 @@ def _normalize_header_key(key):
     return key.strip().lower().replace("_", "-").replace(" ", "-")
 
 
-def _parse_fwreq(data):
-    """Parse an FWREQ datagram into (protocol version, header dict, body)."""
+def _parse_fwreq(data, kind="FWREQ"):
+    """Parse a structured discovery datagram into version, headers, and body."""
     text = data.decode("utf-8")
     head, _, body = text.partition("\n\n")
     lines = head.split("\n")
 
     status = lines[0]
-    if not status.startswith("FWREQ/"):
-        raise ValueError(f"not an FWREQ message: {status!r}")
+    if not status.startswith(f"{kind}/"):
+        raise ValueError(f"not a {kind} message: {status!r}")
     version = int(status.split("/", 1)[1])
 
     headers = {}
@@ -672,61 +672,37 @@ class NetConsole:
 
 class CRSBeacon:
     def __init__(self, data, address=None):
-        """Parse a FWREQ/1 or TCPIPE beacon."""
+        """Parse a structured FWREQ/1 or TCPIPE/1 beacon."""
         text = data.decode("utf-8")
         if text.startswith("FWREQ/"):
-            self._parse_fwreq_beacon(data, address)
-        elif text.startswith("FWREQ "):
-            raise ValueError("legacy FWREQ beacon format is not supported")
+            self._parse_header_beacon(data, address, "FWREQ")
+        elif text.startswith("TCPIPE/"):
+            self._parse_header_beacon(data, address, "TCPIPE")
         else:
-            self._parse_tcpipe_beacon(data, address)
+            raise ValueError("not a CRS discovery beacon")
 
-    def _parse_fwreq_beacon(self, data, address):
-        version, headers, _body = _parse_fwreq(data)
+    def _parse_header_beacon(self, data, address, kind):
+        version, headers, _body = _parse_fwreq(data, kind=kind)
         fields = {_normalize_header_key(k): v for k, v in headers.items()}
 
         manufacturer = headers.get("Manufacturer", "unknown")
         product = headers.get("Product", "unknown")
         revision = headers.get("Revision", "?")
         serial = headers.get("Serial", "unknown")
+        bootloader_version = fields.get("bootloader-version")
 
-        self.kind = "FWREQ"
-        self.version = str(version)
+        self.kind = kind
+        self.version = (
+            bootloader_version
+            if kind == "TCPIPE" and bootloader_version
+            else str(version)
+        )
         self.identifier = f"{manufacturer}-{product}-rev{revision}"
         self.serial = serial
         self.fields = fields
         self.address = address
         self.board_part = product.upper()
         self.board_serial = serial
-        self.crate_part = self.get_any_field(("backplane-part", "crate-part"))
-        self.crate_serial = self.get_any_field(("backplane-serial", "crate-serial"))
-        self.crate_number = _to_int(self.get_any_field(("backplane-number", "crate-number")))
-        self.slot = _to_int(self.get_any_field(("backplane-slot", "crate-slot", "slot")))
-
-    def _parse_tcpipe_beacon(self, data, address):
-        """Parse a TCPIPE beacon.
-
-        The base protocol is four whitespace-separated fields:
-        ``KIND version identifier serial``. Extra metadata is accepted as
-        ``key=value`` tokens using the same TXT field names as mDNS where possible.
-        """
-        parts = data.decode("utf-8").strip().split()
-        if len(parts) < 4 or parts[0] != "TCPIPE":
-            raise ValueError("not a CRS discovery beacon")
-        fields = {}
-        for token in parts[4:]:
-            if "=" not in token:
-                continue
-            key, value = token.split("=", 1)
-            fields[key.strip().lower().replace("_", "-")] = value.strip()
-        self.kind = parts[0]
-        self.version = parts[1]
-        self.identifier = parts[2]
-        self.serial = parts[3]
-        self.fields = fields
-        self.address = address
-        self.board_part = self.get_any_field(("motherboard-part", "board-part", "model")) or "CRS"
-        self.board_serial = self.get_any_field(("motherboard-serial", "serial")) or self.serial
         self.crate_part = self.get_any_field(("backplane-part", "crate-part"))
         self.crate_serial = self.get_any_field(("backplane-serial", "crate-serial"))
         self.crate_number = _to_int(self.get_any_field(("backplane-number", "crate-number")))
@@ -1164,6 +1140,8 @@ class CRSArmFirmwareUploader:
                 beacon = CRSBeacon(data, address=board_ip)
             except (UnicodeDecodeError, ValueError):
                 continue
+            if beacon.kind != "FWREQ":
+                continue
             if not _match_token(str(board.serial), beacon.board_serial, match_integers=True):
                 self.logger.debug(
                     "%r: ignoring FWREQ from %s serial %s (expected %s)",
@@ -1208,8 +1186,6 @@ class CRSArmFirmwareUploader:
                 data, addr = await _async_sock_recvfrom(sock, 4096, wait)
             except asyncio.TimeoutError:
                 continue
-            if not data.startswith(b"TCPIPE"):
-                continue
             board_ip = addr[0]
             board = pending.get(board_ip)
             if board is None:
@@ -1217,6 +1193,8 @@ class CRSArmFirmwareUploader:
             try:
                 beacon = CRSBeacon(data, address=board_ip)
             except (UnicodeDecodeError, ValueError):
+                continue
+            if beacon.kind != "TCPIPE":
                 continue
             if not _match_token(str(board.serial), beacon.board_serial, match_integers=True):
                 continue

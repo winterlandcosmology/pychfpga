@@ -905,7 +905,13 @@ class TCPipe_I2C:
         """
         # self._logger.debug("Accessing I2C bus...")
 
-        addr |= 0x80 if self.current_port else 0
+        # Encode PS I2C port in bit 7 of the TCPipe address byte.
+        # Do not use truthiness on current_port: port 0 is valid and must stay
+        # distinct from "never selected" (None).
+        if self.current_port is None:
+            raise RuntimeError(
+                f'{self!r}: I2C port not selected; call select_bus() before write_read/is_present')
+        addr = (addr & 0x7F) | ((int(self.current_port) & 1) << 7)
 
         if not data:  # if we have no data to write, just read
             return list(self.tcpipe.i2c_read(addr,read_length)) # list for backwards compatibility
@@ -921,13 +927,15 @@ class TCPipe_I2C:
 
             addr (int): I2C address of the device to query
 
-            bus_name (str, int, or list of str or int): I2C bus(es) to activate
+            bus_name (str, int, or list of str or int): I2C bus(es) to activate.
+                Required unless ``select_bus()`` was already called. Pass ``0``
+                for PS I2C0 (truthy check would skip it).
 
         """
-        if bus_name:
+        if bus_name is not None:
             self.select_bus(bus_name, retry=3)
         try:
-            self.write_read(addr, data=[], read_length=1, retry=0)  # dummy I2C acces
+            self.write_read(addr, data=[], read_length=0, retry=0)  # dummy I2C access
         except (IOError, OSError):
             return False
         return True
