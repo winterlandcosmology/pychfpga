@@ -8,6 +8,7 @@ commands sent directly to the FPGA Ethernet port.
         2014-03-04 JFC: Created
 """
 import logging
+import time
 import numpy as np
 
 from .udp import Udp as UDP
@@ -284,53 +285,52 @@ class FPGAMmi(BSB_MMI):
         if retry is None:
             retry = self.udp_retries
         trial = 1
-        has_timed_out = False
         while True:
+            error = ''
+            last_seq = None
+            trial_timeout = self.get_timeout()
             try:
-                error = ''
                 self.udp.send(cmd)
                 self.send_counter += 1
-                data = self.udp.recv()
-                self.recv_counter += 1
-                # self.logger.warning(
-                #   'read command: Got 0x%02x, expected 0x%02x'
-                #   % (ord(data[0]), self.send_counter & 0xff))
+                deadline = time.monotonic() + trial_timeout
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise self.udp.TimeoutException
+                    self.set_timeout(remaining)
+                    data = self.udp.recv()
+                    self.recv_counter += 1
 
-                # Check if the sequence number returned by the FPGA
-                # corresponds to ours so we know we got the answer to the
-                # right command.
-                seq = data[0]  # received sequence number
-                if seq != self.send_counter & 0xff:
-                    error = ('Invalid sequence number from a read command. '
-                             'Got 0x%02x, expected 0x%02x.'
-                             % (seq, self.send_counter & 0xff))
-                    if resync:
-                        self.send_counter = seq
-                        error += ' Resynchronizing.'
-                    self.flush()
-                    # if we had a timeout, it is either because the command
-                    # did not reach the FPGA or the reply didn't make it back.
-                    # In the later case, our command counters are still in
-                    # sync, so the next retry will work. In the first case, we
-                    # advanced our counter when the FPGA didn't, so we'll resync if the
-                    # FPGA is one count behind.
-                    # elif has_timed_out and seq == (self.send_counter - 1) & 0xff:
-                    #     self.send_counter = seq
-                    #     error = "Command sequence number was offset by one following a timeout. " \
-                    #             "The previous command probably didn't reach the FPGA. " \
-                    #             "Resynchronizing and retrying to make sure."
-                    # else:
-                elif len(data) != expected_reply_length + 1:
-                    error = "FPGA Read command returned %i bytes (0x%s) while %i were expected." % (
-                        len(data),
-                        ' '.join('%02X' % b for b in data),
-                        expected_reply_length + 1)
-
-                has_timed_out = False
+                    # A delayed reply may still be queued when the next
+                    # command is sent. Keep receiving for this command instead
+                    # of flushing its matching reply and entering an N-1 retry
+                    # cycle.
+                    seq = data[0]
+                    if seq != self.send_counter & 0xff:
+                        last_seq = seq
+                        error = (
+                            'Invalid sequence number from a read command. '
+                            'Got 0x%02x, expected 0x%02x '
+                            '(received %i bytes, expected %i).'
+                            % (seq, self.send_counter & 0xff, len(data),
+                               expected_reply_length + 1))
+                        continue
+                    if len(data) != expected_reply_length + 1:
+                        error = (
+                            "FPGA Read command returned %i bytes (0x%s) "
+                            "while %i were expected."
+                            % (len(data), ' '.join('%02X' % b for b in data),
+                               expected_reply_length + 1))
+                        continue
+                    error = ''
+                    break
             except self.udp.TimeoutException:
-                self.set_timeout(self.get_timeout() * timeout_increase_factor)
-                error = '%r: Timeout during FPGA command.' % self
-                has_timed_out = True
+                self.set_timeout(trial_timeout * timeout_increase_factor)
+                if error and resync and last_seq is not None:
+                    self.send_counter = last_seq
+                    error += ' Resynchronizing.'
+                elif not error:
+                    error = '%r: Timeout during FPGA command.' % self
             if retry < 0:
                 return ''
 
