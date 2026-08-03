@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+import threading
 from types import SimpleNamespace
 
 import numpy as np
@@ -556,7 +557,7 @@ class _ProcessorThatMustNotBeFlushed:
         raise AssertionError("RawAcqReceiver.flush() must not flush processors")
 
 
-def test_raw_acq_receiver_flush_only_clears_packet_buffer():
+def test_raw_acq_receiver_flush_without_active_buffer_clears_bookkeeping():
     receiver = raw_acq_receiver_mod.RawAcqReceiver()
     receiver.n_stored = 2
     receiver.pkt_len = np.array([64, 64, 0], dtype=np.uint32)
@@ -565,6 +566,61 @@ def test_raw_acq_receiver_flush_only_clears_packet_buffer():
     assert receiver.flush() == 0
     assert receiver.n_stored == 0
     np.testing.assert_array_equal(receiver.pkt_len, np.zeros(3, dtype=np.uint32))
+
+
+class _FlushRawProcessor:
+    def __init__(self):
+        self.packet_lengths = []
+
+    def process_udp_packets(self):
+        self.packet_lengths.append(self.pr.pkt_len[:self.pr.n_stored].copy())
+
+
+class _FlushCorrProcessor:
+    CORR_PACKET_COOKIE = 0xCF
+
+    def __init__(self):
+        self.packet_lengths = []
+        self.consumed = []
+
+    def process_udp_packets(self):
+        self.packet_lengths.append(self.pr.pkt_len[:self.pr.n_stored].copy())
+
+    def after_process_udp_packets(self, elapsed):
+        pass
+
+    def get_formatted_data(self):
+        return "corr-result"
+
+    def consume(self, result):
+        self.consumed.append(result)
+
+
+def test_raw_acq_receiver_flush_discards_mixed_raw_and_corr_batch():
+    receiver = raw_acq_receiver_mod.RawAcqReceiver()
+    receiver.BUF_SIZE = receiver.n_packets = 4
+    receiver.buf = np.zeros((4, 64), dtype=np.uint8)
+    receiver.pkt_len = np.array([64, 64, 64, 0], dtype=np.uint32)
+    receiver.source_socket = np.zeros(4, dtype=np.uint16)
+    receiver.n_stored = 3
+    receiver.sockets = []
+    receiver.received_packets = 0
+    receiver.packet_max_processing_time = 0
+    receiver.packet_current_processing_time = 0
+    receiver.buf[:3, 0] = [0xA0, 0xA1, 0xCF]
+    raw = _FlushRawProcessor()
+    corr = _FlushCorrProcessor()
+    raw.pr = receiver
+    corr.pr = receiver
+    receiver.processors = {"raw": raw, "corr": corr}
+
+    assert receiver.flush(timeout=0) == 3
+
+    assert raw.packet_lengths == []
+    assert corr.packet_lengths == []
+    assert corr.consumed == []
+    assert receiver.n_stored == 0
+    assert not receiver.pkt_len.any()
 
 
 def test_raw_data_processor_formats_only_sources_present_in_batch(monkeypatch):
@@ -595,6 +651,226 @@ def test_raw_data_processor_formats_only_sources_present_in_batch(monkeypatch):
     assert formatted_sources == [0]
     assert adc_results == [("ts", "data", "counts", np.array([0]))]
     assert fft_results == []
+
+
+class _BlockingRawProcessor:
+    def __init__(self):
+        self.processing = threading.Event()
+        self.release = threading.Event()
+        self.flush_calls = 0
+        self.update_calls = []
+
+    def process_udp_packets(self):
+        self.processing.set()
+        assert self.release.wait(1)
+
+    def flush(self, flush_timeout=None):
+        self.flush_calls += 1
+
+    def update_config(self, **kwargs):
+        self.update_calls.append(kwargs)
+
+
+def test_raw_acq_config_update_waits_for_packet_processing():
+    receiver = raw_acq_receiver_mod.RawAcqReceiver()
+    receiver.n_stored = 1
+    receiver.received_packets = 0
+    receiver.packet_max_processing_time = 0
+    receiver.packet_current_processing_time = 0
+    raw = _BlockingRawProcessor()
+    receiver.processors = {"raw": raw}
+    processing_thread = threading.Thread(target=receiver.process_packets)
+    processing_thread.start()
+    assert raw.processing.wait(1)
+
+    update_finished = threading.Event()
+
+    def update():
+        receiver.update_config({"raw": {"frames_per_burst": 1}})
+        update_finished.set()
+
+    update_thread = threading.Thread(target=update)
+    update_thread.start()
+    assert not update_finished.wait(0.05)
+    raw.release.set()
+    processing_thread.join(1)
+    update_thread.join(1)
+
+    assert not processing_thread.is_alive()
+    assert not update_thread.is_alive()
+    assert raw.flush_calls == 1
+    assert len(raw.update_calls) == 1
+
+
+class _NestedFlushRawProcessor:
+    def __init__(self, receiver):
+        self.receiver = receiver
+        self.updated = False
+
+    def flush(self, flush_timeout=None):
+        self.receiver.flush(timeout=0)
+
+    def update_config(self, **kwargs):
+        self.updated = True
+
+
+def test_raw_acq_nested_receiver_flush_does_not_deadlock():
+    receiver = raw_acq_receiver_mod.RawAcqReceiver()
+    receiver.BUF_SIZE = receiver.n_packets = 1
+    receiver.buf = np.zeros((1, 64), dtype=np.uint8)
+    receiver.pkt_len = np.zeros(1, dtype=np.uint32)
+    receiver.source_socket = np.zeros(1, dtype=np.uint16)
+    receiver.n_stored = 0
+    receiver.sockets = []
+    raw = _NestedFlushRawProcessor(receiver)
+    receiver.processors = {"raw": raw}
+
+    update_thread = threading.Thread(
+        target=receiver.update_config,
+        args=({"raw": {"frames_per_burst": 1}},))
+    update_thread.start()
+    update_thread.join(1)
+
+    assert not update_thread.is_alive()
+    assert raw.updated
+
+
+class _BoundaryRawProcessor:
+    def __init__(self, events=None):
+        self.partial_rows = 3
+        self.update_calls = []
+        self.events = events
+
+    def flush(self, flush_timeout=None):
+        self.partial_rows = 0
+        if self.events is not None:
+            self.events.append("raw flush")
+
+    def update_config(self, **kwargs):
+        self.update_calls.append(kwargs)
+        if self.events is not None:
+            self.events.append("raw update")
+
+
+class _BoundaryCorrProcessor:
+    def __init__(self, events=None):
+        self.partial_integrations = 2
+        self.update_calls = []
+        self.events = events
+
+    def flush(self, flush_timeout=None):
+        self.partial_integrations = 0
+        if self.events is not None:
+            self.events.append("corr flush")
+
+    def update_config(self, config):
+        self.update_calls.append(config)
+        if self.events is not None:
+            self.events.append("corr update")
+
+
+def test_raw_acq_decoder_boundary_clears_raw_and_corr_assembly():
+    receiver = raw_acq_receiver_mod.RawAcqReceiver()
+    events = []
+    raw = _BoundaryRawProcessor(events)
+    corr = _BoundaryCorrProcessor(events)
+    receiver.processors = {"raw": raw, "corr": corr}
+
+    receiver.update_config({
+        "raw": {"frames_per_burst": 1},
+        "corr": {"soft_integ_period": 8},
+    })
+
+    assert raw.partial_rows == 0
+    assert len(raw.update_calls) == 1
+    assert corr.partial_integrations == 0
+    assert corr.update_calls == [{"soft_integ_period": 8}]
+    assert events == [
+        "raw flush", "corr flush", "raw update", "corr update"]
+
+
+def test_raw_acq_corr_only_update_does_not_flush_raw():
+    receiver = raw_acq_receiver_mod.RawAcqReceiver()
+    raw = _BoundaryRawProcessor()
+    corr = _BoundaryCorrProcessor()
+    receiver.processors = {"raw": raw, "corr": corr}
+
+    receiver.update_config({"corr": {"soft_integ_period": 4}})
+
+    assert raw.partial_rows == 3
+    assert raw.update_calls == []
+    assert corr.update_calls == [{"soft_integ_period": 4}]
+
+
+class _NeverReadSocket:
+    def __init__(self):
+        self.recv_called = False
+
+    def recv_into(self, target):
+        self.recv_called = True
+        raise AssertionError("stale select result must not be read")
+
+
+def test_raw_acq_receiver_rechecks_stale_select_result(monkeypatch):
+    receiver = raw_acq_receiver_mod.RawAcqReceiver()
+    receiver.BUF_SIZE = receiver.n_packets = 1
+    receiver.buf = np.zeros((1, 64), dtype=np.uint8)
+    receiver.pkt_len = np.zeros(1, dtype=np.uint32)
+    receiver.source_socket = np.zeros(1, dtype=np.uint16)
+    receiver.n_stored = 0
+    receiver.started = True
+    sock = _NeverReadSocket()
+    receiver.sockets = [sock]
+    select_calls = 0
+
+    def fake_select(read, write, error, timeout):
+        nonlocal select_calls
+        select_calls += 1
+        return ([sock] if select_calls == 1 else [], [], [])
+
+    monkeypatch.setattr(raw_acq_receiver_mod.select, "select", fake_select)
+    receiver.receive_packets(
+        timeout=0,
+        stop_condition=lambda: select_calls >= 2)
+
+    assert not sock.recv_called
+    assert receiver.n_stored == 0
+
+
+class _ContinuousRawSocket:
+    def recv_into(self, target):
+        target[0] = 0xA0
+        return 64
+
+
+def test_raw_acq_flush_rejects_continuing_raw_traffic(monkeypatch):
+    receiver = raw_acq_receiver_mod.RawAcqReceiver()
+    receiver.BUF_SIZE = receiver.n_packets = 2
+    receiver.buf = np.zeros((2, 64), dtype=np.uint8)
+    receiver.pkt_len = np.zeros(2, dtype=np.uint32)
+    receiver.source_socket = np.zeros(2, dtype=np.uint16)
+    receiver.n_stored = 0
+    receiver.received_packets = 0
+    receiver.packet_max_processing_time = 0
+    receiver.packet_current_processing_time = 0
+    receiver.processors = {}
+    sock = _ContinuousRawSocket()
+    receiver.sockets = [sock]
+    monotonic_time = 0.0
+
+    def monotonic():
+        nonlocal monotonic_time
+        monotonic_time += 0.002
+        return monotonic_time
+
+    monkeypatch.setattr(raw_acq_receiver_mod.time, "monotonic", monotonic)
+    monkeypatch.setattr(
+        raw_acq_receiver_mod.select,
+        "select",
+        lambda read, write, error, timeout: (list(read), [], []))
+
+    with pytest.raises(RuntimeError, match="raw packets did not stop"):
+        receiver.flush(timeout=0.001, max_flush_time=0.02)
 
 
 def test_raw_acq_receiver_three_field_sources_return_source_key(monkeypatch):
