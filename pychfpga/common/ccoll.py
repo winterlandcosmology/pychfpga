@@ -29,9 +29,10 @@ class Ccoll(object):
     itself returns an iterable to the objects, not their keys. This behavior is
     consistent with a HWMQuery object.
 
-    Calling the mapping will concurrently call every object with the provided
-    arguments and will return the result in another Ccoll with
-    identical keys.
+    Calling the mapping will call every object with the provided arguments and
+    return the results in another Ccoll with identical keys. For coroutine
+    functions, the Ccoll contains coroutine objects — await them explicitly
+    with ``asyncio.gather(*coll(...))``.
 
     Accessing an attribute of the mapping will return a new HWMQueryAttribute
     containing the that attribute for each of the element of the mapping.
@@ -159,41 +160,21 @@ class Ccoll(object):
                         "instead of 'x in ccoll'")
 
     def __call__(self, *args, **kwargs):
-        """Call all objects in the array concurrently if they are coroutines,
-        otherwise call them serially.
+        """Call every object in the collection with the same arguments.
+
+        For ordinary callables, returns a Ccoll of return values.
+        For coroutine functions, returns a Ccoll of coroutine objects — pass
+        them to ``asyncio.gather`` explicitly, e.g.::
+
+            results = await asyncio.gather(*self.ib.foo_async(x))
         """
-
-        # By default, presume a fancy asynchronous version has been coded and
-        # invoke it synchronously. This is often all the serial version needs
-        # to do anyways.
         is_coro = [asyncio.iscoroutinefunction(f) for f in self._dict.values()]
-
-        if all(is_coro):  # If all the functions are coroutines
-
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-
-            futures = asyncio.gather(*(f(*args, **kwargs) for f in self._dict.values()))
-            # results = async.async_call(self._dict.values(), None, *args, **kwargs)
-            results = loop.run_until_complete(futures)
-
-        elif not any(is_coro):  # Otherwise, fall back on a looped invocation.
-            results = [f(*args, **kwargs) for f in self._dict.values()]
-        else:
-            raise RuntimeError('Ccoll: cannot call on a mix of both async and standard methods)')
-
+        if any(is_coro) and not all(is_coro):
+            raise TypeError(
+                'Ccoll: cannot call on a mix of both async and standard methods'
+            )
+        results = [f(*args, **kwargs) for f in self._dict.values()]
         return Ccoll(results, self._dict.keys() if self._has_keys else None)
-
-    async def __acall__(self, *args, **kwargs):
-        '''Stub for asynchronous call that returns a Future.'''
-        is_coro = [iscoroutine(f) for f in func_list]
-        if all(is_coro):  # If all the functions are coroutines
-            results = await asyncio.gather(*(f(*args, **kwargs) for f in self._dict.values()))
-            return Ccoll(results, self._dict.keys() if self._has_keys else None)
-        else:
-            raise RuntimeError('Ccoll: cannot call on a mix of both async and standard methods)')
 
     def map(self, func, *args, **kwargs):
         return Ccoll((func(i, *args, **kwargs) for i in self.values()), self._dict.keys() if self._has_keys else None)

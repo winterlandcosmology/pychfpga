@@ -94,7 +94,7 @@ class TestUtils:
 
         # Program the crate
         fpga_array_params = self.cfg.f_engine_tests.global_settings.fpga_array_params
-        ca = fpga_array.FPGAArray(**fpga_array_params)
+        ca = asyncio.run(fpga_array.FPGAArray(**fpga_array_params).init())
         # ic = ca.ic[0]
         # # set crate model and serial number
         # self.model = ic.part_number
@@ -348,7 +348,7 @@ class TestPreDeploymentCrate(TestUtils):
             for n in range(n_syncs):
                 print(f'Sync {n+1}')
                 try:
-                    self.ca.sync()
+                    asyncio.run(self.ca.sync())
                     # If no exception to the above, increment counter:
                     # sync_counter += 1
                 except Exception as e:
@@ -492,7 +492,7 @@ class TestPreDeploymentCrate(TestUtils):
 
                     # self.ca = self.crate_init()
                     fpga_array_params = cfg.fpga_array_params
-                    self.ca = fpga_array.FPGAArray(**fpga_array_params)
+                    self.ca = asyncio.run(fpga_array.FPGAArray(**fpga_array_params).init())
                     
                     ic = self.ca.ic
                     from pychfpga.hardware import Crate
@@ -607,7 +607,7 @@ class TestPreDeploymentCrate(TestUtils):
                     # Synchronize crate in its own try/except
                     # clause to catch any sync errors
                     try:
-                        self.ca.sync()
+                        asyncio.run(self.ca.sync())
                     except Exception as e:
                         sync_error_tags.append({'Cycle': n,
                                         'ib': i,

@@ -19,19 +19,8 @@ import socket  # for gethostbyname()
 import pickle
 import re
 import datetime
-import functools
 import asyncio
-import nest_asyncio
 from collections import defaultdict
-
-# Patch asyncio so ``asyncio.run`` / ``loop.run_until_complete`` tolerate being
-# called from an already-running event loop (e.g. when ``FPGAArray(...)`` is
-# constructed from a Jupyter / IPython kernel cell). Importing nest_asyncio
-# alone is NOT enough -- you must call ``apply()``. We do it at module load so
-# the patch is in place before ``FPGAArray.__init__`` calls ``asyncio.run``,
-# regardless of which hardware backend (which in turn might also call
-# ``nest_asyncio.apply()``) ends up being loaded lazily later.
-nest_asyncio.apply()
 
 # PyPi packages
 import numpy as np
@@ -87,8 +76,8 @@ class FPGAArray(object):
     # through ``_array_methods`` as ``{method_name: bound_provider_method}``.
     #
     # Class-body defaults below ensure the attributes are always defined,
-    # even on ``object.__new__(FPGAArray)`` code paths (tests, unpickle),
-    # so ``__getattr__`` never needs a guard against early initialization.
+    # even on ``object.__new__(FPGAArray)`` code paths (tests, unpickle).
+    # ``__getattr__`` still guards on ``_ready`` before dispatching array methods.
     # -------------------------------------------------------------------------
 
     # Define defaults for the following class attributes to prevent
@@ -97,7 +86,9 @@ class FPGAArray(object):
     _array_methods = {}
     _array_method_class_sets = ()  # tuple of each motherboard's provider-class frozenset
     _array_method_instances = {}
-    ib = []
+    ib = None
+    ic = None
+    _ready = False
 
     def get_array_methods(self):
         """Return array-wide methods available on every motherboard.
@@ -106,7 +97,7 @@ class FPGAArray(object):
         Provider methods have their provider instance already bound, and the
         provider keeps a reference to this :class:`FPGAArray`.
         """
-        current = tuple(mb._array_method_classes for mb in self.ib)
+        current = tuple(mb._array_method_classes for mb in (self.ib or ()))
         if self._array_method_class_sets == current:
             return self._array_methods
 
@@ -157,6 +148,11 @@ class FPGAArray(object):
 
     def __getattr__(self, name):
         """Dispatch array-wide methods. See :meth:`get_array_method`."""
+        if not getattr(self, '_ready', False):
+            raise RuntimeError(
+                "FPGAArray is not initialized; use "
+                "`ca = await FPGAArray(...).init()`"
+            )
         return self.get_array_method(name)
 
     def __dir__(self):
@@ -214,11 +210,8 @@ class FPGAArray(object):
             stderr_log_level=None,
             syslog_log_level=None,
 
-            ioloop=None,
-
             **kwargs):
-        """ Create a hardware map describing CHIME hardware and optionally
-        initialize the hardware.
+        """ Create an FPGAArray; caller must ``await`` :meth:`init` to initialize hardware.
 
         .. centered:: **Hardware map creation parameters**
 
@@ -518,15 +511,17 @@ class FPGAArray(object):
                 network discovery method for that crate type.
 
         """
-        async_init = functools.partial(
-            self.init,
+        # Store constructor args for async init(); do not run hardware init here.
+        self._init_args = ()
+        self._init_kwargs = dict(
             hwm=hwm,
             iceboards=iceboards,
             icecrates=icecrates,
             mezzanines=mezzanines,
             exclude_iceboards=exclude_iceboards,
             ignore_missing_boards=ignore_missing_boards,
-            subarrays=subarrays, ping=ping,
+            subarrays=subarrays,
+            ping=ping,
             mdns_timeout=mdns_timeout,
             platform_firmware_pathname=platform_firmware_pathname,
             no_mezz=no_mezz,
@@ -535,7 +530,9 @@ class FPGAArray(object):
             open=open,
             init=init,
             if_ip=if_ip,
+            udp_retries=udp_retries,
             fpga_ip_addr_fn=fpga_ip_addr_fn,
+            sampling_frequency=sampling_frequency,
             sync_method=sync_method,
             sync_source=sync_source,
             sync_master=sync_master,
@@ -547,7 +544,6 @@ class FPGAArray(object):
             mode=mode,
             frames_per_packet=frames_per_packet,
             chan8_channel_map=chan8_channel_map,
-            sampling_frequency=sampling_frequency,
             tx_power=tx_power,
             integration_period=integration_period,
             autocorr_only=autocorr_only,
@@ -556,22 +552,20 @@ class FPGAArray(object):
             corner_turn_remap_level=corner_turn_remap_level,
             stderr_log_level=stderr_log_level,
             syslog_log_level=syslog_log_level,
-            udp_retries=udp_retries,
             **kwargs)
+        self._ready = False
+        self.ib = None
+        self.ic = None
 
-        if not ioloop:
-            try:
-                asyncio.run(async_init(), debug=True)
-            except BaseException as e:
-                # print(f'fpga_array: run got exception {e}')  # maybe add message to log?
-                raise
-        else:
-            self._async_init = async_init
+    async def init(self, *args, **kwargs):
+        if args:
+            raise TypeError('FPGAArray.init() does not take positional arguments')
+        merged_kwargs = {**getattr(self, '_init_kwargs', {}), **kwargs}
+        await self.init_async(**merged_kwargs)
+        self._ready = True
+        return self
 
-    async def run(self):
-        await self._async_init()
-
-    async def init(
+    async def init_async(
             self,
 
             hwm=None,
@@ -618,8 +612,6 @@ class FPGAArray(object):
 
             stderr_log_level=None,
             syslog_log_level=None,
-
-            # ioloop=None,
 
             **kwargs):
 
@@ -1467,7 +1459,7 @@ class FPGAArray(object):
 
     def __repr__(self):
         """ Short string representing this object and suitable to use as a tag in a syslog entry"""
-        # ``self.ib`` / ``self.ic`` are populated near the end of ``init()``;
+        # ``self.ib`` / ``self.ic`` are populated near the end of ``init_async()``;
         # before that point we fall back to the live ``HardwareMap`` registry
         # so ``__repr__`` is still useful in early-init log messages.
         # mb = self.ib or Motherboard.get_all_registered_instances() or []

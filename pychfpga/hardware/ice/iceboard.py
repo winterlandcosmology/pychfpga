@@ -10,7 +10,6 @@ import shlex
 import traceback
 import os
 # Pypi packages
-import nest_asyncio
 
 # External private packages
 

@@ -9,10 +9,6 @@ import socket
 import asyncio
 from os import path
 
-# Pypi packages
-
-import nest_asyncio
-
 # External private packages
 
 from wtl.metrics import Metrics

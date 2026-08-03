@@ -182,14 +182,14 @@ class chFPGAArrayMethods(ArrayMethods):
             if sync_method or sync_source:
                 self.logger.info(
                     f'{self.fpga_array!r}: Setting SYNC method to {sync_method}')
-                self.set_sync_method(
+                await self.set_sync_method(
                     method=sync_method,
                     source=sync_source,
                     master=sync_master,
                     master_source=sync_master_source,
                     master_output=sync_master_output)
 
-            self.set_operational_mode(
+            await self.set_operational_mode(
                 mode=mode,
                 frames_per_packet=frames_per_packet,
                 chan8_channel_map=chan8_channel_map,
@@ -232,7 +232,7 @@ class chFPGAArrayMethods(ArrayMethods):
             else:
                 break
 
-    def sync(self, delay=2 - 0.006556800, check=True, align_to_seconds=True, max_trials=3, max_sync_time_difference=None):
+    async def sync(self, delay=2 - 0.006556800, check=True, align_to_seconds=True, max_trials=3, max_sync_time_difference=None):
         """Generate a SYNC event across the whole array.
 
         Parameters:
@@ -282,15 +282,15 @@ class chFPGAArrayMethods(ArrayMethods):
 
                 elif self._sync_method in self.IRIGB_SYNC_METHODS:
                     # Estimate how much time it takes to set the trigger time
-                    dt = self.ib[0].get_irigb_time_sync()
+                    dt = await self.ib[0].get_irigb_time_async()
                     t0 = time.time()
                     # set the trigger far enough in time it should not happen before we reprogram another delay
-                    self.ib.set_irigb_trigger_time_sync(dt, delay=300)
+                    await asyncio.gather(*self.ib.set_irigb_trigger_time_async(dt, delay=300))
                     setting_time = (time.time() - t0)
                     self.logger.info(f'{self!r}: It takes {setting_time:0.3f} seconds to set the trigger time across the array')
                     setting_time = round(2 * setting_time)
                     # Now set the trigger time using that delay
-                    dt = self.ib[0].get_irigb_time_sync()
+                    dt = await self.ib[0].get_irigb_time_async()
                     if align_to_seconds:
                         self.logger.info(f'{self!r}: Rounding trigger time to the second')
                         dt = dt.replace(microsecond=0)
@@ -301,21 +301,24 @@ class chFPGAArrayMethods(ArrayMethods):
                         sync_time = []
                         for mb,dly in zip(self.ib, delay):
                             self.logger.info(f'{self!r}: Triggering SYNC on {mb!r} {setting_time+dly:0.9f} seconds after {dt.isoformat()}')
-                            sync_time.append(mb.set_irigb_trigger_time_sync(dt, delay=setting_time+dly))
+                            sync_time.append(await mb.set_irigb_trigger_time_async(dt, delay=setting_time+dly))
                         self._sync_start_time = sync_time
                     else:
                         max_delay = delay
                         self.logger.info(f'{self!r}: Triggering SYNC {setting_time+delay:0.9f} seconds after {dt.isoformat()}')
-                        self._sync_start_time = sync_time = self.ib.set_irigb_trigger_time_sync(dt, delay=setting_time+delay)
+                        self._sync_start_time = sync_time = await asyncio.gather(
+                            *self.ib.set_irigb_trigger_time_async(dt, delay=setting_time+delay))
                     self.logger.info(f'{self!r}: It took {time.time() - t0:0.3f} seconds to set the final trigger time')
                     t0 = time.time()
-                    # for _ in range(30):
-                    while any(self.ib.is_irigb_before_trigger_time_async()):
-                        #     print(f'trig={any(self.ib.is_irigb_before_trigger_time_async())}, sync={self.ib.REFCLK.SYNC_CTR}')
+                    while True:
+                        still_waiting = await asyncio.gather(
+                            *self.ib.is_irigb_before_trigger_time_async())
+                        if not any(still_waiting):
+                            break
                         if time.time() - t0 > max_delay + 1:
                             raise RuntimeError('Timout while waiting for the IRIG-B-based SYNC to complete')
-                        time.sleep(0.1)
-                    time.sleep(0.1) # make sure the sync sequence has time to finish
+                        await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.1)  # make sure the sync sequence has time to finish
                 elif self._sync_method in self.LOCAL_SYNC_METHODS:
                     self.ib.sync()
                 # elif self.sync_method == 'external':
@@ -339,7 +342,8 @@ class chFPGAArrayMethods(ArrayMethods):
                         raise RuntimeError(f'The following IceBoards did not SYNC properly: {bad_boards_str}')
 
                 if self._sync_method in self.IRIGB_SYNC_METHODS:
-                    self._sync_timestamps = ts = self.ib.get_irigb_time_sync(trig=False, format='raw')
+                    self._sync_timestamps = ts = Ccoll(await asyncio.gather(
+                        *self.ib.get_irigb_time_async(trig=False, format='raw')))
                     self._sync_timestamp = ts[0]
 
                     delta_ts = max(ts.nano) - min(ts.nano)
@@ -1013,7 +1017,7 @@ class chFPGAArrayMethods(ArrayMethods):
         return freq_remap
 
 
-    def set_operational_mode(self,
+    async def set_operational_mode(self,
                              mode,
                              frames_per_packet=1,
                              send_flags=True,
@@ -1115,7 +1119,7 @@ class chFPGAArrayMethods(ArrayMethods):
         # at the same rate, refuse to operate if
         #   - an Iceboard that is in a crate is not using the backplane clock
         #   - an iceboard that is not in a crate is using the backplane clock
-        clock_sources = self.ib.get_iceboard_clock_source_async()
+        clock_sources = await asyncio.gather(*self.ib.get_iceboard_clock_source_async())
         bad_clock_source_without_crate = [i for i, source in enumerate(clock_sources) if not self.ib[i].crate and source == 'CLOCK_SOURCE_BP']
         bad_clock_source_with_crate = [i for i, source in enumerate(clock_sources) if self.ib[i].crate and source != 'CLOCK_SOURCE_BP']
 
@@ -1147,7 +1151,7 @@ class chFPGAArrayMethods(ArrayMethods):
                 for lane, stream_id in enumerate(stream_ids):
                     self.fpga_array.corner_turn_stream_ids[mb.get_id(lane)] = stream_id
             # Sync board(s)
-            self.sync()
+            await self.sync()
 
         elif mode in ('shuffle8',):
             # For use with the CRS
@@ -1162,7 +1166,7 @@ class chFPGAArrayMethods(ArrayMethods):
             self.ib.CROSSBAR3.TIMEOUT_PERIOD = 0
             self.ib.BP_SHUFFLE.reset_rx_equalizers()
 
-            self.init_corner_turn(
+            await self.init_corner_turn(
                 mode=mode,
                 frames_per_packet=frames_per_packet,
                 send_flags=send_flags,
@@ -1192,13 +1196,13 @@ class chFPGAArrayMethods(ArrayMethods):
             if integration_period:
                 self.ib.start_correlator(integration_period=integration_period, autocorr_only=autocorr_only)
             # Sync board(s)
-            self.sync()
+            await self.sync()
         else:
             raise ValueError(f"Unknown operational mode '{mode}'")
 
     
 
-    def init_corner_turn(
+    async def init_corner_turn(
             self,
             mode,
             dsmap=list(range(16)),
@@ -1373,7 +1377,7 @@ class chFPGAArrayMethods(ArrayMethods):
 
         self.logger.info(f'{self.fpga_array!r}: Shuffling initialization completed.')
         if sync:
-            self.sync()
+            await self.sync()
 
     def set_tx_power(self, default_power=(5, 10), lane_group=None, exceptions=[], index=0):
         """ Set the power level of the corner-turn engine GTX transmitters.
@@ -1446,26 +1450,19 @@ class chFPGAArrayMethods(ArrayMethods):
         """
         Return a UDP socket that receives the raw/correlator data, and setup all boards to use that same socket.
 
-        If the socket does not already exists, the FPGA will be configured to send the data to the returned socket.
-
-        Parameters:
-
-            port_number (int): Port number to use:
-                - If ``None``, attempts to open a socket at the destination port currently programmed in the FPGA. If that port is zero, act as if ``port_number`` =0.
-                - If zero, open a socket at a random  (OS-provided) port, and set the corresponding destination port in the FPGA.
-                - If non-zero, get a socket bound to the specified port. An exception will be raised if that port is already used by another program.
-
-        Returns:
-
-            socket.socket(): a UDP socket.
+        Prefer :meth:`get_data_socket_async` when an event loop is already running.
         """
-        # get socket from one board in the array
-        sock = self.ib[0].get_data_socket(port_number=port_number)
+        from pychfpga.common.async_utils import run_async
+        return run_async(self.get_data_socket_async(port_number=port_number))
+
+    async def get_data_socket_async(self, port_number=None):
+        """Async variant of :meth:`get_data_socket`."""
+        sock = await self.ib[0].get_data_socket_async(port_number=port_number)
         for b in self.ib:
-            b.set_data_socket(sock)
+            await b.set_data_socket_async(sock)
         return sock
 
-    def get_tcp_data_sockets(self, port_number=None, rcvbuf=8 * 1024 * 1024):
+    def get_tcp_data_sockets(self, port_number=None, rcvbuf=8 * 1024 * 1024, force=False):
         """Return TCP sockets connected to each board's data listen port.
 
         Delegates to each board's :meth:`~chFPGA.get_tcp_data_socket` (cached there).
@@ -1478,6 +1475,9 @@ class chFPGAArrayMethods(ArrayMethods):
         rcvbuf : int
             ``SO_RCVBUF`` size so the kernel can absorb bursts between
             ``receive_packets`` / process calls.
+        force : bool
+            If True, discard cached sockets and reconnect (needed after control
+            TCP reconnect closes DATA_TCP on the board).
 
         Returns
         -------
@@ -1485,11 +1485,13 @@ class chFPGAArrayMethods(ArrayMethods):
             One connected TCP socket per board in ``self.ib`` order.
         """
         return [
-            b.get_tcp_data_socket(port_number=port_number, rcvbuf=rcvbuf)
+            b.get_tcp_data_socket(port_number=port_number, rcvbuf=rcvbuf, force=force)
             for b in self.ib
         ]
 
-    def get_packet_receiver(self, port_number=None, *, tcp=False, rcvbuf=8 * 1024 * 1024):
+    def get_packet_receiver(
+        self, port_number=None, *, tcp=False, rcvbuf=8 * 1024 * 1024, force=False
+    ):
         """Return the shared packet receiver (UDP or TCP), creating it if needed.
 
         Only one transport is active. If a receiver already exists, it must match
@@ -1508,12 +1510,17 @@ class chFPGAArrayMethods(ArrayMethods):
             If False, create a :class:`~pychfpga.common.udp_packet_receiver.UDPPacketReceiver`.
         rcvbuf : int
             TCP ``SO_RCVBUF`` when ``tcp=True``.
+        force : bool
+            If True, discard the cached receiver (and reconnect TCP data sockets).
+            Needed after control TCP drops, which closes DATA_TCP on the board.
 
         Returns
         -------
         UDPPacketReceiver or TCPPacketReceiver
         """
         want_tcp = bool(tcp)
+        if force:
+            self._packet_receiver = None
         if self._packet_receiver is not None:
             have_tcp = isinstance(self._packet_receiver, TCPPacketReceiver)
             if have_tcp != want_tcp:
@@ -1525,14 +1532,16 @@ class chFPGAArrayMethods(ArrayMethods):
             return self._packet_receiver
 
         if want_tcp:
-            socks = self.get_tcp_data_sockets(port_number=port_number, rcvbuf=rcvbuf)
+            socks = self.get_tcp_data_sockets(
+                port_number=port_number, rcvbuf=rcvbuf, force=True
+            )
             self._packet_receiver = TCPPacketReceiver(socks)
         else:
             sock = self.get_data_socket(port_number=port_number)
             self._packet_receiver = UDPPacketReceiver(sock)
         return self._packet_receiver
 
-    def get_data_receiver(self, port_number=None, tcp=False, **kwargs):
+    def get_data_receiver(self, port_number=None, tcp=False, force=False, **kwargs):
         """ Returns a raw data receiver for the whole array.
 
         A packet receiver and associated socket(s) will be created if none
@@ -1555,6 +1564,8 @@ class chFPGAArrayMethods(ArrayMethods):
                 - For TCP (``tcp=True``): board listen port; ``None`` uses the default TCPipe TCP data port.
             tcp (bool): If ``False`` (default), use UDP (:class:`~pychfpga.common.udp_packet_receiver.UDPPacketReceiver`).
                 If ``True``, use TCP (:class:`~pychfpga.common.tcp_packet_receiver.TCPPacketReceiver`).
+            force (bool): If ``True``, discard cached packet/data receivers and reconnect
+                TCP data sockets (call on array reinit).
             **kwargs: Forwarded to :class:`~pychfpga.common.raw_frame_receiver.RawFrameReceiver`
                 when creating the receiver (e.g. ``verbose``, ``ring_buffer_size``).
 
@@ -1564,8 +1575,12 @@ class chFPGAArrayMethods(ArrayMethods):
         """
         fw = self.get_receiver_config()
 
+        if force:
+            self._data_recv = None
+            self._packet_receiver = None
+
         if not self._data_recv:
-            pr = self.get_packet_receiver(port_number=port_number, tcp=tcp)
+            pr = self.get_packet_receiver(port_number=port_number, tcp=tcp, force=force)
             self._data_recv = RawFrameReceiver(pr, config=fw.raw, **kwargs)
         else:
             # Ensure an existing packet receiver matches the requested transport.
@@ -1574,13 +1589,13 @@ class chFPGAArrayMethods(ArrayMethods):
             self._data_recv.current_row = 0
         return self._data_recv
 
-    def start_data_capture(self, *args, sync=None, **kwargs):
+    async def start_data_capture(self, *args, sync=None, **kwargs):
         """ Starts data capture on all channelizers of all boards in the array
         """
         for b in self.ib:
             b.start_data_capture(*args, **kwargs)
         if sync:
-            self.sync()
+            await self.sync()
 
     def get_corr_receiver(self, port_number=None):
         """ Returns a correlator packet receiver.
@@ -3426,7 +3441,7 @@ class chFPGAArrayMethods(ArrayMethods):
     TRIG_SYNC_METHODS = ('trig',  'centralized_soft_trigger')
     LOCAL_SYNC_METHODS = ('local', 'local_soft_trigger')
 
-    def set_sync_method(self, method='irig-b', source=None, master=None, master_source=None, master_output=0):
+    async def set_sync_method(self, method='irig-b', source=None, master=None, master_source=None, master_output=0):
         """ Sets the global syncing method, and setup the boards accordingly.
 
         Parameters:
@@ -3494,7 +3509,7 @@ class chFPGAArrayMethods(ArrayMethods):
         if method in self.IRIGB_SYNC_METHODS: # REFCLK trigs on the output of the IRIG-B time comparator
             source = source or 'bp_time'
             self.ib.set_sync_source('irigb')
-            self.ib.set_irigb_source_sync(source)
+            await asyncio.gather(*self.ib.set_irigb_source_async(source))
         # elif method == 'centralized_time_trigger':
         #     source = source or 'bp_time'
         #     # if not master or not master_source:
@@ -3521,7 +3536,7 @@ class chFPGAArrayMethods(ArrayMethods):
 
 
 
-    def set_channelizers(self, channels=None, local_sync=None, sync=True, **kwargs):
+    async def set_channelizers(self, channels=None, local_sync=None, sync=True, **kwargs):
         """
         Configures all channelizers in the array.
 
@@ -3532,7 +3547,7 @@ class chFPGAArrayMethods(ArrayMethods):
         for mb in self.ib:
             mb.set_channelizer(**kwargs, channels=channels, local_sync=False)
         if sync:
-            self.sync()
+            await self.sync()
 
     async def set_channelizers_async(self, channels=None, local_sync=None, sync=True, **kwargs):
         """
@@ -3546,7 +3561,7 @@ class chFPGAArrayMethods(ArrayMethods):
             mb.set_channelizer(**kwargs, channels=channels, local_sync=False)
             await asyncio.sleep(0)
         if sync:
-            self.sync()
+            await self.sync()
 
     def set_noise_injection(
             self,

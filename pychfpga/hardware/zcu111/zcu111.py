@@ -11,7 +11,6 @@ from collections import OrderedDict
 import socket
 import asyncio
 
-import nest_asyncio
 # External private packages
 
 from wtl.metrics import Metrics
