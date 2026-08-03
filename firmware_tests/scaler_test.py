@@ -187,7 +187,8 @@ class TestScaler(TestModule):
         self.board.sync()
         source = self.gen_data(func, samples=self.data.NUM_SAMPLES, **func_kwargs) #setup has already been run, so self.data has been set
         self.board.set_data_source(source='arb', data=source)
-        self.board.start_data_capture(period=0.1, source='scaler', data_type=cap_data_type)
+        self.board.configure_data_capture(period=0.1, source='scaler', data_type=cap_data_type)
+        self.board.start_data_capture()
         self.board.sync()
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv) #NOTE: must be after earlier calls for some reason
         receiver.flush()
@@ -951,13 +952,14 @@ class TestScaler(TestModule):
 
         frames_per_burst = 2 if cap_data_type == 4 else 2 * self.data.BINS_PER_WORD #full resolution sends one component every frame
         mode = 0 if frames_per_burst == 2 else 1 if frames_per_burst == 4 else 2
-        self.board.start_data_capture(
+        self.board.configure_data_capture(
             period=0.01,
             frames_per_burst=frames_per_burst,
             mode=mode,
             source='scaler',
             data_type=cap_data_type,
         )
+        self.board.start_data_capture()
         self.board.sync()
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
         receiver.flush()
@@ -1066,7 +1068,8 @@ class TestScaler(TestModule):
             scaler_cap_data_type=0,
             overflow_buffer=injected_data,
         )
-        self.board.start_data_capture(period=0.01, source='scaler', data_type=0)
+        self.board.configure_data_capture(period=0.01, source='scaler', data_type=0)
+        self.board.start_data_capture()
 
         scaler_adc_overflows = self.board.get_channel_metrics(ch=ch, frame_cnt=frame_cnt)[1]
 
@@ -1136,7 +1139,8 @@ class TestScaler(TestModule):
         for chan in self.board.chan:
             chan.SCALER.RESET = 1
             chan.SCALER.MON_RESET_STATS = 1
-        self.board.start_data_capture(source='scaler', data_type=0, period=0.1)
+        self.board.configure_data_capture(source='scaler', data_type=0, period=0.1)
+        self.board.start_data_capture()
         for i in range(10): #ensure that count stays at 0 while reset is high
             sleep(0.1)
             for chan in self.board.chan:
@@ -1256,7 +1260,8 @@ class TestScaler(TestModule):
                     reset_chan=False,
                     overflow_buffer=overflow_buffer,
                 )
-                self.board.start_data_capture(period=0.01, source='scaler', data_type=0)
+                self.board.configure_data_capture(period=0.01, source='scaler', data_type=0)
+                self.board.start_data_capture()
                 receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
                 ts, data, count = receiver.read_raw_frames(ncap=2, split=False, source=1)
                 # Use the second frame to avoid potential source-switch transition effects.
@@ -1320,13 +1325,14 @@ class TestScaler(TestModule):
             self.data.MAX_OUTPUT,
         )
         assert(all(ch.SCALER.CURRENT_GAIN_BANK == 0 for ch in self.board.chan))
-        self.board.start_data_capture(
+        self.board.configure_data_capture(
             period=0.01,
             source='scaler',
             data_type=0,
             frames_per_burst=1,
             verbose=0,
         )
+        self.board.start_data_capture()
         assert(self.board.GPIO.ANT_RESET == 0)
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
         receiver.flush()
@@ -1413,7 +1419,8 @@ class TestScaler(TestModule):
         assert num_frames % FRAMES_PER_BURST == 0, f"{num_frames} frames cannot be divided into bursts of {FRAMES_PER_BURST} frames"
         self.board.set_data_source('noise')
         self.board.set_scaler_output_modes(bypass=False, cap_data_type=0)
-        self.board.start_data_capture(source='scaler', data_type=0, period=0.01, frames_per_burst=FRAMES_PER_BURST)
+        self.board.configure_data_capture(source='scaler', data_type=0, period=0.01, frames_per_burst=FRAMES_PER_BURST)
+        self.board.start_data_capture()
         self.board.set_scaler_rounding_mode(rounding_mode)
         self.board.set_symmetric_saturation(symmetric_saturation)
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)

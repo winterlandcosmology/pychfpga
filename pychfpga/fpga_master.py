@@ -369,7 +369,11 @@ class FPGAMaster(object):
                             f'so the receiver can discover the interface IP and MAC address.')
                     self.log.info(f'{self!r} Setting data transmission address of board {ib.get_id()} to {ip_addr}:{port}({eth_addr})')
                     await ib.set_udp_data_target_address_async(ip_addr, port, eth_addr)
-        await self._sync_raw_acq_firmware_config()
+        # The receiver was created above with metadata from the complete
+        # profile configured before startup. Sending the same full update here
+        # would create a decoder boundary while that initial capture is already
+        # active. Live profile changes use start_fpga_raw_data_transmission(),
+        # which stops every capture engine before requesting this boundary.
         self.log.info(f'{self!r}: RawAcq server setup successfully')
 
 
@@ -383,15 +387,19 @@ class FPGAMaster(object):
             capture_config=None,
             gain_capture=False,
             push_decoder=True):
-        """ Configure the FPGAs to transmit raw data.
+        """Configure and activate FPGA raw-data transmission.
 
-        This is the static baseline data capture configuration that cannot be
-        dynamically changed without sync(). See set_fpga_data_capture() for
-        on-the-fly rource and rate changes.
+        Complete profile changes use ``configure_data_capture()`` while each
+        capture engine is reset. Once raw_acq acknowledges the matching decoder
+        metadata, argument-free ``start_data_capture()`` activates that profile.
+        See ``set_fpga_data_capture()`` for deliberate dynamic sub-period
+        changes.
 
         Parameters:
 
-            capture_rate (float): Number of frames to send per second.
+            capture_rate (float): Legacy override for the baseline number of
+                capture bursts per second. The profile's ``capture_rate``
+                field remains the five-bit sub-period rate code.
 
             capture_source (str): selects the data source. 'adc':  the data is taken after the function generator (sorry, non
                 intuitive). `scaler`: the data is taken after the scaler. Default is 'scaler'.
@@ -407,6 +415,12 @@ class FPGAMaster(object):
             push_decoder: Push the resulting firmware decoder to raw_acq.
 
         If no arguments are provided, the FPGA will be set to transmit data at the idle rate and from source defined in the config file.
+
+        Live decoder changes separate capture configuration from activation.
+        Raw capture is stopped, the complete profile is programmed while the
+        capture engines remain reset, and transmission is enabled only after
+        raw_acq acknowledges the new receiver metadata. This sequence is common
+        to PROBER and UCAP.
         """
         profile = capture_config or self.config.fpga.raw_data_capture
         profile = NameSpace(
@@ -417,6 +431,30 @@ class FPGAMaster(object):
             profile.capture_source = capture_source
         if tmux_factor is not None:
             profile.tmux_factor = tmux_factor
+
+        try:
+            baseline_capture_rate = float(profile.baseline_capture_rate)
+            capture_sub_period = int(profile.capture_rate)
+            frames_per_burst = int(profile.get('frames_per_burst', 1))
+            capture_tmux_factor = int(profile.tmux_factor)
+            ucap_mode = int(profile.get('ucap_mode', 0))
+            capture_source_name = str(profile.capture_source)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f'Invalid raw data capture profile: {exc}') from exc
+        if baseline_capture_rate < 0:
+            raise ValueError('baseline_capture_rate must be non-negative')
+        if frames_per_burst < 1:
+            raise ValueError('frames_per_burst must be at least one')
+        if capture_tmux_factor < 0:
+            raise ValueError('tmux_factor must be non-negative')
+        if not 0 <= ucap_mode <= 3:
+            raise ValueError('ucap_mode must be between zero and three')
+        if not 0 <= capture_sub_period <= 31:
+            raise ValueError('capture_rate must be between zero and 31')
+        if capture_source_name not in ('adc', 'funcgen', 'scaler'):
+            raise ValueError(
+                f'Unknown raw capture source {capture_source_name!r}')
 
         iceboards = []
         for ibs in getattr(self, 'raw_acq_ibs', {}).values():
@@ -440,60 +478,105 @@ class FPGAMaster(object):
                         f'{profile.scaler_cap_data_type!r}')
                 if (
                         fpga.CAPTURE_TYPE == 'PROBER'
-                        and int(profile.frames_per_burst) != 4):
+                        and frames_per_burst != 4):
                     raise RuntimeError(
                         'PROBER fft_full gain capture requires '
                         'frames_per_burst=4')
-            self._active_gain_capture_rate = int(profile.capture_rate)
+            self._active_gain_capture_rate = capture_sub_period
 
-        period = (
-            1.0 / float(profile.baseline_capture_rate)
-            if float(profile.baseline_capture_rate) else 0)
         for ib in iceboards:
             fpga = getattr(ib, 'fpga', ib)
-            channels = list(ib.get_channels())
-            source = str(profile.capture_source)
-            if fpga.CAPTURE_TYPE == 'UCAP' and source == 'adc':
-                source = 'funcgen'
-            ucap_output = profile.get('ucap_output', 'corr')
             if fpga.CAPTURE_TYPE == 'UCAP':
+                ucap_output = profile.get('ucap_output', 'corr')
                 expected_output = 'cap' if gain_capture else 'corr'
                 if ucap_output != expected_output:
                     raise RuntimeError(
                         f'{"Gain" if gain_capture else "Normal"} UCAP capture '
                         f'requires ucap_output={expected_output!r}, got '
                         f'{ucap_output!r}')
-            _, slot = ib.get_id(default_crate=0, default_slot=0)
-            send_delay = int(profile.tmux_factor) * int(slot)
-            self.log.info(
-                f'{self!r}: Starting data capture on {ib!r} '
-                f'with period={period}, source={source}, '
-                f'send_delay={send_delay}')
 
-            if period:
-                ib.start_data_capture(
-                    period=period,
-                    frames_per_burst=int(profile.get('frames_per_burst', 1)),
-                    channels=channels,
-                    source=source,
-                    data_type=(
-                        profile.scaler_cap_data_type
-                        if source == 'scaler' else None),
-                    sync=False,
-                    send_delay=send_delay,
-                    mode=int(profile.get('ucap_mode', 0)))
+        period = (
+            1.0 / baseline_capture_rate
+            if baseline_capture_rate else 0)
+        resolved_captures = []
+        for ib in iceboards:
+            fpga = getattr(ib, 'fpga', ib)
+            channels = list(ib.get_channels())
+            if not channels:
+                raise ValueError(
+                    f'No raw capture channels are available on {ib!r}')
+            source = capture_source_name
+            if fpga.CAPTURE_TYPE == 'UCAP' and source == 'adc':
+                source = 'funcgen'
+            if fpga.CAPTURE_TYPE == 'PROBER':
+                if frames_per_burst > 4:
+                    raise ValueError(
+                        'PROBER frames_per_burst must be between one and four')
+            elif fpga.CAPTURE_TYPE == 'UCAP':
+                expected_channels = {0: 8, 1: 4, 2: 2, 3: 1}[ucap_mode]
+                if len(channels) != expected_channels:
+                    raise ValueError(
+                        f'UCAP mode {ucap_mode} requires '
+                        f'{expected_channels} channels')
             else:
+                raise RuntimeError(
+                    f'Unsupported capture engine {fpga.CAPTURE_TYPE!r}')
+            ucap_output = profile.get('ucap_output', 'corr')
+            _, slot = ib.get_id(default_crate=0, default_slot=0)
+            send_delay = capture_tmux_factor * int(slot)
+            if send_delay > 0xffff:
+                raise ValueError(
+                    f'Raw capture send delay {send_delay} exceeds 65535')
+            frame_period = getattr(fpga, 'FRAME_PERIOD', None)
+            if period and frame_period:
+                burst_frames = max(int(period / frame_period), 1)
+                burst_frames = max((burst_frames // 4) * 4, 4)
+                if burst_frames >= 2**24:
+                    raise ValueError(
+                        f'Raw capture period on {ib!r} exceeds the 24-bit '
+                        'primary-period register')
+            resolved_captures.append((
+                ib, fpga, channels, source, ucap_output, send_delay))
+
+        live_decoder_update = bool(
+            push_decoder and getattr(self, 'raw_acq', {}))
+        if live_decoder_update:
+            for ib, _fpga, _channels, _source, _output, _delay in (
+                    resolved_captures):
                 ib.stop_data_capture()
-            ib.set_data_capture(
+
+        for ib, fpga, channels, source, ucap_output, send_delay in (
+                resolved_captures):
+            self.log.info(
+                f'{self!r}: Configuring data capture on {ib!r} '
+                f'with period={period}, sub_period={capture_sub_period}, '
+                f'source={source}, send_delay={send_delay}')
+
+            ib.configure_data_capture(
+                period=period,
+                frames_per_burst=frames_per_burst,
                 channels=channels,
-                sub_period=int(profile.capture_rate),
-                source=source)
+                source=source,
+                data_type=(
+                    profile.scaler_cap_data_type
+                    if source == 'scaler' else None),
+                send_delay=send_delay,
+                mode=ucap_mode,
+                sub_period=capture_sub_period)
             if fpga.CAPTURE_TYPE == 'UCAP':
                 fpga.UCAP.select_output(ucap_output)
             await asyncio.sleep(0)
 
         if push_decoder:
             await self._sync_raw_acq_firmware_config()
+
+        if period:
+            for ib, _fpga, _channels, _source, _output, _delay in (
+                    resolved_captures):
+                self.log.info(
+                    f'{self!r}: Starting configured data capture on {ib!r}')
+                ib.start_data_capture()
+                await asyncio.sleep(0)
         if period and sync:
             sync_params = self.config.fpga.get('sync_params', {})
             if sync_params.get('enable', False):
@@ -1480,7 +1563,10 @@ class FPGAMaster(object):
             # Setup channelizers and data capture for raw FFT data
             self.log.info('Setting up channelizers for Scaler capture')
             ca.set_channelizers(data_source = 'adc', fft_bypass = False, scaler_bypass = False, offset_binary_encoding = False)
-            ca.start_data_capture(0.03, source='scaler', mode = 0, channels = list(range(8)), data_type = 'fft_4bit', select = True, sync = False)
+            ca.configure_data_capture(
+                period=0.03, source='scaler', mode=0,
+                channels=list(range(8)), data_type='fft_4bit', select=True)
+            ca.start_data_capture()
             
             # Synchronize the crate again to ensure all frames are synchronized
             # ca.sync()

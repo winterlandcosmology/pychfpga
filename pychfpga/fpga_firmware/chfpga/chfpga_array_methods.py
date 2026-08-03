@@ -1291,13 +1291,15 @@ class chFPGAArrayMethods(ArrayMethods):
             self.fpga_array.data_recv = self.ib[0].UCAP.get_data_receiver(pr)
         return self.fpga_array.data_recv
 
-    def start_data_capture(self, *args, sync=None, **kwargs):
-        """ Starts data capture on all channelizers of all boards in the array
-        """
+    def configure_data_capture(self, *args, **kwargs):
+        """Configure data capture on every board without starting it."""
         for b in self.ib:
-            b.start_data_capture(*args, **kwargs)
-        if sync:
-            self.sync()
+            b.configure_data_capture(*args, **kwargs)
+
+    def start_data_capture(self):
+        """Start the configured data capture on every board in the array."""
+        for b in self.ib:
+            b.start_data_capture()
 
     def get_corr_receiver(self, port_number=None):
         """ Returns a correlator packet receiver.

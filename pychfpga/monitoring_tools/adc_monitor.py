@@ -98,7 +98,9 @@ class StandaloneAdcMonitorResources:
         board.set_scaler_eight_bit(scaler_eight_bit=True, prober_user_flags=False, channels=channels)
         board.set_offset_binary_encoding(offset=offset_binary_encoding, channels=channels)
         board.set_scaler_output_modes(bypass_data_type=0, cap_data_type=0, channels=channels)
-        board.start_data_capture(period=capture_period_s, source='adc', channels=channels)
+        board.configure_data_capture(
+            period=capture_period_s, source='adc', channels=channels)
+        board.start_data_capture()
 
         for channel in board.chan:
             channel.SCALER.STATS_FRAME_COUNT = 390625

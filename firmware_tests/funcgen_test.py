@@ -160,7 +160,8 @@ class TestFuncgen(TestModule):
         """
         logger = self.get_logger()
         logger.debug("Starting data capture for one period")
-        self.board.start_data_capture(period=1)
+        self.board.configure_data_capture(period=1)
+        self.board.start_data_capture()
         receiver = self.board.get_data_receiver()
         logger.debug("Reading raw frames")
         ts, data, count = receiver.read_raw_frames(1)
@@ -177,7 +178,8 @@ class TestFuncgen(TestModule):
         """
         logger = self.get_logger()
         logger.debug("Starting data capture from FUNCGEN")
-        self.board.start_data_capture(period=period, source='funcgen', frames_per_burst=frames_per_burst, mode=mode, burst_period_in_frames=burst_period_in_frames)
+        self.board.configure_data_capture(period=period, source='funcgen', frames_per_burst=frames_per_burst, mode=mode, burst_period_in_frames=burst_period_in_frames)
+        self.board.start_data_capture()
         logger.debug(f"Setting data source to {source.upper()}")
         self.board.set_channelizer(data_source=source, fft_bypass=1, scaler_bypass=1, **func_kwargs)
         logger.debug("Initializing data receiver")
@@ -265,7 +267,8 @@ class TestFuncgen(TestModule):
         """Test that the noise generator resets with rst_lfsr and that the captured
             data between each run are identical for the same seed"""
         seed = np.random.randint(-2 ** 15, 2 ** 15 - 1) #seed is 16-bit value
-        self.board.start_data_capture(period=1, source='funcgen', frames_per_burst=2, mode=0)
+        self.board.configure_data_capture(period=1, source='funcgen', frames_per_burst=2, mode=0)
+        self.board.start_data_capture()
         self.board.set_channelizer(data_source='noise', seed = seed)
         receiver = self.board.get_data_receiver()
         #self.board.chan[0].FUNCGEN.reset_noise()

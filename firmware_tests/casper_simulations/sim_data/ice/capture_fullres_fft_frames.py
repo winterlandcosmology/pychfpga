@@ -141,13 +141,14 @@ def capture_one_frame(board, funcgen_input, channels):
     fft_bins_per_word = int(fft_info.get("bins_per_word") or 1)
     frames_per_burst = 2 * fft_bins_per_word
 
-    board.start_data_capture(
+    board.configure_data_capture(
         period=CAPTURE_PERIOD,
         frames_per_burst=frames_per_burst,
         channels=channels,
         source="scaler",
         data_type=CAP_DATA_TYPE,
     )
+    board.start_data_capture()
     board.sync()
 
     receiver = board.get_data_receiver(verbose=1)

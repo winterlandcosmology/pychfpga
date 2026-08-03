@@ -288,6 +288,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self._last_init_time = None
         self.recv = None # raw data capture receiver object
         self._capture_pkt_frames_per_burst = None
+        self._data_capture_configured = False
         self.config.add("raw_capture")
         self._receiver_raw_capture_signature: Optional[Tuple] = None
         self.corr_recv = None # correlator data receiver object
@@ -3120,7 +3121,10 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
     def stop_data_capture(self):
         """
-        Stops the transmission of data.
+        Stop raw packet transmission without clearing its configuration.
+
+        A successfully configured capture can be restarted without additional
+        register writes by calling ``start_data_capture()``.
         """
         self.GPIO.GLOBAL_TRIG = 0  # disable data transmission if continuous mode is currentlly selected
         if self.CAPTURE_TYPE == "PROBER":
@@ -3331,7 +3335,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             self.chan[ch].PROBER.STREAM_ID = stream_id
         self.get_receiver_config(channels=list(stream_ids.keys()))
 
-    def start_data_capture(
+    def configure_data_capture(
             self,
             period=None,
             frames_per_burst=1,
@@ -3339,20 +3343,26 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             source='scaler',
             select=False,
             data_type=None,
-            sync=1,
             verbose=1,
             burst_period_in_seconds=None,
             burst_period_in_frames=None,
             burst_period_frame_rounding=4,
             offset=0,
             send_delay=0,
-            mode = 0):
+            mode=0,
+            sub_period=23):
         """
-        Starts periodic capture and transmission to the host computer of the Function generator (or ADC) raw data or SCALER data frames.
+        Configure periodic raw capture without enabling packet transmission.
 
+        This method programs the complete PROBER or UCAP capture profile and
+        updates the cached receiver configuration. The capture engine remains
+        reset so a host decoder can be updated before packets using the new
+        format are emitted. The previous channelizer-reset state is restored
+        before returning, allowing unrelated channelizer and correlator logic
+        to continue.
 
-        Some parameter are applicable to the PROBER or the UCAP capture engines, depending on which
-        one is supported by the platform.
+        Some parameters apply only to PROBER or UCAP, depending on the capture
+        engine supported by the platform.
 
         Parameters:
 
@@ -3363,6 +3373,11 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             burst_period_in_frames (int): Number of frames between captured bursts - 1 second corresponds to approximately 39 000 frames.
 
             burst_period_frame_rounding (int): rounds burst period to an integer multiple of `burst_period_frame_rounding`.
+
+            sub_period (int): Additional captures are triggered every
+                ``2**(sub_period + 1)`` frames within the primary period.
+                The default value 23 prevents additional captures within the
+                24-bit primary capture period.
 
             frames_per_burst (int): (PROBER only) Number of frames to send in a single burst. Default is 1.
                 Limited by buffer space in the FPGA. This field is ignored if the UCAP capture
@@ -3392,8 +3407,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                   - mode 2: Any 2 channels are sent. `channels` must be a list of exactly 2 channel numbers. Default when None is [0,1].
                   - mode 3: A single `channel` is sent. Default when None is [0].
 
-            sync (bool): When True, a local sync is performed.
-
             verbose (int): A non-zero value increases the amount of information that is printed or logged.
 
             offset (int): (PROBER only) Number that translates to how many frames are skipped before the capture
@@ -3412,40 +3425,149 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 - 2: captures 8 contiguous frames from the first 2 channels listed in ``channels``.
                 - 3: captures 16 contiguous frames from the first channel listed in ``channels``.
 
-        Data is sent as periodic bursts of M frames (`frames_per_burst`) and continues
-        until stopped by ``stop_data_capture()``.
-
         Burst repetition rate is set either as a period specified in seconds (`period` or
         `burst_period_in_seconds`) or as a number of frames (`burst_period_in_frames`).
+
+        Call ``start_data_capture()`` to enable the configured capture. ICE
+        correlation is independent of PROBER capture. On CRS,
+        UCAP and correlator data share an output multiplexer, so selecting the
+        ``cap`` output prevents simultaneous correlator output.
         """
 
         if burst_period_in_seconds is not None:
+            if period is not None:
+                raise ValueError(
+                    "Specify only one of period or burst_period_in_seconds")
             period = burst_period_in_seconds
 
         if ((burst_period_in_frames is None) and (period is None)) \
            or ((burst_period_in_frames is not None) and (period is not None)):
             raise ValueError("You must specify either 'period' or 'burst_period_in_frames' ")
 
+        frames_per_burst = int(frames_per_burst)
+        burst_period_frame_rounding = int(burst_period_frame_rounding)
+        offset = int(offset)
+        send_delay = int(send_delay)
+        mode = int(mode)
+        sub_period = int(sub_period)
+        if frames_per_burst < 1:
+            raise ValueError("frames_per_burst must be at least one")
+        if burst_period_frame_rounding < 1:
+            raise ValueError("burst_period_frame_rounding must be at least one")
+        if not 0 <= sub_period <= 31:
+            raise ValueError("sub_period must be between zero and 31")
+        if not 0 <= offset <= 8191:
+            raise ValueError("offset must be between zero and 8191")
+        if not 0 <= send_delay <= 0xffff:
+            raise ValueError("send_delay must be between zero and 65535")
+        if not 0 <= mode <= 3:
+            raise ValueError("mode must be between zero and three")
+
         if period is not None:
+            if float(period) < 0:
+                raise ValueError("period must be non-negative")
             burst_period_in_frames = max(float(period) / self.FRAME_PERIOD, 1)
+        elif float(burst_period_in_frames) < 0:
+            raise ValueError("burst_period_in_frames must be non-negative")
 
         # round the burst period to an integer multiple of burst_period_frame_rounding
         burst_period_in_frames = (int(burst_period_in_frames) // burst_period_frame_rounding) * burst_period_frame_rounding
+        burst_period_in_frames = max(
+            burst_period_in_frames, burst_period_frame_rounding)
+        if burst_period_in_frames >= 2**24:
+            raise ValueError(
+                f"burst period must be less than {2**24} frames")
         if channels is None:
-                if self.CAPTURE_TYPE == "PROBER":
-                    channels = self.default_channels
-                elif self.CAPTURE_TYPE == "UCAP":
-                    #set default channels based on mode
-                    if mode == 0:
-                        channels = list(range(8))
-                    elif mode == 1:
-                        channels = list(range(4))
-                    elif mode == 2:
-                        channels = list(range(2))
-                    elif mode == 3:
-                        channels = list(range(1))
-                self.logger.info(f"The channels are not specified for data capture. "
-                                    f"Defaulting to {channels}.")
+            if self.CAPTURE_TYPE == "PROBER":
+                channels = self.default_channels
+            elif self.CAPTURE_TYPE == "UCAP":
+                #set default channels based on mode
+                if mode == 0:
+                    channels = list(range(8))
+                elif mode == 1:
+                    channels = list(range(4))
+                elif mode == 2:
+                    channels = list(range(2))
+                elif mode == 3:
+                    channels = list(range(1))
+            self.logger.info(f"The channels are not specified for data capture. "
+                                f"Defaulting to {channels}.")
+        channels = self._normalize_channels(channels)
+        if not channels:
+            raise ValueError("At least one capture channel must be specified")
+        if len(set(channels)) != len(channels):
+            raise ValueError("Capture channels must not contain duplicates")
+        invalid_channels = [ch for ch in channels if ch not in self.chan]
+        if invalid_channels:
+            raise ValueError(
+                f"Unknown capture channel(s): {invalid_channels}")
+        if self.CAPTURE_TYPE == "PROBER":
+            if frames_per_burst > 4:
+                raise ValueError(
+                    "frames_per_burst must be between one and four for PROBER")
+            valid_sources = self.chan[channels[0]].PROBER.DATA_SOURCE_TABLE
+            burst_period_in_frames = max(
+                burst_period_in_frames, frames_per_burst)
+            delay_in_seconds = send_delay * 65536 / 125e6
+            period_in_seconds = (
+                self.FRAME_PERIOD * burst_period_in_frames)
+            buffered_packets = (
+                frames_per_burst
+                * np.ceil(delay_in_seconds / period_in_seconds))
+            if (
+                    buffered_packets
+                    > self.chan[channels[0]].PROBER.DATA_BUFFER_CAPACITY):
+                raise ValueError(
+                    "Capture send delay and period exceed the PROBER "
+                    "capture-buffer capacity")
+        elif self.CAPTURE_TYPE == "UCAP":
+            expected_channels = {0: 8, 1: 4, 2: 2, 3: 1}[mode]
+            if len(channels) != expected_channels:
+                raise ValueError(
+                    f"UCAP mode {mode} requires {expected_channels} channels")
+            if mode == 0 and channels != list(range(8)):
+                raise ValueError(
+                    "UCAP mode 0 requires channels 0-7 in order")
+            valid_sources = self.UCAP.DATA_SOURCE_TABLE
+        else:
+            raise RuntimeError(
+                f"Data capture is not supported for {self.CAPTURE_TYPE!r}")
+        if isinstance(source, str):
+            if source not in valid_sources:
+                valid = ", ".join(valid_sources)
+                raise ValueError(
+                    f"Unknown data capture source {source!r}. "
+                    f"Valid sources: {valid}")
+        elif (
+                not isinstance(source, (int, np.integer))
+                or not 0 <= int(source) <= max(valid_sources.values())):
+            raise ValueError(
+                f"Invalid numeric data capture source {source!r}")
+
+        normalized_cap_type = None
+        if data_type is not None:
+            if source != 'scaler':
+                raise RuntimeError(
+                    "'data_type' can be specified only for source='scaler'")
+            if isinstance(data_type, str):
+                if data_type not in SCALER.CAPTURE_DATA_TYPES:
+                    valid = ", ".join(sorted(SCALER.CAPTURE_DATA_TYPES.keys()))
+                    raise ValueError(
+                        f"Unknown scaler capture data type {data_type!r}. "
+                        f"Valid names: {valid}.")
+                normalized_cap_type = int(
+                    SCALER.CAPTURE_DATA_TYPES[data_type])
+            else:
+                normalized_cap_type = int(data_type)
+            if normalized_cap_type not in SCALER.CAPTURE_DATA_TYPES.values():
+                valid = sorted(SCALER.CAPTURE_DATA_TYPES.values())
+                raise ValueError(
+                    f"Invalid scaler capture data type "
+                    f"{normalized_cap_type!r}. Valid values: {valid}.")
+        elif source == 'scaler':
+            self.logger.warning(
+                "data_type not specified for scaler capture. Defaulting to 0.")
+            normalized_cap_type = 0
  
         if verbose:
             self.logger.debug(
@@ -3454,136 +3576,105 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 f'with first frame offset of {offset} frames ({offset * self.FRAME_PERIOD * 1000:.3f} ms)'
                 f'and a send delay factor of {send_delay} ({send_delay * 65536 / 125e6 * 1000:.3f} ms).')
 
-        try:
-            self.get_receiver_config()
-        except ValueError as exc:
-            if (
-                self.CAPTURE_TYPE != "PROBER"
-                or not str(exc).startswith("Selected channels have different ")
-            ):
-                raise
-            self.logger.debug(
-                f"{self!r}: Skipping receiver config cache refresh before "
-                f"start_data_capture because PROBER channels have mixed "
-                f"stale sources. ({exc})"
-            )
-
-        if data_type is not None:
-            if source == 'scaler':
-                if isinstance(data_type, str):
-                    if data_type not in SCALER.CAPTURE_DATA_TYPES:
-                        valid = ", ".join(sorted(SCALER.CAPTURE_DATA_TYPES.keys()))
-                        raise ValueError(
-                            f"Unknown scaler capture data type {data_type!r}. Valid names: {valid}."
-                        )
-                    normalized_cap_type = int(SCALER.CAPTURE_DATA_TYPES[data_type])
-                else:
-                    normalized_cap_type = int(data_type)
-                for ch in channels:
-                    self.chan[ch].SCALER.set_capture_data_type(normalized_cap_type)
-                for ch in self._normalize_channels(channels):
-                    self.config.chan[ch].scaler_cap_data_type = normalized_cap_type
-                try:
-                    self.get_receiver_config(channels=channels)
-                except ValueError as exc:
-                    if (
-                        self.CAPTURE_TYPE != "PROBER"
-                        or not str(exc).startswith("Selected channels have different ")
-                    ):
-                        raise
-                    self.logger.debug(
-                        f"{self!r}: Skipping receiver config cache refresh after "
-                        f"scaler capture type update because PROBER channels "
-                        f"have mixed stale settings. ({exc})"
-                    )
-            else:
-                raise RuntimeError(f"'data_type' can be specified only for source='scaler'")
-        else:
-            if source == 'scaler':
-                self.logger.warning(f"data_type not specified for scaler capture. Defaulting to 0.")
-                for ch in channels:
-                    self.chan[ch].SCALER.set_capture_data_type(0)
-                for ch in self._normalize_channels(channels):
-                    self.config.chan[ch].scaler_cap_data_type = 0
-                try:
-                    self.get_receiver_config(channels=channels)
-                except ValueError as exc:
-                    if (
-                        self.CAPTURE_TYPE != "PROBER"
-                        or not str(exc).startswith("Selected channels have different ")
-                    ):
-                        raise
-                    self.logger.debug(
-                        f"{self!r}: Skipping receiver config cache refresh after "
-                        f"default scaler capture type update because PROBER "
-                        f"channels have mixed stale settings. ({exc})"
-                    )
-
         # stop data from going into the PROBER and MASTER to minimize the risk
         # of malformed packets and unstable communications
+        self._data_capture_configured = False
+        self.stop_data_capture()
         reset_state = self.get_chan_reset()
-
         self.set_chan_reset(1)
+        try:
+            if normalized_cap_type is not None:
+                for ch in channels:
+                    self.chan[ch].SCALER.set_capture_data_type(
+                        normalized_cap_type)
+                    self.config.chan[ch].scaler_cap_data_type = (
+                        normalized_cap_type)
 
+            if self.CAPTURE_TYPE == 'UCAP':
+                self.UCAP.set_data_capture(
+                    source=source,
+                    mode=mode,
+                    channels=channels,
+                    select=select,
+                    periods=[
+                        burst_period_in_frames - 1,
+                        burst_period_in_frames - 1],
+                )
+                self.UCAP.SUB_PERIOD = sub_period
+                self.config.mode = mode
+                self.config.source = source
+                self.config.raw_capture.target_mode = mode
+                self._capture_pkt_frames_per_burst = None
 
-        if self.CAPTURE_TYPE == 'UCAP':
-            self.UCAP.set_data_capture(source=source, mode=mode, channels=channels, select=select, periods=[burst_period_in_frames-1, burst_period_in_frames-1])
-            self.config.mode = mode
-            self.config.source = source
-            self.config.raw_capture.target_mode = int(mode)
-            self.config.raw_capture.source = source
-            self.config.raw_capture.channels = tuple(self._normalize_channels(channels))
-            self.UCAP.USER_RESET = 0
-            self._capture_pkt_frames_per_burst = None
-            self.get_receiver_config(channels=channels)
-            
+            elif self.CAPTURE_TYPE == 'PROBER':
+                self._capture_pkt_frames_per_burst = frames_per_burst
+                self.config.raw_capture.frames_per_burst = frames_per_burst
 
-        elif self.CAPTURE_TYPE =='PROBER':
-            self._capture_pkt_frames_per_burst = frames_per_burst
-            self.config.raw_capture.frames_per_burst = int(frames_per_burst)
+                frames_per_second = (
+                    frames_per_burst / self.FRAME_PERIOD
+                    / burst_period_in_frames)
+                # 10 header bytes, 42 Ethernet/IP/UDP overhead
+                packet_size_in_bits = (self.FRAME_LENGTH + 10 + 42) * 8
+                self.logger.debug('\n'.join((
+                    f'{self!r}: Data rates are:',
+                    f'    1 board, 1 channel: {frames_per_second * packet_size_in_bits / 1e6:.3f} Mbits/s',
+                    f'    1 board, {len(channels)} channels: {len(channels) * frames_per_second * packet_size_in_bits / 1e6:.3f} Mbit/s',
+                    f'    1 crate: {16 * 16 * frames_per_second * packet_size_in_bits / 1e6:.3f} Mbits/s'
+                    )))
 
-            frames_per_second = frames_per_burst * 1.0 / self.FRAME_PERIOD / burst_period_in_frames
-            packet_size_in_bits = (self.FRAME_LENGTH + 10 + 42) * 8  # 10 header bytes, 42 Ethernet/IP/UDP overhead
-            self.logger.debug('\n'.join((
-                f'{self!r}: Data rates are:',
-                f'    1 board, 1 channel: {frames_per_second * packet_size_in_bits / 1e6:.3f} Mbits/s',
-                f'    1 board, {len(channels)} channels: {len(channels) * frames_per_second * packet_size_in_bits / 1e6:.3f} Mbit/s',
-                f'    1 crate: {16 * 16 * frames_per_second * packet_size_in_bits / 1e6:.3f} Mbits/s'
-                )))
+                # Do not limit the transfer rate
+                self.GPIO.HOST_FRAME_READ_RATE = 5
 
-            if channels is None:
-                channels = self.default_channels
+                # Stop data capture on *ALL* channels
+                for chan in self.get_channelizers():
+                    chan.PROBER.RESET = 1
+                for chan in self.get_channelizers(channels):
+                    chan.PROBER.SUB_PERIOD = sub_period
+                    chan.PROBER.set_data_source(source)
+                    chan.PROBER.config_capture(
+                        frames_per_burst=frames_per_burst,
+                        burst_period=burst_period_in_frames,
+                        offset=offset,
+                        send_delay=send_delay)
+                    self.logger.debug(
+                        f'{self!r}: Configuring raw data capture on channel '
+                        f'{chan.chan_number}')
 
-            # Do not limit the transfer rate
-            self.GPIO.HOST_FRAME_READ_RATE = 5
-
-            # Stop data capture on *ALL* channels
-            for chan in self.get_channelizers():
-                chan.PROBER.RESET = 1
-            for chan in self.get_channelizers(channels):
-                chan.PROBER.SUB_PERIOD = 23  # disable sub period
-                chan.PROBER.set_data_source(source)
-                chan.PROBER.config_capture(
-                    frames_per_burst=frames_per_burst,
-                    burst_period=burst_period_in_frames,
-                    offset=offset,
-                    send_delay=send_delay)
-                ch = chan.chan_number
-                action = ('Disabling', 'Enabling')[ch in channels]
-                self.logger.debug(f'{self!r}: {action} raw data capture on channel {ch}')
-                chan.PROBER.RESET = 0
-
-            for ch in self._normalize_channels(channels):
+            for ch in channels:
                 st = self.config.chan[ch]
                 st.data_source = source
-                st.prober_sub_period = 23
+                st.prober_sub_period = sub_period
             self.config.raw_capture.source = source
-            self.config.raw_capture.channels = tuple(self._normalize_channels(channels))
+            self.config.raw_capture.channels = tuple(channels)
             self.get_receiver_config(channels=channels)
+            self._data_capture_configured = True
+        finally:
+            self.set_chan_reset(reset_state)
+
+    def start_data_capture(self):
+        """Enable the complete profile set by ``configure_data_capture()``.
+
+        This method only releases the PROBER or UCAP capture-engine reset and
+        enables its trigger. It never changes capture registers, receiver
+        metadata, or synchronization state.
+        """
+        if not self._data_capture_configured:
+            raise RuntimeError(
+                "Data capture must be configured before it can be started")
+
+        channels = self._normalize_channels(
+            self.config.raw_capture.channels)
+        if self.CAPTURE_TYPE == 'PROBER':
+            for chan in self.get_channelizers(channels):
+                chan.PROBER.RESET = 0
+        elif self.CAPTURE_TYPE == 'UCAP':
+            self.UCAP.USER_RESET = 0
+        else:
+            raise RuntimeError(
+                f"Data capture is not supported for {self.CAPTURE_TYPE!r}")
 
         # ** line below no longer supported by firmware *** enables data transmission if continuous mode is selected
         self.set_trig(1)
-        self.set_chan_reset(reset_state)
 
     def set_data_capture(self, channels=None, sub_period=23, source='adc'):
         """ Set the dynamic data capture parameters that can be changed on the
@@ -3607,10 +3698,38 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 the sub period.
 
             source (str): Data source to use.
+
+        This method does not configure the primary burst period, scaler
+        capture format, UCAP mode, packet geometry, capture reset, or
+        activation. A sub-period-only change can be made on the fly. Source
+        changes used with raw_acq should instead use fpga_master's atomic
+        profile transition so the host decoder changes at the same boundary.
         """
 
-        if channels is None:
-            channels = self.get_channels()
+        sub_period = int(sub_period)
+        if not 0 <= sub_period <= 31:
+            raise ValueError("sub_period must be between zero and 31")
+        channels = self._normalize_channels(
+            self.get_channels() if channels is None else channels)
+        if not channels:
+            raise ValueError("At least one capture channel must be specified")
+        valid_sources = (
+            self.UCAP.DATA_SOURCE_TABLE
+            if self.CAPTURE_TYPE == 'UCAP'
+            else self.chan[channels[0]].PROBER.DATA_SOURCE_TABLE
+            if self.CAPTURE_TYPE == 'PROBER'
+            else {})
+        if isinstance(source, str):
+            if source not in valid_sources:
+                valid = ', '.join(valid_sources)
+                raise ValueError(
+                    f"Unknown data capture source {source!r}. "
+                    f"Valid sources: {valid}.")
+        elif (
+                not isinstance(source, (int, np.integer))
+                or not 0 <= int(source) <= max(valid_sources.values())):
+            raise ValueError(
+                f"Invalid numeric data capture source {source!r}")
 
         self.logger.debug(
             f'{self!r}: Setting dynamic capture parameters to '
@@ -3634,13 +3753,13 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             raise RuntimeError(
                 f'{self!r}: set_data_capture() is not supported for '
                 f'capture engine {self.CAPTURE_TYPE!r}')
-        for ch in self._normalize_channels(channels):
+        for ch in channels:
             st = self.config.chan[ch]
             st.data_source = source
-            st.prober_sub_period = int(sub_period)
+            st.prober_sub_period = sub_period
         raw_capture = self.config.raw_capture
         raw_capture.source = source
-        raw_capture.channels = tuple(self._normalize_channels(channels))
+        raw_capture.channels = tuple(channels)
         self.get_receiver_config(channels=channels)
 
     def set_fft_bypass(self, bypass_mode, channels=None):

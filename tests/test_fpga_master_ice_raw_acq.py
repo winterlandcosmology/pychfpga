@@ -10,6 +10,7 @@ from wtl.namespace import NameSpace
 
 import pychfpga.fpga_master as fpga_master_mod
 from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
+from pychfpga.fpga_firmware.chfpga.chfpga import chFPGA
 from pychfpga.raw_acq import receiver as raw_acq_receiver_mod
 from pychfpga.raw_acq.raw_data_processor import RawDataProcessor
 
@@ -69,6 +70,248 @@ def test_correlator_soft_integ_period_updates_corr_config():
     assert corr.config.soft_integ_period == 7
 
 
+class _CaptureTestLogger:
+    def debug(self, message):
+        pass
+
+    def info(self, message):
+        pass
+
+    def warning(self, message):
+        pass
+
+
+class _CaptureTestProber:
+    DATA_BUFFER_CAPACITY = 3
+    DATA_SOURCE_TABLE = {
+        "adc": 0,
+        "funcgen": 0,
+        "scaler": 1,
+    }
+
+    def __init__(self):
+        self.RESET = 0
+        self.SUB_PERIOD = 0
+        self.source = None
+        self.capture_config = None
+
+    def set_data_source(self, source):
+        self.source = source
+
+    def config_capture(self, **config):
+        self.capture_config = config
+
+
+class _CaptureTestChannel:
+    def __init__(self, number):
+        self.chan_number = number
+        self.PROBER = _CaptureTestProber()
+        self.SCALER = SimpleNamespace(set_capture_data_type=lambda value: None)
+
+
+class _CaptureTestUCAP:
+    DATA_SOURCE_TABLE = {
+        "funcgen": 0,
+        "scaler": 255,
+    }
+
+    def __init__(self):
+        self.USER_RESET = 0
+        self.SUB_PERIOD = 0
+        self.capture_config = None
+
+    def set_data_capture(self, **config):
+        self.capture_config = config
+
+
+class _CaptureTestBoard:
+    FRAME_PERIOD = 0.001
+    FRAME_LENGTH = 2048
+
+    def __init__(self, capture_type):
+        self.CAPTURE_TYPE = capture_type or "PROBER"
+        self.default_channels = [0, 1]
+        self.logger = _CaptureTestLogger()
+        self.chan_reset = 0
+        self.trig = None
+        self.receiver_config_updates = 0
+        self._capture_pkt_frames_per_burst = None
+        self._data_capture_configured = False
+        self.chan = {
+            ch: _CaptureTestChannel(ch) for ch in self.default_channels}
+        self.GPIO = SimpleNamespace(HOST_FRAME_READ_RATE=0)
+        self.UCAP = _CaptureTestUCAP()
+        self.config = SimpleNamespace(
+            chan={
+                ch: SimpleNamespace(
+                    data_source=None,
+                    prober_sub_period=None,
+                    scaler_cap_data_type=None)
+                for ch in self.default_channels
+            },
+            raw_capture=SimpleNamespace(
+                source=None,
+                channels=(),
+                frames_per_burst=1,
+                target_mode=0),
+            mode=0,
+            source=None,
+        )
+
+    def get_receiver_config(self, channels=None):
+        self.receiver_config_updates += 1
+
+    def get_chan_reset(self):
+        return self.chan_reset
+
+    def set_chan_reset(self, state):
+        self.chan_reset = state
+
+    def _normalize_channels(self, channels):
+        return list(channels)
+
+    def get_channelizers(self, channels=None):
+        channels = self.default_channels if channels is None else channels
+        return [self.chan[ch] for ch in channels]
+
+    def set_trig(self, state):
+        self.trig = state
+
+    def stop_data_capture(self):
+        self.trig = False
+        if self.CAPTURE_TYPE == "PROBER":
+            for channel in self.chan.values():
+                channel.PROBER.RESET = 1
+        else:
+            self.UCAP.USER_RESET = 1
+
+    configure_data_capture = chFPGA.configure_data_capture
+    start_data_capture = chFPGA.start_data_capture
+
+
+@pytest.mark.parametrize(
+    ("capture_type", "mode"),
+    [("PROBER", 0), ("UCAP", 2)],
+)
+@pytest.mark.parametrize("sub_period", [10, 23])
+def test_configure_data_capture_keeps_engine_disabled(
+        capture_type, mode, sub_period):
+    board = _CaptureTestBoard(capture_type)
+
+    board.configure_data_capture(
+        period=0.1,
+        channels=[0, 1],
+        source="funcgen",
+        verbose=0,
+        mode=mode,
+        sub_period=sub_period)
+
+    assert board.chan_reset == 0
+    assert board.trig is False
+    assert board.receiver_config_updates == 1
+    assert board._data_capture_configured
+    if capture_type == "PROBER":
+        assert all(ch.PROBER.RESET == 1 for ch in board.chan.values())
+        assert all(
+            ch.PROBER.SUB_PERIOD == sub_period
+            for ch in board.chan.values())
+    else:
+        assert board.UCAP.USER_RESET == 1
+        assert board.UCAP.SUB_PERIOD == sub_period
+
+
+@pytest.mark.parametrize(
+    ("capture_type", "mode"),
+    [("PROBER", 0), ("UCAP", 2)],
+)
+def test_argument_free_start_only_enables_configured_engine(
+        capture_type, mode):
+    board = _CaptureTestBoard(capture_type)
+
+    board.configure_data_capture(
+        period=0.1,
+        channels=[0, 1],
+        source="funcgen",
+        verbose=0,
+        mode=mode)
+    board.start_data_capture()
+
+    assert board.chan_reset == 0
+    assert board.trig == 1
+    assert board.receiver_config_updates == 1
+    if capture_type == "PROBER":
+        assert all(ch.PROBER.RESET == 0 for ch in board.chan.values())
+    else:
+        assert board.UCAP.USER_RESET == 0
+
+
+def test_start_rejects_capture_configuration_arguments():
+    board = _CaptureTestBoard("PROBER")
+
+    with pytest.raises(TypeError):
+        board.start_data_capture(frames_per_burst=4)
+
+
+def test_start_before_configuration_raises():
+    board = _CaptureTestBoard("PROBER")
+
+    with pytest.raises(RuntimeError, match="must be configured"):
+        board.start_data_capture()
+
+
+def test_stop_then_start_reuses_cached_profile():
+    board = _CaptureTestBoard("PROBER")
+    board.configure_data_capture(
+        period=0.1,
+        channels=[0, 1],
+        source="funcgen",
+        verbose=0)
+
+    board.start_data_capture()
+    board.stop_data_capture()
+    board.start_data_capture()
+
+    assert board.receiver_config_updates == 1
+    assert board.trig == 1
+    assert all(ch.PROBER.RESET == 0 for ch in board.chan.values())
+
+
+def test_configuration_failure_restores_channelizer_reset():
+    board = _CaptureTestBoard("UCAP")
+    board.chan_reset = 7
+
+    def fail_configuration(**kwargs):
+        raise RuntimeError("register write failed")
+
+    board.UCAP.set_data_capture = fail_configuration
+
+    with pytest.raises(RuntimeError, match="register write failed"):
+        board.configure_data_capture(
+            period=0.1,
+            channels=[0, 1],
+            source="funcgen",
+            mode=2,
+            verbose=0)
+
+    assert board.chan_reset == 7
+    assert board.UCAP.USER_RESET == 1
+    assert not board._data_capture_configured
+
+
+def test_dynamic_set_data_capture_still_updates_sub_period():
+    board = _CaptureTestBoard("PROBER")
+
+    chFPGA.set_data_capture(
+        board,
+        channels=[0, 1],
+        source="funcgen",
+        sub_period=10)
+
+    assert all(ch.PROBER.SUB_PERIOD == 10 for ch in board.chan.values())
+    assert board.config.raw_capture.source == "funcgen"
+    assert board.config.raw_capture.channels == (0, 1)
+
+
 class _FakeReceiverConfig:
     def as_dict(self):
         return {"raw": {}, "corr": {}}
@@ -92,6 +335,7 @@ class _FakeBoard:
         self.fpga = self
         self.target_addr = None
         self.capture_source = "mixed"
+        self.configure_data_capture_calls = []
         self.start_data_capture_calls = []
         self.set_data_capture_calls = []
 
@@ -102,9 +346,12 @@ class _FakeBoard:
         channels = channels or self.get_channels()
         return [10 + ch for ch in channels]
 
-    def start_data_capture(self, **kwargs):
-        self.start_data_capture_calls.append(kwargs)
+    def configure_data_capture(self, **kwargs):
+        self.configure_data_capture_calls.append(kwargs)
         self.capture_source = kwargs["source"]
+
+    def start_data_capture(self):
+        self.start_data_capture_calls.append({})
 
     def stop_data_capture(self):
         pass
@@ -262,10 +509,12 @@ def test_raw_acq_initial_decoder_follows_programmed_gain_profile(monkeypatch):
         initial_capture_config=gain_capture,
         gain_capture=True))
 
-    assert board.start_data_capture_calls[0]["frames_per_burst"] == 4
-    assert board.start_data_capture_calls[0]["source"] == "scaler"
-    assert board.start_data_capture_calls[0]["data_type"] == "fft_full"
-    assert board.set_data_capture_calls == [([0, 1], "scaler", 12)]
+    assert board.configure_data_capture_calls[0]["frames_per_burst"] == 4
+    assert board.configure_data_capture_calls[0]["source"] == "scaler"
+    assert board.configure_data_capture_calls[0]["data_type"] == "fft_full"
+    assert board.configure_data_capture_calls[0]["sub_period"] == 12
+    assert board.start_data_capture_calls == [{}]
+    assert board.set_data_capture_calls == []
 
 
 def test_non_prober_raw_acq_does_not_normalize_capture_source(monkeypatch):
