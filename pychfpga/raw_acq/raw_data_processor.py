@@ -92,6 +92,12 @@ class RawDataProcessor(RawDataPacketProcessor):
         indices = np.arange(self.n_out)
         rows = slice(0, self.n_out)
         for source, processor in enumerate((self.adc, self.fft)):
+            # The shared raw decoder keeps both valid capture formats, but a
+            # batch normally contains only the currently selected source.
+            # Formatting an absent source can apply (for example) the retained
+            # four-frame full-resolution FFT format to a one-frame ADC batch.
+            if not np.any(self.raw_source[rows] == source):
+                continue
             ts, data, counts = self.get_formatted_data(rows, source=source)
             processor.consume((ts, data, counts, indices))
 

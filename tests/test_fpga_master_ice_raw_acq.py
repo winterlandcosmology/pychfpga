@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -8,7 +9,9 @@ from wtl.config import load_yaml_config
 from wtl.namespace import NameSpace
 
 import pychfpga.fpga_master as fpga_master_mod
+from pychfpga.common.raw_data_packet_processor import RawDataPacketProcessor
 from pychfpga.raw_acq import receiver as raw_acq_receiver_mod
+from pychfpga.raw_acq.raw_data_processor import RawDataProcessor
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -313,6 +316,36 @@ def test_raw_acq_receiver_flush_only_clears_packet_buffer():
     assert receiver.flush() == 0
     assert receiver.n_stored == 0
     np.testing.assert_array_equal(receiver.pkt_len, np.zeros(3, dtype=np.uint32))
+
+
+def test_raw_data_processor_formats_only_sources_present_in_batch(monkeypatch):
+    """A one-frame ADC batch must not be passed to the retained fft_full formatter."""
+    processor = object.__new__(RawDataProcessor)
+    processor.n_out = 1
+    processor.raw_source = np.zeros((1, 1, 1), dtype=np.uint8)
+    adc_results = []
+    fft_results = []
+    processor.adc = SimpleNamespace(consume=adc_results.append)
+    processor.fft = SimpleNamespace(consume=fft_results.append)
+    formatted_sources = []
+
+    def get_formatted_data(rows, source):
+        formatted_sources.append(source)
+        if source == 1:
+            raise AssertionError("absent FFT source must not be formatted")
+        return "ts", "data", "counts"
+
+    processor.get_formatted_data = get_formatted_data
+    monkeypatch.setattr(
+        RawDataPacketProcessor,
+        "process_udp_packets",
+        lambda self, config=None, verbose=None: None)
+
+    processor.process_udp_packets()
+
+    assert formatted_sources == [0]
+    assert adc_results == [("ts", "data", "counts", np.array([0]))]
+    assert fft_results == []
 
 
 def test_raw_acq_receiver_three_field_sources_return_source_key(monkeypatch):
