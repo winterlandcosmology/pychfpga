@@ -3,6 +3,7 @@
 import socket
 import struct
 import threading
+import time
 
 import pytest
 
@@ -109,3 +110,63 @@ def test_tcp_packet_receiver_split_reads():
     t.join(2)
     assert n == 1
     assert bytes(pr.buf[0, : len(payload)]) == payload
+
+
+def test_tcp_packet_receiver_marks_dead_on_peer_close():
+    """Peer close marks the socket dead; no auto-reconnect."""
+    payload = b"\xA0ok"
+    sock = _connect_client(_frame(0, payload))
+    pr = TCPPacketReceiver([sock], buf_size=4, max_packet_size=64, verbose=0)
+    n = pr.receive_packets()
+    assert n == 1
+    assert sock in pr._dead or n == 1
+    # Drain EOF if not yet marked
+    pr.receive_packets()
+    assert sock in pr._dead
+
+
+def test_tcp_flush_preserves_partial_carry():
+    """Flush discards complete frames but keeps a trailing partial in carry."""
+    p0 = b"\xA0" + b"AAA"
+    p1 = b"\xA0" + b"BBBBBB"
+    f0 = _frame(0, p0)
+    f1 = _frame(1, p1)
+    split = len(f1) // 2
+
+    ready = threading.Event()
+    go_rest = threading.Event()
+    ports = []
+
+    def serve():
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind(("127.0.0.1", 0))
+        ports.append(srv.getsockname()[1])
+        srv.listen(1)
+        ready.set()
+        conn, _ = srv.accept()
+        conn.sendall(f0 + f1[:split])
+        go_rest.wait(2)
+        conn.sendall(f1[split:])
+        conn.close()
+        srv.close()
+
+    t = threading.Thread(target=serve, daemon=True)
+    t.start()
+    assert ready.wait(2)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(("127.0.0.1", ports[0]))
+    sock.settimeout(0.2)
+    pr = TCPPacketReceiver([sock], buf_size=8, max_packet_size=64, verbose=0)
+
+    # Let first chunk arrive, then flush: should drop f0, keep f1[:split] in carry
+    time.sleep(0.05)
+    nflush = pr.flush(timeout=0.05, max_flush_time=1.0, verbose=0)
+    assert nflush >= 1
+    assert bytes(pr._carry[0]) == f1[:split]
+
+    go_rest.set()
+    n = pr.receive_packets()
+    t.join(2)
+    assert n == 1
+    assert bytes(pr.buf[0, : len(p1)]) == p1

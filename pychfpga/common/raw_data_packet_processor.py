@@ -655,11 +655,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
 
     def flush(self, flush_timeout=None):
         """Flush UDP receiver and clear assembled-buffer state."""
-        flush_kwargs = {}
-        if flush_timeout is not None:
-            flush_kwargs["timeout"] = flush_timeout
-        self.pr.flush(**flush_kwargs)
-        if self.verbose >= 2:
+        self.pr.flush(timeout=flush_timeout, verbose=self.verbose)
+        if self.verbose >= 1:
             print("Flushing RawDataPacketProcessor linear buffer")
         self.ts_array.fill(self.TS_EMPTY)
         self.raw_data.fill(0)

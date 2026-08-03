@@ -22,6 +22,14 @@ class TCPPacketReceiver:
     Each record is ``cookie(u16 LE)=0xDA4A``, ``counter``, ``counter ^ 0xFFFF``,
     ``length``, then ``length`` payload bytes. Accepts a list of connected TCP
     sockets (typically one per board).
+
+    Multi-socket receive is fair: sockets are drained round-robin so one busy
+    board cannot fill the packet buffer alone (which would leave other
+    channels as zeros after assembly).
+
+    The data sockets are assumed stable for a session (firmware drops on
+    backpressure instead of closing). Reconnect by calling
+    ``get_data_receiver(..., force=True)`` on array reinit.
     """
 
     def __init__(
@@ -47,6 +55,7 @@ class TCPPacketReceiver:
         # Per-socket carry of incomplete stream bytes
         self._carry = [bytearray() for _ in self.socks]
         self._dead = set()
+        self._rr = 0  # round-robin start index
         self._timeout = None
         for s in self.socks:
             try:
@@ -58,10 +67,16 @@ class TCPPacketReceiver:
     def settimeout(self, timeout):
         self._timeout = timeout
         for s in self.socks:
-            s.settimeout(timeout)
+            try:
+                s.settimeout(timeout)
+            except OSError:
+                pass
 
     def gettimeout(self):
         return self._timeout
+
+    def _live_socks(self):
+        return [s for s in self.socks if s not in self._dead]
 
     @staticmethod
     def _header_ok(cookie: int, counter: int, counter_inv: int) -> bool:
@@ -85,19 +100,19 @@ class TCPPacketReceiver:
             carry.clear()
         return carry
 
-    def _drain_carry_into_buf(self, sock_idx: int, n: int, verbose: int) -> int:
-        """Peel complete frames from carry[sock_idx] into buf starting at n. Returns new n."""
+    def _pop_one_frame(self, sock_idx: int, n: int, verbose: int) -> int:
+        """If carry[sock_idx] has one complete frame, copy it into buf[n]. Returns new n."""
         carry = self._carry[sock_idx]
-        while n < self.n_packets and len(carry) >= DATA_TCP_HEADER_LEN:
+        while len(carry) >= DATA_TCP_HEADER_LEN:
             cookie, counter, counter_inv, length = DATA_TCP_HEADER_STRUCT.unpack_from(carry, 0)
             if not self._header_ok(cookie, counter, counter_inv) or length > self.max_packet_size:
                 self._resync_carry(carry)
                 if len(carry) < DATA_TCP_HEADER_LEN:
-                    break
+                    return n
                 continue
             need = DATA_TCP_HEADER_LEN + length
             if len(carry) < need:
-                break
+                return n
             payload = bytes(carry[DATA_TCP_HEADER_LEN:need])
             self.buf[n, :length] = np.frombuffer(payload, dtype=np.uint8)
             self.pkt_len[n] = length
@@ -107,7 +122,28 @@ class TCPPacketReceiver:
                     f"ctr={counter} len={length}: {self.buf[n, :26].tobytes().hex(':')}"
                 )
             del carry[:need]
-            n += 1
+            return n + 1
+        return n
+
+    def _drain_fair(self, n: int, verbose: int) -> int:
+        """Round-robin peel complete frames from all carries into ``buf``."""
+        nsock = len(self.socks)
+        if nsock == 0:
+            return n
+        start = self._rr % nsock
+        # Keep taking one frame per socket until no socket yields or buffer full.
+        progress = True
+        while n < self.n_packets and progress:
+            progress = False
+            for k in range(nsock):
+                if n >= self.n_packets:
+                    break
+                sock_idx = (start + k) % nsock
+                before = n
+                n = self._pop_one_frame(sock_idx, n, verbose)
+                if n > before:
+                    progress = True
+        self._rr = (start + 1) % nsock
         return n
 
     def receive_packets(self, verbose=None):
@@ -120,11 +156,7 @@ class TCPPacketReceiver:
             deadline = time.monotonic() + timeout
 
         while n < self.n_packets:
-            # First empty any already-buffered complete frames
-            for i in range(len(self.socks)):
-                n = self._drain_carry_into_buf(i, n, v)
-                if n >= self.n_packets:
-                    break
+            n = self._drain_fair(n, v)
             if n >= self.n_packets:
                 break
 
@@ -140,7 +172,7 @@ class TCPPacketReceiver:
             else:
                 wait = 0.0 if timeout == 0 else (timeout if timeout is not None else 1.0)
 
-            live = [s for s in self.socks if s not in self._dead]
+            live = self._live_socks()
             if not live:
                 break
 
@@ -153,25 +185,38 @@ class TCPPacketReceiver:
                     break
                 continue
 
-            for s in readable:
+            # Fair read order: rotate which readable socket we service first.
+            nsock = len(self.socks)
+            order = []
+            for k in range(nsock):
+                sock_idx = (self._rr + k) % nsock
+                s = self.socks[sock_idx]
+                if s in readable:
+                    order.append((sock_idx, s))
+
+            for sock_idx, s in order:
                 if n >= self.n_packets:
                     break
-                sock_idx = self.socks.index(s)
                 try:
                     chunk = s.recv(65536)
                 except socket.timeout:
                     continue
                 except OSError:
                     self._dead.add(s)
+                    if v >= 2:
+                        print(f"{self.__class__.__name__}: socket {sock_idx} recv error")
                     continue
                 if not chunk:
-                    # Peer closed — stop selecting this socket (avoid spin).
                     self._dead.add(s)
                     if v >= 2:
                         print(f"{self.__class__.__name__}: socket {sock_idx} closed by peer")
                     continue
                 self._carry[sock_idx].extend(chunk)
-                n = self._drain_carry_into_buf(sock_idx, n, v)
+                # One frame from this socket then move on (fairness).
+                n = self._pop_one_frame(sock_idx, n, v)
+
+            # After reading, drain any remaining complete frames fairly.
+            n = self._drain_fair(n, v)
 
         if v >= 2:
             print(f"{self.__class__.__name__}: Returning {n} packets")
@@ -182,38 +227,92 @@ class TCPPacketReceiver:
         self.n_stored = n
         return n
 
+    def _discard_complete_frames(self, sock_idx: int) -> int:
+        """Drop complete framed records from carry[sock_idx]; keep a trailing partial.
+
+        Returns the number of complete frames discarded.
+        """
+        carry = self._carry[sock_idx]
+        discarded = 0
+        while len(carry) >= DATA_TCP_HEADER_LEN:
+            cookie, counter, counter_inv, length = DATA_TCP_HEADER_STRUCT.unpack_from(carry, 0)
+            if not self._header_ok(cookie, counter, counter_inv) or length > self.max_packet_size:
+                self._resync_carry(carry)
+                if len(carry) < DATA_TCP_HEADER_LEN:
+                    break
+                continue
+            need = DATA_TCP_HEADER_LEN + length
+            if len(carry) < need:
+                break
+            del carry[:need]
+            discarded += 1
+        return discarded
+
     def flush(self, timeout=0.001, max_flush_time=2, verbose=0):
-        """Drain TCP sockets and clear per-socket carry buffers."""
+        """Discard complete framed records until the stream goes quiet.
+
+        Bytes are fed through the per-socket carry buffer so a trailing partial
+        record is preserved (unlike clearing carry, which desyncs the stream).
+        Stops when no socket is readable for ``timeout`` (typically less than the
+        inter-timestamp gap). ``max_flush_time`` is only a hang safety if the
+        stream never quiets.
+        """
+        if timeout is None:
+            timeout = 0.001
+        if max_flush_time is None:
+            max_flush_time = 2.0
         flushed_packets = 0
         t0 = time.time()
         old_timeout = self.gettimeout()
         self.settimeout(timeout)
-        if verbose >= 2:
-            print("Flushing TCP data sockets")
-        while time.time() - t0 < max_flush_time:
+        if verbose >= 1:
+            print(
+                f"Flushing TCP data sockets "
+                f"(quiet={timeout:.3g}s, max={max_flush_time:.3g}s; carry preserved)"
+            )
+        live = self._live_socks()
+        while live and (time.time() - t0) < max_flush_time:
             try:
-                readable, _, _ = select.select(self.socks, [], [], timeout)
+                readable, _, _ = select.select(live, [], [], timeout)
             except (ValueError, OSError):
                 break
             if not readable:
+                # Quiet for ``timeout`` — stop between bursts when timeout < inter-ts gap.
                 break
             for s in readable:
+                try:
+                    idx = self.socks.index(s)
+                except ValueError:
+                    continue
                 try:
                     chunk = s.recv(65536)
                 except socket.timeout:
                     continue
                 except OSError:
+                    self._dead.add(s)
                     continue
                 if not chunk:
+                    self._dead.add(s)
                     continue
-                # Count approximate frames for logging
-                flushed_packets += max(1, len(chunk) // 64)
+                self._carry[idx].extend(chunk)
+                flushed_packets += self._discard_complete_frames(idx)
                 if verbose >= 2:
-                    print(f"flushing TCP chunk len={len(chunk)}")
-        for carry in self._carry:
-            carry.clear()
+                    print(
+                        f"flushing TCP sock={idx} chunk={len(chunk)} "
+                        f"carry={len(self._carry[idx])}"
+                    )
+            live = self._live_socks()
+        else:
+            if verbose:
+                print(
+                    f"Stopped flushing after {max_flush_time} s: data arriving faster "
+                    f"than quiet timeout {timeout} s"
+                )
         if old_timeout is not None:
             self.settimeout(old_timeout)
         if verbose:
-            print(f"Flushed ~{flushed_packets} TCP chunks")
+            print(
+                f"Flushed {flushed_packets} TCP frames in {time.time() - t0:.3f}s "
+                f"(carry kept; {len(self._dead)} dead sockets)"
+            )
         return flushed_packets
