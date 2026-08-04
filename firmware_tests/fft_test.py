@@ -42,32 +42,23 @@ class TestFFT:
     def get_logger(self):
         return self.logger
 
-    def get_widths(self, test_config):
-        platform = test_config.platform
-        if platform not in platforms:
-            raise ValueError(f'{platform} not recognised as a possible platform')
-        widths = NameSpace(platforms[platform])
-        widths.PLATFORM = platform[:3]
-        widths.MIN_INPUT = -2 ** (widths.INPUT_WIDTH - 1)
-        widths.MAX_INPUT = 2 ** (widths.INPUT_WIDTH - 1) - 1
-        return widths
-
-    def board_conn(self, xr):
-        if 'board' in xr.data:
-            return xr.data.board
-        ca = FPGAArray(**self.connection_config)
-        xr.data.board = ca.ib[0]
-        return xr.data.board
+    def get_constants(_, board):
+        constants = NameSpace()
+        constants.PLATFORM = board.mb.part_number
+        constants.INPUT_WIDTH = board.ADC_BITS_PER_SAMPLE
+        constants.MIN_INPUT = -2 ** (constants.INPUT_WIDTH - 1)
+        constants.MAX_INPUT = 2 ** (constants.INPUT_WIDTH - 1) - 1
+        constants.NUM_SAMPLES = int(board.ADC_SAMPLES_PER_FRAME)
+        constants.NUM_BINS = int(board.NUMBER_OF_FREQUENCY_BINS)
+        return constants
 
     @pytest.fixture(scope='function', autouse=True)
     def setup(self, xr):
         self.test_config = xr.config.test_config
         self.connection_config = xr.config.connection_config
-        xr.data.update(self.get_widths(self.test_config))
+        #xr.data.update(self.get_widths(self.test_config))
         self.data = xr.data
         self.board = self.board_conn(xr)
-        self.data.NUM_SAMPLES = int(self.board.ADC_SAMPLES_PER_FRAME)
-        self.data.NUM_BINS = int(self.board.NUMBER_OF_FREQUENCY_BINS)
         conn_logger_name = FPGAArray.__name__.rsplit('.', 1)[0] if '.' in __name__ else ''
         self.logger = logging.getLogger(conn_logger_name)
         self.logger.setLevel(xr.config.test_config.logleveltest)
