@@ -137,7 +137,6 @@ class _CaptureTestBoard:
         self.trig = None
         self.receiver_config_updates = 0
         self._capture_pkt_frames_per_burst = None
-        self._data_capture_configured = False
         self.chan = {
             ch: _CaptureTestChannel(ch) for ch in self.default_channels}
         self.GPIO = SimpleNamespace(HOST_FRAME_READ_RATE=0)
@@ -186,7 +185,6 @@ class _CaptureTestBoard:
         else:
             self.UCAP.USER_RESET = 1
 
-    configure_data_capture = chFPGA.configure_data_capture
     start_data_capture = chFPGA.start_data_capture
 
 
@@ -194,87 +192,37 @@ class _CaptureTestBoard:
     ("capture_type", "mode"),
     [("PROBER", 0), ("UCAP", 2)],
 )
-@pytest.mark.parametrize("sub_period", [10, 23])
-def test_configure_data_capture_keeps_engine_disabled(
-        capture_type, mode, sub_period):
+def test_start_data_capture_configures_and_activates(capture_type, mode):
     board = _CaptureTestBoard(capture_type)
 
-    board.configure_data_capture(
-        period=0.1,
-        channels=[0, 1],
-        source="funcgen",
-        verbose=0,
-        mode=mode,
-        sub_period=sub_period)
-
-    assert board.chan_reset == 0
-    assert board.trig is False
-    assert board.receiver_config_updates == 1
-    assert board._data_capture_configured
-    if capture_type == "PROBER":
-        assert all(ch.PROBER.RESET == 1 for ch in board.chan.values())
-        assert all(
-            ch.PROBER.SUB_PERIOD == sub_period
-            for ch in board.chan.values())
-    else:
-        assert board.UCAP.USER_RESET == 1
-        assert board.UCAP.SUB_PERIOD == sub_period
-
-
-@pytest.mark.parametrize(
-    ("capture_type", "mode"),
-    [("PROBER", 0), ("UCAP", 2)],
-)
-def test_argument_free_start_only_enables_configured_engine(
-        capture_type, mode):
-    board = _CaptureTestBoard(capture_type)
-
-    board.configure_data_capture(
+    board.start_data_capture(
         period=0.1,
         channels=[0, 1],
         source="funcgen",
         verbose=0,
         mode=mode)
-    board.start_data_capture()
 
     assert board.chan_reset == 0
     assert board.trig == 1
     assert board.receiver_config_updates == 1
     if capture_type == "PROBER":
         assert all(ch.PROBER.RESET == 0 for ch in board.chan.values())
+        assert all(
+            ch.PROBER.SUB_PERIOD == 23
+            for ch in board.chan.values())
     else:
         assert board.UCAP.USER_RESET == 0
 
 
-def test_start_rejects_capture_configuration_arguments():
+def test_start_rejects_invalid_capture_geometry_before_writes():
     board = _CaptureTestBoard("PROBER")
 
-    with pytest.raises(TypeError):
-        board.start_data_capture(frames_per_burst=4)
+    with pytest.raises(ValueError, match="between one and four"):
+        board.start_data_capture(
+            period=0.1, frames_per_burst=5, source="funcgen")
 
-
-def test_start_before_configuration_raises():
-    board = _CaptureTestBoard("PROBER")
-
-    with pytest.raises(RuntimeError, match="must be configured"):
-        board.start_data_capture()
-
-
-def test_stop_then_start_reuses_cached_profile():
-    board = _CaptureTestBoard("PROBER")
-    board.configure_data_capture(
-        period=0.1,
-        channels=[0, 1],
-        source="funcgen",
-        verbose=0)
-
-    board.start_data_capture()
-    board.stop_data_capture()
-    board.start_data_capture()
-
-    assert board.receiver_config_updates == 1
-    assert board.trig == 1
-    assert all(ch.PROBER.RESET == 0 for ch in board.chan.values())
+    assert board.trig is None
+    assert board.receiver_config_updates == 0
 
 
 def test_configuration_failure_restores_channelizer_reset():
@@ -287,7 +235,7 @@ def test_configuration_failure_restores_channelizer_reset():
     board.UCAP.set_data_capture = fail_configuration
 
     with pytest.raises(RuntimeError, match="register write failed"):
-        board.configure_data_capture(
+        board.start_data_capture(
             period=0.1,
             channels=[0, 1],
             source="funcgen",
@@ -296,7 +244,6 @@ def test_configuration_failure_restores_channelizer_reset():
 
     assert board.chan_reset == 7
     assert board.UCAP.USER_RESET == 1
-    assert not board._data_capture_configured
 
 
 def test_dynamic_set_data_capture_still_updates_sub_period():
@@ -311,6 +258,26 @@ def test_dynamic_set_data_capture_still_updates_sub_period():
     assert all(ch.PROBER.SUB_PERIOD == 10 for ch in board.chan.values())
     assert board.config.raw_capture.source == "funcgen"
     assert board.config.raw_capture.channels == (0, 1)
+
+
+def test_set_data_capture_endpoint_reports_gain_operation_conflict():
+    async def exercise():
+        lock = asyncio.Lock()
+        await lock.acquire()
+        server = object.__new__(fpga_master_mod.FPGAMasterAsyncRESTServer)
+        server.log = _CaptureTestLogger()
+        server.fpga_master = SimpleNamespace(
+            state='on',
+            fpgas=object(),
+            _gain_operation_lock=lock,
+        )
+        return await fpga_master_mod.FPGAMasterAsyncRESTServer.set_data_capture(
+            server)
+
+    response = asyncio.run(exercise())
+
+    assert response.status == 409
+    assert 'gain calculation' in response.text
 
 
 class _FakeReceiverConfig:
@@ -336,7 +303,6 @@ class _FakeBoard:
         self.fpga = self
         self.target_addr = None
         self.capture_source = "mixed"
-        self.configure_data_capture_calls = []
         self.start_data_capture_calls = []
         self.set_data_capture_calls = []
 
@@ -347,12 +313,9 @@ class _FakeBoard:
         channels = channels or self.get_channels()
         return [10 + ch for ch in channels]
 
-    def configure_data_capture(self, **kwargs):
-        self.configure_data_capture_calls.append(kwargs)
+    def start_data_capture(self, **kwargs):
+        self.start_data_capture_calls.append(kwargs)
         self.capture_source = kwargs["source"]
-
-    def start_data_capture(self):
-        self.start_data_capture_calls.append({})
 
     def stop_data_capture(self):
         pass
@@ -510,12 +473,10 @@ def test_raw_acq_initial_decoder_follows_programmed_gain_profile(monkeypatch):
         initial_capture_config=gain_capture,
         gain_capture=True))
 
-    assert board.configure_data_capture_calls[0]["frames_per_burst"] == 4
-    assert board.configure_data_capture_calls[0]["source"] == "scaler"
-    assert board.configure_data_capture_calls[0]["data_type"] == "fft_full"
-    assert board.configure_data_capture_calls[0]["sub_period"] == 12
-    assert board.start_data_capture_calls == [{}]
-    assert board.set_data_capture_calls == []
+    assert board.start_data_capture_calls[0]["frames_per_burst"] == 4
+    assert board.start_data_capture_calls[0]["source"] == "scaler"
+    assert board.start_data_capture_calls[0]["data_type"] == "fft_full"
+    assert board.set_data_capture_calls == [([0, 1], "scaler", 12)]
 
 
 def test_non_prober_raw_acq_does_not_normalize_capture_source(monkeypatch):
@@ -568,61 +529,6 @@ def test_raw_acq_receiver_flush_without_active_buffer_clears_bookkeeping():
     np.testing.assert_array_equal(receiver.pkt_len, np.zeros(3, dtype=np.uint32))
 
 
-class _FlushRawProcessor:
-    def __init__(self):
-        self.packet_lengths = []
-
-    def process_udp_packets(self):
-        self.packet_lengths.append(self.pr.pkt_len[:self.pr.n_stored].copy())
-
-
-class _FlushCorrProcessor:
-    CORR_PACKET_COOKIE = 0xCF
-
-    def __init__(self):
-        self.packet_lengths = []
-        self.consumed = []
-
-    def process_udp_packets(self):
-        self.packet_lengths.append(self.pr.pkt_len[:self.pr.n_stored].copy())
-
-    def after_process_udp_packets(self, elapsed):
-        pass
-
-    def get_formatted_data(self):
-        return "corr-result"
-
-    def consume(self, result):
-        self.consumed.append(result)
-
-
-def test_raw_acq_receiver_flush_discards_mixed_raw_and_corr_batch():
-    receiver = raw_acq_receiver_mod.RawAcqReceiver()
-    receiver.BUF_SIZE = receiver.n_packets = 4
-    receiver.buf = np.zeros((4, 64), dtype=np.uint8)
-    receiver.pkt_len = np.array([64, 64, 64, 0], dtype=np.uint32)
-    receiver.source_socket = np.zeros(4, dtype=np.uint16)
-    receiver.n_stored = 3
-    receiver.sockets = []
-    receiver.received_packets = 0
-    receiver.packet_max_processing_time = 0
-    receiver.packet_current_processing_time = 0
-    receiver.buf[:3, 0] = [0xA0, 0xA1, 0xCF]
-    raw = _FlushRawProcessor()
-    corr = _FlushCorrProcessor()
-    raw.pr = receiver
-    corr.pr = receiver
-    receiver.processors = {"raw": raw, "corr": corr}
-
-    assert receiver.flush(timeout=0) == 3
-
-    assert raw.packet_lengths == []
-    assert corr.packet_lengths == []
-    assert corr.consumed == []
-    assert receiver.n_stored == 0
-    assert not receiver.pkt_len.any()
-
-
 def test_raw_data_processor_formats_only_sources_present_in_batch(monkeypatch):
     """A one-frame ADC batch must not be passed to the retained fft_full formatter."""
     processor = object.__new__(RawDataProcessor)
@@ -671,10 +577,11 @@ class _BlockingRawProcessor:
         self.update_calls.append(kwargs)
 
 
-def test_raw_acq_config_update_waits_for_packet_processing():
+def test_raw_acq_config_update_does_not_lock_packet_processing():
     receiver = raw_acq_receiver_mod.RawAcqReceiver()
     receiver.n_stored = 1
     receiver.received_packets = 0
+    receiver.packet_max_readout_time = 0
     receiver.packet_max_processing_time = 0
     receiver.packet_current_processing_time = 0
     raw = _BlockingRawProcessor()
@@ -691,14 +598,14 @@ def test_raw_acq_config_update_waits_for_packet_processing():
 
     update_thread = threading.Thread(target=update)
     update_thread.start()
-    assert not update_finished.wait(0.05)
+    assert update_finished.wait(0.05)
     raw.release.set()
     processing_thread.join(1)
     update_thread.join(1)
 
     assert not processing_thread.is_alive()
     assert not update_thread.is_alive()
-    assert raw.flush_calls == 1
+    assert raw.flush_calls == 0
     assert len(raw.update_calls) == 1
 
 
@@ -714,7 +621,7 @@ class _NestedFlushRawProcessor:
         self.updated = True
 
 
-def test_raw_acq_nested_receiver_flush_does_not_deadlock():
+def test_raw_acq_config_update_does_not_flush_processor():
     receiver = raw_acq_receiver_mod.RawAcqReceiver()
     receiver.BUF_SIZE = receiver.n_packets = 1
     receiver.buf = np.zeros((1, 64), dtype=np.uint8)
@@ -769,7 +676,7 @@ class _BoundaryCorrProcessor:
             self.events.append("corr update")
 
 
-def test_raw_acq_decoder_boundary_clears_raw_and_corr_assembly():
+def test_raw_acq_config_update_does_not_create_decoder_boundary():
     receiver = raw_acq_receiver_mod.RawAcqReceiver()
     events = []
     raw = _BoundaryRawProcessor(events)
@@ -781,12 +688,11 @@ def test_raw_acq_decoder_boundary_clears_raw_and_corr_assembly():
         "corr": {"soft_integ_period": 8},
     })
 
-    assert raw.partial_rows == 0
+    assert raw.partial_rows == 3
     assert len(raw.update_calls) == 1
-    assert corr.partial_integrations == 0
+    assert corr.partial_integrations == 2
     assert corr.update_calls == [{"soft_integ_period": 8}]
-    assert events == [
-        "raw flush", "corr flush", "raw update", "corr update"]
+    assert events == ["raw update", "corr update"]
 
 
 def test_raw_acq_corr_only_update_does_not_flush_raw():
@@ -798,28 +704,34 @@ def test_raw_acq_corr_only_update_does_not_flush_raw():
     receiver.update_config({"corr": {"soft_integ_period": 4}})
 
     assert raw.partial_rows == 3
-    assert raw.update_calls == []
+    assert raw.update_calls == [{
+        "config": {"corr": {"soft_integ_period": 4}}}]
     assert corr.update_calls == [{"soft_integ_period": 4}]
 
 
-class _NeverReadSocket:
+class _ReadableSocket:
     def __init__(self):
         self.recv_called = False
 
     def recv_into(self, target):
         self.recv_called = True
-        raise AssertionError("stale select result must not be read")
+        return 64
 
 
-def test_raw_acq_receiver_rechecks_stale_select_result(monkeypatch):
+def test_raw_acq_receiver_uses_initial_select_result(monkeypatch):
     receiver = raw_acq_receiver_mod.RawAcqReceiver()
     receiver.BUF_SIZE = receiver.n_packets = 1
     receiver.buf = np.zeros((1, 64), dtype=np.uint8)
     receiver.pkt_len = np.zeros(1, dtype=np.uint32)
     receiver.source_socket = np.zeros(1, dtype=np.uint16)
     receiver.n_stored = 0
+    receiver.received_packets = 0
+    receiver.packet_max_readout_time = 0
+    receiver.packet_max_processing_time = 0
+    receiver.packet_current_processing_time = 0
+    receiver.processors = {}
     receiver.started = True
-    sock = _NeverReadSocket()
+    sock = _ReadableSocket()
     receiver.sockets = [sock]
     select_calls = 0
 
@@ -833,7 +745,7 @@ def test_raw_acq_receiver_rechecks_stale_select_result(monkeypatch):
         timeout=0,
         stop_condition=lambda: select_calls >= 2)
 
-    assert not sock.recv_called
+    assert sock.recv_called
     assert receiver.n_stored == 0
 
 
@@ -843,7 +755,7 @@ class _ContinuousRawSocket:
         return 64
 
 
-def test_raw_acq_flush_rejects_continuing_raw_traffic(monkeypatch):
+def test_raw_acq_flush_only_clears_bookkeeping_with_live_socket(monkeypatch):
     receiver = raw_acq_receiver_mod.RawAcqReceiver()
     receiver.BUF_SIZE = receiver.n_packets = 2
     receiver.buf = np.zeros((2, 64), dtype=np.uint8)
@@ -869,8 +781,7 @@ def test_raw_acq_flush_rejects_continuing_raw_traffic(monkeypatch):
         "select",
         lambda read, write, error, timeout: (list(read), [], []))
 
-    with pytest.raises(RuntimeError, match="raw packets did not stop"):
-        receiver.flush(timeout=0.001, max_flush_time=0.02)
+    assert receiver.flush(timeout=0.001, max_flush_time=0.02) == 0
 
 
 def test_raw_acq_receiver_three_field_sources_return_source_key(monkeypatch):

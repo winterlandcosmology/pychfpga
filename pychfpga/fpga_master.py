@@ -370,10 +370,8 @@ class FPGAMaster(object):
                     self.log.info(f'{self!r} Setting data transmission address of board {ib.get_id()} to {ip_addr}:{port}({eth_addr})')
                     await ib.set_udp_data_target_address_async(ip_addr, port, eth_addr)
         # The receiver was created above with metadata from the complete
-        # profile configured before startup. Sending the same full update here
-        # would create a decoder boundary while that initial capture is already
-        # active. Live profile changes use start_fpga_raw_data_transmission(),
-        # which stops every capture engine before requesting this boundary.
+        # profile configured before startup. PROBER keeps that decoder and
+        # geometry for the run; later changes select only source/sub-period.
         self.log.info(f'{self!r}: RawAcq server setup successfully')
 
 
@@ -387,13 +385,11 @@ class FPGAMaster(object):
             capture_config=None,
             gain_capture=False,
             push_decoder=True):
-        """Configure and activate FPGA raw-data transmission.
+        """Configure and start the static FPGA raw-data capture profile.
 
-        Complete profile changes use ``configure_data_capture()`` while each
-        capture engine is reset. Once raw_acq acknowledges the matching decoder
-        metadata, argument-free ``start_data_capture()`` activates that profile.
-        See ``set_fpga_data_capture()`` for deliberate dynamic sub-period
-        changes.
+        PROBER geometry is programmed once. Once active, source and sub-period
+        changes must use :meth:`set_fpga_data_capture`; live decoder/profile
+        replacement is intentionally unsupported.
 
         Parameters:
 
@@ -416,12 +412,8 @@ class FPGAMaster(object):
 
         If no arguments are provided, the FPGA will be set to transmit data at the idle rate and from source defined in the config file.
 
-        Live decoder changes separate capture configuration from activation.
-        Raw capture is stopped, the complete profile is programmed while the
-        capture engines remain reset, and transmission is enabled only after
-        raw_acq acknowledges the new receiver metadata. This sequence is common
-        to PROBER and UCAP.
         """
+        # Input validation and profile resolution
         profile = capture_config or self.config.fpga.raw_data_capture
         profile = NameSpace(
             profile.as_dict() if hasattr(profile, 'as_dict') else dict(profile))
@@ -538,45 +530,38 @@ class FPGAMaster(object):
             resolved_captures.append((
                 ib, fpga, channels, source, ucap_output, send_delay))
 
-        live_decoder_update = bool(
-            push_decoder and getattr(self, 'raw_acq', {}))
-        if live_decoder_update:
-            for ib, _fpga, _channels, _source, _output, _delay in (
-                    resolved_captures):
-                ib.stop_data_capture()
-
+        # Hardware configuration
         for ib, fpga, channels, source, ucap_output, send_delay in (
                 resolved_captures):
             self.log.info(
-                f'{self!r}: Configuring data capture on {ib!r} '
+                f'{self!r}: Starting data capture on {ib!r} '
                 f'with period={period}, sub_period={capture_sub_period}, '
                 f'source={source}, send_delay={send_delay}')
 
-            ib.configure_data_capture(
-                period=period,
-                frames_per_burst=frames_per_burst,
+            if period:
+                ib.start_data_capture(
+                    period=period,
+                    frames_per_burst=frames_per_burst,
+                    channels=channels,
+                    source=source,
+                    data_type=(
+                        profile.scaler_cap_data_type
+                        if source == 'scaler' else None),
+                    sync=False,
+                    send_delay=send_delay,
+                    mode=ucap_mode)
+            else:
+                ib.stop_data_capture()
+            ib.set_data_capture(
                 channels=channels,
-                source=source,
-                data_type=(
-                    profile.scaler_cap_data_type
-                    if source == 'scaler' else None),
-                send_delay=send_delay,
-                mode=ucap_mode,
-                sub_period=capture_sub_period)
+                sub_period=capture_sub_period,
+                source=source)
             if fpga.CAPTURE_TYPE == 'UCAP':
                 fpga.UCAP.select_output(ucap_output)
             await asyncio.sleep(0)
 
         if push_decoder:
             await self._sync_raw_acq_firmware_config()
-
-        if period:
-            for ib, _fpga, _channels, _source, _output, _delay in (
-                    resolved_captures):
-                self.log.info(
-                    f'{self!r}: Starting configured data capture on {ib!r}')
-                ib.start_data_capture()
-                await asyncio.sleep(0)
         if period and sync:
             sync_params = self.config.fpga.get('sync_params', {})
             if sync_params.get('enable', False):
@@ -602,13 +587,39 @@ class FPGAMaster(object):
 
         """
 
-        conf = self.config.fpga.raw_data_capture
-        capture_source = source or conf.capture_source
+        # Input validation and target resolution
+        try:
+            capture_rate = int(capture_rate)
+        except (TypeError, ValueError) as exc:
+            raise ValueError('capture_rate must be an integer') from exc
+        if not 0 <= capture_rate <= 31:
+            raise ValueError('capture_rate must be between zero and 31')
 
-        ib_chans = self.fpgas.get_iceboards(targets, lane_type='chan').items() # Py3: This is now a dictview
+        capture_source = (
+            source or self.config.fpga.raw_data_capture.capture_source)
+        if capture_source not in ('adc', 'funcgen', 'scaler'):
+            raise ValueError(
+                f'Unknown raw capture source {capture_source!r}')
 
-        for (ib, channels) in ib_chans:
-            ib.set_data_capture(channels=channels, sub_period=capture_rate, source=capture_source)
+        ib_chans = list(
+            self.fpgas.get_iceboards(
+                targets, lane_type='chan').items())
+        if not ib_chans:
+            raise ValueError('No FPGA channels matched the capture targets')
+        for ib, channels in ib_chans:
+            if not channels:
+                raise ValueError(f'No capture channels selected on {ib!r}')
+            fpga = getattr(ib, 'fpga', ib)
+            if fpga.CAPTURE_TYPE not in ('PROBER', 'UCAP'):
+                raise RuntimeError(
+                    f'Unsupported capture engine {fpga.CAPTURE_TYPE!r}')
+
+        # Hardware configuration
+        for ib, channels in ib_chans:
+            ib.set_data_capture(
+                channels=channels,
+                sub_period=capture_rate,
+                source=capture_source)
             await asyncio.sleep(0)
 
 
@@ -847,52 +858,55 @@ class FPGAMaster(object):
 
     async def runtime_compute_gains(
             self, data_capture=None, _serial_targets=False, **overrides):
-        """Run a YAML-driven gain phase while the master is operational."""
+        """Compute gains by switching an active PROBER between FFT and ADC."""
         if not self.config.raw_acq.get('enable', False) or not self.raw_acq:
             raise RuntimeError(
                 'Runtime gain calculation requires enabled and running '
                 'raw_acq servers for FFT capture')
         if self._gain_operation_lock.locked():
             raise RuntimeError('A gain calculation is already in progress')
+        if any(
+                getattr(ib, 'fpga', ib).CAPTURE_TYPE != 'PROBER'
+                for ib in self.fpgas.ib):
+            raise RuntimeError(
+                'Runtime gain source switching is supported only for PROBER; '
+                'active UCAP profile transitions are not supported')
 
+        # Input validation
         gain_config = self.config.fpga.compute_gains.as_dict()
-        yaml_capture = gain_config.pop('data_capture')
+        capture_config = dict(gain_config.pop('data_capture'))
         gain_config.pop('enable', None)
         gain_config.update(overrides)
-        capture_config = dict(yaml_capture)
         if data_capture:
-            capture_config.update(
+            capture_overrides = (
                 data_capture.as_dict()
                 if hasattr(data_capture, 'as_dict') else dict(data_capture))
+            static_overrides = set(capture_overrides) - {
+                'capture_source', 'capture_rate'}
+            if static_overrides:
+                raise ValueError(
+                    'Runtime gain capture can change only capture_source and '
+                    'capture_rate; static field(s) are not allowed: '
+                    f'{", ".join(sorted(static_overrides))}')
+            capture_config.update(capture_overrides)
 
+        gain_source = capture_config.get('capture_source', 'scaler')
+        gain_rate = int(capture_config['capture_rate'])
+        if not 0 <= gain_rate <= 31:
+            raise ValueError('capture_rate must be between zero and 31')
+        if gain_source not in ('adc', 'funcgen', 'scaler'):
+            raise ValueError(
+                f'Unknown raw capture source {gain_source!r}')
+        normal_capture = self.config.fpga.raw_data_capture
+        self._active_gain_capture_rate = gain_rate
+
+        # Gain calculation
         async with self._gain_operation_lock:
-            raw_enabled = (
-                self.config.raw_acq.common_config.get(
-                    'hdf5_capture_duration', None) is not None)
-            corr_config = self.config.fpga.get('firmware_correlator', {})
-            corr_enabled = bool(
-                corr_config and corr_config.get('enable', False)
-                and corr_config.get('hdf5_capture_duration', None) is not None)
-            for server_name, server in self.raw_acq.items():
-                for enabled, stop, data_type in (
-                        (raw_enabled, server.stop_raw_hdf5, 'raw'),
-                        (corr_enabled, server.stop_corr_hdf5, 'corr')):
-                    if not enabled:
-                        continue
-                    try:
-                        await stop()
-                    except RuntimeError as exc:
-                        if 'not running' not in str(exc).lower():
-                            raise
-                    self.log.info(
-                        f'{self!r}: Stopped {data_type} HDF5 for gain '
-                        f'calculation on {server_name}')
+            gain_error = None
             try:
-                await self.start_fpga_raw_data_transmission(
-                    capture_config=capture_config,
-                    push_decoder=True,
-                    sync=True,
-                    gain_capture=True)
+                await self.set_fpga_data_capture(
+                    capture_rate=gain_rate,
+                    source=gain_source)
                 if _serial_targets:
                     targets = gain_config.pop('targets', None)
                     if targets is None:
@@ -907,33 +921,24 @@ class FPGAMaster(object):
                             targets=[group], **gain_config)
                 else:
                     await self.compute_gains(**gain_config)
-            except Exception as gain_error:
+            except Exception as exc:
+                gain_error = exc
+                raise
+            finally:
                 try:
-                    await self.start_fpga_raw_data_transmission(
-                        capture_config=self.config.fpga.raw_data_capture,
-                        push_decoder=True,
-                        sync=True,
-                        gain_capture=False)
-                    self.frame0_irigb_time = self.fpgas.sync_timestamp
+                    await self.set_fpga_data_capture(
+                        capture_rate=int(normal_capture.capture_rate),
+                        source=normal_capture.capture_source)
                 except Exception as restore_error:
                     self.log.exception(
-                        'Failed to program normal capture after gain '
+                        'Failed to restore normal capture source after gain '
                         'calculation failed: %s', restore_error)
-                    gain_error.add_note(
-                        'Normal capture recovery also failed: '
-                        f'{restore_error!r}')
-                raise
-
-            await self.start_fpga_raw_data_transmission(
-                capture_config=self.config.fpga.raw_data_capture,
-                push_decoder=True,
-                sync=True,
-                gain_capture=False)
-            self.frame0_irigb_time = self.fpgas.sync_timestamp
-            if raw_enabled:
-                await self.start_hdf5_capture()
-            if corr_enabled:
-                await self.start_corr_hdf5_capture()
+                    if gain_error is not None:
+                        gain_error.add_note(
+                            'Normal capture source recovery also failed: '
+                            f'{restore_error!r}')
+                    else:
+                        raise
 
     async def save_gains(self, bank=0):
         """
@@ -1443,7 +1448,67 @@ class FPGAMaster(object):
                 'fpga.compute_gains.enable is true, but no raw_acq servers '
                 'are configured for FFT capture')
 
-        if gain_enabled:
+        capture_synchronized = False
+
+        if conf.raw_acq.enable and ca.ib and all(
+                getattr(ib, 'fpga', ib).CAPTURE_TYPE == 'PROBER'
+                for ib in ca.ib):
+            # Static profile compatibility
+            gain_capture = gain_config.data_capture
+            normal_capture = conf.fpga.raw_data_capture
+            if (
+                    float(gain_capture.baseline_capture_rate)
+                    != float(normal_capture.baseline_capture_rate)):
+                raise ValueError(
+                    'PROBER gain and normal capture profiles must use the '
+                    'same baseline_capture_rate for source-only switching')
+            if int(gain_capture.tmux_factor) != int(normal_capture.tmux_factor):
+                raise ValueError(
+                    'PROBER gain and normal capture profiles must use the '
+                    'same tmux_factor for source-only switching')
+
+            self.log.info(
+                'Starting raw_acq with the one-time full-resolution PROBER '
+                'capture profile')
+            await self.start_raw_acq_servers(
+                initial_capture_config=gain_capture,
+                gain_capture=True)
+
+            self.log.info('Synchronizing the static PROBER capture profile')
+            sync_params = conf.fpga.get('sync_params', {})
+            if sync_params.get('enable', False):
+                ca.sync(**sync_params)
+            else:
+                ca.sync()
+            capture_synchronized = True
+
+            try:
+                if gain_enabled:
+                    gain_params = gain_config.as_dict()
+                    gain_params.pop('enable', None)
+                    gain_params.pop('data_capture', None)
+                    await self.compute_gains(**gain_params)
+            except Exception as gain_error:
+                self.log.error(
+                    'Startup gain phase failed; restoring the normal capture '
+                    'source and aborting without starting HDF5 acquisition')
+                try:
+                    await self.set_fpga_data_capture(
+                        capture_rate=int(normal_capture.capture_rate),
+                        source=normal_capture.capture_source)
+                except Exception as restore_error:
+                    self.log.exception(
+                        'Failed to restore normal capture after startup gain '
+                        'phase failed: %s', restore_error)
+                    gain_error.add_note(
+                        'Normal capture recovery also failed: '
+                        f'{restore_error!r}')
+                raise
+
+            await self.set_fpga_data_capture(
+                capture_rate=int(normal_capture.capture_rate),
+                source=normal_capture.capture_source)
+        elif gain_enabled:
             self.log.info(
                 'Starting raw_acq servers with gain capture configuration')
             try:
@@ -1457,28 +1522,28 @@ class FPGAMaster(object):
                     ca.sync(**sync_params)
                 else:
                     ca.sync()
+                capture_synchronized = True
 
                 gain_params = gain_config.as_dict()
                 gain_params.pop('enable', None)
                 gain_params.pop('data_capture', None)
                 await self.compute_gains(**gain_params)
             except Exception as gain_error:
-                self.log.error(
-                    'Startup gain phase failed; programming normal capture '
-                    'and aborting without starting HDF5 acquisition')
+                self.log.exception(
+                    'Startup UCAP gain phase failed; restoring normal profile')
                 try:
                     await self.start_fpga_raw_data_transmission(
                         capture_config=conf.fpga.raw_data_capture,
                         push_decoder=bool(getattr(self, 'raw_acq', {})),
                         sync=True,
                         gain_capture=False)
-                    self.frame0_irigb_time = self.fpgas.sync_timestamp
+                    capture_synchronized = True
                 except Exception as restore_error:
                     self.log.exception(
-                        'Failed to program normal capture after startup gain '
-                        'phase failed: %s', restore_error)
+                        'Failed to restore normal UCAP capture: %s',
+                        restore_error)
                     gain_error.add_note(
-                        'Normal capture recovery also failed: '
+                        'Normal UCAP capture recovery also failed: '
                         f'{restore_error!r}')
                 raise
 
@@ -1487,6 +1552,7 @@ class FPGAMaster(object):
                 push_decoder=True,
                 sync=True,
                 gain_capture=False)
+            capture_synchronized = True
         elif conf.raw_acq.enable:
             self.log.info(
                 'Starting raw_acq servers with normal capture configuration')
@@ -1503,7 +1569,7 @@ class FPGAMaster(object):
                 sync=False,
                 gain_capture=False)
 
-        if not gain_enabled:
+        if not capture_synchronized:
             self.log.info('Synchronizing normal capture phase')
             sync_params = conf.fpga.get('sync_params', {})
             if sync_params.get('enable', False):
@@ -1563,10 +1629,9 @@ class FPGAMaster(object):
             # Setup channelizers and data capture for raw FFT data
             self.log.info('Setting up channelizers for Scaler capture')
             ca.set_channelizers(data_source = 'adc', fft_bypass = False, scaler_bypass = False, offset_binary_encoding = False)
-            ca.configure_data_capture(
+            ca.start_data_capture(
                 period=0.03, source='scaler', mode=0,
                 channels=list(range(8)), data_type='fft_4bit', select=True)
-            ca.start_data_capture()
             
             # Synchronize the crate again to ensure all frames are synchronized
             # ca.sync()
@@ -2394,6 +2459,12 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         if not (self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas):
             self.log.warning(f"{self!r}: FPGA array is not ready to accept command")
             return dict(message="FPGA not ready")
+        if self.fpga_master._gain_operation_lock.locked():
+            return aiohttp.web.json_response(
+                dict(error=(
+                    'Data capture configuration is busy: a gain calculation '
+                    'currently controls the capture source')),
+                status=409)
 
         await self.fpga_master.set_fpga_data_capture(**params)
         return dict(message='Data capture updated')

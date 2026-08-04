@@ -16,10 +16,6 @@ import psutil
 from wtl import log
 from wtl.metrics import Metrics
 
-from pychfpga.common.raw_data_packet_processor import (
-    PACKET_COOKIE_ADC,
-    PACKET_COOKIE_MASK,
-)
 from pychfpga.common.state import State
 
 from .corr_data_processor import CorrDataProcessor
@@ -95,74 +91,57 @@ class RawAcqReceiver(object):
         return f'{self.__class__.__name__}({self.name})'
 
     def update_config(self, config=None, **kwargs):
-        """Apply an atomic firmware or per-processor configuration patch.
-
-        This method runs in the REST event-loop thread, while packet reception
-        and processing run in the UDP background thread. The shared RLock keeps
-        a decoder update from resizing assembly or formatted buffers between
-        ``process_udp_packets()`` and ``get_formatted_data()``. Full decoder
-        updates first establish a calibration-generation boundary: queued raw
-        and correlator packets are discarded, then both partial assemblies are
-        reset before the new decoder metadata is applied.
-
-        ``RawDataProcessor.flush()`` calls back into this receiver's ``flush()``.
-        The RLock deliberately permits that nesting; receiver ``flush()`` never
-        calls processor ``flush()`` itself, so the call graph does not recurse.
-        """
+        """Apply firmware or per-processor configuration patches without merging subtrees."""
+        # TODO: Investigate serializing live configuration updates against packet
+        # reception and processing. This method runs in the REST event-loop thread,
+        # while receive_packets()/process_packets() run in the UDP background thread.
+        # Both paths access mutable processor configuration, assembly and formatted
+        # scratch buffers, carry-over state, and receiver bookkeeping such as
+        # n_stored. A configuration update can resize or replace NumPy arrays while
+        # a packet batch is decoding; the Python GIL does not make that multi-step
+        # transition atomic, and NumPy operations may release the GIL. Plausible
+        # failures include mixing decoder generations, malformed full-resolution
+        # spectra, persistent fixed-bin corruption, exceptions, and dropped or
+        # misclassified packets. Live decoder replacement is therefore unsupported
+        # by fpga_master's source-only capture workflow.
+        #
+        # Any future implementation should use the existing RLock to serialize
+        # update_config(), recv_into/n_stored bookkeeping, process_packets(), and
+        # flush(), while leaving select.select() and network waits outside the lock.
+        # It must also define how partially accumulated packets, timestamp
+        # carry-over, and partial FFT/correlation groups are discarded.
         if kwargs:
             config = {**(config or {}), **kwargs}
         if not config:
             return
         sections = _firmware_config_sections(config)
-        corr_only = (
-            set(sections) == {"corr"}
-            or (
-                set(sections).issubset({
-                    "firmware_integ_period", "soft_integ_period"})
-                and bool(sections)
-            )
-        )
 
-        with self.lock:
-            raw_proc = self.processors.get("raw")
-            corr_proc = self.processors.get("corr")
-            if raw_proc is not None and not corr_only:
-                # Ten milliseconds without a raw cookie is the decoder
-                # generation boundary. The FPGA capture engine is held reset by
-                # fpga_master before this update is sent.
-                raw_proc.flush(flush_timeout=0.01)
-            if corr_proc is not None and not corr_only:
-                # Correlation archival is stopped by fpga_master before a
-                # calibration transition. Clear any integration assembled on
-                # the old side of that boundary before either decoder changes.
-                corr_proc.flush(flush_timeout=0.01)
+        raw_proc = self.processors.get("raw")
+        if raw_proc is not None:
+            if "raw" in sections:
+                raw_proc.update_config(
+                    config=sections["raw"],
+                    adc_config=sections["raw"],
+                    fft_config=sections["raw"],
+                )
+            elif any(k in sections for k in ("adc", "fft")):
+                raw_proc.update_config(
+                    config=None,
+                    adc_config=sections.get("adc"),
+                    fft_config=sections.get("fft"),
+                )
+            else:
+                raw_proc.update_config(config=sections)
 
-            # Apply decoder metadata only after the complete raw/correlation
-            # boundary has been drained and both partial assemblies are clear.
-            if raw_proc is not None and not corr_only:
-                if "raw" in sections:
-                    raw_proc.update_config(
-                        config=sections["raw"],
-                        adc_config=sections["raw"],
-                        fft_config=sections["raw"],
-                    )
-                elif any(k in sections for k in ("adc", "fft")):
-                    raw_proc.update_config(
-                        config=None,
-                        adc_config=sections.get("adc"),
-                        fft_config=sections.get("fft"),
-                    )
-                else:
-                    raw_proc.update_config(config=sections)
-
-            if corr_proc is not None:
-                if "corr" in sections:
-                    corr_proc.update_config(sections["corr"])
-                elif (
-                    "firmware_integ_period" in sections  # *** TODO: looks like an exception to he habdles some other way
-                    or "soft_integ_period" in sections
-                ):
-                    corr_proc.update_config(sections)
+        corr_proc = self.processors.get("corr")
+        if corr_proc is not None:
+            if "corr" in sections:
+                corr_proc.update_config(sections["corr"])
+            elif (
+                "firmware_integ_period" in sections
+                or "soft_integ_period" in sections
+            ):
+                corr_proc.update_config(sections)
 
     async def start_async(
             self,
@@ -674,42 +653,31 @@ class RawAcqReceiver(object):
                 # print(f' sockets with data:{sockets_with_data}')
                 if sockets_with_data:
                     for sock in sockets_with_data:
-                        with self.lock:
-                            # flush() may drain a socket after the outer select
-                            # reports it ready but before this thread obtains the
-                            # lock. Recheck readiness to avoid blocking forever
-                            # on that stale result.
-                            ready, [], [] = select.select([sock], [], [], 0)
-                            if not ready:
-                                continue
-                            t0 = time.time()
-                            self.pkt_len[self.n_stored] = sock.recv_into(self.buf[self.n_stored])  # data is transferred directly into the preallocated buffer, which is fast!
-                            self.source_socket[self.n_stored] = self.sockets.index(sock) # store indice of current socket
-                            self.n_stored += 1
-                            self.packet_max_readout_time = max(time.time() - t0, self.packet_max_readout_time)
-                            # Process packets if the buffer is full or if we have
-                            # been buffering packets for a sufficient period of
-                            # time. This is useful when we have a long buffer but
-                            # low packet rate.
-                            if self.n_stored == self.BUF_SIZE or (t0 - last_processing_time) > max_time_between_processing:
-                                self.process_packets()
-                                self.n_stored = 0
-                                last_processing_time = time.time()
-                else:
-                    with self.lock:
-                        if not self.n_stored:
-                            continue
-                        # There was not data after the timeout. Its probable the pause might be
-                        # much longer since data comes in burst, so we don't want to wait for `max_time_between_processing`.
-                        # Let's process whatever data we have so the user
-                        # does not have to wait too long for it.
-                        self.process_packets()
-                        self.n_stored = 0
-                        last_processing_time = time.time()
+                        t0 = time.time()
+                        self.pkt_len[self.n_stored] = sock.recv_into(self.buf[self.n_stored])  # data is transferred directly into the preallocated buffer, which is fast!
+                        self.source_socket[self.n_stored] = self.sockets.index(sock) # store indice of current socket
+                        self.n_stored += 1
+                        self.packet_max_readout_time = max(time.time() - t0, self.packet_max_readout_time)
+                        # Process packets if the buffer is full or if we have
+                        # been buffering packets for a sufficient period of
+                        # time. This is useful when we have a long buffer but
+                        # low packet rate.
+                        if self.n_stored == self.BUF_SIZE or (t0 - last_processing_time) > max_time_between_processing:
+                            self.process_packets()
+                            self.n_stored = 0
+                            last_processing_time = time.time()
+                elif self.n_stored:
+                    # There was not data after the timeout. Its probable the pause might be
+                    # much longer since data comes in burst, so we don't want to wait for `max_time_between_processing`.
+                    # Let's process whatever data we have so the user
+                    # does not have to wait too long for it.
+                    self.process_packets()
+                    self.n_stored = 0
+                    last_processing_time = time.time()
             except KeyboardInterrupt:
                 break
 
-    def process_packets(self, process_raw=True, process_corr=True):
+    def process_packets(self):
         """
         Process the data in the buffer by identifying the packet type (ADC,
         FFT, etc) and calling the appropriate processing method.
@@ -717,126 +685,44 @@ class RawAcqReceiver(object):
         inputs:
             self.n_stored: number of packets in the buffer
             self.buf and its structured references: captured packets, in random order
-            process_raw: process raw packet rows when True
-            process_corr: process correlator packet rows when True
-
         """
         # print('Processing %i packets' % self.n_stored)
 
-        with self.lock:
-            # Just return if there are no packets to process
-            if not self.n_stored:
-                return
+        if not self.n_stored:
+            return
 
-            t0 = time.time()
+        t0 = time.time()
+        self.received_packets += self.n_stored
 
-            self.received_packets += self.n_stored
+        try:
+            raw = self.processors.get("raw")
+            if raw:
+                raw.process_udp_packets()
+            corr = self.processors.get("corr")
+            if corr:
+                t_corr = time.time()
+                corr.process_udp_packets()
+                corr.after_process_udp_packets(time.time() - t_corr)
+                corr.consume(corr.get_formatted_data())
+        except Exception as e:
+            self.log.error(f'process_packets: exception {e!r}')
+            raise
 
-            try:
-                raw = self.processors.get("raw")
-                if raw and process_raw:
-                    raw.process_udp_packets()
-                corr = self.processors.get("corr")
-                if corr and process_corr:
-                    t_corr = time.time()
-                    corr.process_udp_packets()
-                    corr.after_process_udp_packets(time.time() - t_corr)
-                    corr.consume(corr.get_formatted_data())
-            except Exception as e:
-                self.log.error(f'process_packets: exception {e!r}')
-                raise
-
-            t3 = time.time()
-
-            self.packet_max_processing_time = max(t3 - t0, self.packet_max_processing_time)
-            self.packet_current_processing_time += t3 - t0
+        t3 = time.time()
+        self.packet_max_processing_time = max(t3 - t0, self.packet_max_processing_time)
+        self.packet_current_processing_time += t3 - t0
 
     def flush(self, timeout=0.001, max_flush_time=2, verbose=0, **kwargs):
-        """Discard queued UDP packets at a decoder-generation boundary.
+        """Clear packet buffer bookkeeping (UDPPacketReceiver-compatible signature).
 
-        The shared sockets carry raw cookies ``0xA0``/``0xA1`` and correlator
-        cookie ``0xCF``. Both are discarded because correlation produced
-        during calibration must not enter the next saved integration. The
-        method returns after no raw cookie has arrived for ``timeout`` seconds;
-        correlator traffic does not extend this interval. Continuing raw
-        traffic for ``max_flush_time`` is an error because changing decoders
-        would mix capture generations.
-
-        This method intentionally does not call processor ``flush()`` methods.
-        ``RawDataProcessor.flush()`` calls here first and then clears its own
-        partial timestamps, carry-over, and formatted state.
+        Unlike :meth:`UDPPacketReceiver.flush`, there is no UDP socket to drain;
+        this only resets the in-memory ring used with :class:`RawDataPacketProcessor`.
         """
-        flushed_packets = 0
-        flushed_raw_packets = 0
-        flushed_corr_packets = 0
-        start_time = time.monotonic()
-        last_raw_time = start_time
-
-        with self.lock:
-            if not hasattr(self, 'buf'):
-                self.n_stored = 0
-                self.pkt_len[:] = 0
-                return 0
-            while True:
-                processed_batch = False
-                n_raw = 0
-                if self.n_stored:
-                    processed_batch = True
-                    n = self.n_stored
-                    cookies = self.buf[:n, 0]
-                    raw_rows = (
-                        (cookies & PACKET_COOKIE_MASK)
-                        == PACKET_COOKIE_ADC)
-                    n_raw = int(np.count_nonzero(raw_rows))
-                    n_corr = int(np.count_nonzero(
-                        cookies == CorrDataProcessor.CORR_PACKET_COOKIE))
-                    flushed_packets += n
-                    flushed_raw_packets += n_raw
-                    flushed_corr_packets += n_corr
-                    if n_raw:
-                        last_raw_time = time.monotonic()
-                    self.n_stored = 0
-                    self.pkt_len[:] = 0
-
-                now = time.monotonic()
-                if now - start_time >= max_flush_time:
-                    if not n_raw and now - last_raw_time >= timeout:
-                        break
-                    raise RuntimeError(
-                        f'{self!r}: raw packets did not stop within '
-                        f'{max_flush_time} seconds; decoder was not updated')
-                # Correlator traffic may be continuous, so only raw cookies
-                # extend the quiet interval.
-                if (
-                        processed_batch
-                        and not n_raw
-                        and now - last_raw_time >= timeout):
-                    break
-
-                wait_time = min(
-                    max(0, timeout - (now - last_raw_time)),
-                    max_flush_time - (now - start_time))
-                sockets_with_data, [], [] = select.select(
-                    self.sockets, [], [], max(0, wait_time))
-                if not sockets_with_data:
-                    now = time.monotonic()
-                    if now - last_raw_time >= timeout:
-                        break
-                    continue
-                for sock in sockets_with_data:
-                    if self.n_stored == self.BUF_SIZE:
-                        continue
-                    self.pkt_len[self.n_stored] = sock.recv_into(
-                        self.buf[self.n_stored])
-                    self.source_socket[self.n_stored] = self.sockets.index(sock)
-                    self.n_stored += 1
-
-            if verbose:
-                self.log.info(
-                    f'{self!r}: discarded {flushed_packets} packet(s) '
-                    f'at decoder boundary ({flushed_raw_packets} raw, '
-                    f'{flushed_corr_packets} correlator)')
-            return flushed_packets
+        self.n_stored = 0
+        self.pkt_len[:] = 0
+        # Processor.flush() calls back into its packet receiver, so flushing
+        # processors here recurses.
+        return 0
 
     async def get_metrics_async(self):
         """ Gather metrics from all packet processors"""

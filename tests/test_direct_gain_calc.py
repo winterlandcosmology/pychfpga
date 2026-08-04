@@ -192,7 +192,6 @@ class _FakeFPGA:
 class _FakeBoard:
     def __init__(self, fpga=None):
         self.fpga = fpga or _FakeFPGA()
-        self.configure_calls = []
         self.start_calls = []
         self.stop_count = 0
         self.capture_calls = []
@@ -221,17 +220,15 @@ class _FakeBoard:
         self.fpga.config.raw_capture.channels = tuple(channels)
         self.fpga.config.raw_capture.source = kwargs['source']
 
-    def configure_data_capture(self, **kwargs):
-        self.configure_calls.append(kwargs)
+    def start_data_capture(self, **kwargs):
+        self.start_calls.append(kwargs)
         if self.events is not None:
-            self.events.append('configure')
+            self.events.append('start')
         channels = list(kwargs['channels'])
         self.fpga.config.raw_capture.channels = tuple(channels)
         self.fpga.config.raw_capture.source = kwargs['source']
         for ch in channels:
             self.fpga.config.chan[int(ch)].data_source = kwargs['source']
-            self.fpga.config.chan[int(ch)].prober_sub_period = int(
-                kwargs['sub_period'])
         if kwargs['source'] == 'scaler':
             cap_type = kwargs['data_type']
             if isinstance(cap_type, str):
@@ -242,11 +239,6 @@ class _FakeBoard:
             frames = int(kwargs['frames_per_burst'])
             self.fpga._capture_pkt_frames_per_burst = frames
             self.fpga.config.raw_capture.frames_per_burst = frames
-
-    def start_data_capture(self):
-        self.start_calls.append({})
-        if self.events is not None:
-            self.events.append('start')
 
     def stop_data_capture(self):
         self.stop_count += 1
@@ -359,38 +351,16 @@ def test_start_transmission_uses_ice_full_resolution_gain_geometry():
         gain_capture=True,
         sync=True))
 
-    assert ib.configure_calls[0]['frames_per_burst'] == 4
-    assert ib.configure_calls[0]['source'] == 'scaler'
-    assert ib.configure_calls[0]['data_type'] == 'fft_full'
-    assert ib.configure_calls[0]['sub_period'] == 12
-    assert ib.start_calls == [{}]
-    assert ib.capture_calls == []
+    assert ib.start_calls[0]['frames_per_burst'] == 4
+    assert ib.start_calls[0]['source'] == 'scaler'
+    assert ib.start_calls[0]['data_type'] == 'fft_full'
+    assert ib.capture_calls == [{
+        'channels': [0, 1],
+        'sub_period': 12,
+        'source': 'scaler',
+    }]
     assert master.raw_acq_sync_count == 1
     assert master.fpgas.sync_count == 1
-
-
-def test_start_transmission_uses_normal_yaml_after_gain_profile():
-    ib = _FakeBoard(_FakeFPGA())
-    master = _fake_master(ib)
-
-    asyncio.run(FPGAMaster.start_fpga_raw_data_transmission(
-        master,
-        capture_config=_ice_capture_profile(gain=True),
-        gain_capture=True,
-        sync=True))
-    asyncio.run(FPGAMaster.start_fpga_raw_data_transmission(
-        master,
-        capture_config=_ice_capture_profile(gain=False),
-        gain_capture=False,
-        sync=True))
-
-    assert [call['frames_per_burst'] for call in ib.configure_calls] == [4, 1]
-    assert [call['source'] for call in ib.configure_calls] == [
-        'scaler', 'adc']
-    assert [call['sub_period'] for call in ib.configure_calls] == [12, 23]
-    assert ib.start_calls == [{}, {}]
-    assert ib.capture_calls == []
-    assert master.raw_acq_sync_count == 2
 
 
 def test_start_transmission_rejects_wrong_ice_gain_burst_before_writes():
@@ -404,7 +374,6 @@ def test_start_transmission_rejects_wrong_ice_gain_burst_before_writes():
             master, capture_config=profile, gain_capture=True))
 
     assert ib.start_calls == []
-    assert ib.configure_calls == []
 
 
 def test_start_transmission_selects_crs_gain_and_normal_outputs():
@@ -424,41 +393,30 @@ def test_start_transmission_selects_crs_gain_and_normal_outputs():
         sync=True))
 
     assert ib.fpga.UCAP.outputs == ['cap', 'corr']
-    assert [call['source'] for call in ib.configure_calls] == [
+    assert [call['source'] for call in ib.start_calls] == [
         'scaler', 'funcgen']
 
 
-@pytest.mark.parametrize(
-    'platform',
-    ['ice', 'crs'],
-)
-def test_live_decoder_transition_configures_before_enabling(platform):
-    if platform == 'ice':
-        profile = _ice_capture_profile(gain=True)
-        platform_id = _FakeFPGA._PLATFORM_ID_MGK7MB_REV2
-    else:
-        profile = _crs_capture_profile(gain=True)
-        platform_id = _FakeFPGA._PLATFORM_ID_CRS
-    ib = _FakeBoard(_FakeFPGA(platform_id=platform_id))
+def test_initial_profile_starts_without_stopping_capture():
+    ib = _FakeBoard(_FakeFPGA(
+        platform_id=_FakeFPGA._PLATFORM_ID_MGK7MB_REV2))
     master = _fake_master(ib, _FakeGainServer(np.ones((1, 4))))
 
     asyncio.run(FPGAMaster.start_fpga_raw_data_transmission(
         master,
-        capture_config=profile,
+        capture_config=_ice_capture_profile(gain=True),
         gain_capture=True,
         push_decoder=True,
         sync=True))
 
-    assert ib.stop_count == 1
-    assert len(ib.configure_calls) == 1
-    assert ib.start_calls == [{}]
+    assert ib.stop_count == 0
+    assert len(ib.start_calls) == 1
     assert master.raw_acq_sync_count == 1
     assert master.fpgas.sync_count == 1
-    assert master.events == [
-        'stop', 'configure', 'decoder', 'start', 'sync']
+    assert master.events == ['start', 'decoder', 'sync']
 
 
-def test_live_decoder_update_failure_leaves_capture_disabled():
+def test_decoder_update_failure_prevents_sync():
     ib = _FakeBoard(_FakeFPGA())
     master = _fake_master(ib, _FakeGainServer(np.ones((1, 4))))
 
@@ -475,9 +433,8 @@ def test_live_decoder_update_failure_leaves_capture_disabled():
             push_decoder=True,
             sync=True))
 
-    assert ib.stop_count == 1
-    assert len(ib.configure_calls) == 1
-    assert ib.start_calls == []
+    assert ib.stop_count == 0
+    assert len(ib.start_calls) == 1
     assert master.fpgas.sync_count == 0
 
 
@@ -495,7 +452,6 @@ def test_invalid_live_capture_profile_is_rejected_before_hardware_writes():
             sync=True))
 
     assert ib.stop_count == 0
-    assert ib.configure_calls == []
     assert ib.start_calls == []
     assert ib.capture_calls == []
     assert master.raw_acq_sync_count == 0
@@ -516,7 +472,6 @@ def test_invalid_capture_sub_period_is_rejected_before_hardware_writes():
             sync=True))
 
     assert ib.stop_count == 0
-    assert ib.configure_calls == []
     assert ib.start_calls == []
     assert master.events == []
 
@@ -533,8 +488,8 @@ def test_zero_baseline_rate_configures_but_does_not_activate():
         push_decoder=False,
         sync=True))
 
-    assert len(ib.configure_calls) == 1
     assert ib.start_calls == []
+    assert ib.stop_count == 1
     assert master.fpgas.sync_count == 0
 
 
@@ -763,23 +718,14 @@ def test_load_gains_scrambles_natural_order_archive_for_firmware():
     assert uid == 'gain-uid'
 
 
-class _RuntimeHDFServer:
-    def __init__(self, events):
-        self.events = events
-
-    async def stop_raw_hdf5(self):
-        self.events.append('stop-raw-hdf')
-
-    async def stop_corr_hdf5(self):
-        self.events.append('stop-corr-hdf')
-
-
 def _runtime_master(*, fail_gain=False, block_gain=None):
     events = []
     master = object.__new__(FPGAMaster)
     master.log = _DummyLog()
     master._gain_operation_lock = asyncio.Lock()
-    master.fpgas = State(sync_timestamp='science-sync')
+    master.fpgas = State(
+        sync_timestamp='science-sync',
+        ib=[State(fpga=State(CAPTURE_TYPE='PROBER'))])
     master.frame0_irigb_time = None
     master.config = State(
         raw_acq=State(
@@ -802,13 +748,10 @@ def _runtime_master(*, fail_gain=False, block_gain=None):
             ),
         ),
     )
-    master.raw_acq = {'raw0': _RuntimeHDFServer(events)}
+    master.raw_acq = {'raw0': object()}
 
-    async def program(capture_config=None, **kwargs):
-        events.append(
-            ('program-gain' if kwargs['gain_capture'] else 'program-normal',
-             capture_config.as_dict()
-             if hasattr(capture_config, 'as_dict') else dict(capture_config)))
+    async def set_capture(**kwargs):
+        events.append(('set-capture', kwargs))
 
     async def compute(**kwargs):
         events.append(('compute', kwargs))
@@ -817,20 +760,12 @@ def _runtime_master(*, fail_gain=False, block_gain=None):
         if fail_gain:
             raise ValueError('gain input RMS is invalid')
 
-    async def start_raw():
-        events.append('start-raw-hdf')
-
-    async def start_corr():
-        events.append('start-corr-hdf')
-
-    master.start_fpga_raw_data_transmission = program
+    master.set_fpga_data_capture = set_capture
     master.compute_gains = compute
-    master.start_hdf5_capture = start_raw
-    master.start_corr_hdf5_capture = start_corr
     return master, events
 
 
-def test_runtime_gain_phase_stops_writers_and_restarts_new_files():
+def test_runtime_gain_phase_switches_source_without_stopping_writers():
     master, events = _runtime_master()
 
     asyncio.run(FPGAMaster.runtime_compute_gains(
@@ -839,35 +774,30 @@ def test_runtime_gain_phase_stops_writers_and_restarts_new_files():
         data_capture={'capture_rate': 14},
     ))
 
-    assert [event if isinstance(event, str) else event[0] for event in events] == [
-        'stop-raw-hdf',
-        'stop-corr-hdf',
-        'program-gain',
+    assert [event[0] for event in events] == [
+        'set-capture',
         'compute',
-        'program-normal',
-        'start-raw-hdf',
-        'start-corr-hdf',
+        'set-capture',
     ]
-    assert events[2][1]['capture_rate'] == 14
-    assert events[3][1]['target'] == 3.0
-    assert events[4][1]['capture_rate'] == 23
+    assert events[0][1] == {'capture_rate': 14, 'source': 'scaler'}
+    assert events[1][1]['target'] == 3.0
+    assert events[2][1] == {'capture_rate': 23, 'source': 'adc'}
     assert master.config.fpga.raw_data_capture.capture_rate == 23
-    assert master.frame0_irigb_time == 'science-sync'
+    assert master.frame0_irigb_time is None
 
 
-def test_runtime_gain_failure_restores_normal_profile_without_hdf_restart():
+def test_runtime_gain_failure_restores_normal_source():
     master, events = _runtime_master(fail_gain=True)
 
     with pytest.raises(ValueError, match='gain input RMS is invalid'):
         asyncio.run(FPGAMaster.runtime_compute_gains(master))
 
-    assert [event if isinstance(event, str) else event[0] for event in events] == [
-        'stop-raw-hdf',
-        'stop-corr-hdf',
-        'program-gain',
+    assert [event[0] for event in events] == [
+        'set-capture',
         'compute',
-        'program-normal',
+        'set-capture',
     ]
+    assert events[-1][1] == {'capture_rate': 23, 'source': 'adc'}
 
 
 def test_runtime_gain_rejects_a_second_active_request():
@@ -884,7 +814,9 @@ def test_runtime_gain_rejects_a_second_active_request():
         return events
 
     events = asyncio.run(exercise())
-    assert sum(event == 'stop-raw-hdf' for event in events) == 1
+    assert sum(
+        event[0] == 'set-capture' and event[1]['source'] == 'scaler'
+        for event in events) == 1
 
 
 def test_runtime_gain_requires_running_raw_acq():
@@ -892,6 +824,16 @@ def test_runtime_gain_requires_running_raw_acq():
     master.raw_acq = {}
 
     with pytest.raises(RuntimeError, match='requires enabled and running raw_acq'):
+        asyncio.run(FPGAMaster.runtime_compute_gains(master))
+
+    assert events == []
+
+
+def test_runtime_gain_rejects_active_ucap_transition():
+    master, events = _runtime_master()
+    master.fpgas.ib[0].fpga.CAPTURE_TYPE = 'UCAP'
+
+    with pytest.raises(RuntimeError, match='supported only for PROBER'):
         asyncio.run(FPGAMaster.runtime_compute_gains(master))
 
     assert events == []
@@ -912,8 +854,18 @@ def test_runtime_serial_gain_uses_one_capture_phase_for_all_groups():
         [[0, '*', '*']],
         [[1, '*', '*']],
     ]
-    assert sum(event == 'stop-raw-hdf' for event in events) == 1
-    assert sum(event == 'start-raw-hdf' for event in events) == 1
+    assert sum(event[0] == 'set-capture' for event in events) == 2
+
+
+def test_runtime_gain_rejects_static_capture_override():
+    master, events = _runtime_master()
+
+    with pytest.raises(ValueError, match='static field'):
+        asyncio.run(FPGAMaster.runtime_compute_gains(
+            master,
+            data_capture={'frames_per_burst': 2}))
+
+    assert events == []
 
 
 @pytest.mark.parametrize('removed_argument', ['capture_rate', 'scaler_cap_data_type'])

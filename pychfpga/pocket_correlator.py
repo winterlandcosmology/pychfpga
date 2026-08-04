@@ -333,14 +333,13 @@ class POCKET_CORRELATOR:
         # always captured at the output of the FUNCGEN module, no matter if it is real ADC 
         # data, or a test pattern written to the buffer of the FUNCGEN)
 
-        self.i.configure_data_capture(period = period,
+        self.i.start_data_capture(period = period,
                                       source = 'funcgen', # 'adc',
                                       mode = self.ucap.MODE,
                                       channels = channels,
                                       select = True,
                                       data_type = None # only used when source = 'scaler', this avoids errors
                                       )
-        self.i.start_data_capture()
 
         # Capture data!
         t, d_adc, c = self.u_receiver.read_raw_frames(format = '16', 
@@ -536,14 +535,13 @@ class POCKET_CORRELATOR:
 
             # Start data capture (recall that we have bypassed the SCALER, but UCAP still
             # captures data from its output)
-            self.i.configure_data_capture(period = period,
+            self.i.start_data_capture(period = period,
                                           source = 'scaler',
                                           mode = self.ucap.MODE,
                                           channels = channels,
                                           data_type = 'fft',
                                           select = True
                                           )
-            self.i.start_data_capture()
 
             # Capture data!
             t, d_fft, c = self.u_receiver.read_raw_frames(format = fft_bit_res, 
@@ -578,14 +576,13 @@ class POCKET_CORRELATOR:
                                    )
 
             # Start data capture
-            self.i.configure_data_capture(period = 4*self.frame_period*489, # always use a period that guarantees even bins first
+            self.i.start_data_capture(period = 4*self.frame_period*489, # always use a period that guarantees even bins first
                                           source = 'scaler',
                                           mode = self.ucap.MODE,
                                           channels = channels,
                                           data_type = 'fft_2x',
                                           select = True
                                           )
-            self.i.start_data_capture()
 
             # Capture date. In the case of 'fft_2x', the 
             # argument for split must be True. We need to request
@@ -1041,14 +1038,13 @@ class POCKET_CORRELATOR:
 
         # Start data capture, grabbing data at the output of the
         # scaler, which has been bypassed.
-        self.i.configure_data_capture(period = period,
+        self.i.start_data_capture(period = period,
                                       source = 'scaler',
                                       mode = self.ucap.MODE,
                                       channels = channels,
                                       data_type = 'fft_gain',
                                       select = True
                                       )
-        self.i.start_data_capture()
 
         # Capture data!
         t, d_post_gain, c = self.u_receiver.read_raw_frames(format = '16+16', 
@@ -1177,14 +1173,13 @@ class POCKET_CORRELATOR:
                                )
 
         # Start data capture, always setting the source to 'scaler'
-        self.i.configure_data_capture(period = period,
+        self.i.start_data_capture(period = period,
                                       source = 'scaler',
                                       mode = self.ucap.MODE,
                                       channels = channels,
                                       data_type = 0,
                                       select = True
                                       )
-        self.i.start_data_capture()
 
         # Capture data!
         t, d_scaler, c = self.u_receiver.read_raw_frames(format = '16+16', 

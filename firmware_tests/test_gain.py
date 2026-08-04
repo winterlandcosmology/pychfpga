@@ -163,14 +163,13 @@ class TestGain:
                 data=funcgen_input,
             )
         frames_per_burst = 2 * self.fft_bins_per_word()
-        self.board.configure_data_capture(
+        self.board.start_data_capture(
             period=self.CAPTURE_PERIOD,
             frames_per_burst=frames_per_burst,
             channels=[ch],
             source='scaler',
             data_type=self.FFT_FULL_CAPTURE_MODE,
         )
-        self.board.start_data_capture()
         self.board.sync()
 
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
@@ -199,14 +198,13 @@ class TestGain:
             reset_chan=True,
             channels=[ch],
         )
-        self.board.configure_data_capture(
+        self.board.start_data_capture(
             period=self.CAPTURE_PERIOD,
             frames_per_burst=1,
             channels=[ch],
             source='funcgen',
             mode=3,
         )
-        self.board.start_data_capture()
         self.board.sync()
 
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
@@ -292,13 +290,12 @@ class TestGain:
     def capture_scaler_mode0(self, ch, ncap=None):
         if ncap is None:
             ncap = self.SCALER_NCAP
-        self.board.configure_data_capture(
+        self.board.start_data_capture(
             period=self.CAPTURE_PERIOD,
             channels=[ch],
             source='scaler',
             data_type=0,
         )
-        self.board.start_data_capture()
         self.board.sync()
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
         receiver.flush()

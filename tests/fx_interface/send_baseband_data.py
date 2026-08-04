@@ -105,14 +105,13 @@ while True:
                         )
     
     # Start data capture
-    i.configure_data_capture(period =  4*2**14*(1/3.2e9)*489,
+    i.start_data_capture(period =  4*2**14*(1/3.2e9)*489,
                              source = 'scaler',
                              mode = ucap.MODE,
                              channels = list(np.arange(NPOLS)),
                              data_type = 'fft_2x',
                              select = True
                              )
-    i.start_data_capture()
     
     # Capture data!
     t, d_fft_32_32_raw, c = u_receiver.read_raw_frames(format = '32+32', 

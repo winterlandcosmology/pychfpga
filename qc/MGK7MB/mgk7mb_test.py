@@ -1432,8 +1432,7 @@ class TestMGK7MBNetwork(TestUtils):
             ib.set_adcdaq_mode('data')
             ib.set_data_source('adc')
             ib.set_adc_mode('ramp')
-            ib.configure_data_capture(period=1, source='adc')
-            ib.start_data_capture()
+            ib.start_data_capture(period=1, source='adc')
 
             print('Syncing...')
             ib.sync()

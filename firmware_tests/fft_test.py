@@ -269,14 +269,13 @@ class TestFFT:
         )
 
         frames_per_burst = self.fft_complex_frames_per_burst()
-        self.board.configure_data_capture(
+        self.board.start_data_capture(
             period=0.01,
             frames_per_burst=frames_per_burst,
             channels=[ch],
             source='scaler',
             data_type=self.FFT_COMPLEX_CAPTURE_MODE,
         )
-        self.board.start_data_capture()
         self.board.sync()
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
         receiver.flush()
@@ -519,14 +518,13 @@ class TestFFT:
         fft_info = self.board.FFT_INFO[int(self.board.FFT_TYPE)]
         fft_bins_per_word = int(fft_info.get('bins_per_word') or 1)
         frames_per_burst = 2 * fft_bins_per_word
-        self.board.configure_data_capture(
+        self.board.start_data_capture(
             period=self.SIM_COMPARE_CAPTURE_PERIOD,
             frames_per_burst=frames_per_burst,
             channels=[ch],
             source='scaler',
             data_type=self.FFT_FULL_CAPTURE_MODE,
         )
-        self.board.start_data_capture()
         self.board.sync()
 
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
