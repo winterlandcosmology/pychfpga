@@ -811,6 +811,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             if self.CAPTURE_TYPE == 'UCAP':
                 self.logger.debug(f'{self!r}: === Instantiating UCAP')
                 self.UCAP = ucap.UCAP(router=self.top_router, router_port = 'UCAP', state=self.config.add("ucap"))
+                self.CAPTURE_BUS_WIDTH = self.UCAP.CAPTURE_BUS_WIDTH
             elif self.CAPTURE_TYPE !='PROBER':
                 raise RuntimeError(f'Unknown Data capture type {self.CAPTURE_TYPE}')
 
@@ -2264,7 +2265,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 self.config.get("mode", raw_capture.get("target_mode", 0) or 0)
             )
             raw_capture.target_mode = target_mode
-            source = self.config.get("source", raw_capture.get("source", "scaler")) or "scaler"
+            source = raw_capture.get("source", "scaler") or "scaler"
             raw_capture.source = source
             ucap_mode_to_frames = {0: 2, 1: 4, 2: 8, 3: 16}
             if target_mode not in ucap_mode_to_frames:
@@ -2332,11 +2333,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             fmt_interleave_factor=1,
         )
         adc_pplf = 1
-
         #We store in the capture format both the bus width, which is the total number of bits available to send the captured data
         #and the data length, which is the number of bits that actual contain the desired data. Since these are placed in the MSBs
         #of the bus, we must right shift by the difference to extract our desired data
-
         fft_data_width = self.FFT_INFO[self.FFT_TYPE]['bits_per_bin']//2 #divide by 2 for real and imaginary
         if cap_data_type == 4:
             capture_bus_width = 32 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 16
@@ -2365,7 +2364,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             if any(ebc != eight_bit for ebc in eight_bit_capture_modes):
                 raise ValueError("Selected channels have different eight-bit capture settings. Use separate receivers.")
             capture_bus_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8 
-            if cap_data_type > 0: #1 or 2
+            if cap_data_type in (1, 2):
                 data_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 4
             else:
                 data_width = 8 if eight_bit else 4
@@ -3486,11 +3485,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 raise RuntimeError(f"'data_type' can be specified only for source='scaler'")
         else:
             if source == 'scaler':
-                self.logger.warning(f"data_type not specified for scaler capture. Defaulting to 0.")
-                for ch in channels:
-                    self.chan[ch].SCALER.set_capture_data_type(0)
-                for ch in self._normalize_channels(channels):
-                    self.config.chan[ch].scaler_cap_data_type = 0
                 try:
                     self.get_receiver_config(channels=channels)
                 except ValueError as exc:
@@ -3515,7 +3509,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         if self.CAPTURE_TYPE == 'UCAP':
             self.UCAP.set_data_capture(source=source, mode=mode, channels=channels, select=select, periods=[burst_period_in_frames-1, burst_period_in_frames-1])
             self.config.mode = mode
-            self.config.source = source
+            if source not in ('scaler', 'funcgen'):
+                raise ValueError(f"Invalid source {source} specified")
             self.config.raw_capture.target_mode = int(mode)
             self.config.raw_capture.source = source
             self.config.raw_capture.channels = tuple(self._normalize_channels(channels))
@@ -3649,7 +3644,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                                     f' which has no FFT module. The command will have no effect.')
             else:
                 self.chan[ch].FFT.BYPASS = bypass_mode
-                self.chan[ch].FFT.config_id + 1  # flag a change
+                self.chan[ch].FFT.config_id += 1  # flag a change so bin maps refresh
                 configured_channels.add(ch)
         channels_str = ', '.join([str(i) for i in configured_channels])
         self.logger.debug(f'{self!r}: Setting FFT bypass mode to {bool(bypass_mode)} for channel {channels_str}')
@@ -5397,11 +5392,24 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         self.CORR.stop_correlator()
 
-    def get_corr_receiver(self, verbose=1, **kwargs):
-        if self.corr_recv:
-            return self.corr_recv
+    def get_corr_receiver(self, verbose=1, buf_size=2048, **kwargs):
+        """Return (and cache) the correlator UDP frame receiver.
+
+        Parameters:
+            verbose (int): Verbosity for the packet / frame receiver.
+            buf_size (int): ``UDPPacketReceiver`` packet-batch capacity. Increase
+                above the default when one firmware integration exceeds 2048
+                packets (e.g. 8192 for CRS corr8).
+            **kwargs: Forwarded to :meth:`UCORR.get_data_receiver`.
+        """
+        if self.corr_recv is not None:
+            pr = getattr(self.corr_recv, 'pr', None)
+            if pr is not None and getattr(pr, 'n_packets', None) == buf_size:
+                return self.corr_recv
+            self.corr_recv = None
         sock = self.get_data_socket()
-        self.corr_recv = self.CORR.get_data_receiver(sock, **kwargs)
+        self.corr_recv = self.CORR.get_data_receiver(
+            sock, buf_size=buf_size, verbose=verbose, **kwargs)
         return self.corr_recv
 
 

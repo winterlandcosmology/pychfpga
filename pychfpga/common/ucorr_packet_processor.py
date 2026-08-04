@@ -32,6 +32,7 @@ class UCorrPacketProcessor(PacketProcessorBase):
     CORR_PACKET_COOKIE = 0xCF
     NBYTES_PER_HEADER = 10 # Number of bytes in the UDP payload header
     NBYTES_PER_PROD = 5  # Number of bytes used to store each complex correlator product ( (18+18) bits = 36 bits, 5 bytes = 40 bits)
+    TS_NOT_EMITTED = np.iinfo(np.uint64).max
 
 
     def __init__(self, packet_receiver, config=None, receive_window=3, verbose=0):
@@ -57,7 +58,9 @@ class UCorrPacketProcessor(PacketProcessorBase):
         self.prod_map = None
         self.firmware_integ_period = None
         self.soft_integ_period = 1
+        self.PACKET_SIZE = 0
         super().__init__(packet_receiver, receive_window, verbose)
+        self._last_emitted_ts = self.TS_NOT_EMITTED
         if config is not None:
             self.update_config(State(config).deepcopy())
 
@@ -134,6 +137,7 @@ class UCorrPacketProcessor(PacketProcessorBase):
 
             # Packet view depends on NCMAC.
             NCMAC = state.NCMAC
+            self.PACKET_SIZE = self.NBYTES_PER_HEADER + int(NCMAC) * self.NBYTES_PER_PROD
             self.packet_dtype = np.dtype([("header", self.header_dtype, (1,)), ("data", self.product_dtype, (NCMAC,))])
             self.buf_struct = self.pr.buf[:, :self.packet_dtype.itemsize].view(self.packet_dtype)[:, 0]
             self.buf_cookie = self.buf_struct["header"]["cookie"][:, 0]
@@ -198,9 +202,13 @@ class UCorrPacketProcessor(PacketProcessorBase):
 
     def filter_packets(self, n: int) -> Optional[np.ndarray]:
         """Decode UCORR headers; leave integration index in ``pkt_ts``; return row indices."""
-        # Cookie filter — UCORR packets only. Header layout is fixed so no packet-size check needed.
+        # Cookie + full payload length. recvfrom_into leaves stale bytes past pkt_len; a short
+        # cookie-matched row would otherwise mix real CMAC lanes with leftover product bytes.
         bix_mask = self.bix_mask[:n]
+        tmp_mask = self.tmp_mask[:n]
         np.equal(self.buf_cookie[:n], self.CORR_PACKET_COOKIE, out=bix_mask)
+        np.equal(self.pr.pkt_len[:n], self.PACKET_SIZE, out=tmp_mask, where=bix_mask)
+        np.bitwise_and(bix_mask, tmp_mask, out=bix_mask)
 
         # Decode header fields. stream_id top 5 bits = corr id, low 11 bits = bin index, flags hi nibble = bin_set.
         np.right_shift(self.buf_stream_id[:n], 11, out=self.pkt_corr[:n], where=bix_mask)
@@ -211,9 +219,11 @@ class UCorrPacketProcessor(PacketProcessorBase):
         np.floor_divide(self.pkt_ts[:n], self.integ_period, out=self.pkt_ts[:n], where=bix_mask)
 
         # Drop packets at or before the latest integration already returned (monotonic emits).
-        tmp_mask = self.tmp_mask[:n]
-        np.greater(self.pkt_ts[:n], self._last_emitted_ts, out=tmp_mask, where=bix_mask)
-        np.bitwise_and(bix_mask, tmp_mask, out=bix_mask)
+        # A fresh receiver/flush must still accept timestamp 0 after the correlator restarts.
+        if self._last_emitted_ts != self.TS_NOT_EMITTED:
+            tmp_mask = self.tmp_mask[:n]
+            np.greater(self.pkt_ts[:n], self._last_emitted_ts, out=tmp_mask, where=bix_mask)
+            np.bitwise_and(bix_mask, tmp_mask, out=bix_mask)
 
         return np.flatnonzero(bix_mask)
 
@@ -255,7 +265,13 @@ class UCorrPacketProcessor(PacketProcessorBase):
 
     def store_packets(self, bix: np.ndarray, tix: np.ndarray) -> None:
         """Accumulate correlation products from valid packets into ``acc_re`` / ``acc_im``."""
-        # integrate the packets into the accumulators
+        # Cap each soft-integ row at expected_packets. A UDP batch can include the first
+        # packet(s) of the next firmware period (buf holds soft+1 bursts); if those still
+        # hash into the current soft key, uncapped add.at would over-integrate a few bins.
+        bix, tix = self._cap_to_expected_packets(bix, tix)
+        if not bix.size:
+            return
+
         # Track overrun bit (LSB of flags) over valid packets only.
         self.overrun |= int((self.buf_flags[bix] & 1).any())
 
@@ -269,20 +285,50 @@ class UCorrPacketProcessor(PacketProcessorBase):
         #   imag: bits 17:0  of buf_data_l  -> shift<<14 then >>14 sign-extends from bit 31.
         np.left_shift(self.buf_data_h[bix], 4, out=temp32)
         np.right_shift(temp32, 14, out=temp32)
-        # Fancy-index += matches the original behavior; relies on (tix, bin_set, corr, bin) tuples
-        # being unique within a single batch (one packet per (corr,bin) per soft integration).
-        self.acc_re[tix, bin_set, corr, bin_] += temp32
+        # Use add.at: soft integ maps multiple firmware packets onto the same
+        # (tix, bin_set, corr, bin) within one UDP batch; fancy-index += drops duplicates.
+        np.add.at(self.acc_re, (tix, bin_set, corr, bin_), temp32)
 
         np.left_shift(self.buf_data_l[bix], 14, out=temp32)
         np.right_shift(temp32, 14, out=temp32)
-        self.acc_im[tix, bin_set, corr, bin_] += temp32
+        np.add.at(self.acc_im, (tix, bin_set, corr, bin_), temp32)
 
         # Sat counters: bit 0x20 = real saturation, bit 0x10 = imag saturation. Increment each cmac lane.
         sat_pkt = self.buf_data_sat[bix]
-        self.sat[tix, bin_set, corr, bin_, :, 0] += sat_pkt & 0x20
-        self.sat[tix, bin_set, corr, bin_, :, 1] += sat_pkt & 0x10
+        np.add.at(self.sat[..., 0], (tix, bin_set, corr, bin_), sat_pkt & 0x20)
+        np.add.at(self.sat[..., 1], (tix, bin_set, corr, bin_), sat_pkt & 0x10)
 
         np.add.at(self.raw_data_count, tix, 1)
+
+    def _cap_to_expected_packets(self, bix: np.ndarray, tix: np.ndarray):
+        """Keep at most ``expected_packets - raw_data_count[tix]`` new packets per soft row."""
+        if not bix.size:
+            return bix, tix
+        order = np.argsort(tix, kind="mergesort")
+        tix_sorted = tix[order]
+        unique_tix, starts, counts = np.unique(tix_sorted, return_index=True, return_counts=True)
+        keep_sorted = np.zeros(tix_sorted.shape, dtype=bool)
+        dropped = 0
+        for u, start, cnt in zip(unique_tix, starts, counts):
+            n_take = int(self.expected_packets - self.raw_data_count[u])
+            if n_take <= 0:
+                dropped += int(cnt)
+                continue
+            n_take = min(n_take, int(cnt))
+            keep_sorted[start:start + n_take] = True
+            dropped += int(cnt) - n_take
+        if dropped and self.verbose:
+            print(
+                f"UCorrPacketProcessor: dropping {dropped} packet(s) past "
+                f"expected_packets={self.expected_packets} for soft integ row(s)"
+            )
+        if not keep_sorted.any():
+            return bix[:0], tix[:0]
+        if keep_sorted.all():
+            return bix, tix
+        keep = np.empty(bix.shape, dtype=bool)
+        keep[order] = keep_sorted
+        return bix[keep], tix[keep]
 
 
     def _on_rows_ready(self, n_out, verbose):
@@ -328,6 +374,9 @@ class UCorrPacketProcessor(PacketProcessorBase):
             return None
         integ_ts = self.ts_array[rows]
         counts = self.raw_data_count[rows]
+        # Clear before scatter so unmapped slots cannot retain a prior integration.
+        self.integ_data[rows] = 0
+        self.integ_sats[rows] = 0
         ix = (rows, self.bin_map, self.prod_map)
         self.integ_data.real[ix] = self.acc_re[rows]
         self.integ_data.imag[ix] = self.acc_im[rows]
@@ -350,6 +399,7 @@ class UCorrPacketProcessor(PacketProcessorBase):
             self.raw_data_count.fill(0)
             self.ts_array.fill(0)
         self.n_ts = 0
+        self.n_out = 0
         self.carry_len = 0
-        self._last_emitted_ts = np.uint64(0)
+        self._last_emitted_ts = self.TS_NOT_EMITTED
         self.overrun = 0

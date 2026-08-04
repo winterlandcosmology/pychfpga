@@ -160,7 +160,7 @@ class UCORR(MMI):
         # Derive useful parameters
         NPROD = NCHAN * (NCHAN + 1) // 2
         NPROD_PER_BINCLK =  NPROD // NCLK # number of products for each binclk, i.e number of products in each packet
-        print(f"{NCHAN=}, {NCLK=}, {NPROD_PER_BINCLK=}, {NPROD=}")
+        #print(f"{NCHAN=}, {NCLK=}, {NPROD_PER_BINCLK=}, {NPROD=}")
 
 
         # Map to convert a (i,j) coordinate in a NCHANxNCHAN matrix to a common-sense linearized product index (pix)
@@ -230,7 +230,7 @@ class UCORR(MMI):
          # Compute a map that lists the bins seen by each CMAC after decimation
         # corr_bins[bin_set, corr, bix] = bin
         corr_bins = np.array([ct_bin_map[:, bs::NDECIM] for bs in range(NDECIM)])
-        print(f'Post Corr decimation corr_bins={corr_bins.shape}, {NDECIM=}')
+        #print(f'Post Corr decimation corr_bins={corr_bins.shape}, {NDECIM=}')
 
 
 
@@ -245,7 +245,7 @@ class UCORR(MMI):
         # Compute the linearized product index corresponding to every product of every packet sent by each correlator.
         # We take into account the real channel numbers provided into the CMAC input vector position.
         # cmac_out_pix[clk, prod] = pix
-        print(f'{cmac_out_ij.shape=}, {chan_map=}')
+        #print(f'{cmac_out_ij.shape=}, {chan_map=}')
         cmac_out_pix = ij_to_pix_map[chan_map[cmac_out_ij[...,0]], chan_map[cmac_out_ij[...,1]]]
 
         # Compute the linearized product index for each (corr, clkbin, prod) data sent by the correlator
@@ -255,7 +255,7 @@ class UCORR(MMI):
         #     prod: 0 .. NPROD/NCLK, each product in a packet
         prod_map = np.array([[[cmac_out_pix[clk, clkprod] for clkprod in range(NPROD_PER_BINCLK)] for _ in lane_bins for clk in range(NCLK)] for lane_bins in corr_bins[0]])
 
-        print(f'bin_map={bin_map.shape}, prod_map={prod_map.shape}')
+        #print(f'bin_map={bin_map.shape}, prod_map={prod_map.shape}')
         config.bin_map = bin_map
         config.prod_map = prod_map
         config.NDECIM, config.NCORRS, config.NPROD_PER_CMAC, config.NCMAC = bin_map.shape
@@ -341,11 +341,34 @@ class UCORR(MMI):
             verbose=verbose,
             corr_config_id=int(self.config.corr_config_id) + 1,  # indicate that some parameters (i.e. integration period) might have changed
         )
+        # Match CORR.start_correlator: hold the array in reset while programming,
+        # then release both the GPIO CORR_RESET and the UCORR soft reset so the
+        # pipeline can emit packets. Leaving GPIO CORR_RESET asserted (e.g. after
+        # a partial init) silences the correlator even when SOFT_RESET=0.
+        self.fpga.set_corr_reset(1)
+        self.SOFT_RESET = 1
+        self.SOFT_RESET = 0
+        self.fpga.set_corr_reset(0)
+    
+    def stop_correlator(self):
+        """ Stop all correlator cored from sending data.
+        """
+        self.SOFT_RESET = 1
+    
+    def get_data_receiver(self, sock, buf_size=2048, verbose=1, **kwargs):
+        """Return a :class:`UCorrFrameReceiver` for ``sock``.
 
-    def get_data_receiver(self, sock):
-        packet_receiver = UDPPacketReceiver(sock)
+        Parameters:
+            sock: Bound UDP socket that receives correlator packets.
+            buf_size (int): Number of packets the UDP receiver can hold in one
+                batch (``UDPPacketReceiver`` buffer length). One full integration
+                is ``NCORRS * NBINS_PER_CORR`` packets (8192 for CRS corr8).
+            verbose (int): Verbosity for the packet receiver / frame receiver.
+            **kwargs: Forwarded to :class:`UCorrFrameReceiver`.
+        """
+        packet_receiver = UDPPacketReceiver(sock, buf_size=buf_size, verbose=verbose)
         self.get_bin_map()
-        return UCorrFrameReceiver(packet_receiver, config=self.config)
+        return UCorrFrameReceiver(packet_receiver, config=self.config, verbose=verbose, **kwargs)
 
 
     @classmethod
