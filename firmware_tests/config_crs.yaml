@@ -1,6 +1,6 @@
 connection_config:
     prog: 1                 # 0 - do not reprogram, 1 - reprogram if outdated, 2 - always reprogram
-    mode: 'shuffle8'          # Do not change for a single board
+    mode: 'corr8'          # Do not change for a single board
     hwm: 'crs 77'           # For a different board change the serial number
 
 test_config:
@@ -9,19 +9,19 @@ test_config:
     loglevelrecv: 0        # 0-3
     conn_scope: "class"     # Select "function" to re-establish connection for each test or
                             # "class" if you want to reuse connection.
-    only_plot: False              #Don't compare results, only plot them 
+    only_plot: False              #Don't compare results, only plot them
+    always_plot: True 
 
-    #parameters for scaler tests 
-    platform: 'CRS'
+    #parameters for scaler tests
     rtol: 0.015
-    global_postscaler: range(MAPPING_POSTSCALER - 1, MAPPING_POSTSCALER + 2) #range(SCALER_SHIFT - INPUT_WIDTH - IMPLICIT_SHIFT + 1, SCALED_WIDTH - IMPLICIT_SHIFT)
+    postscaler: range(MAPPING_POSTSCALER - 1, MAPPING_POSTSCALER + 2) #range(SCALER_SHIFT - INPUT_WIDTH - IMPLICIT_SHIFT + 1, SCALED_WIDTH - IMPLICIT_SHIFT)
     global_frame_cnt: [100, 30000]
     alternating_gain:
         period: [1, 2, 500] #range(1, 20, 2)
     constant_gain:
         gain: [3, 65535]
         #gain: [-3, 32767]
-    rounding:
+    rounding_modes:
         value: [-8, 7]
     double_resolution_capture:
         postscaler: range(12, 22)
@@ -31,9 +31,9 @@ test_config:
         postscaler_range: ((MAPPING_POSTSCALER - CAPTURE_WIDTH, MAPPING_POSTSCALER + CAPTURE_WIDTH),)
 
     #parameters for funcgen tests
-    global_seeds: [-7680, 7744, -14296, -65, -32175, -29190, 30160, 5679, -2070, 24601, 29784, -18765, -25554, -10744, -27608, 3207, 5129, 5031, 22606, 11371, 2446, -28089, 29554, -24103, -26437, 18246, -6527] #, 10486, -25707, -5372, -16068, 25810, 14648, 23623, 4812, 4715, -2645, -28820, -15584, 13563, 32522, 31152, 17351, -22105, -2246, 25818, 17051, -2280, -25287, -20404, -15797, -12642, -15709, -31140, 7986, 22594, -6864, -32133, 11524, -4534, -11304, 16974, -14582, -19158, -30167, 18625, 24000, -12775, -2598, 10724, -17769, -6480, -21887, -20074, -20059, 14521, -5225, 4359, 6366, 30513, -25340, 4396, -224, -4468, 28533, -14307, 13536, -24931, 20594, -30438, -10245, -4246, 25084, -3154, 26509, -16821, -1224, 10499, -16869, -1795]
-    global_burst_period_in_frames: [10004, 10000]
-    global_number_of_bursts: [1, 10, 100]
+    seeds: [-7680, 7744, -14296, -65, -32175, -29190, 30160, 5679, -2070, 24601, 29784, -18765, -25554, -10744, -27608, 3207, 5129, 5031, 22606, 11371, 2446, -28089, 29554, -24103, -26437, 18246, -6527] #, 10486, -25707, -5372, -16068, 25810, 14648, 23623, 4812, 4715, -2645, -28820, -15584, 13563, 32522, 31152, 17351, -22105, -2246, 25818, 17051, -2280, -25287, -20404, -15797, -12642, -15709, -31140, 7986, 22594, -6864, -32133, 11524, -4534, -11304, 16974, -14582, -19158, -30167, 18625, 24000, -12775, -2598, 10724, -17769, -6480, -21887, -20074, -20059, 14521, -5225, 4359, 6366, 30513, -25340, 4396, -224, -4468, 28533, -14307, 13536, -24931, 20594, -30438, -10245, -4246, 25084, -3154, 26509, -16821, -1224, 10499, -16869, -1795]
+    burst_period_in_frames: [10004, 10000]
+    number_of_bursts: [1, 10, 100]
 
     #funcgen test functions with parameters
     funcgen_noise_fft_avg_squared:
@@ -51,3 +51,9 @@ test_config:
         expected_overflows_per_frame: [0, 1, 1000, 2000]
         stats_frames: [10]
         mode: ['word_ctr_buffer_flags', 'frame8', 'frame4']
+
+    #global parameters for the correlator tests
+    num_frames: [32768, 32767]
+    channel0: range(NUM_CHANNELS)
+    channel1: range(NUM_CHANNELS)
+    #correlator test functions with parameters
