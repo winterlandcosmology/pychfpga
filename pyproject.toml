@@ -67,7 +67,7 @@
 
 [tool.setuptools.package-data]
 
-    pychfpga = ["*.bit", "*.yaml"]
+    pychfpga = ["*.bit", "*.yaml", "adc_delay_tables/*.yaml", "fpga_firmware/bitstreams/*.bit"]
 
 
 [tool.setuptools.packages.find]

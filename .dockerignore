@@ -1,3 +1,46 @@
+# Keep this section in sync with .gitignore. Docker builds must not depend on
+# untracked local files; required files belong in version control.
+*.log
+*.so
+*.pyc
+*.swp
+*.pkl
+*.pyo
+*.bak
+*.mif
+*.orig
+/Archives
+/build
+*.7z
+out_*/
+/nbproject/
+/src/
+/venv*
+.py*venv/
+.venv*
+.venv-fmt/
+\.DS_Store
+.Xil
+*.str
+*.jou
+*.egg-info
+.ipynb_checkpoints
+.vscode/
+corr16tests/
+docker-data/
+.codex
+.env
+.env.docker
+xreport.xml
+.vscode
+*__pycache__*
+fw_test_results/
+firmware_tests/fft_of_data
+tmp_*
+
+# Docker-only build-context exclusions.
+# Firmware bitstreams are tracked package data required at runtime.
+!pychfpga/fpga_firmware/bitstreams/*.bit
 .git
 /docs
 /old_scripts
@@ -6,15 +49,10 @@
 /unused
 /ice-qc
 **/arm_firmware
-/.venv
 /.pytest_cache
 /.idea
-/.vscode
-/corr16tests
 /firmware_tests
 /fw_test_results
-/docker-data
-.env.docker
 Dockerfile
 docker-compose.yaml
 .dockerignore

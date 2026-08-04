@@ -193,6 +193,8 @@ def: &default  # defaults, referenced below
 
         adc_delay_params: # parameters passed to set_adc_delays()
             source : 'default'
+            # Persist measured tables on the Docker /data bind mount.
+            delay_table_folder: '{data_folder}/adc_delay_tables'
             compute_delays : 1
             save_delays : True # False  # True
             check_sync_delays : 0
