@@ -2,30 +2,29 @@
 import asyncio
 
 
-#PyPi packages
-
-import nest_asyncio
-
-
 def run_async(awaitable):
     """
-    Run the current loop until the awaitable is resolved.
+    Run an awaitable from synchronous code when no event loop is running.
 
-    Is used to run an async function from a sync function, assuming there is a valid current event loop .
-
-    We use nest_asyncio to allow run_until_complete() call to operate even if the current loop is already running. Native asyncio does not allow that.
+    If a loop is already running (e.g. Jupyter), raises RuntimeError — await
+    the coroutine from async code instead. Native asyncio does not allow
+    nested run_until_complete / asyncio.run on a running loop.
     """
-    nest_asyncio.apply()  # make sure we can run in an already running loop
-    return asyncio.run(awaitable)
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(awaitable)
+    raise RuntimeError(
+        "Event loop is already running; await the coroutine instead of "
+        "calling run_async() / async_to_sync wrappers"
+    )
 
 
 def async_to_sync(fn):
     """
-    Wraps an async coroutine function into a function that can be called synchronously (without the await statement).
-
-    This assumes there is a event loop.
+    Wraps an async coroutine function into a function that can be called
+    synchronously (without the await statement) when no loop is running.
     """
     def sync_fn(*args, **kwargs):
         return run_async(fn(*args, **kwargs))
     return sync_fn
-

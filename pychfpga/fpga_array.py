@@ -19,19 +19,8 @@ import socket  # for gethostbyname()
 import pickle
 import re
 import datetime
-import functools
 import asyncio
-import nest_asyncio
 from collections import defaultdict
-
-# Patch asyncio so ``asyncio.run`` / ``loop.run_until_complete`` tolerate being
-# called from an already-running event loop (e.g. when ``FPGAArray(...)`` is
-# constructed from a Jupyter / IPython kernel cell). Importing nest_asyncio
-# alone is NOT enough -- you must call ``apply()``. We do it at module load so
-# the patch is in place before ``FPGAArray.__init__`` calls ``asyncio.run``,
-# regardless of which hardware backend (which in turn might also call
-# ``nest_asyncio.apply()``) ends up being loaded lazily later.
-nest_asyncio.apply()
 
 # PyPi packages
 import numpy as np
@@ -65,16 +54,8 @@ from wtl.namespace import NameSpace, merge_dict
 from wtl.config import load_yaml_config
 
 from pychfpga.common import Ccoll
-from pychfpga.common.udp_packet_receiver import UDPPacketReceiver
 
 from pychfpga.hardware import HardwareMap, Motherboard, Crate
-
-
-
-
-#####################################
-
-
 
 
 class FPGAArray(object):
@@ -95,8 +76,8 @@ class FPGAArray(object):
     # through ``_array_methods`` as ``{method_name: bound_provider_method}``.
     #
     # Class-body defaults below ensure the attributes are always defined,
-    # even on ``object.__new__(FPGAArray)`` code paths (tests, unpickle),
-    # so ``__getattr__`` never needs a guard against early initialization.
+    # even on ``object.__new__(FPGAArray)`` code paths (tests, unpickle).
+    # ``__getattr__`` still guards on ``_ready`` before dispatching array methods.
     # -------------------------------------------------------------------------
 
     # Define defaults for the following class attributes to prevent
@@ -105,7 +86,9 @@ class FPGAArray(object):
     _array_methods = {}
     _array_method_class_sets = ()  # tuple of each motherboard's provider-class frozenset
     _array_method_instances = {}
-    ib = []
+    ib = None
+    ic = None
+    _ready = False
 
     def get_array_methods(self):
         """Return array-wide methods available on every motherboard.
@@ -114,7 +97,7 @@ class FPGAArray(object):
         Provider methods have their provider instance already bound, and the
         provider keeps a reference to this :class:`FPGAArray`.
         """
-        current = tuple(mb._array_method_classes for mb in self.ib)
+        current = tuple(mb._array_method_classes for mb in (self.ib or ()))
         if self._array_method_class_sets == current:
             return self._array_methods
 
@@ -165,6 +148,11 @@ class FPGAArray(object):
 
     def __getattr__(self, name):
         """Dispatch array-wide methods. See :meth:`get_array_method`."""
+        if not getattr(self, '_ready', False):
+            raise RuntimeError(
+                "FPGAArray is not initialized; use "
+                "`ca = await FPGAArray(...).init()`"
+            )
         return self.get_array_method(name)
 
     def __dir__(self):
@@ -222,11 +210,8 @@ class FPGAArray(object):
             stderr_log_level=None,
             syslog_log_level=None,
 
-            ioloop=None,
-
             **kwargs):
-        """ Create a hardware map describing CHIME hardware and optionally
-        initialize the hardware.
+        """ Create an FPGAArray; caller must ``await`` :meth:`init` to initialize hardware.
 
         .. centered:: **Hardware map creation parameters**
 
@@ -526,15 +511,17 @@ class FPGAArray(object):
                 network discovery method for that crate type.
 
         """
-        async_init = functools.partial(
-            self.init,
+        # Store constructor args for async init(); do not run hardware init here.
+        self._init_args = ()
+        self._init_kwargs = dict(
             hwm=hwm,
             iceboards=iceboards,
             icecrates=icecrates,
             mezzanines=mezzanines,
             exclude_iceboards=exclude_iceboards,
             ignore_missing_boards=ignore_missing_boards,
-            subarrays=subarrays, ping=ping,
+            subarrays=subarrays,
+            ping=ping,
             mdns_timeout=mdns_timeout,
             platform_firmware_pathname=platform_firmware_pathname,
             no_mezz=no_mezz,
@@ -543,7 +530,9 @@ class FPGAArray(object):
             open=open,
             init=init,
             if_ip=if_ip,
+            udp_retries=udp_retries,
             fpga_ip_addr_fn=fpga_ip_addr_fn,
+            sampling_frequency=sampling_frequency,
             sync_method=sync_method,
             sync_source=sync_source,
             sync_master=sync_master,
@@ -555,7 +544,6 @@ class FPGAArray(object):
             mode=mode,
             frames_per_packet=frames_per_packet,
             chan8_channel_map=chan8_channel_map,
-            sampling_frequency=sampling_frequency,
             tx_power=tx_power,
             integration_period=integration_period,
             autocorr_only=autocorr_only,
@@ -564,42 +552,20 @@ class FPGAArray(object):
             corner_turn_remap_level=corner_turn_remap_level,
             stderr_log_level=stderr_log_level,
             syslog_log_level=syslog_log_level,
-            udp_retries=udp_retries,
             **kwargs)
+        self._ready = False
+        self.ib = None
+        self.ic = None
 
-        if not ioloop:
-            # Create our own IOLoop so we don't interfere with ipython's own ioloop.
-            # old_ioloop = IOLoop.current()
-            # ioloop = IOLoop()
-            # ioloop.make_current()
-            # ioloop.run_sync(init)
-            # old_ioloop.make_current()
-            try:
-                asyncio.run(async_init(), debug=True)
-            except BaseException as e:
-                # print(f'fpga_array: run got exception {e}')  # maybe add message to log?
-                raise
-        else:
-            self._async_init = async_init
-            # old_ioloop = IOLoop.current()
-            # ioloop.make_current()
-            # future = init()
-            # ioloop.add_future(future)
-            # while not future.done():
-            #   print('waiting', future, future.done())
-            #   time.sleep(.3)
-            #   pass
-            # old_ioloop.make_current()
+    async def init(self, *args, **kwargs):
+        if args:
+            raise TypeError('FPGAArray.init() does not take positional arguments')
+        merged_kwargs = {**getattr(self, '_init_kwargs', {}), **kwargs}
+        await self.init_async(**merged_kwargs)
+        self._ready = True
+        return self
 
-        # else:
-        #     old_ioloop = None
-            # old_ioloop = IOLoop.current
-            # IOLoop.set_current(ioloop)
-
-    async def run(self):
-        await self._async_init()
-
-    async def init(
+    async def init_async(
             self,
 
             hwm=None,
@@ -647,8 +613,6 @@ class FPGAArray(object):
             stderr_log_level=None,
             syslog_log_level=None,
 
-            # ioloop=None,
-
             **kwargs):
 
         """
@@ -656,15 +620,6 @@ class FPGAArray(object):
         """
         self.ib = []  # make sure repr() has always something
         self.ic = []
-        self.sync_timestamp = None
-
-        self.max_sync_time_difference = max_sync_time_difference
-        self.tx_power = tx_power
-        self.mode = mode
-
-        self.packet_receiver = None
-        self.corr_recv = None
-        self.data_recv = None
         # Instance shadows of the class-body defaults; ensures a fresh
         # per-array cache state even if the class attributes were ever
         # mutated in some test or debugging session.
@@ -1205,121 +1160,34 @@ class FPGAArray(object):
 
         self.logger.info(f'{self!r}: Done creating {self!r}')
 
-        # Determine if we program and initialize the FPGA based on the mode and the overrides
-        # specified by `prog` , `init` and `open`.
-
-        # translate the `open` parameter into `init`
-        if open is not None and init is None:
-            if open == 0:
-                init = 1  # program FPGA only
-            elif open == 1:
-                init = 3 # full initialization
-
-        if mode:
-            # automatically fully initializes the FPGA unless we
-            # explicitely specify the init (or open) parameter
-            if init is None:
-                init = 3  # full initialization unless specified explicitely
-
-            # automatically program the FPGA if `force` mode (prog=2) unless we
-            # explicitely specify the prog parameter
-            if prog is None:
-                prog = 2  # force FPGA programming
-        else:
-            # No firmware operational mode specified. Do not program or initialize.
-            init = 0
-
-        if self.ib:
-            if init >= 1:
-                ####################################
-                # Program the FPGAs and open communication link to firmware
-                ####################################
-                self.logger.info(f'{self!r}: Configuring FPGAs and connecting to them...')
-                await asyncio.gather(*[
-                    self.prog_and_open_fpga(
-                        mb=mb,
-                        prog=prog,
-                        init=init,
-                        mode=mode,
-                        bitfile=bitfile,
-                        udp_retries=udp_retries,
-                        fpga_ip_addr_fn=fpga_ip_addr_fn,
-                        interface_ip_addr=if_ip,
-                        **mb.extra_args)
-                    for mb in self.ib])
-            self.get_array_methods()  # force a check and update of the array method list since the firmware may have added such methods
-
-
-            if init >= 3: # initialize the FPGA subsystems
-                ################################################
-                # Initialize the FPGA firmware
-                ################################################
-                self.logger.info(f'{self!r}: Initializing FPGA firmware')
-                await asyncio.gather(*[
-                    mb.init_fpga_async(
-                        init=open,
-                        adc_mode=adc_mode,
-                        adc_bandwidth=adc_bandwidth,
-                        sampling_frequency=sampling_frequency,
-                        # group_frames = frames_per_packet,  # Removed because not needed by CRS. is also passed to set_operational_mode
-                        **kwargs
-                    ) for mb in self.ib])
-
-
-            if init >= 3: # initialize the backplane
-                ########################
-                # Initializing backplane hardware communication firmware
-                ########################
-                # The FPGA starts genereting significant heat now that is is initialized.
-                # Let's give the backplane the opportunoty to update the fan speed.
-                self.logger.info(f'{self!r}: Initializing Backplane')
-                if self.ic:
-                    self.ic.init()
-
-            if init >= 3: # configure and initialize the selected operational mode
-
-                if not mode:
-                    raise RuntimeError(f'An operational mode must be specified for init={init}')
-
-                ########################
-                # Initializing SYNC method
-                ########################
-                # As a convenience, unless `sync_method` is explicitely specified,
-                # set default sync method to `irig-b` if *all* boards
-                # are in a crate or to 'local' if we *only* have standalone boards.
-                if sync_method is None:
-                    if all(self.ib.crate):
-                        sync_method = 'irig-b'
-                        self.logger.info(f'{self!r}: sync_method is not specified but was automatically set to "irig-b" since all boards are in crates')
-                    elif not any(self.ib.crate):
-                        sync_method = 'local'
-                        self.logger.info(f'{self!r}: sync_method is not specified but was automatically set to "local" since no board is in a crate')
-                    else:
-                        self.logger.warning(f'{self!r}: Some motherboards are in crates and some are not. `sync_method` is not set.')
-
-
-                if sync_method or sync_source:
-                    self.logger.info(f'{self!r}: Setting SYNC method to {sync_method}')
-                    self.set_sync_method(
-                        method=sync_method,
-                        source=sync_source,
-                        master=sync_master,
-                        master_source=sync_master_source,
-                        master_output=sync_master_output)
-
-                ########################
-                # Initializing operational mode
-                ########################
-                self.set_operational_mode(
-                    mode=mode,
-                    frames_per_packet=frames_per_packet,
-                    chan8_channel_map=chan8_channel_map,
-                    tx_power=tx_power,
-                    integration_period=integration_period,
-                    autocorr_only=autocorr_only,
-                    corner_turn_bad_links=corner_turn_bad_links,
-                    corner_turn_bin_priority=corner_turn_bin_priority,
-                    corner_turn_remap_level=corner_turn_remap_level)
+        await self._run_provider_array_init(
+            platform_firmware_pathname=platform_firmware_pathname,
+            mode=mode,
+            bitfile=bitfile,
+            prog=prog,
+            open=open,
+            init=init,
+            if_ip=if_ip,
+            fpga_ip_addr_fn=fpga_ip_addr_fn,
+            udp_retries=udp_retries,
+            sync_method=sync_method,
+            sync_source=sync_source,
+            sync_master=sync_master,
+            sync_master_source=sync_master_source,
+            sync_master_output=sync_master_output,
+            max_sync_time_difference=max_sync_time_difference,
+            adc_mode=adc_mode,
+            adc_bandwidth=adc_bandwidth,
+            frames_per_packet=frames_per_packet,
+            chan8_channel_map=chan8_channel_map,
+            sampling_frequency=sampling_frequency,
+            tx_power=tx_power,
+            integration_period=integration_period,
+            autocorr_only=autocorr_only,
+            corner_turn_bad_links=corner_turn_bad_links,
+            corner_turn_bin_priority=corner_turn_bin_priority,
+            corner_turn_remap_level=corner_turn_remap_level,
+            **kwargs)
 
         self.print_flush()
 
@@ -1327,70 +1195,36 @@ class FPGAArray(object):
         # Completed array creation and initialization
         #################################
 
-    async def prog_and_open_fpga(self, mb, prog, init, mode, bitfile=None, max_trials=3, **kwargs):
-        """ Try to open communication with the FPGA and reprogram the FPGA and retry a number of
-        times if this fails.
+    async def _run_provider_array_init(self, **init_kwargs):
+        """Delegate firmware-specific initialization to array method providers."""
+        provider_classes = set()
+        for mb in self.ib:
+            provider_classes.update(mb.get_array_method_classes())
 
-        Parameters:
+        if not provider_classes:
+            mode = init_kwargs.get('mode')
+            if mode and self.ib:
+                from pychfpga.fpga_firmware.fpga_firmware import FPGAFirmware
+                bitfile = init_kwargs.get('bitfile')
+                for mb in self.ib:
+                    part_number = getattr(mb, 'part_number', None)
+                    if not part_number:
+                        continue
+                    fw_cls, _, _ = FPGAFirmware.get_firmware(
+                        part_number, mode, bitfile_override=bitfile)
+                    array_method_class = getattr(fw_cls, 'array_method_class', None)
+                    if array_method_class is not None:
+                        provider_classes.add(array_method_class)
 
-            mb: Motherboard object to program and open
-
-
-            init (int): Initialization level
-
-                - 1: program FPGA only (calls set_fpga_bitstream() and creates fpga object)
-                - 2: like init=1, plus connects to FPGA (call open_fpga_async(...))
-
-            prog (int): FPGA bitstream configuration level
-
-                0: do not program the FPGA
-                1: program FPGA only if needed
-                2: always program the FPGA
-
-            mode (str): operational mode. Is needed to find the proper bitstream for the platform
-
-            bitfile (str): If `bitfile` is a path pointing to a directory, override the bitstream
-                 search path (but still uses the default bitstream filename). If `bitfile`  is a
-                 path to a file, use this specific bitstream (mode still has to be specified to
-                 properly initialize the python objects and firmware)
-
-            max_trials (int): Maximun allowed number of reprogramming and retrials before raising an error.
-
-            kwargs: Any extra argument is passed to open_fpga_async(...)
-
-        Exceptions:
-
-            IOError: Raised if the motherboard's open() method still raises
-                an IOError after the maximum number of trials.
-
-        """
-        for trial in range(1, max_trials + 1):
-            if init >= 1 and prog:
-                await mb.set_fpga_bitstream_async(mode, force=(prog > 1) or (trial > 1), bitfile_override=bitfile)
-                self.logger.debug(f'{self!r}: Done configuring FPGAs on {mb!r}')
-
-
-            if init >= 2:
-                try:
-                    self.logger.info(
-                        f'{self!r}: Initializing core FPGA firmware for {mb!r}: '
-                        f'Trial {trial}/{max_trials}.')
-
-                    # Initialize FPGA UDP communications. Overrides
-                    # default parameters that were temporarily set when
-                    # the motherboard handler object was created.
-                    await mb.open_fpga_async(**kwargs)
-                    break
-                except IOError as e:
-                    raise
-                    self.logger.warning(f'{self!r}: Error while initializing core firmware on trial {trial}/{max_trials}. '
-                                        f'Error is: \n{e!r}')
-                    if trial == max_trials:
-                        raise IOError(f'{self!r}: Unable to initializing FPGA core firmware after {trial} trials. Giving up.')
-                    else:
-                        self.logger.warning(f'{self!r}: Reprogramming FPGA and trying again.')
-            else:
+        for cls in provider_classes:
+            provider = self._array_method_instances.get(cls) or cls(self)
+            self._array_method_instances[cls] = provider
+            init_fn = getattr(provider, 'array_init', None)
+            if init_fn is not None:
+                await init_fn(**init_kwargs)
                 break
+
+        self.get_array_methods()
 
     @staticmethod
     def _to_integer(x):
@@ -1625,7 +1459,7 @@ class FPGAArray(object):
 
     def __repr__(self):
         """ Short string representing this object and suitable to use as a tag in a syslog entry"""
-        # ``self.ib`` / ``self.ic`` are populated near the end of ``init()``;
+        # ``self.ib`` / ``self.ic`` are populated near the end of ``init_async()``;
         # before that point we fall back to the live ``HardwareMap`` registry
         # so ``__repr__`` is still useful in early-init log messages.
         # mb = self.ib or Motherboard.get_all_registered_instances() or []
@@ -2081,184 +1915,6 @@ class FPGAArray(object):
             return list(iceboards.keys())
         else:
             return iceboards
-
-    def print_table(self, data=None,
-                    row_labels=None, col_labels=None, corner_label=None,
-                    row_keys=None, col_keys=None,
-                    max_width=180, line_sep=False):
-        """
-        Prints a nicely formatted table of data, where data is a list of column contents.
-        """
-
-        # If we provide no row/col keys, and labels are dict, use the label keys as the row/col keys
-        if col_keys is None:
-            if isinstance(col_labels, dict):
-                col_keys = list(col_labels.keys())
-            elif isinstance(data, dict):  # columns are dicts
-                col_keys = list(data.keys())
-            else:
-                col_keys = list(range(len(data)))
-
-        data = [data[key] for key in col_keys]
-
-        if row_keys is None:
-            if isinstance(row_labels, dict):
-                row_keys = row_labels.keys()
-            else:
-                for col_data in data:
-                    keys = list(col_data.keys()) if isinstance(col_data, dict) else list(range(len(col_data)))
-                    if row_keys is None:
-                        row_keys = keys
-                    elif keys != row_keys:
-                        raise ValueError('Row keys are not identical for every column')
-
-        data = [[col_data[row_key] for row_key in row_keys] for col_data in data]
-
-        if col_labels is None:
-            col_labels = [str(key) for key in col_keys]
-        else:
-            col_labels = [str(label) for label in col_labels]
-        if row_labels is None:
-            row_labels = [str(key) for key in row_keys]
-        else:
-            row_labels = [str(label) for label in row_labels]
-
-        if corner_label is None:
-            corner_label = ''
-
-        col_keys = list(range(len(data)))
-        row_keys = list(range(len(data[0])))
-        col_width = [max([len(line) for cell_data in [col_labels[col]] + data[col]
-                     for line in str(cell_data).splitlines()]) for col in col_keys]
-        row_labels_width = max([len(line) for row_label in [corner_label] + row_labels
-                               for line in row_label.splitlines()])
-        col_labels_height = max([len(label.splitlines()) for label in [corner_label] + col_labels])
-
-        remaining_col_keys = list(col_keys)
-        while remaining_col_keys:
-            block_col_keys = []
-            block_col_width = []
-            while remaining_col_keys:
-                col_key = remaining_col_keys[0]
-                width = col_width[col_key]
-                block_width = row_labels_width + 3 + sum(block_col_width + [width]) + len(block_col_width) * 3 + 3 + 1
-                # print block_col_keys, col_key, block_col_width, width, block_width, max_width
-                if block_width <= max_width:
-                    block_col_keys.append(remaining_col_keys.pop(0))
-                    block_col_width.append(width)
-                else:
-                    break
-
-            line_format = (f'| %-{int(row_labels_width)}s'
-                           + ' | '
-                           + ' | '.join(f'%-{int(width)}s' for width in block_col_width)
-                           + ' |')
-            line_sep_str = '+' + '+'.join(['-' * (width + 2) for width in [row_labels_width] + block_col_width]) + '+'
-
-            print(line_sep_str)
-
-            for i in range(col_labels_height):
-                line_data = [cell.splitlines()[i] if i < len(cell.splitlines()) else ''
-                             for cell in [corner_label] + [col_labels[col_key] for col_key in block_col_keys]]
-                print(line_format % tuple(line_data))
-
-            print(line_sep_str)
-
-            for row_key in row_keys:
-                row_data = [str(cell) for cell in [row_labels[row_key]] + [data[col_key][row_key]
-                            for col_key in block_col_keys]]
-                row_height = max([len(cell.splitlines()) for cell in row_data])
-                for i in range(row_height):
-                    line_data = [cell.splitlines()[i] if i < len(cell.splitlines()) else '' for cell in row_data]
-                    print(line_format % tuple(line_data))
-                if line_sep:
-                    print(line_sep_str)
-
-            if not line_sep:  # Make sure we have a bottom line if we didn't already printed one
-                print(line_sep_str)
-
-            print() # make sure we have a blank line between tables
-
-    def print_iceboard_table(self, func=None, row_labels=None, grid=False, add_serial=True):
-        """
-        func=function
-        func=async function : wll be called concurrently
-        func=data, dict, key is motherboard object
-        """
-
-        if not len(self.ib):
-            print('[ There are no Motherboards in the hardware map ]')
-            return
-
-        # Process func and end up with a dict of {motherboard:cell_text}
-        if func:
-            if isinstance(func, dict):
-                data = func
-            elif hasattr(func, 'async_map'):
-                data = dict(zip(self.ib, func.async_map(self.ib)))
-            else:
-                data = {mb: func(mb) for mb in self.ib}
-        else:
-            data = {mb: '' for mb in self.ib}
-
-        iceboards = list(data.keys())
-
-        if row_labels is None:
-            row_labels = ''
-        if isinstance(row_labels, str):
-            row_labels = [row_labels]
-
-        # Print a table of crate-less (stand-alone) motherboards
-        orphan_iceboards = [mb for mb in iceboards if not mb.crate or not mb.crate.serial]
-        corner_label = 'Standalone\nMotherboards'
-        # col_labels = ['-'] * len(orphan_iceboards)
-        col_labels = [f'Virt. slot {mb.slot}\n{mb.part_number}_SN{mb.serial}\n{mb.hostname}' for mb in orphan_iceboards]
-        # for i, mb in enumerate(orphan_iceboards):
-        #    col_labels[i] += '\n%s' % mb.hostname
-        table = []
-        for mb in orphan_iceboards:
-            # cell = 'SN' + mb.serial + '\n' if add_serial else ''
-            cell = data[mb] if data else ''
-            table.append([cell])  # append single-row column
-        if not any(table):
-            table = []
-        if table:
-            self.print_table(
-                table, row_labels=row_labels, col_labels=col_labels,
-                corner_label=corner_label, line_sep=grid)
-
-        # Create list of unique crates, preserving order. We use the keys of a dict to implement a de-facto ordered set (Python 3 dicts are ordered, sets ar enot)
-        valid_crates = list({mb.crate: None for mb in iceboards if mb.crate and mb.crate.serial}.keys())
-
-        for crate in valid_crates:
-            corner_label = f'{crate.get_string_id()}\nCrate #{crate.crate_number}'
-            slot_range = list(range(1, crate.NUMBER_OF_SLOTS + 1))
-            col_labels = [f'{int(s)}' for s in slot_range]
-
-
-
-            if add_serial:
-                for i, slot in enumerate(slot_range):
-                    col_labels[i] += (f'\nSN {crate.slot[slot].serial}') if slot in crate.slot else '\n-'
-            if add_serial:
-                for i, slot in enumerate(slot_range):
-                    col_labels[i] += (f'\n{crate.slot[slot].hostname}') if slot in crate.slot else '\n-'
-
-            table = []
-            # local_row_labels = [row_labels for crate in valid_crates]
-            for slot in slot_range:
-
-                # col_data = []
-                if slot in crate.slot.keys():
-                    cell = data[crate.slot[slot]] if data else ''
-                else:
-                    cell = '-'
-                # col_data.append(cell)
-                table.append([cell])
-            if table:
-                self.print_table(
-                    table, row_labels=row_labels, col_labels=col_labels,
-                    corner_label=corner_label, line_sep=grid)
 
 
 log_levels = {'info': logging.INFO,

@@ -394,7 +394,7 @@ class FPGAMaster(object):
         # If not done explicitely later, we must issue sync command after starting raw data capture,
         # otherwise raw frames will not be synced across boards.
         if capture_period and sync:
-            self.fpgas.sync()
+            await self.fpgas.sync()
 
 
     async def set_fpga_data_capture(self, targets=None, capture_rate=23, source=None):
@@ -1280,8 +1280,8 @@ class FPGAMaster(object):
         # in the parameters, the FPGAs will be loaded with their bitstream, communication with the FPGAs
         # will be established and all the Python objects needed to operate the FPGA firmware will be
         # created and initialized.
-        self.fpgas = ca = fpga_array.FPGAArray(ioloop=True, **fpga_array_params)  # Starts an independent ioloop while initializing. Web clients/server stop while
-        await ca.run()
+        self.fpgas = ca = fpga_array.FPGAArray(**fpga_array_params)
+        await ca.init()
 
         self.register_hardware()
 
@@ -1388,14 +1388,14 @@ class FPGAMaster(object):
         self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% This is the last SYNC %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
         if conf.fpga.sync_params.enable:
             # Use config params
-            ca.sync(**conf.fpga.sync_params)
+            await ca.sync(**conf.fpga.sync_params)
         else:
             # Use default params
-            ca.sync()
+            await ca.sync()
         self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Last SYNC is done %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 
         # save the time of frame0 after sync
-        self.frame0_irigb_time = self.fpgas.sync_timestamp
+        self.frame0_irigb_time = self.fpgas.get_sync_timestamp()
 
 
         #######
@@ -1406,7 +1406,7 @@ class FPGAMaster(object):
         # Clear errors accumulated during start and initialization
         self.log.info("Resetting FPGA statistics counters")
         self.reset_fpga_stats()
-        if ca.mode in ['shuffle16', 'shuffle128', 'shuffle256', 'shuffle512']: # FIXME. Temporary hack to bypass crossbar and bp_shuffle stats for CRS platform.
+        if ca.get_operational_mode() in ['shuffle16', 'shuffle128', 'shuffle256', 'shuffle512']: # FIXME. Temporary hack to bypass crossbar and bp_shuffle stats for CRS platform.
             self.reset_crossbar_stats()
             self.reset_bp_shuffle_stats()
 
@@ -1476,11 +1476,11 @@ class FPGAMaster(object):
 
             # Setup channelizers and data capture for raw FFT data
             self.log.info('Setting up channelizers for Scaler capture')
-            ca.set_channelizers(data_source = 'adc', fft_bypass = False, scaler_bypass = False, offset_binary_encoding = False)
-            ca.start_data_capture(0.03, source='scaler', mode = 0, channels = list(range(8)), data_type = 'fft_4bit', select = True, sync = False)
+            await ca.set_channelizers(data_source = 'adc', fft_bypass = False, scaler_bypass = False, offset_binary_encoding = False)
+            await ca.start_data_capture(0.03, source='scaler', mode = 0, channels = list(range(8)), data_type = 'fft_4bit', select = True, sync = False)
             
             # Synchronize the crate again to ensure all frames are synchronized
-            # ca.sync()
+            # await ca.sync()
             
             # Capture data
             self.log.info('Gathering Scaler data')
@@ -2409,7 +2409,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
 
                         frame_number, gps_ts = await self.fpga_master.fpgas.ib[0].capture_frame_time_async(format='raw')
 
-                        frame0_ts = self.fpga_master.fpgas.sync_timestamp
+                        frame0_ts = self.fpga_master.fpgas.get_sync_timestamp()
 
                         self._gps_time = dict(
                             frame_number=frame_number,  # 48-bit frame number
@@ -2463,9 +2463,9 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
 
         """
         if (self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas and
-            self.fpga_master.fpgas.sync_timestamp):
+            self.fpga_master.fpgas.get_sync_timestamp()):
 
-            frame0_ts = self.fpga_master.fpgas.sync_timestamp
+            frame0_ts = self.fpga_master.fpgas.get_sync_timestamp()
 
             gps_time = dict(start_ctime=self.fpga_master.start_time,
                             frame0_time=frame0_ts.time_struct,
@@ -2848,7 +2848,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         """
         if self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas:
             self.log.info(f'{self!r}: received sync() request')
-            self.fpga_master.fpgas.sync()
+            await self.fpga_master.fpgas.sync()
             self.log.info(f'{self!r}: sync() done')
 
 

@@ -12,14 +12,227 @@ import time
 import numpy as np
 
 from pychfpga.common.array_methods import ArrayMethods
+from pychfpga.common.raw_frame_receiver import RawFrameReceiver
+from pychfpga.common.state import State
 from pychfpga.common.udp_packet_receiver import UDPPacketReceiver
+from pychfpga.common.tcp_packet_receiver import TCPPacketReceiver
 
 
 class chFPGAArrayMethods(ArrayMethods):
     """Array-wide methods for chFPGA firmware arrays."""
 
+    def __init__(self, fpga_array):
+        super().__init__(fpga_array)
+        self._sync_timestamp = None
+        self._sync_timestamps = None
+        self._sync_start_time = None
+        self._sync_method = None
+        self._sync_master = None
+        self._max_sync_time_difference = 100
+        self._mode = None
+        self._tx_power = None
+        self._packet_receiver = None
+        self._data_recv = None
+        self._corr_recv = None
 
-    def sync(self, delay=2 - 0.006556800, check=True, align_to_seconds=True, max_trials=3, max_sync_time_difference=None):
+    def get_sync_timestamp(self):
+        """Frame-0 IRIG-B time after the last successful sync, or None."""
+        return self._sync_timestamp
+
+    def get_sync_timestamps(self):
+        """Per-board timestamps from the last sync, or None."""
+        return self._sync_timestamps
+
+    def get_sync_start_time(self):
+        """Trigger time(s) programmed during the last IRIG-B sync."""
+        return self._sync_start_time
+
+    def get_sync_method(self):
+        """Current array sync method string, or None if unset."""
+        return self._sync_method
+
+    def get_operational_mode(self):
+        """Current operational mode string, or None if unset."""
+        return self._mode
+
+    async def array_init(
+            self,
+            *,
+            platform_firmware_pathname=None,
+            mode=None,
+            bitfile=None,
+            prog=None,
+            open=None,
+            init=None,
+            if_ip=None,
+            fpga_ip_addr_fn=None,
+            udp_retries=10,
+            sync_method=None,
+            sync_source=None,
+            sync_master=None,
+            sync_master_source=None,
+            sync_master_output=None,
+            max_sync_time_difference=100,
+            adc_mode=0,
+            adc_bandwidth=2,
+            frames_per_packet=2,
+            chan8_channel_map=None,
+            sampling_frequency=None,
+            tx_power=None,
+            integration_period=None,
+            autocorr_only=None,
+            corner_turn_bad_links=None,
+            corner_turn_bin_priority=None,
+            corner_turn_remap_level=0,
+            **kwargs):
+        """Initialize chFPGA firmware after the hardware map is complete."""
+        self.ib = self.fpga_array.ib
+        self.ic = getattr(self.fpga_array, 'ic', None)
+
+        self._max_sync_time_difference = max_sync_time_difference
+        self._mode = mode
+        self._tx_power = tx_power
+
+        if not self.ib:
+            return
+
+        # platform_firmware_groups = {}
+        # for mb in self.ib:
+        #     if mb.hostname:
+        #         platform_firmware_groups.setdefault(mb.__class__, []).append(mb)
+        # if platform_firmware_groups:
+        #     platform_names = ', '.join(cls.__name__ for cls in platform_firmware_groups)
+        #     self.logger.debug(
+        #         f'{self!r}: Loading platform firmware on the following '
+        #         f'motherboards as needed: {platform_names}')
+        #     for board_cls, boards in platform_firmware_groups.items():
+        #         await board_cls.set_platform_firmware(
+        #             boards=boards,
+        #             firmware_pathname=platform_firmware_pathname)
+
+        if open is not None and init is None:
+            if open == 0:
+                init = 1
+            elif open == 1:
+                init = 3
+
+        if mode:
+            if init is None:
+                init = 3
+            if prog is None:
+                prog = 2
+        else:
+            init = 0
+
+        if init >= 1:
+            self.logger.info(
+                f'{self.fpga_array!r}: Configuring FPGAs and connecting to them...')
+            await asyncio.gather(*[
+                self._prog_and_open_fpga(
+                    mb=mb,
+                    prog=prog,
+                    init=init,
+                    mode=mode,
+                    bitfile=bitfile,
+                    udp_retries=udp_retries,
+                    fpga_ip_addr_fn=fpga_ip_addr_fn,
+                    interface_ip_addr=if_ip,
+                    **mb.extra_args)
+                for mb in self.ib])
+
+        self.fpga_array.get_array_methods()
+
+        if init >= 3:
+            self.logger.info(f'{self.fpga_array!r}: Initializing FPGA firmware')
+            await asyncio.gather(*[
+                mb.init_fpga_async(
+                    init=open,
+                    adc_mode=adc_mode,
+                    adc_bandwidth=adc_bandwidth,
+                    sampling_frequency=sampling_frequency,
+                    **kwargs)
+                for mb in self.ib])
+
+        if init >= 3:
+            self.logger.info(f'{self.fpga_array!r}: Initializing Backplane')
+            if self.ic:
+                self.ic.init()
+
+        if init >= 3:
+            if not mode:
+                raise RuntimeError(
+                    f'An operational mode must be specified for init={init}')
+
+            if sync_method is None:
+                if all(self.ib.crate):
+                    sync_method = 'irig-b'
+                    self.logger.info(
+                        f'{self.fpga_array!r}: sync_method is not specified but was '
+                        f'automatically set to "irig-b" since all boards are in crates')
+                elif not any(self.ib.crate):
+                    sync_method = 'local'
+                    self.logger.info(
+                        f'{self.fpga_array!r}: sync_method is not specified but was '
+                        f'automatically set to "local" since no board is in a crate')
+                else:
+                    self.logger.warning(
+                        f'{self.fpga_array!r}: Some motherboards are in crates and '
+                        f'some are not. `sync_method` is not set.')
+
+            if sync_method or sync_source:
+                self.logger.info(
+                    f'{self.fpga_array!r}: Setting SYNC method to {sync_method}')
+                await self.set_sync_method(
+                    method=sync_method,
+                    source=sync_source,
+                    master=sync_master,
+                    master_source=sync_master_source,
+                    master_output=sync_master_output)
+
+            await self.set_operational_mode(
+                mode=mode,
+                frames_per_packet=frames_per_packet,
+                chan8_channel_map=chan8_channel_map,
+                tx_power=tx_power,
+                integration_period=integration_period,
+                autocorr_only=autocorr_only,
+                corner_turn_bad_links=corner_turn_bad_links,
+                corner_turn_bin_priority=corner_turn_bin_priority,
+                corner_turn_remap_level=corner_turn_remap_level)
+
+    async def _prog_and_open_fpga(
+            self, mb, prog, init, mode, bitfile=None, max_trials=3, **kwargs):
+        """Program and open communication with one motherboard's FPGA."""
+        for trial in range(1, max_trials + 1):
+            if init >= 1 and prog:
+                await mb.set_fpga_bitstream_async(
+                    mode, force=(prog > 1) or (trial > 1), bitfile_override=bitfile)
+                self.logger.debug(
+                    f'{self.fpga_array!r}: Done configuring FPGAs on {mb!r}')
+
+            if init >= 2:
+                try:
+                    self.logger.info(
+                        f'{self.fpga_array!r}: Initializing core FPGA firmware for {mb!r}: '
+                        f'Trial {trial}/{max_trials}.')
+                    await mb.open_fpga_async(**kwargs)
+                    break
+                except IOError:
+                    raise
+                    self.logger.warning(
+                        f'{self.fpga_array!r}: Error while initializing core firmware on '
+                        f'trial {trial}/{max_trials}.')
+                    if trial == max_trials:
+                        raise IOError(
+                            f'{self.fpga_array!r}: Unable to initializing FPGA core firmware '
+                            f'after {trial} trials. Giving up.')
+                    else:
+                        self.logger.warning(
+                            f'{self.fpga_array!r}: Reprogramming FPGA and trying again.')
+            else:
+                break
+
+    async def sync(self, delay=2 - 0.006556800, check=True, align_to_seconds=True, max_trials=3, max_sync_time_difference=None):
         """Generate a SYNC event across the whole array.
 
         Parameters:
@@ -52,11 +265,11 @@ class chFPGAArrayMethods(ArrayMethods):
                 if check:
                     sync_ctr_before = self.ib.REFCLK.SYNC_CTR
 
-                self.sync_timestamps = []
-                self.sync_timestamp = None
+                self._sync_timestamps = []
+                self._sync_timestamp = None
 
-                if self.sync_method in self.TRIG_SYNC_METHODS:
-                    self.sync_master.generate_sync()
+                if self._sync_method in self.TRIG_SYNC_METHODS:
+                    self._sync_master.generate_sync()
 
                 # elif self.sync_method == 'centralized_time_trigger':
                 #     dt = self.sync_master.get_irigb_time_sync()
@@ -67,17 +280,17 @@ class chFPGAArrayMethods(ArrayMethods):
                 #         if time.time() - t0 > delay + 1:
                 #             raise RuntimeError('Timout while waiting for the IRIG-B-based SYNC to complete')
 
-                elif self.sync_method in self.IRIGB_SYNC_METHODS:
+                elif self._sync_method in self.IRIGB_SYNC_METHODS:
                     # Estimate how much time it takes to set the trigger time
-                    dt = self.ib[0].get_irigb_time_sync()
+                    dt = await self.ib[0].get_irigb_time_async()
                     t0 = time.time()
                     # set the trigger far enough in time it should not happen before we reprogram another delay
-                    self.ib.set_irigb_trigger_time_sync(dt, delay=300)
+                    await asyncio.gather(*self.ib.set_irigb_trigger_time_async(dt, delay=300))
                     setting_time = (time.time() - t0)
                     self.logger.info(f'{self!r}: It takes {setting_time:0.3f} seconds to set the trigger time across the array')
                     setting_time = round(2 * setting_time)
                     # Now set the trigger time using that delay
-                    dt = self.ib[0].get_irigb_time_sync()
+                    dt = await self.ib[0].get_irigb_time_async()
                     if align_to_seconds:
                         self.logger.info(f'{self!r}: Rounding trigger time to the second')
                         dt = dt.replace(microsecond=0)
@@ -88,22 +301,25 @@ class chFPGAArrayMethods(ArrayMethods):
                         sync_time = []
                         for mb,dly in zip(self.ib, delay):
                             self.logger.info(f'{self!r}: Triggering SYNC on {mb!r} {setting_time+dly:0.9f} seconds after {dt.isoformat()}')
-                            sync_time.append(mb.set_irigb_trigger_time_sync(dt, delay=setting_time+dly))
-                        self.sync_start_time = sync_time
+                            sync_time.append(await mb.set_irigb_trigger_time_async(dt, delay=setting_time+dly))
+                        self._sync_start_time = sync_time
                     else:
                         max_delay = delay
                         self.logger.info(f'{self!r}: Triggering SYNC {setting_time+delay:0.9f} seconds after {dt.isoformat()}')
-                        self.sync_start_time = sync_time = self.ib.set_irigb_trigger_time_sync(dt, delay=setting_time+delay)
+                        self._sync_start_time = sync_time = await asyncio.gather(
+                            *self.ib.set_irigb_trigger_time_async(dt, delay=setting_time+delay))
                     self.logger.info(f'{self!r}: It took {time.time() - t0:0.3f} seconds to set the final trigger time')
                     t0 = time.time()
-                    # for _ in range(30):
-                    while any(self.ib.is_irigb_before_trigger_time_async()):
-                        #     print(f'trig={any(self.ib.is_irigb_before_trigger_time_async())}, sync={self.ib.REFCLK.SYNC_CTR}')
+                    while True:
+                        still_waiting = await asyncio.gather(
+                            *self.ib.is_irigb_before_trigger_time_async())
+                        if not any(still_waiting):
+                            break
                         if time.time() - t0 > max_delay + 1:
                             raise RuntimeError('Timout while waiting for the IRIG-B-based SYNC to complete')
-                        time.sleep(0.1)
-                    time.sleep(0.1) # make sure the sync sequence has time to finish
-                elif self.sync_method in self.LOCAL_SYNC_METHODS:
+                        await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.1)  # make sure the sync sequence has time to finish
+                elif self._sync_method in self.LOCAL_SYNC_METHODS:
                     self.ib.sync()
                 # elif self.sync_method == 'external':
                 #     # Wait until one of the board sees a trig. We assume all
@@ -115,7 +331,7 @@ class chFPGAArrayMethods(ArrayMethods):
                 #             raise RuntimeError('Timout while waiting for the external sync signal')
                 else:
                     valid_methods = ', '.join((self.IRIGB_SYNC_METHODS[0], self.TRIG_SYNC_METHODS[0], self.LOCAL_SYNC_METHODS[0]))
-                    raise ValueError(f"Unknown syncing method '{self.sync_method}'. Valid methods are {valid_methods}")
+                    raise ValueError(f"Unknown syncing method '{self._sync_method}'. Valid methods are {valid_methods}")
 
                 # Check if all boards of the array have sync'ed by looking at the sync counter
                 if check:
@@ -125,9 +341,10 @@ class chFPGAArrayMethods(ArrayMethods):
                         bad_boards_str = ','.join(repr(mb) for mb in bad_mb)
                         raise RuntimeError(f'The following IceBoards did not SYNC properly: {bad_boards_str}')
 
-                if self.sync_method in self.IRIGB_SYNC_METHODS:
-                    self.sync_timestamps = ts = self.ib.get_irigb_time_sync(trig=False, format='raw')
-                    self.sync_timestamp = ts[0]
+                if self._sync_method in self.IRIGB_SYNC_METHODS:
+                    self._sync_timestamps = ts = Ccoll(await asyncio.gather(
+                        *self.ib.get_irigb_time_async(trig=False, format='raw')))
+                    self._sync_timestamp = ts[0]
 
                     delta_ts = max(ts.nano) - min(ts.nano)
                     irigb_times = '\n'.join(
@@ -137,7 +354,8 @@ class chFPGAArrayMethods(ArrayMethods):
                         for i, mb in enumerate(self.ib))
                     self.logger.info(f'{self!r}: The IRIG-B time for Frame 0 on all boards is:\n{irigb_times}')
                     self.logger.info(f'{self!r}: The maximum Frame 0 time difference is {delta_ts} ns')
-                    max_sync_time_difference = max_sync_time_difference or self.max_sync_time_difference
+                    max_sync_time_difference = (
+                        max_sync_time_difference or self._max_sync_time_difference)
                     if delta_ts > max_sync_time_difference:
                         raise RuntimeError(f'The Frame 0 time difference of {delta_ts} '
                                            f'exceeds the maximum limit of {max_sync_time_difference}')
@@ -799,7 +1017,7 @@ class chFPGAArrayMethods(ArrayMethods):
         return freq_remap
 
 
-    def set_operational_mode(self,
+    async def set_operational_mode(self,
                              mode,
                              frames_per_packet=1,
                              send_flags=True,
@@ -889,15 +1107,19 @@ class chFPGAArrayMethods(ArrayMethods):
 
         """
         # use defaults that were set during initialization unless overriden
-        mode = mode or self.fpga_array.mode
-        tx_power = tx_power or self.fpga_array.tx_power
+        mode = mode or self._mode
+        tx_power = tx_power or self._tx_power
+        if mode is not None:
+            self._mode = mode
+        if tx_power is not None:
+            self._tx_power = tx_power
         self.logger.info(f'{self.fpga_array!r}: Setting operational mode to {mode}')
 
         # To make sure that the data acquisition and transmission will be done
         # at the same rate, refuse to operate if
         #   - an Iceboard that is in a crate is not using the backplane clock
         #   - an iceboard that is not in a crate is using the backplane clock
-        clock_sources = self.ib.get_iceboard_clock_source_async()
+        clock_sources = await asyncio.gather(*self.ib.get_iceboard_clock_source_async())
         bad_clock_source_without_crate = [i for i, source in enumerate(clock_sources) if not self.ib[i].crate and source == 'CLOCK_SOURCE_BP']
         bad_clock_source_with_crate = [i for i, source in enumerate(clock_sources) if self.ib[i].crate and source != 'CLOCK_SOURCE_BP']
 
@@ -929,7 +1151,7 @@ class chFPGAArrayMethods(ArrayMethods):
                 for lane, stream_id in enumerate(stream_ids):
                     self.fpga_array.corner_turn_stream_ids[mb.get_id(lane)] = stream_id
             # Sync board(s)
-            self.sync()
+            await self.sync()
 
         elif mode in ('shuffle8',):
             # For use with the CRS
@@ -944,7 +1166,7 @@ class chFPGAArrayMethods(ArrayMethods):
             self.ib.CROSSBAR3.TIMEOUT_PERIOD = 0
             self.ib.BP_SHUFFLE.reset_rx_equalizers()
 
-            self.init_corner_turn(
+            await self.init_corner_turn(
                 mode=mode,
                 frames_per_packet=frames_per_packet,
                 send_flags=send_flags,
@@ -974,13 +1196,13 @@ class chFPGAArrayMethods(ArrayMethods):
             if integration_period:
                 self.ib.start_correlator(integration_period=integration_period, autocorr_only=autocorr_only)
             # Sync board(s)
-            self.sync()
+            await self.sync()
         else:
             raise ValueError(f"Unknown operational mode '{mode}'")
 
     
 
-    def init_corner_turn(
+    async def init_corner_turn(
             self,
             mode,
             dsmap=list(range(16)),
@@ -1155,7 +1377,7 @@ class chFPGAArrayMethods(ArrayMethods):
 
         self.logger.info(f'{self.fpga_array!r}: Shuffling initialization completed.')
         if sync:
-            self.sync()
+            await self.sync()
 
     def set_tx_power(self, default_power=(5, 10), lane_group=None, exceptions=[], index=0):
         """ Set the power level of the corner-turn engine GTX transmitters.
@@ -1228,76 +1450,152 @@ class chFPGAArrayMethods(ArrayMethods):
         """
         Return a UDP socket that receives the raw/correlator data, and setup all boards to use that same socket.
 
-        If the socket does not already exists, the FPGA will be configured to send the data to the returned socket.
-
-        Parameters:
-
-            port_number (int): Port number to use:
-                - If ``None``, attempts to open a socket at the destination port currently programmed in the FPGA. If that port is zero, act as if ``port_number`` =0.
-                - If zero, open a socket at a random  (OS-provided) port, and set the corresponding destination port in the FPGA.
-                - If non-zero, get a socket bound to the specified port. An exception will be raised if that port is already used by another program.
-
-        Returns:
-
-            socket.socket(): a UDP socket.
+        Prefer :meth:`get_data_socket_async` when an event loop is already running.
         """
-        # get socket from one board in the array
-        sock = self.ib[0].get_data_socket(port_number=port_number)
+        from pychfpga.common.async_utils import run_async
+        return run_async(self.get_data_socket_async(port_number=port_number))
+
+    async def get_data_socket_async(self, port_number=None):
+        """Async variant of :meth:`get_data_socket`."""
+        sock = await self.ib[0].get_data_socket_async(port_number=port_number)
         for b in self.ib:
-            b.set_data_socket(sock)
+            await b.set_data_socket_async(sock)
         return sock
 
+    def get_tcp_data_sockets(self, port_number=None, rcvbuf=8 * 1024 * 1024, force=False):
+        """Return TCP sockets connected to each board's data listen port.
 
-    def get_packet_receiver(self, port_number=None):
-        """ Returns an existing UDP packet receiver or create a new one if none has been created yet.
+        Delegates to each board's :meth:`~chFPGA.get_tcp_data_socket` (cached there).
+        The board listens on a fixed well-known port; no TCPipe register is programmed.
 
-        Parameters:
+        Parameters
+        ----------
+        port_number : int or None
+            Board listen port. ``None`` uses :attr:`TCPipe.DEFAULT_TCP_DATA_PORT`.
+        rcvbuf : int
+            ``SO_RCVBUF`` size so the kernel can absorb bursts between
+            ``receive_packets`` / process calls.
+        force : bool
+            If True, discard cached sockets and reconnect (needed after control
+            TCP reconnect closes DATA_TCP on the board).
 
-            port_number (int): Specifies the port to use if a socket has not already been allocated.
+        Returns
+        -------
+        list[socket.socket]
+            One connected TCP socket per board in ``self.ib`` order.
+        """
+        return [
+            b.get_tcp_data_socket(port_number=port_number, rcvbuf=rcvbuf, force=force)
+            for b in self.ib
+        ]
+
+    def get_packet_receiver(
+        self, port_number=None, *, tcp=False, rcvbuf=8 * 1024 * 1024, force=False
+    ):
+        """Return the shared packet receiver (UDP or TCP), creating it if needed.
+
+        Only one transport is active. If a receiver already exists, it must match
+        the requested ``tcp`` mode or a ``RuntimeError`` is raised.
+
+        Parameters
+        ----------
+        port_number : int or None
+            For UDP: 
                 - If ``None``, attempts to open a socket at the destination port currently programmed in the FPGA. If that port is zero, act as if ``port_number`` =0.
                 - If zero, open a socket at a random  (OS-provided) port, and set the corresponding destination port in the FPGA.
                 - If non-zero, get a socket bound to the specified port. An exception will be raised if that port is already used by another program.
+            For TCP: board listen port (``None`` = default).
+        tcp : bool
+            If True, create a :class:`~pychfpga.common.tcp_packet_receiver.TCPPacketReceiver`.
+            If False, create a :class:`~pychfpga.common.udp_packet_receiver.UDPPacketReceiver`.
+        rcvbuf : int
+            TCP ``SO_RCVBUF`` when ``tcp=True``.
+        force : bool
+            If True, discard the cached receiver (and reconnect TCP data sockets).
+            Needed after control TCP drops, which closes DATA_TCP on the board.
 
-        Returns:
-
-            UDPPacketReceiver instance
+        Returns
+        -------
+        UDPPacketReceiver or TCPPacketReceiver
         """
-        if not self.fpga_array.packet_receiver:
+        want_tcp = bool(tcp)
+        if force:
+            self._packet_receiver = None
+        if self._packet_receiver is not None:
+            have_tcp = isinstance(self._packet_receiver, TCPPacketReceiver)
+            if have_tcp != want_tcp:
+                have = "TCP" if have_tcp else "UDP"
+                want = "TCP" if want_tcp else "UDP"
+                raise RuntimeError(
+                    f"{self!r}: packet receiver is already {have}, cannot switch to {want}"
+                )
+            return self._packet_receiver
+
+        if want_tcp:
+            socks = self.get_tcp_data_sockets(
+                port_number=port_number, rcvbuf=rcvbuf, force=True
+            )
+            self._packet_receiver = TCPPacketReceiver(socks)
+        else:
             sock = self.get_data_socket(port_number=port_number)
-            self.fpga_array.packet_receiver = UDPPacketReceiver(sock) # ***todo: move packet receiver to utils (can be used by raw capture also)
-        return self.fpga_array.packet_receiver
+            self._packet_receiver = UDPPacketReceiver(sock)
+        return self._packet_receiver
 
-    def get_data_receiver(self, port_number=None):
-        """ Returns a raw data receiver.
+    def get_data_receiver(self, port_number=None, tcp=False, force=False, **kwargs):
+        """ Returns a raw data receiver for the whole array.
 
-        A UDP packet receiver and associated socket will be created if none already exist, otherwise the existing ones will be reused.
-        The correlator packet receiver and the raw data receiver share the same socket and UDP packet receiver.
+        A packet receiver and associated socket(s) will be created if none
+        already exist, otherwise the existing ones will be reused.
+        The correlator packet receiver and the raw data receiver share the same
+        packet receiver (UDP or TCP — not both).
+
+        The receiver is configured from :meth:`get_receiver_config`, which
+        aggregates board configs (concatenated ``stream_ids``, otherwise
+        identical attributes).
 
 
         Parameters:
 
-            port_number (int): Specifies the port to use if a socket has not already been allocated for the UDP packet receiver.
-                - If ``None``, attempts to open a socket at the destination port currently programmed in the FPGA. If that port is zero, act as if ``port_number`` =0.
-                - If zero, open a socket at a random  (OS-provided) port, and set the corresponding destination port in the FPGA.
-                - If non-zero, get a socket bound to the specified port. An exception will be raised if that port is already used by another program.
+            port_number (int): Specifies the port to use if a socket has not already been allocated for the packet receiver.
+                - For UDP (``tcp=False``):
+                    - If ``None``, attempts to open a socket at the destination port currently programmed in the FPGA. If that port is zero, act as if ``port_number`` =0.
+                    - If zero, open a socket at a random (OS-provided) port, and set the corresponding destination port in the FPGA.
+                    - If non-zero, get a socket bound to the specified port. An exception will be raised if that port is already used by another program.
+                - For TCP (``tcp=True``): board listen port; ``None`` uses the default TCPipe TCP data port.
+            tcp (bool): If ``False`` (default), use UDP (:class:`~pychfpga.common.udp_packet_receiver.UDPPacketReceiver`).
+                If ``True``, use TCP (:class:`~pychfpga.common.tcp_packet_receiver.TCPPacketReceiver`).
+            force (bool): If ``True``, discard cached packet/data receivers and reconnect
+                TCP data sockets (call on array reinit).
+            **kwargs: Forwarded to :class:`~pychfpga.common.raw_frame_receiver.RawFrameReceiver`
+                when creating the receiver (e.g. ``verbose``, ``ring_buffer_size``).
 
         Returns:
 
-            A PROBER or UCAP data receiver instance (RawFrameReceiver)
+            :class:`~pychfpga.common.raw_frame_receiver.RawFrameReceiver`
         """
+        fw = self.get_receiver_config()
 
-        if not self.fpga_array.data_recv:
-            pr = self.get_packet_receiver(port_number=port_number)
-            self.fpga_array.data_recv = self.ib[0].UCAP.get_data_receiver(pr)
-        return self.fpga_array.data_recv
+        if force:
+            self._data_recv = None
+            self._packet_receiver = None
 
-    def start_data_capture(self, *args, sync=None, **kwargs):
+        if not self._data_recv:
+            pr = self.get_packet_receiver(port_number=port_number, tcp=tcp, force=force)
+            self._data_recv = RawFrameReceiver(pr, config=fw.raw, **kwargs)
+        else:
+            # Ensure an existing packet receiver matches the requested transport.
+            self.get_packet_receiver(port_number=port_number, tcp=tcp)
+            self._data_recv.update_config(fw.raw)
+            self._data_recv.current_row = 0
+        return self._data_recv
+
+    async def start_data_capture(self, *args, sync=None, **kwargs):
         """ Starts data capture on all channelizers of all boards in the array
         """
         for b in self.ib:
             b.start_data_capture(*args, **kwargs)
         if sync:
-            self.sync()
+            await self.sync()
 
     def get_corr_receiver(self, port_number=None):
         """ Returns a correlator packet receiver.
@@ -1318,21 +1616,12 @@ class chFPGAArrayMethods(ArrayMethods):
             UCorrFrameReceiver instance
         """
 
-        def select_func(cr):
-            for b in self.ib:
-                b.CORR.select()
+        corr_config = self.ib[0].CORR.get_config()
 
-            self.ib[0].CORR.get_bin_map()
-            corr_config = self.ib[0].CORR.config
-            cr.update_config(corr_config)
-
-        self.ib[0].CORR.get_bin_map()
-        corr_config = self.ib[0].CORR.config
-
-        if not self.fpga_array.corr_recv:
+        if not self._corr_recv:
             pr = self.get_packet_receiver(port_number=port_number)
-            self.fpga_array.corr_recv = self.ib[0].CORR.get_corr_receiver(packet_receiver=pr, config=corr_config, pre_func=select_func)
-        return self.fpga_array.corr_recv
+            self._corr_recv = self.ib[0].CORR.get_corr_receiver(packet_receiver=pr, config=corr_config)
+        return self._corr_recv
 
 
     def start_correlators(self, integration_period, autocorr_only=False, no_accum=False,
@@ -1896,7 +2185,7 @@ class chFPGAArrayMethods(ArrayMethods):
 
     def test_sync(self):
         c = list(self.ib)
-        sync_board = self.fpga_array.sync_master
+        sync_board = self._sync_master
 
         sync_ctr = np.zeros(len(c), dtype=int)
         for i, bb in enumerate(c):
@@ -2900,7 +3189,7 @@ class chFPGAArrayMethods(ArrayMethods):
 
         # Command errors
 
-        sync_timestamps = getattr(self, 'sync_timestamps', None)
+        sync_timestamps = self._sync_timestamps
         if sync_timestamps:
             for i, mb in enumerate(self.ib):
                 try:
@@ -3152,7 +3441,7 @@ class chFPGAArrayMethods(ArrayMethods):
     TRIG_SYNC_METHODS = ('trig',  'centralized_soft_trigger')
     LOCAL_SYNC_METHODS = ('local', 'local_soft_trigger')
 
-    def set_sync_method(self, method='irig-b', source=None, master=None, master_source=None, master_output=0):
+    async def set_sync_method(self, method='irig-b', source=None, master=None, master_source=None, master_output=0):
         """ Sets the global syncing method, and setup the boards accordingly.
 
         Parameters:
@@ -3211,8 +3500,8 @@ class chFPGAArrayMethods(ArrayMethods):
                 self.ib.GPIO.BP_GPIO_INT_EN = 0
                 master.GPIO.BP_GPIO_INT_EN = 1
 
-        self.sync_master = master
-        self.sync_method = method
+        self._sync_master = master
+        self._sync_method = method
 
         if source == 'bp_gpio_int' and not master:
             raise RuntimeError('A master board should be specified when bp_gpio_int is used as a source')
@@ -3220,7 +3509,7 @@ class chFPGAArrayMethods(ArrayMethods):
         if method in self.IRIGB_SYNC_METHODS: # REFCLK trigs on the output of the IRIG-B time comparator
             source = source or 'bp_time'
             self.ib.set_sync_source('irigb')
-            self.ib.set_irigb_source_sync(source)
+            await asyncio.gather(*self.ib.set_irigb_source_async(source))
         # elif method == 'centralized_time_trigger':
         #     source = source or 'bp_time'
         #     # if not master or not master_source:
@@ -3247,7 +3536,7 @@ class chFPGAArrayMethods(ArrayMethods):
 
 
 
-    def set_channelizers(self, channels=None, local_sync=None, sync=True, **kwargs):
+    async def set_channelizers(self, channels=None, local_sync=None, sync=True, **kwargs):
         """
         Configures all channelizers in the array.
 
@@ -3258,7 +3547,7 @@ class chFPGAArrayMethods(ArrayMethods):
         for mb in self.ib:
             mb.set_channelizer(**kwargs, channels=channels, local_sync=False)
         if sync:
-            self.sync()
+            await self.sync()
 
     async def set_channelizers_async(self, channels=None, local_sync=None, sync=True, **kwargs):
         """
@@ -3272,7 +3561,7 @@ class chFPGAArrayMethods(ArrayMethods):
             mb.set_channelizer(**kwargs, channels=channels, local_sync=False)
             await asyncio.sleep(0)
         if sync:
-            self.sync()
+            await self.sync()
 
     def set_noise_injection(
             self,
@@ -3385,3 +3674,76 @@ class chFPGAArrayMethods(ArrayMethods):
             self.logger.warning(f'{self!r}: Stream IDs are not unique!')
 
         return stream_id_map
+
+    def get_receiver_config(self):
+        """Aggregate board receiver configs into one array-wide config.
+
+        Calls each board's ``get_receiver_config()`` and returns a single
+        :class:`~pychfpga.common.state.State` with the same structure as a
+        single-board result. Board ``raw.stream_ids`` are concatenated (must be
+        unique across the array); every other attribute must be identical on
+        all boards.
+
+        Returns:
+            State with ``raw`` and ``corr`` subtrees.
+
+        Raises:
+            RuntimeError: If the array has no boards.
+            ValueError: If ``stream_ids`` are not unique, or if any other
+                config attribute differs between boards.
+        """
+        boards = list(self.ib)
+        if not boards:
+            raise RuntimeError(
+                f'{self.fpga_array!r}: No boards available to build receiver config'
+            )
+
+        configs = [mb.get_receiver_config() for mb in boards]
+        all_stream_ids = []
+        for cfg in configs:
+            all_stream_ids.extend(int(sid) for sid in cfg.raw.stream_ids)
+
+        if len(all_stream_ids) != len(set(all_stream_ids)):
+            raise ValueError(
+                f'{self.fpga_array!r}: stream_ids are not unique across the array: '
+                f'{all_stream_ids}'
+            )
+
+        ref = configs[0]
+        ref_dict = ref.as_dict()
+        for mb, cfg in zip(boards[1:], configs[1:]):
+            diff = self._receiver_config_diff(ref_dict, cfg.as_dict())
+            if diff is not None:
+                raise ValueError(
+                    f'{self.fpga_array!r}: receiver config attribute {diff!r} differs '
+                    f'between boards {boards[0].get_id()} and {mb.get_id()}'
+                )
+
+        result = ref.deepcopy()
+        result.raw.stream_ids = tuple(all_stream_ids)
+        return result
+
+    @staticmethod
+    def _receiver_config_diff(left, right, path=''):
+        """Return dotted path of the first differing key, ignoring ``raw.stream_ids``."""
+        if path == 'raw.stream_ids':
+            return None
+
+        if isinstance(left, dict) and isinstance(right, dict):
+            keys = set(left) | set(right)
+            for key in sorted(keys, key=str):
+                child_path = f'{path}.{key}' if path else str(key)
+                if child_path == 'raw.stream_ids':
+                    continue
+                if key not in left or key not in right:
+                    return child_path
+                diff = chFPGAArrayMethods._receiver_config_diff(
+                    left[key], right[key], child_path
+                )
+                if diff is not None:
+                    return diff
+            return None
+
+        if not State._values_equal(left, right):
+            return path or '<root>'
+        return None

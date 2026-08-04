@@ -118,7 +118,7 @@ def decode_packets(self, packets):
         d.data_length = len(d.raw_data_bytes) # length of all the packet without the header
         result.append(d)
         if print_packet_info:
-            print 'Timestamp %08X, Ethernet packet= %i bytes' % (d.timestamp, d.ethernet_packet_size)
+            print(f'Timestamp {d.timestamp:08X}, Ethernet packet= {d.ethernet_packet_size} bytes')
         return Ccoll(result)  # Ccoll allows attributes of the list elements to be accessed directly in parallel
 
 def to_cplx(x):
@@ -190,10 +190,10 @@ def sync_timing_test(ca, Nsync=10, Nscan=1):
             for trial in range(3):
                 try:
                     ca.sync(delay = 3 - delay/1e9)
-                    sync_time.append(ca.sync_start_time.nano)
-                    frame0_time.append(ca.sync_timestamps.nano)
+                    sync_time.append(ca.get_sync_start_time().nano)
+                    frame0_time.append(ca.get_sync_timestamps().nano)
                     delay_list.append(delay)
                     break
                 except RuntimeError as e:
-                    print 'Ignoring %r' % e
+                    print(f'Ignoring {e}')
     return delay_list, np.array(sync_time), np.array(frame0_time)

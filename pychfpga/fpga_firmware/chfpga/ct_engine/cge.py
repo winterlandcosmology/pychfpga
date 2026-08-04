@@ -404,9 +404,9 @@ class CGE(MMI):
 
     # CMAC GT fabric PRBS / reset (control bytes 7-8, muxed by GT_LANE_SEL). TX swing: DRP on CGEChannel.
     RXDFELPMRESET = BitField(CONTROL, 7, 7, doc='RX DFE/LPM reset (muxed lane)')
-    RXPRBSCNTRESET = BitField(CONTROL, 8, 7, doc='RX PRBS counter reset (muxed lane)')
-    TXPRBSSEL = BitField(CONTROL, 8, 3, width=3, doc='TX PRBS pattern select (muxed lane)')
-    RXPRBSSEL = BitField(CONTROL, 8, 0, width=3, doc='RX PRBS pattern select (muxed lane)')
+    RXPRBSCNTRESET = BitField(CONTROL, 7, 6, doc='RX PRBS counter reset (muxed lane)')
+    TXPRBSSEL = BitField(CONTROL, 7, 3, width=3, doc='TX PRBS pattern select (muxed lane)')
+    RXPRBSSEL = BitField(CONTROL, 7, 0, width=3, doc='RX PRBS pattern select (muxed lane)')
 
     # Add DRP registers here...
 

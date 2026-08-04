@@ -5,9 +5,8 @@ import numpy as np
 
 
 OUTPUT_PRESETS = {
-    "hirax": {"n_outputs": 2, "fft_stages": 11, "n_parallel_bits": 2},
-    "chime": {"n_outputs": 2, "fft_stages": 11, "n_parallel_bits": 2},
-    "chord": {"n_outputs": 4, "fft_stages": 14, "n_parallel_bits": 3},
+    "ice": {"n_outputs": 2, "fft_stages": 11, "n_parallel_bits": 2},
+    "crs": {"n_outputs": 4, "fft_stages": 14, "n_parallel_bits": 3},
 }
 
 
@@ -40,7 +39,7 @@ class OutputSignal:
     imag, and so on.  No time axis is stored.
 
     `n_outputs` is the number of saved complex output lanes.  `n_parallel_bits`
-    is the FFT scalar parallelism.  For HIRAX, each clock emits four scalar
+    is the FFT scalar parallelism.  For ICE, each clock emits four scalar
     values, saved as two complex outputs: out00 real/imag and out01 real/imag.
     """
 
@@ -88,7 +87,7 @@ class OutputSignal:
 
             sync_out, out00_real, out00_imag, ..., out0N_real, out0N_imag, of
 
-        HIRAX and CHIME use two output lanes.  CHORD uses four output lanes.
+        ICE uses two output lanes.  CRS uses four output lanes.
         """
         preset = _preset_for_instrument(instrument)
         dtype = np.dtype(dtype)

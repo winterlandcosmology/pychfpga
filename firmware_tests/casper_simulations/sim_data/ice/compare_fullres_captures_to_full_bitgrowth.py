@@ -44,6 +44,11 @@ INPUT_FRAME_SAMPLES = 2048
 INSTRUMENT = "hirax"
 SIM_DTYPE = np.int32
 FREQ_MAX_MHZ = 400.0
+PLOT_LINEWIDTH = 2
+AVERAGE_LINEWIDTH = 3
+LABEL_FONTSIZE = 16
+LEGEND_FONTSIZE = 15
+TICK_FONTSIZE = 14
 
 CAPTURE_NAME_RE = re.compile(
     r"^(?P<stem>.+?)__(?P<bitstream>.+)__fftshift_(?P<fft_shift>\d+)__"
@@ -58,19 +63,6 @@ def log2_abs(values):
     nonzero = abs_values > 0
     out[nonzero] = np.log2(abs_values[nonzero])
     return out
-
-
-def log2_scalar(value):
-    value = abs(float(value))
-    if value == 0:
-        return float("-inf")
-    return float(np.log2(value))
-
-
-def format_log2(value):
-    if np.isneginf(value):
-        return "-inf"
-    return f"{value:.6g}"
 
 
 def nanmean(values):
@@ -164,86 +156,84 @@ def plot_comparison(stem, input_frame, sim_real, sim_imag, capture_info, cap_rea
 
     freq_mhz = np.arange(sim_real.size, dtype=np.float64) * FREQ_MAX_MHZ / sim_real.size
 
-    fig, axes = plt.subplots(4, 1, figsize=(14, 12), sharex=False)
-    axes[0].plot(np.arange(input_frame.size), input_frame, lw=1, color="black")
-    axes[0].set_title(f"{stem} input ADC frame")
-    axes[0].set_xlabel("Sample")
-    axes[0].set_ylabel("ADC counts")
+    fig, axes = plt.subplots(
+        4,
+        1,
+        figsize=(21, 10.5),
+        sharex=False,
+        gridspec_kw={"height_ratios": [0.5, 1, 1, 1]},
+    )
+    input_samples = np.arange(input_frame.size)
+    axes[0].plot(input_samples, input_frame, lw=1, color="black")
+    axes[0].set_xlabel("Sample", fontsize=LABEL_FONTSIZE)
+    axes[0].set_ylabel("ADC counts", fontsize=LABEL_FONTSIZE)
+    axes[0].set_xlim(input_samples[0], input_samples[-1])
     axes[0].grid(True, alpha=0.3)
 
-    axes[1].plot(freq_mhz, log2_abs(sim_real), lw=1, color="black", label="simulation real")
+    axes[1].plot(freq_mhz, log2_abs(sim_real), lw=PLOT_LINEWIDTH, color="black", label="Sim Re")
     axes[1].plot(
         freq_mhz,
         log2_abs(cap_real),
-        lw=1,
+        lw=PLOT_LINEWIDTH,
         color=capture_color,
-        label=f"captured real << {left_shift}",
+        label=f"Cap Re << {left_shift}",
     )
-    axes[1].set_title("Full-bitgrowth simulation vs captured real FFT MSBs")
-    axes[1].set_ylabel("log2(abs(FFT integer))")
+    axes[1].set_ylabel("log2(abs(FFT int))", fontsize=LABEL_FONTSIZE)
     axes[1].set_xlim(0, FREQ_MAX_MHZ)
-    axes[1].legend()
+    axes[1].legend(fontsize=LEGEND_FONTSIZE)
     axes[1].grid(True, alpha=0.3)
 
-    axes[2].plot(freq_mhz, log2_abs(sim_imag), lw=1, color="black", label="simulation imag")
+    axes[2].plot(freq_mhz, log2_abs(sim_imag), lw=PLOT_LINEWIDTH, color="black", label="Sim Im")
     axes[2].plot(
         freq_mhz,
         log2_abs(cap_imag),
-        lw=1,
+        lw=PLOT_LINEWIDTH,
         color=capture_color,
-        label=f"captured imag << {left_shift}",
+        label=f"Cap Im << {left_shift}",
     )
-    axes[2].set_title("Full-bitgrowth simulation vs captured imaginary FFT MSBs")
-    axes[2].set_ylabel("log2(abs(FFT integer))")
+    axes[2].set_ylabel("log2(abs(FFT int))", fontsize=LABEL_FONTSIZE)
     axes[2].set_xlim(0, FREQ_MAX_MHZ)
-    axes[2].legend()
+    axes[2].legend(fontsize=LEGEND_FONTSIZE)
     axes[2].grid(True, alpha=0.3)
 
     axes[3].plot(
         freq_mhz,
         real_residual_log2,
-        lw=1,
+        lw=PLOT_LINEWIDTH,
         color=capture_color,
         alpha=0.5,
-        label="real residual",
+        label="Re res",
     )
     axes[3].plot(
         freq_mhz,
         imag_residual_log2,
-        lw=1,
+        lw=PLOT_LINEWIDTH,
         color=capture_color,
         alpha=0.5,
         ls="-",
-        label="imag residual",
+        label="Im res",
     )
     axes[3].axhline(
         real_residual_avg,
-        lw=3,
+        lw=AVERAGE_LINEWIDTH,
         color="black",
-        label=f"real avg={real_residual_avg:.6g}",
+        label=f"Re avg={real_residual_avg:.2f}",
     )
     axes[3].axhline(
         imag_residual_avg,
-        lw=3,
+        lw=AVERAGE_LINEWIDTH,
         color="black",
         ls="--",
-        label=f"imag avg={imag_residual_avg:.6g}",
+        label=f"Im avg={imag_residual_avg:.2f}",
     )
-    axes[3].set_title(
-        "Residual MSB: "
-        f"real max_abs={real_max_abs} (log2={format_log2(log2_scalar(real_max_abs))}), "
-        f"imag max_abs={imag_max_abs} (log2={format_log2(log2_scalar(imag_max_abs))})"
-    )
-    axes[3].set_xlabel("Frequency [MHz]")
-    axes[3].set_ylabel("log2(abs(captured - simulation))")
+    axes[3].set_xlabel("Frequency [MHz]", fontsize=LABEL_FONTSIZE)
+    axes[3].set_ylabel("log2(abs(cap - sim))", fontsize=LABEL_FONTSIZE)
     axes[3].set_xlim(0, FREQ_MAX_MHZ)
-    axes[3].legend(ncol=2)
+    axes[3].legend(ncol=2, fontsize=LEGEND_FONTSIZE)
     axes[3].grid(True, alpha=0.3)
+    for ax in axes:
+        ax.tick_params(axis="both", labelsize=TICK_FONTSIZE)
 
-    fig.suptitle(
-        f"{stem}: {capture_info['bitstream']}, FFT_SHIFT={capture_info['fft_shift']}, "
-        f"{capture_info['fft_bits']}bit, ch={capture_info['channel']}"
-    )
     fig.tight_layout()
 
     PLOT_DIR.mkdir(parents=True, exist_ok=True)

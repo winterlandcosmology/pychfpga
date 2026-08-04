@@ -218,7 +218,7 @@ class hmc7044(object):
             self.regs[reg] = val
 
         self.log.info(f'Writing {len(spi_segments)} HMC7044 registers')
-        self.spi.batch_write(self.spi_port, spi_segments)
+        self.spi.batch_write(self.spi_port, spi_segments, timeout=5)
 
         # if not batch or len(spi_data) >= 240 or i == len(regs) - 1:
         #     self.log.info(f'Writing {len(spi_data)} bytes to HMC7044')

@@ -9,10 +9,6 @@ import socket
 import asyncio
 from os import path
 
-# Pypi packages
-
-import nest_asyncio
-
 # External private packages
 
 from wtl.metrics import Metrics
@@ -138,7 +134,8 @@ class CRS(Motherboard):
         return await crs_discovery.set_platform_firmware(
             boards=boards or [],
             required_version=cls.REQUIRED_TCPIPE_VERSION,
-            firmware_pathname=firmware_pathname or cls.DEFAULT_ARM_FIRMWARE_PATHNAME)
+            firmware_pathname=firmware_pathname or cls.DEFAULT_ARM_FIRMWARE_PATHNAME,
+            **kwargs)
 
 
     async def open_platform_async(self, **kwargs):
@@ -242,10 +239,11 @@ class CRS(Motherboard):
         self.i2c1_qsfp = qsfp(self.iic, bus_name=(i2c1_switch1, 0), gpio_prefix='QSFP_', gpio=self.i2c1_gpios, address=0x50)
         # Switch port 1-6: SFPs
 
-        self.i2c0_bp_eeprom_data = eeprom(self.iic, address=0x50, bus_name=0, address_width=7, max_read_length=255, max_write_length=8, write_page_size=8)
-        self.i2c0_bp_eeprom_serial = eeprom(self.iic, address=0x58, bus_name=0, address_width=8, max_read_length=255)
-        self.i2c0_bp_tmp421 = tmp421(self.iic, address=0x4E, port=0)
-        self.i2c0_bp_gpio = pca6524(self.iic, address=0x22, port=0) #
+        # I2C0: Backplane
+        self.i2c0_bp_eeprom_data = eeprom(self.iic, address=0x51, bus_name=0, address_width=7, max_read_length=255, max_write_length=8, write_page_size=8)
+        self.i2c0_bp_tmp421 = tmp421(self.iic, address=0x4E, port=0) # only on slot 0
+        self.i2c0_bp_gpio = pca6524(self.iic, address=0x44, port=0) # only on slot 0
+        self.i2c0_qsfp = qsfp(self.iic, bus_name=0, gpio_prefix='QSFP_', gpio=self.i2c0_bp_gpio, address=0x50) # only on slot 0
 
         # list of sensors
         self.i2c1_ina231_list = {

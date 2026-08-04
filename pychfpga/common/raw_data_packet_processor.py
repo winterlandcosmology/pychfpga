@@ -317,8 +317,11 @@ class RawDataPacketProcessor(PacketProcessorBase):
             if cf.has_changed(context=dynamic_state_attrs[source]):
                 if cf.fmt_is_complex:
                     fmt_bus_width = int(cf.fmt_bus_width)
+                    fmt_data_width = int(cf.fmt_data_width)
                     bytes_per_integer = math.ceil(fmt_bus_width / 8)
-                    out_dtype = np.dtype(np.complex128 if fmt_bus_width == 64 else np.complex64)
+                    # Use the meaningful Re/Im width for output precision. The bus width
+                    # may include padding, while float32 cannot exactly hold >24-bit ints.
+                    out_dtype = np.dtype(np.complex128 if fmt_data_width > 24 else np.complex64)
                     complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // 2
                     interleave_factor = int(cf.fmt_interleave_factor or 1)
                     if interleave_factor > 2:
@@ -657,11 +660,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
 
     def flush(self, flush_timeout=None):
         """Flush UDP receiver and clear assembled-buffer state."""
-        flush_kwargs = {}
-        if flush_timeout is not None:
-            flush_kwargs["timeout"] = flush_timeout
-        self.pr.flush(**flush_kwargs)
-        if self.verbose >= 2:
+        self.pr.flush(timeout=flush_timeout, verbose=self.verbose)
+        if self.verbose >= 1:
             print("Flushing RawDataPacketProcessor linear buffer")
         self.ts_array.fill(self.TS_EMPTY)
         self.raw_data.fill(0)

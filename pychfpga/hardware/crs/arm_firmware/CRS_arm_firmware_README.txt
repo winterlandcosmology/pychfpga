@@ -15,7 +15,7 @@ To program the flash, activate the Vitis environment, go to the CRS firmware ima
 
 	source /tools/Xilinx/Vitis/2022.2/settings64.sh
 	cd pychfpga/pychfpga/hardware/crs/arm_firmware
-    program_flash -f BOOT.bin -offset 0 -flash_type qspi-x8-dual_parallel -fsbl fsbl.elf -blank_check -verify
+    program_flash -f uboot.bin -offset 0 -flash_type qspi-x8-dual_parallel -fsbl fsbl-t0-crs.elf -blank_check -verify
 
 
 The ``-blank_check`` and ``-verify`` options can be omitted to accelerate the programming.

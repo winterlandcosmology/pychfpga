@@ -14,6 +14,15 @@
 		},
 		{
 			"path": "../temp/data"
+		},
+		{
+			"path": "../labpy"
+		},
+		{
+			"path": "../chfpga"
+		},
+		{
+			"path": "../t0/u-boot"
 		}
 	],
 	"settings": {}

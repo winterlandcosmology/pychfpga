@@ -496,7 +496,8 @@ class TestFuncgen(TestModule):
     def test_funcgen_noise_fft_avg_squared(self, xr, number_of_bursts, num_runs):
         """Plot the spectrum of measured noise vs spectrum of simulated noise by averaging the |fft|^2 of the measured/simulated noise over ``num_runs`` runs"""
         seeds = [np.random.randint(-2 ** 15, 2 ** 15 - 1) for _ in range(num_runs)]
-        total_samples = 4 * number_of_bursts * self.data.SAMPLES_PER_FRAME
+        frames_per_burst = 4
+        total_samples = frames_per_burst * number_of_bursts * self.data.SAMPLES_PER_FRAME
         psd_a = np.empty((num_runs, total_samples))
         sim_psd_a = np.empty((num_runs, total_samples))
         logger = self.get_logger()
@@ -504,7 +505,7 @@ class TestFuncgen(TestModule):
             logger.info(f"noise_fft_avg_squared run {i} / {num_runs}")
             data = self._set_capture_funcgen('noise',
                                             period=None,
-                                            frames_per_burst = 4,
+                                            frames_per_burst = frames_per_burst,
                                             mode=1,
                                             number_of_bursts = number_of_bursts,
                                             burst_period_in_frames = self.data.BURST_PERIOD,
@@ -547,10 +548,12 @@ class TestFuncgen(TestModule):
         '''
 
         logger = self.get_logger()
+        frames_per_burst = 4
+        burst_period_in_frames = self.data.BURST_PERIOD
         data = self._set_capture_funcgen(
             "word_ctr_buffer_flags",
             period=None,
-            frames_per_burst=4,
+            frames_per_burst=frames_per_burst,
             mode = 1,
             number_of_bursts=number_of_bursts,
             burst_period_in_frames=self.data.BURST_PERIOD,
@@ -588,8 +591,8 @@ class TestFuncgen(TestModule):
         word_count = np.bitwise_and(packed_samples, word_counter_mask)
 
         cn = (np.arange(words_per_cap) // (words_per_burst)) * self.data.BURST_PERIOD
-        expected_frame_count = (np.arange(words_per_cap) // words_per_frame) % 4 + frame_count[0] + cn 
-        expected_word_count = np.tile(np.arange(words_per_frame), 4 * number_of_bursts)
+        expected_frame_count = (np.arange(words_per_cap) // words_per_frame) % frames_per_burst + frame_count[0] + cn
+        expected_word_count = np.tile(np.arange(words_per_frame), frames_per_burst * number_of_bursts)
         
         plt.figure(f"{number_of_bursts}")
         plt.subplot(2, 1, 1)
@@ -706,6 +709,12 @@ class TestFuncgen(TestModule):
         '''
         
         
+        if getattr(self.board, "CAPTURE_TYPE", None) == "PROBER" and frames_per_burst > 4:
+            pytest.skip(f"PROBER supports at most 4 frames per burst, got {frames_per_burst}.")
+
+        frames_to_mode = {2: 0, 4: 1, 8: 2, 16: 3}
+        mode = 0 if getattr(self.board, "CAPTURE_TYPE", None) == "PROBER" else frames_to_mode[frames_per_burst]
+
         for chan in self.board.chan.values():
             chan.FUNCGEN.RESET = 1
             chan.FUNCGEN.RESET = 0
@@ -770,6 +779,9 @@ class TestFuncgen(TestModule):
             burst_period_in_frames (int): Number of frames to wait between capturing bursts
             number_of_bursts (int): Number of bursts to capture as part of a run
         '''
+        if getattr(self.board, "CAPTURE_TYPE", None) == "PROBER" and frames_per_burst > 4:
+            pytest.skip(f"PROBER supports at most 4 frames per burst, got {frames_per_burst}.")
+
         for chan in self.board.chan.values():
             chan.FUNCGEN.RESET = 1
             chan.FUNCGEN.RESET = 0
@@ -787,9 +799,9 @@ class TestFuncgen(TestModule):
         capture_frames_per_burst = max(frames_per_burst, 2)
 
         frames_to_mode = {2: 0, 4: 1, 8: 2, 16: 3}
-        mode = frames_to_mode.get(capture_frames_per_burst, -1)
-        if mode == -1 and self.data.PLATFORM == 'CRS':
-            raise ValueError(f'UCAP does not support {capture_frames_per_burst} frames per burst')
+        mode = 0 if getattr(self.board, "CAPTURE_TYPE", None) == "PROBER" else frames_to_mode.get(frames_per_burst, -1)
+        if mode == -1 and self.PLATFORM == 'CRS':
+            raise ValueError(f'UCAP does not support {frames_per_burst} frames per burst')
         raw_data = self._set_capture_funcgen(
             "nibble4",
             period=None,

@@ -7,7 +7,7 @@ from firmware_tests.casper_simulations.caspersimtools import (
 )
 
 
-def test_output_signal_reads_hirax_binary_rows(tmp_path):
+def test_output_signal_reads_ice_binary_rows(tmp_path):
     rows = np.array(
         [
             [1, 10, 20, 11, 21, 0],
@@ -16,21 +16,21 @@ def test_output_signal_reads_hirax_binary_rows(tmp_path):
         ],
         dtype=np.int32,
     )
-    path = tmp_path / "hirax.bin"
+    path = tmp_path / "ice.bin"
     rows.tofile(path)
 
-    signal = OutputSignal.from_file(path, instrument="hirax", dtype=np.int32)
+    signal = OutputSignal.from_file(path, instrument="ice", dtype=np.int32)
 
     np.testing.assert_array_equal(signal.sync_out, [1, 0, 0])
     np.testing.assert_array_equal(signal.of, [0, 1, 0])
     np.testing.assert_array_equal(signal.real, [[10, 12, 14], [11, 13, 15]])
     np.testing.assert_array_equal(signal.imag, [[20, 22, 24], [21, 23, 25]])
-    assert signal.instrument == "hirax"
+    assert signal.instrument == "ice"
     assert signal.fft_stages == 11
     assert signal.n_parallel_bits == 2
 
 
-def test_output_signal_reads_chord_binary_rows(tmp_path):
+def test_output_signal_reads_crs_binary_rows(tmp_path):
     rows = np.array(
         [
             [1, 10, 20, 11, 21, 12, 22, 13, 23, 0],
@@ -38,10 +38,10 @@ def test_output_signal_reads_chord_binary_rows(tmp_path):
         ],
         dtype=np.int32,
     )
-    path = tmp_path / "chord.bin"
+    path = tmp_path / "crs.bin"
     rows.tofile(path)
 
-    signal = OutputSignal.from_file(path, instrument="chord", dtype=np.int32)
+    signal = OutputSignal.from_file(path, instrument="crs", dtype=np.int32)
 
     np.testing.assert_array_equal(signal.sync_out, [1, 0])
     np.testing.assert_array_equal(signal.of, [0, 1])
@@ -53,10 +53,10 @@ def test_output_signal_reads_chord_binary_rows(tmp_path):
 
 def test_output_signal_respects_dtype_parameter(tmp_path):
     rows = np.array([[1, -10, 20, -11, 21, 0]], dtype=np.int16)
-    path = tmp_path / "hirax_i16.bin"
+    path = tmp_path / "ice_i16.bin"
     rows.tofile(path)
 
-    signal = OutputSignal.from_file(path, instrument="chime", dtype=np.int16)
+    signal = OutputSignal.from_file(path, instrument="ice", dtype=np.int16)
 
     assert signal.real.dtype == np.dtype(np.int16)
     np.testing.assert_array_equal(signal.real, [[-10], [-11]])
@@ -71,9 +71,9 @@ def test_output_signal_get_real_imag_interleaves_lanes(tmp_path):
         ],
         dtype=np.int32,
     )
-    path = tmp_path / "hirax.bin"
+    path = tmp_path / "ice.bin"
     rows.tofile(path)
-    signal = OutputSignal.from_file(path, instrument="hirax", dtype=np.int32)
+    signal = OutputSignal.from_file(path, instrument="ice", dtype=np.int32)
 
     real, imag = signal.get_real_imag()
 
@@ -89,9 +89,9 @@ def test_output_signal_get_complex_matches_interleaved_real_imag(tmp_path):
         ],
         dtype=np.int32,
     )
-    path = tmp_path / "hirax.bin"
+    path = tmp_path / "ice.bin"
     rows.tofile(path)
-    signal = OutputSignal.from_file(path, instrument="hirax", dtype=np.int32)
+    signal = OutputSignal.from_file(path, instrument="ice", dtype=np.int32)
 
     np.testing.assert_array_equal(
         signal.get_complex(),
@@ -107,9 +107,9 @@ def test_output_signal_calc_fft_power_uses_interleaved_real_imag(tmp_path):
         ],
         dtype=np.int32,
     )
-    path = tmp_path / "hirax.bin"
+    path = tmp_path / "ice.bin"
     rows.tofile(path)
-    signal = OutputSignal.from_file(path, instrument="hirax", dtype=np.int32)
+    signal = OutputSignal.from_file(path, instrument="ice", dtype=np.int32)
 
     np.testing.assert_array_equal(signal.calc_fft_power(), [25, 169, 289, 625])
 
@@ -124,9 +124,9 @@ def test_output_signal_descramble_changes_return_only(tmp_path):
     rows[:, 3] = interleaved_real[1::2]
     rows[:, 4] = interleaved_imag[1::2]
     rows[:, 5] = 0
-    path = tmp_path / "hirax_frame.bin"
+    path = tmp_path / "ice_frame.bin"
     rows.tofile(path)
-    signal = OutputSignal.from_file(path, instrument="hirax", dtype=np.int32)
+    signal = OutputSignal.from_file(path, instrument="ice", dtype=np.int32)
     stored_real = signal.real.copy()
     stored_imag = signal.imag.copy()
 
@@ -143,7 +143,7 @@ def test_output_signal_descramble_requires_complete_frames(tmp_path):
     rows = np.array([[0, 10, 20, 11, 21, 0]], dtype=np.int32)
     path = tmp_path / "short.bin"
     rows.tofile(path)
-    signal = OutputSignal.from_file(path, instrument="hirax", dtype=np.int32)
+    signal = OutputSignal.from_file(path, instrument="ice", dtype=np.int32)
 
     with pytest.raises(ValueError, match="Cannot descramble"):
         signal.get_real_imag(descramble=True)
@@ -158,9 +158,9 @@ def test_output_signal_slice_and_strip_before_sync(tmp_path):
         ],
         dtype=np.int32,
     )
-    path = tmp_path / "hirax.bin"
+    path = tmp_path / "ice.bin"
     rows.tofile(path)
-    signal = OutputSignal.from_file(path, instrument="hirax", dtype=np.int32)
+    signal = OutputSignal.from_file(path, instrument="ice", dtype=np.int32)
 
     stripped = signal.strip_before_sync()
 
@@ -191,9 +191,9 @@ def test_output_signal_get_sync_frame_returns_one_complete_frame(tmp_path):
     rows[1:513, 2] = interleaved_imag[0::2]
     rows[1:513, 3] = interleaved_real[1::2]
     rows[1:513, 4] = interleaved_imag[1::2]
-    path = tmp_path / "hirax_frame.bin"
+    path = tmp_path / "ice_frame.bin"
     rows.tofile(path)
-    signal = OutputSignal.from_file(path, instrument="hirax", dtype=np.int32)
+    signal = OutputSignal.from_file(path, instrument="ice", dtype=np.int32)
 
     frame = signal.get_sync_frame()
 
@@ -217,4 +217,4 @@ def test_output_signal_rejects_bad_file_length(tmp_path):
     np.array([0, 1, 2, 3, 4], dtype=np.int32).tofile(path)
 
     with pytest.raises(ValueError, match="not divisible"):
-        OutputSignal.from_file(path, instrument="hirax", dtype=np.int32)
+        OutputSignal.from_file(path, instrument="ice", dtype=np.int32)

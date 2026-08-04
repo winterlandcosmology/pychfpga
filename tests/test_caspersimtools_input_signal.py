@@ -113,9 +113,8 @@ def test_input_signal_from_binary_rejects_bad_raw_length(tmp_path):
 @pytest.mark.parametrize(
     ("instrument", "adc_bits", "n_inputs", "frame_size"),
     [
-        ("hirax", 8, 4, 2048),
-        ("chime", 8, 4, 2048),
-        ("chord", 12, 8, 16384),
+        ("ice", 8, 4, 2048),
+        ("crs", 12, 8, 16384),
     ],
 )
 def test_shortcuts_use_instrument_presets(instrument, adc_bits, n_inputs, frame_size):
@@ -127,14 +126,14 @@ def test_shortcuts_use_instrument_presets(instrument, adc_bits, n_inputs, frame_
 
 
 def test_generate_sine_input_accepts_multiple_mhz_frequencies():
-    signal = generate_sine_input("hirax", nframes=1, ampl=32, freq=[150.0, 210.0])
+    signal = generate_sine_input("ice", nframes=1, ampl=32, freq=[150.0, 210.0])
 
     assert signal.data.shape == (4, 512)
     assert signal.storage_dtype == np.dtype(np.int8)
 
 
 def test_generate_ramp_input_uses_scalar_mhz_frequency():
-    signal = generate_ramp_input("hirax", nframes=1, ampl=32, freq=100.0)
+    signal = generate_ramp_input("ice", nframes=1, ampl=32, freq=100.0)
 
     assert signal.data.shape == (4, 512)
     assert np.unique(signal.data).size > 1
@@ -142,16 +141,16 @@ def test_generate_ramp_input_uses_scalar_mhz_frequency():
 
 def test_generate_noise_input_defaults_to_reproducible_gaussian():
     with pytest.warns(RuntimeWarning, match="truncated fractional"):
-        signal_a = generate_noise_input("hirax", nframes=1, ampl=8, seed=123)
+        signal_a = generate_noise_input("ice", nframes=1, ampl=8, seed=123)
     with pytest.warns(RuntimeWarning, match="truncated fractional"):
-        signal_b = generate_noise_input("hirax", nframes=1, ampl=8, seed=123)
+        signal_b = generate_noise_input("ice", nframes=1, ampl=8, seed=123)
 
     np.testing.assert_array_equal(signal_a.data, signal_b.data)
 
 
 def test_shortcuts_repeat_one_adc_frame_by_default():
     with pytest.warns(RuntimeWarning, match="truncated fractional"):
-        signal = generate_noise_input("hirax", nframes=3, ampl=8, seed=123)
+        signal = generate_noise_input("ice", nframes=3, ampl=8, seed=123)
     samples = signal.data.T.ravel()
     frame_size = 2048
 
@@ -161,7 +160,7 @@ def test_shortcuts_repeat_one_adc_frame_by_default():
 
 def test_shortcuts_can_generate_continuous_multi_frame_noise():
     with pytest.warns(RuntimeWarning, match="truncated fractional"):
-        signal = generate_noise_input("hirax", nframes=3, ampl=8, seed=123, repeat_frame=False)
+        signal = generate_noise_input("ice", nframes=3, ampl=8, seed=123, repeat_frame=False)
     samples = signal.data.T.ravel()
     frame_size = 2048
 
@@ -169,7 +168,7 @@ def test_shortcuts_can_generate_continuous_multi_frame_noise():
 
 
 def test_shortcuts_repeat_non_frame_periodic_sine_by_default():
-    signal = generate_sine_input("hirax", nframes=2, ampl=32, freq=[150.0, 210.0])
+    signal = generate_sine_input("ice", nframes=2, ampl=32, freq=[150.0, 210.0])
     samples = signal.data.T.ravel()
     frame_size = 2048
 
@@ -177,8 +176,8 @@ def test_shortcuts_repeat_non_frame_periodic_sine_by_default():
 
 
 def test_generate_noise_input_integer_mode_is_reproducible():
-    signal_a = generate_noise_input("hirax", nframes=1, ampl=8, seed=123, mode="integer")
-    signal_b = generate_noise_input("hirax", nframes=1, ampl=8, seed=123, mode="integer")
+    signal_a = generate_noise_input("ice", nframes=1, ampl=8, seed=123, mode="integer")
+    signal_b = generate_noise_input("ice", nframes=1, ampl=8, seed=123, mode="integer")
 
     np.testing.assert_array_equal(signal_a.data, signal_b.data)
 
@@ -186,7 +185,7 @@ def test_generate_noise_input_integer_mode_is_reproducible():
 def test_shortcut_save_path_writes_binary_and_returns_signal(tmp_path):
     path = tmp_path / "sine_input.bin"
 
-    signal = generate_sine_input("hirax", nframes=1, ampl=4, freq=1.0, save_path=path)
+    signal = generate_sine_input("ice", nframes=1, ampl=4, freq=1.0, save_path=path)
     restored = InputSignal.from_binary(path, adc_bits=8, n_inputs=4)
 
     assert isinstance(signal, InputSignal)
@@ -197,9 +196,9 @@ def test_shortcut_save_path_writes_binary_and_returns_signal(tmp_path):
     ("kwargs", "match"),
     [
         (dict(instrument="bad", nframes=1, ampl=1, freq=1), "Unknown instrument"),
-        (dict(instrument="hirax", nframes=0, ampl=1, freq=1), "nframes must be positive"),
-        (dict(instrument="hirax", nframes=1, ampl=128, freq=1), "ampl must be in"),
-        (dict(instrument="hirax", nframes=1, ampl=1, freq=np.nan), "freq must"),
+        (dict(instrument="ice", nframes=0, ampl=1, freq=1), "nframes must be positive"),
+        (dict(instrument="ice", nframes=1, ampl=128, freq=1), "ampl must be in"),
+        (dict(instrument="ice", nframes=1, ampl=1, freq=np.nan), "freq must"),
     ],
 )
 def test_waveform_shortcuts_reject_invalid_common_inputs(kwargs, match):
@@ -209,4 +208,4 @@ def test_waveform_shortcuts_reject_invalid_common_inputs(kwargs, match):
 
 def test_generate_noise_input_rejects_invalid_mode():
     with pytest.raises(ValueError, match="mode must"):
-        generate_noise_input("hirax", nframes=1, ampl=8, mode="bad")
+        generate_noise_input("ice", nframes=1, ampl=8, mode="bad")

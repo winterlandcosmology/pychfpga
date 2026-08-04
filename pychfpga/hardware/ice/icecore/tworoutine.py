@@ -68,10 +68,30 @@ This works the same way:
 '''
 
 import asyncio
-import nest_asyncio
 import functools
 
 __all__ = ["tworoutine"]
+
+# Loops for which nest_asyncio has already been applied (keyed by loop object).
+_nested_loops = {}
+
+
+def get_nested_loop():
+    """Return the current event loop with nest_asyncio applied, creating one if needed.
+
+    nest_asyncio is applied at most once per loop, tracked in ``_nested_loops``.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    if loop not in _nested_loops:
+        import nest_asyncio
+        nest_asyncio.apply(loop)
+        _nested_loops[loop] = True
+    return loop
 
 
 class tworoutine:
@@ -143,29 +163,15 @@ class tworoutine:
         # By default, presume a fancy asynchronous version has been coded and
         # invoke it synchronously. This is often all the serial version needs
         # to do anyways.
-        try:
-
-            # loop = asyncio.get_running_loop() # get the running current loop
-            loop = asyncio.get_event_loop() # get the current loop, running or not
-            # loop = asyncio.new_event_loop() # get the current loop, running or not
-            nest_asyncio.apply(loop)  # make sure we can run in an already running loop
-            print(f'Reusing loop {id(loop)}. patch={getattr(loop, "_nest_patched", False)}')
-
-        except RuntimeError as e:
-            loop = asyncio.new_event_loop()
-            nest_asyncio.apply(loop)  # make sure we can run in an already running loop
-
-            print(f'Could not get event loop because of error {e}. Creating a new loop {loop} with ID {id(loop)}')
+        loop = get_nested_loop()
 
         coroutine = (~self)(*args, **kwargs)
         self._used_loops.add(loop)
-        # print(f'About to create and execute coroutine {coroutine}({args},{kwargs}). The loop is {loop} and is running={loop.is_running()}')
         try:
             result = loop.run_until_complete(coroutine)
         except Exception as e:
             print(f'Exception during run_until_complete(): {e}')
             raise e
-        # print(f'Result is {result}')
         return result
 
     def __invert__(self):

@@ -35,7 +35,7 @@ from wtl.metrics import Metrics
 # Local packages
 
 
-from pychfpga.common import State, async_to_sync, run_async
+from pychfpga.common import State, run_async
 
 from pychfpga.fpga_firmware import FPGAFirmware
 from .chfpga_udp import chFPGA_UDP
@@ -842,6 +842,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                     self.ANT_FMC_IS_PRESENT[chan_number] = True
 
             self._data_socket = None
+            self._tcp_data_socket = None
 
         except Exception as e:
             self.logger.error(f'****Exception during open!****** =  {e!r}')
@@ -2117,18 +2118,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
 
 
-    # provide sync-wrapped functions for convenience
-
-    get_irigb_time_sync = async_to_sync(get_irigb_time_async)
-    capture_refclk_time_sync = async_to_sync(capture_refclk_time_async)
-    get_frame_number_async = async_to_sync(get_frame_number_async)
-    is_irigb_before_trigger_time_sync = async_to_sync(is_irigb_before_trigger_time_async)
-    set_irigb_trigger_time_sync= async_to_sync(set_irigb_trigger_time_async)
-    set_irigb_source_sync = async_to_sync(set_irigb_source_async)
-    get_irigb_source_sync = async_to_sync(get_irigb_source_async)
-
-
-
 
     def is_fmc_present_for_channel(self, channel_number):
         return self.ANT_FMC_IS_PRESENT[channel_number]
@@ -2356,16 +2345,18 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 fmt_is_complex=True,
                 fmt_interleave_factor=2 * fft_bins_per_word,
             )
-            fft_pplf = 2 * max(1, fft_bins_per_word)
+            fft_pplf = 2 * max(1, fft_bins_per_word) # 2 packets per logical frame for full resolution FFT . TODO: Seems wrong to me; review.
         else:
             #check if eight-bit is enabled (only on ICE)
             eight_bit_capture_modes = [bool(self.config.chan[ch].scaler.get('eight_bit', False)) for ch in target_channels]
             eight_bit = eight_bit_capture_modes[0]
             if any(ebc != eight_bit for ebc in eight_bit_capture_modes):
                 raise ValueError("Selected channels have different eight-bit capture settings. Use separate receivers.")
-            capture_bus_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8 
+            capture_bus_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8
             if cap_data_type in (1, 2):
-                data_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 4
+                # Raw and post-gain FFT capture modes use the full Re/Im
+                # component width available on the scaler capture bus.
+                data_width = 16 if self.PLATFORM_ID == self._PLATFORM_ID_CRS else 8
             else:
                 data_width = 8 if eight_bit else 4
             fft_capture_format = State(
@@ -3209,6 +3200,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         If the socket does not already exists, the FPGA will be configured to send the data to the returned socket.
 
+        Prefer :meth:`get_data_socket_async` when an event loop is already running
+        (e.g. Jupyter).
+
         Parameters:
 
             port_number (int): Port number to use:
@@ -3222,18 +3216,19 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
             socket.socket(): a UDP socket.
         """
-        # Make sure there is a list of opened sockets
+        return run_async(self.get_data_socket_async(port_number=port_number))
 
+    async def get_data_socket_async(self, port_number=None):
+        """Async variant of :meth:`get_data_socket`."""
         if port_number is None:
-            port_number = run_async(self.get_local_data_port_number_async())
+            port_number = await self.get_local_data_port_number_async()
 
         opened_sockets = __main__.__dict__.setdefault('__opened_sockets__', {})
 
-        # If we have a non-zero port, try to return an existing socket for that port number.
         if port_number and (port_number in opened_sockets):
             sock = opened_sockets[port_number]
             self.logger.debug(f'{self!r}: Reusing already allocated socket {sock} for port {port_number}')
-        else: # open a new port. If port_number is zero, it will be a OS-assigned port.
+        else:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             port_number = port_number or 0
             self.logger.debug(f'{self!r}: Binding data socket at port {port_number} to interface IP {self.interface_ip_addr}')
@@ -3241,21 +3236,84 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 sock.bind((self.interface_ip_addr, port_number))
             except OSError:
                 raise OSError(f'Socket at port {port_number} is already in use on interface {self.interface_ip_addr}. On Linux, use "netstat -ulpe" to find which user/process has the port already open')
-            # store the socket in the main module so it will live persistently until the Python session is closed.
 
-        self.set_data_socket(sock)
+        await self.set_data_socket_async(sock)
+        return sock
+
+    def get_tcp_data_socket(self, port_number=None, rcvbuf=8 * 1024 * 1024, force=False):
+        """Return a cached TCP socket connected to this board's fixed data listen port.
+
+        The board always listens on a well-known port (host-initiated); no TCPipe
+        register programming is required. ``get_data_receiver`` still uses UDP.
+
+        Sockets are assumed stable for a session (firmware drops on backpressure
+        instead of closing). Use ``force=True`` (or array reinit via
+        ``get_data_receiver(..., force=True)``) to connect fresh.
+
+        Parameters
+        ----------
+        port_number : int or None
+            Board listen port. ``None`` uses :attr:`TCPipe.DEFAULT_TCP_DATA_PORT`.
+        rcvbuf : int
+            ``SO_RCVBUF`` so the kernel can absorb bursts between process calls.
+        force : bool
+            If True, discard any cached socket and connect fresh.
+
+        Returns
+        -------
+        socket.socket
+            Connected TCP stream socket.
+        """
+        from pychfpga.hardware.interfaces.tcpipe import TCPipe
+
+        if port_number is None:
+            port_number = TCPipe.DEFAULT_TCP_DATA_PORT
+        port_number = int(port_number)
+
+        host = self.mb.hostname
+        if not host:
+            raise RuntimeError(f"{self!r}: no hostname for TCP data connect")
+
+        opened = __main__.__dict__.setdefault("__opened_tcp_data_sockets__", {})
+        key = (host, port_number)
+
+        if force:
+            old = opened.pop(key, None)
+            if old is not None:
+                try:
+                    old.close()
+                except OSError:
+                    pass
+            sock = None
+        else:
+            sock = opened.get(key)
+
+        if sock is not None:
+            self._tcp_data_socket = sock
+            self.logger.debug(
+                f"{self!r}: Reusing TCP data socket {sock} for {host}:{port_number}"
+            )
+            return sock
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, int(rcvbuf))
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.logger.debug(f"{self!r}: Connecting TCP data socket to {host}:{port_number}")
+        sock.connect((host, port_number))
+        sock.settimeout(0.1)
+        opened[key] = sock
+        self._tcp_data_socket = sock
         return sock
 
     def set_data_socket(self, sock, force=False):
-        """ Specified the data socket to which data will be sent
+        """ Specified the data socket to which data will be sent.
 
-        Parameters:
-
-            sock (socket.socket): Valid, opened and bound UDP socket to use.
-
-            force (bool): If True, the socket cache and FPGA port numbers will be updated even if the socket has already been set
+        Prefer :meth:`set_data_socket_async` when an event loop is already running.
         """
-        # Return if the board already uses that socket
+        return run_async(self.set_data_socket_async(sock, force=force))
+
+    async def set_data_socket_async(self, sock, force=False):
+        """Async variant of :meth:`set_data_socket`."""
         if sock is self._data_socket and not force:
             return
 
@@ -3266,7 +3324,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         if self._data_socket:
             self.logger.warning(f'{self!r}: Abandonning previously allocated socket {self._data_socket} for new socket {sock}')
         self._data_socket = sock
-        run_async(self.set_local_data_port_number_async(actual_port_number))
+        await self.set_local_data_port_number_async(actual_port_number)
 
 
     def set_data_capture_stream_ids(self, stream_ids):
@@ -3597,6 +3655,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             f'{self!r}: Setting dynamic capture parameters to '
             f'sub_period={sub_period} and source={source} for channels={channels}')
 
+        # *** TODO: rewrite the UCAP block below to use the new UCAP.set_data_capture() method.
         if self.CAPTURE_TYPE == 'UCAP':
             if isinstance(source, str):
                 if source not in self.UCAP.DATA_SOURCE_TABLE:
