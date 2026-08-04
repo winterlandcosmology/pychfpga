@@ -45,6 +45,7 @@ class UCAP(MMI):
     IN_FRAME_CTR     = BitField(STATUS, 1, 0, width=8, doc='debug')
     OUT_FRAME_CTR    = BitField(STATUS, 2, 0, width=8, doc='debug')
     M_CLK_CTR        = BitField(STATUS, 3, 0, width=8, doc='debug')
+    CAPTURE_BUS_WIDTH = BitField(STATUS, 4, 0, width=8, doc='Width of the capture bus')
 
     def __init__(self, *, router, router_port, state, verbose=0):
         self.verbose = verbose
@@ -71,7 +72,14 @@ class UCAP(MMI):
         """ Return the stream_ids of all channels.
         """
         return [(self.USER_STREAM_ID << 4) + ch for ch in range(8)]
-
+    
+    def get_source_id(self, source: str):
+        if source in self.DATA_SOURCE_TABLE:
+            return self.DATA_SOURCE_TABLE[source]
+        else:
+            valid_sources = ', '.join(self.DATA_SOURCE_TABLE)
+            raise ValueError(f"Unknown data capture source '{source}'. Valid sources are {valid_sources}")
+        
     def set_data_capture(self, source, mode=0, channels=None, periods=[195312,195312], select=False):
         """ Selects the source of the data to be captured (FUNCGEN or SCALER). Optionally enables streaming the captured data instead of the correlator data.
 
@@ -100,11 +108,7 @@ class UCAP(MMI):
         """
         # Set the data source (either 'adc' or 'scaler') in the control register
         if isinstance(source, str):
-            if source in self.DATA_SOURCE_TABLE:
-                source = self.DATA_SOURCE_TABLE[source]
-            else:
-                valid_sources = ', '.join(self.DATA_SOURCE_TABLE)
-                raise ValueError(f"Unknown data capture source '{source}'. Valid sources are {valid_sources}")
+            source = self.get_source_id(source)
         self.SOURCE_SEL = source
 
         if isinstance(channels, int):

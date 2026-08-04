@@ -375,7 +375,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
 
 
 
-    def get_formatted_data(self, rows=slice(None), source=0, split=False, format=None, complex_override=None):
+    def get_formatted_data(self, rows=slice(None), source=None, split=False, format=None, complex_override=None):
         """Transform assembled raw rows into ``(ts, data, counts)`` for source ``source``.
 
         Parameters
@@ -394,7 +394,13 @@ class RawDataPacketProcessor(PacketProcessorBase):
         ts = self.ts_array[rows]
         counts = self.raw_data_count[rows]
         sources = self.raw_source[rows]
-
+        SOURCE_MAP = {'funcgen': 0, 'scaler': 1}
+        if source is None:
+            capture_source = self.config.source
+            if capture_source in SOURCE_MAP:
+                source = SOURCE_MAP[capture_source]
+            else:
+                raise ValueError(f"Invalid source {capture_source!r} specified")
         if format is not None:
             cf = decode_format_string(format)
         else:
@@ -418,7 +424,6 @@ class RawDataPacketProcessor(PacketProcessorBase):
             right_shift -= 64
         if right_shift > 0:
             np.right_shift(data, right_shift, data)
-
         if is_complex:
             split = True
         if split:  # split a burst into multiple independent frames. Frames are always split for complex data.
@@ -516,7 +521,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         return ts, data, counts
 
 
-    def create_output_buffer(self, n_ts, source=0, split=False, format=None, complex_override=None):
+    def create_output_buffer(self, n_ts, source=None, split=False, format=None, complex_override=None):
         """Create arrays to store the timestamps, formatted data, and data counts returned by process_packets.
 
         This is used by applications that need to crate a storage space for the formatted data returned by the process_packets method.

@@ -40,7 +40,7 @@ class RawFrameReceiver(RawDataPacketProcessor):
         self,
         ncap: int = 1,
         split=None,
-        source=0,
+        source=None,
         flush=False,
         flush_timeout=None,
         chan_first: bool = True,
@@ -73,7 +73,7 @@ class RawFrameReceiver(RawDataPacketProcessor):
 
         if config is not None:
             self.update_config(config)
-
+            
         ts, data, counts = self.create_output_buffer(n_ts=ncap, source=source, split=split, format=format, complex_override=complex_override)
         # ts.fill(0)
         # data.fill(0)
