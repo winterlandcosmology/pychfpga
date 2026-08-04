@@ -238,24 +238,71 @@ To start the fpga_master server::
 Docker operation
 ================
 
+The Docker deployment runs ``pychfpga_raw_acq`` and ``fpga_master`` in two
+containers built from the same Python 3.12 image. Both containers use host
+networking and share the data directory. ``fpga_master`` starts after raw
+acquisition becomes healthy and can optionally wait until a list of IceBoards
+answers ping.
 
-pychfpga is also available as a docker image, with all system and Python dependencies already installed.
+The FPGA configuration remains outside the image and is mounted read-only at
+``/config/fpga_config.yaml``.
 
+Docker configuration
+--------------------
 
-Build:
+Create the local environment file and edit it for the deployment::
 
-export DOCKER_BUILDKIT=1
-export BUILDKIT_PROGRESS=plain
-docker build --no-cache -t pychfpga:jfc_dev .
+    cp .env.example .env
 
-Building the Docker Image
--------------------------
+``PYCHFPGA_SSH_KEY_PATH`` must be an absolute path to a private SSH key with
+read access to the private Bitbucket dependencies. The key is forwarded by
+BuildKit and is not copied into the image.
 
-In order to build the docker image for `pychfpga` you need to have access to ssh-identity with read permissions to this and other `wtl` repositories.
+The environment file contains:
 
-- Environemt Parameter DOCKER_BUILDKIT=1 is required to be set, before the build.
-- In order to build the image execute the following command if the correct ssh-identity is already loaded into the `ssh-agent`
-	$ docker build -f Dockerfile -t chimefrb/pychfpga:latest --ssh github_ssh_key=$SSH_AUTH_SOCK .
-- Alternatively, if you have the private key, you can use:
-        $ docker build -f Dockerfile -t chimefrb/pychfpga:latest --ssh github_ssh_key=/path/to/id_rsa .
+- ``PYCHFPGA_IMAGE``: image name and tag.
+- ``PYCHFPGA_DATA_DIR``: host directory mounted at ``/data``.
+- ``PYCHFPGA_CONFIG_FILE``: external FPGA YAML configuration file.
+- ``PYCHFPGA_CONFIG_NAME``: top-level configuration name in that file.
+- ``PYCHFPGA_WAIT_HOSTS``: optional comma-separated IceBoard host names or IPs.
+- ``PYCHFPGA_WAIT_PING_TIMEOUT``: timeout for each ping attempt, in seconds.
+- ``PYCHFPGA_WAIT_TIMEOUT``: optional total wait timeout. Leave it empty to
+  wait indefinitely; no wait is performed when ``PYCHFPGA_WAIT_HOSTS`` is
+  empty.
+- ``PYCHFPGA_SSH_KEY_PATH``: absolute path to the Bitbucket SSH key.
+- ``PYCHFPGA_VERSION``: optional package-version override for image builds.
 
+The raw-acquisition address in the FPGA configuration should use
+``localhost:54322`` because both services use host networking.
+
+Building and starting
+---------------------
+
+Validate the resolved deployment before starting it::
+
+    docker compose config
+
+Build and start both services::
+
+    docker compose up -d --build
+
+The standalone image-build helper reads ``.env`` automatically::
+
+    ./scripts/docker/build_image.sh
+
+Set ``PYCHFPGA_ENV_FILE`` to load another environment file. The legacy
+``./docker_build`` command remains as a compatibility wrapper around the same
+helper.
+
+Health and operation
+--------------------
+
+Raw acquisition is healthy when its REST status endpoint on port 54322
+responds. ``fpga_master`` is healthy when its status endpoint on port 54321
+reports that it is ready. Check service state and logs with::
+
+    docker compose ps
+    docker compose logs -f
+
+Both services use the ``unless-stopped`` restart policy, so they resume after
+the Docker daemon or host restarts unless they were explicitly stopped.

@@ -449,7 +449,7 @@ ICEBOX:
             n_inputs: 16 # Number of inputs channels to be correlated (from 0 to n_inputs-1). Don't change this number! The FPGA will still send zeros on the uncorellated channels
             hdf5_capture_folder: '%(run_folder)s/corr/%(hdf5_start_time)s'
             hdf5_capture_filename: '%(file_number)04d' #'data'
-            hdf5_capture_duration: 300 # write corr HDF5 data for 5 minutes
+            hdf5_capture_duration: 0 # Write corr HDF5 data until stopped.
             hdf5_capture_elements_per_file: 256 # 256 elements=7Mbytes
             # hdf5_capture_n_inputs can either be an int or an array of integers. If int, only the N first channels will be saved.
             # With an array you can specify arbitrary channels to be saved. Examples:

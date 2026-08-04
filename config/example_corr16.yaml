@@ -446,7 +446,7 @@ EXAMPLE:
             n_inputs: 16 # Number of inputs channels to be correlated (from 0 to n_inputs-1)
             hdf5_capture_folder: '%(run_folder)s/corr/%(hdf5_start_time)s'
             hdf5_capture_filename: '%(file_number)04d' #'data'
-            hdf5_capture_duration: 0 #300 # number of seconds during which data is captured. 0= forver (until stopped), null = Do not write hdf5 data start
+            hdf5_capture_duration: 0 # Write corr HDF5 data until stopped.
 #            hdf5_capture_elements_per_file: 256 # 256 elements=7Mbytes
             hdf5_capture_elements_per_file: 8 # 256 elements=7Mbytes
             hdf5_capture_n_inputs: 16

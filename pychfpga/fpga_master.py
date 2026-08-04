@@ -601,9 +601,13 @@ class FPGAMaster(object):
             raise ValueError(
                 f'Unknown raw capture source {capture_source!r}')
 
-        ib_chans = list(
-            self.fpgas.get_iceboards(
-                targets, lane_type='chan').items())
+        if targets is None:
+            ib_chans = [
+                (ib, ib.get_channels()) for ib in self.fpgas.ib]
+        else:
+            ib_chans = list(
+                self.fpgas.get_iceboards(
+                    targets, lane_type='chan').items())
         if not ib_chans:
             raise ValueError('No FPGA channels matched the capture targets')
         for ib, channels in ib_chans:

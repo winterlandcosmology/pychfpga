@@ -28,6 +28,7 @@ corr16tests/
 docker-data/
 .codex
 .env
+.env.docker
 xreport.xml
 .vscode
 *__pycache__*

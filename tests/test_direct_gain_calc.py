@@ -255,6 +255,8 @@ class _FakeFpgas:
 
     def get_iceboards(self, targets, lane_type='chan'):
         assert lane_type == 'chan'
+        if targets is None:
+            return {0: self.ib[0]}
         return {self.ib[0]: [0]}
 
     def sync(self, **kwargs):
@@ -361,6 +363,20 @@ def test_start_transmission_uses_ice_full_resolution_gain_geometry():
     }]
     assert master.raw_acq_sync_count == 1
     assert master.fpgas.sync_count == 1
+
+
+def test_set_capture_without_targets_uses_all_board_channels():
+    ib = _FakeBoard(_FakeFPGA())
+    master = _fake_master(ib)
+
+    asyncio.run(FPGAMaster.set_fpga_data_capture(
+        master, capture_rate=17, source='adc'))
+
+    assert ib.capture_calls == [{
+        'channels': [0, 1],
+        'sub_period': 17,
+        'source': 'adc',
+    }]
 
 
 def test_start_transmission_rejects_wrong_ice_gain_burst_before_writes():
