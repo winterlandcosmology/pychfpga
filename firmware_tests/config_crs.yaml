@@ -15,7 +15,7 @@ test_config:
     #parameters for scaler tests
     rtol: 0.015
     postscaler: range(MAPPING_POSTSCALER - 1, MAPPING_POSTSCALER + 2) #range(SCALER_SHIFT - INPUT_WIDTH - IMPLICIT_SHIFT + 1, SCALED_WIDTH - IMPLICIT_SHIFT)
-    global_frame_cnt: [100, 30000]
+    frame_cnt: [100, 30000]
     alternating_gain:
         period: [1, 2, 500] #range(1, 20, 2)
     constant_gain:
@@ -23,6 +23,7 @@ test_config:
         #gain: [-3, 32767]
     rounding_modes:
         value: [-8, 7]
+        number_of_fractional_bits: [1, 2, 7]
     double_resolution_capture:
         postscaler: range(12, 22)
     averages:

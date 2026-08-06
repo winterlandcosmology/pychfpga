@@ -4,11 +4,13 @@ import logging
 from .utils import plot
 import matplotlib.pyplot as plt
 import numpy as np
+import asyncio
 class TestModule:
     def board_conn(self, xr):
         if  'board' in xr.data: #check if board is cached to avoid unnecessary reconnection
             return xr.data.board
         ca = FPGAArray(**xr.config.connection_config)
+        asyncio.run(ca.init())
         xr.data.board = ca.ib[0]
         return xr.data.board
 

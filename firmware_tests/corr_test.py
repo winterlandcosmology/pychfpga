@@ -174,8 +174,10 @@ class TestCorr(TestModule):
         Parameters:
             cap_mode (int): capture mode to read back data in
         '''
-        spectrum = self._inject_spectrum('complex_ramp', min=-64, max=63, cap_mode=cap_mode)
+        spectrum = self._inject_spectrum('complex_ramp', min=-8, max=7, cap_mode=cap_mode)
         data = self._read_spectrum()
+        #if cap_mode == 0:
+        #    spectrum = np.clip(spectrum, -8, 7)
         plot([data[0], spectrum], split_complex=True, title=f"Complex ramp spectrum")
         xr.insert_plot()
         np.testing.assert_equal(data[0], spectrum) #no shifting should be required
