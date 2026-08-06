@@ -75,6 +75,8 @@ class UCORR(MMI):
             NDECIM=int(self.BIN_DECIMATION_FACTOR),
             CT_LEVEL=int(self.fpga.CT.CT_LEVEL),
             firmware_integ_period=int(self.INTEGRATION_PERIOD + 1),
+            autocorr_only=bool(self.AUTOCORR_ONLY),
+            no_accum=bool(self.NO_ACCUM),
         )
         self.config.NPROD = self.config.NCHAN * (self.config.NCHAN + 1) // 2 # total number of computed products
 
@@ -103,22 +105,21 @@ class UCORR(MMI):
     def get_bin_map(self):
         fft = self.fpga.chan[0].FFT
         if (
-            fft.config_id == self.config.last_fft_config_id
-            and self.config.bin_map is not None
-            and self.config.prod_map is not None
+            fft.config_id != self.config.last_fft_config_id
+            or self.config.bin_map is None
+            or self.config.prod_map is None
         ):
-            return self.config.bin_map, self.config.prod_map
-
-        self.config.update(
-            CT_LEVEL=int(self.fpga.CT.CT_LEVEL),
-            NDECIM=int(self.config.NDECIM),
-            NCHAN=int(self.config.NCHAN),
-            NCLK=int(self.config.NCLK),
-            firmware_integ_period=int(self.INTEGRATION_PERIOD + 1),
-            fft_bin_map=fft.get_bin_map(),
-        )
+            self.config.update(
+                CT_LEVEL=int(self.fpga.CT.CT_LEVEL),
+                NDECIM=int(self.config.NDECIM),
+                NCHAN=int(self.config.NCHAN),
+                NCLK=int(self.config.NCLK),
+                firmware_integ_period=int(self.INTEGRATION_PERIOD + 1),
+                fft_bin_map=fft.get_bin_map(),
+            )
+            self.config.last_fft_config_id = fft.config_id
+        # Always run map update: cheap when unchanged, and picks up autocorr_only flips.
         self.update_corr_maps(self.config)
-        self.config.last_fft_config_id = fft.config_id
         return self.config.bin_map, self.config.prod_map
 
     @classmethod
@@ -131,6 +132,7 @@ class UCORR(MMI):
         - NCHAN: number of channels
         - NCLK: number of clocks
         - fft_bin_map: FFT bin map
+        - autocorr_only: whether packets carry only diagonal products
 
         The following parameters are then updated:  
         - bin_map: (bin_set, corr, clkbin, prod) = bin
@@ -138,7 +140,7 @@ class UCORR(MMI):
         - NDECIM: number of decimation bins
         - NCORRS: number of correlators
         - NPROD_PER_CMAC: number of products per CMAC
-        - NCMAC: number of CMACs
+        - NCMAC: number of CMACs (products per packet; shrinks when autocorr_only)
         - NBINS: number of bins
         - NPROD_PER_ARRAY: number of products per array
 
@@ -147,7 +149,11 @@ class UCORR(MMI):
         Returns:
             None
         """
-        map_attrs = ('CT_LEVEL', 'NDECIM', 'NCHAN', 'NCLK', 'fft_bin_map')
+        # Ensure optional mode flags exist before change-tracking (older configs omit them).
+        if 'autocorr_only' not in config:
+            config.autocorr_only = False
+
+        map_attrs = ('CT_LEVEL', 'NDECIM', 'NCHAN', 'NCLK', 'fft_bin_map', 'autocorr_only')
         if not config.has_changed(map_attrs, context=map_attrs):
             return
 
@@ -156,10 +162,13 @@ class UCORR(MMI):
         NDECIM = config.NDECIM
         NCHAN = config.NCHAN
         NCLK = config.NCLK
+        autocorr_only = bool(config.autocorr_only)
 
         # Derive useful parameters
         NPROD = NCHAN * (NCHAN + 1) // 2
         NPROD_PER_BINCLK =  NPROD // NCLK # number of products for each binclk, i.e number of products in each packet
+        # Match UCORR44 / UCMAC44_ARRAY: AUTOCORR_STRIDE = NCOL_PER_CLK
+        autocorr_stride = NCHAN // 2 // NCLK
         #print(f"{NCHAN=}, {NCLK=}, {NPROD_PER_BINCLK=}, {NPROD=}")
 
 
@@ -256,11 +265,19 @@ class UCORR(MMI):
         prod_map = np.array([[[cmac_out_pix[clk, clkprod] for clkprod in range(NPROD_PER_BINCLK)] for _ in lane_bins for clk in range(NCLK)] for lane_bins in corr_bins[0]])
 
         #print(f'bin_map={bin_map.shape}, prod_map={prod_map.shape}')
+        # UCMAC44_ARRAY autocorr_only shortens each packet to the NCHAN diagonal
+        # products at CMAC indices i*AUTOCORR_STRIDE (packet length 10+5*NCHAN).
+        if autocorr_only:
+            ac_ix = np.arange(NCHAN) * autocorr_stride
+            bin_map = bin_map[..., ac_ix]
+            prod_map = prod_map[..., ac_ix]
+
         config.bin_map = bin_map
         config.prod_map = prod_map
         config.NDECIM, config.NCORRS, config.NPROD_PER_CMAC, config.NCMAC = bin_map.shape
         config.NBINS = int(bin_map.max()) + 1
         config.NPROD_PER_ARRAY = config.NCORRS * config.NPROD_PER_CMAC
+        config.ack(map_attrs, context=map_attrs)
 
 
     @classmethod
@@ -341,6 +358,8 @@ class UCORR(MMI):
             verbose=verbose,
             corr_config_id=int(self.config.corr_config_id) + 1,  # indicate that some parameters (i.e. integration period) might have changed
         )
+        # Refresh product/packet maps for autocorr_only (changes UDP payload length).
+        self.get_bin_map()
         # Match CORR.start_correlator: hold the array in reset while programming,
         # then release both the GPIO CORR_RESET and the UCORR soft reset so the
         # pipeline can emit packets. Leaving GPIO CORR_RESET asserted (e.g. after
