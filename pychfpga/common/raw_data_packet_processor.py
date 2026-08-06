@@ -478,9 +478,13 @@ class RawDataPacketProcessor(PacketProcessorBase):
             bins_per_word = interleave_factor // 2
             v = data.reshape(logical_rows, interleave_factor, data.shape[1], data.shape[2])
             out = self.fmt_cdata2[source][:logical_rows]
+            # Lane scatter only writes lane::bins_per_word; clear first so a
+            # reused fmt_cdata2 buffer cannot leak samples from a prior decode.
+            out.fill(0)
             # Full-resolution frames carry Re/Im pairs in each physical row.
             complex_values_per_frame = data.shape[2] // 2
             cdata = self.fmt_cdata1[source][:data.shape[0], :, :complex_values_per_frame]
+            cdata.fill(0)
             np.copyto(cdata.real, data[:, :, ::2])
             np.copyto(cdata.imag, data[:, :, 1::2])
             cv = cdata.reshape(logical_rows, interleave_factor, data.shape[1], cdata.shape[2])
@@ -497,7 +501,9 @@ class RawDataPacketProcessor(PacketProcessorBase):
         else:
             # fmt_cdata* are sized for max_timestamps; only slice the active row prefix.
             n_rows = data.shape[0]
-            cdata = self.fmt_cdata1[source][:n_rows]
+            complex_values_per_frame = data.shape[2] // 2
+            cdata = self.fmt_cdata1[source][:n_rows, :, :complex_values_per_frame]
+            cdata.fill(0)
             np.copyto(cdata.real, data[:, :, ::2])
             np.copyto(cdata.imag, data[:, :, 1::2])
 
@@ -513,6 +519,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
                         f'interleave_factor={interleave_factor}'
                     )
                 data = self.fmt_cdata2[source][:out_rows]
+                data.fill(0)
                 v = cdata.reshape(out_rows, interleave_factor, nchan, s2)
                 data[:] = v.transpose(0, 2, 1, 3).reshape(
                     out_rows, nchan, s2 * interleave_factor, order='F')
@@ -658,7 +665,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         # Update the raw data count and raw data complete arrays
         np.add.at(self.raw_data_count, (tix, self.pkt_six[bix], self.pkt_frame[bix]), 1)
 
-    def flush(self, flush_timeout=None):
+    def flush(self, flush_timeout=0.001):
         """Flush UDP receiver and clear assembled-buffer state."""
         self.pr.flush(timeout=flush_timeout, verbose=self.verbose)
         if self.verbose >= 1:

@@ -31,7 +31,7 @@ class RawFrameReceiver(RawDataPacketProcessor):
     def update_config(self, config=None):
         super().update_config(config)
 
-    def flush(self, flush_timeout = None):
+    def flush(self, flush_timeout = 0.001):
         """Clear UDP and assembly state (matches a clean capture)."""
         super().flush(flush_timeout)
         self.current_row = 0
@@ -75,9 +75,11 @@ class RawFrameReceiver(RawDataPacketProcessor):
             self.update_config(config)
             
         ts, data, counts = self.create_output_buffer(n_ts=ncap, source=source, split=split, format=format, complex_override=complex_override)
-        # ts.fill(0)
-        # data.fill(0)
-        # counts.fill(0)
+        # create_output_buffer uses np.empty; clear so unfilled/partial rows cannot
+        # return leftover heap contents as "stale" samples.
+        ts.fill(0)
+        data.fill(0)
+        counts.fill(0)
 
         raw_rows_completed = 0
         fmt_rows_completed = 0
