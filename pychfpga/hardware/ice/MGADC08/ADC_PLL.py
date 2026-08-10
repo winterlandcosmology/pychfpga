@@ -200,7 +200,7 @@ class ADC_PLL_base(object):
                 break
             elif trial > 5:
                 raise RuntimeError('ADC PLL cannot be locked')
-            self.logger.warning(f'{self.adc_board:.32}: ADC PLL did not lock, retrying...')
+            self.logger.warning(f'{self.adc_board!r}: ADC PLL did not lock, retrying...')
             trial += 1
             # self.adc_board.IOExpander.wait_for_bit('PLL1_LOCK', timeout=1)
         # if verbose:
