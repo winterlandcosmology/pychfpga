@@ -755,6 +755,14 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                     router_port = 'CT',
                     state=self.config.add("ct")
                     )
+
+                # BCT modules were moved under self.CT, but the motherboard and
+                # array APIs still expose these long-standing top-level names.
+                # Keep both access paths bound to the same objects.
+                self.CROSSBAR = self.CT.CROSSBAR
+                self.BP_SHUFFLE = self.CT.BP_SHUFFLE
+                self.CROSSBAR2 = self.CT.CROSSBAR2
+                self.CROSSBAR3 = self.CT.CROSSBAR3
             # UCT corner-turn
             elif self.CT_TYPE == "UCT":
                 self.CT = uct_engine.UCTEngine(
@@ -2723,9 +2731,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         """
         return self.default_channels
 
-    def init_crossbars(self, **kwargs):
+    def init_crossbars(self, *args, **kwargs):
         if self.CT:
-            self.CT.init_crossbars(**kwargs)
+            return self.CT.init_crossbars(*args, **kwargs)
 
     def set_channelizer(
             self,
