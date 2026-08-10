@@ -160,8 +160,10 @@ class TestFuncgen(TestModule):
         """
         logger = self.get_logger()
         logger.debug("Starting data capture for one period")
-        self.board.start_data_capture(period=1)
+        self.board.start_data_capture(period=1, source='funcgen')
         receiver = self.board.get_data_receiver()
+        receiver.flush()
+        self.board.sync()
         logger.debug("Reading raw frames")
         ts, data, count = receiver.read_raw_frames(1)
         logger.info(f"Expected {len(count[0])} packages, received {np.sum(count[0])}.")
