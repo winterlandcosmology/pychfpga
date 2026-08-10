@@ -412,8 +412,8 @@ class BCTEngine(MMIRouter):
             raise ValueError(f'3rd crossbar bin map should have {int(number_of_cb3_bin_sel)} lists of bins. Ir currently has {len(cb3_bin_indices)}')
 
         def get_dest_slot_for_src_lane(src_lane):
-            tx = (self.slot, src_lane)  # unique transmitter id (slot, lane)
-            dest_slot = self.crate.get_matching_rx(tx)[0]
+            tx = (self.fpga.slot, src_lane)  # unique transmitter id (slot, lane)
+            dest_slot = self.fpga.crate.get_matching_rx(tx)[0]
             return dest_slot
 
         # def get_src_slot_for_dest_lane(dest_lane):
@@ -439,9 +439,9 @@ class BCTEngine(MMIRouter):
 
         if mode == 'chan8':
 
-            if self.CROSSBAR1_TYPE=="URAM":
-                self.set_corr_reset(0)
-                self.set_chan_reset(0)
+            if self.fpga.CROSSBAR1_TYPE=="URAM":
+                self.fpga.set_corr_reset(0)
+                self.fpga.set_chan_reset(0)
                 return (0,)
 
             # Get raw data from the channelizer (all 32-bit sent as is). Only 8 lanes are available to the GPU.
@@ -663,7 +663,7 @@ class BCTEngine(MMIRouter):
 
             Crossbar3 operates as in shuffle512: data from 8 input lanes is sent to the 8 output GPU lanes. We have 16 bins per lane.
             """
-            if not self.slot:
+            if not self.fpga.slot:
                 raise RuntimeError('The slot number is unknown. Cannot route the appropriate bins to the target boards in the same crate')
 
             #############################
@@ -729,10 +729,10 @@ class BCTEngine(MMIRouter):
             # (tx_slot => rx_lane) = (0=>1), (1->3), 2->0, 3->2, we have a map of [1, 3, 0, 2]
             # If slot 3 is not sending data,  we should discard  data from lanes lane_map[3] = 2
             cb2_lane_map = self.CROSSBAR2.compute_bp_shuffle_lane_map()
-            print(f'slot {self.slot-1}/15: CB2 lane map: {cb2_lane_map}') #[ 0  8  6 14  5  4 15  7  3  2 11  1 13 12  9 10]
+            print(f'slot {self.fpga.slot-1}/15: CB2 lane map: {cb2_lane_map}') #[ 0  8  6 14  5  4 15  7  3  2 11  1 13 12  9 10]
             cb2_ignore_lane = sum((1<<lane) for lane in cb2_lane_map[8:16])
             cb2_lane_map[8:16] = [0,0,0,0,0,0,0,0]  # hack to make sure all the bin sel input lanes have valid data
-            print(f'slot {self.slot-1}/15: CB2 lane map: {cb2_lane_map}') #[ 0  8  6 14  5  4 15  7  3  2 11  1 13 12  9 10]
+            print(f'slot {self.fpga.slot-1}/15: CB2 lane map: {cb2_lane_map}') #[ 0  8  6 14  5  4 15  7  3  2 11  1 13 12  9 10]
             cb2_bypass = True
 
             cb2_input_words_per_bin = cb1_output_words_per_bin
@@ -799,7 +799,7 @@ class BCTEngine(MMIRouter):
                 cb3_input_frame_flags_words_per_frame * cb3_input_lanes_per_output_lane)
 
         elif mode == 'shuffle256':
-            if not self.slot:
+            if not self.fpga.slot:
                 raise RuntimeError('The slot number is unknown. Cannot route the appropriate bins to the target boards in the same crate')
 
             #############################
@@ -977,7 +977,7 @@ class BCTEngine(MMIRouter):
             Like shuffle256, but adds a corner-turn operation between pair of crates using the
             backplane QSFP connections between them.
             """
-            if not self.slot:
+            if not self.fpga.slot:
                 raise RuntimeError('The slot number is unknown. Cannot route the appropriate bins '
                                    'to the target boards in the same crate')
 
@@ -1298,9 +1298,9 @@ class BCTEngine(MMIRouter):
             the same FPGA. in this mode, we simply enable the 1st crossbar. The 2nd and 3rd
             crossbars are not present in the firmware.
             """
-            if self.CT_TYPE == "UCT": # hack
-                self.set_corr_reset(0)
-                self.set_chan_reset(0)
+            if self.fpga.CT_TYPE == "UCT": # hack
+                self.fpga.set_corr_reset(0)
+                self.fpga.set_chan_reset(0)
                 return 0
 
             raise RuntimeError('Unsupported mode corr8 with current firmware configuration')
@@ -1328,7 +1328,7 @@ class BCTEngine(MMIRouter):
             stream_type = 4
 
             cb2_input_bins = cb1_bins
-            if bp_shuffle_bypass and self.slot is not None:
+            if bp_shuffle_bypass and self.fpga.slot is not None:
                 cb2_lane_map = self.CROSSBAR2.compute_bp_shuffle_lane_map()
             else:
                 cb2_lane_map = list(range(16))
@@ -1376,7 +1376,7 @@ class BCTEngine(MMIRouter):
         self.fpga.set_corr_reset(1)
 
         # slot_number = self.slot - 1 if self.slot is not None else 0
-        slot_number = self.slot - 1 if self.slot else 0  # SC 03/17/2019 changed for individual iceboard
+        slot_number = self.fpga.slot - 1 if self.fpga.slot else 0  # SC 03/17/2019 changed for individual iceboard
 
         ###########################
         #  Configure CROSSBAR 1
@@ -1524,6 +1524,6 @@ class BCTEngine(MMIRouter):
                           data_flags_words_per_bin=cb3_output_data_flags_words_per_bin,
                           frame_flags_words_per_frame=cb3_output_frame_flags_words_per_frame)
 
-        self.set_corr_reset(0)
-        self.set_chan_reset(0)
+        self.fpga.set_corr_reset(0)
+        self.fpga.set_chan_reset(0)
         return stream_id
