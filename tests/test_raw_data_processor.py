@@ -6,6 +6,7 @@ import pytest
 
 from pychfpga.common.raw_data_packet_processor import (
     PACKET_COOKIE_ADC,
+    PACKET_COOKIE_CT,
     PACKET_COOKIE_FFT,
     RAW_SOURCE_EMPTY,
     RawDataPacketProcessor,
@@ -729,3 +730,209 @@ def test_split_format_core_and_modifiers_suffix():
     assert split("32+32") == ("32+32", "")
     assert split("16saturationflags") == ("16", "saturationflags")
     assert split("8") == ("8", "")
+
+
+# ---------------------------------------------------------------------------
+# Corner-turn capture probe (ct_prober, cookie 0xA2, source index 2)
+# ---------------------------------------------------------------------------
+
+CT_STREAM_ID = 0x015  # crate 0, slot 1, lane 5
+CT_HEADER_WORDS = 4
+CT_DATA_WORDS = 2  # tiny geometry: 2 data words -> 7 words per CT packet
+CT_WORDS_PER_PACKET = CT_HEADER_WORDS + CT_DATA_WORDS + 1  # + trailer word
+
+
+def ct_capture_format(use_offset_encoding=False, four_bits=True):
+    return State(
+        fmt_bus_width=8,
+        fmt_data_width=4,
+        fmt_is_complex=True,
+        fmt_interleave_factor=1,
+        fmt_ct_packed=True,
+        fmt_header_words=CT_HEADER_WORDS,
+        fmt_data_words=CT_DATA_WORDS,
+        fmt_four_bits=four_bits,
+        fmt_frames_per_packet=1,
+        fmt_bins=CT_DATA_WORDS,
+        fmt_channels_per_bin=4,
+        use_offset_encoding=use_offset_encoding,
+    )
+
+
+def default_ct_config(frames_per_burst=1, **overrides):
+    bytes_per_frame = 4 * CT_WORDS_PER_PACKET
+    state = default_config(
+        source="ct",
+        channels=(),
+        stream_ids=(CT_STREAM_ID,),
+        frames_per_burst=frames_per_burst,
+        samples_per_frame=bytes_per_frame,
+        bytes_per_frame=bytes_per_frame,
+        bytes_per_subframe=bytes_per_frame,
+        capture_bits_per_word=32,
+        capture_format=[None, None, ct_capture_format()],
+        packet_cookie=[PACKET_COOKIE_ADC, PACKET_COOKIE_FFT, PACKET_COOKIE_CT],
+    )
+    state.update(overrides)
+    return state
+
+
+def make_ct_processor(n_packets=16, frames_per_burst=1, receive_window=3, **kwargs):
+    pr = DummyPacketReceiver(n_packets=n_packets, max_packet_size=64)
+    state = default_ct_config(frames_per_burst=frames_per_burst, **kwargs)
+    return RawDataPacketProcessor(pr, config=state, receive_window=receive_window), pr
+
+
+def write_ct_packet(
+        processor,
+        pr,
+        ix,
+        ts,
+        burst_index=0,
+        stream_id=CT_STREAM_ID,
+        data_words=(0, 0),
+        pkt_len=None):
+    """Write a wrapped CT packet: 10-byte capture header + big-endian 32-bit words.
+
+    Word 0 mimics the inner CT header cookie word (0x...14CF); the last word is
+    the all-zero packet-flags trailer emitted by the firmware.
+    """
+    words = np.zeros(CT_WORDS_PER_PACKET, dtype=np.uint32)
+    words[0] = (stream_id << 16) | (1 << 12) | (CT_HEADER_WORDS << 8) | 0xCF
+    words[3] = int(ts) & 0xFFFFFFFF  # inner frame timestamp
+    words[CT_HEADER_WORDS:CT_HEADER_WORDS + CT_DATA_WORDS] = np.asarray(data_words, dtype=np.uint32)
+    pr.buf[ix, 0] = 0xA2
+    pr.buf[ix, 1] = ((burst_index & 0xF) << 4) | ((stream_id >> 8) & 0xF)
+    pr.buf[ix, 2] = stream_id & 0xFF
+    pr.buf[ix, 3] = 0
+    pr.buf[ix, 4:10] = np.frombuffer(int(ts).to_bytes(6, "big"), dtype=np.uint8)
+    payload = words.astype(">u4").view(np.uint8)  # MSB-first on the wire
+    pr.buf[ix, 10:10 + payload.size] = payload
+    pr.pkt_len[ix] = processor.PACKET_SIZE if pkt_len is None else pkt_len
+    pr.n_stored = max(pr.n_stored, ix + 1)
+
+
+def test_ct_cookie_accepted_and_decoded():
+    """0xA2 packets land in source 2 and decode to (4+4)-bit complex samples."""
+    processor, pr = make_ct_processor()
+    assert processor.PACKET_SIZE == 10 + 4 * CT_WORDS_PER_PACKET
+    # Word value 0x7F8801F0: wire bytes 7F 88 01 F0, logical channel order is
+    # LSB-first, so channels decode as F0, 01, 88, 7F.
+    write_ct_packet(processor, pr, 0, ts=100, data_words=(0x7F8801F0, 0x12345678))
+    result = process_and_get(processor, source=2)
+    assert result is not None
+    ts, data, counts = result
+    assert data.dtype == np.complex64
+    assert data.shape == (1, 1, 4 * CT_DATA_WORDS)
+    np.testing.assert_array_equal(ts, [100])
+    np.testing.assert_array_equal(counts, [[1]])
+    assert processor.raw_source[0, 0, 0] == 2
+    expected = np.asarray([
+        -1 + 0j, 0 + 1j, -8 - 8j, 7 - 1j,   # F0, 01, 88, 7F
+        7 - 8j, 5 + 6j, 3 + 4j, 1 + 2j,     # 78, 56, 34, 12
+    ], dtype=np.complex64)
+    np.testing.assert_array_equal(data[0, 0], expected)
+
+
+def test_ct_offset_binary_decode():
+    """use_offset_encoding converts offset-binary nibbles to two's complement."""
+    processor, pr = make_ct_processor(
+        capture_format=[None, None, ct_capture_format(use_offset_encoding=True)])
+    write_ct_packet(processor, pr, 0, ts=100, data_words=(0x00F78888, 0))
+    ts, data, counts = process_and_get(processor, source=2)
+    # Bytes LSB-first: 88, 88, F7, 00 -> XOR 0x88 -> 00, 00, 7F, 88
+    expected_first = np.asarray([0 + 0j, 0 + 0j, 7 - 1j, -8 - 8j], dtype=np.complex64)
+    np.testing.assert_array_equal(data[0, 0, :4], expected_first)
+
+
+def test_ct_format32_returns_raw_words():
+    """format='32' bypasses the packed decode and returns all packet words."""
+    processor, pr = make_ct_processor()
+    write_ct_packet(processor, pr, 0, ts=100, data_words=(0x7F8801F0, 0x12345678))
+    processor.process_udp_packets()
+    ts, data, counts = processor.get_formatted_data(
+        slice(0, processor.n_out), source=2, format="32")
+    assert data.shape == (1, 1, CT_WORDS_PER_PACKET)
+    words = data[0, 0].astype(np.int64) & 0xFFFFFFFF
+    assert words[0] & 0xFF == 0xCF                    # inner CT header cookie
+    assert (words[0] >> 8) & 0xF == CT_HEADER_WORDS   # header length
+    assert (words[0] >> 12) & 0xF == 1                # protocol
+    assert words[0] >> 16 == CT_STREAM_ID
+    assert words[4] == 0x7F8801F0
+    assert words[5] == 0x12345678
+    assert words[6] == 0                              # packet-flags trailer
+
+
+def test_ct_burst_split_rows_and_timestamps():
+    """A multi-packet burst yields one row per CT packet with consecutive ts."""
+    processor, pr = make_ct_processor(frames_per_burst=2)
+    write_ct_packet(processor, pr, 0, ts=100, burst_index=0, data_words=(0x01010101, 0))
+    write_ct_packet(processor, pr, 1, ts=100, burst_index=1, data_words=(0x02020202, 0))
+    ts, data, counts = process_and_get(processor, source=2)
+    np.testing.assert_array_equal(ts, [100, 101])
+    assert data.shape == (2, 1, 4 * CT_DATA_WORDS)
+    np.testing.assert_array_equal(data[0, 0, :4], np.full(4, 0 + 1j, dtype=np.complex64))
+    np.testing.assert_array_equal(data[1, 0, :4], np.full(4, 0 + 2j, dtype=np.complex64))
+    np.testing.assert_array_equal(counts, [[1], [1]])
+
+
+def test_ct_wrong_length_dropped():
+    """A 0xA2 packet whose size does not match the configured geometry is dropped."""
+    processor, pr = make_ct_processor()
+    write_ct_packet(processor, pr, 0, ts=100, pkt_len=processor.PACKET_SIZE - 4)
+    processor.process_udp_packets()
+    assert processor.n_out == 0
+
+
+def test_ct_dropped_by_legacy_two_cookie_config():
+    """Configs without 0xA2 in packet_cookie (CRS/UCAP, older ICE) drop CT packets."""
+    processor, pr = make_processor(n_packets=4)  # legacy chan config, no packet_cookie
+    assert list(processor.config.packet_cookie) == [PACKET_COOKIE_ADC, PACKET_COOKIE_FFT]
+    pr.buf[0, 0] = 0xA2
+    pr.buf[0, 1] = (10 >> 8) & 0xF
+    pr.buf[0, 2] = 10 & 0xFF
+    pr.buf[0, 4:10] = np.frombuffer(int(100).to_bytes(6, "big"), dtype=np.uint8)
+    pr.pkt_len[0] = processor.PACKET_SIZE  # even a size match must not help
+    pr.n_stored = 1
+    processor.process_udp_packets()
+    assert processor.n_out == 0
+
+
+def test_ct_source2_without_capture_format_raises():
+    """Reading source 2 on a chan-capture config fails with a clear error."""
+    processor, pr = make_processor(n_packets=4, stream_ids=(10,), channels=(0,))
+    write_packet(processor, pr, 0, stream_id=10, ts=100)
+    processor.process_udp_packets()
+    with pytest.raises(ValueError, match="No capture format is configured for source 2"):
+        processor.get_formatted_data(slice(0, processor.n_out), source=2)
+
+
+def test_ct_mixed_source_invalidates_cell():
+    """A cell receiving both 0xA0 and 0xA2 packets is flagged invalid (counts=-1)."""
+    processor, pr = make_ct_processor()
+    write_ct_packet(processor, pr, 0, ts=100)
+    # Same stream id, same timestamp, chan cookie, matching size
+    write_ct_packet(processor, pr, 1, ts=100)
+    pr.buf[1, 0] = PACKET_COOKIE_ADC
+    processor.process_udp_packets()
+    assert processor.raw_data_count[0, 0, 0] == -1
+    assert processor.raw_source[0, 0, 0] == RAW_SOURCE_EMPTY
+
+
+def test_chan_sources_unchanged_with_three_cookie_list():
+    """A0/A1 decode behavior is unchanged when 0xA2 is listed as source 2."""
+    processor, pr = make_processor(
+        n_packets=4,
+        packet_cookie=[PACKET_COOKIE_ADC, PACKET_COOKIE_FFT, 0xA2],
+        capture_format=[
+            capture_format_for_tests("8"),
+            _unused_capture_format_slot(),
+            None,
+        ],
+    )
+    write_burst(processor, pr, 0, ts=100, payload_base=10)
+    ts, data, counts = process_and_get(processor, source=0)
+    np.testing.assert_array_equal(ts, [100])
+    np.testing.assert_array_equal(counts, [[1, 1]])
+    np.testing.assert_array_equal(data[0, 0], np.full(4, 11, dtype=data.dtype))
+    np.testing.assert_array_equal(data[0, 1], np.full(4, 12, dtype=data.dtype))

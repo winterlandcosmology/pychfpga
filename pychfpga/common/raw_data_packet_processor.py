@@ -11,9 +11,10 @@ from .state import State
 
 PACKET_COOKIE_ADC = 0xA0
 PACKET_COOKIE_FFT = 0xA1
+PACKET_COOKIE_CT = 0xA2  # corner-turn output capture probe (ct_prober)
 PACKET_COOKIE_MASK = 0xFE
 RAW_SOURCE_EMPTY = 255
-NUM_SOURCES = 2
+NUM_SOURCES = 3
 
 
 def decode_format_string(format):
@@ -144,8 +145,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.config = State()
         self.packet_cookie_mask = PACKET_COOKIE_MASK
         self.source_target_mode = np.zeros((NUM_SOURCES,), dtype=np.uint8)
-        self._capture_format = [None, None]
-        self._fmt_scratch = [{}, {}]
+        self._capture_format = [None] * NUM_SOURCES
+        self._fmt_scratch = [{} for _ in range(NUM_SOURCES)]
         super().__init__(packet_receiver, receive_window, verbose)
         if config is not None:
             self.update_config(State(config).deepcopy())
@@ -186,7 +187,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.pkt_cookie = np.empty((n_packets,), dtype=np.uint8)
         self.pkt_frame = np.empty((n_packets,), dtype=np.uint32) # same as pkt_off  into the data buffer for each packet
         self.pkt_subframe = np.empty((n_packets,), dtype=np.uint32) # must be wide enough to compute the offset into the data buffer for each packet
-        # self.pkt_source = np.empty((n_packets,), dtype=np.uint8)
+        self.pkt_source = np.empty((n_packets,), dtype=np.int8)  # source index per packet from the cookie lookup (-1 = unknown cookie)
 
         self.pkt_six = np.empty((n_packets,), dtype=np.uint16)
         self.pkt_off = np.empty((n_packets,), dtype=np.uint32)
@@ -197,11 +198,12 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.raw_source_buf = np.empty(0, dtype=np.uint8)
         self.raw_subframe_mask_buf = np.empty(0, dtype=np.uint8)
         self.raw_source_mask_buf = np.empty(0, dtype=np.uint8)
-        self.formatted_data_bufs = [np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)]
+        self.formatted_data_bufs = [np.empty(0, dtype=np.uint8) for _ in range(NUM_SOURCES)]
         self.fmt_cdata_buf1_0, self.fmt_cdata_buf1_1 = np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)
         self.fmt_cdata_buf2_0, self.fmt_cdata_buf2_1 = np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)
-        self.fmt_cdata1 = [None, None]
-        self.fmt_cdata2 = [None, None]
+        self.fmt_cdata_buf1_2, self.fmt_cdata_buf2_2 = np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)
+        self.fmt_cdata1 = [None] * NUM_SOURCES
+        self.fmt_cdata2 = [None] * NUM_SOURCES
 
     def update_config(self, config=None):
         if config is not None:
@@ -210,6 +212,10 @@ class RawDataPacketProcessor(PacketProcessorBase):
         state = self.config
         if state.get("capture_bits_per_word") is None:
             state.capture_bits_per_word = int(state.get("bytes_per_sample", 1) or 1) * 8
+        if state.get("packet_cookie") is None:
+            # Legacy configs (CRS/UCAP, older ICE) list no cookies: default to
+            # the two channelizer sources, which never admit 0xA2.
+            state.packet_cookie = [PACKET_COOKIE_ADC, PACKET_COOKIE_FFT]
 
         # List if state attributes that do not change during normal operation and will require reallocation of internal buffers
         # The tuple is used both as a list of attributes and the context token
@@ -226,6 +232,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
             "packets_per_logical_frame",
             "logical_frames_per_burst",
             "packet_header_format",
+            "packet_cookie",
         )
 
         # Recompute output buffer arrays if the packet geometry parameter has changed 
@@ -263,6 +270,19 @@ class RawDataPacketProcessor(PacketProcessorBase):
             self.CAPTURE_SOURCE = state.source
             self.FFT_BINS_PER_WORD = state.fft_bins_per_word or 1
             self.CAPTURE_BITS_PER_WORD = int(state.capture_bits_per_word)
+
+            # Cookie-to-source-index lookup table. Configs list the accepted
+            # cookies in source order (0xA0 -> 0, 0xA1 -> 1, and 0xA2 -> 2 for
+            # firmware with the corner-turn capture probe); every other cookie
+            # maps to -1 and is dropped by filter_packets. Legacy two-entry
+            # configs (CRS/UCAP, older ICE builds) therefore never admit 0xA2.
+            cookies = list(state.packet_cookie)
+            if len(cookies) > NUM_SOURCES:
+                raise ValueError(
+                    f"packet_cookie lists {len(cookies)} cookies but only "
+                    f"{NUM_SOURCES} capture sources are supported")
+            self.cookie_source_map = np.full(256, -1, dtype=np.int8)
+            self.cookie_source_map[np.asarray(cookies, dtype=np.intp)] = np.arange(len(cookies), dtype=np.int8)
 
             self.NCHAN = len(self.stream_ids)
             # Map of stream IDs to stream index
@@ -324,6 +344,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         dynamic_state_attrs = (
             "capture_format0",
             "capture_format1",
+            "capture_format2",
         )
 
         for source, cf in enumerate(state.capture_format):
@@ -333,7 +354,20 @@ class RawDataPacketProcessor(PacketProcessorBase):
                 cf = State(cf)
                 state.capture_format[source] = cf
             if cf.has_changed(context=dynamic_state_attrs[source]):
-                if cf.fmt_is_complex:
+                if cf.get("fmt_ct_packed"):
+                    # Corner-turn packets: one (4+4)-bit complex value per
+                    # payload byte, fmt_data_words 32-bit words per CT packet
+                    # (the 4-word CT header, optional flags and the trailer
+                    # word are stripped by get_formatted_data). Output rows
+                    # are per wire packet, so only fmt_cdata1 is needed.
+                    cdata1_dims = (
+                        self.max_timestamps * self.FRAMES_PER_BURST,
+                        self.NCHAN,
+                        4 * int(cf.fmt_data_words),
+                    )
+                    self.fmt_cdata1[source] = self.resize_buffer(
+                        f"fmt_cdata_buf1_{source}", cdata1_dims, element_dtype=np.complex64)
+                elif cf.fmt_is_complex:
                     fmt_bus_width = int(cf.fmt_bus_width)
                     fmt_data_width = int(cf.fmt_data_width)
                     bytes_per_integer = math.ceil(fmt_bus_width / 8)
@@ -419,9 +453,66 @@ class RawDataPacketProcessor(PacketProcessorBase):
         if format is not None:
             cf = decode_format_string(format)
         else:
+            if not 0 <= source < len(self.config.capture_format):
+                raise ValueError(
+                    f"No capture format is configured for source {source}. "
+                    f"Source 2 (CT, cookie 0xA2) requires an active "
+                    f"start_data_capture(source='ct') on an ICE corner-turn "
+                    f"firmware; this configuration only has "
+                    f"{len(self.config.capture_format)} source(s).")
             cf = self.config.capture_format[source]
-            if cf is not None and not isinstance(cf, State):
+            if cf is None:
+                raise ValueError(
+                    f"No capture format is configured for source {source}. "
+                    f"Source 2 (CT, cookie 0xA2) requires an active "
+                    f"start_data_capture(source='ct') on an ICE corner-turn "
+                    f"firmware; reconfigure the capture or pass format=.")
+            if not isinstance(cf, State):
                 cf = State(cf)
+
+        if cf.get("fmt_ct_packed"):
+            # Corner-turn packets: each burst row holds FRAMES_PER_BURST
+            # complete CT packets of big-endian 32-bit words (4-word CT
+            # header, data block, optional flags blocks, one trailer word).
+            # Strip the header and everything after the data block, and
+            # unpack the (4+4)-bit complex bytes. The logical layout of the
+            # returned samples is (frames_per_packet, bins, channels_per_bin)
+            # flattened, i.e. reshape with
+            # data.reshape(-1, fmt_frames_per_packet, fmt_bins, fmt_channels_per_bin);
+            # the bin numbers map through CT.CROSSBAR.BIN_SEL[lane].get_selected_bins().
+            # Use format='32' to get the raw words including the CT header.
+            if not cf.get("fmt_four_bits", True):
+                raise NotImplementedError(
+                    "8-bit corner-turn payload decode is not implemented; "
+                    "use format='32' to read the raw packet words")
+            n_ts, nchan, nbytes_burst = raw_data.shape
+            frames_per_burst = int(self.FRAMES_PER_BURST)
+            words_per_packet = nbytes_burst // frames_per_burst // 4
+            header_words = int(cf.get("fmt_header_words", 4))
+            data_words = int(cf.fmt_data_words)
+            w = raw_data.view(">u4").reshape(n_ts, nchan, frames_per_burst, words_per_packet)
+            payload = w[..., header_words:header_words + data_words]
+            # The wire serializes each word MSB-first, but channel 0 of a bin
+            # word sits in the LSBs: byteswap so bytes come out in logical
+            # channel order (same convention as the legacy GPU-link decoder).
+            b = np.ascontiguousarray(payload.astype("<u4")).view(np.uint8)
+            b = b.reshape(n_ts, nchan, frames_per_burst, 4 * data_words)
+            if cf.get("use_offset_encoding"):
+                b = b ^ np.uint8(0x88)  # offset-binary nibbles -> two's complement
+            s = b.view(np.int8)
+            # Split each wire packet into its own output row; the packets of a
+            # burst are consecutive CT packets, so extend the timestamps the
+            # same way as the generic split path below.
+            s = s.transpose(0, 2, 1, 3).reshape(n_ts * frames_per_burst, nchan, 4 * data_words)
+            cdata = self.fmt_cdata1[source][:n_ts * frames_per_burst]
+            np.copyto(cdata.real, s >> 4)                                # Re = signed high nibble
+            np.copyto(cdata.imag, np.left_shift(s, 4).astype(np.int8) >> 4)  # Im = signed low nibble
+            frame_offsets = np.arange(frames_per_burst, dtype=ts.dtype)
+            ts = (ts[:, None] + frame_offsets[None, :]).reshape(-1)
+            sources = sources.swapaxes(-1, -2).reshape(n_ts * frames_per_burst, -1)
+            counts = counts.swapaxes(-1, -2).reshape(n_ts * frames_per_burst, -1) * (sources == source)
+            return ts, cdata, counts
+
         base = cf.fmt_bus_width
         is_complex = cf.fmt_is_complex
         if complex_override is not None:
@@ -568,9 +659,11 @@ class RawDataPacketProcessor(PacketProcessorBase):
         bix_mask = self.bix_mask[:n]
         temp_mask = self.tmp_mask[:n]
 
-        # Filter out packets with the wrong cookie or packet size
-        np.bitwise_and(self.buf_cookie[:n], self.PACKET_COOKIE_MASK, out=self.pkt_cookie[:n])
-        np.equal(self.pkt_cookie[:n], self.PACKET_COOKIE, out=bix_mask)
+        # Filter out packets with an unknown cookie or the wrong packet size.
+        # The cookie lookup also yields the source index for each packet
+        # (0xA0 -> 0, 0xA1 -> 1, 0xA2 -> 2 when configured; -1 = drop).
+        np.take(self.cookie_source_map, self.buf_cookie[:n], out=self.pkt_source[:n])
+        np.greater_equal(self.pkt_source[:n], 0, out=bix_mask)
         np.equal(self.pr.pkt_len[:n], self.PACKET_SIZE, out=temp_mask[:n], where=bix_mask)
         np.bitwise_and(bix_mask, temp_mask[:n], out=bix_mask)
 
@@ -694,7 +787,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         )
 
         source_bit = np.left_shift(
-            np.uint8(1), (self.buf_cookie[bix] & 1).astype(np.uint8, copy=False)
+            np.uint8(1), self.pkt_source[bix].astype(np.uint8, copy=False)
         )
         np.bitwise_or.at(self.raw_source_mask, (tix, six, frame), source_bit)
 
@@ -725,7 +818,11 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.raw_source[affected_index] = np.where(
             source_masks == 1,
             0,
-            np.where(source_masks == 2, 1, RAW_SOURCE_EMPTY),
+            np.where(
+                source_masks == 2,
+                1,
+                np.where(source_masks == 4, 2, RAW_SOURCE_EMPTY),
+            ),
         )
 
     def flush(self, flush_timeout=None):

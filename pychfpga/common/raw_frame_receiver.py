@@ -55,7 +55,8 @@ class RawFrameReceiver(RawDataPacketProcessor):
         Parameters:
             ncap (int): Number of **bursts** to capture. The number of rows returned might be different depending `split` and the specific output format for the specified source
             split (bool): If True, split each burst into per-firmware-frame rows. Has an effect only on real data (i.e. timestream typically returned by source 0). Has no effect on complex data
-            source (int): Capture source index (0=ADC, 1=FFT).
+            source (int): Capture source index (0=ADC/funcgen, 1=FFT/scaler,
+                2=corner-turn probe on ICE ct firmware).
             flush (bool): If True, flush UDP and assembly state before capture.
             chan_first (bool): If True (default), ``data`` is ``(nchan, ncap, nsamples)``.
                 If False, ``data`` is ``(ncap, nchan, nsamples)``.
