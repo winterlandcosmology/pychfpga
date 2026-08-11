@@ -47,7 +47,7 @@ test_config:
     shift_clip_width:
         shift: [5]
         clip_width: [5]
-    overflow_ctr: 
+    overflow_ctr:
         expected_overflows_per_frame: [0, 1, 1000, 2000]
         stats_frames: [10]
         mode: ['word_ctr_buffer_flags', 'frame8', 'frame4']

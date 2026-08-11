@@ -47,7 +47,18 @@ test_config:
         clip_width: [5]
     frame_counter_nibble:
         burst_period_in_frames: [4001]
-    overflow_ctr: 
+    overflow_ctr:
         expected_overflows_per_frame: [0, 1, 1000, 2000]
         stats_frames: [10]
         mode: ['word_ctr_buffer_flags', 'frame8', 'frame4']
+
+    #parameters for ct_prober tests
+    global_lane: [0]        # corner-turn output lane(s) captured by the probe tests
+    lane_readback:
+        lanes: ((0, 3, MAX_LANE),)
+    lane_switch:
+        target_lane: [3]    # lane switched to on the fly; must differ from lane 0
+    corner_turn_shuffle16:
+        lane: range(MAX_LANE + 1)
+        waveform: ['ramp', 'channel_id', 'noise']
+
