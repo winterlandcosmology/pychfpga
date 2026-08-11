@@ -65,6 +65,7 @@ from .ct_engine import ucorn
 from .ct_engine import gpu
 from .ct_engine import cge
 from .ct_engine import ucap
+from .ct_engine import ct_prober
 
 # FPGA Correlator (X-Engine)
 from .x_engine import CORR, UCORR  # Correlators (if implemented in firmware)
@@ -165,6 +166,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             'GPU': 3,
             'CORR': 4,
             'UCORN': 5,
+            'CT_PROBER': 6,  # Corner-turn output capture probe (ICE ct bitstreams only)
             'UCAP': 7
         }
 
@@ -821,6 +823,21 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 self.UCAP = ucap.UCAP(router=self.top_router, router_port = 'UCAP', state=self.config.add("ucap"))
             elif self.CAPTURE_TYPE !='PROBER':
                 raise RuntimeError(f'Unknown Data capture type {self.CAPTURE_TYPE}')
+
+            # Corner-turn output capture probe (ct_prober, cookie 0xA2, BSB port 6).
+            # Only ICE corner-turn bitstreams implement it (IMPLEMENT_CT_PROBER=TRUE,
+            # a CT_LEVEL=3 build); corr16 builds (CT_LEVEL=1) and CRS/UCAP platforms
+            # never do, so CT_PROBER stays None there and every access raises a clear
+            # error. There is no GPIO capability bit for it yet (future firmware
+            # improvement): a custom CT_LEVEL=3 build without the probe would only be
+            # detected by an MMI timeout on first access. Construction is pure python
+            # (no bus traffic), and the probe's power-on default is parked, so it is
+            # deliberately never initialized during board init.
+            if self.CAPTURE_TYPE == 'PROBER' and self.CT_TYPE == 'BCT' and self.CT_LEVEL == 3:
+                self.CT_PROBER = ct_prober.CTProber(router=self.top_router, router_port='CT_PROBER',
+                                                    instance_number=0, state=self.config.add("ct_prober"))
+            else:
+                self.CT_PROBER = None
 
 
             # ---------------------------------------------------------------------
@@ -2201,7 +2218,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         Returns:
             State with keys ``raw`` and ``corr``.
         """
-        from pychfpga.common.raw_data_packet_processor import PACKET_COOKIE_ADC, PACKET_COOKIE_FFT
+        from pychfpga.common.raw_data_packet_processor import PACKET_COOKIE_ADC, PACKET_COOKIE_FFT, PACKET_COOKIE_CT
         from pychfpga.fpga_firmware.chfpga.x_engine.UCORR import UCORR
 
         if "raw_capture" not in self.config:
@@ -2220,6 +2237,80 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 bytes_per_frame=int(self.ADC_BYTES_PER_SAMPLE * self.ADC_SAMPLES_PER_FRAME),
                 packet_header_format="raw-v1",
             )
+
+        if str(raw_capture.get("source", "")) == "ct":
+            # Corner-turn capture (ct_prober, cookie 0xA2): a single stream of
+            # complete CT packets from one lane. The chan-oriented geometry
+            # below does not apply; build the config directly from the probe
+            # and CB1 bin-sel readback and return.
+            if self.CT_PROBER is None:
+                raise RuntimeError(
+                    f"raw capture source is 'ct' but this firmware has no corner-turn "
+                    f"capture probe (CAPTURE_TYPE={self.CAPTURE_TYPE!r}, "
+                    f"CT_TYPE={self.CT_TYPE!r}, CT_LEVEL={self.CT_LEVEL!r}); "
+                    f"reconfigure the capture with start_data_capture()")
+            lane = raw_capture.get("lane")
+            lane = int(lane) if lane is not None else int(self.CT_PROBER.LANE_SEL)
+            ct_geometry = self.CT_PROBER.get_packet_geometry(lane)
+            # Hardware overwrites stream-id bits 15:12 (burst index, outside the
+            # receiver's 12-bit mask) and 3:0 (lane); the effective 12-bit
+            # stream id on the wire is therefore the programmed bits 11:4 plus
+            # the lane number.
+            ct_stream_id = (int(self.CT_PROBER.STREAM_ID) & 0x0FF0) | lane
+            pkt_frames_per_burst = int(
+                raw_capture.get("frames_per_burst", self._capture_pkt_frames_per_burst or 1) or 1
+            )
+            bytes_per_frame = 4 * ct_geometry['words_per_packet']
+            ct_capture_format = State(
+                fmt_bus_width=8,
+                fmt_data_width=4 if ct_geometry['four_bits'] else 8,
+                fmt_is_complex=True,
+                fmt_interleave_factor=1,
+                fmt_ct_packed=True,
+                fmt_header_words=4,
+                fmt_data_words=int(ct_geometry['data_words']),
+                fmt_four_bits=bool(ct_geometry['four_bits']),
+                fmt_frames_per_packet=int(ct_geometry['frames_per_packet']),
+                fmt_bins=int(ct_geometry['bins_per_frame']),
+                fmt_channels_per_bin=int(ct_geometry['channels_per_bin']),
+                use_offset_encoding=bool(ct_geometry['use_offset_binary']),
+            )
+            raw = State(
+                capture_engine=raw_capture.get("capture_engine", self.CAPTURE_TYPE) or self.CAPTURE_TYPE,
+                channels=(),
+                stream_ids=(ct_stream_id,),
+                frames_per_burst=pkt_frames_per_burst,
+                target_mode=0,
+                subframes_per_frame=1,
+                bytes_per_sample=1,
+                samples_per_frame=bytes_per_frame,
+                bytes_per_frame=bytes_per_frame,
+                bytes_per_subframe=bytes_per_frame,
+                packets_per_channel_per_burst=pkt_frames_per_burst,
+                logical_frames_per_burst=pkt_frames_per_burst,
+                fft_bins_per_word=1,
+                capture_bits_per_word=32,
+                packet_header_format="raw-v1",
+                source='ct',
+                lane=lane,
+                capture_format=[None, None, ct_capture_format],
+                source_target_mode=[0, 0, 0],
+                packets_per_logical_frame=[1, 1, 1],
+                packet_cookie=[PACKET_COOKIE_ADC, PACKET_COOKIE_FFT, PACKET_COOKIE_CT],
+                fft_offset_encoding=False,
+                offset_encoding=False,
+                fft_bin_map=None,
+            )
+            self.config.capture_format = [None, None, ct_capture_format]
+            # ICE corner-turn bitstreams implement no correlator
+            # (CONFIG_CORR_TYPE=NONE), so the corr subtree is empty here. If a
+            # future build pairs a correlator with the ct probe, factor the
+            # corr-subtree construction out of the channelizer path below.
+            corr = State()
+            raw_capture.update(raw.as_dict())
+            result = State(raw=raw, corr=corr)
+            self._cached_receiver_config = result
+            return result
 
         if channels is None and stream_ids is not None:
             if isinstance(stream_ids, (int, np.integer)):
@@ -2417,14 +2508,29 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             dtype=np.intp,
         )
 
-        self.config.capture_format = [adc_capture_format, fft_capture_format]
+        capture_format_list = [adc_capture_format, fft_capture_format]
+        source_target_mode_list = [0, int(target_mode)]
+        packets_per_logical_frame_list = [adc_pplf, fft_pplf]
+        packet_cookie_list = [PACKET_COOKIE_ADC, PACKET_COOKIE_FFT]
+        if getattr(self, 'CT_PROBER', None) is not None:
+            # Firmware with the corner-turn capture probe can also emit cookie
+            # 0xA2 packets (source index 2); they carry no decode format during
+            # a channelizer capture, so reading source=2 raises a clear error.
+            # On CRS/UCAP platforms and corr16 builds the lists keep their
+            # legacy two entries and 0xA2 packets are never admitted.
+            capture_format_list.append(None)
+            source_target_mode_list.append(0)
+            packets_per_logical_frame_list.append(1)
+            packet_cookie_list.append(PACKET_COOKIE_CT)
+
+        self.config.capture_format = capture_format_list
         raw = State(
             **shared_geometry,
             source=source,
-            capture_format=[adc_capture_format, fft_capture_format],
-            source_target_mode=[0, int(target_mode)],
-            packets_per_logical_frame=[adc_pplf, fft_pplf],
-            packet_cookie=[PACKET_COOKIE_ADC, PACKET_COOKIE_FFT],
+            capture_format=capture_format_list,
+            source_target_mode=source_target_mode_list,
+            packets_per_logical_frame=packets_per_logical_frame_list,
+            packet_cookie=packet_cookie_list,
             fft_offset_encoding=bool(fft_offset_encoding),
             offset_encoding=bool(fft_offset_encoding),
             fft_bin_map=fft_bin_map,
@@ -3134,6 +3240,11 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         if self.CAPTURE_TYPE == "PROBER":
             for chan in self.chan.values():
                 chan.PROBER.RESET = 1
+            if self.CT_PROBER is not None:
+                # The ct prober self-triggers off the corner-turn packet stream;
+                # GLOBAL_TRIG does not gate it, so it must be parked explicitly.
+                self.CT_PROBER.CAPTURE_EN = 0
+                self.CT_PROBER.RESET = 1
         elif self.CAPTURE_TYPE == "UCAP":
             self.UCAP.USER_RESET = 1
         else:
@@ -3354,7 +3465,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             burst_period_frame_rounding=4,
             offset=0,
             send_delay=0,
-            mode=0):
+            mode=0,
+            lane=0):
         """
         Configure and start periodic raw capture.
 
@@ -3380,6 +3492,14 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 - ``'funcgen'``:  the data is taken after the function generator, which can be
                   configured to pass on the ADC data or an internally generated waveform.
                 - ``'scaler'``: the data is taken on the scaler capture port.
+                - ``'ct'``: (ICE corner-turn bitstreams only) complete corner-turn output
+                  packets are captured from the lane selected with ``lane``, wrapped with
+                  cookie 0xA2. The channelizer probers are parked; ``channels`` and
+                  ``data_type`` do not apply. Periods are rounded down to whole CT packets
+                  (one CT packet spans frames_per_packet FPGA frames), and capture timing
+                  is relative to the probe reset performed here, not to the array sync.
+                  The wrapper timestamp is a local CT-packet counter; the system frame
+                  number travels in word 3 of the CT header carried inside the payload.
 
             select (bool): (UCAP only) If True, the output multiplexer of UCAP will be set to stream the
                 captured data instead of the auxiliary (correlator) data.
@@ -3420,6 +3540,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 - 1: captures 4 contiguous frames from the first 4 channels listed in ``channels``.
                 - 2: captures 8 contiguous frames from the first 2 channels listed in ``channels``.
                 - 3: captures 16 contiguous frames from the first channel listed in ``channels``.
+
+            lane (int): (source='ct' only) corner-turn output lane (0-7) to capture.
 
         Burst repetition rate is set either as a period specified in seconds (`period` or
         `burst_period_in_seconds`) or as a number of frames (`burst_period_in_frames`).
@@ -3470,22 +3592,58 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         if burst_period_in_frames >= 2**24:
             raise ValueError(
                 f"burst period must be less than {2**24} frames")
-        if channels is None:
+        # The corner-turn capture probe exists only in ICE ct bitstreams. Check
+        # before any capture-engine branching so that CRS/UCAP platforms (and
+        # corr16 builds) get an explicit error instead of a generic
+        # invalid-source message.
+        if source == 'ct' and self.CT_PROBER is None:
+            raise RuntimeError(
+                f"source='ct' requires a firmware build with the corner-turn capture probe "
+                f"(ICE ct bitstream); this firmware reports CAPTURE_TYPE={self.CAPTURE_TYPE!r}, "
+                f"CT_TYPE={self.CT_TYPE!r}, CT_LEVEL={self.CT_LEVEL!r} — "
+                f"CRS/UCAP platforms do not implement it")
+
+        if source == 'ct':
+            if channels is not None:
+                raise ValueError(
+                    "channels does not apply to source='ct'; use lane= to select "
+                    "the corner-turn output lane")
+            lane = int(lane)
+            if not 0 <= lane <= 7:
+                raise ValueError(f"lane must be between zero and seven, got {lane}")
+            channels = ()
+            # One CT packet spans frames_per_packet FPGA frames: the ct_prober
+            # counts periods/offsets in CT packets, so convert the frame-based
+            # period computed above. The geometry read-back also gives the
+            # packet size used to enforce the capture-FIFO ceiling.
+            ct_geometry = self.CT_PROBER.get_packet_geometry(lane)
+            if ct_geometry['data_words'] == 0:
+                raise RuntimeError(
+                    "The corner-turn crossbars do not appear to be initialized "
+                    "(CB1 bin-sel reports an empty packet); run set_operational_mode/"
+                    "init_corner_turn before capturing from the corner turn")
+            ct_burst_period_in_packets = max(
+                int(burst_period_in_frames) // ct_geometry['frames_per_packet'],
+                frames_per_burst)
+        elif channels is None:
             if self.CAPTURE_TYPE == "PROBER":
                 channels = self.default_channels
             elif self.CAPTURE_TYPE == "UCAP":
                 channels = list(range({0: 8, 1: 4, 2: 2, 3: 1}[mode]))
             self.logger.info(f"The channels are not specified for data capture. "
                                 f"Defaulting to {channels}.")
-        channels = self._normalize_channels(channels)
-        if not channels:
-            raise ValueError("At least one capture channel must be specified")
-        if len(set(channels)) != len(channels):
-            raise ValueError("Capture channels must not contain duplicates")
-        for channel in channels:
-            if channel not in self.chan:
-                raise ValueError(f"Unknown capture channel: {channel}")
-        if self.CAPTURE_TYPE == "PROBER":
+        if source != 'ct':
+            channels = self._normalize_channels(channels)
+            if not channels:
+                raise ValueError("At least one capture channel must be specified")
+            if len(set(channels)) != len(channels):
+                raise ValueError("Capture channels must not contain duplicates")
+            for channel in channels:
+                if channel not in self.chan:
+                    raise ValueError(f"Unknown capture channel: {channel}")
+        if source == 'ct':
+            pass  # validated above; config_capture() enforces the FIFO ceiling
+        elif self.CAPTURE_TYPE == "PROBER":
             if frames_per_burst > 4:
                 raise ValueError(
                     "frames_per_burst must be between one and four for PROBER")
@@ -3512,16 +3670,20 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         else:
             raise RuntimeError(
                 f"Data capture is not supported for {self.CAPTURE_TYPE!r}")
-        if isinstance(source, str):
-            if source not in valid_sources:
+        if source != 'ct':
+            if isinstance(source, str):
+                if source not in valid_sources:
+                    valid_names = list(valid_sources)
+                    if self.CT_PROBER is not None:
+                        valid_names.append('ct')
+                    raise ValueError(
+                        f"Unknown data capture source {source!r}. "
+                        f"Valid sources: {', '.join(valid_names)}")
+            elif (
+                    not isinstance(source, (int, np.integer))
+                    or not 0 <= int(source) <= max(valid_sources.values())):
                 raise ValueError(
-                    f"Unknown data capture source {source!r}. "
-                    f"Valid sources: {', '.join(valid_sources)}")
-        elif (
-                not isinstance(source, (int, np.integer))
-                or not 0 <= int(source) <= max(valid_sources.values())):
-            raise ValueError(
-                f"Invalid numeric data capture source {source!r}")
+                    f"Invalid numeric data capture source {source!r}")
 
         normalized_cap_type = None
         if data_type is not None:
@@ -3584,6 +3746,42 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 self.config.raw_capture.target_mode = mode
                 self._capture_pkt_frames_per_burst = None
 
+            elif self.CAPTURE_TYPE == 'PROBER' and source == 'ct':
+                self._capture_pkt_frames_per_burst = frames_per_burst
+                self.config.raw_capture.frames_per_burst = frames_per_burst
+
+                packets_per_second = (
+                    frames_per_burst / self.FRAME_PERIOD
+                    / ct_geometry['frames_per_packet']
+                    / ct_burst_period_in_packets)
+                # 10 header bytes, 42 Ethernet/IP/UDP overhead
+                packet_size_in_bits = (4 * ct_geometry['words_per_packet'] + 10 + 42) * 8
+                self.logger.debug(
+                    f'{self!r}: CT capture data rate on lane {lane}: '
+                    f'{packets_per_second * packet_size_in_bits / 1e6:.3f} Mbits/s '
+                    f'({4 * ct_geometry["words_per_packet"]}-byte CT packets)')
+
+                # Do not limit the transfer rate
+                self.GPIO.HOST_FRAME_READ_RATE = 5
+
+                # stop_data_capture() above already parked the channelizer
+                # probers, so only ct_prober packets (cookie 0xA2) will flow.
+                p = self.CT_PROBER
+                p.RESET = 1  # hold in reset: period/offset cross raw into ct_clk
+                p.LANE_SEL = lane
+                p.SUB_PERIOD = 23
+                # Bits 15:12 (burst index) and 3:0 (lane) are overwritten by hardware
+                p.set_stream_id(self.get_id(lane))
+                p.config_capture(
+                    frames_per_burst=frames_per_burst,
+                    burst_period=ct_burst_period_in_packets,
+                    offset=offset,
+                    send_delay=send_delay,
+                    words_per_packet=ct_geometry['words_per_packet'])
+                self.logger.debug(
+                    f'{self!r}: Configuring corner-turn raw data capture on '
+                    f'lane {lane}')
+
             elif self.CAPTURE_TYPE == 'PROBER':
                 self._capture_pkt_frames_per_burst = frames_per_burst
                 self.config.raw_capture.frames_per_burst = frames_per_burst
@@ -3623,9 +3821,15 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 st.data_source = source
                 st.prober_sub_period = 23
             self.config.raw_capture.source = source
+            self.config.raw_capture.lane = lane if source == 'ct' else None
             self.config.raw_capture.channels = tuple(channels)
             self.get_receiver_config(channels=channels)
-            if self.CAPTURE_TYPE == 'PROBER':
+            if source == 'ct':
+                # Release and arm: the CT-packet counter (offset/period and the
+                # wrapper timestamps) restarts from this reset release.
+                self.CT_PROBER.RESET = 0
+                self.CT_PROBER.CAPTURE_EN = 1
+            elif self.CAPTURE_TYPE == 'PROBER':
                 for chan in self.get_channelizers(channels):
                     chan.PROBER.RESET = 0
             else:
@@ -3634,7 +3838,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         finally:
             self.set_chan_reset(reset_state)
 
-    def set_data_capture(self, channels=None, sub_period=23, source='adc'):
+    def set_data_capture(self, channels=None, sub_period=23, source='adc', lane=None):
         """ Set the dynamic data capture parameters that can be changed on the
         fly without re-syncing the board.
 
@@ -3655,28 +3859,64 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 intervals if the primary period is not an exact multiple of
                 the sub period.
 
-            source (str): Data source to use.
+            source (str): Data source to use. With ``'ct'`` (ICE corner-turn
+                bitstreams only), the corner-turn capture probe is adjusted
+                instead of the channelizer probers; ``channels`` does not
+                apply.
+
+            lane (int or None): (source='ct' only) switch the captured
+                corner-turn lane. The lane register is latched between
+                bursts, so the change takes effect on the next burst; a
+                burst already in flight still carries the old lane. Call
+                get_data_receiver() afterwards so the receiver follows the
+                new lane's stream id.
 
         This method does not configure the primary burst period, scaler
         capture format, UCAP mode, packet geometry, capture reset, or
         activation. Source and sub-period changes are intended to be made on
         the fly while the receiver retains both ADC and FFT decode formats.
+        Like the channelizer probers, the ct sub_period register crosses
+        clock domains unsynchronized; the on-the-fly change may glitch one
+        period comparison, which is accepted here for both engines.
         """
 
         # Input validation
         sub_period = int(sub_period)
         if not 0 <= sub_period <= 31:
             raise ValueError("sub_period must be between zero and 31")
-        channels = self._normalize_channels(
-            self.get_channels() if channels is None else channels)
-        if not channels:
-            raise ValueError("At least one capture channel must be specified")
-        if len(set(channels)) != len(channels):
-            raise ValueError("Capture channels must not contain duplicates")
-        for channel in channels:
-            if channel not in self.chan:
-                raise ValueError(f"Unknown capture channel: {channel}")
-        if self.CAPTURE_TYPE == 'UCAP':
+        # The corner-turn capture probe exists only in ICE ct bitstreams (see
+        # start_data_capture); give CRS/UCAP platforms the explicit error.
+        if source == 'ct' and self.CT_PROBER is None:
+            raise RuntimeError(
+                f"source='ct' requires a firmware build with the corner-turn capture probe "
+                f"(ICE ct bitstream); this firmware reports CAPTURE_TYPE={self.CAPTURE_TYPE!r}, "
+                f"CT_TYPE={self.CT_TYPE!r}, CT_LEVEL={self.CT_LEVEL!r} — "
+                f"CRS/UCAP platforms do not implement it")
+        if source == 'ct':
+            if channels is not None:
+                raise ValueError(
+                    "channels does not apply to source='ct'; use lane= to select "
+                    "the corner-turn output lane")
+            channels = ()
+            if lane is not None:
+                lane = int(lane)
+                if not 0 <= lane <= 7:
+                    raise ValueError(f"lane must be between zero and seven, got {lane}")
+        elif lane is not None:
+            raise ValueError("lane applies only to source='ct'")
+        else:
+            channels = self._normalize_channels(
+                self.get_channels() if channels is None else channels)
+            if not channels:
+                raise ValueError("At least one capture channel must be specified")
+            if len(set(channels)) != len(channels):
+                raise ValueError("Capture channels must not contain duplicates")
+            for channel in channels:
+                if channel not in self.chan:
+                    raise ValueError(f"Unknown capture channel: {channel}")
+        if source == 'ct':
+            pass  # validated above
+        elif self.CAPTURE_TYPE == 'UCAP':
             valid_sources = self.UCAP.DATA_SOURCE_TABLE
         elif self.CAPTURE_TYPE == 'PROBER':
             valid_sources = self.chan[channels[0]].PROBER.DATA_SOURCE_TABLE
@@ -3684,23 +3924,32 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             raise RuntimeError(
                 f'{self!r}: set_data_capture() is not supported for '
                 f'capture engine {self.CAPTURE_TYPE!r}')
-        if isinstance(source, str):
-            if source not in valid_sources:
+        if source != 'ct':
+            if isinstance(source, str):
+                if source not in valid_sources:
+                    valid_names = list(valid_sources)
+                    if self.CT_PROBER is not None:
+                        valid_names.append('ct')
+                    raise ValueError(
+                        f"Unknown data capture source {source!r}. "
+                        f"Valid sources: {', '.join(valid_names)}.")
+            elif (
+                    not isinstance(source, (int, np.integer))
+                    or not 0 <= int(source) <= max(valid_sources.values())):
                 raise ValueError(
-                    f"Unknown data capture source {source!r}. "
-                    f"Valid sources: {', '.join(valid_sources)}.")
-        elif (
-                not isinstance(source, (int, np.integer))
-                or not 0 <= int(source) <= max(valid_sources.values())):
-            raise ValueError(
-                f"Invalid numeric data capture source {source!r}")
+                    f"Invalid numeric data capture source {source!r}")
 
         # Hardware configuration
         self.logger.debug(
             f'{self!r}: Setting dynamic capture parameters to '
             f'sub_period={sub_period} and source={source} for channels={channels}')
 
-        if self.CAPTURE_TYPE == 'UCAP':
+        if source == 'ct':
+            if lane is not None:
+                self.CT_PROBER.LANE_SEL = lane  # latched between bursts, live-safe
+                self.config.raw_capture.lane = lane
+            self.CT_PROBER.SUB_PERIOD = sub_period
+        elif self.CAPTURE_TYPE == 'UCAP':
             if isinstance(source, str):
                 self.UCAP.SOURCE_SEL = self.UCAP.DATA_SOURCE_TABLE[source]
             else:
