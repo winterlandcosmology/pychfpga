@@ -421,6 +421,11 @@ class BCTEngine(MMIRouter):
         #     src_slot = self.crate.get_matching_tx(rx)[0]
         #     return src_slot
 
+        if frames_per_packet is None:
+            # Callers (FPGAArray/set_operational_mode) pass None through to
+            # mean "use the default", which would otherwise defeat the
+            # signature default and break the range check below.
+            frames_per_packet = 2
         if frames_per_packet < 1 or frames_per_packet > 4:
             raise ValueError('Number of frames per packet must be between 1 and 4')
         if cb1_lanes in (4, 8, 12, 16):
