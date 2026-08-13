@@ -51,3 +51,28 @@ test_config:
         expected_overflows_per_frame: [0, 1, 1000, 2000]
         stats_frames: [10]
         mode: ['word_ctr_buffer_flags', 'frame8', 'frame4']
+
+    #parameters for ct_prober tests. These entries exist only so the tests
+    #collect: the corner-turn capture probe is absent on CRS firmware, so
+    #the setup_ct_prober/setup_ct_flags fixtures skip every one of them at
+    #runtime (only the rejection-path test actually runs).
+    global_lane: [0]
+    global_fpp: [1, 2]
+    lane_readback:
+        lanes: ((0, 3, MAX_LANE),)
+    lane_switch:
+        target_lane: [3]
+    corner_turn_shuffle16:
+        lane: range(MAX_LANE + 1)
+        waveform: ['ramp', 'channel_id', 'noise']
+    flags_packet_size:
+        lane: (0, 3, MAX_LANE)
+    flags_data_decode:
+        lane: [0]
+        waveform: ['ramp']
+    frame_flags_adc_mask:
+        lane: [0, 5]
+    frame_flags_fft_mask:
+        lane: [0]
+    data_flags_as_built:
+        lane: range(MAX_LANE + 1)
