@@ -26,12 +26,22 @@ test except test_ct_source_rejected_without_probe, which then verifies the
 explicit error path instead.
 
 The probe's capture FIFO holds 2048 words, so a whole burst must fit in it.
-If the operational corner-turn configuration produces packets that cannot fit
-(flags enabled with 2 frames per packet), the setup_ct_prober fixture
-reconfigures the corner turn once per session into the probe's design
-operating point (frames_per_packet=1, send_flags=False, default bin
-selection) and leaves it there. This does not affect the other firmware test
-suites, which capture upstream of the corner turn.
+Every shuffle16 packet geometry fits (517/582 words per packet at one frame
+per packet with flags off/on, 1029/1159 at two frames), but the algorithm
+tests want minimal deterministic packets, so the setup_ct_prober fixture
+configures the corner turn into the canonical probe operating point
+(frames_per_packet=1, send_flags=False, default bin selection). The flags
+tests use their own setup_ct_flags fixture to switch to the flags-on
+geometries instead; the applied operating point is cached so the (slow)
+reconfiguration only happens when a test needs a different one. None of this
+affects the other firmware test suites, which capture upstream of the corner
+turn.
+
+The flags tests fabricate deterministic per-channel flags and verify the
+packet's flags block bit-exactly. Note the as-built firmware limitation
+documented at test_data_flags_as_built: the per-bin data-flags words do not
+carry scaler overflow flags on current bitstreams; the per-frame frame-flags
+word (ADC and FFT overflow per channel) is fully functional.
 '''
 
 
@@ -44,6 +54,22 @@ class TestCTProber(TestModule):
     INNER_HEADER_COOKIE = 0xCF
     INNER_HEADER_WORDS = 4
     CT_NOISE_SEED = 0x5EED # seed for the deterministic noise waveform
+
+    # Flags-on shuffle16 packet geometry (4-word header + fpp*512 data words
+    # + fpp*(64 combined data-flags + 1 frame-flags) words + 1 trailer) and
+    # the resulting 2048-word capture FIFO burst ceilings.
+    FLAGS_WORDS_PER_PACKET = {1: 582, 2: 1159}
+    FLAGS_MAX_BURST = {1: 3, 2: 1}
+    ADC_FLAG_MASK = 0xA5C3 # per-channel ADC-overflow injection pattern
+    FFT_FLAG_MASK = 0x3C69 # per-channel FFT OVERFLOW_FORCE pattern
+    # As-built expectation for the only data-flags word that can be nonzero
+    # (word 63 on lanes 6/7, see test_data_flags_as_built), pinned from
+    # hardware (mb 509, aug11 bitstream) under maximal flag forcing:
+    # lane 6 samples the gain-bank bit (0 for the default bank 0) and
+    # lane 7 the FFT-overflow bit, asserted on the frame's TLAST word for
+    # all 16 channels. Set to None to fall back to a stability-only check
+    # that logs the observed value.
+    DATA_FLAGS_W63 = {6: 0x0000, 7: 0xFFFF}
 
     def get_logger(self):
         return self.logger
@@ -85,39 +111,68 @@ class TestCTProber(TestModule):
             self.logger.debug(f"setup post-check after cleanup: overrun={post_flags[0]} overflow_sticky={post_flags[1]}")
             assert all(v == 0 for v in post_flags)
 
+    def _configure_ct(self, xr, key, frames_per_packet, send_flags):
+        '''Put the corner turn into a known probe test operating point.
+
+        The applied operating point is cached in the session data and only
+        re-applied when a test needs a different one, since reconfiguration
+        is slow and stops the corner-turn clock. init_crossbars wraps all
+        bin-selector programming in the chan/corr reset sequence, which also
+        satisfies the firmware requirement that SEND_FLAGS may only change
+        across a module reset.
+        '''
+        if xr.data.get('ct_config') == key:
+            return
+        self.logger.info(
+            f"Configuring the corner turn into the '{key}' probe test operating point "
+            f"(frames_per_packet={frames_per_packet}, send_flags={send_flags}, "
+            f"default bin selection)")
+        self.board.init_crossbars(
+            mode=self.board.mode, frames_per_packet=frames_per_packet, send_flags=send_flags)
+        # init_crossbars never writes USE_OFFSET_BINARY and its power-on
+        # default is 1; clear it so the packet-header flag (which drives
+        # the capture decoder's offset-binary correction) is truthful for
+        # the two's-complement data these tests generate.
+        for bin_sel in self.board.CT.CROSSBAR.BIN_SEL:
+            bin_sel.USE_OFFSET_BINARY = 0
+        self.board.sync()
+        # Reset the GPU link MACs after reconfiguring the corner turn, as
+        # the production init_corner_turn flow does: a corner-turn stream
+        # interrupted mid-packet (clock stop during reconfiguration or
+        # board bring-up) leaves orphaned words in a link's TX FIFO, which
+        # then overflows on every subsequent packet. OVERFLOW_RESET clears
+        # only the flag; this clears the FIFOs.
+        if getattr(self.board, 'GPU', None) is not None:
+            self.board.GPU.reset()
+        xr.data.ct_config = key
+        # Reconfiguration stops the corner-turn clock, so any cached dataflow
+        # verdict is stale: make _require_ct_dataflow prove it again.
+        xr.data.pop('ct_prober_dataflow', None)
+
     @pytest.fixture(scope='function')
     def setup_ct_prober(self, setup, xr):
         self.logger.debug(f"Attempting to setup ct_prober on instance {self}")
         if getattr(self.board, 'CT_PROBER', None) is None:
             pytest.skip("Corner-turn capture probe is not implemented in this firmware "
                         "(CRS/UCAP platform or corr16 build)")
-        # Once per session: put the corner turn into the canonical probe test
-        # operating point (default bin selection, one frame per packet, flags
-        # off). This guarantees a known geometry for the algorithm tests and
-        # keeps every burst within the probe's 2048-word capture FIFO.
-        if 'ct_canonical_configured' not in xr.data:
-            self.logger.info(
-                "Configuring the corner turn into the probe test operating point "
-                "(frames_per_packet=1, send_flags=False, default bin selection)")
-            self.board.init_crossbars(
-                mode=self.board.mode, frames_per_packet=1, send_flags=False)
-            # init_crossbars never writes USE_OFFSET_BINARY and its power-on
-            # default is 1; clear it so the packet-header flag (which drives
-            # the capture decoder's offset-binary correction) is truthful for
-            # the two's-complement data these tests generate.
-            for bin_sel in self.board.CT.CROSSBAR.BIN_SEL:
-                bin_sel.USE_OFFSET_BINARY = 0
-            self.board.sync()
-            # Reset the GPU link MACs after reconfiguring the corner turn, as
-            # the production init_corner_turn flow does: a corner-turn stream
-            # interrupted mid-packet (clock stop during reconfiguration or
-            # board bring-up) leaves orphaned words in a link's TX FIFO, which
-            # then overflows on every subsequent packet. OVERFLOW_RESET clears
-            # only the flag; this clears the FIFOs.
-            if getattr(self.board, 'GPU', None) is not None:
-                self.board.GPU.reset()
-            xr.data.ct_canonical_configured = True
+        # Canonical probe operating point: default bin selection, one frame
+        # per packet, flags off. This guarantees a known minimal geometry for
+        # the algorithm tests.
+        self._configure_ct(xr, 'canonical', frames_per_packet=1, send_flags=False)
         self.logger.debug("Setup corner turn for testing ct_prober")
+
+    @pytest.fixture(scope='function')
+    def setup_ct_flags(self, fpp, setup, xr):
+        '''Configure the corner turn for the flags tests: send_flags=True at
+        the parametrized frames-per-packet, default bin selection otherwise.
+        '''
+        self.logger.debug(f"Attempting to setup ct_prober flags-on (fpp={fpp}) on instance {self}")
+        if getattr(self.board, 'CT_PROBER', None) is None:
+            pytest.skip("Corner-turn capture probe is not implemented in this firmware "
+                        "(CRS/UCAP platform or corr16 build)")
+        if self.board.mode != 'shuffle16':
+            pytest.skip("Corner-turn flags tests are currently defined only for shuffle16")
+        self._configure_ct(xr, f'flags_fpp{fpp}', frames_per_packet=fpp, send_flags=True)
 
     def _decode_ct_byte(self, byte, use_offset_binary=False):
         '''Reference (4+4)-bit complex decode of one corner-turn payload byte.'''
@@ -201,17 +256,21 @@ class TestCTProber(TestModule):
                         "(CROSSBAR3 OUTPUT_FRAME_CTR is static): complete the "
                         "corner-turn dataflow bring-up before running capture tests")
 
-    def _set_capture_ct(self, ncap=1, lane=0, frames_per_burst=1, format=None, period=None):
+    def _set_capture_ct(self, ncap=1, lane=0, frames_per_burst=1, format=None, period=None,
+                        split=None):
         '''Configures a corner-turn capture on the given lane and reads it back.
 
         Returns (ts, data, counts, geometry), where geometry is the packet
         geometry read back from the first-crossbar bin-selector registers.
+        Raw captures (format='32') of multi-packet bursts are only split
+        into per-packet rows when split=True (decoded complex captures are
+        always split).
         '''
         logger = self.get_logger()
         if period is None:
             period = self.CAPTURE_PERIOD
         logger.debug(f"_set_capture_ct: lane={lane} ncap={ncap} frames_per_burst={frames_per_burst} "
-                     f"period={period} format={format}")
+                     f"period={period} format={format} split={split}")
         self.board.start_data_capture(
             period=period, source='ct', lane=lane, frames_per_burst=frames_per_burst)
         geometry = self.board.CT_PROBER.get_packet_geometry(lane)
@@ -219,9 +278,85 @@ class TestCTProber(TestModule):
         receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
         receiver.flush()
         ts, data, counts = receiver.read_raw_frames(
-            ncap=ncap, source=2, format=format, chan_first=False)
+            ncap=ncap, source=2, format=format, chan_first=False, split=split)
         logger.debug(f"_set_capture_ct: ts={ts.tolist()} data_shape={data.shape} counts={counts.tolist()}")
         return ts, data, counts, geometry
+
+    def _gpu_clean_start(self, gpu, retries=8):
+        '''Reset the GPU link MACs until their TX FIFOs come up clean.
+
+        The GPU core reset released while the corner-turn stream is running
+        intermittently (roughly one attempt in three on the bench) leaves
+        one lane's TX FIFO permanently wedged: the MAC accepts stream words
+        the moment the fabric reset deasserts, but the FIFO/GTX are still
+        completing their own reset, and the dropped words desynchronize the
+        header and data FIFOs - both then overflow continuously (the sticky
+        flags re-assert within 100 ms of every clear) until the next core
+        reset. This is a firmware reset-sequencing weakness of the
+        reconnected GPU path (candidate fix: gate the s_axis feed until
+        resetdone and FIFO wr_rst_busy clear, re-enabling at a packet
+        boundary); until it is fixed, a clean start is obtained by
+        re-resetting until the overflow flags stay quiet.
+        '''
+        logger = self.get_logger()
+        for attempt in range(retries):
+            gpu.reset()
+            sleep(0.25)
+            gpu.OVERFLOW_RESET = 1
+            gpu.OVERFLOW_RESET = 0
+            sleep(0.25)
+            data_overflow = int(gpu.DATA_FIFO_OVERFLOW)
+            frame_overflow = int(gpu.FRAME_FIFO_OVERFLOW)
+            if data_overflow == 0 and frame_overflow == 0:
+                logger.debug(f"_gpu_clean_start: clean after {attempt + 1} attempt(s)")
+                return
+            logger.info(f"_gpu_clean_start: attempt {attempt + 1} left a wedged TX FIFO "
+                        f"(data_overflow={data_overflow:#04x} frame_overflow={frame_overflow:#04x}), "
+                        f"re-resetting")
+        raise AssertionError(
+            f"GPU link TX FIFOs still overflow after {retries} core resets "
+            f"(data_overflow={data_overflow:#04x} frame_overflow={frame_overflow:#04x})")
+
+    def _capture_flags_words(self, lane, fpp, frames_per_burst=1, ncap=1):
+        '''Capture flags-on packets on `lane` and split each into its sections.
+
+        Packet layout (shuffle16 with combined data flags): 4 header words,
+        then ALL frames' data words, then ALL frames' data-flags words, then
+        one frame-flags word per frame (frame 0 first), then the zero
+        packet-flags trailer word.
+
+        Returns a NameSpace with ts, counts, geometry and the packet sections
+        as int64 word arrays: header (n, 4), data (n, fpp*512), data_flags
+        (n, fpp, 64), frame_flags (n, fpp) and trailer (n,), where
+        n = ncap * frames_per_burst captured packets.
+        '''
+        logger = self.get_logger()
+        self._require_ct_dataflow()
+        ts, raw, counts, geometry = self._set_capture_ct(
+            ncap=ncap, lane=lane, frames_per_burst=frames_per_burst, format='32',
+            split=True) # split multi-packet bursts into per-packet rows
+        assert geometry['send_flags'], "flags tests need a flags-on corner-turn configuration"
+        assert geometry['frames_per_packet'] == fpp
+        assert raw.shape[2] == geometry['words_per_packet']
+        words = (raw[:, 0, :].astype(np.int64) & 0xFFFFFFFF)
+        data_flag_words = geometry['flags_words'] - fpp # minus the per-frame frame-flags words
+        pos = self.INNER_HEADER_WORDS
+        header = words[:, :pos]
+        data = words[:, pos:pos + geometry['data_words']]
+        pos += geometry['data_words']
+        data_flags = words[:, pos:pos + data_flag_words].reshape(words.shape[0], fpp, -1)
+        pos += data_flag_words
+        frame_flags = words[:, pos:pos + fpp]
+        pos += fpp
+        trailer = words[:, pos]
+        assert pos + 1 == geometry['words_per_packet']
+        logger.debug(f"_capture_flags_words: lane={lane} fpp={fpp} packets={words.shape[0]} "
+                     f"data_flags_shape={data_flags.shape} "
+                     f"frame_flags={[hex(int(v)) for v in frame_flags.ravel()[:4]]} "
+                     f"trailer={trailer.tolist()}")
+        return NameSpace(dict(ts=ts, counts=counts, geometry=geometry, header=header,
+                              data=data, data_flags=data_flags, frame_flags=frame_flags,
+                              trailer=trailer))
 
     def plot_and_test(self, xr, data, ref_data, title, **kwargs):
         logging.getLogger("matplotlib").setLevel(logging.WARNING)
@@ -560,8 +695,10 @@ class TestCTProber(TestModule):
             pytest.skip("This firmware implements no GPU data links")
         self._require_ct_dataflow()
         gpu = self.board.GPU
-        gpu.OVERFLOW_RESET = 1
-        gpu.OVERFLOW_RESET = 0
+        # Clean-start the TX FIFOs after the stream interruptions of this
+        # test's own setup (see _gpu_clean_start for why one reset is not
+        # always enough).
+        self._gpu_clean_start(gpu)
         a = int(gpu.FRAME_CTR)
         sleep(0.2)
         b = int(gpu.FRAME_CTR)
@@ -572,3 +709,371 @@ class TestCTProber(TestModule):
         assert a != b, "GPU FRAME_CTR is static: corner-turn output is not reaching the 10G links"
         assert data_overflow == 0
         assert frame_overflow == 0
+
+    @pytest.mark.ct_prober
+    @pytest.mark.ct_flags
+    def test_flags_packet_size(self, fpp, lane, setup_ct_flags, xr):
+        '''
+        Verify that the larger flags-on packets are advertised, transported and captured exactly.
+
+        With send_flags on, every shuffle16 packet grows to 582 words (one
+        frame per packet) or 1159 words (two frames). This test proves the
+        probe capture path handles the larger packets safely: the geometry
+        readback, the captured packet length, the CT header fields, the zero
+        trailer and every overflow/overrun indicator along the path,
+        including the per-bin-selector flags FIFOs that are only exercised
+        when flags are enabled.
+
+        Parameters:
+            fpp (int): frames per packet programmed into the corner turn
+
+            lane (int): corner-turn output lane to capture
+        '''
+        logger = self.get_logger()
+        probe = self.board.CT_PROBER
+        geometry = probe.get_packet_geometry(lane)
+        logger.debug(f"test_flags_packet_size: lane={lane} fpp={fpp} geometry={geometry}")
+        assert geometry['send_flags']
+        assert geometry['words_per_packet'] == self.FLAGS_WORDS_PER_PACKET[fpp]
+        assert geometry['data_words'] == fpp * 512
+        assert geometry['flags_words'] == fpp * 65
+        cap = self._capture_flags_words(lane, fpp)
+        np.testing.assert_array_equal(cap.counts, [[1]])
+        w0, w1 = int(cap.header[0, 0]), int(cap.header[0, 1])
+        logger.debug(f"test_flags_packet_size: w0={w0:#010x} w1={w1:#010x}")
+        assert w0 & 0xFF == self.INNER_HEADER_COOKIE, "inner CT header cookie"
+        assert (w0 >> 16) & 0xF == lane, "source lane in inner stream id"
+        assert (w1 >> 31) & 1 == 0, "bypass header bit"
+        assert (w1 >> 30) & 1 == 1, "send_flags header bit"
+        assert (w1 >> 24) & 0xF == fpp
+        assert (w1 >> 12) & 0xFFF == geometry['bins_per_frame']
+        assert int(cap.trailer[0]) == 0, "packet-flags trailer word"
+        assert int(probe.OVERRUN) == 0
+        assert int(probe._DATA_FIFO_OVERFLOW_STICKY) == 0
+        # The bin selectors' data/frame flags FIFOs only fill with
+        # send_flags on; none of them may overflow at the nominal rate.
+        for bin_sel in self.board.CT.CROSSBAR.BIN_SEL:
+            assert int(bin_sel.DATA_FLAGS_OVERFLOW) == 0
+            assert int(bin_sel.FRAME_FIFO_OVERFLOW) == 0
+
+    @pytest.mark.ct_prober
+    @pytest.mark.ct_flags
+    def test_flags_burst_ceiling(self, fpp, setup_ct_flags, xr):
+        '''
+        Verify the capture FIFO burst ceilings of the flags-on packet sizes.
+
+        582-word packets must allow 3-packet bursts and 1159-word packets
+        single-packet bursts in the 2048-word capture FIFO; one word more
+        must be refused by the driver. A maximal burst is then captured
+        intact to show the ceiling is actually safe, not just enforced.
+
+        Parameters:
+            fpp (int): frames per packet programmed into the corner turn
+        '''
+        logger = self.get_logger()
+        probe = self.board.CT_PROBER
+        geometry = probe.get_packet_geometry(0)
+        max_frames = probe.DATA_FIFO_DEPTH // geometry['words_per_packet']
+        logger.debug(f"test_flags_burst_ceiling: fpp={fpp} words_per_packet={geometry['words_per_packet']} "
+                     f"max_frames={max_frames}")
+        assert max_frames == self.FLAGS_MAX_BURST[fpp]
+        cap = self._capture_flags_words(0, fpp, frames_per_burst=max_frames)
+        assert cap.data.shape[0] == max_frames
+        np.testing.assert_array_equal(cap.counts, np.ones_like(cap.counts))
+        if max_frames > 1:
+            # Packets within a burst are consecutive CT packets: the inner
+            # header timestamp (word 3) must advance by exactly fpp between
+            # them, proving real burst reassembly (the wrapper timestamps of
+            # split raw captures are synthesized and prove nothing).
+            w3 = cap.header[:, 3]
+            np.testing.assert_array_equal(np.diff(w3) & 0xFFFFFFFF, fpp)
+        assert int(probe.OVERRUN) == 0
+        assert int(probe._DATA_FIFO_OVERFLOW_STICKY) == 0
+        with pytest.raises(ValueError, match='does not fit'):
+            self.board.start_data_capture(period=self.CAPTURE_PERIOD, source='ct',
+                                          frames_per_burst=max_frames + 1)
+
+    @pytest.mark.ct_prober
+    @pytest.mark.ct_flags
+    def test_flags_gpu_link_feed(self, fpp, setup_ct_flags, xr):
+        '''
+        Verify that the 10G GPU links absorb the larger flags-on packets without overflow.
+
+        Same checks as test_gpu_link_feed, but under the flags-on corner-turn
+        configuration (fpp=2 with flags is the production-like operating
+        point and the largest sustained packet rate). The overflow flags are
+        read twice with a settling interval to catch slow-onset overflow of
+        a nearly-saturated link.
+
+        Parameters:
+            fpp (int): frames per packet programmed into the corner turn
+        '''
+        logger = self.get_logger()
+        if getattr(self.board, 'GPU', None) is None:
+            pytest.skip("This firmware implements no GPU data links")
+        self._require_ct_dataflow()
+        gpu = self.board.GPU
+        # This test measures sustained-rate absorption, so it needs a clean
+        # start after the stream interruptions of its own setup (the
+        # per-test board.reset(), the sync() in the dataflow gate above).
+        # Production's init_corner_turn likewise pulses the GPU core reset
+        # as its last step; _gpu_clean_start additionally retries the reset,
+        # which released mid-stream can itself wedge a lane.
+        self._gpu_clean_start(gpu)
+        a = int(gpu.FRAME_CTR)
+        sleep(0.5)
+        b = int(gpu.FRAME_CTR)
+        assert a != b, "GPU FRAME_CTR is static: corner-turn output is not reaching the 10G links"
+        for check in range(2):
+            data_overflow = int(gpu.DATA_FIFO_OVERFLOW)
+            frame_overflow = int(gpu.FRAME_FIFO_OVERFLOW)
+            logger.debug(f"test_flags_gpu_link_feed: fpp={fpp} check={check} "
+                         f"data_overflow={data_overflow:#04x} frame_overflow={frame_overflow:#04x}")
+            assert data_overflow == 0, (
+                f"10G TX data FIFO overflowed under flags-on packets "
+                f"(fpp={fpp} check={check} data_overflow={data_overflow:#04x} "
+                f"frame_overflow={frame_overflow:#04x})")
+            assert frame_overflow == 0, (
+                f"10G TX frame FIFO overflowed under flags-on packets "
+                f"(fpp={fpp} check={check} frame_overflow={frame_overflow:#04x})")
+            if check == 0:
+                sleep(0.5)
+
+    @pytest.mark.ct_prober
+    @pytest.mark.ct_flags
+    def test_flags_data_decode(self, fpp, lane, waveform, setup_ct_flags, xr):
+        '''
+        Verify that the decoded capture path is byte-exact with flags appended to the packets.
+
+        Runs one corner-turn algorithm instance under the flags-on
+        configuration through the normal decoded capture path (no raw
+        format), proving that the receiver's data slice is unaffected by the
+        flags block that now follows it in every packet.
+
+        Parameters:
+            fpp (int): frames per packet programmed into the corner turn
+
+            lane (int): corner-turn output lane to capture and verify
+
+            waveform (str): per-channel funcgen pattern (see _gen_ct_waveforms)
+        '''
+        logger = self.get_logger()
+        self._require_ct_dataflow()
+        chan_bytes = self._gen_ct_waveforms(waveform)
+        self.board.set_channelizer(
+            data_source=None, fft_bypass=1, scaler_bypass=1,
+            scaler_bypass_data_type=0, offset_binary_encoding=False)
+        for ch in range(16):
+            self.board.set_funcgen(function='arb', channels=[ch], left_shift=0, right_shift=0,
+                                   data=chan_bytes[ch])
+        self.board.sync()
+        ts, data, counts, geometry = self._set_capture_ct(ncap=self.NCAP, lane=lane)
+        np.testing.assert_array_equal(counts, [[1]])
+        samples = (geometry['frames_per_packet'] * geometry['bins_per_frame']
+                   * geometry['channels_per_bin'])
+        logger.debug(f"test_flags_data_decode: lane={lane} fpp={fpp} samples={samples} "
+                     f"data_shape={data.shape}")
+        assert data.shape == (1, 1, samples)
+        assert samples == fpp * 2048
+        # every frame of the packet carries the same frame-periodic waveforms
+        ref_data = np.tile(self._corner_turn_reference(lane, chan_bytes), fpp)
+        self.plot_and_test(xr, data[0, 0], ref_data,
+                           f'Flags-on data decode (lane={lane}, fpp={fpp}, waveform={waveform})')
+
+    @pytest.mark.ct_prober
+    @pytest.mark.ct_flags
+    def test_frame_flags_adc_mask(self, fpp, lane, setup_ct_flags, xr):
+        '''
+        Verify the per-channel ADC-overflow bits of the frame-flags word bit-exactly.
+
+        The funcgen 'frame8' source takes an overflow buffer whose sample
+        bit 0 injects an ADC-overflow event, which the channelizer
+        accumulates into a per-frame sticky TUSER bit; the corner turn
+        latches those bits from all 16 channels into the low half of each
+        packet's frame-flags word. Injecting one overflow per frame on a
+        known subset of channels must therefore reproduce exactly that
+        channel mask in every captured frame-flags word, after a negative
+        phase proves the word is all-zero without injection.
+
+        Parameters:
+            fpp (int): frames per packet programmed into the corner turn
+
+            lane (int): corner-turn output lane to capture
+        '''
+        logger = self.get_logger()
+        self._require_ct_dataflow()
+        zeros = np.zeros(int(self.data.NUM_SAMPLES), np.uint8)
+        inject = zeros.copy()
+        inject[0] = 1 # one injected ADC-overflow event per frame
+        # Phase 1 (negative): no injected overflows -> all-zero frame flags.
+        self.board.set_channelizer(
+            data_source='frame8', fft_bypass=1, scaler_bypass=1,
+            scaler_bypass_data_type=0, offset_binary_encoding=False,
+            funcgen_left_shift=0, funcgen_right_shift=0, overflow_buffer=zeros)
+        self.board.sync()
+        cap = self._capture_flags_words(lane, fpp)
+        np.testing.assert_array_equal(cap.frame_flags, 0)
+        # Phase 2: inject on the channels selected by ADC_FLAG_MASK.
+        for ch in range(16):
+            buf = inject if (self.ADC_FLAG_MASK >> ch) & 1 else zeros
+            self.board.set_funcgen(function='frame8', channels=[ch],
+                                   left_shift=0, right_shift=0, overflow_buffer=buf)
+        self.board.sync()
+        cap = self._capture_flags_words(lane, fpp)
+        expected = self.board.CT.CROSSBAR.BIN_SEL[lane].map_flags(
+            frame_flags={ch: ((self.ADC_FLAG_MASK >> ch) & 1, 0)
+                         for ch in range(16)})['frame_flags_word']
+        logger.debug(f"test_frame_flags_adc_mask: lane={lane} fpp={fpp} expected={expected:#010x} "
+                     f"observed={[hex(int(v)) for v in cap.frame_flags.ravel()]}")
+        assert expected == self.ADC_FLAG_MASK # layout model: channel c lands on bit c
+        np.testing.assert_array_equal(cap.frame_flags, expected)
+
+    @pytest.mark.ct_prober
+    @pytest.mark.ct_flags
+    def test_frame_flags_fft_mask(self, fpp, lane, setup_ct_flags, xr):
+        '''
+        Verify the per-channel FFT-overflow bits of the frame-flags word bit-exactly.
+
+        With the FFT in the datapath, each channel's OVERFLOW_FORCE debug bit
+        deterministically asserts the per-frame FFT-overflow TUSER bit, which
+        the corner turn latches into the high half of the frame-flags word.
+        The FFT shift schedule is left at its shift-every-stage default so
+        genuine data-driven overflow cannot occur: only the forced channels
+        may flag. Phases: all-zero negative check, FFT mask alone, then FFT
+        and ADC masks combined.
+
+        Parameters:
+            fpp (int): frames per packet programmed into the corner turn
+
+            lane (int): corner-turn output lane to capture
+        '''
+        logger = self.get_logger()
+        self._require_ct_dataflow()
+        zeros = np.zeros(int(self.data.NUM_SAMPLES), np.uint8)
+        inject = zeros.copy()
+        inject[0] = 1
+        self.board.set_channelizer(
+            data_source='frame8', fft_bypass=0, scaler_bypass=1,
+            scaler_bypass_data_type=0, offset_binary_encoding=False,
+            funcgen_left_shift=0, funcgen_right_shift=0, overflow_buffer=zeros)
+        self.board.set_fft_shift() # shift every stage: no genuine overflow possible
+        self.board.sync()
+        bin_sel = self.board.CT.CROSSBAR.BIN_SEL[lane]
+        try:
+            # Phase 1 (negative): nothing forced -> all-zero frame flags.
+            cap = self._capture_flags_words(lane, fpp)
+            np.testing.assert_array_equal(cap.frame_flags, 0)
+            # Phase 2: force the FFT-overflow flag on the FFT_FLAG_MASK channels.
+            for ch in range(16):
+                self.board.chan[ch].FFT.OVERFLOW_FORCE = (self.FFT_FLAG_MASK >> ch) & 1
+            cap = self._capture_flags_words(lane, fpp)
+            expected = bin_sel.map_flags(
+                frame_flags={ch: (0, (self.FFT_FLAG_MASK >> ch) & 1)
+                             for ch in range(16)})['frame_flags_word']
+            logger.debug(f"test_frame_flags_fft_mask: lane={lane} fpp={fpp} expected={expected:#010x} "
+                         f"observed={[hex(int(v)) for v in cap.frame_flags.ravel()]}")
+            assert expected == self.FFT_FLAG_MASK << 16
+            np.testing.assert_array_equal(cap.frame_flags, expected)
+            # Phase 3: combine with the ADC injection mask.
+            for ch in range(16):
+                buf = inject if (self.ADC_FLAG_MASK >> ch) & 1 else zeros
+                self.board.set_funcgen(function='frame8', channels=[ch],
+                                       left_shift=0, right_shift=0, overflow_buffer=buf)
+            self.board.sync()
+            cap = self._capture_flags_words(lane, fpp)
+            expected = bin_sel.map_flags(
+                frame_flags={ch: ((self.ADC_FLAG_MASK >> ch) & 1,
+                                  (self.FFT_FLAG_MASK >> ch) & 1)
+                             for ch in range(16)})['frame_flags_word']
+            np.testing.assert_array_equal(cap.frame_flags, expected)
+        finally:
+            # OVERFLOW_FORCE is a live control bit that survives board.reset();
+            # never leak it into later tests.
+            for ch in range(16):
+                self.board.chan[ch].FFT.OVERFLOW_FORCE = 0
+
+    @pytest.mark.ct_prober
+    @pytest.mark.ct_flags
+    def test_data_flags_as_built(self, fpp, lane, setup_ct_flags, xr):
+        '''
+        Characterize the as-built (defective) content of the per-bin data-flags words.
+
+        As designed, each data-flags word should carry the per-bin scaler
+        overflow flags of all 16 channels for two selected bins. As built,
+        it cannot: the channelizer truncates the scaler's 5-bit TUSER to
+        bits 3:0 (chan.vhd:695), dropping the high-bin scaler overflow, and
+        chan_bin_sel samples stale constants (chfpga_package.vhd:534-540,
+        where SCALER_LOW collides with FFT_OVERFLOW=1 and SCALER_HIGH with
+        GAINBANK=2), so it reads the gain-bank bit as the "even scaler flag"
+        and the FFT-overflow bit as the "odd scaler flag". Both of those are
+        asserted only on the last word(s) of a frame, and the surviving true
+        scaler flag (TUSER bit 3) is never read.
+
+        Consequence, verified here: the data-flags block is all-zero
+        everywhere except possibly the final flags word (word 63) on the
+        lanes whose default bin selection includes the frame's last data
+        word - lane 6 (bin 1022, samples the gain-bank bit) and lane 7
+        (bin 1023, samples the FFT-overflow bit), both in the high half of
+        word 63. This defect is characterized deliberately and NOT fixed:
+        a fix needs a TUSER repack in the firmware and a recompile.
+
+        Hardware-pinned expectation (DATA_FLAGS_W63): lane 6 word 63 reads
+        0x0000 (the gain-bank bit is 0 for the default bank 0) and lane 7
+        reads 0xFFFF (the FFT-overflow flag is asserted on the frame's
+        TLAST data word, which only lane 7's final selected bin coincides
+        with, for all 16 channels when forced).
+
+        Parameters:
+            fpp (int): frames per packet programmed into the corner turn
+
+            lane (int): corner-turn output lane to capture
+        '''
+        logger = self.get_logger()
+        self._require_ct_dataflow()
+        zeros = np.zeros(int(self.data.NUM_SAMPLES), np.uint8)
+        inject = zeros.copy()
+        inject[0] = 1
+        # Phase 1 (quiescent): FFT bypassed, nothing injected -> the whole
+        # data-flags block must be zero on every lane.
+        self.board.set_channelizer(
+            data_source='frame8', fft_bypass=1, scaler_bypass=1,
+            scaler_bypass_data_type=0, offset_binary_encoding=False,
+            funcgen_left_shift=0, funcgen_right_shift=0, overflow_buffer=zeros)
+        self.board.sync()
+        cap = self._capture_flags_words(lane, fpp)
+        np.testing.assert_array_equal(cap.data_flags, 0)
+        # Phase 2 (maximal forcing): every flag source that CAN reach the
+        # corner turn is asserted on all 16 channels - FFT overflow forced,
+        # one ADC overflow injected per frame. If scaler flags reached the
+        # data-flags words as designed, or the sampled bits were asserted
+        # frame-wide, this phase would light them up.
+        self.board.set_channelizer(
+            data_source='frame8', fft_bypass=0, scaler_bypass=1,
+            scaler_bypass_data_type=0, offset_binary_encoding=False,
+            funcgen_left_shift=0, funcgen_right_shift=0, overflow_buffer=inject)
+        self.board.set_fft_shift() # no genuine data-driven FFT overflow on top
+        self.board.sync()
+        try:
+            for ch in range(16):
+                self.board.chan[ch].FFT.OVERFLOW_FORCE = 1
+            cap = self._capture_flags_words(lane, fpp, ncap=3)
+            # stimulus sanity: with everything forced, the (functional)
+            # frame-flags word must be all-ones in every frame
+            np.testing.assert_array_equal(cap.frame_flags, 0xFFFFFFFF)
+            flags = cap.data_flags # (3, fpp, 64)
+            if lane <= 5:
+                np.testing.assert_array_equal(flags, 0)
+            else:
+                np.testing.assert_array_equal(flags[:, :, :63], 0)
+                w63 = flags[:, :, 63]
+                assert np.all(w63 & 0xFFFF == 0), "low half of data-flags word 63 must stay zero"
+                observed = np.unique(w63 >> 16)
+                logger.info(f"test_data_flags_as_built: lane={lane} fpp={fpp} "
+                            f"word63_high={[hex(int(v)) for v in observed]}")
+                assert observed.size == 1, \
+                    "data-flags word 63 must be stable across frames and captures"
+                if self.DATA_FLAGS_W63 is not None:
+                    assert int(observed[0]) == self.DATA_FLAGS_W63[lane]
+        finally:
+            for ch in range(16):
+                self.board.chan[ch].FFT.OVERFLOW_FORCE = 0

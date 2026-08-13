@@ -62,3 +62,17 @@ test_config:
         lane: range(MAX_LANE + 1)
         waveform: ['ramp', 'channel_id', 'noise']
 
+    #parameters for the flags-on ct_prober tests (send_flags=True)
+    global_fpp: [1, 2]      # corner-turn frames per packet for the flags tests
+    flags_packet_size:
+        lane: (0, 3, MAX_LANE)
+    flags_data_decode:
+        lane: [0]
+        waveform: ['ramp']
+    frame_flags_adc_mask:
+        lane: [0, 5]
+    frame_flags_fft_mask:
+        lane: [0]
+    data_flags_as_built:
+        lane: range(MAX_LANE + 1)
+
