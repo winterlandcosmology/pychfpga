@@ -137,7 +137,14 @@ class chFPGAArrayMethods(ArrayMethods):
                         for i, mb in enumerate(self.ib))
                     self.logger.info(f'{self!r}: The IRIG-B time for Frame 0 on all boards is:\n{irigb_times}')
                     self.logger.info(f'{self!r}: The maximum Frame 0 time difference is {delta_ts} ns')
-                    max_sync_time_difference = max_sync_time_difference or self.max_sync_time_difference
+                    # The limit normally lives on the FPGAArray (the provider
+                    # has no attribute delegation), so fall back through both
+                    # holders instead of raising AttributeError when the
+                    # caller leaves the argument at its None default.
+                    max_sync_time_difference = (max_sync_time_difference
+                                                or getattr(self, 'max_sync_time_difference', None)
+                                                or getattr(self.fpga_array, 'max_sync_time_difference', None)
+                                                or 20)
                     if delta_ts > max_sync_time_difference:
                         raise RuntimeError(f'The Frame 0 time difference of {delta_ts} '
                                            f'exceeds the maximum limit of {max_sync_time_difference}')
