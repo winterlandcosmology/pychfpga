@@ -65,6 +65,45 @@ three-way `if CAPTURE_TYPE == 'PROBER' ... elif 'UCAP' ... else raise` idiom.
   when its check deems the loaded image current — after swapping a
   same-named bitstream file, force with `prog=2` once.
 - `read_raw_frames()` has no timeout: capture tests must gate on a live
-  dataflow indicator first (see the ct_prober suite's `_require_ct_dataflow`).
+  dataflow indicator first (see ct_common.require_ct_dataflow).
 - The corner-turn capture probe's design decisions and register map live in
   chfpgalite's AGENTS.md.
+
+## Corner-turn crate (shuffle256) notes
+
+- `CTProber.get_packet_geometry` derives the geometry from the CROSSBAR3
+  bin-sel registers whenever `CROSSBAR3.BIN_SEL[0].BYPASS == 0` (shuffle256/
+  512/chord16). The old CB1-only readback under-reported shuffle256 packets
+  (326 vs the real 597 words) and broke both the capture FIFO ceiling and
+  the receiver configuration. `four_bits`/`use_offset_binary`/`send_flags`
+  always come from CB1: the CB2/CB3 header-population registers
+  (FOUR_BITS, NUMBER_OF_OUTPUT_BINS_PER_FRAME, ...) are never programmed by
+  init_crossbars and read zero — the same is true of the inner packet
+  header's bins/channels fields at CB3.
+- `ShuffleCrossbar.get_lane_map` had a read-length bug (u2 element count →
+  reads twice the bytes and decodes only every other one); fixed to the
+  nibble-packed u1 readback matching `set_lane_map`. `get_reverse_lane_map`
+  and `get_shuffle_output` depend on it.
+- Dead status registers on the shuffle crossbars — never assert on:
+  `DATA_TIMEOUT_MON`, `HAD_TIMEOUT`, `CAPTURE_DONE`, `TIMEOUT_PERIOD`
+  (write is a no-op) and BP_SHUFFLE `RX_FRAME_CTR`. The real lane-absent
+  flag is `MISSING_FRAME_MON`. `PACKET_ERROR_CTR`/`OUTPUT_FRAME_CTR` (and
+  all CROSSBAR3 per-lane arrays) are only valid for `LANE_MONITOR_SEL`
+  0..7. Backplane link health = `gtx[n].BLOCK_LOCK` (64b66b sync);
+  `RX_RESETDONE` is timer-based and asserts with no cable.
+- Crate test discipline: never call `board.sync()` or `board.reset()` on a
+  crate member (board sync is local-only and breaks the array-wide frame
+  alignment), and never reconfigure the corner turn (`init_crossbars`) on a
+  live crate — connecting `FPGAArray(mode='shuffle256', open=1)` performs
+  the whole bring-up and the tests read the operating point from registers.
+  The array-wide sync is `ca.sync(max_sync_time_difference=...)`; pass the
+  limit explicitly (the provider-attribute fallback in
+  chfpga_array_methods.sync is fixed but don't rely on it).
+- Remote-crate workflow: `firmware_tests/config_ice_crate.yaml` is the
+  single user-edited file (crate hwm placeholder). Run only
+  ct_shuffle256_test.py against it, stage by stage in file order (health →
+  alignment → geometry → algorithm → flags → gpu), stopping at the first
+  failure; every assertion message is written to be actionable from the log
+  alone. Captures at frames_per_packet=2 with flags need ~4.8 KB UDP
+  packets on the capture path — if geometry tests time out with zero
+  packets, check the receiving host's interface MTU (needs ≥ 5000).
