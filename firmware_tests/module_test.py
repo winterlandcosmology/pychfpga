@@ -1,13 +1,43 @@
+import logging
+
+import numpy as np
+import matplotlib.pyplot as plt
+
 from pychfpga.fpga_array import FPGAArray
 from wtl.pytest_xreport import xr, get_xr_from
+
+from .utils import plot
 
 class TestModule:
     def board_conn(self, xr):
         if  'board' in xr.data: #check if board is cached to avoid unnecessary reconnection
             return xr.data.board
         ca = FPGAArray(**self.connection_config)
+        # Keep the array too: multi-board suites need the array-level methods
+        # (array-wide sync, shuffle output model), which only exist on the
+        # FPGAArray, not on the individual boards.
+        xr.data.array = ca
         xr.data.board = ca.ib[0]
         return xr.data.board
+
+    def plot_and_test(self, xr, data, ref_data, title, **kwargs):
+        logging.getLogger("matplotlib").setLevel(logging.WARNING)
+        test_name = title[:title.find('(')] #up to position of first bracket
+        parameters  = title[title.find('('):]
+        xr.header(test_name)
+        print(f'Parameters: {parameters}')
+        print(data.shape, data.dtype)
+        residuals = data - ref_data
+        print("Creating plots")
+        plot((data, ref_data), title=test_name, **kwargs)
+        xr.insert_plot()
+        plt.close()
+        plot((residuals,), title = f"Residuals of {test_name.lower()}", **kwargs)
+        xr.insert_plot()
+        plt.close()
+        print(f"Sum of residuals: {np.sum(np.abs(residuals))}")
+        if not self.test_config.only_plot:
+            assert np.equal(data, ref_data).all()
     
     def pytest_generate_tests(self, metafunc):
         """ This pytest hook is called before each test to allow dynamic generation of test parameters.

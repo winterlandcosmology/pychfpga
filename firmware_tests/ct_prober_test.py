@@ -8,6 +8,7 @@ from wtl.pytest_xreport import xr, get_xr_from
 from wtl.namespace import NameSpace
 import matplotlib.pyplot as plt
 from .module_test import TestModule
+from . import ct_common
 
 '''
 Corner-turn capture probe (ct_prober) tests
@@ -176,12 +177,7 @@ class TestCTProber(TestModule):
 
     def _decode_ct_byte(self, byte, use_offset_binary=False):
         '''Reference (4+4)-bit complex decode of one corner-turn payload byte.'''
-        byte = int(byte) & 0xFF
-        if use_offset_binary:
-            byte ^= 0x88
-        re = ((byte >> 4) + 8) % 16 - 8 # sign-extend the 4-bit nibbles
-        im = ((byte & 0xF) + 8) % 16 - 8
-        return complex(re, im)
+        return ct_common.decode_ct_byte(byte, use_offset_binary)
 
     def _gen_ct_waveforms(self, waveform):
         '''Generate one deterministic frame-periodic funcgen pattern per channelizer.
@@ -238,23 +234,9 @@ class TestCTProber(TestModule):
         silent, independently of the probe. (GPU.FRAME_CTR is unsuitable:
         that status register is never driven by the firmware.)
         '''
-        logger = self.get_logger()
-        if 'ct_prober_dataflow' not in self.data:
-            cb3 = getattr(self.board.CT, 'CROSSBAR3', None)
-            if cb3 is None:
-                self.data.ct_prober_dataflow = True # no independent monitor; try anyway
-            else:
-                self.board.set_trig(1)
-                self.board.sync()
-                a = int(cb3.OUTPUT_FRAME_CTR)
-                sleep(0.3)
-                b = int(cb3.OUTPUT_FRAME_CTR)
-                logger.debug(f"_require_ct_dataflow: output_frame_ctr {a}->{b} advancing={a != b}")
-                self.data.ct_prober_dataflow = a != b
-        if not self.data.ct_prober_dataflow:
-            pytest.skip("The corner-turn output is not streaming on this board "
-                        "(CROSSBAR3 OUTPUT_FRAME_CTR is static): complete the "
-                        "corner-turn dataflow bring-up before running capture tests")
+        ct_common.require_ct_dataflow(
+            self.board, self.data, self.get_logger(),
+            sync=lambda: (self.board.set_trig(1), self.board.sync()))
 
     def _set_capture_ct(self, ncap=1, lane=0, frames_per_burst=1, format=None, period=None,
                         split=None):
@@ -266,56 +248,19 @@ class TestCTProber(TestModule):
         into per-packet rows when split=True (decoded complex captures are
         always split).
         '''
-        logger = self.get_logger()
-        if period is None:
-            period = self.CAPTURE_PERIOD
-        logger.debug(f"_set_capture_ct: lane={lane} ncap={ncap} frames_per_burst={frames_per_burst} "
-                     f"period={period} format={format} split={split}")
-        self.board.start_data_capture(
-            period=period, source='ct', lane=lane, frames_per_burst=frames_per_burst)
-        geometry = self.board.CT_PROBER.get_packet_geometry(lane)
-        logger.debug(f"_set_capture_ct: geometry={geometry}")
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
-        receiver.flush()
-        ts, data, counts = receiver.read_raw_frames(
-            ncap=ncap, source=2, format=format, chan_first=False, split=split)
-        logger.debug(f"_set_capture_ct: ts={ts.tolist()} data_shape={data.shape} counts={counts.tolist()}")
-        return ts, data, counts, geometry
+        return ct_common.set_capture_ct(
+            self.board, ncap=ncap, lane=lane, frames_per_burst=frames_per_burst,
+            format=format, period=self.CAPTURE_PERIOD if period is None else period,
+            split=split, recv_verbose=self.test_config.loglevelrecv,
+            logger=self.get_logger())
 
     def _gpu_clean_start(self, gpu, retries=8):
         '''Reset the GPU link MACs until their TX FIFOs come up clean.
 
-        The GPU core reset released while the corner-turn stream is running
-        intermittently (roughly one attempt in three on the bench) leaves
-        one lane's TX FIFO permanently wedged: the MAC accepts stream words
-        the moment the fabric reset deasserts, but the FIFO/GTX are still
-        completing their own reset, and the dropped words desynchronize the
-        header and data FIFOs - both then overflow continuously (the sticky
-        flags re-assert within 100 ms of every clear) until the next core
-        reset. This is a firmware reset-sequencing weakness of the
-        reconnected GPU path (candidate fix: gate the s_axis feed until
-        resetdone and FIFO wr_rst_busy clear, re-enabling at a packet
-        boundary); until it is fixed, a clean start is obtained by
-        re-resetting until the overflow flags stay quiet.
+        See ct_common.gpu_clean_start for the reset-release wedge mechanism
+        this works around.
         '''
-        logger = self.get_logger()
-        for attempt in range(retries):
-            gpu.reset()
-            sleep(0.25)
-            gpu.OVERFLOW_RESET = 1
-            gpu.OVERFLOW_RESET = 0
-            sleep(0.25)
-            data_overflow = int(gpu.DATA_FIFO_OVERFLOW)
-            frame_overflow = int(gpu.FRAME_FIFO_OVERFLOW)
-            if data_overflow == 0 and frame_overflow == 0:
-                logger.debug(f"_gpu_clean_start: clean after {attempt + 1} attempt(s)")
-                return
-            logger.info(f"_gpu_clean_start: attempt {attempt + 1} left a wedged TX FIFO "
-                        f"(data_overflow={data_overflow:#04x} frame_overflow={frame_overflow:#04x}), "
-                        f"re-resetting")
-        raise AssertionError(
-            f"GPU link TX FIFOs still overflow after {retries} core resets "
-            f"(data_overflow={data_overflow:#04x} frame_overflow={frame_overflow:#04x})")
+        ct_common.gpu_clean_start(gpu, self.get_logger(), retries=retries)
 
     def _capture_flags_words(self, lane, fpp, frames_per_burst=1, ncap=1):
         '''Capture flags-on packets on `lane` and split each into its sections.
@@ -358,24 +303,7 @@ class TestCTProber(TestModule):
                               data=data, data_flags=data_flags, frame_flags=frame_flags,
                               trailer=trailer))
 
-    def plot_and_test(self, xr, data, ref_data, title, **kwargs):
-        logging.getLogger("matplotlib").setLevel(logging.WARNING)
-        test_name = title[:title.find('(')] #up to position of first bracket
-        parameters  = title[title.find('('):]
-        xr.header(test_name)
-        print(f'Parameters: {parameters}')
-        print(data.shape, data.dtype)
-        residuals = data - ref_data
-        print("Creating plots")
-        plot((data, ref_data), title=test_name, **kwargs)
-        xr.insert_plot()
-        plt.close()
-        plot((residuals,), title = f"Residuals of {test_name.lower()}", **kwargs)
-        xr.insert_plot()
-        plt.close()
-        print(f"Sum of residuals: {np.sum(np.abs(residuals))}")
-        if not self.test_config.only_plot:
-            assert np.equal(data, ref_data).all()
+    # plot_and_test is inherited from TestModule
 
     @pytest.mark.ct_prober
     def test_present_and_parked(self, setup_ct_prober):
