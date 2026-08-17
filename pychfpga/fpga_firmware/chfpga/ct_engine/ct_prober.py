@@ -118,7 +118,7 @@ class CTProber(PROBER):
         return [self.PERIOD0]
 
     def get_packet_geometry(self, lane=None):
-        """ Return the corner-turn packet geometry for `lane`, read back from the CB1 bin-sel registers.
+        """ Return the corner-turn packet geometry for `lane`, read back from the crossbar registers.
 
         Parameters:
 
@@ -129,35 +129,70 @@ class CTProber(PROBER):
 
             dict: frames_per_packet, bins_per_frame, channels_per_bin,
                 words_per_bin, data_words, flags_words, words_per_packet,
-                four_bits, use_offset_binary, send_flags.
+                four_bits, use_offset_binary, send_flags, geometry_source.
 
         Notes:
 
-            The geometry is read from the FIRST corner-turn stage (CB1).
-            In modes where the later crossbars are active (shuffle256/512)
-            the bins/channels split they apply may differ, but the total
-            packet size is conserved across stages, so words_per_packet and
-            data_words remain valid. The 4-word CT header carried inside
-            every captured packet is always authoritative (readable with
-            read_raw_frames(..., format='32')).
+            In single-stage modes (shuffle16, chan*) the later crossbars are
+            bypassed and the geometry comes from the FIRST corner-turn stage
+            (CB1). In modes where CROSSBAR3 actively re-slices the packets
+            (shuffle256/512, chord16) the output geometry differs from CB1's
+            in every respect INCLUDING total size (e.g. shuffle256: 326-word
+            CB1 packets become 597-word output packets at one frame per
+            packet with flags), so the geometry is derived from the CB3
+            bin-selector registers instead. The data encoding fields
+            (four_bits, use_offset_binary) and send_flags always come from
+            CB1: the equivalent CB3 registers only populate the outgoing
+            header and are never programmed by init_crossbars. The 4-word CT
+            header carried inside every captured packet remains readable
+            with read_raw_frames(..., format='32'), but its bins/channels
+            fields are likewise unprogrammed (zero) at CB3.
         """
         if lane is None:
             lane = int(self.LANE_SEL)
-        bs = self.fpga.CT.CROSSBAR.BIN_SEL[int(lane)]
-        four_bits = bool(bs.FOUR_BITS)
-        frames_per_packet = int(bs.GROUP_FRAMES)
-        bins_per_frame = int(bs.NUMBER_OF_SELECTED_WORDS)
-        channels_per_bin = (int(bs.LAST_FIFO_NUMBER) - int(bs.FIRST_FIFO_NUMBER) + 1) * 4
-        words_per_bin = channels_per_bin // (4 if four_bits else 2)
-        data_words = frames_per_packet * bins_per_frame * words_per_bin
-        send_flags = bool(bs.SEND_FLAGS) and not bool(bs.BYPASS)
-        if send_flags:
-            # Data flags block per frame, plus one frame-flags word per frame
-            # (same formulas as BCTEngine.init_crossbars/print_packet_size)
-            data_flag_words = bins_per_frame * words_per_bin * 4 // (32 if bs.COMBINE_DATA_FLAGS else 16)
-            flags_words = frames_per_packet * (data_flag_words + 1)
+        # Encoding and flag enablement are properties of the first stage in
+        # every mode (CB1 packs the nibbles and appends the flags blocks).
+        cb1_bs = self.fpga.CT.CROSSBAR.BIN_SEL[int(lane)]
+        four_bits = bool(cb1_bs.FOUR_BITS)
+        use_offset_binary = bool(cb1_bs.USE_OFFSET_BINARY)
+        send_flags = bool(cb1_bs.SEND_FLAGS) and not bool(cb1_bs.BYPASS)
+
+        cb3 = getattr(self.fpga.CT, 'CROSSBAR3', None)
+        cb3_active = cb3 is not None and not bool(cb3.BIN_SEL[0].BYPASS)
+        if cb3_active:
+            # Active shuffle mode: the packet leaving the corner turn is the
+            # one re-sliced by the CB3 bin selector of this output lane.
+            bs = cb3.BIN_SEL[int(lane)]
+            frames_per_packet = int(bs.NUMBER_OF_FRAMES_PER_PACKET)
+            bins_per_frame = len(bs.get_selected_bins())
+            # Each output bin concatenates the words of all input lanes the
+            # selector is configured to forward.
+            lanes = int(bs.LAST_LANE) - int(bs.FIRST_LANE) + 1
+            words_per_bin = int(bs.NUMBER_OF_WORDS_PER_BIN) * lanes
+            data_words = frames_per_packet * bins_per_frame * words_per_bin
+            if send_flags:
+                data_flag_words = bins_per_frame * lanes * int(bs.NUMBER_OF_DATA_FLAGS_WORDS_PER_BIN)
+                frame_flag_words = int(bs.NUMBER_OF_FRAME_FLAGS_WORDS_PER_FRAME) * lanes
+                flags_words = frames_per_packet * (data_flag_words + frame_flag_words)
+            else:
+                flags_words = 0
+            geometry_source = 'CB3'
         else:
-            flags_words = 0
+            bs = cb1_bs
+            frames_per_packet = int(bs.GROUP_FRAMES)
+            bins_per_frame = int(bs.NUMBER_OF_SELECTED_WORDS)
+            channels_per_bin = (int(bs.LAST_FIFO_NUMBER) - int(bs.FIRST_FIFO_NUMBER) + 1) * 4
+            words_per_bin = channels_per_bin // (4 if four_bits else 2)
+            data_words = frames_per_packet * bins_per_frame * words_per_bin
+            if send_flags:
+                # Data flags block per frame, plus one frame-flags word per frame
+                # (same formulas as BCTEngine.init_crossbars/print_packet_size)
+                data_flag_words = bins_per_frame * words_per_bin * 4 // (32 if bs.COMBINE_DATA_FLAGS else 16)
+                flags_words = frames_per_packet * (data_flag_words + 1)
+            else:
+                flags_words = 0
+            geometry_source = 'CB1'
+        channels_per_bin = words_per_bin * (4 if four_bits else 2)
         # 4-word CT header + data + optional flags + 1 packet-flags trailer word
         words_per_packet = 4 + data_words + flags_words + 1
         return dict(
@@ -169,8 +204,9 @@ class CTProber(PROBER):
             flags_words=flags_words,
             words_per_packet=words_per_packet,
             four_bits=four_bits,
-            use_offset_binary=bool(bs.USE_OFFSET_BINARY),
-            send_flags=send_flags)
+            use_offset_binary=use_offset_binary,
+            send_flags=send_flags,
+            geometry_source=geometry_source)
 
     def config_capture(self, frames_per_burst=1, burst_period=100, offset=0, send_delay=0, words_per_packet=None):
         """

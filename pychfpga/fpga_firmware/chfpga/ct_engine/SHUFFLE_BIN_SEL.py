@@ -136,7 +136,7 @@ class SHUFFLE_BIN_SEL_base(MMI):
         if use_cache and self.cached_bin_select_table is not None:
             mask = self.cached_bin_select_table
         else:
-            mask = self.read_ram(0x00, length=128)  # 128*8 = up to 1024 bins / frame
+            mask = self.read_ram(0x00, type=np.dtype('u1'), length=128)  # 128*8 = up to 1024 bins / frame
 
         bin_map = np.unpackbits(mask[::-1])[::-1]
         return np.where(bin_map)[0]
