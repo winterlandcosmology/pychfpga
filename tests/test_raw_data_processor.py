@@ -936,3 +936,165 @@ def test_chan_sources_unchanged_with_three_cookie_list():
     np.testing.assert_array_equal(counts, [[1, 1]])
     np.testing.assert_array_equal(data[0, 0], np.full(4, 11, dtype=data.dtype))
     np.testing.assert_array_equal(data[0, 1], np.full(4, 12, dtype=data.dtype))
+
+
+# ---------------------------------------------------------------------------
+# shuffle256-geometry corner-turn packets (CB3-resliced: 8 bins x 256 channels)
+# ---------------------------------------------------------------------------
+
+S256_INNER_STREAM_ID = 0x2015  # stream_type 2, crate 0, slot0 1, lane 5
+S256_DATA_WORDS_PER_FRAME = 512  # 8 bins x 64 words (256 channel bytes/bin)
+S256_FLAG_WORDS_PER_FRAME = 80   # 64 data-flags + 16 frame-flags words
+
+
+def s256_words_per_packet(fpp, send_flags=True):
+    return (4 + fpp * S256_DATA_WORDS_PER_FRAME
+            + (fpp * S256_FLAG_WORDS_PER_FRAME if send_flags else 0) + 1)
+
+
+def s256_capture_format(fpp=1, use_offset_encoding=False):
+    return State(
+        fmt_bus_width=8,
+        fmt_data_width=4,
+        fmt_is_complex=True,
+        fmt_interleave_factor=1,
+        fmt_ct_packed=True,
+        fmt_header_words=4,
+        fmt_data_words=fpp * S256_DATA_WORDS_PER_FRAME,
+        fmt_four_bits=True,
+        fmt_frames_per_packet=fpp,
+        fmt_bins=8,
+        fmt_channels_per_bin=256,
+        use_offset_encoding=use_offset_encoding,
+    )
+
+
+def make_s256_processor(fpp=1, send_flags=True, frames_per_burst=1, n_packets=8,
+                        **format_kwargs):
+    wpp = s256_words_per_packet(fpp, send_flags)
+    bytes_per_frame = 4 * wpp
+    pr = DummyPacketReceiver(n_packets=n_packets, max_packet_size=8192)
+    state = default_config(
+        source="ct",
+        channels=(),
+        stream_ids=(CT_STREAM_ID,),  # the wrapper carries the probe's 12-bit id
+        frames_per_burst=frames_per_burst,
+        samples_per_frame=bytes_per_frame,
+        bytes_per_frame=bytes_per_frame,
+        bytes_per_subframe=bytes_per_frame,
+        capture_bits_per_word=32,
+        capture_format=[None, None, s256_capture_format(fpp, **format_kwargs)],
+        packet_cookie=[PACKET_COOKIE_ADC, PACKET_COOKIE_FFT, PACKET_COOKIE_CT],
+    )
+    return RawDataPacketProcessor(pr, config=state, receive_window=3), pr
+
+
+def write_s256_packet(processor, pr, ix, ts, fpp=1, send_flags=True,
+                      burst_index=0, planted=None):
+    """Write a wrapped shuffle256 CT packet.
+
+    planted: {(frame, bin, word): uint32} data words to set; everything else
+    is zero. All flags words are poisoned with 0xDEADBEEF to prove the
+    decoder never reads them; the trailer stays zero.
+    """
+    wpp = s256_words_per_packet(fpp, send_flags)
+    words = np.zeros(wpp, dtype=np.uint32)
+    words[0] = (S256_INNER_STREAM_ID << 16) | (1 << 12) | (4 << 8) | 0xCF
+    words[1] = (int(send_flags) << 30) | (fpp << 24)
+    words[3] = int(ts) & 0xFFFFFFFF
+    data = words[4:4 + fpp * S256_DATA_WORDS_PER_FRAME].reshape(fpp, 8, 64)
+    for (frame, bin_number, word), value in (planted or {}).items():
+        data[frame, bin_number, word] = value
+    if send_flags:
+        words[4 + fpp * S256_DATA_WORDS_PER_FRAME:wpp - 1] = 0xDEADBEEF
+    pr.buf[ix, 0] = 0xA2
+    pr.buf[ix, 1] = ((burst_index & 0xF) << 4) | ((CT_STREAM_ID >> 8) & 0xF)
+    pr.buf[ix, 2] = CT_STREAM_ID & 0xFF
+    pr.buf[ix, 3] = 0
+    pr.buf[ix, 4:10] = np.frombuffer(int(ts).to_bytes(6, "big"), dtype=np.uint8)
+    payload = words.astype(">u4").view(np.uint8)
+    pr.buf[ix, 10:10 + payload.size] = payload
+    pr.pkt_len[ix] = processor.PACKET_SIZE
+    pr.n_stored = max(pr.n_stored, ix + 1)
+
+
+def test_s256_geometry_words():
+    """The shuffle256 packet sizes match the doc-confirmed totals."""
+    assert s256_words_per_packet(1, True) == 597
+    assert s256_words_per_packet(2, True) == 1189
+    assert s256_words_per_packet(1, False) == 517
+    assert s256_words_per_packet(2, False) == 1029
+
+
+def test_s256_decode_fpp1():
+    """Planted data words land at flat index bin*256 + word*4 (+byte), LSB-first."""
+    processor, pr = make_s256_processor(fpp=1)
+    assert processor.PACKET_SIZE == 10 + 4 * 597
+    planted = {
+        (0, 0, 0): 0x7F8801F0,
+        (0, 0, 63): 0x12345678,
+        (0, 7, 63): 0x0000000F,
+    }
+    write_s256_packet(processor, pr, 0, ts=100, planted=planted)
+    ts, data, counts = process_and_get(processor, source=2)
+    assert data.shape == (1, 1, 2048)
+    np.testing.assert_array_equal(counts, [[1]])
+    samples = data[0, 0]
+    # word (bin 0, word 0): wire bytes 7F 88 01 F0, channels decode LSB-first
+    np.testing.assert_array_equal(
+        samples[0:4],
+        np.asarray([-1 + 0j, 0 + 1j, -8 - 8j, 7 - 1j], dtype=np.complex64))
+    # word (bin 0, word 63) -> channels 252..255 of bin 0
+    np.testing.assert_array_equal(
+        samples[63 * 4:63 * 4 + 4],
+        np.asarray([7 - 8j, 5 + 6j, 3 + 4j, 1 + 2j], dtype=np.complex64))
+    # word (bin 7, word 63) -> the very last 4 samples of the frame
+    base = 7 * 256 + 63 * 4
+    np.testing.assert_array_equal(
+        samples[base:base + 4],
+        np.asarray([0 - 1j, 0, 0, 0], dtype=np.complex64))
+    # nothing else (in particular no flags poison) leaks into the decode
+    planted_idx = [0, 1, 2, 3, 252, 253, 254, 255, base, base + 1, base + 2, base + 3]
+    rest = np.delete(samples, planted_idx)
+    np.testing.assert_array_equal(rest, 0)
+
+
+def test_s256_decode_fpp2_flags_poison():
+    """Two-frame flags-on packets decode with frame 1 at offset 2048; flags ignored."""
+    processor, pr = make_s256_processor(fpp=2)
+    assert processor.PACKET_SIZE == 10 + 4 * 1189
+    write_s256_packet(processor, pr, 0, ts=100, fpp=2,
+                      planted={(1, 2, 5): 0x000000F7})
+    ts, data, counts = process_and_get(processor, source=2)
+    assert data.shape == (1, 1, 4096)
+    samples = data[0, 0]
+    idx = 2048 + 2 * 256 + 5 * 4
+    np.testing.assert_array_equal(samples[idx], np.complex64(-1 + 7j))
+    rest = np.delete(samples, [idx])
+    np.testing.assert_array_equal(rest, 0)
+
+
+def test_s256_offset_binary():
+    """The offset-binary XOR applies at the shuffle256 geometry too."""
+    processor, pr = make_s256_processor(fpp=1, use_offset_encoding=True)
+    # byte 0x88 ^ 0x88 = 0x00 -> 0+0j; byte 0x00 ^ 0x88 = 0x88 -> -8-8j
+    write_s256_packet(processor, pr, 0, ts=100, planted={(0, 0, 0): 0x00000088})
+    ts, data, counts = process_and_get(processor, source=2)
+    samples = data[0, 0]
+    np.testing.assert_array_equal(samples[0], np.complex64(0))
+    np.testing.assert_array_equal(samples[1:4], np.full(3, -8 - 8j, np.complex64))
+
+
+def test_s256_burst_split():
+    """A two-packet shuffle256 burst yields one row per packet, consecutive ts."""
+    processor, pr = make_s256_processor(fpp=1, frames_per_burst=2)
+    write_s256_packet(processor, pr, 0, ts=100, burst_index=0,
+                      planted={(0, 0, 0): 0x01010101})
+    write_s256_packet(processor, pr, 1, ts=100, burst_index=1,
+                      planted={(0, 0, 0): 0x02020202})
+    ts, data, counts = process_and_get(processor, source=2)
+    np.testing.assert_array_equal(ts, [100, 101])
+    assert data.shape == (2, 1, 2048)
+    np.testing.assert_array_equal(data[0, 0, :4], np.full(4, 0 + 1j, np.complex64))
+    np.testing.assert_array_equal(data[1, 0, :4], np.full(4, 0 + 2j, np.complex64))
+    np.testing.assert_array_equal(counts, [[1], [1]])
