@@ -251,7 +251,7 @@ class ShuffleCrossbar(MMI):
             lane_map[tx[0] - 1] = i
         return lane_map
 
-    def map(self, data):
+    def map(self, data, flags=False):
         """
         Returns a crossbar map that describes the contents of each bin selector.
 
@@ -260,6 +260,11 @@ class ShuffleCrossbar(MMI):
             data (dict): input data, in the format::
 
                 {lane:[elements ...], ...}
+
+            flags (bool): when True, the input dicts' 'data_flags' and
+                'frame_flags' entries are re-sliced through the bin
+                selectors' map_flags() models and returned in place of the
+                None placeholders.
 
         Returns:
 
@@ -279,7 +284,7 @@ class ShuffleCrossbar(MMI):
         cb_out = OrderedDict()
         N = self.NUMBER_OF_OUTPUT_LANES // self.NUMBER_OF_BIN_SEL
         for bs_number, bs in enumerate(self.BIN_SEL):
-            for sublane, data in bs.map(remap_out).items():
+            for sublane, data in bs.map(remap_out, flags=flags).items():
                 cb_out[N * bs_number + sublane] = data
         return cb_out
 

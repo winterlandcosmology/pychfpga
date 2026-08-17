@@ -17,6 +17,68 @@ import logging
 from ..mmi import MMI, BitField, CONTROL, STATUS
 
 
+def pack_data_flags_words(bins, channels, data_flags, combine):
+    """ Pack per-channel, per-bin flag bits into one frame's data-flags words.
+
+    Pure layout model (no hardware access) shared by the driver's map_flags
+    methods and the offline unit tests.
+
+    Parameters:
+        bins: selected bin numbers in transmission order (ascending).
+
+        channels: channel numbers, one per flag bit position (bit c carries
+            channels[c]).
+
+        data_flags: {channel: sequence of 0/1 indexed by bin number}.
+            Channels not listed contribute zeros. None means all zeros.
+
+        combine (bool): the hardware COMBINE_DATA_FLAGS setting. When True,
+            two consecutive selected bins share one word (even index in the
+            low half, odd index in the high half). When False, each selected
+            bin gets its own word with the channel flags in the low half and
+            the high half zeroed.
+
+    Returns:
+        np.uint32 array of len(bins)//2 (combine) or len(bins) words.
+    """
+    data_flags = data_flags or {}
+    if combine:
+        if len(bins) % 2:
+            raise NotImplementedError('combined data flags need an even number of selected bins')
+        words = np.zeros(len(bins) // 2, np.uint32)
+        for c, ch in enumerate(channels):
+            ch_flags = data_flags.get(ch)
+            if ch_flags is None:
+                continue
+            for m in range(len(bins) // 2):
+                words[m] |= (int(ch_flags[bins[2 * m]]) & 1) << c
+                words[m] |= (int(ch_flags[bins[2 * m + 1]]) & 1) << (16 + c)
+    else:
+        words = np.zeros(len(bins), np.uint32)
+        for c, ch in enumerate(channels):
+            ch_flags = data_flags.get(ch)
+            if ch_flags is None:
+                continue
+            for m, bin_number in enumerate(bins):
+                words[m] |= (int(ch_flags[bin_number]) & 1) << c
+    return words
+
+
+def pack_frame_flags_word(channels, frame_flags):
+    """ Pack per-channel (adc, fft) overflow bits into one frame-flags word.
+
+    Pure layout model: bit c = ADC overflow of channels[c], bit 16+c = FFT
+    overflow. Channels not listed in `frame_flags` contribute zeros.
+    """
+    frame_flags = frame_flags or {}
+    word = 0
+    for c, ch in enumerate(channels):
+        adc, fft = frame_flags.get(ch, (0, 0))
+        word |= (int(adc) & 1) << c
+        word |= (int(fft) & 1) << (16 + c)
+    return word
+
+
 class ChanBinSel(MMI):
     """ Implements interface to the FR_DIST within a processor pipeline"""
 
@@ -155,6 +217,10 @@ class ChanBinSel(MMI):
         the firmware actually samples is the caller's concern, not this
         model's.
 
+        Both COMBINE_DATA_FLAGS layouts are modelled: combined (one word per
+        pair of selected bins - shuffle16) and uncombined (one word per
+        selected bin, high half zero - shuffle256).
+
         Parameters:
             data_flags: {channel_number: [flag, ...]} indexed by frequency
                 bin, like map()'s input_data. Channels not listed contribute
@@ -164,43 +230,18 @@ class ChanBinSel(MMI):
                 Channels not listed contribute zeros.
 
         Returns:
-            dict(data_flags_words=<uint32 array, one word per two selected
-            bins>, frame_flags_word=int)
+            dict(data_flags_words=<uint32 array>, frame_flags_word=int)
         """
 
         if self.BYPASS:
             raise RuntimeError(f'{self!r}: CHAN_BIN_SEL cannot provide flag maps in BYPASS mode (no flags are sent)')
-        if not self.COMBINE_DATA_FLAGS:
-            raise NotImplementedError(f'{self!r}: only the combined data-flags layout (COMBINE_DATA_FLAGS=1) is modelled')
 
         channels = list(range(self.FIRST_FIFO_NUMBER * 4, self.LAST_FIFO_NUMBER * 4 + 3 + 1))
         bins = self.get_selected_bins()
-        if len(bins) % 2:
-            raise NotImplementedError(f'{self!r}: combined data flags need an even number of selected bins')
-
-        data_flags = data_flags or {}
-        frame_flags = frame_flags or {}
-
-        # One combined word per pair of selected bins: bit c carries channel
-        # channels[c] of the even-indexed bin of the pair, bit 16+c the same
-        # channel of the odd-indexed bin.
-        data_flags_words = np.zeros(len(bins) // 2, np.uint32)
-        for c, ch in enumerate(channels):
-            ch_flags = data_flags.get(ch)
-            if ch_flags is None:
-                continue
-            for m in range(len(bins) // 2):
-                data_flags_words[m] |= (int(ch_flags[bins[2 * m]]) & 1) << c
-                data_flags_words[m] |= (int(ch_flags[bins[2 * m + 1]]) & 1) << (16 + c)
-
-        # One word per frame: bit c = ADC overflow, bit 16+c = FFT overflow.
-        frame_flags_word = 0
-        for c, ch in enumerate(channels):
-            adc, fft = frame_flags.get(ch, (0, 0))
-            frame_flags_word |= (int(adc) & 1) << c
-            frame_flags_word |= (int(fft) & 1) << (16 + c)
-
-        return dict(data_flags_words=data_flags_words, frame_flags_word=frame_flags_word)
+        return dict(
+            data_flags_words=pack_data_flags_words(
+                bins, channels, data_flags, combine=bool(self.COMBINE_DATA_FLAGS)),
+            frame_flags_word=pack_frame_flags_word(channels, frame_flags))
 
     def map(self, input_data, header=False, data_flags=None, frame_flags=None):
         """ Reorders the data based on the configuration of the bin selector.
