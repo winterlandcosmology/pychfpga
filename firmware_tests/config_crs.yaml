@@ -76,3 +76,12 @@ test_config:
         lane: [0]
     data_flags_as_built:
         lane: range(MAX_LANE + 1)
+
+    #parameters for the shuffle256 crate tests. Collection-only: the tests
+    #skip at runtime on this config (mode is not 'shuffle256').
+    global_s256_slot: [1]
+    global_s256_lane: [0]
+    corner_turn_shuffle256:
+        waveform: ['slot_channel_id']
+    frame_flags_shuffle256:
+        s256_lane: [0]

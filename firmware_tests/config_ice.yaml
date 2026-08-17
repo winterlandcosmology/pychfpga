@@ -76,3 +76,13 @@ test_config:
     data_flags_as_built:
         lane: range(MAX_LANE + 1)
 
+    #parameters for the shuffle256 crate tests. These entries exist only so
+    #the tests collect: they skip at runtime on this single-board config
+    #(mode is not 'shuffle256'). Use config_ice_crate.yaml to run them.
+    global_s256_slot: [1]
+    global_s256_lane: [0]
+    corner_turn_shuffle256:
+        waveform: ['slot_channel_id']
+    frame_flags_shuffle256:
+        s256_lane: [0]
+

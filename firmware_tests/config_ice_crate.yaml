@@ -1,0 +1,41 @@
+# Configuration for the shuffle256 crate tests (ct_shuffle256_test.py).
+#
+# Run ONLY the crate test file with this config (the other suites are
+# single-board and would misbehave against a crate):
+#
+#   pytest --xreport-config=config_ice_crate.yaml --log-cli-level=INFO ct_shuffle256_test.py
+#
+# Run the tests stage by stage in file order (health -> alignment ->
+# geometry -> algorithm -> flags -> gpu) and stop at the first failure; see
+# the module docstring of ct_shuffle256_test.py for the exact commands.
+
+connection_config:
+    prog: 1                     # 0 - do not reprogram, 1 - reprogram if outdated, 2 - always reprogram
+    mode: 'shuffle256'          # 16-board crate, 3-level corner turn. Do not change.
+    hwm: 'bp16 XX:0'            # EDIT ME: replace XX with the crate's backplane serial
+                                # number (e.g. 'bp16 29:0' = serial 29, crate number 0)
+    bitfile: /home/vbidula/pychfpga/pychfpga/fpga_firmware/bitstreams/chfpga_ice_ct_pbg_aug11.bit
+    sync_method: 'distributed_time'   # backplane time distribution (production default);
+    sync_source: 'bp_time'            # use 'irigb' instead if the crate has an IRIG-B feed
+    mdns_timeout: 40            # crate discovery takes longer than a single board
+    open: 1                     # full bring-up including init_corner_turn
+
+test_config:
+    loglevelconn: "INFO"        # Log level during connection to the crate
+    logleveltest: "INFO"        # INFO (not DEBUG): remote logs must stay readable
+    loglevelrecv: 1             # 0-3
+    conn_scope: "class"         # reuse the (slow) crate connection across tests
+    only_plot: False
+
+    platform: 'ICE-crate'
+
+    sync_max_time_difference: 100  # ns; array-sync frame-0 alignment limit
+
+    #parameters for the shuffle256 crate tests
+    global_s256_slot: range(1, NUM_SLOTS + 1)   # all 16 boards
+    global_s256_lane: [0, 7]                    # first and last corner-turn output lane
+    corner_turn_shuffle256:
+        waveform: ['slot_channel_id', 'ramp']
+    frame_flags_shuffle256:
+        s256_lane: [0]
+    stream_frame_spread: 2      # max frame-number spread across CB2 input lanes
