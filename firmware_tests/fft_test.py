@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-
+from .module_test import TestModule
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -11,27 +11,13 @@ from .casper_simulations.caspersimtools import InputSignal, OutputSignal
 from .utils import plot
 
 
-platforms = {
-    'ICE-4bit-c':
-        {'INPUT_WIDTH': 8, 'CAPTURE_WIDTH': 4, 'FFT_WIDTH': 18, 'SCALED_WIDTH': 35, 'READOUT_SHIFT': 4, 'BINS_PER_SAMPLE': 2},
-    'ICE-4bit-r':
-        {'INPUT_WIDTH': 8, 'CAPTURE_WIDTH': 4, 'FFT_WIDTH': 18, 'SCALED_WIDTH': 34, 'READOUT_SHIFT': 4, 'BINS_PER_SAMPLE': 2},
-    'ICE-8bit-c':
-        {'INPUT_WIDTH': 8, 'CAPTURE_WIDTH': 8, 'FFT_WIDTH': 18, 'SCALED_WIDTH': 35, 'READOUT_SHIFT': 0, 'BINS_PER_SAMPLE': 2},
-    'ICE-8bit-r':
-        {'INPUT_WIDTH': 8, 'CAPTURE_WIDTH': 8, 'FFT_WIDTH': 18, 'SCALED_WIDTH': 34, 'READOUT_SHIFT': 0, 'BINS_PER_SAMPLE': 2},
-    'CRS':
-        {'INPUT_WIDTH': 14, 'CAPTURE_WIDTH': 4, 'FFT_WIDTH': 32, 'SCALED_WIDTH': 48, 'READOUT_SHIFT': 12, 'BINS_PER_SAMPLE': 4},
-}
-
-
-class TestFFT:
+class TestFFT(TestModule):
     SCALER_COMPLEX_GAIN = 1
     SCALER_COMPLEX_POSTSCALER = 20
     FFT_COMPLEX_CAPTURE_MODE = 'fft_2x'
     SIM_COMPARE_DATA_ROOT = Path(__file__).resolve().parent / 'casper_simulations' / 'sim_data'
     SIM_COMPARE_CONFIGS = {
-        'ICE-8bit-r': {
+        'ICE': {
             'instrument': 'ice',
             'capture_mode': 'fft_full',
             'adc_bits': 8,
@@ -641,7 +627,7 @@ class TestFFT:
         plt.close(fig)
 
     def assert_fft_matches_simulation(self, xr, stem, *, ch=0):
-        platform = str(self.test_config.platform)
+        platform = self.data.PLATFORM
         if platform not in self.SIM_COMPARE_CONFIGS:
             valid = ', '.join(sorted(self.SIM_COMPARE_CONFIGS))
             pytest.skip(f"FFT simulation comparison is defined only for: {valid}")

@@ -253,7 +253,7 @@ class TestCorr(TestModule):
         spectrum = self._inject_spectrum('arb', data=spectrum)
         ref_data = self._compute_psd(spectrum,)
         data  = self._read_corr_data(self.data.NUM_FRAMES)
-        plot([np.swapaxes(data[0, :64, :1], 0, 1)[0], ref_data[:64]], split_complex=True, title=f"PSD of periodic ramp spectrum")
+        plot([np.swapaxes(data[0, :64, :1], 0, 1)[0], ref_data[:64]], split_complex=True, title=f"PSD of alternating spectrum (period={period})")
         xr.insert_plot()
         np.testing.assert_equal(data, np.broadcast_to(ref_data[np.newaxis, :, np.newaxis], data.shape))
 
@@ -393,6 +393,6 @@ class TestCorr(TestModule):
         firmware_data = self._compute_psd(spectrum, self.data.NUM_FRAMES, normalise=False)
         ref_data = num_soft_frames * firmware_data
         #print(data[0, 2000:3000, 0])
-        plot([np.swapaxes(data[0, 2500:3500, :1], 0, 1)[0], ref_data[2500:3500]], split_complex=True, title=f"Software accumulation with {num_soft_frames} soft frames")
+        plot([np.swapaxes(data[0, :, :1], 0, 1)[0], ref_data], split_complex=True, title=f"Software accumulation with {num_soft_frames} soft frames")
         xr.insert_plot()
         np.testing.assert_equal(data, np.broadcast_to(ref_data[np.newaxis, :, np.newaxis], data.shape))

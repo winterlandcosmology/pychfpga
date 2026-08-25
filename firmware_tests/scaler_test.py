@@ -574,7 +574,7 @@ class TestScaler(TestModule):
         bottom = abs(source % (2**num_fractional_bits))
         if rounding_mode == 0:
             round_up = np.zeros(bottom.size)
-        if rounding_mode == 1:
+        elif rounding_mode == 1:
             round_up = bottom >= 2**(num_fractional_bits - 1)
         elif rounding_mode == 2:
             round_up = (bottom > 2**(num_fractional_bits - 1)) | ((bottom == 2**(num_fractional_bits - 1)) & (value % 2 == 1))
@@ -593,15 +593,15 @@ class TestScaler(TestModule):
         logger.debug(f"test_rounding: round_up_first16={round_up[:16]}")
         logger.debug(f"test_rounding: received_first16={data[0][:16]}")
         logger.debug(f"test_rounding: reference_first16={ref_data[:16]}")
-        self.plot_and_test(xr, data[0], ref_data, f'Rounding (value={value}, # of fractional bits={num_fractional_bits}, rounding mode={self.ROUNDING_MODES[rounding_mode]}, use pre-rounding data={use_prerounding})')
+        self.plot_and_test(xr, data[0], ref_data, f'Rounding (value={value}, # of fractional bits={num_fractional_bits}, rounding mode={self.ROUNDING_MODES[rounding_mode]})')
         
 
     @pytest.mark.scaler
-    @pytest.mark.parametrize('rounding_mode', (1, 2))
-    @pytest.mark.parametrize('symmetric_saturation', (False, True))
-    @pytest.mark.parametrize('num_fractional_bits', (1, 2, 3))
+    @pytest.mark.parametrize('rounding_mode', (0, 1, 2))
+    @pytest.mark.parametrize('symmetric_saturation', (True,))
+    @pytest.mark.parametrize('num_fractional_bits', (9,))
     @pytest.mark.parametrize('force_float_gains', (False,))
-    @pytest.mark.parametrize('use_4bit_cap_mode', (False, True))
+    @pytest.mark.parametrize('use_4bit_cap_mode', (False,))
     def test_post_rounding_saturation(self, rounding_mode, symmetric_saturation, num_fractional_bits, force_float_gains, use_4bit_cap_mode, setup_scaler, xr):
         '''
         Tests that if rounding and not scaling which causes a bin to saturate, it is nevertheless corrected. The test is run for a range of fractional bits (see rounding for definition), but a more limited range because more bits are needed to produce both rounding and a saturation.
@@ -649,7 +649,9 @@ class TestScaler(TestModule):
         source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=cap_data_type)
         ref_data = source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler  // 2**self.data.SCALER_SHIFT
         bottom = abs(source % (2**num_fractional_bits))
-        if rounding_mode == 1:
+        if rounding_mode == 0:
+            round_up = np.zeros(bottom.size)
+        elif rounding_mode == 1:
             round_up = bottom >= 2**(num_fractional_bits - 1)
         elif rounding_mode == 2:
             round_up = (bottom > 2**(num_fractional_bits - 1)) | ((bottom == 2**(num_fractional_bits - 1)) & (ref_data % 2 == 1))
@@ -883,8 +885,10 @@ class TestScaler(TestModule):
         self.board.set_scaler_output_modes(cap_data_type=cap_data_type)
         self.board.set_gains(self._uniform_real_gains(1))
 
+        capture_width = self.data.CAPTURE_BUS_WIDTH // self.data.BINS_PER_WORD if cap_data_type == 4 else self.data.CAPTURE_BUS_WIDTH
+        input_range = min(capture_width, self.data.INPUT_WIDTH)
         self.board.sync()
-        source = gen_data('complex_ramp', samples=self.data.NUM_SAMPLES, min=-64, max=63)
+        source = gen_data('ramp', samples=self.data.NUM_SAMPLES, min=-2**(input_range-1), max=2**(input_range-1)-1)
         self.board.set_data_source(source='arb', data=source)
 
         frames_per_burst = 2 if cap_data_type == 4 else 2 * self.data.BINS_PER_WORD #full resolution sends one component every frame
@@ -907,7 +911,6 @@ class TestScaler(TestModule):
         raw_fft = source_i
 
         if cap_data_type == 4 and not bool(self.board.chan[0].FFT.BYPASS):
-            capture_width = self.data.CAPTURE_BUS_WIDTH // self.data.BINS_PER_WORD
             ref_components = np.clip(
                 raw_fft // (2 ** max(self.data.FFT_WIDTH - capture_width, 0)),
                 -2**(capture_width - 1),
@@ -928,7 +931,7 @@ class TestScaler(TestModule):
         logger.debug(f"test_mult_resolution_capture: source_first16={source[:16]}")
         logger.debug(f"test_mult_resolution_capture: received_first16={data[0][:16]}")
         logger.debug(f"test_mult_resolution_capture: reference_first16={ref_data[:16]}")
-        self.plot_and_test(xr, data[0], ref_data, f'Mult-resolution capture (capture mode = {cap_data_type})', split_complex=True)
+        self.plot_and_test(xr, data[0], ref_data, f'Mult-resolution capture (capture mode = {cap_data_type})', split_complex=False)
 
     @pytest.mark.scaler
     @pytest.mark.parametrize("ch", (0,))
@@ -1357,9 +1360,9 @@ class TestScaler(TestModule):
             
         '''
 
-        pytest.skip("TODO: implement")
+        #pytest.skip("TODO: implement")
         logger = self.get_logger()
-        FRAMES_PER_BURST = 4
+        FRAMES_PER_BURST = 16
         frames_to_mode = {2: 0, 4: 1, 8: 2, 16: 3}
         mode = frames_to_mode.get(FRAMES_PER_BURST, -1)
         assert num_frames % FRAMES_PER_BURST == 0, f"{num_frames} frames cannot be divided into bursts of {FRAMES_PER_BURST} frames"

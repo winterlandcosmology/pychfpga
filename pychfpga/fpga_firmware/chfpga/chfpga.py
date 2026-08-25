@@ -2925,8 +2925,10 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 st.funcgen_left_shift = int(left_shift)
             if right_shift is not None:
                 st.funcgen_right_shift = int(right_shift)
+        # Refresh decode cache without shrinking raw_capture.channels to the
+        # programmed subset (capture channel list is owned by start_data_capture).
         try:
-            self.get_receiver_config(channels=channels)
+            self.get_receiver_config()
         except ValueError as exc:
             if (
                 self.CAPTURE_TYPE != "PROBER"
@@ -3141,7 +3143,16 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             ``stream_ids``, ``format``, ``verbose``, ``ring_buffer_size``,
             ``decode_strict``, ``ignore_first_burst``. Engine/profile kwargs
             are injected internally.
+
+        Prefer :meth:`get_data_receiver_async` when an event loop is already running
+        (e.g. Jupyter).
         """
+        return run_async(self.get_data_receiver_async(
+            pr=pr, pr_buf_size=pr_buf_size, port_number=port_number, **kwargs
+        ))
+
+    async def get_data_receiver_async(self, pr: UDPPacketReceiver = None, pr_buf_size=None, port_number=None, **kwargs):
+        """Async variant of :meth:`get_data_receiver`."""
         # self._init_capture_state_tracking()
 
         # raw_capture_state = self.get_raw_decoder_state(
@@ -3184,7 +3195,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 pr_kwargs["report_pkt_len_me"] = kwargs.pop("report_pkt_len_me", 0)
 
                 self.logger.debug(f'{self!r}: Creating data receiver')
-                pr = UDPPacketReceiver(self.get_data_socket(port_number=port_number), **pr_kwargs)
+                pr = UDPPacketReceiver(await self.get_data_socket_async(port_number=port_number), **pr_kwargs)
 
             self.recv = RawFrameReceiver(pr, config=fw.raw, **kwargs)
         else:
