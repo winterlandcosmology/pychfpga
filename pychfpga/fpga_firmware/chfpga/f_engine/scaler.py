@@ -14,6 +14,7 @@ import numpy as np
 
 # Local packages
 from ..mmi import MMI, BitField, CONTROL, STATUS
+from pychfpga.common.state import State
 
 
 class SCALER(MMI):
@@ -87,9 +88,9 @@ class SCALER(MMI):
 
     # Define Status registers
 
-    def __init__(self, *, router, router_port, instance_number, state):
+    def __init__(self, *, router, router_port, instance_number, config):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
-        self.state = state
+        self.config = config
         self.cached_gain_table = {}
         self.cached_gain_timestamp = {}
 
@@ -106,17 +107,26 @@ class SCALER(MMI):
             self.BYPASS = 1
         self.set_capture_data_type(0)
         self.SHIFT_LEFT = 31
-        self.USE_OFFSET_BINARY = 1
+        self.set_offset_binary_encoding(1)
         self.set_gain_table(1)
         self.SATURATE_ON_MINUS_7 = 1
         self.STATS_CAPTURE = 1
         self.STATS_FRAME_COUNT = int(800e6 / 2048 * 30)
+        self.config.update(
+            bypass=bool(self.BYPASS),
+            bypass_data_type=int(self.DATA_TYPE),
+            eight_bit=not bool(self.FOUR_BITS),
+            eight_bit_support=bool(self.EIGHT_BIT_SUPPORT),
+            use_offset_binary=bool(self.USE_OFFSET_BINARY),
+            cap_data_type=int(self.CAP_DATA_TYPE),
+        )
+        self.get_config()
 
     def set_scaler_output(self, data_type, bypass):
         self.BYPASS = bypass
         self.DATA_TYPE = data_type
-        self.state.scaler_bypass = bypass
-        self.state.scaler_bypass_data_type = int(data_type)
+        self.config.bypass = bool(bypass)
+        self.config.bypass_data_type = int(data_type)
 
     CAPTURE_DATA_TYPES = {
         'out': 0, # same as main data output
@@ -130,17 +140,107 @@ class SCALER(MMI):
     def set_capture_data_type(self, data_type):
         if data_type in self.CAPTURE_DATA_TYPES:
             self.CAP_DATA_TYPE = self.CAPTURE_DATA_TYPES[data_type]
-            self.state.cap_data_type = self.CAPTURE_DATA_TYPES[data_type]
+            self.config.cap_data_type = self.CAPTURE_DATA_TYPES[data_type]
         elif data_type in self.CAPTURE_DATA_TYPES.values():
             self.CAP_DATA_TYPE = data_type
-            self.state.cap_data_type = int(data_type)
+            self.config.cap_data_type = int(data_type)
         else:
             valid_values = [f'{v}:{k}' for k,v in self.CAPTURE_DATA_TYPES.items()]
             raise RuntimeError(f"Invalid capture data type. Valid values are {', '.join(valid_values)}")
 
     def set_offset_binary_encoding(self, offset):
-        self.USE_OFFSET_BINARY = offset 
-        self.state.use_offset_binary = offset
+        self.USE_OFFSET_BINARY = offset
+        self.config.use_offset_binary = bool(offset)
+
+    def set_output_bit_width(self, width):
+        """Set scaler output bit width.
+
+        Parameters:
+            width (int): ``4`` for (4+4)-bit output, ``8`` for (8+8)-bit output.
+
+        Raises:
+            ValueError: If ``width`` is not 4 or 8, or if 8-bit mode is requested
+                but the firmware build does not support it.
+        """
+        if width == 4:
+            eight_bit = False
+        elif width == 8:
+            if not self.config.eight_bit_support:
+                raise ValueError(
+                    '8-bit mode not supported in this build of the SCALER firmware')
+            eight_bit = True
+        else:
+            raise ValueError(
+                f'Number of bits {int(width)} is invalid for the scaler. '
+                'Only 4 or 8 is allowed')
+        self.FOUR_BITS = not eight_bit
+        self.config.eight_bit = eight_bit
+
+    def get_config(self):
+        """Derive FFT capture_format onto ``self.config``."""
+        cfg = self.config
+        board = self.fpga.config
+        fft_bypass = bool(self.fpga.chan[self.instance_number].FFT.config.bypass)
+        map_attrs = (
+            'cap_data_type', 'eight_bit', 'use_offset_binary',
+        )
+        board_attrs = ('platform_id', 'adc_bits_per_sample', 'fft_bins_per_word')
+        ctx = ('SCALER.get_config', self.instance_number)
+        if (
+            cfg.has_attr('capture_format')
+            and not cfg.has_changed(map_attrs, context=ctx)
+            and not board.has_changed(board_attrs, context=ctx)
+            and not self.fpga.chan[self.instance_number].FFT.config.has_changed(
+                ('bypass',), context=ctx)
+        ):
+            return cfg
+
+        # We store in the capture format both the bus width, which is the total number of bits available to send the captured data
+        # and the data length, which is the number of bits that actual contain the desired data. Since these are placed in the MSBs
+        # of the bus, we must right shift by the difference to extract our desired data
+        cap_data_type = int(cfg.cap_data_type)
+        eight_bit = bool(cfg.eight_bit)
+        use_offset_encoding = bool(cfg.use_offset_binary)
+        adc_bit_width = int(board.adc_bits_per_sample)
+        fft_bins_per_word = int(board.fft_bins_per_word)
+        is_crs = int(board.platform_id) == self.fpga._PLATFORM_ID_CRS
+        fft_data_width = self.fpga.FFT_INFO[self.fpga.FFT_TYPE]['bits_per_bin'] // 2
+
+        if cap_data_type == 4:
+            capture_bus_width = 32 if is_crs else 16
+            data_width = adc_bit_width if fft_bypass else min(fft_data_width, capture_bus_width)
+            interleave_factor = 2
+        elif cap_data_type == 5:  # Full resolution FFT
+            # CRS: 128-bit complex, ICE: 32-bit complex. TODO: have this parametrized by the firmware
+            capture_bus_width = 128 if is_crs else 32
+            data_width = adc_bit_width if fft_bypass else min(fft_data_width, capture_bus_width)
+            interleave_factor = 2 * fft_bins_per_word
+        else:
+            capture_bus_width = 16 if is_crs else 8
+            if cap_data_type in (1, 2):
+                # Raw and post-gain FFT capture modes use the full Re/Im
+                # component width available on the scaler capture bus.
+                data_width = 16 if is_crs else 8
+            else:
+                data_width = 8 if eight_bit else 4
+            interleave_factor = 1
+
+        if not cfg.has_attr('capture_format'):
+            cfg.capture_format = State()
+        cfg.capture_format.update(
+            fmt_bus_width=capture_bus_width,
+            fmt_data_width=data_width,
+            fmt_is_complex=True,
+            fmt_interleave_factor=interleave_factor,
+            use_offset_encoding=use_offset_encoding,
+        )
+        cfg.ack(map_attrs, context=ctx)
+        board.ack(board_attrs, context=ctx)
+        self.fpga.chan[self.instance_number].FFT.config.ack(('bypass',), context=ctx)
+        return cfg
+
+    def get_bypass(self):
+        return bool(self.config.bypass)
 
     def reset_overflow_flags(self):
         self.CHAN_FIFO_OVERFLOW_RESET = 1

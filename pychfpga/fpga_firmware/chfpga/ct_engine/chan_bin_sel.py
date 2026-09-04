@@ -56,11 +56,11 @@ class ChanBinSel(MMI):
     # ADC_FLAG_FIFO_OVERFLOW   = BitField(STATUS, 0x04, 5, doc="Debug")
     # DATA_FIFO_RD_EN          = BitField(STATUS, 0x04, 6, doc="Debug")
 
-    def __init__(self, *, router, router_port, instance_number, state):
+    def __init__(self, *, router, router_port, instance_number, config):
         # self.parent = parent
         # self.fpga = fpga_instance
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
-        self.state = state
+        self.config = config
         self.logger = logging.getLogger(__name__)
         self.NUMBER_OF_CROSSBAR_INPUTS = self.fpga.NUMBER_OF_CROSSBAR_INPUTS
         self.NUMBER_OF_CROSSBAR_OUTPUTS = self.fpga.NUMBER_OF_CROSSBAR1_OUTPUTS

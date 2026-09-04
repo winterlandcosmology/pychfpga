@@ -47,10 +47,10 @@ class REFCLK(MMI):
     SYNC_IN                = BitField(STATUS, 0x02, 0, doc='reflects the level on the sync_in port')
     # SYNC_DELAY_READBACK  = BitField(STATUS, 0x02, 0, width=5,doc='Reads back the delay set onthe SYNC IODELAY')
 
-    def __init__(self, *, router, router_port, state):
+    def __init__(self, *, router, router_port, config):
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
 
     def init(self):
         # Sets the REFCLK delay to zero by default.
@@ -102,6 +102,12 @@ class REFCLK(MMI):
         self.pulse_bit('REMOTE_SYNC')
         self.wait_for_bit('SYNC_DONE')
 
+    async def remote_sync_async(self, delay=None):
+        """Async version of :meth:`remote_sync`."""
+        self.set_sync_delays(delay)
+        self.pulse_bit('REMOTE_SYNC')
+        await self.wait_for_bit_async('SYNC_DONE')
+
     def local_sync(self, delay=None, max_trials=3):
         """
         Locally generates a SYNC pulse on the current board's ADCs and reset the data acquisition logic.
@@ -130,6 +136,21 @@ class REFCLK(MMI):
                 raise RuntimeError(f'Local SYNC failed after {int(trial)} trials')
             else:
                 self.logger.warning(f'{self!r}: Local SYNC failed on trial {int(trial)}/{int(max_trials)}. Retrying...')
+
+    async def local_sync_async(self, delay=None, max_trials=3):
+        """Async version of :meth:`local_sync`. Yields while waiting for ``SYNC_DONE``."""
+        self.set_sync_delays(delay)
+        trial = 0
+        while True:
+            self.LOCAL_SYNC = 1
+            self.LOCAL_SYNC = 0
+            if await self.wait_for_bit_async('SYNC_DONE', no_error=True):
+                return
+            trial += 1
+            if trial >= max_trials:
+                raise RuntimeError(f'Local SYNC failed after {int(trial)} trials')
+            self.logger.warning(
+                f'{self!r}: Local SYNC failed on trial {int(trial)}/{int(max_trials)}. Retrying...')
 
     def set_sync_delays(self, delay):
         """

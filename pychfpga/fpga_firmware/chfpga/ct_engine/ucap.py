@@ -25,7 +25,6 @@ class UCAP(MMI):
     CH0              = BitField(CONTROL, 0, 0, width=3, doc='Channel #0 in 1, 2, or 4-channel mode')
     CH1              = BitField(CONTROL, 0, 3, width=3, doc='Channel #1 in 2 or 4-channel mode')
     USER_RESET       = BitField(CONTROL, 1, 7, doc='User reset')
-    OUTPUT_SOURCE_SEL = BitField(CONTROL, 1, 6, doc='Selects what data is streamed out: 0: UCAP, 1: CORR44')
     CH2              = BitField(CONTROL, 1, 0, width=3, doc='Channel #2 in 4-channel mode')
     CH3              = BitField(CONTROL, 1, 3, width=3, doc='Channel #3 in 4-channel mode')
     CAPTURE_PERIOD   = BitField(CONTROL, 4, 0, width=24, doc='Number of frames between captures for source 0')
@@ -46,22 +45,83 @@ class UCAP(MMI):
     OUT_FRAME_CTR    = BitField(STATUS, 2, 0, width=8, doc='debug')
     M_CLK_CTR        = BitField(STATUS, 3, 0, width=8, doc='debug')
 
-    def __init__(self, *, router, router_port, state, verbose=0):
+    def __init__(self, *, router, router_port, config, verbose=0):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
         self.sock = None
+
+    # Logical indices used by data_config / packet processor (0=ADC/funcgen, 1=FFT/scaler).
+    SOURCE_INDEX = {
+        'funcgen': 0,
+        'scaler': 1,
+    }
+    SOURCE_NAMES = {v: k for k, v in SOURCE_INDEX.items()}
+    # Hardware SOURCE_SEL codes (bitmask; 255 enables scaler on all channels).
+    DATA_SOURCE_TABLE = {
+        'funcgen': 0,
+        'scaler': 255,
+    }
+    FRAMES_PER_BURST = (2, 4, 8, 16)
+    _DEFAULT_CHANNEL_COUNTS = (8, 4, 2, 1)
+
+    @classmethod
+    def get_default_channels(cls, mode):
+        """Return the default channel list for ``mode`` when ``channels`` is omitted."""
+        try:
+            nchan = cls._DEFAULT_CHANNEL_COUNTS[int(mode)]
+        except (IndexError, TypeError, ValueError):
+            raise RuntimeError(f'Invalid UCAP mode number {mode}') from None
+        return list(range(nchan))
+
+    @classmethod
+    def normalize_source(cls, source):
+        """Return ``(source_index, source_name)`` for a capture source specifier."""
+        if isinstance(source, str):
+            if source == 'adc':
+                source = 'funcgen'
+            if source not in cls.SOURCE_INDEX:
+                valid = ', '.join(cls.SOURCE_INDEX)
+                raise ValueError(
+                    f"Unknown data capture source '{source}'. Valid sources are {valid}"
+                )
+            return cls.SOURCE_INDEX[source], source
+        source_index = int(source)
+        if source_index not in cls.SOURCE_NAMES:
+            raise ValueError(
+                f"Unknown data capture source index {source_index}. Valid indices are 0 (funcgen) or 1 (scaler)"
+            )
+        return source_index, cls.SOURCE_NAMES[source_index]
 
     def init(self):
         """ Initializes UCAP module"""
         slot = self.fpga.slot
         crate = self.fpga.mb.get_crate_number(default=0)
         self.USER_STREAM_ID = (crate << 4) | (slot-1 if slot else 0)
+        mode = int(self.MODE)
+        source_code = int(self.SOURCE_SEL)
+        source_name = 'funcgen' if source_code == 0 else 'scaler'
+        self.config.update(
+            ucap_stream_ids=self.get_stream_ids(),
+            source=self.SOURCE_INDEX[source_name],
+            source_name=source_name,
+            mode=mode,
+            active_channels=self._get_active_channels(mode),
+            frames_per_burst=self.FRAMES_PER_BURST[mode],
+            subframes_per_frame=4,  # hardwired in UCAP
+        )
 
-    DATA_SOURCE_TABLE = {
-        'funcgen': 0,
-        'scaler': 255} # 255: set data source for all 8 channels (11111111 = 255 for unsigned 8-bit bin)
+    def _get_active_channels(self, mode):
+        if mode == 0:
+            return tuple(range(8))
+        if mode == 1:
+            return (int(self.CH0), int(self.CH1), int(self.CH2), int(self.CH3))
+        if mode == 2:
+            return (int(self.CH0), int(self.CH1))
+        if mode == 3:
+            return (int(self.CH0),)
+        raise RuntimeError(f'Invalid UCAP mode number {mode}')
     
     # def get_stream_ids(self, channels = None):
     #     """Return the stream_ids for the requested channels. Default is all channels. """
@@ -72,19 +132,15 @@ class UCAP(MMI):
         """
         return [(self.USER_STREAM_ID << 4) + ch for ch in range(8)]
 
-    def set_data_capture(self, source, mode=0, channels=None, periods=[195312,195312], select=False):
+    def set_data_capture(self, source, mode=0, channels=None, periods=[195312,195312]):
         """ Selects the source of the data to be captured (FUNCGEN or SCALER). Optionally enables streaming the captured data instead of the correlator data.
 
         Parameters:
 
-            source (str): Source to use. The source string represents where the tata is tapped in
-                the channelizer pipeline:
+            source (str or int): Capture source. String names or logical indices:
 
-                - 'funcgen': The captured data is taken at the output of the function generator module
-                  (which can be configured to pass the ADC data or internally-generated waveforms)
-                - 'scaler': The captured data is taken from the capture output port (not the main
-                  output) of the scaler. The scaler can be configured to output various signals on this
-                  port (scaled/unscaled raw FFT data, overflow flags etc.)
+                - ``'funcgen'`` / ``0``: function-generator (ADC/timestream) tap
+                - ``'scaler'`` / ``1``: scaler capture (spectrum) tap
 
             mode (int): capture mode to use
 
@@ -98,17 +154,14 @@ class UCAP(MMI):
                 captured data instead of the auxiliary (correlator) data.
 
         """
-        # Set the data source (either 'adc' or 'scaler') in the control register
-        if isinstance(source, str):
-            if source in self.DATA_SOURCE_TABLE:
-                source = self.DATA_SOURCE_TABLE[source]
-            else:
-                valid_sources = ', '.join(self.DATA_SOURCE_TABLE)
-                raise ValueError(f"Unknown data capture source '{source}'. Valid sources are {valid_sources}")
-        self.SOURCE_SEL = source
+        source_index, source_name = self.normalize_source(source)
+        self.SOURCE_SEL = self.DATA_SOURCE_TABLE[source_name]
 
         if isinstance(channels, int):
             channels = [channels]
+
+        if channels is None:
+            channels = self.get_default_channels(mode)
 
         if mode == 0:
             if channels != list(range(8)):
@@ -120,7 +173,7 @@ class UCAP(MMI):
             self.CH1 = channels[1]
             self.CH2 = channels[2]
             self.CH3 = channels[3]
-        elif mode == 2 :
+        elif mode == 2:
             if len(channels) != 2:
                 raise RuntimeError('UCAP mode 2 can only capture 2 channels')
             self.CH0 = channels[0]
@@ -134,9 +187,14 @@ class UCAP(MMI):
         self.MODE = mode
         self.CAPTURE_PERIOD = periods[0]
         self.CAPTURE_PERIOD2 = periods[1]
+        self.config.update(
+            source=source_index,
+            source_name=source_name,
+            mode=mode,
+            active_channels=tuple(channels),
+            frames_per_burst=self.FRAMES_PER_BURST[mode],
+        )
 
-        if select:
-            self.select_output('ucap')
 
     OUTPUT_NAMES = {
         'cap':0,
@@ -144,49 +202,39 @@ class UCAP(MMI):
         'aux': 1,
         'corr': 1}
 
-    def select_output(self, out):
-        """ Select whether UCAP streams capture or auxiliary (correlator) data
 
-        Parameters:
+    # def get_data(self, flush_timeout=0.01):
 
-            out (str or int): Output to stream: 0: Captured data; 1: auxiliary (correlator) data. If a string, the value will be looked up in OUTPUT_NAMES.
+    #     self.sock = self.fpga.get_data_socket()
+    #     # s = getattr(__main__,"ucap_sock", None)
+    #     # if s:
+    #     #     self.sock = s
+    #     # if self.sock is None:
+    #     #     self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM);
+    #     #     self.sock.bind(("0.0.0.0",41000))
+    #     #     __main__.ucap_sock = self.sock
+    #     # Flush the UDP  buffers by reading and discarding data until we timeout
+    #     self.sock.settimeout(flush_timeout)
+    #     b = np.zeros((128, 8192+5), '>i2')
+    #     print('Flushing UDP buffers')
+    #     while True:
+    #         try:
+    #             self.sock.recv_into(b[0])
+    #         except socket.timeout:
+    #             break
+    #     self.sock.settimeout(2)
+    #     print('Capturing data')
+    #     for bb in b:
+    #         self.sock.recv_into(bb)
+    #     print(f'got stream_IDs: {b[:, 1] >> 8}')
+    #     for bb in b:
+    #         print(bb[:5].tobytes().hex(':'))
+    #     # sid =
+    #     # sid_ok = all(b[:,1]>>8 == np.arange(b.shape[0], dtype=np.uint8) & 63)
+    #     # if not sid_ok:
+    #     #     raise RuntimeError('Missing packets')
 
-        """
-        self.OUTPUT_SOURCE_SEL = out if isinstance(out, int) else self.OUTPUT_NAMES[out]
-
-
-    def get_data(self, flush_timeout=0.01):
-
-        self.sock = self.fpga.get_data_socket()
-        # s = getattr(__main__,"ucap_sock", None)
-        # if s:
-        #     self.sock = s
-        # if self.sock is None:
-        #     self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM);
-        #     self.sock.bind(("0.0.0.0",41000))
-        #     __main__.ucap_sock = self.sock
-        # Flush the UDP  buffers by reading and discarding data until we timeout
-        self.sock.settimeout(flush_timeout)
-        b = np.zeros((128, 8192+5), '>i2')
-        print('Flushing UDP buffers')
-        while True:
-            try:
-                self.sock.recv_into(b[0])
-            except socket.timeout:
-                break
-        self.sock.settimeout(2)
-        print('Capturing data')
-        for bb in b:
-            self.sock.recv_into(bb)
-        print(f'got stream_IDs: {b[:, 1] >> 8}')
-        for bb in b:
-            print(bb[:5].tobytes().hex(':'))
-        # sid =
-        # sid_ok = all(b[:,1]>>8 == np.arange(b.shape[0], dtype=np.uint8) & 63)
-        # if not sid_ok:
-        #     raise RuntimeError('Missing packets')
-
-        return b[:64, 5:]
+    #     return b[:64, 5:]
 
     # def get_data_receiver(self, packet_receiver):
     #     return RawFrameReceiver(packet_receiver)

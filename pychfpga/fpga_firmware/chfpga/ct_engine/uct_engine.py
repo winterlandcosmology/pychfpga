@@ -20,9 +20,9 @@ class CT1Regs(MMI):
     IN_FRAME_CTR = BitField(STATUS, 1, 0, width=8, doc='Counts frames coming into the CT engine')
     OUT_FRAME_CTR = BitField(STATUS, 2, 0, width=8, doc='Counts frames coming out of the CT engine')
 
-    def __init__(self, *, router, router_port, state):
+    def __init__(self, *, router, router_port, config):
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
 
 class CT2Regs(MMI):
 
@@ -37,9 +37,9 @@ class CT2Regs(MMI):
     NUMBER_OF_CT2_INPUTS = 4
     NUMBER_OF_CT2_OUTPUTS = 4
 
-    def __init__(self, *, router, router_port, state):
+    def __init__(self, *, router, router_port, config):
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
 
     def set_lane_map(self, premap, postmap):
         """ Sets the lane remapping.
@@ -84,9 +84,9 @@ class CT3Regs(MMI):
     RST_STATUS        = BitField(STATUS, 0, 0, doc='Reset line state')
     ALIGN_MON_WORD    = BitField(STATUS, 2, 0, width=16, doc='ALIGN monitoring word, selected by ALIGN_MON_SOURCE and ALIGN_MON_LANE')
 
-    def __init__(self, *, router, router_port, state):
+    def __init__(self, *, router, router_port, config):
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
 
     def init(self):
         self.SLOT_GROUP =  (self.fpga.slot - 1) // 4
@@ -105,12 +105,12 @@ class UCTEngine(MMIRouter):
         'BPLINKS': 3
         }
 
-    def __init__(self,*, router, router_port, state, verbose=1):
+    def __init__(self,*, router, router_port, config, verbose=1):
         self.logger = logging.getLogger(__name__)
         self.verbose = verbose
 
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
 
         self.CT_LEVEL = self.fpga.CT_LEVEL
 
@@ -119,31 +119,36 @@ class UCTEngine(MMIRouter):
         self.CT1 = self.CT2 = self.CT3 = self.GTLINKS = None
 
         # Instantiate Level-1 CT registers
-        self.CT1 = CT1Regs(router=self, router_port='CT1', state=self.state.add("ct1"))
+        self.CT1 = CT1Regs(router=self, router_port='CT1', config=self.config.add("ct1"))
 
         if self.CT_LEVEL >=2:
             lane_groups = (('pcb', 1, 3),) # (name, # of bypass lanes, # of links)
-            self.CT2 = CT2Regs(router=self, router_port='CT2', state=self.state.add("ct2"))
+            self.CT2 = CT2Regs(router=self, router_port='CT2', config=self.config.add("ct2"))
             self.BPLINKS = xxvglink.XXVGLinkArray(
                 router = self,
                 router_port='BPLINKS',
                 lane_groups=lane_groups,
-                state=self.state.add("bplinks"),
+                config=self.config.add("bplinks"),
                 verbose=1)
 
         if self.CT_LEVEL >=3:
-            self.CT3 = CT3Regs(router=self, router_port='CT3', state=self.state.add("ct3"))
+            self.CT3 = CT3Regs(router=self, router_port='CT3', config=self.config.add("ct3"))
 
 
 
     def init(self):
         self.TEST_PACKET_ENABLE = 0
-
-        if self.CT_LEVEL >=2:
+        ct_level = int(self.CT_LEVEL)
+        if ct_level >=2:
             self.CT2.init()
 
-        if self.CT_LEVEL >=3:
+        if ct_level >=3:
             self.CT3.init()
+        self.config.CT_LEVEL = ct_level
+
+    def get_config(self):
+        """Refresh CT config subtree; returns ``self.config``."""
+        return self.config
 
     def capture_bytes(self, N=64, fmt='hex'):
         """ Captures N bytes

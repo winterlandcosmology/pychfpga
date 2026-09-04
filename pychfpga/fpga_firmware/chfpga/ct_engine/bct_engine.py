@@ -18,9 +18,9 @@ class WiredCrossbar(MMI):
 
     """
 
-    def __init__(self, *, router, router_port, state):
+    def __init__(self, *, router, router_port, config):
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
 
     def init(self):
         pass
@@ -54,12 +54,12 @@ class BCTEngine(MMIRouter):
         'SHUFFLE': 3
         }
 
-    def __init__(self, *, router, router_port, state, verbose=1):
+    def __init__(self, *, router, router_port, config, verbose=1):
         self.logger = logging.getLogger(__name__)
         self.verbose = verbose
 
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
 
         self.BP_SHUFFLE = None
         self.CROSSBAR = None
@@ -67,27 +67,28 @@ class BCTEngine(MMIRouter):
         self.CROSSBAR3 = None
 
         CT_LEVEL = self.CT_LEVEL = self.fpga.CT_LEVEL
+        self.config.CT_LEVEL = CT_LEVEL
 
         self.logger.debug(f'{self!r}: === Instantiating Corner-turn engine Type BCT Level {CT_LEVEL}')
 
         if CT_LEVEL == 1:
 
             self.logger.debug(f'{self!r}: ===     Instantiating 1st CROSSBAR (Wired)')
-            self.CROSSBAR = WiredCrossbar(router=self, router_port='CB1', state=self.state.add("crossbar"))
+            self.CROSSBAR = WiredCrossbar(router=self, router_port='CB1', config=self.config.add("crossbar"))
 
         elif CT_LEVEL == 3:
             self.logger.debug(f'{self!r}: ===     Instantiating 1st CROSSBAR (Programmable)')
-            self.CROSSBAR = chan_crossbar.ChanCrossbar(router=self, router_port='CB1', state=self.state.add("crossbar"))
+            self.CROSSBAR = chan_crossbar.ChanCrossbar(router=self, router_port='CB1', config=self.config.add("crossbar"))
 
             self.logger.debug(f'{self!r}: ===     Instantiating Backplane shuffle subsystem')
-            self.BP_SHUFFLE = shuffle.Shuffle(router=self, router_port='SHUFFLE', state=self.state.add("bp_shuffle"))
+            self.BP_SHUFFLE = shuffle.Shuffle(router=self, router_port='SHUFFLE', config=self.config.add("bp_shuffle"))
 
             self.logger.debug(f'{self!r}: ===     Instantiating 2nd CROSSBAR')
             self.CROSSBAR2 = shuffle_crossbar.ShuffleCrossbar(
                 router=self,
                 router_port='CB2',
                 crossbar_level=2,
-                state=self.state.add("crossbar2"),
+                config=self.config.add("crossbar2"),
                 number_of_bin_sel=2)  # CROSSBAR block
 
             self.logger.debug(f'{self!r}: ===     Instantiating 3rd CROSSBAR')
@@ -95,7 +96,7 @@ class BCTEngine(MMIRouter):
                 router = self,
                 router_port='CB3',
                 crossbar_level=3,
-                state=self.state.add("crossbar3"),
+                config=self.config.add("crossbar3"),
                 number_of_bin_sel=8)  # CROSSBAR block
         else:
             raise RuntimeError("BCT-type Corner turn engine only supports CT_LEVEL of 1 or 3. Received CT_LEVEL={CT_LEVEL}")
@@ -129,6 +130,10 @@ class BCTEngine(MMIRouter):
             self.CROSSBAR3.init()
         # else:
         #     self.logger.warning(f"{self!r}: There is no BCT 3rd CROSSBAR module in this firmware build")
+
+    def get_config(self):
+        """Refresh CT config subtree; returns ``self.config``."""
+        return self.config
 
     def set_data_width(self, width):
         if self.CROSSBAR:

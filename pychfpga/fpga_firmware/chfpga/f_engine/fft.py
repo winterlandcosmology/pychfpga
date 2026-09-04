@@ -48,10 +48,9 @@ class FFT(MMI):
     IMPLEMENT_FFT     = BitField(STATUS, 4, 7, doc="'1' if FFT in implemented")
     ROTATE_BINS       = BitField(STATUS, 4, 6, doc="'1' if FFT bin rotation is enabled")
     RESET_MON         = BitField(STATUS, 4, 5, doc="Monitors the reset line")
-    def __init__(self, *, router, router_port, instance_number, state):
+    def __init__(self, *, router, router_port, instance_number, config):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
-        self.state = state
-        self.config_id = 0  # Increases every time a configuration change is made
+        self.config = config
 
     def reset(self):
         self.pulse_bit('RESET')
@@ -68,11 +67,35 @@ class FFT(MMI):
         self.n_bins_per_lane = self.n_bins // self.n_lanes
         self.is_scrambled = not info['unscrambled']
         self.is_rotated = self.ROTATE_BINS
+        self.config.bypass = bool(self.BYPASS)
+        self.get_config()
 
         # For the CRS, the pipeline delay is not yet measured at this point, and is not measured even if we pulse SOFT_RESET.
         # So we can't check if it is right until the pipeline is running. This is why we disable the check below
         # if self.PIPELINE_DELAY != self.MEASURED_PIPELINE_DELAY:
         #    raise Exception('FFT pipeline delay is not set to the measured value!')
+
+    def set_bypass(self, bypass):
+        """Set FFT bypass and track it in ``config``."""
+        bypass = bool(bypass)
+        self.BYPASS = bypass
+        self.config.bypass = bypass
+
+    def get_bypass(self):
+        """Return tracked FFT bypass (seed from HW if unset)."""
+        return self.config.bypass
+
+    def get_config(self):
+        """Cache reverse+flatten bin_map on ``self.config`` for raw decode."""
+        cfg = self.config
+        ctx = ('FFT.get_config', self.instance_number)
+        if not cfg.has_attr('bin_map') or cfg.has_changed(('bypass', 'bin_map'), context=ctx):
+            cfg.update(bin_map=np.asarray(
+                self.get_bin_map(flatten=True, reverse=True),
+                dtype=np.intp,
+            ))
+            cfg.ack(('bypass', 'bin_map'), context=ctx)
+        return cfg
 
     def get_fft_overflow_count(self):
         return self.OVERFLOW_COUNT
@@ -105,7 +128,7 @@ class FFT(MMI):
         # We split the data into 4 lanes since the FFT outputs 4 numbers per clock.
         # fft_bins = np.array([[n_bins_per_lane*((lane - (rotate*clk & 0b11)) & 0b11) + clk for clk in range(n_bins_per_lane)] for lane in range(n_lanes)])
 
-        if self.BYPASS:
+        if self.get_bypass():
             bins = np.arange(self.n_bins).reshape((self.n_lanes, -1), order='F')
         else:
             # bins coming out straight out of the CASPER FFT

@@ -49,10 +49,10 @@ class QPLL(MMI):
     COMMON_CFG0              = BitField(DRP, 0x0043, 0, width=16, doc="COMMON_CFG[15:0 ] 0-65535")
     COMMON_CFG1              = BitField(DRP, 0x0044, 0, width=16, doc="COMMON_CFG[31:16] 0-65535")
 
-    def __init__(self, *, router, router_port, instance_number, state):
+    def __init__(self, *, router, router_port, instance_number, config):
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
-        self.state = state
+        self.config = config
 
     def select(self):
         """No-op: this block has a dedicated DRP port (API parity with :class:`cge.CGECommon`)."""
@@ -206,11 +206,11 @@ class GTX(MMI):
 
 # Add DRP registers here...
 
-    def __init__(self, *, router, router_port, instance_number, state):
+    def __init__(self, *, router, router_port, instance_number, config):
         # self.fpga = fpga
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
-        self.state = state
+        self.config = config
         self.node_id = (self.fpga.slot, instance_number + 1)
         self._lock()
 
@@ -421,11 +421,11 @@ class XGLinkCore(MMI):
     RESET_DONE      = BitField(STATUS, 1, 4, doc='debug')
     QPLL_RESET_MON  = BitField(STATUS, 1, 3, doc='debug')
 
-    def __init__(self, *, router, router_port, state, verbose=1):
+    def __init__(self, *, router, router_port, config, verbose=1):
         # self.fpga = fpga
         self.logger = logging.getLogger(__name__)
         self.verbose = verbose
-        self.state = state
+        self.config = config
 
         xgl_router = XGLRouter(router=router, router_port=router_port)
 
@@ -435,15 +435,15 @@ class XGLinkCore(MMI):
 
         # Instantiate QUAD objects
         self.qpll = []
-        qpll_state = self.state.add("qpll")
+        qpll_state = self.config.add("qpll")
         for j in range(self.NUMBER_OF_QUADS):
-            self.qpll.append(QPLL(router=xgl_router, router_port=i, instance_number=j, state=qpll_state.add(j)))
+            self.qpll.append(QPLL(router=xgl_router, router_port=i, instance_number=j, config=qpll_state.add(j)))
             i += 1
 
         self.gtx = []
-        gtx_state = self.state.add("gtx")
+        gtx_state = self.config.add("gtx")
         for j in range(self.NUMBER_OF_LINKS):
-            self.gtx.append(GTX(router=xgl_router, router_port=i, instance_number=j, state=gtx_state.add(j)))
+            self.gtx.append(GTX(router=xgl_router, router_port=i, instance_number=j, config=gtx_state.add(j)))
             i += 1
 
     def init(self):
@@ -554,9 +554,9 @@ class XGLinkArray(XGLinkCore):
         # 'RX_CTR': 'RX_CTR',
         'RX_FRAME_CTR': 'RX_FRAME_CTR'}
 
-    def __init__(self, *, router, router_port, lane_groups, state, verbose=1):
+    def __init__(self, *, router, router_port, lane_groups, config, verbose=1):
 
-        super().__init__(router=router, router_port=router_port, state=state, verbose=verbose)
+        super().__init__(router=router, router_port=router_port, config=config, verbose=verbose)
 
         # lane_list = []
         phys_lane = 0

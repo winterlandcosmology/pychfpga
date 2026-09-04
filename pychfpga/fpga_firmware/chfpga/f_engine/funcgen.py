@@ -8,6 +8,7 @@ History:
 """
 
 from ..mmi import MMI, BitField, CONTROL, STATUS
+from pychfpga.common.state import State
 import numpy as np
 import asyncio
 
@@ -177,9 +178,9 @@ class FUNCGEN(MMI):
 
     buffer_cache = None
 
-    def __init__(self,  *, router, router_port, instance_number, state):
+    def __init__(self,  *, router, router_port, instance_number, config):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
-        self.state = state
+        self.config = config
         self.SAMPLES_PER_FRAME = self.NS = self.fpga.ADC_SAMPLES_PER_FRAME
         self.BYTES_PER_FRAME = self.NB = self.fpga.ADC_BYTES_PER_FRAME
         self.BYTES_PER_SAMPLE = self.BPS = self.fpga.ADC_BYTES_PER_SAMPLE
@@ -197,7 +198,6 @@ class FUNCGEN(MMI):
         self.dtype = np.dtype(f'>u{self.BYTES_PER_SAMPLE}') # storage format, either dtype 'u1' or 'u2' (MSB is at lower byte address = big endian)
         self.lshift = self.dtype.itemsize*8 - self.fpga.ADC_BITS_PER_SAMPLE
 
-        self.state.update(fn_name=None, fn_id=self.FN_ID, fn_code=self.FUNCTION, left_shift=self.LEFT_SHIFT, right_shift=self.RIGHT_SHIFT)
         self._lock()
 
     def set_output_shifting(self, left_shift=0, right_shift=0):
@@ -213,9 +213,9 @@ class FUNCGEN(MMI):
 
         """
         if left_shift is not None:
-            self.LEFT_SHIFT = self.state.left_shift = left_shift
+            self.LEFT_SHIFT = self.config.left_shift = left_shift
         if right_shift is not None:
-            self.RIGHT_SHIFT = self.state.right_shift = right_shift
+            self.RIGHT_SHIFT = self.config.right_shift = right_shift
 
     def set_data_source(self, source_name, verbose=0, **kwargs):
         """
@@ -270,7 +270,7 @@ class FUNCGEN(MMI):
         self.FN_ID = fn_id
         if buffer_fn:
             self.set_buffer(data=buffer_fn(self=self, **kwargs), verbose=verbose)
-        self.state.update(fn_name=source_name, fn_id=fn_id, fn_code=fn_code)
+        self.config.update(fn_name=source_name, fn_id=fn_id, fn_code=fn_code)
 
         # if seed is not None:
         #     self.BYTE_A = seed & 0xff
@@ -303,12 +303,15 @@ class FUNCGEN(MMI):
         Returns:
             str: name of the currently selected data source.
         """
+        if self.config.get("fn_name") is not None:
+            return self.config.fn_name
 
         current_fn_id = self.FN_ID
         fn_names = [fn_name for fn_name, (fn_id, *_) in self.FUNCTION_NAMES.items() if fn_id == current_fn_id]
         if not fn_names:
             raise RuntimeError(f'Cannot find current function number {current_fn_id} in the function table')
-        return fn_names[0]
+        self.config.fn_name = fn_names[0]
+        return self.config.fn_name
 
 
     def set_function(self, function_name, verbose=False, **kwargs):
@@ -490,6 +493,34 @@ class FUNCGEN(MMI):
             self.set_function('ramp')
         else:
             self.set_data_source('adc')  # use the ADC data
+
+        self.config.update(
+            fn_id=self.FN_ID,
+            fn_code=self.FUNCTION,
+            left_shift=self.LEFT_SHIFT,
+            right_shift=self.RIGHT_SHIFT,
+        )
+        self.get_config()
+
+    def get_config(self):
+        """Refresh ADC capture_format on ``self.config`` from board constants."""
+        cfg = self.config
+        board = self.fpga.config
+        fmt_attrs = ('adc_bytes_per_sample', 'adc_bits_per_sample')
+        if cfg.has_attr('capture_format') and not board.has_changed(fmt_attrs, context=self):
+            return cfg
+
+        if not cfg.has_attr('capture_format'):
+            cfg.capture_format = State()
+        cfg.capture_format.update(
+            fmt_bus_width=8 * board.adc_bytes_per_sample,
+            fmt_data_width=board.adc_bits_per_sample,
+            fmt_is_complex=False,
+            fmt_interleave_factor=1,
+            use_offset_encoding=False,
+        )
+        board.ack(fmt_attrs, context=self)
+        return cfg
 
     def status(self):
         """ Displays the status of the function generator module """

@@ -41,7 +41,7 @@ class UCorn(MMI):
     IN_FRAME_CTR        = BitField(STATUS, 1, 0, width=8, doc='Counts the number of frames coming in.')
     OUT_FRAME_CTR       = BitField(STATUS, 2, 0, width=8, doc='Counts the number of frames coming out.')
 
-    def __init__(self, *, router, router_port, state, verbose=0):
+    def __init__(self, *, router, router_port, config, verbose=0):
         """ Creates a UCorn corner-turn engine instance.
 
         ``__init__`` initializes the instnce but does not yet start communicating with. This allows
@@ -62,7 +62,7 @@ class UCorn(MMI):
 
         """
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
         # self.fpga = fpga_instance
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
