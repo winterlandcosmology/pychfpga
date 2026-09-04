@@ -1,6 +1,7 @@
 import logging
 import numpy as np
 import socket
+import struct
 import time
 
 class UDPPacketReceiver:
@@ -94,6 +95,39 @@ class UDPPacketReceiver:
             self.pkt_len[n:] = 0
         self.n_stored = n
         return n
+
+    def udp_socket_stats(self):
+        """Return ``(rx_queue_bytes, drops)`` for this UDP socket, or ``None``.
+
+        Reads ``/proc/net/udp`` (Linux). ``drops`` is the kernel's per-socket
+        RCVBUF overflow counter — the same column ``watch cat /proc/net/udp`` shows.
+        """
+        sock = getattr(self, "sock", None)
+        if sock is None:
+            return None
+        try:
+            ip, port = sock.getsockname()[:2]
+        except OSError:
+            return None
+        try:
+            ip_u = struct.unpack("<I", socket.inet_aton(ip))[0]
+        except OSError:
+            return None
+        key = f"{ip_u:08X}:{port:04X}".lower()
+        try:
+            with open("/proc/net/udp", "r", encoding="ascii") as f:
+                next(f)
+                for line in f:
+                    parts = line.split()
+                    if len(parts) < 13:
+                        continue
+                    if parts[1].lower() == key:
+                        rx_queue = int(parts[4].split(":")[1], 16)
+                        drops = int(parts[12])
+                        return rx_queue, drops
+        except OSError:
+            return None
+        return None
 
 
 
