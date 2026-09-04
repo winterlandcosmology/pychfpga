@@ -14,6 +14,21 @@ __all__ = [
 ]
 
 
+class _CcollGather:
+    """Awaitable that gathers coroutines and wraps results in a Ccoll."""
+
+    def __init__(self, coros, keys=None):
+        self._keys = keys
+        self._fut = asyncio.gather(*coros)
+
+    def __await__(self):
+        return self._await().__await__()
+
+    async def _await(self):
+        results = await self._fut
+        return Ccoll(results, self._keys)
+
+
 class Ccoll(object):
     """
     Class representing a collection of objects that can be accessed and/or
@@ -31,8 +46,8 @@ class Ccoll(object):
 
     Calling the mapping will call every object with the provided arguments and
     return the results in another Ccoll with identical keys. For coroutine
-    functions, the Ccoll contains coroutine objects — await them explicitly
-    with ``asyncio.gather(*coll(...))``.
+    functions, the call returns an awaitable that gathers concurrently and
+    resolves to a Ccoll of results (``await coll.foo_async(x)``).
 
     Accessing an attribute of the mapping will return a new HWMQueryAttribute
     containing the that attribute for each of the element of the mapping.
@@ -163,10 +178,10 @@ class Ccoll(object):
         """Call every object in the collection with the same arguments.
 
         For ordinary callables, returns a Ccoll of return values.
-        For coroutine functions, returns a Ccoll of coroutine objects — pass
-        them to ``asyncio.gather`` explicitly, e.g.::
+        For coroutine functions, returns an awaitable that gathers them and
+        resolves to a Ccoll of results, e.g.::
 
-            results = await asyncio.gather(*self.ib.foo_async(x))
+            results = await self.ib.foo_async(x)
         """
         is_coro = [asyncio.iscoroutinefunction(f) for f in self._dict.values()]
         if any(is_coro) and not all(is_coro):
@@ -174,7 +189,10 @@ class Ccoll(object):
                 'Ccoll: cannot call on a mix of both async and standard methods'
             )
         results = [f(*args, **kwargs) for f in self._dict.values()]
-        return Ccoll(results, self._dict.keys() if self._has_keys else None)
+        keys = self._dict.keys() if self._has_keys else None
+        if is_coro and is_coro[0]:
+            return _CcollGather(results, keys)
+        return Ccoll(results, keys)
 
     def map(self, func, *args, **kwargs):
         return Ccoll((func(i, *args, **kwargs) for i in self.values()), self._dict.keys() if self._has_keys else None)
