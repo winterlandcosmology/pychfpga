@@ -1,6 +1,7 @@
 """UCORR UDP packet processor."""
 
 import math
+import time
 import warnings
 from typing import Optional
 
@@ -34,32 +35,37 @@ class UCorrPacketProcessor(PacketProcessorBase):
     NBYTES_PER_PROD = 5  # Number of bytes used to store each complex correlator product ( (18+18) bits = 36 bits, 5 bytes = 40 bits)
 
 
-    def __init__(self, packet_receiver, config=None, receive_window=3, verbose=0):
+    def __init__(self, packet_receiver, config_getter, receive_window=3, verbose=0):
         """Build a packet parser and linear integ-buffer pipeline.
 
         Parameters
         ----------
         packet_receiver : UDPPacketReceiver
             UDP packet source holding the shared packet buffer.
-        config : dict or State or None
-            Initial correlator configuration (see class docstring). Deep-copied into
-            an internal :class:`State` so the caller can mutate their copy freely.
+        config_getter : callable
+            Callable returning a stable :class:`State` correlator config.
         receive_window : int
             Maximum number of trailing incomplete integration rows withheld between
             UDP packet blocks (carried into the next ``process_packets`` call).
         verbose : int
             Verbosity level for debug prints.
         """
-        self.config = State()
+        if config_getter is None:
+            raise TypeError("config_getter is required")
+        self._config_getter = config_getter
+        self.config = None
         self.NCHAN = None
         self.NCLK = None
         self.bin_map = None
         self.prod_map = None
         self.firmware_integ_period = None
         self.soft_integ_period = 1
+        self._applied_soft_integ_period = 1
         super().__init__(packet_receiver, receive_window, verbose)
-        if config is not None:
-            self.update_config(State(config).deepcopy())
+
+    def set_soft_integ_period(self, soft_integ_period):
+        """Set host-side software integration depth (not an FPGA register)."""
+        self.soft_integ_period = max(1, int(soft_integ_period or 1))
 
     def init(self) -> None:
         # Header layout is fixed; product layout depends on NCMAC and is rebuilt on bin_map changes.
@@ -88,10 +94,29 @@ class UCorrPacketProcessor(PacketProcessorBase):
         self.integ_data_buf = np.empty(0, dtype=np.uint8)
         self.integ_sats_buf = np.empty(0, dtype=np.uint8)
         self.temp32_buf = np.empty(0, dtype=np.uint8)
+        self.overrun_row_buf = np.empty(0, dtype=np.uint8)
+        self.overrun_row = np.empty(0, dtype=np.uint8)
         self.ts_array = np.empty(0, dtype=np.uint64)
         self.max_timestamps = 0
+        self.profile = {
+            "recv_s": 0.0,
+            "recv_n": 0,
+            "recv_calls": 0,
+            "process_s": 0.0,
+            "process_calls": 0,
+            "init_dest_s": 0.0,
+            "init_dest_move_s": 0.0,
+            "store_s": 0.0,
+            "format_s": 0.0,
+            "format_calls": 0,
+        }
 
-    def update_config(self, config=None) -> None:
+    def reset_profile(self):
+        """Zero wall-time counters used by :meth:`read_corr_frames` / process path."""
+        for k in self.profile:
+            self.profile[k] = 0.0 if k.endswith("_s") else 0
+
+    def update_config(self) -> None:
         """Update the correlator receiver configuration.
 
         ``bin_map`` is the only static attribute: changing it triggers reallocation of
@@ -100,40 +125,40 @@ class UCorrPacketProcessor(PacketProcessorBase):
         with no buffer reallocation (or only ``max_timestamps`` resizing when the integration
         period or per-integ packet count changes).
         """
-        if config is None:
-            return  # hot-path fast exit: skip the deep-copy snapshots in has_changed when nothing changed
-        self.config.update(config)
-        state = self.config
+        source = self._config_getter()  # This call must be fast, it is made on every processing call
+        if self.config is None:
+            self.config = source
+        elif source is not self.config:
+            raise RuntimeError("config_getter must return a stable State")
+        config = self.config
 
         from pychfpga.fpga_firmware.chfpga.x_engine.UCORR import UCORR
 
         # get independent parameters from the configuration
-        self.NCHAN = state.NCHAN
-        self.NCLK = state.NCLK
+        self.NCHAN = config.NCHAN
+        self.NCLK = config.NCLK
 
         self.NPROD = self.NCHAN * (self.NCHAN + 1) // 2
 
-        # Update the correlator bin map, product map and derived geometry parameters based on the current configuration if the dependent parameters have changed.
-        UCORR.update_corr_maps(self.config)
-        self.bin_map = state.bin_map
-        self.prod_map = state.prod_map
-        self.NDECIM = state.NDECIM
-        self.NCORRS = state.NCORRS
-        self.NPROD_PER_CMAC = state.NPROD_PER_CMAC
-        self.NCMAC = state.NCMAC
-        self.NBINS = state.NBINS
-        self.NPROD_PER_ARRAY = state.NPROD_PER_ARRAY
+        self.bin_map = np.asarray(config.bin_map)
+        self.prod_map = np.asarray(config.prod_map)
+        self.NDECIM = config.NDECIM
+        self.NCORRS = config.NCORRS
+        self.NPROD_PER_CMAC = config.NPROD_PER_CMAC
+        self.NCMAC = config.NCMAC
+        self.NBINS = config.NBINS
+        self.NPROD_PER_ARRAY = config.NPROD_PER_ARRAY
 
 
 
         # Static attributes changes cause loss of data as the main integ buffer needs to be resized. 
         buf_view_attrs = ("NCMAC",)
-        if state.has_changed(buf_view_attrs, context=buf_view_attrs):
+        if config.has_changed(buf_view_attrs, context=buf_view_attrs):
             if self.verbose:
                 print("UCorrPacketProcessor: bin_map changed; rebuilding views and buffers.")
 
             # Packet view depends on NCMAC.
-            NCMAC = state.NCMAC
+            NCMAC = config.NCMAC
             self.packet_dtype = np.dtype([("header", self.header_dtype, (1,)), ("data", self.product_dtype, (NCMAC,))])
             self.buf_struct = self.pr.buf[:, :self.packet_dtype.itemsize].view(self.packet_dtype)[:, 0]
             self.buf_cookie = self.buf_struct["header"]["cookie"][:, 0]
@@ -149,22 +174,31 @@ class UCorrPacketProcessor(PacketProcessorBase):
 
             self.n_ts = 0
             self.carry_len = 0
-            state.ack(buf_view_attrs, context=buf_view_attrs)
+            config.ack(buf_view_attrs, context=buf_view_attrs)
 
         # Dynamic: all non-shape attributes. NCHAN drives ij_to_prod_map; integ-period
         # drives max_timestamps which sizes the linear accumulators / output buffers.
         ij_attrs = ("NCHAN",)
-        if state.has_changed(ij_attrs, context=ij_attrs):
+        if config.has_changed(ij_attrs, context=ij_attrs):
             self.ij_to_prod_map = UCORR.get_ij_to_prod_map(self.NCHAN)
-            state.ack(ij_attrs, context=ij_attrs)
+            config.ack(ij_attrs, context=ij_attrs)
 
-        integ_attrs = ("firmware_integ_period", "soft_integ_period", "NPROD_PER_ARRAY", "NDECIM", "NCORRS", "NPROD_PER_CMAC", "NCMAC", "NBINS")
-        if state.has_changed(integ_attrs, context=integ_attrs):
+        firm_integ_attrs = (
+            "firmware_integ_period",
+            "NPROD_PER_ARRAY",
+            "NDECIM",
+            "NCORRS",
+            "NPROD_PER_CMAC",
+            "NCMAC",
+            "NBINS",
+        )
+        firm_integ_changed = config.has_changed(firm_integ_attrs, context=firm_integ_attrs)
+        soft_integ_changed = self.soft_integ_period != self._applied_soft_integ_period
+        if firm_integ_changed or soft_integ_changed:
             # If we now have enough info, (re)size the integ-indexed buffers.
             if self.verbose:
                 print(f"UCorrPacketProcessor:  rebuilding integration buffers.")
-            self.firmware_integ_period = state.firmware_integ_period
-            self.soft_integ_period = state.soft_integ_period
+            self.firmware_integ_period = config.firmware_integ_period
 
             self.integ_period = np.uint64(self.soft_integ_period * self.firmware_integ_period)
             self.expected_packets = self.NPROD_PER_ARRAY * self.soft_integ_period
@@ -177,13 +211,26 @@ class UCorrPacketProcessor(PacketProcessorBase):
             self.ts_array = self.resize_buffer("integ_array_buf", (self.max_timestamps,), np.uint64)
             self.integ_data = self.resize_buffer("integ_data_buf", (self.max_timestamps, self.NBINS, self.NPROD), np.complex128)
             self.integ_sats = self.resize_buffer("integ_sats_buf", (self.max_timestamps, self.NBINS, self.NPROD), np.complex64)
+            self.overrun_row = self.resize_buffer("overrun_row_buf", (self.max_timestamps,), np.uint8)
             self.acc_re.fill(0)
             self.acc_im.fill(0)
             self.sat.fill(0)
             self.raw_data_count.fill(0)
+            self.overrun_row.fill(0)
+            self.overrun = 0
             self.n_ts = 0
             self.carry_len = 0
-            state.ack(integ_attrs, context=integ_attrs)
+            if firm_integ_changed:
+                config.ack(firm_integ_attrs, context=firm_integ_attrs)
+            self._applied_soft_integ_period = self.soft_integ_period
+
+    def process_udp_packets(self, verbose=None, update_config=True):
+        if update_config:
+            self.update_config()
+        t0 = time.perf_counter()
+        super().process_udp_packets(verbose=verbose)
+        self.profile["process_s"] += time.perf_counter() - t0
+        self.profile["process_calls"] += 1
 
     def get_ij_to_prod_map(self):
         return self.ij_to_prod_map
@@ -194,13 +241,14 @@ class UCorrPacketProcessor(PacketProcessorBase):
         data = np.empty((n_ts, self.NBINS, self.NPROD), dtype=self.integ_data.dtype)
         sats = np.empty((n_ts, self.NBINS, self.NPROD), dtype=self.integ_sats.dtype)
         counts = np.empty((n_ts,), dtype=self.raw_data_count.dtype)
-        return ts, data, sats, counts
+        return ts, data, counts, sats
 
     def filter_packets(self, n: int) -> Optional[np.ndarray]:
         """Decode UCORR headers; leave integration index in ``pkt_ts``; return row indices."""
         # Cookie filter — UCORR packets only. Header layout is fixed so no packet-size check needed.
         bix_mask = self.bix_mask[:n]
         np.equal(self.buf_cookie[:n], self.CORR_PACKET_COOKIE, out=bix_mask)
+        n_cookie = int(bix_mask.sum()) if self.verbose >= 2 else 0
 
         # Decode header fields. stream_id top 5 bits = corr id, low 11 bits = bin index, flags hi nibble = bin_set.
         np.right_shift(self.buf_stream_id[:n], 11, out=self.pkt_corr[:n], where=bix_mask)
@@ -215,6 +263,27 @@ class UCorrPacketProcessor(PacketProcessorBase):
         np.greater(self.pkt_ts[:n], self._last_emitted_ts, out=tmp_mask, where=bix_mask)
         np.bitwise_and(bix_mask, tmp_mask, out=bix_mask)
 
+        if self.verbose >= 2:
+            bix = np.flatnonzero(bix_mask)
+            if bix.size:
+                hw_ts = np.bitwise_and(self.buf_ts[bix], self.ts_mask)
+                bin_sets = np.unique(self.pkt_bin_set[bix])
+                fw_ts = hw_ts // self.firmware_integ_period
+                print(
+                    f"UCorrPacketProcessor: filter cookie={n_cookie} accepted={bix.size}/{n} "
+                    f"bin_set={bin_sets.tolist()} corr={np.unique(self.pkt_corr[bix]).tolist()} "
+                    f"clkbin={int(self.pkt_bin[bix].min())}-{int(self.pkt_bin[bix].max())} "
+                    f"integ_idx={int(self.pkt_ts[bix].min())}-{int(self.pkt_ts[bix].max())} "
+                    f"fw_integ={int(fw_ts.min())}-{int(fw_ts.max())} "
+                    f"hw_ts={int(hw_ts.min())}-{int(hw_ts.max())} "
+                    f"soft_integ={self.soft_integ_period} fw_period={self.firmware_integ_period} "
+                    f"expected_pkt/integ={self.expected_packets} last_emitted={int(self._last_emitted_ts)}"
+                )
+            else:
+                print(
+                    f"UCorrPacketProcessor: filter cookie={n_cookie} accepted=0/{n} "
+                    f"last_emitted={int(self._last_emitted_ts)}"
+                )
         return np.flatnonzero(bix_mask)
 
     def on_ts_overflow(self, dropped: int) -> None:
@@ -231,33 +300,53 @@ class UCorrPacketProcessor(PacketProcessorBase):
         carry_tix (np.ndarray): Indices of the carryover rows in the new output buffer.
 
         """
-        tix_to_clear = np.ones(n_ts, dtype=bool)        
+        t0 = time.perf_counter()
+        tix_to_clear = np.ones(n_ts, dtype=bool)
         cix_mask = carry_tix >= 0  # find indices of carryover timestamps that were not dropped
         if cix_mask.any():
-            if self.verbose:
-                print(
-                    f"UCorrPacketProcessor: preserving carryover state for {cix_mask.sum()} "
-                    f"carryover timestamps {cix_mask=}, {carry_tix[cix_mask]=}."
-                )
             src_tix = np.arange(cix.start, cix.stop)[cix_mask]
             dst_tix = carry_tix[cix_mask]
-            self.acc_re[dst_tix] = self.acc_re[src_tix]
-            self.acc_im[dst_tix] = self.acc_im[src_tix]
-            self.sat[dst_tix] = self.sat[src_tix]
-            self.raw_data_count[dst_tix] = self.raw_data_count[src_tix]
             tix_to_clear[dst_tix] = False  # don't clear the carryover rows
+            # Identity maps are the common case (one in-flight integration): a
+            # fancy-index copy still memcpy's a full corr64 row (~126 MiB × 3
+            # arrays, ~75 ms) and overruns the 2048-packet UDP budget.
+            if src_tix.size and not np.array_equal(src_tix, dst_tix):
+                t_move = time.perf_counter()
+                if self.verbose:
+                    print(
+                        f"UCorrPacketProcessor: preserving carryover state for {cix_mask.sum()} "
+                        f"carryover timestamps {cix_mask=}, {carry_tix[cix_mask]=}."
+                    )
+                self.acc_re[dst_tix] = self.acc_re[src_tix]
+                self.acc_im[dst_tix] = self.acc_im[src_tix]
+                self.sat[dst_tix] = self.sat[src_tix]
+                self.raw_data_count[dst_tix] = self.raw_data_count[src_tix]
+                self.overrun_row[dst_tix] = self.overrun_row[src_tix]
+                self.profile["init_dest_move_s"] += time.perf_counter() - t_move
+            elif self.verbose >= 2:
+                print(
+                    f"UCorrPacketProcessor: identity carryover {src_tix.tolist()} "
+                    f"-> {dst_tix.tolist()}; skip row copy."
+                )
 
-        n = tix_to_clear.size
-        self.acc_re[:n][tix_to_clear] = 0
-        self.acc_im[:n][tix_to_clear] = 0
-        self.sat[:n][tix_to_clear] = 0
-        self.raw_data_count[:n][tix_to_clear] = 0
+        if tix_to_clear.any():
+            n = tix_to_clear.size
+            self.acc_re[:n][tix_to_clear] = 0
+            self.acc_im[:n][tix_to_clear] = 0
+            self.sat[:n][tix_to_clear] = 0
+            self.raw_data_count[:n][tix_to_clear] = 0
+            self.overrun_row[:n][tix_to_clear] = 0
+        self.profile["init_dest_s"] += time.perf_counter() - t0
 
     def store_packets(self, bix: np.ndarray, tix: np.ndarray) -> None:
         """Accumulate correlation products from valid packets into ``acc_re`` / ``acc_im``."""
         # integrate the packets into the accumulators
-        # Track overrun bit (LSB of flags) over valid packets only.
-        self.overrun |= int((self.buf_flags[bix] & 1).any())
+        # Per-row overrun (LSB of flags). Do not OR into a process-wide latch:
+        # that poisoned later emits from carry packets / incomplete batches.
+        t0 = time.perf_counter()
+        np.bitwise_or.at(
+            self.overrun_row, tix, (self.buf_flags[bix] & np.uint8(1)).astype(np.uint8, copy=False)
+        )
 
         bin_set = self.pkt_bin_set[bix]
         corr = self.pkt_corr[bix]
@@ -279,17 +368,54 @@ class UCorrPacketProcessor(PacketProcessorBase):
 
         # Sat counters: bit 0x20 = real saturation, bit 0x10 = imag saturation. Increment each cmac lane.
         sat_pkt = self.buf_data_sat[bix]
-        self.sat[tix, bin_set, corr, bin_, :, 0] += sat_pkt & 0x20
-        self.sat[tix, bin_set, corr, bin_, :, 1] += sat_pkt & 0x10
+        temp32 = sat_pkt
+        temp32 &= 0x20
+        temp32 >>= 5
+        self.sat[tix, bin_set, corr, bin_, :, 0] += temp32
+        temp32 = sat_pkt
+        temp32 &= 0x10
+        temp32 >>= 4
+        self.sat[tix, bin_set, corr, bin_, :, 1] += temp32
 
         np.add.at(self.raw_data_count, tix, 1)
+        self.profile["store_s"] += time.perf_counter() - t0
 
+        if self.verbose >= 2 and len(bix):
+            for tix_val in np.unique(tix):
+                row_mask = tix == tix_val
+                print(
+                    f"UCorrPacketProcessor: store integ_row={int(tix_val)} "
+                    f"n_packets={int(row_mask.sum())} "
+                    f"bin_set={np.unique(bin_set[row_mask]).tolist()} "
+                    f"corr={np.unique(corr[row_mask]).tolist()} "
+                    f"clkbin={int(bin_[row_mask].min())}-{int(bin_[row_mask].max())}"
+                )
 
-    def _on_rows_ready(self, n_out, verbose):
-        if verbose >= 2:
-            print(f"UCorrPacketProcessor: emitted {n_out} integ(s), carry={self.carry_len}, overrun={self.overrun}")
+    def on_emit(self):
+        """Log bin-set coverage when integration rows are ready (verbose>=2)."""
+        super().on_emit()
+        # Warn only for rows actually emitted this call; carry keeps its flag.
+        self.overrun = int(self.overrun_row[self.out_rows].any()) if self.n_out else 0
+        if self.verbose >= 2:
+            for row in range(self.out_rows.start, self.out_rows.stop):
+                active_bin_sets = [
+                    bs for bs in range(self.NDECIM)
+                    if self.acc_re[row, bs].any()
+                ]
+                print(
+                    f"UCorrPacketProcessor: emit row={row} integ_key={int(self.ts_array[row])} "
+                    f"pkt_count={int(self.raw_data_count[row])}/{self.expected_packets} "
+                    f"active_bin_sets={active_bin_sets} NDECIM={self.NDECIM}"
+                )
+            print(
+                f"UCorrPacketProcessor: emitted {self.n_out} integ(s), "
+                f"carry={self.carry_len}, overrun={self.overrun}"
+            )
         if self.overrun:
-            print("*** Warning: the correlator experienced an overrun condition. All products could not be sent within the hardware integration period.")
+            print(
+                "*** Warning: the correlator experienced an overrun condition. "
+                "All products could not be sent within the hardware integration period."
+            )
             self.overrun = 0
 
     def get_formatted_data(self, rows=slice(None), **kwargs):
@@ -302,13 +428,14 @@ class UCorrPacketProcessor(PacketProcessorBase):
         otherwise the write hits a copy.
 
         Parameters:
-            rows (slice or int): Index rows in the internal assembly buffer. An ``int`` selects
-                ``slice(0, rows)``.
+            rows (slice or int): Physical index rows in the internal assembly buffer.
+                ``None`` or ``slice(None)`` selects ``out_rows``. An ``int`` selects
+                ``slice(0, rows)``, then clipped to ``out_rows``.
 
         Returns:
-            None if no rows are ready; otherwise ``(integ_ts, data, sats, counts)`` where
-            ``integ_ts`` has shape ``(n,)``, ``data`` and ``sats`` have shape
-            ``(n, NBINS, NPROD)``, and ``counts`` has shape ``(n,)``.
+            None if no rows are ready; otherwise ``(integ_ts, data, counts, sats)`` where
+            ``integ_ts`` and ``counts`` have shape ``(n,)``, and ``data`` and ``sats`` have
+            shape ``(n, NBINS, NPROD)``.
 
         Raises:
             TypeError: If ``source`` or ``format`` keyword arguments are passed.
@@ -317,25 +444,22 @@ class UCorrPacketProcessor(PacketProcessorBase):
             if "source" in kwargs or "format" in kwargs:
                 raise TypeError("UCorrPacketProcessor.get_formatted_data does not accept source or format")
             raise TypeError(f"unexpected keyword arguments: {list(kwargs)}")
-        if isinstance(rows, int):
-            rows = slice(0, rows)
-        if not self.n_out:
+        rows = self.clip_out_rows(rows)
+        if rows is None:
             return None
-        if rows == slice(None):
-            rows = slice(0, self.n_out)
-        start, stop, _ = rows.indices(self.n_out)
-        if start >= stop:
-            return None
+        t0 = time.perf_counter()
         integ_ts = self.ts_array[rows]
         counts = self.raw_data_count[rows]
         ix = (rows, self.bin_map, self.prod_map)
         self.integ_data.real[ix] = self.acc_re[rows]
         self.integ_data.imag[ix] = self.acc_im[rows]
-        self.integ_sats.real[ix] = self.sat[rows, ..., 0] * (1.0 / 32.0)
-        self.integ_sats.imag[ix] = self.sat[rows, ..., 1] * (1.0 / 16.0)
+        self.integ_sats.real[ix] = self.sat[rows, ..., 0]
+        self.integ_sats.imag[ix] = self.sat[rows, ..., 1]
         data = self.integ_data[rows]
         sats = self.integ_sats[rows]
-        return integ_ts, data, sats, counts
+        self.profile["format_s"] += time.perf_counter() - t0
+        self.profile["format_calls"] += 1
+        return integ_ts, data, counts, sats
 
     def flush(self, flush_timeout=None):
         """Drain UDP and clear assembly state for a clean restart."""
@@ -344,12 +468,16 @@ class UCorrPacketProcessor(PacketProcessorBase):
         else:
             self.pr.flush(flush_timeout)
         if self.bin_map is not None and self.firmware_integ_period is not None:
-            self.acc_re.fill(0)
-            self.acc_im.fill(0)
-            self.sat.fill(0)
-            self.raw_data_count.fill(0)
-            self.ts_array.fill(0)
+            n = self.n_ts or 0
+            if n:
+                self.acc_re[:n] = 0
+                self.acc_im[:n] = 0
+                self.sat[:n] = 0
+                self.raw_data_count[:n] = 0
+                self.overrun_row[:n] = 0
+                self.ts_array[:n] = 0
         self.n_ts = 0
         self.carry_len = 0
         self._last_emitted_ts = np.uint64(0)
+        self._set_out_rows(0, 0)
         self.overrun = 0
