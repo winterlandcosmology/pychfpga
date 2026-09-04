@@ -121,7 +121,7 @@ def setup_capture(board, channels):
         board.chan[channel].FFT.reset_fft_overflow_count()
 
 
-def capture_one_frame(board, funcgen_input, channels):
+def capture_one_frame(ca, board, funcgen_input, channels):
     board.stop_data_capture()
     board.reset_scaler_overflow_flags(channels=channels)
     for channel in channels:
@@ -150,7 +150,8 @@ def capture_one_frame(board, funcgen_input, channels):
     )
     board.sync()
 
-    receiver = board.get_data_receiver(verbose=1)
+    from pychfpga.common import run_async
+    receiver = run_async(ca.get_data_receiver_async(verbose=1))
     receiver.flush()
     ts, data, counts = receiver.read_raw_frames(ncap=NCAP, source=1, chan_first=False)
     return receiver, data[-1, 0, :], int(ts[-1]), counts[-1].tolist(), frames_per_burst
@@ -197,7 +198,8 @@ def main():
 
     connection_config = load_yaml_config(f"{CONFIG}:connection_config")
     bs_label = bitstream_label(connection_config)
-    board = FPGAArray(**connection_config).ib[0]
+    ca = FPGAArray(**connection_config)
+    board = ca.ib[0]
     channels = [CHANNEL]
 
     n_inputs = int(board.SAMPLES_PER_WORD)
@@ -229,7 +231,7 @@ def main():
 
     for stem in INPUT_STEMS:
         input_path, funcgen_input = load_funcgen_input(board, stem)
-        receiver, captured, timestamp, count, frames_per_burst = capture_one_frame(board, funcgen_input, channels)
+        receiver, captured, timestamp, count, frames_per_burst = capture_one_frame(ca, board, funcgen_input, channels)
         (
             real,
             imag,

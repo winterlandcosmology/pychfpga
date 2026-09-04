@@ -48,6 +48,7 @@ import argparse
 
 # Import custom packages
 from pychfpga import fpga_array
+from pychfpga.common import run_async
 from pychfpga.network_utils import verify_network_settings
 
 class POCKET_CORRELATOR:
@@ -1239,7 +1240,7 @@ class POCKET_CORRELATOR:
 
         # Configure the parameters of the correlator
         self.corr = self.i.CORR # UCORR object
-        self.corr_receiver = self.i.get_corr_receiver() # instantiate a correlator receiver object
+        self.corr_receiver = run_async(self.ca.get_corr_receiver_async())
         self.NCORR_PROD = int(self.NPOLS*(self.NPOLS + 1) // 2)
 
         # Start the correlator
@@ -1455,7 +1456,7 @@ class POCKET_CORRELATOR:
         t1 = time.time() # This is our rough timestamp  
         # Note: ``return_format`` is currently a no-op (kept for API compatibility); only 'raw' has been validated.
         _ = return_format
-        _integ_ts, d_corr, sat, count = self.corr_receiver.read_corr_frames(soft_integ_period = n_software_frames,
+        _integ_ts, d_corr, count, sat = self.corr_receiver.read_corr_frames(soft_integ_period = n_software_frames,
                                                                             number_of_results = number_of_results,
                                                                             flush = flush,
                                                                             data_timeout = data_timeout,

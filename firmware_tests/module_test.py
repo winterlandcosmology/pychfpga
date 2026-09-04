@@ -1,13 +1,21 @@
 from pychfpga.fpga_array import FPGAArray
+from pychfpga.common import run_async
 from wtl.pytest_xreport import xr, get_xr_from
 
 class TestModule:
     def board_conn(self, xr):
-        if  'board' in xr.data: #check if board is cached to avoid unnecessary reconnection
+        if 'board' in xr.data: #check if board is cached to avoid unnecessary reconnection
+            self.ca = xr.data.ca
             return xr.data.board
         ca = FPGAArray(**self.connection_config)
+        xr.data.ca = ca
         xr.data.board = ca.ib[0]
+        self.ca = ca
         return xr.data.board
+
+    def get_data_receiver(self, **kwargs):
+        """Return the array raw-data receiver (one-board FPGAArray)."""
+        return run_async(self.ca.get_data_receiver_async(**kwargs))
     
     def pytest_generate_tests(self, metafunc):
         """ This pytest hook is called before each test to allow dynamic generation of test parameters.

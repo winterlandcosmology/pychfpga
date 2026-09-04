@@ -161,7 +161,7 @@ class TestFuncgen(TestModule):
         logger = self.get_logger()
         logger.debug("Starting data capture for one period")
         self.board.start_data_capture(period=1)
-        receiver = self.board.get_data_receiver()
+        receiver = self.get_data_receiver()
         logger.debug("Reading raw frames")
         ts, data, count = receiver.read_raw_frames(1)
         logger.info(f"Expected {len(count[0])} packages, received {np.sum(count[0])}.")
@@ -181,7 +181,7 @@ class TestFuncgen(TestModule):
         logger.debug(f"Setting data source to {source.upper()}")
         self.board.set_channelizer(data_source=source, fft_bypass=1, scaler_bypass=1, **func_kwargs)
         logger.debug("Initializing data receiver")
-        receiver = self.board.get_data_receiver(
+        receiver = self.get_data_receiver(
             verbose=self.loglevelrecv,
         )
         receiver.flush()
@@ -267,7 +267,7 @@ class TestFuncgen(TestModule):
         seed = np.random.randint(-2 ** 15, 2 ** 15 - 1) #seed is 16-bit value
         self.board.start_data_capture(period=1, source='funcgen', frames_per_burst=2, mode=0)
         self.board.set_channelizer(data_source='noise', seed = seed)
-        receiver = self.board.get_data_receiver()
+        receiver = self.get_data_receiver()
         #self.board.chan[0].FUNCGEN.reset_noise()
         sleep(0.1)
         _, data, _ = receiver.read_raw_frames(split=True)

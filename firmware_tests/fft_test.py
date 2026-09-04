@@ -76,10 +76,18 @@ class TestFFT:
 
     def board_conn(self, xr):
         if 'board' in xr.data:
+            self.ca = xr.data.ca
             return xr.data.board
         ca = FPGAArray(**self.connection_config)
+        xr.data.ca = ca
         xr.data.board = ca.ib[0]
+        self.ca = ca
         return xr.data.board
+
+    def get_data_receiver(self, **kwargs):
+        """Return the array raw-data receiver (one-board FPGAArray)."""
+        from pychfpga.common import run_async
+        return run_async(self.ca.get_data_receiver_async(**kwargs))
 
     @pytest.fixture(scope='function', autouse=True)
     def setup(self, xr):
@@ -301,7 +309,7 @@ class TestFFT:
             data_type=self.FFT_COMPLEX_CAPTURE_MODE,
         )
         self.board.sync()
-        receiver = self.board.get_data_receiver(port_number=0, verbose=self.test_config.loglevelrecv)
+        receiver = self.get_data_receiver(port_number=0, verbose=self.test_config.loglevelrecv)
         receiver.flush()
         # The PFB/FFT pipeline is continuously running. Read several completed
         # logical frames after changing FUNCGEN, then assert against the last one.
@@ -575,7 +583,7 @@ class TestFFT:
         )
         self.board.sync()
 
-        receiver = self.board.get_data_receiver(port_number=0, verbose=self.test_config.loglevelrecv)
+        receiver = self.get_data_receiver(port_number=0, verbose=self.test_config.loglevelrecv)
         receiver.flush()
         ts, data, count = receiver.read_raw_frames(
             ncap=ncap,

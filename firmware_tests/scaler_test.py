@@ -189,7 +189,7 @@ class TestScaler(TestModule):
         self.board.set_data_source(source='arb', data=source)
         self.board.start_data_capture(period=0.1, source='scaler', data_type=cap_data_type)
         self.board.sync()
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv) #NOTE: must be after earlier calls for some reason
+        receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv) #NOTE: must be after earlier calls for some reason
         receiver.flush()
         if not read:
             logger.debug(
@@ -959,7 +959,7 @@ class TestScaler(TestModule):
             data_type=cap_data_type,
         )
         self.board.sync()
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv)
         receiver.flush()
         ts, data, count = receiver.read_raw_frames(ncap=1, split=False, source=1)
         data = data[:, 0, :]
@@ -1257,7 +1257,7 @@ class TestScaler(TestModule):
                     overflow_buffer=overflow_buffer,
                 )
                 self.board.start_data_capture(period=0.01, source='scaler', data_type=0)
-                receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
+                receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv)
                 ts, data, count = receiver.read_raw_frames(ncap=2, split=False, source=1)
                 # Use the second frame to avoid potential source-switch transition effects.
                 flags_out = data[:, -1, :] & mask
@@ -1328,7 +1328,7 @@ class TestScaler(TestModule):
             verbose=0,
         )
         assert(self.board.GPIO.ANT_RESET == 0)
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv)
         receiver.flush()
 
         ts_before, data_before, count_before = receiver.read_raw_frames(
@@ -1416,7 +1416,7 @@ class TestScaler(TestModule):
         self.board.start_data_capture(source='scaler', data_type=0, period=0.01, frames_per_burst=FRAMES_PER_BURST)
         self.board.set_scaler_rounding_mode(rounding_mode)
         self.board.set_symmetric_saturation(symmetric_saturation)
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv)
         avgs = np.zeros(postscaler_range[1]  - postscaler_range[0], dtype=np.float64)
         n = self.data.NUM_SAMPLES * len(self.board.chan) * num_frames
         num_bursts = num_frames // FRAMES_PER_BURST

@@ -86,8 +86,6 @@ class FPGAArray(object):
     _array_methods = {}
     _array_method_class_sets = ()  # tuple of each motherboard's provider-class frozenset
     _array_method_instances = {}
-    ib = None
-    ic = None
     _ready = False
 
     def get_array_methods(self):
@@ -148,10 +146,10 @@ class FPGAArray(object):
 
     def __getattr__(self, name):
         """Dispatch array-wide methods. See :meth:`get_array_method`."""
-        if not getattr(self, '_ready', False):
+        if not self._ready:
             raise RuntimeError(
-                "FPGAArray is not initialized; use "
-                "`ca = await FPGAArray(...).init()`"
+                "FPGAArray is not initialized, probably because it was not await'ed; use "
+                "`ca = await FPGAArray(...)`"
             )
         return self.get_array_method(name)
 
@@ -165,7 +163,6 @@ class FPGAArray(object):
             hwm=None,
             iceboards=[],
             icecrates=[],
-            mezzanines=[],
             exclude_iceboards=[],
             ignore_missing_boards=False,
 
@@ -511,113 +508,50 @@ class FPGAArray(object):
                 network discovery method for that crate type.
 
         """
-        # Store constructor args for async init(); do not run hardware init here.
-        self._init_args = ()
-        self._init_kwargs = dict(
-            hwm=hwm,
-            iceboards=iceboards,
-            icecrates=icecrates,
-            mezzanines=mezzanines,
-            exclude_iceboards=exclude_iceboards,
-            ignore_missing_boards=ignore_missing_boards,
-            subarrays=subarrays,
-            ping=ping,
-            mdns_timeout=mdns_timeout,
-            platform_firmware_pathname=platform_firmware_pathname,
-            no_mezz=no_mezz,
-            bitfile=bitfile,
-            prog=prog,
-            open=open,
-            init=init,
-            if_ip=if_ip,
-            udp_retries=udp_retries,
-            fpga_ip_addr_fn=fpga_ip_addr_fn,
-            sampling_frequency=sampling_frequency,
-            sync_method=sync_method,
-            sync_source=sync_source,
-            sync_master=sync_master,
-            sync_master_source=sync_master_source,
-            sync_master_output=sync_master_output,
-            max_sync_time_difference=max_sync_time_difference,
-            adc_mode=adc_mode,
-            adc_bandwidth=adc_bandwidth,
-            mode=mode,
-            frames_per_packet=frames_per_packet,
-            chan8_channel_map=chan8_channel_map,
-            tx_power=tx_power,
-            integration_period=integration_period,
-            autocorr_only=autocorr_only,
-            corner_turn_bad_links=corner_turn_bad_links,
-            corner_turn_bin_priority=corner_turn_bin_priority,
-            corner_turn_remap_level=corner_turn_remap_level,
-            stderr_log_level=stderr_log_level,
-            syslog_log_level=syslog_log_level,
-            **kwargs)
-        self._ready = False
-        self.ib = None
-        self.ic = None
+        # Capture constructor args before any other locals are created; do not
+        # run hardware init here. Caller must ``await`` this instance.
+        init_kwargs = {k: v for k, v in locals().items() if k not in ('self', 'kwargs')}
+        init_kwargs.update(kwargs)
 
-    async def init(self, *args, **kwargs):
-        if args:
-            raise TypeError('FPGAArray.init() does not take positional arguments')
-        merged_kwargs = {**getattr(self, '_init_kwargs', {}), **kwargs}
-        await self.init_async(**merged_kwargs)
+        self._ready = False  # Indicate that the array is not initialized yet.
+        self._init_args = ()
+        self._init_kwargs = init_kwargs
+
+    async def init(self):
+        return await self
+
+    def __await__(self):
+        yield from self.init_async(**self._init_kwargs).__await__()  # create a generator that passes-on the init_async yields
         self._ready = True
         return self
 
-    async def init_async(
-            self,
 
-            hwm=None,
-            iceboards=[],
-            icecrates=[],
-            mezzanines=[],
-            exclude_iceboards=[],
-            ignore_missing_boards=False,
+    async def init_async(self, **kwargs):
+        """Co-routine implementation of fpga_array initialization.
 
-            subarrays=None, ping=True,
-            mdns_timeout=2,
-            platform_firmware_pathname=None,
-            no_mezz=False,
-
-            mode=None,
-            bitfile=None,
-            prog=None,
-            open=None,
-            init=None,
-
-            if_ip=None,
-            fpga_ip_addr_fn='(a,b,3,d)',
-            udp_retries=10,
-
-            sync_method=None,
-            sync_source=None,
-            sync_master=None,
-            sync_master_source=None,
-            sync_master_output=None,
-            max_sync_time_difference=20,
-
-            adc_mode=0,
-            adc_bandwidth=2,
-
-            frames_per_packet=2,
-            chan8_channel_map=list(range(8)),
-            sampling_frequency=None,
-            tx_power=None,
-            integration_period=None,
-            autocorr_only=None,
-            corner_turn_bad_links=None,
-            corner_turn_bin_priority=None,
-            corner_turn_remap_level=0,
-
-            stderr_log_level=None,
-            syslog_log_level=None,
-
-            **kwargs):
-
+        Hardware-map / discovery parameters are consumed here. Remaining
+        ``kwargs`` are forwarded unchanged to
+        :meth:`_run_provider_array_init` (and thus firmware ``array_init_async``).
+        Constructor parameters are documented on :meth:`__init__`.
         """
-        Co-routine implementation of fpga_array initialization
-        """
+        # Hardware-map / discovery params (not forwarded to array_init)
+        hwm = kwargs.pop('hwm', None)
+        iceboards = kwargs.pop('iceboards', [])
+        icecrates = kwargs.pop('icecrates', [])
+        exclude_iceboards = kwargs.pop('exclude_iceboards', [])
+        ignore_missing_boards = kwargs.pop('ignore_missing_boards', False)
+        subarrays = kwargs.pop('subarrays', None)
+        ping = kwargs.pop('ping', True)
+        mdns_timeout = kwargs.pop('mdns_timeout', 2)
+        no_mezz = kwargs.pop('no_mezz', False)
+        stderr_log_level = kwargs.pop('stderr_log_level', None)
+        syslog_log_level = kwargs.pop('syslog_log_level', None)
+        # Used here for platform firmware load; array_init_async no longer consumes it.
+        platform_firmware_pathname = kwargs.pop('platform_firmware_pathname', None)
+        # Bound to locals for repeated use below; left in kwargs for array_init_async.
+        if_ip = kwargs.get('if_ip')
+        fpga_ip_addr_fn = kwargs.get('fpga_ip_addr_fn', '(a,b,3,d)')
+
         self.ib = []  # make sure repr() has always something
         self.ic = []
         # Instance shadows of the class-body defaults; ensures a fresh
@@ -674,23 +608,24 @@ class FPGAArray(object):
         self.logger.info(f'{self!r}:     mdns_timeout = {mdns_timeout}')
         self.logger.info(f'{self!r}:     platform_firmware_pathname = {platform_firmware_pathname}')
         self.logger.info(f'{self!r}:     exclude_iceboards = {exclude_iceboards}')
-        self.logger.info(f'{self!r}:     bitfile = {bitfile}')
-        self.logger.info(f'{self!r}:     prog = {prog}')
-        self.logger.info(f'{self!r}:     open = {open}')
-        self.logger.info(f'{self!r}:     init = {init}')
+        self.logger.info(f'{self!r}:     bitfile = {kwargs.get("bitfile")}')
+        self.logger.info(f'{self!r}:     prog = {kwargs.get("prog")}')
+        self.logger.info(f'{self!r}:     open = {kwargs.get("open")}')
+        self.logger.info(f'{self!r}:     init = {kwargs.get("init")}')
         self.logger.info(f'{self!r}:     no_mezz = {no_mezz}')
-        self.logger.info(f'{self!r}:     sampling_frequency = {sampling_frequency}')
+        self.logger.info(f'{self!r}:     sampling_frequency = {kwargs.get("sampling_frequency")}')
         # self.logger.info(f'{self!r}:     reference_frequency = {reference_frequency}')
-        self.logger.info(f'{self!r}:     sync_method = {sync_method}')
-        self.logger.info(f'{self!r}:     sync_source = {sync_source}')
+        self.logger.info(f'{self!r}:     sync_method = {kwargs.get("sync_method")}')
+        self.logger.info(f'{self!r}:     sync_source = {kwargs.get("sync_source")}')
         self.logger.info(f'{self!r}:     fpga_ip_addr_fn = {fpga_ip_addr_fn}')
         self.logger.info(f'{self!r}: ------------------------')
 
         __main__._host_interface_ip_addr = if_ip
 
-        # COnvert the FPGA IP-setting function name to an actual function
+        # Convert the FPGA IP-setting function name to an actual function.
+        # Result stays in kwargs so array_init_async receives the resolved callable.
         if fpga_ip_addr_fn in self.FPGA_IP_ADDR_FN_TABLE:
-            fpga_ip_addr_fn = self.FPGA_IP_ADDR_FN_TABLE[fpga_ip_addr_fn]
+            kwargs['fpga_ip_addr_fn'] = self.FPGA_IP_ADDR_FN_TABLE[fpga_ip_addr_fn]
         else:
             valid_fn = ', '.join(f"'{fn}'" for fn in self.FPGA_IP_ADDR_FN_TABLE)
             raise AttributeError(
@@ -772,7 +707,7 @@ class FPGAArray(object):
                 # Find iceboards to ping. Use `as_dict` so mb_to_ping does not change as we delete boards from the hwm
                 self.logger.info(f'{self!r}: Pinging {len(boards_to_ping)} Motherboards with explicit hostnames')
                 # TCP-ping boards. Make is an asynchronous parallel call to all boards
-                ping_results = await asyncio.gather(*[mb.ping_async(timeout=ping_timeout) for mb in boards_to_ping])
+                ping_results = await Ccoll(boards_to_ping).ping_async(timeout=ping_timeout)
                 # self.logger.debug('%r: Ping results are %s' % (self, ping_results))
                 for mb, ping_successful in zip(boards_to_ping, ping_results):
                     if ping_successful:
@@ -925,9 +860,11 @@ class FPGAArray(object):
         if motherboards:
             self.logger.info(f'{self!r}: Establishing communication with the motherboards')
             t0 = time.time()
-            result = await asyncio.gather(*[mb.open_platform_async() for mb in motherboards if mb.hostname])
-            self.logger.info(f'{self!r}: Connection with {len(result)} Motherboard established. '
-                             f'It took {time.time() - t0:.3f} seconds')
+            mbs_with_hostname = Ccoll(mb for mb in motherboards if mb.hostname)
+            if mbs_with_hostname:
+                result = await mbs_with_hostname.open_platform_async()
+                self.logger.info(f'{self!r}: Connection with {len(result)} Motherboard established. '
+                                 f'It took {time.time() - t0:.3f} seconds')
 
         ########################################################################################
         # Resolve missing serial/crate/slot info through the motherboard's on-board processor
@@ -942,7 +879,7 @@ class FPGAArray(object):
             ad_boards = ', '.join(mb.hostname for mb in mb_without_serial)
             self.logger.debug(f'{self!r}: Serial Auto-discovery is performed on the following boards: {ad_boards}')
             # concurrently resolve serials
-            await asyncio.gather(*[mb.discover_serial_async() for mb in mb_without_serial])
+            await Ccoll(mb_without_serial).discover_serial_async()
             # self.logger.info('%r: Got all discover_serial futures after %f seconds' % (self, time.time() - t0))
             # [mb.discover_serial.async() for mb in mb_without_serial]
             self.logger.debug(f'{self!r}: Finished Auto-Discovering serial number for Motherboards. '
@@ -957,7 +894,7 @@ class FPGAArray(object):
                 self.logger.info(f'{self!r}: Auto-Discovering & validating the slot numbers '
                                  f'for {len(mb_without_slot)} Motherboards with known hostnames...')
                 t0 = time.time()
-                await asyncio.gather(*[mb.discover_slot_async() for mb in mb_without_slot])
+                await Ccoll(mb_without_slot).discover_slot_async()
                 self.logger.info(f'{self!r}: Finished Auto-Discovering slot numbers for Motherboards. '
                                  f'Took {time.time() - t0} seconds.')
 
@@ -973,7 +910,7 @@ class FPGAArray(object):
                 hostnames = ', '.join(mb.hostname for mb in mb_without_crate)
                 self.logger.info(f'{self!r}: Auto-Discovering crate information '
                                  f'for Motherboards with known hostnames: {hostnames}')
-                await asyncio.gather(*[mb.discover_crate_async() for mb in mb_without_crate])
+                await Ccoll(mb_without_crate).discover_crate_async()
                 self.logger.info(f'{self!r}: Finished Auto-Discovering crate serial numbers. '
                                  f'Took {time.time() - t0} seconds.')
 
@@ -1068,7 +1005,7 @@ class FPGAArray(object):
             self.logger.info(f'{self!r}: Discovering Mezzanines...')
             # make sure we see the previous prints right away so we have a better feeling of what is happening
             self.print_flush()
-            await asyncio.gather(*[mb.discover_mezzanines_async() for mb in motherboards])
+            await Ccoll(motherboards).discover_mezzanines_async()
         for mb in motherboards:
             mezz_info = ','.join(f'{i}:{m.iceboard}' for i, m in mb.mezzanine.items())
             self.logger.debug(f"Mezzanines after discovery {mb}, {mezz_info}")
@@ -1160,34 +1097,7 @@ class FPGAArray(object):
 
         self.logger.info(f'{self!r}: Done creating {self!r}')
 
-        await self._run_provider_array_init(
-            platform_firmware_pathname=platform_firmware_pathname,
-            mode=mode,
-            bitfile=bitfile,
-            prog=prog,
-            open=open,
-            init=init,
-            if_ip=if_ip,
-            fpga_ip_addr_fn=fpga_ip_addr_fn,
-            udp_retries=udp_retries,
-            sync_method=sync_method,
-            sync_source=sync_source,
-            sync_master=sync_master,
-            sync_master_source=sync_master_source,
-            sync_master_output=sync_master_output,
-            max_sync_time_difference=max_sync_time_difference,
-            adc_mode=adc_mode,
-            adc_bandwidth=adc_bandwidth,
-            frames_per_packet=frames_per_packet,
-            chan8_channel_map=chan8_channel_map,
-            sampling_frequency=sampling_frequency,
-            tx_power=tx_power,
-            integration_period=integration_period,
-            autocorr_only=autocorr_only,
-            corner_turn_bad_links=corner_turn_bad_links,
-            corner_turn_bin_priority=corner_turn_bin_priority,
-            corner_turn_remap_level=corner_turn_remap_level,
-            **kwargs)
+        await self._run_provider_array_init(**kwargs)
 
         self.print_flush()
 
@@ -1219,7 +1129,7 @@ class FPGAArray(object):
         for cls in provider_classes:
             provider = self._array_method_instances.get(cls) or cls(self)
             self._array_method_instances[cls] = provider
-            init_fn = getattr(provider, 'array_init', None)
+            init_fn = getattr(provider, 'array_init_async', None)
             if init_fn is not None:
                 await init_fn(**init_kwargs)
                 break
