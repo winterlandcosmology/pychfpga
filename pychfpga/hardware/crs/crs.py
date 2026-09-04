@@ -768,11 +768,30 @@ class CRS(Motherboard):
     async def get_slot_number(self):
         return None
 
+    def _pll_input_to_iceboard_clock_source(self, pll_input):
+        """Map CRS PLL input index to IceBoard-style clock source names."""
+        if pll_input == self.PLL_INPUT_BP_CLK_10MHZ:
+            return 'CLOCK_SOURCE_BP'
+        if pll_input == self.PLL_INPUT_SMA_CLK_10MHZ:
+            return 'CLOCK_SOURCE_SMA'
+        if pll_input == self.PLL_INPUT_ETH_REG_125MHZ:
+            return 'CLOCK_SOURCE_XTAL'
+        if pll_input is None:
+            return 'CLOCK_SOURCE_XTAL'
+        return f'CLOCK_SOURCE_PLL_{pll_input}'
+
+    def _get_iceboard_clock_source(self):
+        """Return the reference clock source used by the motherboard PLL."""
+        pll_input = getattr(self, 'input_reference', None)
+        if pll_input is None and hasattr(self, 'pll') and self.pll is not None:
+            pll_input = self.pll.get_active_clkin()
+        return self._pll_input_to_iceboard_clock_source(pll_input)
+
     async def get_iceboard_clock_source_async(self):
-        return "CRYSTAL"
+        return self._get_iceboard_clock_source()
 
     def get_iceboard_clock_source_sync(self):
-        return "CRYSTAL"
+        return self._get_iceboard_clock_source()
 
     def get_motherboard_temperature(self, sensor):
         """ Synchronous wrapper to return motherboard temperature sensor value.
