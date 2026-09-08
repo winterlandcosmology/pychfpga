@@ -12,6 +12,9 @@ History:
     2012-10-17 JFC: Added correlator frequency
     2012-11-09 JFC: Modified to use Module. Uses fpga SYSTEM_CLOCK_FREQUENCY variable.
 """
+import asyncio
+import time
+
 from ..mmi import MMI, BitField, CONTROL, STATUS
 
 class FreqCtr(MMI):
@@ -21,6 +24,8 @@ class FreqCtr(MMI):
     ADDRESS_WIDTH = 12
 
     _SYSTEM_CLOCK_FREQUENCY = 200e6  # in Hz
+    # Extra time allowed after the FPGA gate before declaring the counter stuck.
+    _FREQ_DONE_TIMEOUT_MARGIN = 1.0
 
     # Frequency counter port definitions
     PORTS = {
@@ -73,10 +78,10 @@ class FreqCtr(MMI):
     FREQ_COUNT = BitField(STATUS, 3, 0, width=32, doc='Frequency count (number of rising edges seen on the source signal during the gate time)')
     DONE = BitField(STATUS, 4, 0, doc='Frequency counting is complete (gate time has been reached).')
 
-    def __init__(self, *, router, router_port, state, verbose=1):
+    def __init__(self, *, router, router_port, config, verbose=1):
         self.verbose = verbose
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
         self._lock()  # prevent further property creation to avoid creating attributes by mistake
 
 
@@ -86,6 +91,24 @@ class FreqCtr(MMI):
         """
         pass
 
+    def _start_frequency_count(self, port, gate_time):
+        """Program and start a frequency measurement. Returns the numeric port id."""
+        if isinstance(port, str):
+            port = self.PORTS[port]
+        self.GATE_COUNT = int(self._SYSTEM_CLOCK_FREQUENCY * gate_time)
+        self.SOURCE = port  # Sets the signal source to be measured
+        self.START = 0  # Clears the counter
+        self.START = 1  # starts the frequency counter
+        return port
+
+    def _frequency_from_count(self, gate_time):
+        return self.FREQ_COUNT * 2.0 / gate_time
+
+    def _frequency_done_timeout(self, port, gate_time):
+        return RuntimeError(
+            f'{self!r}: Frequency counter did not complete within '
+            f'{gate_time + self._FREQ_DONE_TIMEOUT_MARGIN:.3f} s '
+            f'(port={port}, gate_time={gate_time})')
 
     def read_frequency(self, port, gate_time=0.01):
         """ Read the frequency (in Hz) of the specified frequency counter input port.
@@ -102,20 +125,39 @@ class FreqCtr(MMI):
 
         Note:
             The frequency resolution is given by resolution = 2/`gate_time`
-        """
-        ref_freq = self._SYSTEM_CLOCK_FREQUENCY
-        gate_ctr = int(ref_freq * gate_time)
-        self.GATE_COUNT = gate_ctr
 
-        if type(port) is str:
-            port = self.PORTS[port]
-        self.SOURCE = port  # Sets the signal source to be measured
-        self.START = 0  # Clears the counter
-        self.START = 1  # starts the frequncy counter
+            Prefer :meth:`read_frequency_async` from async code so the gate wait
+            yields to other boards.
+        """
+        port = self._start_frequency_count(port, gate_time)
+        t0 = time.monotonic()
+        deadline = t0 + gate_time + self._FREQ_DONE_TIMEOUT_MARGIN
         while not self.DONE:
-            pass
-        freq = self.FREQ_COUNT
-        return freq * 2.0 / gate_time
+            now = time.monotonic()
+            if now >= deadline:
+                raise self._frequency_done_timeout(port, gate_time)
+            remaining = gate_time - (now - t0)
+            time.sleep(remaining if remaining > 0 else 0.001)
+        return self._frequency_from_count(gate_time)
+
+    async def read_frequency_async(self, port, gate_time=0.01):
+        """Async version of :meth:`read_frequency`.
+
+        Sleeps for the FPGA gate time instead of busy-waiting on ``DONE``, so
+        other boards can make progress on the event loop. The first ``DONE``
+        poll also flushes any aggregated BSB writes so the counter actually
+        starts before the sleep.
+        """
+        port = self._start_frequency_count(port, gate_time)
+        t0 = time.monotonic()
+        deadline = t0 + gate_time + self._FREQ_DONE_TIMEOUT_MARGIN
+        while not self.DONE:
+            now = time.monotonic()
+            if now >= deadline:
+                raise self._frequency_done_timeout(port, gate_time)
+            remaining = gate_time - (now - t0)
+            await asyncio.sleep(remaining if remaining > 0 else 0.001)
+        return self._frequency_from_count(gate_time)
 
     def status(self):
         """
