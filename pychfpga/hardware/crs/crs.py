@@ -80,7 +80,7 @@ class CRS(Motherboard):
 
     port = 7  # port number on which to access the platform `hostname`
 
-    REQUIRED_TCPIPE_VERSION = "1.0" # Requird version of the TCPipe firmware running on the board.
+    REQUIRED_TCPIPE_VERSION = "1.0"  # Fallback when the ELF has no TCPIPE_GIT= marker.
     DEFAULT_ARM_FIRMWARE_NAME = "tcpipe_rtos.elf"
     DEFAULT_ARM_FIRMWARE_PATHNAME = path.join(path.dirname(__file__), 'arm_firmware', DEFAULT_ARM_FIRMWARE_NAME)
 
@@ -131,11 +131,17 @@ class CRS(Motherboard):
 
     @classmethod
     async def set_platform_firmware(cls, boards=None, firmware_pathname=None, **kwargs):
-
+        firmware_pathname = firmware_pathname or cls.DEFAULT_ARM_FIRMWARE_PATHNAME
+        required_version = kwargs.pop("required_version", None)
+        if required_version is None:
+            required_version = (
+                crs_discovery.tcpipe_version_from_elf(firmware_pathname)
+                or cls.REQUIRED_TCPIPE_VERSION
+            )
         return await crs_discovery.set_platform_firmware(
             boards=boards or [],
-            required_version=cls.REQUIRED_TCPIPE_VERSION,
-            firmware_pathname=firmware_pathname or cls.DEFAULT_ARM_FIRMWARE_PATHNAME,
+            required_version=required_version,
+            firmware_pathname=firmware_pathname,
             **kwargs)
 
 

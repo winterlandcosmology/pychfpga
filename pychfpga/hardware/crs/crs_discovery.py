@@ -132,6 +132,35 @@ def _file_md5(path):
         return hashlib.file_digest(f, "md5").hexdigest()
 
 
+_TCPIPE_GIT_MARKER = b"TCPIPE_GIT="
+
+
+def tcpipe_version_from_elf(pathname):
+    """Return the GIT_VERSION compiled into a TCPipe ELF, or None.
+
+    The firmware stores ``TCPIPE_GIT=<git describe>`` as a NUL-terminated
+    rodata string. Discovery beacons advertise the same value as
+    ``Bootloader Version``, so the uploader can skip boards that already
+    match the ELF being loaded.
+    """
+    if not pathname:
+        return None
+    path = Path(pathname)
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    start = data.find(_TCPIPE_GIT_MARKER)
+    if start < 0:
+        return None
+    start += len(_TCPIPE_GIT_MARKER)
+    end = data.find(b"\0", start)
+    if end < 0:
+        return None
+    version = data[start:end].decode("ascii", "replace").strip()
+    return version or None
+
+
 async def _async_sock_recvfrom(sock, bufsize, timeout):
     """Recvfrom on a non-blocking UDP socket (Python 3.10+ compatible)."""
     loop = asyncio.get_running_loop()
@@ -735,20 +764,23 @@ class CRSBeacon:
         self.address = address
         self.board_part = product.upper()
         self.board_serial = serial
-        self.backplane_part = self.get_any_field(("backplane-part",))
+        self.backplane_part = self.get_any_field(("backplane-part", "backplane-model"))
         self.backplane_serial = self.get_any_field(("backplane-serial",))
         self.backplane_slot = _to_int(self.get_any_field(("backplane-slot",)))
-        self.crate_part = self.get_any_field(("crate-part",))
+        self.crate_part = self.get_any_field(("crate-part", "crate-model"))
         self.crate_serial = self.get_any_field(("crate-serial",))
         self.crate_number = _to_int(self.get_any_field(("crate-number", "backplane-number")))
         self.crate_slot = _to_int(self.get_any_field(("crate-slot",)))
-        # ``slot`` is the crate-wide slot (1..N). Beacons currently publish
-        # backplane-local slots (1..4); those stay in ``backplane_slot``.
-        self.slot = (
-            self.crate_slot
-            if isinstance(self.crate_slot, int) and self.crate_slot > 0
-            else None
-        )
+        # EEPROM chassis custom ``slot=`` is published as Backplane Slot.
+        # There is no crate-slot field on current U-Boot/TCPIPE beacons.
+        # IceBoard.slot uses a leftover Crate Slot header if present, else
+        # Backplane Slot.
+        if isinstance(self.crate_slot, int) and self.crate_slot > 0:
+            self.slot = self.crate_slot
+        elif isinstance(self.backplane_slot, int) and self.backplane_slot > 0:
+            self.slot = self.backplane_slot
+        else:
+            self.slot = None
 
     def get_any_field(self, names):
         for name in names:
@@ -778,14 +810,10 @@ def _format_discovered_board_line(beacon, mb=None, added_to_hwm=False):
         f"@ {beacon.address}"
     )
 
-    if beacon.backplane_serial is not None or beacon.backplane_slot is not None:
+    if beacon.backplane_serial is not None or beacon.backplane_part is not None:
         bp_part = beacon.backplane_part or "CBP"
         bp_serial = _format_discovery_serial(beacon.backplane_serial)
-        bp_slot = beacon.backplane_slot
-        bp_text = f"on Backplane {bp_part} {bp_serial}"
-        if isinstance(bp_slot, int) and bp_slot > 0:
-            bp_text += f" subslot {bp_slot}"
-        line += f" {bp_text}"
+        line += f" on Backplane {bp_part} {bp_serial}"
 
     crate_serial = beacon.crate_serial
     if mb is not None and mb.crate is not None and mb.crate.serial:
@@ -793,8 +821,8 @@ def _format_discovered_board_line(beacon, mb=None, added_to_hwm=False):
     crate_slot = None
     if mb is not None and mb.slot:
         crate_slot = mb.slot
-    elif isinstance(beacon.crate_slot, int) and beacon.crate_slot > 0:
-        crate_slot = beacon.crate_slot
+    elif isinstance(beacon.slot, int) and beacon.slot > 0:
+        crate_slot = beacon.slot
 
     if crate_serial is not None or crate_slot is not None:
         crate_part = beacon.crate_part or "CCR"
@@ -1130,7 +1158,7 @@ class CRSDiscovery:
             if slot is not None and slot != mb.slot:
                 self.logger.debug(
                     f"{self!r}: Keeping hardware-map slot {mb.slot} for SN{mb.serial}; "
-                    f"beacon advertises crate slot {slot} "
+                    f"beacon advertises slot {slot} "
                     f"(backplane slot {beacon.backplane_slot})")
             slot = None
         if crate is not None or slot is not None:
@@ -1139,7 +1167,7 @@ class CRSDiscovery:
             f"{self!r}: Updated hardware map with {beacon.kind} beacon from "
             f"{beacon.board_part} SN{beacon.board_serial} @ {beacon.address} on crate "
             f"SN{beacon.crate_serial} backplane SN{beacon.backplane_serial} "
-            f"(crate number {beacon.crate_number}, crate slot {beacon.slot}, "
+            f"(crate number {beacon.crate_number}, slot {beacon.slot}, "
             f"backplane slot {beacon.backplane_slot})")
         return mb
 
