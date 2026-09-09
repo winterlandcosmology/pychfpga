@@ -144,9 +144,23 @@ class FreqCtr(MMI):
         """Async version of :meth:`read_frequency`.
 
         Sleeps for the FPGA gate time instead of busy-waiting on ``DONE``, so
-        other boards can make progress on the event loop. The first ``DONE``
-        poll also flushes any aggregated BSB writes so the counter actually
-        starts before the sleep.
+        other boards can make progress on the event loop.
+
+        Parameters:
+            port (str or int): port name or port number from which to measure the frequency. See  `PORTS` table.
+
+            gate_time (float): Time (in seconds) during which the frequency of the selected source
+               will be measured. Affects the measurement time and the resolution. Maximum is limited
+               by the gating counter width (32 bits) to 21.47 seconds (2^32/200 MHz).
+
+        Returns:
+            (float): Frequency of the selected source (port) in Hz.
+
+        Note:
+            The frequency resolution is given by resolution = 2/`gate_time`
+
+            Prefer :meth:`read_frequency` from synchronous code so the gate wait
+            yields to other boards.
         """
         port = self._start_frequency_count(port, gate_time)
         t0 = time.monotonic()
