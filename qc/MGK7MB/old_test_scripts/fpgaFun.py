@@ -1,3 +1,4 @@
+from pychfpga.common.async_utils import run_async
 """
 Set of functions used in iceboard qc script to program and test the FPGA.
 Based off of 'top_test.py'
@@ -311,7 +312,7 @@ def gtx_ber(board_sn, ch_acq_path='../../../../../../ch_acq/', links=None, perio
         links = [links]
     else:
         raise Exception("Unrecognized argument for 'links': '{}'.    Must be either 'bp' or 'gpu'.".format(str(links)))
-    ber = ca.get_ber(link_list=links, tx_power=power, period=period)
+    ber = run_async(ca.get_ber_async(link_list=links, tx_power=power, period=period))
     ca.ib.close()
     return ber
 

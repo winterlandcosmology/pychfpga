@@ -19,14 +19,36 @@ def capture_format_for_tests(format="8"):
 
 def _unused_capture_format_slot():
     """Placeholder for dual-source ``capture_format[1]`` when tests only use source 0."""
-    return State(fmt_bus_width=8, fmt_data_width=8, fmt_is_complex=False, fmt_interleave_factor=1)
+    return State(
+        fmt_bus_width=8,
+        fmt_data_width=8,
+        fmt_is_complex=False,
+        fmt_interleave_factor=1,
+        use_offset_encoding=False,
+    )
 
 
-def process_and_get(processor, source=0, config=None, verbose=None, with_indices=False):
-    processor.process_udp_packets(config=config, verbose=verbose)
+def config_getter_from_mapping(mapping):
+    """Build a stable config getter for processor unit tests."""
+    if isinstance(mapping, State):
+        payload = mapping.as_dict()
+    else:
+        payload = dict(mapping)
+    if "capture_format" in payload:
+        payload["capture_format"] = [
+            item.as_dict() if isinstance(item, State) else item
+            for item in payload["capture_format"]
+        ]
+    state = State()
+    state.update_from(payload)
+    return lambda: state
+
+
+def process_and_get(processor, source=0, verbose=None, with_indices=False):
+    processor.process_udp_packets(verbose=verbose)
     if not processor.n_out:
         return None
-    ts, data, counts = processor.get_formatted_data(slice(0, processor.n_out), source=source)
+    ts, data, counts = processor.get_formatted_data(processor.out_rows, source=source)
     if with_indices:
         return ts, data, counts, np.arange(ts.shape[0])
     return ts, data, counts
@@ -54,7 +76,7 @@ def default_config(format="8", frames_per_burst=1, **overrides):
     cf0 = capture_format_for_tests(format)
     state = dict(
         capture_engine="PROBER",
-        source="funcgen",
+        source=0,
         channels=(0, 1),
         stream_ids=(10, 11),
         frames_per_burst=frames_per_burst,
@@ -65,7 +87,6 @@ def default_config(format="8", frames_per_burst=1, **overrides):
         bytes_per_frame=4,
         bytes_per_subframe=4,
         packets_per_channel_per_burst=frames_per_burst,
-        packets_per_logical_frame=1,
         logical_frames_per_burst=frames_per_burst,
         fft_bins_per_word=1,
         capture_bits_per_word=8,
@@ -78,7 +99,6 @@ def default_config(format="8", frames_per_burst=1, **overrides):
             "frames_per_burst",
             "subframes_per_frame",
             "stream_ids",
-            "packets_per_logical_frame",
             "logical_frames_per_burst",
             "packet_header_format",
         ),
@@ -95,11 +115,14 @@ def make_processor(n_packets=16, format="8", frames_per_burst=1, receive_window=
         frames_per_burst=frames_per_burst,
         **kwargs,
     )
-    return RawDataPacketProcessor(
+    getter = config_getter_from_mapping(state)
+    processor = RawDataPacketProcessor(
         pr,
-        config=state,
+        config_getter=getter,
         receive_window=receive_window,
-    ), pr
+    )
+    processor.update_config()
+    return processor, pr
 
 
 def write_packet(processor, pr, ix, stream_id, ts, frame=0, payload=None):
@@ -115,8 +138,22 @@ def write_packet(processor, pr, ix, stream_id, ts, frame=0, payload=None):
 
 
 def write_burst(processor, pr, start_ix, ts, payload_base=0):
-    write_packet(processor, pr, start_ix, stream_id=10, ts=ts, payload=[payload_base + 1] * 4)
-    write_packet(processor, pr, start_ix + 1, stream_id=11, ts=ts, payload=[payload_base + 2] * 4)
+    """Write one complete timestamp burst for streams 10 and 11.
+
+    Writes ``FRAMES_PER_BURST`` packets per stream (frame indices ``0..N-1``).
+    """
+    frames = int(getattr(processor, "FRAMES_PER_BURST", 1) or 1)
+    ix = start_ix
+    for frame in range(frames):
+        write_packet(
+            processor, pr, ix, stream_id=10, ts=ts, frame=frame,
+            payload=[payload_base + 1] * 4,
+        )
+        write_packet(
+            processor, pr, ix + 1, stream_id=11, ts=ts, frame=frame,
+            payload=[payload_base + 2] * 4,
+        )
+        ix += 2
 
 
 def test_duplicate_stream_ids_rejected():
@@ -124,13 +161,17 @@ def test_duplicate_stream_ids_rejected():
     pr = DummyPacketReceiver()
     state = default_config(stream_ids=(0, 0))
     with pytest.raises(ValueError, match="stream_ids must be unique"):
-        RawDataPacketProcessor(pr, config=state, receive_window=3)
+        processor = RawDataPacketProcessor(
+            pr, config_getter=config_getter_from_mapping(state), receive_window=3
+        )
+        processor.update_config()
 
 
 def test_captured_payload_not_all_zeros_process_packets():
     """Regression: assembled rows must contain UDP payload bytes (not all zeros).
 
-    One timestamp is not enough: with default receive_window, ``n_out = max(0, n_ts - nc)``
+    One timestamp is not enough: with default receive_window, physical ready
+    ``stop = max(0, n_ts - carry_len)`` (cached as ``n_out`` when start is 0)
     can be 0 until enough complete rows sit behind the tail window (same as
     ``test_process_packets_returns_complete_burst_after_carryover_tail``).
     """
@@ -192,7 +233,7 @@ def test_read_raw_frames_yields_nonzero_data():
     """Notebook path: receive → process → copy formatted rows into output buffer."""
     pr = DummyPacketReceiver()
     cfg = default_config(format="8")
-    r = RawFrameReceiver(pr, config=cfg, verbose=0)
+    r = RawFrameReceiver(pr, config_getter=config_getter_from_mapping(cfg), verbose=0)
     write_burst(r, pr, 0, ts=9001, payload_base=20)
     write_burst(r, pr, 2, ts=9002, payload_base=30)
     write_burst(r, pr, 4, ts=9003, payload_base=40)
@@ -212,7 +253,7 @@ def test_read_raw_frames_yields_nonzero_data():
 def test_read_raw_frames_omitting_verbose_preserves_constructor():
     """read_raw_frames must not reset verbose when omitted (use constructor / get_data_receiver value)."""
     pr = DummyPacketReceiver()
-    r = RawFrameReceiver(pr, config=default_config(format="8"), verbose=4)
+    r = RawFrameReceiver(pr, config_getter=config_getter_from_mapping(default_config(format="8")), verbose=4)
     for i, tsv in enumerate((100, 101, 102, 103)):
         write_burst(r, pr, 2 * i, ts=tsv, payload_base=10 * i)
     r.read_raw_frames(ncap=1, flush=False)
@@ -227,7 +268,7 @@ def test_read_raw_frames_omitting_verbose_preserves_constructor():
 def test_back_to_back_read_raw_frames_each_gets_fresh_iterator():
     """Regression: singleton data_iter caused confusing state; each read_raw_frames starts clean."""
     pr = DummyPacketReceiver()
-    r = RawFrameReceiver(pr, config=default_config(format="8"), verbose=0)
+    r = RawFrameReceiver(pr, config_getter=config_getter_from_mapping(default_config(format="8")), verbose=0)
     for i, tsv in enumerate((100, 101, 102, 103)):
         write_burst(r, pr, 2 * i, ts=tsv, payload_base=10 * i)
     ts1, _d1, c1 = r.read_raw_frames(ncap=4, flush=False)
@@ -457,9 +498,12 @@ def test_transformed_format_uses_formatted_output_buffer():
 def test_output_only_reconfiguration_reuses_raw_buffer():
     processor, pr = make_processor(n_packets=2, format="8")
     raw_data = processor.raw_data
-    cfg = default_config(format="14", capture_format=[capture_format_for_tests("14"), _unused_capture_format_slot()])
+    processor.config.capture_format[0].update_from(
+        capture_format_for_tests("14").as_dict()
+    )
 
-    process_and_get(processor, config=State(cfg))
+    processor.update_config()
+    process_and_get(processor)
 
     assert processor.raw_data is raw_data
     assert processor.config.capture_format[0].fmt_bus_width == 16
@@ -476,7 +520,11 @@ def test_geometry_reconfiguration_reallocates_when_shape_changes():
         logical_frames_per_burst=2,
     )
 
-    process_and_get(processor, config=State(cfg))
+    processor.config.update_from(
+        {k: v for k, v in cfg.items() if k != "capture_format"}
+    )
+    processor.update_config()
+    process_and_get(processor)
 
     assert processor.raw_data is not raw_data
     assert processor.FRAMES_PER_BURST == 2
@@ -495,10 +543,11 @@ def test_read_raw_frames_split_kwarg_yields_per_frame_width():
         subframes_per_frame=1,
         packets_per_channel_per_burst=2,
     )
-    pr = DummyPacketReceiver(n_packets=16, max_packet_size=32)
-    r = RawFrameReceiver(pr, config=cfg, verbose=0)
+    pr = DummyPacketReceiver(n_packets=32, max_packet_size=32)
+    r = RawFrameReceiver(pr, config_getter=config_getter_from_mapping(cfg), verbose=0)
+    # frames_per_burst=2 → 4 packets per timestamp (2 streams × 2 frames)
     for i, tsv in enumerate((5, 6, 7, 8, 9)):
-        write_burst(r, pr, 2 * i, ts=tsv, payload_base=10 * (i + 1))
+        write_burst(r, pr, 4 * i, ts=tsv, payload_base=10 * (i + 1))
     ts, data, counts = r.read_raw_frames(ncap=2, split=1, flush=False)
     assert data.shape[-1] == 8, f"expected 8 samples per frame, got shape {data.shape}"
 
@@ -524,7 +573,7 @@ def test_split_parameter_yields_samples_per_frame():
     processor.ts_array[0] = 100
     processor.raw_data_count[0, 0, :] = 4
     processor.raw_source[0, 0, :] = 0
-    processor.n_out = 1
+    processor._set_out_rows(0, 1)
 
     ts_wide, burst_wide, counts_wide = processor.get_formatted_data(slice(0, 1), source=0, split=False)
     assert burst_wide.shape == (1, 1, 32768), burst_wide.shape
@@ -539,7 +588,13 @@ def test_split_parameter_yields_samples_per_frame():
 
 
 def test_full_resolution_complex_ice_interleave4():
-    cf1 = State(fmt_bus_width=32, fmt_data_width=29, fmt_is_complex=True, fmt_interleave_factor=4)
+    cf1 = State(
+        fmt_bus_width=32,
+        fmt_data_width=29,
+        fmt_is_complex=True,
+        fmt_interleave_factor=4,
+        use_offset_encoding=False,
+    )
     processor, _pr = make_processor(
         n_packets=4,
         frames_per_burst=4,
@@ -548,11 +603,10 @@ def test_full_resolution_complex_ice_interleave4():
         bytes_per_frame=24,
         bytes_per_subframe=24,
         packets_per_channel_per_burst=4,
-        packets_per_logical_frame=4,
         logical_frames_per_burst=1,
         fft_bins_per_word=2,
         capture_bits_per_word=32,
-        source="scaler",
+        source=1,
         stream_ids=(10,),
         channels=(0,),
         capture_format=[_unused_capture_format_slot(), cf1],
@@ -575,7 +629,7 @@ def test_full_resolution_complex_ice_interleave4():
     processor.ts_array[0] = 20
     processor.raw_data_count[0, 0, :] = 1
     processor.raw_source[0, 0, :] = 1
-    processor.n_out = 1
+    processor._set_out_rows(0, 1)
 
     ts, data, counts = processor.get_formatted_data(slice(0, 1), source=1)
 
@@ -587,7 +641,13 @@ def test_full_resolution_complex_ice_interleave4():
 
 
 def test_full_resolution_complex_crs_interleave8_uses_msb_slot():
-    cf1 = State(fmt_bus_width=128, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=8)
+    cf1 = State(
+        fmt_bus_width=128,
+        fmt_data_width=32,
+        fmt_is_complex=True,
+        fmt_interleave_factor=8,
+        use_offset_encoding=False,
+    )
     processor, _pr = make_processor(
         n_packets=8,
         frames_per_burst=8,
@@ -596,11 +656,10 @@ def test_full_resolution_complex_crs_interleave8_uses_msb_slot():
         bytes_per_frame=32,
         bytes_per_subframe=32,
         packets_per_channel_per_burst=8,
-        packets_per_logical_frame=8,
         logical_frames_per_burst=1,
         fft_bins_per_word=4,
         capture_bits_per_word=128,
-        source="scaler",
+        source=1,
         stream_ids=(10,),
         channels=(0,),
         capture_format=[_unused_capture_format_slot(), cf1],
@@ -624,7 +683,7 @@ def test_full_resolution_complex_crs_interleave8_uses_msb_slot():
     processor.ts_array[0] = 100
     processor.raw_data_count[0, 0, :] = 4
     processor.raw_source[0, 0, :] = 1
-    processor.n_out = 1
+    processor._set_out_rows(0, 1)
 
     ts, data, counts = processor.get_formatted_data(slice(0, 1), source=1)
 
@@ -649,3 +708,54 @@ def test_split_format_core_and_modifiers_suffix():
     assert split("32+32") == ("32+32", "")
     assert split("16saturationflags") == ("16", "saturationflags")
     assert split("8") == ("8", "")
+
+
+_STATIC_BUFFER_ATTRS = (
+    "bytes_per_sample",
+    "samples_per_frame",
+    "frames_per_burst",
+    "fft_bins_per_word",
+    "capture_bits_per_word",
+    "subframes_per_frame",
+    "stream_ids",
+    "target_mode",
+)
+
+
+def test_serialized_equal_config_does_not_dirty_raw_buffers():
+    processor, _pr = make_processor()
+    raw_data = processor.raw_data
+    fmt0 = processor.config.capture_format[0]
+    fmt_buf = processor.fmt_cdata1[0]
+    assert not processor.config.has_changed(_STATIC_BUFFER_ATTRS, context=_STATIC_BUFFER_ATTRS)
+    assert not fmt0.has_changed(context="capture_format0")
+
+    processor.config.update_from(processor.config.as_dict())
+    processor.update_config()
+
+    assert processor.raw_data is raw_data
+    assert processor.config.capture_format[0] is fmt0
+    assert not processor.config.has_changed(_STATIC_BUFFER_ATTRS, context=_STATIC_BUFFER_ATTRS)
+    assert not fmt0.has_changed(context="capture_format0")
+    assert processor.fmt_cdata1[0] is fmt_buf
+
+
+def test_serialized_stream_id_change_is_detected():
+    processor, _pr = make_processor()
+    processor.config.update(stream_ids=(10, 12))
+    processor.update_config()
+    assert processor.stream_ids == (10, 12)
+    assert int(processor.six_map[12]) == 1
+    assert int(processor.six_map[11]) == -1
+
+
+def test_serialized_format_change_is_detected_without_raw_realloc():
+    processor, _pr = make_processor()
+    raw_data = processor.raw_data
+    fmt0 = processor.config.capture_format[0]
+    fmt0.update_from({"fmt_data_width": 4})
+    processor.update_config()
+    assert processor.raw_data is raw_data
+    assert processor.config.capture_format[0] is fmt0
+    assert fmt0.fmt_data_width == 4
+    assert not processor.config.has_changed(_STATIC_BUFFER_ATTRS, context=_STATIC_BUFFER_ATTRS)

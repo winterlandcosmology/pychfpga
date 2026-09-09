@@ -1233,7 +1233,7 @@ class TestMGK7MBNetwork(TestUtils):
         #print("\nThe firmware operating is version: %s" %ib.get_fpga_firmware_timestamp_sync())
 
         #I think this function doesn't exist anymore, ask about new version
-        #print("\nThe firmware operating is version: %s" %async_to_sync(ib.get_fpga_firmware_timestamp()))
+        #print("\nThe firmware operating is version: %s" %async_to_sync(ib.get_fpga_firmware_timestamp_async()))
 
         print("\nAttempting to read the motherboard eeprom directly from the FPGA - this tests connectivity to I2C matrix")
 
@@ -1405,7 +1405,7 @@ class TestMGK7MBNetwork(TestUtils):
 
         print('\n-------------------------------')
         print("Please ensure mezzanines are loaded, and sufficient cooling for FPGA")
-        (ib, ibs) = self.connect_to_board(questions=self.cfg.ready_check, program=True, open_fpga=True)
+        (ib, ca) = self.connect_to_board(questions=self.cfg.ready_check, program=True, open_fpga=True)
 
         run_async(ib.fpga.init_async()) #temp fix
 
@@ -1426,7 +1426,7 @@ class TestMGK7MBNetwork(TestUtils):
             print('\nOpening data receiver socket')
 
             print(ib.CAPTURE_TYPE)
-            receiver = ib.get_data_receiver()
+            receiver = run_async(ca.get_data_receiver_async())
 
             print('Setting up ramp transmission...')
             ib.set_adcdaq_mode('data')
@@ -1600,7 +1600,7 @@ class TestMGK7MBNetwork(TestUtils):
         xr.header('Test-Results')
 
         print("\nMeasuring  gtx error rate over a 20 second period ")
-        meas_ber1 = run_async(ibs.get_ber(tx_power = cfg.tx_power, print_ = 0, period = 20))
+        meas_ber1 = run_async(ibs.get_ber_async(tx_power = cfg.tx_power, print_ = 0, period = 20))
         #print meas_ber1
 
         bp_rate = True
@@ -1643,7 +1643,7 @@ class TestMGK7MBNetwork(TestUtils):
         assert gpu_rate, 'Bit Error Rate for GPU lanes too high!'
 
         print("\nMeasuring  gtx error rate over a 600 second period")
-        meas_ber2 = run_async(ibs.get_ber(tx_power = cfg.tx_power, print_ = 0, period = 600))
+        meas_ber2 = run_async(ibs.get_ber_async(tx_power = cfg.tx_power, print_ = 0, period = 600))
 
         bp_rate = True
         qsfp_rate = True

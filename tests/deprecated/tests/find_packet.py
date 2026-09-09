@@ -3,6 +3,7 @@ import logging
 import pychfpga
 import time
 import numpy as np
+from pychfpga.common.async_utils import run_async
 
 def get_ps():
     ps = pychfpga.AgilentN5764AHandler('10.10.10.151')
@@ -16,8 +17,8 @@ def init_fpga():
     ca.ib.GPU.TEST_PACKET_LENGTH=0x0040
     ca.ib.GPU.TEST_PACKET_PERIOD=0xff00
     ca.ib.set_gains((800,12))  # assuming a -5 dBm signal through a resistive 1:2 splitter (6 dB loss)
-    ca.set_sync_method('distributed_time')
-    ca.set_operational_mode('shuffle512', frames_per_packet=1)
+    run_async(ca.set_sync_method_async('distributed_time'))
+    run_async(ca.set_operational_mode_async('shuffle512', frames_per_packet=1))
     return ca
 
 def get_raw_socket():
@@ -189,7 +190,7 @@ def sync_timing_test(ca, Nsync=10, Nscan=1):
         for delay in range(0,10*Nscan,10):
             for trial in range(3):
                 try:
-                    ca.sync(delay = 3 - delay/1e9)
+                    run_async(ca.sync_async(delay = 3 - delay/1e9))
                     sync_time.append(ca.get_sync_start_time().nano)
                     frame0_time.append(ca.get_sync_timestamps().nano)
                     delay_list.append(delay)

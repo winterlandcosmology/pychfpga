@@ -432,6 +432,7 @@ class TestMGADC08Carrier(TestUtils):
             assert len(a.ib), 'No Iceboard was found with parameters %s' % kwargs
             assert len(a.ib) == 1, 'One than one Iceboard was found with parameters %s' % kwargs
             ib = a.ib[0]
+            self.ca = a
             print()
             print('Testing Mezzanine Power with %r' % ib)
             # ib.discover_mezzanines()
@@ -502,6 +503,7 @@ class TestMGADC08Carrier(TestUtils):
             assert len(a.ib), 'No Iceboard was found with parameters %s' % kwargs
             assert len(a.ib) == 1, 'One than one Iceboard was found with parameters %s' % kwargs
             ib = a.ib[0]
+            self.ca = a
 
             run_async(ib.set_fpga_bitstream_async(firmware_mode = 'corr16', force=False)) #needs to be added to the open iceboard funct
             ip_fn = lambda a, b, c, d: (a, b, 3, d)
@@ -1027,7 +1029,7 @@ class TestMGADC08Carrier(TestUtils):
             delay_table = ib.get_adc_delays()
 #
             print('\nOpening data receiver socket')
-            receiver = ib.get_data_receiver()
+            receiver = run_async(self.ca.get_data_receiver_async())
 
             print('Setting up ramp transmission...')
             # Begin Ramp test
@@ -1208,7 +1210,7 @@ class TestMGADC08Carrier(TestUtils):
             
 
 
-            r = ib.get_data_receiver()
+            r = run_async(self.ca.get_data_receiver_async())
 
             if cfg.adc_trim_value is not None:
                 for adc in mezz.ADC:

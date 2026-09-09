@@ -15,7 +15,7 @@ ca = FPGAArray(hwm = hwm,
 
 #print('')
 #print('Firmware timestamp:')
-#print(await ca.ib[0].get_fpga_firmware_timestamp())
+#print(await ca.ib[0].get_fpga_firmware_timestamp_async())
 
 # =============================
 # Instantiate variables
