@@ -2,6 +2,7 @@
 import logging
 import socket
 import re
+import struct
 import time
 import textwrap
 from contextlib import contextmanager
@@ -112,6 +113,74 @@ class TCPipe:
     RPC_OLED_DRAW_TEXT = 0x0A
     RPC_BSB_BATCH_WRITE = 0x0B
     RPC_SPI_BATCH_WRITE = 0x0C
+    RPC_ADC_STARTUP = 0x0D
+    RPC_ADC_SHUTDOWN = 0x0E
+    RPC_ADC_RESET = 0x0F
+    RPC_ADC_WAIT_FOR_STATE = 0x10
+    RPC_ADC_GET_IP_STATUS = 0x11
+    RPC_ADC_GET_BLOCK_STATUS = 0x12
+    RPC_ADC_SETUP_FIFO = 0x13
+    RPC_ADC_GET_FIFO_STATUS = 0x14
+    RPC_ADC_SET_MIXER_SETTINGS = 0x15
+    RPC_ADC_GET_MIXER_SETTINGS = 0x16
+    RPC_ADC_RESET_NCO_PHASE = 0x17
+    RPC_ADC_UPDATE_EVENT = 0x18
+    RPC_ADC_SET_DECIMATION_FACTOR = 0x19
+    RPC_ADC_GET_DECIMATION_FACTOR = 0x1A
+    RPC_ADC_SET_NYQUIST_ZONE = 0x1B
+    RPC_ADC_GET_NYQUIST_ZONE = 0x1C
+    RPC_ADC_SET_DSA = 0x1D
+    RPC_ADC_GET_DSA = 0x1E
+    RPC_ADC_SET_QMC_SETTINGS = 0x1F
+    RPC_ADC_GET_QMC_SETTINGS = 0x20
+    RPC_ADC_SET_COARSE_DELAY = 0x21
+    RPC_ADC_GET_COARSE_DELAY = 0x22
+    RPC_ADC_SET_DITHER = 0x23
+    RPC_ADC_GET_DITHER = 0x24
+    RPC_ADC_GET_CLOCK_SOURCE = 0x25
+    RPC_ADC_GET_PLL_LOCK_STATUS = 0x26
+    RPC_ADC_GET_PLL_CONFIG = 0x27
+    RPC_ADC_DYNAMIC_PLL_CONFIG = 0x28
+    RPC_ADC_SET_CALIBRATION_MODE = 0x29
+    RPC_ADC_GET_CALIBRATION_MODE = 0x2A
+    RPC_ADC_SET_CAL_FREEZE = 0x2B
+    RPC_ADC_GET_CAL_FREEZE = 0x2C
+    RPC_ADC_SET_CAL_COEFFICIENTS = 0x2D
+    RPC_ADC_GET_CAL_COEFFICIENTS = 0x2E
+    RPC_ADC_SET_SIGNAL_DETECTOR = 0x2F
+    RPC_ADC_GET_SIGNAL_DETECTOR = 0x30
+    RPC_ADC_SET_CLK_DISTRIBUTION = 0x31
+    RPC_ADC_GET_CLK_DISTRIBUTION = 0x32
+    RPC_ADC_SET_THRESHOLD_SETTINGS = 0x33
+    RPC_ADC_GET_THRESHOLD_SETTINGS = 0x34
+    RPC_ADC_SET_THRESHOLD_CLR_MODE = 0x35
+    RPC_ADC_THRESHOLD_STICKY_CLEAR = 0x36
+    RPC_ADC_SET_DATAPATH_MODE = 0x37
+    RPC_ADC_GET_DATAPATH_MODE = 0x38
+    RPC_ADC_SET_IMR_PASS_MODE = 0x39
+    RPC_ADC_GET_IMR_PASS_MODE = 0x3A
+    RPC_ADC_SET_PWR_MODE = 0x3B
+    RPC_ADC_GET_PWR_MODE = 0x3C
+
+    ADC_TILE = 0
+    DAC_TILE = 1
+
+    _RFDC_TILE_STATUS = '<IIBII'
+    _RFDC_BLOCK_STATUS = '<dIIBBB'
+    _RFDC_MIXER = '<ddIIIBB'
+    _RFDC_QMC = '<IIddiI'
+    _RFDC_COARSE_DELAY = '<II'
+    _RFDC_DSA = '<If'
+    _RFDC_PLL = '<IddIIIIQI'
+    _RFDC_CAL_FREEZE = '<III'
+    _RFDC_CAL_COEFF = '<8I'
+    _RFDC_SIGNAL_DETECTOR = '<BBBBHHHB'
+    _RFDC_THRESHOLD = '<9I'
+    _RFDC_PWR_MODE = '<II'
+    _RFDC_TILE_CLOCK = 'BBIddBBB'
+    _RFDC_DIST_INFO = '6B' + _RFDC_TILE_CLOCK * 8
+    _RFDC_DIST = 'II2I2IdI8dI' + _RFDC_DIST_INFO
+    _RFDC_DIST_SYS = '<' + _RFDC_DIST * 8
 
     RPC_NAMES = {
         RPC_BSB_WRITE_READ: 'bsb_write_read',
@@ -126,6 +195,54 @@ class TCPipe:
         RPC_OLED_DRAW_TEXT: 'oled_draw_text',
         RPC_BSB_BATCH_WRITE: 'bsb_batch_write',
         RPC_SPI_BATCH_WRITE: 'spi_batch_write',
+        RPC_ADC_STARTUP: 'adc_startup',
+        RPC_ADC_SHUTDOWN: 'adc_shutdown',
+        RPC_ADC_RESET: 'adc_reset',
+        RPC_ADC_WAIT_FOR_STATE: 'adc_wait_for_state',
+        RPC_ADC_GET_IP_STATUS: 'adc_get_ip_status',
+        RPC_ADC_GET_BLOCK_STATUS: 'adc_get_block_status',
+        RPC_ADC_SETUP_FIFO: 'adc_setup_fifo',
+        RPC_ADC_GET_FIFO_STATUS: 'adc_get_fifo_status',
+        RPC_ADC_SET_MIXER_SETTINGS: 'adc_set_mixer_settings',
+        RPC_ADC_GET_MIXER_SETTINGS: 'adc_get_mixer_settings',
+        RPC_ADC_RESET_NCO_PHASE: 'adc_reset_nco_phase',
+        RPC_ADC_UPDATE_EVENT: 'adc_update_event',
+        RPC_ADC_SET_DECIMATION_FACTOR: 'adc_set_decimation_factor',
+        RPC_ADC_GET_DECIMATION_FACTOR: 'adc_get_decimation_factor',
+        RPC_ADC_SET_NYQUIST_ZONE: 'adc_set_nyquist_zone',
+        RPC_ADC_GET_NYQUIST_ZONE: 'adc_get_nyquist_zone',
+        RPC_ADC_SET_DSA: 'adc_set_dsa',
+        RPC_ADC_GET_DSA: 'adc_get_dsa',
+        RPC_ADC_SET_QMC_SETTINGS: 'adc_set_qmc_settings',
+        RPC_ADC_GET_QMC_SETTINGS: 'adc_get_qmc_settings',
+        RPC_ADC_SET_COARSE_DELAY: 'adc_set_coarse_delay',
+        RPC_ADC_GET_COARSE_DELAY: 'adc_get_coarse_delay',
+        RPC_ADC_SET_DITHER: 'adc_set_dither',
+        RPC_ADC_GET_DITHER: 'adc_get_dither',
+        RPC_ADC_GET_CLOCK_SOURCE: 'adc_get_clock_source',
+        RPC_ADC_GET_PLL_LOCK_STATUS: 'adc_get_pll_lock_status',
+        RPC_ADC_GET_PLL_CONFIG: 'adc_get_pll_config',
+        RPC_ADC_DYNAMIC_PLL_CONFIG: 'adc_dynamic_pll_config',
+        RPC_ADC_SET_CALIBRATION_MODE: 'adc_set_calibration_mode',
+        RPC_ADC_GET_CALIBRATION_MODE: 'adc_get_calibration_mode',
+        RPC_ADC_SET_CAL_FREEZE: 'adc_set_cal_freeze',
+        RPC_ADC_GET_CAL_FREEZE: 'adc_get_cal_freeze',
+        RPC_ADC_SET_CAL_COEFFICIENTS: 'adc_set_cal_coefficients',
+        RPC_ADC_GET_CAL_COEFFICIENTS: 'adc_get_cal_coefficients',
+        RPC_ADC_SET_SIGNAL_DETECTOR: 'adc_set_signal_detector',
+        RPC_ADC_GET_SIGNAL_DETECTOR: 'adc_get_signal_detector',
+        RPC_ADC_SET_CLK_DISTRIBUTION: 'adc_set_clk_distribution',
+        RPC_ADC_GET_CLK_DISTRIBUTION: 'adc_get_clk_distribution',
+        RPC_ADC_SET_THRESHOLD_SETTINGS: 'adc_set_threshold_settings',
+        RPC_ADC_GET_THRESHOLD_SETTINGS: 'adc_get_threshold_settings',
+        RPC_ADC_SET_THRESHOLD_CLR_MODE: 'adc_set_threshold_clr_mode',
+        RPC_ADC_THRESHOLD_STICKY_CLEAR: 'adc_threshold_sticky_clear',
+        RPC_ADC_SET_DATAPATH_MODE: 'adc_set_datapath_mode',
+        RPC_ADC_GET_DATAPATH_MODE: 'adc_get_datapath_mode',
+        RPC_ADC_SET_IMR_PASS_MODE: 'adc_set_imr_pass_mode',
+        RPC_ADC_GET_IMR_PASS_MODE: 'adc_get_imr_pass_mode',
+        RPC_ADC_SET_PWR_MODE: 'adc_set_pwr_mode',
+        RPC_ADC_GET_PWR_MODE: 'adc_get_pwr_mode',
     }
     RPC_PERF_LOG_INTERVAL = 500
 
@@ -135,10 +252,17 @@ class TCPipe:
     CORE_REG_UDP_DATA_PORT = 2
     #: Fixed board-side TCP data listen port (matches firmware ``DATA_TCP_DEFAULT_PORT``).
     DEFAULT_TCP_DATA_PORT = 41002
+    #: After an RPC timeout, wait this long with no RX before treating the stream as idle.
+    RPC_DRAIN_QUIET_S = 0.2
+    #: Cap on post-timeout drain time (late replies plus quiet period).
+    RPC_DRAIN_MAX_S = 1.0
+    #: Retry TCP connect while the board is still booting (port 7 comes up early).
+    CONNECT_RETRY_INTERVAL_S = 1.0
+    CONNECT_RETRY_MAX_S = 60.0
 
     opened_sockets = {}
 
-    def __init__(self, hostname, port=7, timeout=2, log_performance=False):
+    def __init__(self, hostname, port=7, timeout=10, log_performance=False):
         self.log = logging.getLogger(__name__)
         self.hostname = hostname
         self.port = port
@@ -146,8 +270,22 @@ class TCPipe:
         if self.sock:
             self.sock.close()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sock.settimeout(timeout)
-        self.sock.connect((hostname, self.port))
+        deadline = time.monotonic() + self.CONNECT_RETRY_MAX_S
+        last_err = None
+        while True:
+            try:
+                self.sock.connect((hostname, self.port))
+                break
+            except (TimeoutError, socket.timeout, ConnectionRefusedError,
+                    ConnectionResetError, OSError) as exc:
+                last_err = exc
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(self.CONNECT_RETRY_INTERVAL_S)
+        if last_err is not None:
+            self.log.debug('%r: connect succeeded after %r', self, last_err)
         self.opened_sockets[(hostname, port)] = self.sock
         self.tx_buf = bytearray(2048)
         self.tx_view = memoryview(self.tx_buf)
@@ -157,8 +295,8 @@ class TCPipe:
         self.log.debug(f'{self!r}: Opened TCPipe socket from local address{self.sock.getsockname()} to remote address {self.hostname}:{self.port}')
         self.bsb_sent_ctr = 0
         self.perf = _TCPipePerf(self, self.RPC_PERF_LOG_INTERVAL) if log_performance else None
-        # BSB write aggregation uses the batch-write RPC provided by the RTOS.
-        self._bsb_aggregate_ctx_depth = 1
+        # BSB write aggregation is off until :meth:`aggregate_commands` is entered.
+        self._bsb_aggregate_ctx_depth = 0
         self._bsb_agg_pending = []
         self._bsb_agg_pending_tx = 0
         self._bsb_aggregate_max_cmds = 512
@@ -201,6 +339,9 @@ class TCPipe:
         Raises:
             ValueError: If the payload length is too long.
             IOError: If the RPC fails.
+            TimeoutError, socket.timeout: If the RPC send or reply times out.
+                Leftover command-stream bytes are drained before the exception
+                is re-raised so the next RPC is not desynchronized.
         """
         if self._bsb_agg_pending:
             self._bsb_batch_write_flush()
@@ -235,24 +376,33 @@ class TCPipe:
         rx_len = 0
         reply = None
         try:
-            self.sock.sendall(tx_payload)
-            send_done_time = time.perf_counter()
-            if read_until is not None:
-                reply = bytearray()
-                while True:
-                    reply += self.sock.recv(1024)
-                    if reply.endswith(read_until):
-                        recv_done_time = time.perf_counter()
-                        rx_len = len(reply)
-                        break
-            elif read_length is not None:
-                reply = self._recv_exact(read_length, timeout=timeout)
-                recv_done_time = time.perf_counter()
-                rx_len = len(reply)
-            else:
-                rx_len = self.sock.recv_into(self.rx_buf)
-                recv_done_time = time.perf_counter()
-                reply = self.rx_buf[:rx_len]
+            try:
+                self.sock.sendall(tx_payload)
+                send_done_time = time.perf_counter()
+                if read_until is not None:
+                    reply = bytearray()
+                    while True:
+                        reply += self.sock.recv(1024)
+                        if reply.endswith(read_until):
+                            recv_done_time = time.perf_counter()
+                            rx_len = len(reply)
+                            break
+                elif read_length is not None:
+                    reply = self._recv_exact(read_length, timeout=timeout)
+                    recv_done_time = time.perf_counter()
+                    rx_len = len(reply)
+                else:
+                    rx_len = self.sock.recv_into(self.rx_buf)
+                    recv_done_time = time.perf_counter()
+                    reply = self.rx_buf[:rx_len]
+            except (TimeoutError, socket.timeout):
+                discarded = self._drain_socket_buffer(
+                    quiet=self.RPC_DRAIN_QUIET_S,
+                    max_time=self.RPC_DRAIN_MAX_S)
+                self.log.warning(
+                    '%r: RPC %s timed out; discarded %d leftover command-stream bytes',
+                    self, rpc_id, discarded)
+                raise
         finally:
             if timeout:
                 self.sock.settimeout(old_timeout)
@@ -268,21 +418,44 @@ class TCPipe:
             raise IOError(f'{self!r}: RPC {rpc_id} received {rx_len} bytes instead of {read_length} bytes')
         return reply
 
-    def bsb_write_read(self, data):
+    def bsb_write_read(self, data, read_length=None):
         """ Writes `data` to the FPGA firmware Byte-serial bus and return reply.
 
 
         Parameters:
 
             data (bytes): data to write prior to the read operation
+            read_length (int): expected reply size in bytes, including the
+                1-byte BSB sequence header. ``None`` derives it from the
+                3-byte BSB command header (reads: ``1 + 2**length_code``;
+                writes: ``1``) so a split TCP segment cannot desynchronise
+                the command stream.
 
 
         """
         if self._bsb_agg_pending:
             self._bsb_batch_write_flush()
-        reply = self._rpc_write_read(self.RPC_BSB_WRITE_READ, data)
+        if read_length is None:
+            read_length = self._bsb_write_read_reply_len(data)
+        reply = self._rpc_write_read(
+            self.RPC_BSB_WRITE_READ, data, read_length=read_length)
         self.bsb_sent_ctr += 1
         return reply
+
+    @staticmethod
+    def _bsb_write_read_reply_len(data):
+        """Bytes the board will send for one ``bsb_write_read`` RPC.
+
+        BSB byte 0: opcode[7:5], length_code[4:3], addr[18:16]. Read opcodes
+        (0-3) return 1 sequence byte plus ``2**length_code`` payload bytes.
+        Write opcodes return the sequence byte only.
+        """
+        if not data:
+            return 1
+        opcode = data[0] >> 5
+        if opcode <= 0b011:
+            return 1 + (1 << ((data[0] >> 3) & 0x03))
+        return 1
 
     def bsb_batch_write(self, commands):
         """Execute multiple write-only BSB transfers in one ``bsb_batch_write`` RPC.
@@ -324,7 +497,8 @@ class TCPipe:
             parts.append(lc.to_bytes(2, 'little'))
             parts.append(c)
         payload = b''.join(parts)
-        reply = self._rpc_write_read(self.RPC_BSB_BATCH_WRITE, payload)
+        reply = self._rpc_write_read(
+            self.RPC_BSB_BATCH_WRITE, payload, read_length=1 + n)
         if len(reply) == 1:
             if reply[0] == 0xFF:
                 raise IOError(f'{self!r}: BSB batch RPC failed (protocol/parse error on board)')
@@ -344,19 +518,63 @@ class TCPipe:
         return reply[1:]
 
 
-    def _drain_socket_buffer(self):
-        """Discard any bytes left in the kernel socket buffer after a stream RPC."""
+    def _drain_socket_buffer(self, quiet=0.0, max_time=None):
+        """Discard leftover bytes on the command TCP stream.
+
+        With ``quiet=0`` (default), only bytes already in the kernel buffer are
+        dropped (non-blocking). Used after ``get_rpc_functions``.
+
+        After an RPC timeout, pass a quiet period so a late reply can arrive and
+        be discarded before the next command is sent.
+
+        Parameters:
+            quiet (float): Seconds with no RX after which the stream is idle.
+            max_time (float or None): Cap on total drain time when ``quiet`` is
+                non-zero. Defaults to :attr:`RPC_DRAIN_MAX_S`.
+
+        Returns:
+            int: Number of bytes discarded.
+        """
         if self.sock is None:
-            return
+            return 0
+        discarded = 0
         old_timeout = self.sock.gettimeout()
-        self.sock.settimeout(0)
         try:
-            while self.sock.recv(4096):
-                pass
-        except (BlockingIOError, socket.timeout, ConnectionResetError, ConnectionAbortedError):
-            pass
+            self.sock.settimeout(0)
+            while True:
+                try:
+                    data = self.sock.recv(4096)
+                except (BlockingIOError, TimeoutError, socket.timeout):
+                    break
+                except (ConnectionResetError, ConnectionAbortedError):
+                    return discarded
+                if not data:
+                    return discarded
+                discarded += len(data)
+
+            if not quiet:
+                return discarded
+
+            if max_time is None:
+                max_time = self.RPC_DRAIN_MAX_S
+            deadline = time.perf_counter() + max_time
+            while True:
+                remaining = deadline - time.perf_counter()
+                if remaining <= 0:
+                    break
+                self.sock.settimeout(quiet if remaining > quiet else remaining)
+                try:
+                    data = self.sock.recv(4096)
+                except (TimeoutError, socket.timeout):
+                    break
+                except (ConnectionResetError, ConnectionAbortedError):
+                    break
+                if not data:
+                    break
+                discarded += len(data)
         finally:
             self.sock.settimeout(old_timeout)
+        return discarded
 
     def _recv_exact(self, nbytes, timeout=None):
         """Read exactly ``nbytes`` from the RPC stream socket."""
@@ -416,7 +634,7 @@ class TCPipe:
             raise RuntimeError(
                 f'{self!r}: RTOS firmware does not advertise required RPC '
                 f'bsb_batch_write (id {self.RPC_BSB_BATCH_WRITE}); update the board firmware')
-        self.log.info('%s: BSB aggregate flushes will use bsb_batch_write RPC', self)
+        self.log.debug('%s: BSB aggregate flushes will use bsb_batch_write RPC', self)
 
 
     def _bsb_aggregate_active(self):
@@ -425,7 +643,12 @@ class TCPipe:
 
     @contextmanager
     def aggregate_commands(self):
-        """Coalesce write-only BSB MMI transactions until exit, then flush."""
+        """Coalesce write-only BSB MMI transactions until exit, then flush.
+
+        Aggregation is off by default so a lone control write (for example
+        ``UCAP.USER_RESET = 1``) is sent immediately. Nesting is counted;
+        the queued writes flush when the outermost context exits.
+        """
         self._bsb_aggregate_ctx_depth += 1
         try:
             yield self
@@ -776,7 +999,7 @@ class TCPipe:
 
 
     #########################################################
-    #  ADC synchronization
+    #  ADC / RFDC
     #########################################################
 
     def adc_sync(self):
@@ -786,6 +1009,522 @@ class TCPipe:
 
         """
         return self._rpc_write_read(self.RPC_ADC_SYNC)
+
+    def _rfdc_rpc(self, rpc_id, payload=b'', reply_fmt='', timeout=None):
+        extra = struct.calcsize(reply_fmt) if reply_fmt else 0
+        reply = self._rpc_write_read(rpc_id, payload, read_length=4 + extra, timeout=timeout)
+        status = struct.unpack_from('<I', reply, 0)[0]
+        if status:
+            name = self.RPC_NAMES.get(rpc_id, f'rpc_{rpc_id}')
+            raise IOError(f'{self!r}: {name} failed with XRFdc status {status}')
+        return reply[4:]
+
+    @staticmethod
+    def _rfdc_tile_status(values):
+        return {
+            'is_enabled': values[0],
+            'tile_state': values[1],
+            'block_status_mask': values[2],
+            'power_up_state': values[3],
+            'pll_state': values[4],
+        }
+
+    @classmethod
+    def _unpack_ip_status(cls, data):
+        tile_size = struct.calcsize(cls._RFDC_TILE_STATUS)
+        tiles = []
+        offset = 0
+        for _ in range(8):
+            tiles.append(cls._rfdc_tile_status(struct.unpack_from(cls._RFDC_TILE_STATUS, data, offset)))
+            offset += tile_size
+        state = struct.unpack_from('<I', data, offset)[0]
+        return {
+            'dac_tile_status': tiles[:4],
+            'adc_tile_status': tiles[4:],
+            'state': state,
+        }
+
+    @classmethod
+    def _unpack_block_status(cls, data):
+        sampling_freq, analog, digital, clocks, fifo_en, fifo_asserted = struct.unpack(cls._RFDC_BLOCK_STATUS, data)
+        return {
+            'sampling_freq': sampling_freq,
+            'analog_data_path_status': analog,
+            'digital_data_path_status': digital,
+            'data_path_clocks_status': clocks,
+            'is_fifo_flags_enabled': fifo_en,
+            'is_fifo_flags_asserted': fifo_asserted,
+        }
+
+    @classmethod
+    def _pack_mixer(cls, freq, phase_offset, event_source, coarse_mix_freq, mixer_mode,
+                    fine_mixer_scale, mixer_type):
+        return struct.pack(cls._RFDC_MIXER, freq, phase_offset, event_source, coarse_mix_freq,
+                           mixer_mode, fine_mixer_scale, mixer_type)
+
+    @classmethod
+    def _unpack_mixer(cls, data):
+        freq, phase_offset, event_source, coarse_mix_freq, mixer_mode, fine_mixer_scale, mixer_type = (
+            struct.unpack(cls._RFDC_MIXER, data))
+        return {
+            'freq': freq,
+            'phase_offset': phase_offset,
+            'event_source': event_source,
+            'coarse_mix_freq': coarse_mix_freq,
+            'mixer_mode': mixer_mode,
+            'fine_mixer_scale': fine_mixer_scale,
+            'mixer_type': mixer_type,
+        }
+
+    @classmethod
+    def _pack_qmc(cls, enable_phase, enable_gain, gain_correction_factor, phase_correction_factor,
+                  offset_correction_factor, event_source):
+        return struct.pack(cls._RFDC_QMC, enable_phase, enable_gain, gain_correction_factor,
+                           phase_correction_factor, offset_correction_factor, event_source)
+
+    @classmethod
+    def _unpack_qmc(cls, data):
+        enable_phase, enable_gain, gain, phase, offset, event_source = struct.unpack(cls._RFDC_QMC, data)
+        return {
+            'enable_phase': enable_phase,
+            'enable_gain': enable_gain,
+            'gain_correction_factor': gain,
+            'phase_correction_factor': phase,
+            'offset_correction_factor': offset,
+            'event_source': event_source,
+        }
+
+    @classmethod
+    def _unpack_pll(cls, data):
+        (enabled, ref_clk_freq, sample_rate, ref_clk_divider, feedback_divider, output_divider,
+         fractional_mode, fractional_data, fract_width) = struct.unpack(cls._RFDC_PLL, data)
+        return {
+            'enabled': enabled,
+            'ref_clk_freq': ref_clk_freq,
+            'sample_rate': sample_rate,
+            'ref_clk_divider': ref_clk_divider,
+            'feedback_divider': feedback_divider,
+            'output_divider': output_divider,
+            'fractional_mode': fractional_mode,
+            'fractional_data': fractional_data,
+            'fract_width': fract_width,
+        }
+
+    @classmethod
+    def _pack_signal_detector(cls, mode, time_constant, flush, enable_integrator, threshold,
+                              thresh_on_trigger_cnt, thresh_off_trigger_cnt, hysteresis_enable):
+        return struct.pack(cls._RFDC_SIGNAL_DETECTOR, mode, time_constant, flush, enable_integrator,
+                           threshold, thresh_on_trigger_cnt, thresh_off_trigger_cnt, hysteresis_enable)
+
+    @classmethod
+    def _unpack_signal_detector(cls, data):
+        (mode, time_constant, flush, enable_integrator, threshold, thresh_on, thresh_off,
+         hysteresis_enable) = struct.unpack(cls._RFDC_SIGNAL_DETECTOR, data)
+        return {
+            'mode': mode,
+            'time_constant': time_constant,
+            'flush': flush,
+            'enable_integrator': enable_integrator,
+            'threshold': threshold,
+            'thresh_on_trigger_cnt': thresh_on,
+            'thresh_off_trigger_cnt': thresh_off,
+            'hysteresis_enable': hysteresis_enable,
+        }
+
+    @classmethod
+    def _pack_threshold(cls, update_threshold, threshold_mode, threshold_avg_val,
+                        threshold_under_val, threshold_over_val):
+        return struct.pack(
+            cls._RFDC_THRESHOLD,
+            update_threshold,
+            threshold_mode[0], threshold_mode[1],
+            threshold_avg_val[0], threshold_avg_val[1],
+            threshold_under_val[0], threshold_under_val[1],
+            threshold_over_val[0], threshold_over_val[1])
+
+    @classmethod
+    def _unpack_threshold(cls, data):
+        values = struct.unpack(cls._RFDC_THRESHOLD, data)
+        return {
+            'update_threshold': values[0],
+            'threshold_mode': [values[1], values[2]],
+            'threshold_avg_val': [values[3], values[4]],
+            'threshold_under_val': [values[5], values[6]],
+            'threshold_over_val': [values[7], values[8]],
+        }
+
+    @classmethod
+    def _pack_tile_clock(cls, settings):
+        return struct.pack(
+            '<' + cls._RFDC_TILE_CLOCK,
+            settings['source_type'],
+            settings['source_tile'],
+            settings['pll_enable'],
+            settings['ref_clk_freq'],
+            settings['sample_rate'],
+            settings['division_factor'],
+            settings['distributed_clock'],
+            settings['delay'])
+
+    @classmethod
+    def _unpack_tile_clock(cls, data, offset=0):
+        values = struct.unpack_from('<' + cls._RFDC_TILE_CLOCK, data, offset)
+        return {
+            'source_type': values[0],
+            'source_tile': values[1],
+            'pll_enable': values[2],
+            'ref_clk_freq': values[3],
+            'sample_rate': values[4],
+            'division_factor': values[5],
+            'distributed_clock': values[6],
+            'delay': values[7],
+        }
+
+    @classmethod
+    def _pack_clk_distribution(cls, settings):
+        info = settings['info']
+        payload = struct.pack(
+            '<II2I2IdI8dI6B',
+            settings['source_tile_id'],
+            settings['source_type'],
+            settings['edge_tile_ids'][0], settings['edge_tile_ids'][1],
+            settings['edge_types'][0], settings['edge_types'][1],
+            settings['dist_ref_clk_freq'],
+            settings['distributed_clock'],
+            *([settings['sample_rates'][t][tile] for t in range(2) for tile in range(4)]),
+            settings['shutdown_mode'],
+            info['max_delay'], info['min_delay'], info['is_delay_balanced'],
+            info['source'], info['upper_bound'], info['lower_bound'])
+        clocks = bytearray()
+        for t in range(2):
+            for tile in range(4):
+                clocks.extend(cls._pack_tile_clock(info['clk_settings'][t][tile]))
+        return payload + bytes(clocks)
+
+    @classmethod
+    def _unpack_clk_distribution(cls, data, offset=0):
+        header_fmt = '<II2I2IdI8dI6B'
+        header_size = struct.calcsize(header_fmt)
+        clock_size = struct.calcsize('<' + cls._RFDC_TILE_CLOCK)
+        values = struct.unpack_from(header_fmt, data, offset)
+        clk_settings = [[None] * 4 for _ in range(2)]
+        clock_offset = offset + header_size
+        for t in range(2):
+            for tile in range(4):
+                clk_settings[t][tile] = cls._unpack_tile_clock(data, clock_offset)
+                clock_offset += clock_size
+        return {
+            'source_tile_id': values[0],
+            'source_type': values[1],
+            'edge_tile_ids': [values[2], values[3]],
+            'edge_types': [values[4], values[5]],
+            'dist_ref_clk_freq': values[6],
+            'distributed_clock': values[7],
+            'sample_rates': [
+                [values[8], values[9], values[10], values[11]],
+                [values[12], values[13], values[14], values[15]],
+            ],
+            'shutdown_mode': values[16],
+            'info': {
+                'max_delay': values[17],
+                'min_delay': values[18],
+                'is_delay_balanced': values[19],
+                'source': values[20],
+                'upper_bound': values[21],
+                'lower_bound': values[22],
+                'clk_settings': clk_settings,
+            },
+        }
+
+    def adc_startup(self, type=ADC_TILE, tile_id=-1):
+        """Start up an RFDC tile. ``tile_id=-1`` selects all tiles."""
+        self._rfdc_rpc(self.RPC_ADC_STARTUP, struct.pack('<Bb', type, tile_id))
+
+    def adc_shutdown(self, type=ADC_TILE, tile_id=-1):
+        """Shut down an RFDC tile. ``tile_id=-1`` selects all tiles."""
+        self._rfdc_rpc(self.RPC_ADC_SHUTDOWN, struct.pack('<Bb', type, tile_id))
+
+    def adc_reset(self, type=ADC_TILE, tile_id=-1):
+        """Reset an RFDC tile. ``tile_id=-1`` selects all tiles."""
+        self._rfdc_rpc(self.RPC_ADC_RESET, struct.pack('<Bb', type, tile_id))
+
+    def adc_wait_for_state(self, type=ADC_TILE, tile_id=0, state=0, timeout=5):
+        """Wait until an RFDC tile reaches ``state``."""
+        self._rfdc_rpc(self.RPC_ADC_WAIT_FOR_STATE, struct.pack('<BBI', type, tile_id, state),
+                       timeout=timeout)
+
+    def adc_get_ip_status(self):
+        """Return RFDC IP and per-tile status."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_IP_STATUS, reply_fmt='<' + 'IIBII' * 8 + 'I')
+        return self._unpack_ip_status(data)
+
+    def adc_get_block_status(self, tile_id, block_id, type=ADC_TILE):
+        """Return RFDC block status."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_BLOCK_STATUS,
+                              struct.pack('<BBB', type, tile_id, block_id),
+                              reply_fmt=self._RFDC_BLOCK_STATUS)
+        return self._unpack_block_status(data)
+
+    def adc_setup_fifo(self, enable, type=ADC_TILE, tile_id=-1):
+        """Enable or disable the RFDC FIFO. ``tile_id=-1`` selects all tiles."""
+        self._rfdc_rpc(self.RPC_ADC_SETUP_FIFO, struct.pack('<BbB', type, tile_id, int(bool(enable))))
+
+    def adc_get_fifo_status(self, type=ADC_TILE, tile_id=0):
+        """Return whether the RFDC FIFO is enabled."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_FIFO_STATUS, struct.pack('<BB', type, tile_id),
+                              reply_fmt='<B')
+        return struct.unpack('<B', data)[0]
+
+    def adc_set_mixer_settings(self, tile_id, block_id, freq, phase_offset, event_source,
+                               coarse_mix_freq, mixer_mode, fine_mixer_scale, mixer_type,
+                               type=ADC_TILE):
+        """Set mixer / NCO settings."""
+        self._rfdc_rpc(
+            self.RPC_ADC_SET_MIXER_SETTINGS,
+            struct.pack('<BBB', type, tile_id, block_id) + self._pack_mixer(
+                freq, phase_offset, event_source, coarse_mix_freq, mixer_mode,
+                fine_mixer_scale, mixer_type))
+
+    def adc_get_mixer_settings(self, tile_id, block_id, type=ADC_TILE):
+        """Return mixer / NCO settings."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_MIXER_SETTINGS,
+                              struct.pack('<BBB', type, tile_id, block_id),
+                              reply_fmt=self._RFDC_MIXER)
+        return self._unpack_mixer(data)
+
+    def adc_reset_nco_phase(self, tile_id, block_id, type=ADC_TILE):
+        """Reset NCO phase."""
+        self._rfdc_rpc(self.RPC_ADC_RESET_NCO_PHASE, struct.pack('<BBB', type, tile_id, block_id))
+
+    def adc_update_event(self, tile_id, block_id, event, type=ADC_TILE):
+        """Trigger an RFDC update event."""
+        self._rfdc_rpc(self.RPC_ADC_UPDATE_EVENT, struct.pack('<BBBI', type, tile_id, block_id, event))
+
+    def adc_set_decimation_factor(self, tile_id, block_id, factor):
+        """Set ADC decimation factor."""
+        self._rfdc_rpc(self.RPC_ADC_SET_DECIMATION_FACTOR, struct.pack('<BBI', tile_id, block_id, factor))
+
+    def adc_get_decimation_factor(self, tile_id, block_id):
+        """Return ADC decimation factor."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_DECIMATION_FACTOR, struct.pack('<BB', tile_id, block_id),
+                              reply_fmt='<I')
+        return struct.unpack('<I', data)[0]
+
+    def adc_set_nyquist_zone(self, tile_id, block_id, zone, type=ADC_TILE):
+        """Set Nyquist zone."""
+        self._rfdc_rpc(self.RPC_ADC_SET_NYQUIST_ZONE,
+                       struct.pack('<BBBI', type, tile_id, block_id, zone))
+
+    def adc_get_nyquist_zone(self, tile_id, block_id, type=ADC_TILE):
+        """Return Nyquist zone."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_NYQUIST_ZONE,
+                              struct.pack('<BBB', type, tile_id, block_id),
+                              reply_fmt='<I')
+        return struct.unpack('<I', data)[0]
+
+    def adc_set_dsa(self, tile_id, block_id, disable_rts, attenuation):
+        """Set ADC DSA attenuation."""
+        self._rfdc_rpc(self.RPC_ADC_SET_DSA,
+                       struct.pack('<BB', tile_id, block_id) + struct.pack(self._RFDC_DSA, disable_rts, attenuation))
+
+    def adc_get_dsa(self, tile_id, block_id):
+        """Return ADC DSA settings."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_DSA, struct.pack('<BB', tile_id, block_id),
+                              reply_fmt=self._RFDC_DSA)
+        disable_rts, attenuation = struct.unpack(self._RFDC_DSA, data)
+        return {'disable_rts': disable_rts, 'attenuation': attenuation}
+
+    def adc_set_qmc_settings(self, tile_id, block_id, enable_phase, enable_gain,
+                             gain_correction_factor, phase_correction_factor,
+                             offset_correction_factor, event_source, type=ADC_TILE):
+        """Set QMC settings."""
+        self._rfdc_rpc(
+            self.RPC_ADC_SET_QMC_SETTINGS,
+            struct.pack('<BBB', type, tile_id, block_id) + self._pack_qmc(
+                enable_phase, enable_gain, gain_correction_factor, phase_correction_factor,
+                offset_correction_factor, event_source))
+
+    def adc_get_qmc_settings(self, tile_id, block_id, type=ADC_TILE):
+        """Return QMC settings."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_QMC_SETTINGS,
+                              struct.pack('<BBB', type, tile_id, block_id),
+                              reply_fmt=self._RFDC_QMC)
+        return self._unpack_qmc(data)
+
+    def adc_set_coarse_delay(self, tile_id, block_id, coarse_delay, event_source, type=ADC_TILE):
+        """Set coarse delay."""
+        self._rfdc_rpc(
+            self.RPC_ADC_SET_COARSE_DELAY,
+            struct.pack('<BBB', type, tile_id, block_id) + struct.pack(self._RFDC_COARSE_DELAY, coarse_delay, event_source))
+
+    def adc_get_coarse_delay(self, tile_id, block_id, type=ADC_TILE):
+        """Return coarse delay settings."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_COARSE_DELAY,
+                              struct.pack('<BBB', type, tile_id, block_id),
+                              reply_fmt=self._RFDC_COARSE_DELAY)
+        coarse_delay, event_source = struct.unpack(self._RFDC_COARSE_DELAY, data)
+        return {'coarse_delay': coarse_delay, 'event_source': event_source}
+
+    def adc_set_dither(self, tile_id, block_id, mode):
+        """Set ADC dither mode."""
+        self._rfdc_rpc(self.RPC_ADC_SET_DITHER, struct.pack('<BBI', tile_id, block_id, mode))
+
+    def adc_get_dither(self, tile_id, block_id):
+        """Return ADC dither mode."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_DITHER, struct.pack('<BB', tile_id, block_id),
+                              reply_fmt='<I')
+        return struct.unpack('<I', data)[0]
+
+    def adc_get_clock_source(self, type=ADC_TILE, tile_id=0):
+        """Return tile clock source."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_CLOCK_SOURCE, struct.pack('<BB', type, tile_id),
+                              reply_fmt='<I')
+        return struct.unpack('<I', data)[0]
+
+    def adc_get_pll_lock_status(self, type=ADC_TILE, tile_id=0):
+        """Return tile PLL lock status."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_PLL_LOCK_STATUS, struct.pack('<BB', type, tile_id),
+                              reply_fmt='<I')
+        return struct.unpack('<I', data)[0]
+
+    def adc_get_pll_config(self, type=ADC_TILE, tile_id=0):
+        """Return tile PLL configuration."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_PLL_CONFIG, struct.pack('<BB', type, tile_id),
+                              reply_fmt=self._RFDC_PLL)
+        return self._unpack_pll(data)
+
+    def adc_dynamic_pll_config(self, source, ref_clk_freq, sampling_rate, type=ADC_TILE, tile_id=0):
+        """Configure a tile PLL dynamically."""
+        self._rfdc_rpc(self.RPC_ADC_DYNAMIC_PLL_CONFIG,
+                       struct.pack('<BBBdd', type, tile_id, source, ref_clk_freq, sampling_rate))
+
+    def adc_set_calibration_mode(self, tile_id, block_id, mode):
+        """Set ADC calibration mode."""
+        self._rfdc_rpc(self.RPC_ADC_SET_CALIBRATION_MODE, struct.pack('<BBB', tile_id, block_id, mode))
+
+    def adc_get_calibration_mode(self, tile_id, block_id):
+        """Return ADC calibration mode."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_CALIBRATION_MODE, struct.pack('<BB', tile_id, block_id),
+                              reply_fmt='<B')
+        return struct.unpack('<B', data)[0]
+
+    def adc_set_cal_freeze(self, tile_id, block_id, cal_frozen, disable_freeze_pin, freeze_calibration):
+        """Set ADC calibration freeze settings."""
+        self._rfdc_rpc(
+            self.RPC_ADC_SET_CAL_FREEZE,
+            struct.pack('<BB', tile_id, block_id) + struct.pack(
+                self._RFDC_CAL_FREEZE, cal_frozen, disable_freeze_pin, freeze_calibration))
+
+    def adc_get_cal_freeze(self, tile_id, block_id):
+        """Return ADC calibration freeze settings."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_CAL_FREEZE, struct.pack('<BB', tile_id, block_id),
+                              reply_fmt=self._RFDC_CAL_FREEZE)
+        cal_frozen, disable_freeze_pin, freeze_calibration = struct.unpack(self._RFDC_CAL_FREEZE, data)
+        return {
+            'cal_frozen': cal_frozen,
+            'disable_freeze_pin': disable_freeze_pin,
+            'freeze_calibration': freeze_calibration,
+        }
+
+    def adc_set_cal_coefficients(self, tile_id, block_id, calibration_block, coeff):
+        """Set ADC calibration coefficients (8 uint32 values)."""
+        self._rfdc_rpc(
+            self.RPC_ADC_SET_CAL_COEFFICIENTS,
+            struct.pack('<BBI', tile_id, block_id, calibration_block) + struct.pack(self._RFDC_CAL_COEFF, *coeff))
+
+    def adc_get_cal_coefficients(self, tile_id, block_id, calibration_block):
+        """Return ADC calibration coefficients."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_CAL_COEFFICIENTS,
+                              struct.pack('<BBI', tile_id, block_id, calibration_block),
+                              reply_fmt=self._RFDC_CAL_COEFF)
+        return list(struct.unpack(self._RFDC_CAL_COEFF, data))
+
+    def adc_set_signal_detector(self, tile_id, block_id, mode, time_constant, flush, enable_integrator,
+                                threshold, thresh_on_trigger_cnt, thresh_off_trigger_cnt,
+                                hysteresis_enable):
+        """Set ADC signal detector (Gen3+)."""
+        self._rfdc_rpc(
+            self.RPC_ADC_SET_SIGNAL_DETECTOR,
+            struct.pack('<BB', tile_id, block_id) + self._pack_signal_detector(
+                mode, time_constant, flush, enable_integrator, threshold,
+                thresh_on_trigger_cnt, thresh_off_trigger_cnt, hysteresis_enable))
+
+    def adc_get_signal_detector(self, tile_id, block_id):
+        """Return ADC signal detector settings (Gen3+)."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_SIGNAL_DETECTOR, struct.pack('<BB', tile_id, block_id),
+                              reply_fmt=self._RFDC_SIGNAL_DETECTOR)
+        return self._unpack_signal_detector(data)
+
+    def adc_set_clk_distribution(self, settings):
+        """Set RFDC clock distribution (Gen3+). ``settings`` matches ``adc_get_clk_distribution`` entries."""
+        packed = self._pack_clk_distribution(settings)
+        if len(packed) != struct.calcsize('<' + self._RFDC_DIST):
+            raise ValueError(f'{self!r}: clock distribution payload is {len(packed)} bytes, expected {struct.calcsize("<" + self._RFDC_DIST)}')
+        self._rfdc_rpc(self.RPC_ADC_SET_CLK_DISTRIBUTION, packed)
+
+    def adc_get_clk_distribution(self):
+        """Return the eight RFDC clock-distribution entries (Gen3+)."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_CLK_DISTRIBUTION, reply_fmt=self._RFDC_DIST_SYS)
+        entry_size = struct.calcsize('<' + self._RFDC_DIST)
+        return [self._unpack_clk_distribution(data, i * entry_size) for i in range(8)]
+
+    def adc_set_threshold_settings(self, tile_id, block_id, update_threshold, threshold_mode,
+                                   threshold_avg_val, threshold_under_val, threshold_over_val):
+        """Set ADC threshold settings. Mode/avg/under/over are two-element sequences."""
+        self._rfdc_rpc(
+            self.RPC_ADC_SET_THRESHOLD_SETTINGS,
+            struct.pack('<BB', tile_id, block_id) + self._pack_threshold(
+                update_threshold, threshold_mode, threshold_avg_val,
+                threshold_under_val, threshold_over_val))
+
+    def adc_get_threshold_settings(self, tile_id, block_id):
+        """Return ADC threshold settings."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_THRESHOLD_SETTINGS, struct.pack('<BB', tile_id, block_id),
+                              reply_fmt=self._RFDC_THRESHOLD)
+        return self._unpack_threshold(data)
+
+    def adc_set_threshold_clr_mode(self, tile_id, block_id, threshold_to_update, clr_mode):
+        """Set ADC threshold clear mode."""
+        self._rfdc_rpc(self.RPC_ADC_SET_THRESHOLD_CLR_MODE,
+                       struct.pack('<BBII', tile_id, block_id, threshold_to_update, clr_mode))
+
+    def adc_threshold_sticky_clear(self, tile_id, block_id, threshold_to_update):
+        """Clear a sticky ADC threshold."""
+        self._rfdc_rpc(self.RPC_ADC_THRESHOLD_STICKY_CLEAR,
+                       struct.pack('<BBI', tile_id, block_id, threshold_to_update))
+
+    def adc_set_datapath_mode(self, tile_id, block_id, mode):
+        """Set DAC datapath mode."""
+        self._rfdc_rpc(self.RPC_ADC_SET_DATAPATH_MODE, struct.pack('<BBI', tile_id, block_id, mode))
+
+    def adc_get_datapath_mode(self, tile_id, block_id):
+        """Return DAC datapath mode."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_DATAPATH_MODE, struct.pack('<BB', tile_id, block_id),
+                              reply_fmt='<I')
+        return struct.unpack('<I', data)[0]
+
+    def adc_set_imr_pass_mode(self, tile_id, block_id, mode):
+        """Set DAC IMR pass mode."""
+        self._rfdc_rpc(self.RPC_ADC_SET_IMR_PASS_MODE, struct.pack('<BBI', tile_id, block_id, mode))
+
+    def adc_get_imr_pass_mode(self, tile_id, block_id):
+        """Return DAC IMR pass mode."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_IMR_PASS_MODE, struct.pack('<BB', tile_id, block_id),
+                              reply_fmt='<I')
+        return struct.unpack('<I', data)[0]
+
+    def adc_set_pwr_mode(self, tile_id, block_id, disable_ip_control, pwr_mode, type=ADC_TILE):
+        """Set RFDC power mode."""
+        self._rfdc_rpc(
+            self.RPC_ADC_SET_PWR_MODE,
+            struct.pack('<BBB', type, tile_id, block_id) + struct.pack(self._RFDC_PWR_MODE, disable_ip_control, pwr_mode))
+
+    def adc_get_pwr_mode(self, tile_id, block_id, type=ADC_TILE):
+        """Return RFDC power mode."""
+        data = self._rfdc_rpc(self.RPC_ADC_GET_PWR_MODE, struct.pack('<BBB', type, tile_id, block_id),
+                              reply_fmt=self._RFDC_PWR_MODE)
+        disable_ip_control, pwr_mode = struct.unpack(self._RFDC_PWR_MODE, data)
+        return {'disable_ip_control': disable_ip_control, 'pwr_mode': pwr_mode}
 
 
 class TCPipe_I2C:
@@ -1134,7 +1873,8 @@ class TCPipe_BSB_MMI(BSB_MMI):
         if expected_reply_length == 0:
             self.tcpipe.bsb_batch_write((cmd,))
             return b''
-        reply = self.tcpipe.bsb_write_read(cmd)
+        reply = self.tcpipe.bsb_write_read(
+            cmd, read_length=expected_reply_length + 1)
         if len(reply) != expected_reply_length + 1:
             raise IOError(f'{self!r}: Unexpected number of reply bytes. Got {len(reply)} bytes ({reply.hex(",")}), expected {expected_reply_length + 1} bytes')
         return reply[1:]
