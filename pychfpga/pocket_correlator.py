@@ -1797,6 +1797,8 @@ class POCKET_CORRELATOR:
                 stats_grp = f.create_group('stats')
                 dset_FRAME_COUNT = stats_grp.create_dataset('frame_count', (n_vis_per_file, self.NPOLS), dtype = int)
                 # dset_ADC_OVERFLOWS = stats_grp.create_dataset('adc_overflows', (n_vis_per_file, self.NPOLS), dtype = int) # Deprecated as a result of the following two flags
+                # The ADC overrange/overvoltage flags are stored with the ADCs indexed in ascending
+                # order along the final axis, i.e. index 0 is ADC1 and index 7 is ADC8.
                 dset_ADC_OVERRANGE = stats_grp.create_dataset('adc_overrange', (n_vis_per_file, self.NPOLS), dtype = int)
                 dset_ADC_OVERVOLTAGE = stats_grp.create_dataset('adc_overvoltage', (n_vis_per_file, self.NPOLS), dtype = int)
                 dset_FFT_OVERFLOWS = stats_grp.create_dataset('fft_overflows', (n_vis_per_file, self.NPOLS), dtype = int) # 
@@ -1943,14 +1945,16 @@ class POCKET_CORRELATOR:
                     # Helper array for reading individual bits of ADC_OR and ADC_OV flags
                     bitmask = 2**np.arange(8) # 8-bit bitmask for isolating values of individual bits
                     bitshifts = np.arange(0, 8)[::-1] # bitshifts to read values of bits as 1 or 0
-                    
-                    # Read ADC_OR flag
-                    adc_overrange_raw = self.i.GPIO.ADC_OV
-                    adc_overrange_buf[n] = np.array([(adc_overrange_raw & bitmask[m]) >> m for m in bitshifts])
 
-                    # Read ADC_OV flag
+                    # Read ADC_OR flag, reversing the array so that the ADCs are indexed in
+                    # ascending order from ADC1 to ADC8 (same convention as compute_gains())
+                    adc_overrange_raw = self.i.GPIO.ADC_OR
+                    adc_overrange_buf[n] = np.array([(adc_overrange_raw & bitmask[m]) >> m for m in bitshifts])[::-1]
+
+                    # Read ADC_OV flag, reversing the array so that the ADCs are indexed in
+                    # ascending order from ADC1 to ADC8 (same convention as compute_gains())
                     adc_overvoltage_raw = self.i.GPIO.ADC_OV
-                    adc_overvoltage_buf[n] = np.array([(adc_overvoltage_raw & bitmask[m]) >> m for m in bitshifts])
+                    adc_overvoltage_buf[n] = np.array([(adc_overvoltage_raw & bitmask[m]) >> m for m in bitshifts])[::-1]
 
                     for m in range(self.NPOLS):
 
@@ -1977,18 +1981,15 @@ class POCKET_CORRELATOR:
                     # FPGA die temperature
                     temperature_buf[n] = self.i.get_temperatures()['FPGA_core']
 
-                    # Create arrays to print the overrange/overflow status of individual ADCs,
-                    # reversing the array so that the ADCs are indexed in ascending order from ADC1 to ADC8
-                    adc_or_arr = np.array([(adc_overrange_buf[n] & bitmask[m]) >> m for m in bitshifts])[::-1]
-                    adc_ov_arr = np.array([(adc_overvoltage_buf[n] & bitmask[m]) >> m for m in bitshifts])[::-1]
-
-                    # Print some statistics:
+                    # Print some statistics. The overrange/overvoltage buffers have already been
+                    # decoded bit-by-bit above and are indexed in ascending order from ADC1 to ADC8,
+                    # so they are used directly here.
                     if adc_overrange_raw != 0:
-                        print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_or_arr[n] != 0])
+                        print(f'ADC overranges detected:', [f'ADC{m + 1}' for m in range(8) if adc_overrange_buf[n, m] != 0])
                     else:
                         print('No ADC overranges detected')
                     if adc_overvoltage_raw != 0:
-                        print(f'ADC overvoltages detected:', [f'ADC{n + 1}' for n in range(8) if adc_ov_arr[n] != 0])
+                        print(f'ADC overvoltages detected:', [f'ADC{m + 1}' for m in range(8) if adc_overvoltage_buf[n, m] != 0])
                     else:
                         print('No ADC overvoltages detected')
                     # print(f'ADC Overranges: {bin(adc_overrange_buf[n])[2:].zfill(8)}')
