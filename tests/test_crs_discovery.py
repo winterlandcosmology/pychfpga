@@ -12,7 +12,7 @@ matplotlib_stub.pyplot = matplotlib_pyplot_stub
 sys.modules.setdefault("matplotlib", matplotlib_stub)
 sys.modules.setdefault("matplotlib.pyplot", matplotlib_pyplot_stub)
 
-from pychfpga.hardware import HardwareMap, Motherboard
+from pychfpga.hardware import Crate, HardwareMap, Motherboard
 from pychfpga.hardware.crs import CRS, CRSBackplane
 from pychfpga.hardware.crs.crs_discovery import (
     CRSArmFirmwareUploader,
@@ -22,6 +22,8 @@ from pychfpga.hardware.crs.crs_discovery import (
     NetConsole,
     UPLOAD_METHODS,
     _file_md5,
+    _format_discovered_board_line,
+    tcpipe_version_from_elf,
 )
 from pychfpga.hardware.crs.netconsole_loads import Loads
 from pychfpga.hardware.crs.netconsole_xmodem import (
@@ -52,7 +54,9 @@ TCPIPE_BEACON = (
     b"Bootloader Version: 1.0\n"
     b"Backplane-Part: CRS\n"
     b"Backplane-Serial: BP001\n"
-    b"Backplane-Slot: 4\n"
+    b"Backplane-Slot: 2\n"
+    b"Crate-Model: CCR\n"
+    b"Crate-Serial: CR001\n"
     b"Crate-Number: 2\n"
     b"\n"
 )
@@ -92,15 +96,170 @@ def test_parse_tcpipe_beacon():
     assert beacon.board_serial == "0037"
     assert beacon.fields["bootloader"] == "tcpipe"
     assert beacon.fields["bootloader-version"] == "1.0"
-    assert beacon.crate_part == "CRS"
-    assert beacon.crate_serial == "BP001"
-    assert beacon.slot == 4
+    assert beacon.crate_part == "CCR"
+    assert beacon.backplane_part == "CRS"
+    assert beacon.backplane_serial == "BP001"
+    assert beacon.backplane_slot == 2
+    assert beacon.crate_serial == "CR001"
+    assert beacon.slot == 2
+    assert beacon.crate_slot is None
     assert beacon.crate_number == 2
+
+
+def test_format_discovered_board_line_includes_backplane_and_crate():
+    beacon = CRSBeacon(
+        b"FWREQ/1\n"
+        b"Manufacturer: t0\n"
+        b"Product: crs\n"
+        b"Revision: 5\n"
+        b"Serial: 0139\n"
+        b"Bootloader: u-boot\n"
+        b"Bootloader Version: 0.1\n"
+        b"Backplane Serial: 083\n"
+        b"Crate Serial: 011\n"
+        b"Backplane Slot: 1\n\n",
+        address="10.10.10.182",
+    )
+    mb = CRS.get_unique_instance(serial="0139", slot=5)
+
+    line = _format_discovered_board_line(beacon, mb=mb, added_to_hwm=True)
+
+    assert line == (
+        "CRS SN0139 @ 10.10.10.182 on Backplane CBP SN0083 "
+        "/ Crate CCR SN0011 Slot 5 (FWREQ 1 beacon) -> added to hardware map"
+    )
+
+
+def test_crs_clock_source_from_pll_input_reference():
+    mb = CRS.__new__(CRS)
+    mb.input_reference = CRS.PLL_INPUT_BP_CLK_10MHZ
+    mb.pll = None
+    assert mb._get_iceboard_clock_source() == "CLOCK_SOURCE_BP"
 
 
 def test_legacy_tcpipe_beacon_is_rejected():
     with pytest.raises(ValueError, match="CRS discovery beacon"):
         CRSBeacon(b"TCPIPE 1.0 CRS 003")
+
+
+UNINITIALIZED_BACKPLANE_BEACON = (
+    b"FWREQ/1\n"
+    b"Manufacturer: t0\n"
+    b"Product: crs\n"
+    b"Revision: 4\n"
+    b"Serial: 0039\n"
+    b"Bootloader: u-boot\n"
+    b"Bootloader Version: 0.1\n"
+    b"Backplane-Part:\n"
+    b"Backplane-Serial: unknown\n"
+    b"Backplane-Slot: 0\n"
+    b"Crate-Number: 0\n"
+    b"\n"
+)
+
+
+def test_uninitialized_backplane_fields_are_ignored():
+    beacon = CRSBeacon(UNINITIALIZED_BACKPLANE_BEACON)
+
+    assert beacon.board_serial == "0039"
+    assert beacon.crate_part is None
+    assert beacon.crate_serial is None
+    assert beacon.backplane_slot == 0
+    assert beacon.slot is None
+    assert beacon.crate_number == 0
+
+
+TCPIPE_UNKNOWN_BACKPLANE_BEACON = (
+    b"TCPIPE/1\n"
+    b"Manufacturer: t0\n"
+    b"Product: crs\n"
+    b"Revision: 4\n"
+    b"Serial: 0083\n"
+    b"Bootloader: tcpipe\n"
+    b"Bootloader Version: 1.0\n"
+    b"Backplane Part: unknown\n"
+    b"Backplane Serial: unknown\n"
+    b"Backplane Slot: unknown\n"
+    b"Crate Model: unknown\n"
+    b"Crate Serial: unknown\n"
+    b"\n"
+)
+
+TCPIPE_CBP_CCR_BEACON = (
+    b"TCPIPE/1\n"
+    b"Manufacturer: t0\n"
+    b"Product: crs\n"
+    b"Revision: 4\n"
+    b"Serial: 0083\n"
+    b"Bootloader: tcpipe\n"
+    b"Bootloader Version: 1.0\n"
+    b"Backplane Part: CBP\n"
+    b"Backplane Serial: 083\n"
+    b"Backplane Slot: 1\n"
+    b"Crate Model: CCR\n"
+    b"Crate Serial: 011\n"
+    b"\n"
+)
+
+
+def test_tcpipe_unknown_backplane_fields_are_ignored():
+    beacon = CRSBeacon(TCPIPE_UNKNOWN_BACKPLANE_BEACON)
+
+    assert beacon.board_serial == "0083"
+    assert beacon.backplane_part is None
+    assert beacon.backplane_serial is None
+    assert beacon.backplane_slot is None
+    assert beacon.crate_part is None
+    assert beacon.crate_serial is None
+    assert beacon.crate_slot is None
+    assert beacon.slot is None
+
+
+def test_tcpipe_crate_model_alias():
+    beacon = CRSBeacon(TCPIPE_CBP_CCR_BEACON)
+
+    assert beacon.backplane_part == "CBP"
+    assert beacon.backplane_serial == "083"
+    assert beacon.backplane_slot == 1
+    assert beacon.crate_part == "CCR"
+    assert beacon.crate_serial == "011"
+    assert beacon.crate_slot is None
+    assert beacon.slot == 1
+
+
+def test_crs_discovery_skips_crate_when_tcpipe_backplane_is_unknown():
+    discovery = CRSDiscovery(
+        board_targets=[("CRS", "0083")],
+        crate_targets=[],
+        timeout=0)
+    beacon = CRSBeacon(TCPIPE_UNKNOWN_BACKPLANE_BEACON)
+    beacon.address = "192.0.2.83"
+
+    mb = discovery._update_hardware_map(beacon, tcpipe_version=beacon.version)
+
+    assert isinstance(mb, CRS)
+    assert mb.serial == "0083"
+    assert mb.crate is None
+    assert mb.slot is None
+    assert Crate.get_all_registered_instances() == []
+
+
+def test_crs_discovery_sets_slot_from_backplane_slot():
+    discovery = CRSDiscovery(
+        board_targets=[("CRS", "0083")],
+        crate_targets=[],
+        timeout=0)
+    beacon = CRSBeacon(TCPIPE_CBP_CCR_BEACON)
+    beacon.address = "192.0.2.83"
+
+    mb = discovery._update_hardware_map(beacon, tcpipe_version=beacon.version)
+
+    assert mb.slot == 1
+    assert isinstance(mb.crate, CRSBackplane)
+    assert mb.crate.serial == "011"
+    assert mb.crate.slot[1] is mb
+    assert beacon.backplane_slot == 1
+    assert beacon.crate_slot is None
 
 
 def test_crs_discovery_updates_board_crate_and_slot_from_beacon():
@@ -117,11 +276,107 @@ def test_crs_discovery_updates_board_crate_and_slot_from_beacon():
     assert mb.hostname == "192.0.2.10"
     assert mb.serial == "0037"
     assert mb.tcpipe_version == "1.0"
-    assert mb.slot == 4
+    assert mb.slot == 2
     assert isinstance(mb.crate, CRSBackplane)
-    assert mb.crate.serial == "BP001"
+    assert mb.crate.serial == "CR001"
     assert mb.crate.crate_number == 2
-    assert mb.crate.slot[4] is mb
+    assert mb.crate.slot[2] is mb
+
+
+def test_crs_discovery_uses_backplane_slot_as_crate_slot():
+    discovery = CRSDiscovery(
+        board_targets=[("CRS", "0139")],
+        crate_targets=[],
+        timeout=0)
+    beacon = CRSBeacon(
+        b"FWREQ/1\n"
+        b"Manufacturer: t0\n"
+        b"Product: crs\n"
+        b"Revision: 5\n"
+        b"Serial: 0139\n"
+        b"Bootloader: u-boot\n"
+        b"Bootloader Version: 0.1\n"
+        b"Backplane Serial: 083\n"
+        b"Crate Serial: 011\n"
+        b"Backplane Slot: 1\n\n")
+    beacon.address = "10.10.10.182"
+
+    mb = discovery._update_hardware_map(beacon, tcpipe_version=None)
+
+    assert mb.serial == "0139"
+    assert beacon.crate_slot is None
+    assert beacon.slot == 1
+    assert mb.slot == 1
+    assert mb.crate.serial == "011"
+
+
+def test_crs_discovery_preserves_hardware_map_slot():
+    mb = CRS.get_unique_instance(serial="0139", slot=5)
+    discovery = CRSDiscovery(
+        board_targets=[("CRS", "0139")],
+        crate_targets=[],
+        timeout=0)
+    beacon = CRSBeacon(
+        b"FWREQ/1\n"
+        b"Manufacturer: t0\n"
+        b"Product: crs\n"
+        b"Revision: 5\n"
+        b"Serial: 0139\n"
+        b"Bootloader: u-boot\n"
+        b"Bootloader Version: 0.1\n"
+        b"Backplane Serial: 083\n"
+        b"Crate Serial: 011\n"
+        b"Backplane Slot: 1\n\n")
+    beacon.address = "10.10.10.182"
+
+    updated = discovery._update_hardware_map(beacon, tcpipe_version=None)
+
+    assert updated is mb
+    assert mb.slot == 5
+    assert mb.hostname == "10.10.10.182"
+
+
+def test_crs_discovery_skips_crate_when_backplane_eeprom_is_uninitialized():
+    discovery = CRSDiscovery(
+        board_targets=[("CRS", "0039")],
+        crate_targets=[],
+        timeout=0)
+    beacon = CRSBeacon(UNINITIALIZED_BACKPLANE_BEACON)
+    beacon.address = "192.0.2.39"
+
+    mb = discovery._update_hardware_map(beacon, tcpipe_version=None)
+
+    assert isinstance(mb, CRS)
+    assert mb.serial == "0039"
+    assert mb.hostname == "192.0.2.39"
+    assert mb.crate is None
+    assert mb.slot is None
+    assert Crate.get_all_registered_instances() == []
+
+
+def test_crs_discovery_skips_crate_with_serial_but_no_part():
+    discovery = CRSDiscovery(
+        board_targets=[("CRS", "0039")],
+        crate_targets=[],
+        timeout=0)
+    beacon = CRSBeacon(
+        b"FWREQ/1\n"
+        b"Manufacturer: t0\n"
+        b"Product: crs\n"
+        b"Revision: 4\n"
+        b"Serial: 0039\n"
+        b"Bootloader: u-boot\n"
+        b"Bootloader Version: 0.1\n"
+        b"Backplane-Serial: BP001\n"
+        b"Crate-Number: 2\n"
+        b"\n")
+    beacon.address = "192.0.2.39"
+
+    mb = discovery._update_hardware_map(beacon, tcpipe_version=None)
+
+    assert isinstance(mb, CRS)
+    assert mb.crate is None
+    assert Crate.get_all_registered_instances() == []
 
 
 def test_crs_discovery_completion_accepts_integer_equivalent_serials():
@@ -240,6 +495,23 @@ def test_arm_firmware_uploader_skips_matching_tcpipe_version():
     )
 
     assert runner._boards_to_upload() == []
+
+
+def test_set_platform_firmware_uses_elf_git_version(monkeypatch, tmp_path):
+    elf = tmp_path / "tcpipe_rtos.elf"
+    elf.write_bytes(b"padding\0TCPIPE_GIT=v1.2-3-gabcd12-dirty\0")
+    captured = {}
+
+    async def fake_run(self):
+        captured["required_version"] = self.required_tcpipe_version
+        captured["firmware"] = str(self.firmware_pathname)
+
+    monkeypatch.setattr(CRSArmFirmwareUploader, "run", fake_run)
+    board = CRS(serial="0037", hostname="192.0.2.10")
+    board.tcpipe_version = "1.0"
+    asyncio.run(CRS.set_platform_firmware(boards=[board], firmware_pathname=str(elf)))
+    assert captured["required_version"] == "v1.2-3-gabcd12-dirty"
+    assert captured["firmware"] == str(elf)
 
 
 def test_arm_firmware_uploader_skips_boards_without_hostname():
@@ -522,6 +794,25 @@ def test_xmodem1k_block_framing():
     assert len(block) == 3 + 1024 + 2
 
 
+def test_xmodem128_block_framing():
+    data = np.frombuffer(b"abc", dtype=np.uint8)
+    block = XMODEM.block(5, data, block_size=128)
+    assert block[0] == 0x01
+    assert block[1] == 5
+    assert block[2] == 0xFA
+    assert len(block) == 3 + 128 + 2
+
+
+def test_xmodem_block_size_must_be_128_or_1024():
+    data = np.frombuffer(b"abc", dtype=np.uint8)
+    try:
+        XMODEM.block(1, data, block_size=256)
+    except ValueError as exc:
+        assert "block_size" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
+
+
 class _MockSock:
     def __init__(self, recv_chunks):
         self.recv_chunks = list(recv_chunks)
@@ -594,6 +885,89 @@ def test_xmodem_pipe_sends_blocks_and_eot(tmp_path):
     payloads = b"".join(sock.sent)
     assert payloads[0:1] == bytes([0x02])
     assert sock.sent[-1] == bytes([0x04])
+
+
+def test_xmodem_pipe_128_sends_soh_blocks(tmp_path):
+    elf_path = tmp_path / "fw.elf"
+    elf_path.write_bytes(b"x" * 256)
+    sock = _MockSock([
+        bytes([0x43]),  # CRC handshake
+        bytes([0x06]),  # ACK block 1
+        bytes([0x06]),  # ACK block 2
+        bytes([0x06]),  # ACK EOT
+    ])
+    assert xmodem1k_pipe_send(sock, elf_path, pipe_depth=2, block_size=128)
+    assert len(sock.sent) == 3  # two 128-byte blocks + EOT
+    assert sock.sent[0][0] == 0x01
+    assert len(sock.sent[0]) == 3 + 128 + 2
+    assert sock.sent[-1] == bytes([0x04])
+
+
+class _PipeResendSock:
+    """Mock that ACKs the first frame, times out on the second until resent."""
+
+    def __init__(self, retry_with_c=False):
+        self.sent = []
+        self._handshake_done = False
+        self._acks = 0
+        self._retry_with_c = retry_with_c
+        self._sent_retry_signal = False
+
+    def settimeout(self, timeout):
+        return None
+
+    def sendall(self, data):
+        self.sent.append(data)
+
+    def _data_frames(self):
+        return [s for s in self.sent if len(s) > 1]
+
+    def recv(self, size):
+        if not self._handshake_done:
+            self._handshake_done = True
+            return bytes([0x43])
+        if self.sent and self.sent[-1] == bytes([0x04]):
+            return bytes([0x06])  # ACK EOT
+        n_data = len(self._data_frames())
+        if self._acks == 0 and n_data >= 2:
+            self._acks = 1
+            return bytes([0x06])
+        if self._acks == 1 and n_data < 3:
+            if self._retry_with_c and not self._sent_retry_signal:
+                self._sent_retry_signal = True
+                return bytes([0x43])
+            raise socket.timeout
+        if self._acks == 1 and n_data >= 3:
+            self._acks = 2
+            return bytes([0x06])
+        raise socket.timeout
+
+
+def test_xmodem_pipe_resends_after_missing_ack(tmp_path):
+    """After ACK1, a timeout on ACK2 resends only the unacked frame."""
+    elf_path = tmp_path / "fw.elf"
+    elf_path.write_bytes(b"x" * 256)
+    sock = _PipeResendSock(retry_with_c=False)
+    assert xmodem1k_pipe_send(
+        sock, elf_path, pipe_depth=2, block_size=128,
+        ack_timeout=0.3, max_retries=3,
+    )
+    assert len(sock.sent) == 4  # B1, B2, resend B2, EOT
+    assert sock.sent[0][1] == 1 and sock.sent[1][1] == 2 and sock.sent[2][1] == 2
+    assert sock.sent[-1] == bytes([0x04])
+
+
+def test_xmodem_pipe_resends_on_receiver_c(tmp_path):
+    """U-Boot retry ``C`` after a lost frame triggers resend of the remainder."""
+    elf_path = tmp_path / "fw.elf"
+    elf_path.write_bytes(b"x" * 256)
+    sock = _PipeResendSock(retry_with_c=True)
+    assert xmodem1k_pipe_send(
+        sock, elf_path, pipe_depth=2, block_size=128,
+        ack_timeout=0.3, max_retries=3,
+    )
+    assert len(sock.sent) == 4
+    assert sock.sent[2][1] == 2
 
 
 def test_loads_send_streams_srec_lines(tmp_path):
@@ -836,6 +1210,19 @@ def test_collect_fwreq_ports_maps_ephemeral_reply_port():
 
 def test_fpga_array_routes_crs_crates_to_crs_network_discovery():
     assert CRS.get_network_discovery_function().__name__ == "discover_crs"
+
+
+def test_tcpipe_version_from_elf_reads_marker(tmp_path):
+    elf = tmp_path / "tcpipe_rtos.elf"
+    elf.write_bytes(b"junk\0TCPIPE_GIT=1.5-3-g571c24-dirty\0more")
+    assert tcpipe_version_from_elf(elf) == "1.5-3-g571c24-dirty"
+
+
+def test_tcpipe_version_from_elf_missing(tmp_path):
+    elf = tmp_path / "empty.elf"
+    elf.write_bytes(b"no marker here")
+    assert tcpipe_version_from_elf(elf) is None
+    assert tcpipe_version_from_elf(tmp_path / "missing.elf") is None
 
 
 def test_discovery_records_tcpipe_version():

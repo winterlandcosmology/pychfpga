@@ -13,8 +13,18 @@ def crs_ucap_fft_2x_firmware_config(stream_ids=None):
     """Firmware config snapshot for CRS UCAP scaler fft_2x (8 channels, mode 0)."""
     stream_ids = tuple(int(s) for s in (stream_ids or range(8)))
     nchan = len(stream_ids)
-    adc_cf = dict(fmt_base_width=16, fmt_is_complex=False, fmt_interleave_factor=1)
-    fft_cf = dict(fmt_base_width=32, fmt_is_complex=True, fmt_interleave_factor=2)
+    adc_cf = dict(
+        fmt_base_width=16,
+        fmt_is_complex=False,
+        fmt_interleave_factor=1,
+        use_offset_encoding=False,
+    )
+    fft_cf = dict(
+        fmt_base_width=32,
+        fmt_is_complex=True,
+        fmt_interleave_factor=2,
+        use_offset_encoding=False,
+    )
     shared = dict(
         capture_engine="UCAP",
         channels=tuple(range(nchan)),
@@ -33,30 +43,23 @@ def crs_ucap_fft_2x_firmware_config(stream_ids=None):
     )
     raw = dict(
         **shared,
-        source="scaler",
+        source=1,
         capture_format=[adc_cf, fft_cf],
         source_target_mode=[0, 0],
-        packets_per_logical_frame=2,
         packet_cookie=0xA1,
-        fft_offset_encoding=False,
-        offset_encoding=False,
     )
     adc = dict(
         **shared,
-        source="funcgen",
+        source=0,
         capture_format=[adc_cf, None],
         storage_dtype="i2",
-        packets_per_logical_frame=1,
         packet_cookie=0xA0,
     )
     fft = dict(
         **shared,
-        source="scaler",
+        source=1,
         capture_format=[None, fft_cf],
-        packets_per_logical_frame=2,
         packet_cookie=0xA1,
-        fft_offset_encoding=False,
-        offset_encoding=False,
     )
     corr = dict(
         capture_engine="UCORR",
