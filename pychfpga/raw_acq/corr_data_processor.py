@@ -18,7 +18,10 @@ from pychfpga.common.ucorr_packet_processor import UCorrPacketProcessor
 class CorrDataProcessor(UCorrPacketProcessor):
     """UCORR packet integration plus correlator HDF5 capture (raw_acq REST path)."""
 
-    def __init__(self, packet_receiver, config=None, receive_window=3, verbose=0):
+    def __init__(self, packet_receiver, config_getter, receive_window=3, verbose=0):
+        if config_getter is None:
+            raise TypeError("config_getter is required")
+        self._config_getter = config_getter
         self.log = log.get_logger(self)
         self.recv = packet_receiver
         self.hdf5_file = None
@@ -32,7 +35,12 @@ class CorrDataProcessor(UCorrPacketProcessor):
         self.corr_current_processing_time = 0
         self.metrics_corr_packet_length_error = 0
         self.frame0_irigb_time = 0
-        super().__init__(packet_receiver, config=config, receive_window=receive_window, verbose=verbose)
+        super().__init__(
+            packet_receiver,
+            config_getter=config_getter,
+            receive_window=receive_window,
+            verbose=verbose,
+        )
 
     def filter_packets(self, n):
         """Count UCORR cookie matches, then delegate to the base filter."""
@@ -50,7 +58,7 @@ class CorrDataProcessor(UCorrPacketProcessor):
         """Append correlator HDF5 rows from a ``get_formatted_data()`` result.
 
         Args:
-            result: ``(integ_ts, data, sats, counts)`` tuple, or None.
+            result: ``(integ_ts, data, counts, sats)`` tuple, or None.
 
         Returns:
             The same ``result`` argument (for chaining).
@@ -73,23 +81,23 @@ class CorrDataProcessor(UCorrPacketProcessor):
                 f'{self!r}: correlator geometry is not configured; '
                 'start raw_acq with firmware corr config first')
         cfg = self.config
-        engine = getattr(cfg, 'capture_engine', 'UCORR')
+        engine = cfg.capture_engine if cfg.has_attr('capture_engine') else 'UCORR'
         geom = dict(
             capture_engine=engine,
             n_freq_bins=int(self.NBINS),
             number_of_correlated_inputs=int(self.NCHAN),
-            sample_freq=float(getattr(cfg, 'sample_freq_mhz', 800.)),
+            sample_freq=float(cfg.sample_freq_mhz if cfg.has_attr('sample_freq_mhz') else 800.),
         )
         if engine == 'ICE':
             geom['number_of_correlators'] = int(cfg.number_of_correlators)
             geom['number_of_bins_per_frame'] = int(cfg.number_of_bins_per_frame)
         else:
-            geom['number_of_correlators'] = int(getattr(cfg, 'NCORRS', 1))
+            geom['number_of_correlators'] = int(cfg.NCORRS if cfg.has_attr('NCORRS') else 1)
         return geom
 
     def _write_hdf5_from_result(self, result):
         """Append completed UCORR integration rows to the correlator HDF5 file."""
-        integ_ts, data, sats, counts = result
+        integ_ts, data, counts, sats = result
         n = len(integ_ts)
         self.corr_hdf5_integrations_written += n
         soft = max(1, int(self.soft_integ_period or 1))
@@ -118,18 +126,13 @@ class CorrDataProcessor(UCorrPacketProcessor):
                         autocorr_only=False,
                         elements_per_file=256,
                         frame0_irigb_time=0,
-                        firmware_integration_period=None,
                         software_integration_period=None,
                         ):
         """ Start the capture of data in a HDF5 file.
         """
-        integ_patch = {}
-        if firmware_integration_period is not None:
-            integ_patch['firmware_integ_period'] = int(firmware_integration_period)
         if software_integration_period is not None:
-            integ_patch['soft_integ_period'] = int(software_integration_period)
-        if integ_patch:
-            self.update_config(integ_patch)
+            self.set_soft_integ_period(software_integration_period)
+        self.update_config()
 
         if self.hdf5_file:
             self.stop_corr_hdf5()

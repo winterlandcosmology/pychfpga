@@ -31,7 +31,7 @@ class ADCDataProcessor:
         self,
         packet_receiver,
         raw_processor,
-        config=None,
+        config_getter,
         stream_ids=(),
         metrics_refresh_time=10,
         adc_rms_refresh_count=100,
@@ -39,22 +39,21 @@ class ADCDataProcessor:
     ) -> None:
         kwargs.pop("metrics_refresh_time", None)
         kwargs.pop("adc_rms_refresh_count", None)
-        kwargs.pop("fft_offset_encoding", None)
         kwargs.pop("receive_window", None)
         kwargs.pop("verbose", None)
         kwargs.pop("decode_strict", None)
         self.raw = raw_processor
         self.recv = packet_receiver
         self.pr = packet_receiver
-        self.config = State(config).deepcopy() if config is not None else State()
-        if stream_ids and not self.config.get("stream_ids"):
-            self.config.stream_ids = tuple(stream_ids)
+        if config_getter is None:
+            raise TypeError("config_getter is required")
+        self._config_getter = config_getter
+        self.config = None
+        self._metrics_refresh_time = metrics_refresh_time
+        self._adc_rms_refresh_count = adc_rms_refresh_count
         self.log = log.get_logger(self)
         self.lock = threading.RLock()
         self.processed_packets = 0
-        self._sync_stream_id_helpers()
-        self._init_adc_state(metrics_refresh_time, adc_rms_refresh_count)
-        self._sync_adc_hdf5_layout()
 
     @property
     def NCHAN(self):
@@ -93,13 +92,19 @@ class ADCDataProcessor:
         else:
             self.adc_samples_per_frame = burst_bytes // bps
 
-    def update_config(self, config=None) -> None:
+    def update_config(self) -> None:
+        source = self._config_getter()
+        if self.config is None:
+            self.config = source
+        elif source is not self.config:
+            raise RuntimeError("config_getter must return a stable State")
         nchan_before = getattr(self, "NCHAN", 0)
-        if config is not None:
-            self.config.update(config)
         self._sync_adc_hdf5_layout()
         self._sync_stream_id_helpers()
-        if self.NCHAN == nchan_before or not hasattr(self, "metrics_refresh_time"):
+        if not hasattr(self, "metrics_refresh_time"):
+            self._init_adc_state(self._metrics_refresh_time, self._adc_rms_refresh_count)
+            return
+        if self.NCHAN == nchan_before:
             return
         mrt = self.metrics_refresh_time
         arr = self.adc_rms_refresh_count

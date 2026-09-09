@@ -210,7 +210,6 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
                               autocorr_only=False,
                               elements_per_file=256,
                               frame0_irigb_time=0,
-                              firmware_integration_period=None,
                               software_integration_period=None,
                               ):
         self.log.debug(f'{self!r}: Starting correlator data capture (calling receiver.processors["corr"].start_corr_hdf5)')
@@ -222,7 +221,6 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
             autocorr_only=autocorr_only,
             elements_per_file=elements_per_file,
             frame0_irigb_time=frame0_irigb_time,
-            firmware_integration_period=firmware_integration_period,
             software_integration_period=software_integration_period,
             )
         corr = self.receiver.processors["corr"]

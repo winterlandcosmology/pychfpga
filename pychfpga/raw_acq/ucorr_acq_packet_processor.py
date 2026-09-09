@@ -18,7 +18,10 @@ from pychfpga.common.ucorr_packet_processor import UCorrPacketProcessor
 class CorrDataProcessor(UCorrPacketProcessor):
     """UCORR packet integration plus correlator HDF5 capture (raw_acq REST path)."""
 
-    def __init__(self, packet_receiver, config=None, receive_window=3, verbose=0):
+    def __init__(self, packet_receiver, config_getter, receive_window=3, verbose=0):
+        if config_getter is None:
+            raise TypeError("config_getter is required")
+        self._config_getter = config_getter
         self.log = log.get_logger(self)
         self.recv = packet_receiver
         self.hdf5_file = None
@@ -30,7 +33,12 @@ class CorrDataProcessor(UCorrPacketProcessor):
         self.software_integration_period = 0
         self.firmware_integration_period = 1
         self.frame0_irigb_time = 0
-        super().__init__(packet_receiver, config=config, receive_window=receive_window, verbose=verbose)
+        super().__init__(
+            packet_receiver,
+            config_getter=config_getter,
+            receive_window=receive_window,
+            verbose=verbose,
+        )
 
     def consume(self, result):
         """Append correlator HDF5 rows from a ``get_formatted_data()`` result."""
@@ -45,7 +53,7 @@ class CorrDataProcessor(UCorrPacketProcessor):
 
     def _write_hdf5_from_result(self, result):
         """Append completed UCORR integration rows to the correlator HDF5 file."""
-        integ_ts, data, sats, counts = result
+        integ_ts, data, counts, sats = result
         n = len(integ_ts)
         self.corr_processed_packets += n
         soft = max(1, int(self.soft_integ_period or 1))
@@ -97,6 +105,8 @@ class CorrDataProcessor(UCorrPacketProcessor):
 
         self.software_integration_period = software_integration_period
         self.firmware_integration_period = firmware_integration_period
+        self.set_soft_integ_period(software_integration_period)
+        self.update_config()
         # Update time of frame 0 from last sync.
         self.frame0_irigb_time = frame0_irigb_time
 
