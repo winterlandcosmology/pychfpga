@@ -30,6 +30,17 @@ else:
 
 TEST_CONFIG_FILE = './test_config.yaml'
 
+
+class PSUError(RuntimeError):
+    """Raised for any PSU-related failure during crate power control.
+
+    Subclasses ``RuntimeError`` so that existing ``except RuntimeError``
+    handlers still catch it, while allowing callers to distinguish PSU
+    failures from genuine FPGA programming / array-init errors via
+    ``isinstance(e, PSUError)``.
+    """
+
+
 class TestUtils:
     """ 
     Some utility methods common to all tests.
@@ -45,16 +56,17 @@ class TestUtils:
 
         # Verify connection by checking status of PSU
         try:
-            self.psu = PSUController(hostname = psu_ip)
-            status = self.psu.status()
+            self.psu = PSUController(hostname = psu_ip, timeout = psu_timeout)
+            status = self.psu.get_status()
             print(f'PSU status: {status}')
 
         except Exception as e:
             print(f'Failed to connect to {psu_ip}: ', e)
+            self.psu = None
+            raise PSUError(f'Failed to connect to PSU at {psu_ip}: {e!r}') from e
 
-        if self.psu:
-            print('Successfully connected with PSU.')
-            return self.psu
+        print('Successfully connected with PSU.')
+        return self.psu
 
     def crate_init(self, reset_power = True):
         """
@@ -67,25 +79,32 @@ class TestUtils:
              if not self.psu:
                  self.psu = self.connect_psu()
 
-             # Check if power supply is on:
-             psu_on = self.psu.status()['output_on']
+             # All PSU control below is wrapped so that any failure is re-raised
+             # as a RuntimeError. Callers (e.g. test_power_cycle) can then
+             # distinguish PSU-related failures (RuntimeError) from genuine FPGA
+             # programming / array-init errors.
+             try:
+                 # Check if power supply is on:
+                 psu_on = self.psu.get_status()['output_on']
 
-             if psu_on:
-                print(f'Power supply is ON')
-                # Turning off power supply
-                print(f'Turning off power supply...')
-                self.psu.control_power(state = False) # Force power cycle if power supply is on
-                psu_on = self.psu.status()['output_on']
-                if not psu_on:
-                    print(f'Power supply is now OFF')
-                time.sleep(5) # Give it a few seconds before turning back on
-                
-             else:
-                 print(f'Power supply is OFF')
+                 if psu_on:
+                    print(f'Power supply is ON')
+                    # Turning off power supply
+                    print(f'Turning off power supply...')
+                    self.psu.set_power(False) # Force power cycle if power supply is on
+                    psu_on = self.psu.get_status()['output_on']
+                    if not psu_on:
+                        print(f'Power supply is now OFF')
+                    time.sleep(5) # Give it a few seconds before turning back on
 
-             # Turn power supply back on:
-             print(f'Turning on power supply...')
-             self.psu.control_power(state = True)
+                 else:
+                     print(f'Power supply is OFF')
+
+                 # Turn power supply back on:
+                 print(f'Turning on power supply...')
+                 self.psu.set_power(True)
+             except Exception as e:
+                 raise PSUError(f'PSU control failed during crate power cycle: {e!r}') from e
 
             # Wait for the boards to boot
              delay = self.cfg.f_engine_tests.global_settings.ps_t_sleep
@@ -107,28 +126,23 @@ class TestPreDeploymentCrate(TestUtils):
     """
     List of tests:
     
-    0) Check connection to power supply
+    0) Test connection to power supply
 
-    1) Check board initialization:
+    1) Test board initialization:
         - all 16 boards found in hwm
         - all FPGAs programmed
         - crate must sync
 
-    2) Check backplane errors (requires above to pass to be able to run)
-        - initialize crate
-        - iterate through output of await ca.print_shuffle_status_async(verbose = 1)
-        - maybe save the verbose = 2 one as well?
-
-    3) Force IRIG-B syncs
+    2) Test IRIG-B synchronization
         - initialize crate
         - config-defined number of sync tries
 
-    4) Check ADC clocks
+    3) Test ADC clocks
         - initialize crate
         - iterate through all motherboards and mezzanines, check that
           clocks are 200 MHz +/- tolerance (set by integration time)
 
-    5) Power cycle
+    4) Test all above tests with many power cycles
         - initialize crate N times, sleep for t seconds in between
         - scrape clock error and udp error metrics, add a counter for each
 
@@ -150,7 +164,7 @@ class TestPreDeploymentCrate(TestUtils):
 
         # Turn off power supply
         if self.psu:
-            self.psu.control_power(state = False) 
+            self.psu.set_power(False) 
 
     def test_ps_connection(self, xr):
         """
@@ -180,6 +194,25 @@ class TestPreDeploymentCrate(TestUtils):
 
             for n in range(n_ps_cycles):
 
+                if n == 0:
+                    # On the first iteration, check to make sure the PSU is off. If it is on, turn it off.
+
+                    # Connect to PSU
+                    self.psu = self.connect_psu()
+
+                    psu_on = self.psu.get_status()['output_on']
+
+                    if psu_on:
+                        print(f'Power supply is ON')
+                        # Turning off power supply
+                        print(f'Turning off power supply...')
+                        self.psu.set_power(False) # Force power cycle if power supply is on
+                        psu_on = self.psu.get_status()['output_on']
+                        if not psu_on:
+                            print(f'Power supply is now OFF')
+                    else:
+                        print(f'Power supply is OFF')
+
                 print('\n*******************************')
                 print(f'Cycle {n+1}/{n_ps_cycles}')
                 print('*******************************')
@@ -192,15 +225,18 @@ class TestPreDeploymentCrate(TestUtils):
                 print(f'Wait {on_time} seconds')
 
                 # Turn on PSU
-                self.psu.control_power(state = True)
+                self.psu.set_power(True)
 
                 # Keep PSU on for on_time seconds
                 time.sleep(on_time)
 
                 # Check PSU status
                 try:
-                    ps_status = self.psu.status()
+                    ps_status = self.psu.get_status()
                     print(f'PSU status: {ps_status}')
+                    psu_on = self.psu.get_status()['output_on']
+                    if not psu_on:
+                        turn_ON_errs.append(f'cycle {n+1}: PSU failed to turn on')
                 except Exception as e:
                     print(e)
                     turn_ON_errs.append(f'cycle {n+1}: {e}')
@@ -210,15 +246,18 @@ class TestPreDeploymentCrate(TestUtils):
                 print(f'Wait {off_time} seconds')
 
                 # Turn off PSU
-                self.psu.control_power(state = False)
+                self.psu.set_power(False)
 
                 # Keep PSU off for off_time seconds
                 time.sleep(off_time)
 
                 # Check PSU status
                 try:
-                    ps_status = self.psu.status()
+                    ps_status = self.psu.get_status()
                     print(f'PSU status: {ps_status}')
+                    psu_on = self.psu.get_status()['output_on']
+                    if psu_on:
+                        turn_OFF_errs.append(f'cycle {n+1}: PSU failed to turn off')
                 except Exception as e:
                     turn_OFF_errs.append(f'cycle {n+1}: {e}')
                 print('--------------------------------------------')
@@ -230,8 +269,6 @@ class TestPreDeploymentCrate(TestUtils):
         finally:
             test_results.passed = passed
             xr.save_data(test_results)
-            # if this test passed, the ps should already be off; if it didn't, it can't be turned off remotely and has to be turned off manually
-            # self.psu.control_power(state=False)    
 
     def test_init(self, xr):
         """
@@ -255,72 +292,21 @@ class TestPreDeploymentCrate(TestUtils):
         # Initialize the crate:
         passed = False
         try:
-            # input('Turn on the power supply. Press ENTER to continue. (Q:Exit) ')
             self.ca = self.crate_init()
             # If we made it to this point, FPGAs programmed, all boards present in hwm
             # and crate has synced (see test_config.yaml - parameters passed to FPGAArray
             # force all these to be present to return self.ca
             assert self.ca.ib, f'ib object is {self.ca.ib}'
+            passed = True
         finally:
             test_results.passed = passed
             xr.save_data(test_results)
-            #self.psu.control_power(state=False) # Turn off power supply
+            self.psu.set_power(False) # Turn off power supply
     
-
-    # def test_bperr(self, xr):
-    #     """
-    #     QC002: Backplane error test: check if there are errors in print_shuffle_status()
-
-    #     Procedure:
-
-    #         - Start the bperr test on the computer
-    #         - Power up crate
-    #         - After initializing crate, check backplane errors using
-    #             await ca.print_shuffle_status_async()
-
-    #     """
-
-    #     xr.header('Backplane Error Test')
-    #     cfg = self.cfg.f_engine_tests.backplane_err # not needed
-    #     shuffle_mode = self.cfg.f_engine_tests.global_settings.fpga_array_params.mode
-    #     n_checks = cfg.n_checks
-    #     t_sleep = cfg.t_sleep
-    #     test_results = NameSpace()
-
-    #     passed = False
-    #     bp_errs = []
-    
-    #     try:
-    #         # Initialize the crate
-    #         self.ca = self.crate_init()
-
-    #         for n in range(n_checks):
-
-    #             # Add 1s of sleep time between error gathering in case errors accumulate:
-    #             time.sleep(t_sleep)
-
-    #             # Get corner turn engine status:
-    #             # info = asyncio.run(self.ca.get_corner_turn_engine_status_async(reset_stats=True)) # reset stats for each check
-
-    #             bp_errs_cycle_n = self.check_bp_errs()
-
-    #             if bp_errs_cycle_n:
-    #                 bp_errs.append([f'cycle {n}', bp_errs_cycle_n])
-
-    #         assert not bp_errs, f'Backplane errors present on: {bp_errs}'
-        
-    #        # if not bp_errs:            
-    #         passed = True
-
-    #     finally:
-    #         test_results.passed = passed
-    #         xr.save_data(test_results)
-    #         self.psu.control_power(state=False) # Turn off power supply
-    #         #assert not bp_errs, f'Backplane erros present on: {bp_errs}'
             
     def test_sync(self, xr):
         """
-        QC003: Sync/IRIG-B test: stress test of crate sync using IRIG-B
+        QC002: Sync/IRIG-B test: stress test of crate sync using IRIG-B
 
         Procedure:
 
@@ -343,7 +329,6 @@ class TestPreDeploymentCrate(TestUtils):
 
         # Initialize the crate
         try:
-            # xr.input('Turn on the power supply. Press ENTER to continue. (Q:Exit) ')
             self.ca = self.crate_init()
             for n in range(n_syncs):
                 print(f'Sync {n+1}')
@@ -362,12 +347,13 @@ class TestPreDeploymentCrate(TestUtils):
         finally:
             test_results.passed = passed
             xr.save_data(test_results)
-            self.psu.control_power(state = False) # Turn off power supply
+            if self.psu:
+                self.psu.set_power(False) # Turn off power supply
   
 
     def test_adc_clocks(self, xr):
         """
-        QC004: ADC clock test: ensure all ADCs get the correct clocks on every channel + power cycling between checks
+        QC003: ADC clock test: ensure all ADCs get the correct clocks on every channel + power cycling between checks
 
         Procedure:
 
@@ -417,12 +403,6 @@ class TestPreDeploymentCrate(TestUtils):
                 print(f'****************************')
 
                 for i in self.ca.ib:
-                    # for clock in range(16):
-                    #     print(f'{i}, ADC_CLK{clock}')
-                    #     diffs = set(i.FreqCtr.read_frequency(f'ADC_CLK{clock}', integration_period) - 200e6 for _ in range(n_clock_checks))
-                    #     # If diffs is not a subset of expected_diffs, i.e. it contains an unexpected value, then append to failed_clocks
-                    #     if not diffs.issubset(expected_diffs):
-                    #         failed_clocks.append([f'{i}', f'ADC_CLK{clock}', diffs]) 
 
                     print(f'Checking ADC clocks on: {i}')
                     adc_error = i.check_adc_frequencies('after boot')
@@ -439,112 +419,19 @@ class TestPreDeploymentCrate(TestUtils):
             print(f'Total clock fails = {clk_fails}')
             print(f'Recovered clock errors = {adc_err_tags}')
 
-            # assert not failed_clocks, f'ADC clock errors present on: {failed_clocks}'
-            # assert not error, f'ADC clock errors present on: {failed_clocks}'
             assert (clk_fails <= n_fails_accept)
             passed = True
 
         finally:
             test_results.passed = passed
             xr.save_data(test_results)
-            self.psu.control_power(state=False) # Turn off power supply
-
-    def test_network(self, xr):
-        xr.header('Network Test')
-        cfg = self.cfg.f_engine_tests.network_test
-
-        test_results = NameSpace()
-        n_cycles = cfg.n_cycles
-        t_cycle = cfg.t_cycle
-
-        missing_slot_errors = []
-        error_total = 0
-
-        try:
-
-            for n in range(n_cycles):
-                print(f'****************************')
-                print(f'Power-cycling test iteration {n + 1}/{n_cycles}')
-                print(f'****************************')
-                
-                # Initialize the crate:
-                try:
-                    if not self.psu:
-                        self.psu= self.open_ps()
-                    # Check status of power supply:
-                    ps_status = self.psu.status()['status']
-                    if ps_status == 'ON' or ps_status == 'OK':
-                        print(f'Power supply is {ps_status}')
-                        # Turning off power supply
-                        print(f'Turning off power supply...')
-                        self.psu.control_power(state=False) # Force power cycle if power supply is on
-                        ps_status = self.psu.status()['status']
-                        print(f'Power supply is now {ps_status}')
-                        time.sleep(5) # Give it a few seconds before turning back on
-                    else:
-                        print(f'Power supply is {ps_status}')
-                    # Turn power supply back on:
-                    print(f'Turning on power supply...')
-                    self.psu.control_power(state=True)
-                    delay = 60
-                    print(f'Waiting for {delay} seconds to let the boards boot')
-                    time.sleep(delay) # Sleep to let the crate boot
-
-                    # self.ca = self.crate_init()
-                    fpga_array_params = cfg.fpga_array_params
-                    self.ca = asyncio.run(fpga_array.FPGAArray(**fpga_array_params).init())
-                    
-                    ic = self.ca.ic
-                    from pychfpga.hardware import Crate
-                    missing_slots = {
-                        (ic.part_number, ic.serial, ic.crate_number): set(range(1, ic.NUMBER_OF_SLOTS + 1)) - set(ic.slot)
-                        for ic in Crate.get_all_instances()}
-                    
-                    # for i in boards_to_ping:
-                    #     if i not in self.ca.ib.values():
-                    #         # print('********************************')
-                    #         print(f'Failed to connect to board {i}')
-
-                    if any(missing_slots.values()):
-                        missing_slots_str = '\n'.join(
-                            '    Crate #{number} ({model} SN{serial}): slots {slots}'.format(
-                                number=number,
-                                model=model,
-                                serial=serial,
-                                slots=', '.join(str(s) for s in slots))
-                            for ((model, serial, number), slots) in missing_slots.items() if slots)
-                        print(f'{self!r}: The following slots are missing:\n{missing_slots_str}')
-                        missing_slot_errors.append(tuple(n, missing_slots_str))
-                        error_total += len(missing_slots)
-                    
-
-                except (RuntimeError, IOError, OSError) as e:
-                    print("*"*10)
-                    print(f'Failed initializing the array because of error {e!r}')
-                
-            
-
-                    
-                print('Turning OFF the crate')
-                self.psu.control_power(state=False)
-                print(f'Letting the crate cool down for {t_cycle} seconds before repeating the test')
-                time.sleep(t_cycle)
-
-
-            assert not missing_slot_errors, f'The following slots failed to appear: \n{missing_slot_errors} \n Total of {error_total} errors'
-
-        finally:
-
-
-            test_results.passed = True
-            xr.save_data(test_results)
-            self.psu.control_power(state=False) # Turn off power supply
-
+            if self.psu:
+                self.psu.set_power(False) # Turn off power supply
 
 
     def test_power_cycle(self, xr):
         """
-        QC007: Power cycle test: cycle crate initializations, logging ADC clock and UDP errors.
+        QC004: Power cycle test: cycle crate initializations, logging ADC clock and UDP errors.
 
         Procedure:
 
@@ -572,6 +459,7 @@ class TestPreDeploymentCrate(TestUtils):
         udp_fails = 0
         # mmi_fails = 0
         other_fails = 0
+        psu_fails = 0
 
         init_exception_tags = []
         sync_error_tags = []
@@ -579,6 +467,7 @@ class TestPreDeploymentCrate(TestUtils):
         udp_err_tags = []
         # mmi_err_tags = []
         other_err_tags = []
+        psu_err_tags = []
 
         passed = False
 
@@ -593,25 +482,31 @@ class TestPreDeploymentCrate(TestUtils):
                 try:
                     self.ca = self.crate_init()
              
-                except (RuntimeError, IOError, OSError) as e:
-                    
-                    print(f'Failed initializing the array because of error {e!r}')
-                    
-                    init_fails += 1
-                    init_exception_tags.append({'Cycle': n, 'exception': repr(e)})
+                except Exception as e:
+                    # PSU-related failures are raised as PSUError (see crate_init /
+                    # connect_psu) and are counted separately. Anything else is a
+                    # genuine FPGA programming / array-init failure.
+                    if isinstance(e, PSUError):
+                        print(f'PSU error while power cycling the crate: {e!r}')
+                        psu_fails += 1
+                        psu_err_tags.append({'Cycle': n, 'exception': repr(e)})
+                    else:
+                        print(f'Failed initializing the array because of error {e!r}')
+                        init_fails += 1
+                        init_exception_tags.append({'Cycle': n, 'exception': repr(e)})
                     
                 else:
 
-                    print('Got an IceBoard array')
+                    print('Got an FPGA array')
 
                     # Synchronize crate in its own try/except
                     # clause to catch any sync errors
                     try:
                         asyncio.run(self.ca.sync_async())
                     except Exception as e:
+                        sync_fails += 1
                         sync_error_tags.append({'Cycle': n,
-                                        'ib': i,
-                                        'sync_err_msgs': e})
+                                        'sync_err_msgs': repr(e)})
 
                     try:
 
@@ -620,9 +515,14 @@ class TestPreDeploymentCrate(TestUtils):
                         udp_errors_cycle_n = 0
 
                         for i in self.ca.ib:
-    
-                            # Check counters and error lists:
 
+                            # Reset error counters for each cycle
+                            i.adc_clk_err_ctr = 0
+                            i.adc_clk_err_msgs = []
+                            i.udp_err_ctr = 0
+                            i.udp_err_msgs = []
+    
+                            # Check counters and error lists
                             print(f'Checking ADC clocks on: {i}')
                             adc_error = i.check_adc_frequencies('after boot')
                             if adc_error:
@@ -654,16 +554,24 @@ class TestPreDeploymentCrate(TestUtils):
                         if udp_errors_cycle_n != 0:
                             udp_fails += 1
 
-                        for i in self.ca.ib:
-                            # Close UDP communication with the iceboard to prevent errors:
-                            print(f'Closing UDP connection to slot {i.slot}')
-                            asyncio.run(i.close_async())
-
                     except Exception as e:
                         print(f'Got other error {e!r} during cycle {n}')
                         other_fails += 1
                         other_err_tags.append({'Cycle': n,
                                             'exception': repr(e)})
+
+                    finally:
+                        # Close UDP communication with each iceboard to prevent
+                        # errors. This is cleanup (not a sub-test), so it runs
+                        # regardless of check outcome and each board is closed
+                        # independently so one failure does not skip the rest or
+                        # count as a test error.
+                        for i in self.ca.ib:
+                            try:
+                                print(f'Closing UDP connection to slot {i.slot}')
+                                asyncio.run(i.close_async())
+                            except Exception as e:
+                                print(f'Failed to close UDP connection to slot {i.slot}: {e!r}')
 
 
                 print(50*'-')
@@ -673,12 +581,20 @@ class TestPreDeploymentCrate(TestUtils):
                 print(f'UDP errors = {udp_fails}')
                 print(f'init_exceptions = {init_fails}')
                 print(f'Other errors = {other_fails}')
+                print(f'PSU errors = {psu_fails}')
                 print(50*'-')
                 
                 # Turn off crate and sleep before turning back on
                 # to allow it to cool down:
                 print('Turning OFF the crate')
-                self.psu.control_power(state = False)
+                try:
+                    if not self.psu:
+                        raise PSUError('PSU is not connected')
+                    self.psu.set_power(False)
+                except Exception as e:
+                    print(f'Failed to turn OFF the crate during cycle {n}: {e!r}')
+                    psu_fails += 1
+                    psu_err_tags.append({'Cycle': n, 'exception': repr(e)})
                 print(f'Letting the crate cool down for {t_cycle} seconds before repeating the test')
                 time.sleep(t_cycle)
 
@@ -697,14 +613,18 @@ class TestPreDeploymentCrate(TestUtils):
             for other_err in other_err_tags:
                 print(other_err)
 
+            for psu_err in psu_err_tags:
+                print(psu_err)
+
             # assert (max(init_fails, clk_fails, udp_fails, delay_fails, backplane_fails) <= n_fails_accept), f'ADC errors on: {adc_err_tags}, UDP errors on: {udp_err_tags}, Init exceptions on: {init_exception_tags}, Delay exceptions on: {delay_exception_tags}, Backplane errors on: {backplane_err_tags}'
-            assert (max(init_fails, sync_fails, clk_fails, udp_fails, other_fails) <= n_fails_accept), 'Print check above '
+            assert (max(init_fails, sync_fails, clk_fails, udp_fails, other_fails, psu_fails) <= n_fails_accept), 'Print check above '
             passed = True
 
         finally:
             test_results.passed = passed
             xr.save_data(test_results)
-            self.psu.control_power(state = False) # Turn off power supply
+            if self.psu:
+                self.psu.set_power(False) # Turn off power supply
 
 
 if __name__ == '__main__':

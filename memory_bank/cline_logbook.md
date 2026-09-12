@@ -364,3 +364,25 @@ python3 tests/crs_fpga_master_tests/test_crs_metrics.py --serial 0080
 metrics = await fpga_master.get_metrics_async()
 # Returns comprehensive hardware and firmware monitoring data
 ```
+
+---
+
+## October 9, 2026 - QC f_engine_tests Fixes After Branch Merge
+
+### Task: Verify `qc/CRS_crate/f_engine_tests.py` against merged API and fix breakages
+
+**Objective**: After merging another developer's long-running branch, confirm the QC tests still work (correct API calls) and fix anything that would prevent them from running.
+
+**Fixes Applied**:
+- **psucontrol dependency**: pinned `pyproject.toml` to `git+https://github.com/t0/psucontrol.git@main` and reinstalled into `conda_venv312` (stale cached wheel had no `api.py`). Note: `@main` is mutable; an exact-SHA pin would be more reproducible.
+- **PSU API rename** (main blocker): `status()` → `get_status()`, `control_power(state=X)` → `set_power(X)` across all live call sites; passed configured `timeout` into `PSUController(...)`.
+- **connect_psu**: raises a clear `RuntimeError` on failure instead of returning `None` (avoids later `NoneType` AttributeError).
+- **test_power_cycle**: removed undefined `'ib': i` in the sync-exception tag; added missing `sync_fails += 1` so the pass/fail assertion counts sync failures.
+- **Crate API**: `Crate.get_all_instances()` → `get_all_registered_instances()` (test_network).
+- **test_network cleanup**: `open_ps()` → `connect_psu()`; use boolean `['output_on']` key (no `['status']`); removed dead `ic = self.ca.ic`; fixed `tuple(n, s)` → `(n, s)`.
+
+**Files Modified**:
+- `qc/CRS_crate/f_engine_tests.py`
+- `pyproject.toml` (psucontrol pin)
+
+**Status**: ✅ Verified with `python -m py_compile`. Full end-to-end run still requires live crate + PSU hardware.

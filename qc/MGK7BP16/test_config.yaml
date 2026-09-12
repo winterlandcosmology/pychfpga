@@ -66,7 +66,7 @@ menu:
     - { key: 'Q', action: exit, description: 'Exit',                                    }
     - { description: "Start by entering the BP's serial number, then select a test or range of tests (e.g. 5-7)."}
     - { regex: '(0\d{2})', model: 'MGK7BP16', serial: '{0}', next_key: '0'}  # 0nn are MGK7BP16 Serial number
-    - { regex: '\d+\-\d+', action: run_range, input: '{0}'} # regex to select a range of options
+    - { regex: '(\d+\-\d+)', action: run_range, input: '{0}'} # regex to select a range of options
 
 
 
