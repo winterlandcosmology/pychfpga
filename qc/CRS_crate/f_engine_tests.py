@@ -68,6 +68,31 @@ class TestUtils:
         print('Successfully connected with PSU.')
         return self.psu
 
+    def _psu_call(self, fn, *args, retries=3, backoff=5, **kwargs):
+        """Call a PSU control function with retries and backoff.
+
+        Each PSU call (get_status/set_power) opens a fresh HTTP connection to
+        the PSU's small embedded web server. Under rapid power cycling this can
+        transiently exhaust the server's limited sockets, producing ReadTimeout
+        or "No route to host" errors. Retrying with a delay between attempts
+        gives the server time to recover before we declare a hard failure.
+
+        Raises:
+            PSUError: if all attempts fail.
+        """
+        last_exc = None
+        for attempt in range(1, retries + 1):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                last_exc = e
+                print(f'PSU call {getattr(fn, "__name__", fn)!s} failed '
+                      f'(attempt {attempt}/{retries}): {e!r}')
+                if attempt < retries:
+                    time.sleep(backoff)
+        raise PSUError(f'PSU call {getattr(fn, "__name__", fn)!s} failed after '
+                       f'{retries} attempts: {last_exc!r}') from last_exc
+
     def crate_init(self, reset_power = True):
         """
         Run fpga_array, initializing the crate. Recover ca object. Power is reset by default.
@@ -85,16 +110,14 @@ class TestUtils:
              # programming / array-init errors.
              try:
                  # Check if power supply is on:
-                 psu_on = self.psu.get_status()['output_on']
+                 psu_on = self._psu_call(self.psu.get_status)['output_on']
 
                  if psu_on:
                     print(f'Power supply is ON')
                     # Turning off power supply
                     print(f'Turning off power supply...')
-                    self.psu.set_power(False) # Force power cycle if power supply is on
-                    psu_on = self.psu.get_status()['output_on']
-                    if not psu_on:
-                        print(f'Power supply is now OFF')
+                    self._psu_call(self.psu.set_power, False) # Force power cycle if power supply is on
+                    print(f'Power supply turned OFF')
                     time.sleep(5) # Give it a few seconds before turning back on
 
                  else:
@@ -102,7 +125,9 @@ class TestUtils:
 
                  # Turn power supply back on:
                  print(f'Turning on power supply...')
-                 self.psu.set_power(True)
+                 self._psu_call(self.psu.set_power, True)
+             except PSUError:
+                 raise
              except Exception as e:
                  raise PSUError(f'PSU control failed during crate power cycle: {e!r}') from e
 
@@ -162,9 +187,14 @@ class TestPreDeploymentCrate(TestUtils):
         
         yield  # pass control to the test and return
 
-        # Turn off power supply
+        # Turn off power supply. Guard against a PSU that has become
+        # unreachable so a teardown failure cannot abort the whole test
+        # harness (an unguarded exception in fixture teardown propagates).
         if self.psu:
-            self.psu.set_power(False) 
+            try:
+                self._psu_call(self.psu.set_power, False)
+            except Exception as e:
+                print(f'Warning: failed to turn off PSU during teardown: {e!r}')
 
     def test_ps_connection(self, xr):
         """
@@ -461,6 +491,12 @@ class TestPreDeploymentCrate(TestUtils):
         other_fails = 0
         psu_fails = 0
 
+        # Number of consecutive cycles that failed on PSU communication. If the
+        # PSU becomes permanently unreachable, nothing can recover, so we abort
+        # the test early rather than grinding through every remaining cycle.
+        consecutive_psu_fails = 0
+        MAX_CONSECUTIVE_PSU_FAILS = 5
+
         init_exception_tags = []
         sync_error_tags = []
         adc_err_tags = []
@@ -477,7 +513,11 @@ class TestPreDeploymentCrate(TestUtils):
                 print(50*'=')
                 print(f'Power-cycling test iteration {n + 1}/{n_cycles}')
                 print(50*'=')
-                
+
+                # Track whether this cycle hit a PSU communication failure so we
+                # can detect a permanently-unreachable PSU and abort early.
+                psu_failed_this_cycle = False
+
                 # Initialize the crate:
                 try:
                     self.ca = self.crate_init()
@@ -489,6 +529,7 @@ class TestPreDeploymentCrate(TestUtils):
                     if isinstance(e, PSUError):
                         print(f'PSU error while power cycling the crate: {e!r}')
                         psu_fails += 1
+                        psu_failed_this_cycle = True
                         psu_err_tags.append({'Cycle': n, 'exception': repr(e)})
                     else:
                         print(f'Failed initializing the array because of error {e!r}')
@@ -590,11 +631,25 @@ class TestPreDeploymentCrate(TestUtils):
                 try:
                     if not self.psu:
                         raise PSUError('PSU is not connected')
-                    self.psu.set_power(False)
+                    self._psu_call(self.psu.set_power, False)
                 except Exception as e:
                     print(f'Failed to turn OFF the crate during cycle {n}: {e!r}')
                     psu_fails += 1
+                    psu_failed_this_cycle = True
                     psu_err_tags.append({'Cycle': n, 'exception': repr(e)})
+
+                # Track consecutive PSU failures and abort early if the PSU
+                # appears permanently unreachable (no chance of recovery).
+                if psu_failed_this_cycle:
+                    consecutive_psu_fails += 1
+                    if consecutive_psu_fails >= MAX_CONSECUTIVE_PSU_FAILS:
+                        print(f'Aborting power-cycle test after {consecutive_psu_fails} '
+                              f'consecutive PSU failures: the PSU appears unreachable '
+                              f'and cannot recover.')
+                        break
+                else:
+                    consecutive_psu_fails = 0
+
                 print(f'Letting the crate cool down for {t_cycle} seconds before repeating the test')
                 time.sleep(t_cycle)
 
@@ -624,7 +679,10 @@ class TestPreDeploymentCrate(TestUtils):
             test_results.passed = passed
             xr.save_data(test_results)
             if self.psu:
-                self.psu.set_power(False) # Turn off power supply
+                try:
+                    self._psu_call(self.psu.set_power, False) # Turn off power supply
+                except Exception as e:
+                    print(f'Warning: failed to turn off PSU during teardown: {e!r}')
 
 
 if __name__ == '__main__':

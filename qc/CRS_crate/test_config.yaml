@@ -6,7 +6,7 @@ model_number: 'CRS_crate'
 fpga_bit_file: '../../pychfpga/fpga_firmware/bitstreams/chfpga_crs_ct.bit'
 
 instruments:
-  psu: {'ip': '10.10.10.240', 'timeout': 1}
+  psu: {'ip': '10.10.10.240', 'timeout': 5}  # HTTP read timeout (s); >1s avoids spurious ReadTimeouts from the embedded PSU server
 ?: &default_fpga_array # Shouldn't really be used
     iceboards: 0047
     mdns_delay: 1
