@@ -1,6 +1,23 @@
 Flashing TCPipe ARM firmware on the CRS
 ---------------------------------------
 
+The CRS needs a generic uboot firmware image to boot. pychfpga uses uboot commands to dynamically uploads the TCPIPE ARM firmware to the boards when an array is created, so there is no need to flash TCPIPE manually.
+Here are the instructions if uboot needs to be updated:
+
+Case 1 - Upgrading a board with an existing uboot
+
+Modern uboot builds allow over-the-wire reflashing. The utility ``fwupgrade`` uploads the uboot image to ALL THE ACTIVE CRS BOARDS ON THE NETWORK.
+so Turn off or disconnect the boards you don't want to upgrade. The procedure is:
+
+   - Activate the pychfpga Pychfpga environemnt
+   - cd pychfpga/pychfpga/hardware/crs/arm_firmware
+   - ./fwupgrade.py uboot.bin  ( or python fwupgrade.py uboot.bin)
+
+
+Case 2 - JTAG flashing
+
+If the board has a very old uboot or no firmware at all, you can program it using the Vitis programming tool oved JTAG.
+
 Note: The instructions below are for Ubuntu
 
 Prerequisites
@@ -35,73 +52,10 @@ To check the programming:
      	Xilinx Zynq MP First Stage Boot Loader
 		Release 2022.1   Apr 29 2024  -  18:05:58
 		PMU-FW is not running, certain applications may not be supported.
-
-		-----TCPipe server v1.0 ------
-		Build time:Jul  3 2024 19:37:31
-		GIT version:1.5-3-g571c24-dirty
-		Processing system DNA = 400000000170CFA814A041C5
-		PS IIC: initializing hardware
-		PS IIC0: Starting IIC initialization
-		PS IIC0: running self-test
-		PS IIC0: IIC initialization successful
-		PS IIC1: Starting IIC initialization
-		PS IIC1: running self-test
-		PS IIC1: IIC initialization successful
-		PS SPI0: initializing hardware
-		PS SPI0: SPI initialization successful
-		PS SPI1: initializing hardware
-		PS SPI1: SPI initialization successful
-		Reading Board information from EEPROM
-		Setting I2C switch
-		Reading EEPROM
-		Decoding EEPROM
-		Platform is crs_SN0026
-		Board Manufacturing Date: Mon Jan  1 00:00:00 1996
-
-		Initializing networking stack
-		Ethernet MAC is EMACPS (10/100/1000 Mbps) (Processing System) at base address 0xFF0E0000
-		XEmacPs detect_phy: PHY detected at address 12 with ID 0x2000.
-		Start TI PHY autonegotiation (PHY address 12)
-		TI PHY IO_MUX_CFG register =0x0C4F
-		Waiting for PHY to complete autonegotiation (iteration #1).
-		Waiting for PHY to complete autonegotiation (iteration #2).
-		Waiting for PHY to complete autonegotiation (iteration #3).
-		Waiting for PHY to complete autonegotiation (iteration #4).
-		Waiting for PHY to complete autonegotiation (iteration #5).
-		Waiting for PHY to complete autonegotiation (iteration #6).
-		Waiting for PHY to complete autonegotiation (iteration #7).
-		Waiting for PHY to complete autonegotiation (iteration #8).
-		Waiting for PHY to complete autonegotiation (iteration #9).
-		Waiting for PHY to complete autonegotiation (iteration #10).
-		autonegotiation complete
-		link speed for phy address 12: 1000
-		rxringptr: 0x002003A0
-		txringptr: 0x00200330
-		rx_bdspace: 800000
-		tx_bdspace: 810000
-		xemacpsif_mac_filter_update: Multicast MAC address successfully added.
-		netif: added interface te IP addr 0.0.0.0 netmask 0.0.0.0 gw 0.0.0.0
-		netif: setting default interface te
-		Getting IP address from DHCP
-		netif: netmask of interface te set to 255.255.0.0
-		netif: GW address of interface te set to 10.10.10.1
-		netif_set_ipaddr: netif address being changed
-		Got an IP address
-		Board IP: 10.10.10.203
-		Netmask : 255.255.0.0
-		Gateway : 10.10.10.1
-		Starting mDNS
-		xemacpsif_mac_filter_update: Multicast MAC address successfully added.
-		TCPipe server started @ 10.10.10.203:7
-		Starting main loop
+		...
 		mDNS: Board crs_0026 registered successfully over mDNS at 10.10.10.203:7
 
-New uboot-based firmware
--------------------------
 
-Program with::
-
-    program_flash -f uboot.bin -fsbl fsbl-t0-crs.elf -flash_type qspi-x8-dual_parallel
 
 
 Resetting the board
