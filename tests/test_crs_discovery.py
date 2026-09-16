@@ -86,6 +86,23 @@ def test_legacy_fwreq_format_is_rejected():
         CRSBeacon(b"FWREQ 1.0 unknown-t0-crs-rev? 0037")
 
 
+TCPIPE_V12_BEACON = (
+    b"TCPIPE/1\n"
+    b"Manufacturer: t0.technology\n"
+    b"Product: crs\n"
+    b"Revision: 5\n"
+    b"Serial: 0216\n"
+    b"Bootloader: tcpipe\n"
+    b"Bootloader Version: 1.0\n"
+    b"Crate Manufacturer: t0.technology\n"
+    b"Crate Model: CCR\n"
+    b"Crate Serial: 011\n"
+    b"Crate Revision: 1\n"
+    b"Crate Slot: 15\n"
+    b"\n"
+)
+
+
 def test_parse_tcpipe_beacon():
     beacon = CRSBeacon(TCPIPE_BEACON)
 
@@ -104,6 +121,42 @@ def test_parse_tcpipe_beacon():
     assert beacon.slot == 2
     assert beacon.crate_slot is None
     assert beacon.crate_number == 2
+
+
+def test_parse_tcpipe_v12_beacon():
+    beacon = CRSBeacon(TCPIPE_V12_BEACON)
+
+    assert beacon.kind == "TCPIPE"
+    assert beacon.version == "1.0"
+    assert beacon.board_part == "CRS"
+    assert beacon.board_serial == "0216"
+    assert beacon.backplane_part is None
+    assert beacon.backplane_serial is None
+    assert beacon.backplane_slot is None
+    assert beacon.crate_manufacturer == "t0.technology"
+    assert beacon.crate_part == "CCR"
+    assert beacon.crate_serial == "011"
+    assert beacon.crate_revision == "1"
+    assert beacon.crate_slot == 15
+    assert beacon.slot == 15
+
+
+def test_crs_discovery_sets_slot_from_crate_slot():
+    discovery = CRSDiscovery(
+        board_targets=[("CRS", "0216")],
+        crate_targets=[],
+        timeout=0)
+    beacon = CRSBeacon(TCPIPE_V12_BEACON)
+    beacon.address = "192.0.2.16"
+
+    mb = discovery._update_hardware_map(beacon, tcpipe_version=beacon.version)
+
+    assert mb.slot == 15
+    assert isinstance(mb.crate, CRSBackplane)
+    assert mb.crate.serial == "011"
+    assert mb.crate.slot[15] is mb
+    assert beacon.crate_slot == 15
+    assert beacon.backplane_slot is None
 
 
 def test_format_discovered_board_line_includes_backplane_and_crate():
@@ -495,6 +548,23 @@ def test_arm_firmware_uploader_skips_matching_tcpipe_version():
     )
 
     assert runner._boards_to_upload() == []
+
+
+def test_arm_firmware_uploader_raises_on_wrong_tcpipe_version(tmp_path):
+    elf = tmp_path / "tcpipe_rtos.elf"
+    elf.write_bytes(b"payload")
+    board = CRS(serial="0037", hostname="192.0.2.10")
+    board.tcpipe_version = "0.9"
+    runner = CRSArmFirmwareUploader(
+        boards=[board],
+        required_version="v1.2-3-gabcd12",
+        firmware_pathname=str(elf),
+    )
+
+    with pytest.raises(RuntimeError, match=(
+            r"measured '0\.9', expected 'v1\.2-3-gabcd12'"
+            r".*Reboot the boards")):
+        asyncio.run(runner.run())
 
 
 def test_set_platform_firmware_uses_elf_git_version(monkeypatch, tmp_path):
@@ -1206,6 +1276,82 @@ def test_collect_fwreq_ports_maps_ephemeral_reply_port():
 
     ports = asyncio.run(exercise())
     assert ports == {"127.0.0.1": 10132}
+
+
+def test_collect_fwreq_ports_raises_on_wrong_tcpipe_version():
+    wrong = TCPIPE_BEACON.replace(
+        b"Bootloader Version: 1.0", b"Bootloader Version: 0.9")
+    board = CRS(serial="0037", hostname="127.0.0.1")
+    board.tcpipe_version = None
+    runner = CRSArmFirmwareUploader(
+        boards=[board],
+        required_version="v1.2-3-gabcd12",
+        firmware_pathname=CRS.DEFAULT_ARM_FIRMWARE_PATHNAME,
+    )
+
+    async def exercise():
+        recv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        send_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            CRSArmFirmwareUploader._bind_fwreq_socket(recv_sock)
+            send_sock.bind(("127.0.0.1", 10133))
+
+            async def send_tcpipe():
+                await asyncio.sleep(0.05)
+                send_sock.sendto(wrong, ("127.0.0.1", DEFAULT_DISCOVERY_PORT))
+
+            sender = asyncio.create_task(send_tcpipe())
+            try:
+                await runner._collect_fwreq_ports(recv_sock, [board], timeout=2)
+            finally:
+                await sender
+        finally:
+            recv_sock.close()
+            send_sock.close()
+
+    with pytest.raises(RuntimeError, match=(
+            r"measured '0\.9', expected 'v1\.2-3-gabcd12'"
+            r".*Reboot the boards")):
+        asyncio.run(exercise())
+
+
+def test_wait_for_tcpipe_beacons_raises_on_wrong_version(monkeypatch):
+    wrong = TCPIPE_BEACON.replace(
+        b"Bootloader Version: 1.0", b"Bootloader Version: 0.9")
+    board = CRS(serial="0037", hostname="127.0.0.1")
+    runner = CRSArmFirmwareUploader(
+        boards=[board],
+        required_version="v1.2-3-gabcd12",
+        firmware_pathname=CRS.DEFAULT_ARM_FIRMWARE_PATHNAME,
+    )
+    monkeypatch.setattr(
+        "pychfpga.hardware.crs.crs_discovery.request_beacon", lambda *a, **k: None)
+
+    async def exercise():
+        recv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        send_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            CRSArmFirmwareUploader._bind_fwreq_socket(recv_sock)
+            send_sock.bind(("127.0.0.1", 10134))
+
+            async def send_tcpipe():
+                await asyncio.sleep(0.05)
+                send_sock.sendto(wrong, ("127.0.0.1", DEFAULT_DISCOVERY_PORT))
+
+            sender = asyncio.create_task(send_tcpipe())
+            try:
+                await runner._wait_for_tcpipe_beacons(
+                    recv_sock, [board], timeout=2)
+            finally:
+                await sender
+        finally:
+            recv_sock.close()
+            send_sock.close()
+
+    with pytest.raises(RuntimeError, match=(
+            r"measured '0\.9', expected 'v1\.2-3-gabcd12'"
+            r".*Reboot the boards")):
+        asyncio.run(exercise())
 
 
 def test_fpga_array_routes_crs_crates_to_crs_network_discovery():

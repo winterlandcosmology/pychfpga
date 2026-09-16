@@ -352,3 +352,43 @@ def test_has_changed_no_false_positive_on_equal_update():
     assert root.has_changed(context="arr")
     assert root.has_changed("target_mode", context="arr")
     assert not root.has_changed("stream_ids", context="arr")
+
+
+def test_get_common_attr_match_returns_first_identity():
+    fmt = State(bits=8)
+    a = State(source=1, fmt=fmt)
+    b = State(source=1, fmt=fmt)
+    assert State.get_common_attr([a, b], "source") == 1
+    assert State.get_common_attr([a, b], "fmt") is fmt
+
+
+def test_get_common_attr_mismatch_raises():
+    a = State(source=1)
+    b = State(source=2)
+    with pytest.raises(ValueError, match="source"):
+        State.get_common_attr([a, b], "source")
+
+
+def test_get_common_attr_empty_raises():
+    with pytest.raises(ValueError, match="no states"):
+        State.get_common_attr([], "source")
+
+
+def test_get_common_attr_ndarray_match():
+    import numpy as np
+
+    arr = np.arange(4)
+    a = State(bin_map=arr)
+    b = State(bin_map=np.arange(4))
+    result = State.get_common_attr([a, b], "bin_map")
+    assert result is arr
+    assert np.array_equal(result, np.arange(4))
+
+
+def test_get_common_attr_ndarray_mismatch():
+    import numpy as np
+
+    a = State(bin_map=np.arange(4))
+    b = State(bin_map=np.arange(4) + 1)
+    with pytest.raises(ValueError, match="bin_map"):
+        State.get_common_attr([a, b], "bin_map")
