@@ -150,7 +150,7 @@ class Motherboard(HardwareMap):
         self.serial = serial
         self.slot = slot
         self.subarray = subarray
-        self.extra_args = kwargs
+        self.extra_hwm_args = kwargs
 
         self.crate = None  # Crate (or backplane) object on which the motherboard is mounted
         self.mezzanine = {}  # Mezzanines attached to this motherboard ({slot:mezz_object, ...})
@@ -279,7 +279,7 @@ class Motherboard(HardwareMap):
                 that matches the specified crate number, or one is created
                 with that crate number to hold the desired crate number value.
 
-            **kwargs: Any other argument is stored in the extra_args
+            **kwargs: Any other argument is stored in the extra_hwm_args
                 dictionary, and will be transferred if this instance is
                 converted into a new class.
         """
@@ -364,10 +364,10 @@ class Motherboard(HardwareMap):
         slot = slot if slot is not None else self.slot
         subarray = subarray if subarray is not None else self.subarray
         crate_number = self.get_crate_number()
-        extra_args = {**self.extra_args, **kwargs}
+        extra_hwm_args = {**self.extra_hwm_args, **kwargs}
         if new_class and self.__class__ is not new_class:
-            self.logger.debug(f"update_instance: Creating new instance with {new_class.__name__}(serial={serial}, hostname={hostname}, slot={slot}, subarray={subarray}, **{extra_args})")
-            other = new_class(serial=serial, hostname=hostname, slot=slot, subarray=subarray, **extra_args)
+            self.logger.debug(f"update_instance: Creating new instance with {new_class.__name__}(serial={serial}, hostname={hostname}, slot={slot}, subarray={subarray}, **{extra_hwm_args})")
+            other = new_class(serial=serial, hostname=hostname, slot=slot, subarray=subarray, **extra_hwm_args)
             self.logger.debug(f"{self!r}: Updating newly created instance...")
             other.update_instance(crate_number=crate_number, crate=self.crate)  # update crate and backrefs
             # Update Mezzanine references to the new instance
@@ -384,7 +384,7 @@ class Motherboard(HardwareMap):
             self.hostname = hostname
             self.serial = serial
             self.subarray = subarray
-            self.extra_args = extra_args
+            self.extra_hwm_args = extra_hwm_args
             # remove previous crate backref if it exists
             if self.crate and self.slot:
                 self.crate.slot.pop(self.slot, None)
@@ -679,13 +679,7 @@ class Motherboard(HardwareMap):
     async def init_fpga_async(self, **kwargs):
         """ Initializes the FPGA firmware.
         """
-        # Only TCPipe-backed platforms support BSB command aggregation.
-        tcpipe = self.__dict__.get('tcpipe')
-        if tcpipe is not None:
-            with tcpipe.aggregate_commands():
-                await self.fpga.init_async(**kwargs)
-        else:
-            await self.fpga.init_async(**kwargs)
+        await self.fpga.init_async(**kwargs)
 
     # ****************************
     # Metrics
