@@ -19,11 +19,21 @@ from pychfpga.common.udp_packet_receiver import UDPPacketReceiver
 from pychfpga.common.tcp_packet_receiver import TCPPacketReceiver
 
 
+# Pipeline compensation after an integer-second IRIG target so ADC frames
+# start on the second. The old default delay was ``2 - 0.006556800``; the 2 s
+# pad is gone and this offset remains.
+IRIG_SYNC_PIPELINE_OFFSET_S = -0.006556800
+IRIG_SYNC_MIN_SLACK_S = 0.05
+IRIG_SYNC_DUMMY_ARM_DELAY_S = 300
+IRIG_SYNC_POLL_LEAD_S = 0.020
+
+
 class chFPGAArrayMethods(ArrayMethods):
     """Array-wide methods for chFPGA firmware arrays."""
 
     def __init__(self, fpga_array):
         super().__init__(fpga_array)
+        self.perf = fpga_array.perf
         self._sync_timestamp = None
         self._sync_timestamps = None
         self._sync_start_time = None
@@ -61,11 +71,10 @@ class chFPGAArrayMethods(ArrayMethods):
     async def array_init_async(
             self,
             *,
-            platform_firmware_pathname=None,
+            # platform_firmware_pathname=None,
             mode=None,
             bitfile=None,
             prog=None,
-            open=None,
             init=None,
             if_ip=None,
             fpga_ip_addr_fn=None,
@@ -99,26 +108,6 @@ class chFPGAArrayMethods(ArrayMethods):
         if not self.ib:
             return
 
-        # platform_firmware_groups = {}
-        # for mb in self.ib:
-        #     if mb.hostname:
-        #         platform_firmware_groups.setdefault(mb.__class__, []).append(mb)
-        # if platform_firmware_groups:
-        #     platform_names = ', '.join(cls.__name__ for cls in platform_firmware_groups)
-        #     self.logger.debug(
-        #         f'{self!r}: Loading platform firmware on the following '
-        #         f'motherboards as needed: {platform_names}')
-        #     for board_cls, boards in platform_firmware_groups.items():
-        #         await board_cls.set_platform_firmware(
-        #             boards=boards,
-        #             firmware_pathname=platform_firmware_pathname)
-
-        if open is not None and init is None:
-            if open == 0:
-                init = 1
-            elif open == 1:
-                init = 3
-
         if mode:
             if init is None:
                 init = 3
@@ -127,35 +116,54 @@ class chFPGAArrayMethods(ArrayMethods):
         else:
             init = 0
 
-        if init >= 1:
-            self.logger.info(
-                f'{self.fpga_array!r}: Configuring FPGAs and connecting to them...')
-            await asyncio.gather(*[
-                self._prog_and_open_fpga_async(
-                    mb=mb,
-                    prog=prog,
-                    init=init,
-                    mode=mode,
-                    bitfile=bitfile,
-                    udp_retries=udp_retries,
-                    fpga_ip_addr_fn=fpga_ip_addr_fn,
-                    interface_ip_addr=if_ip,
-                    **mb.extra_args)
-                for mb in self.ib])
+        # try programming the FPGA and establishing communicaiton with it up to 3 times
+        max_trials = 3
+        for trial in range(1, max_trials + 1): 
 
+            if init >= 1:
+                self.logger.info(f'{self.fpga_array!r}: Configuring FPGAs...')
+                self.perf.start('FPGA programming', description='Init Level 1/prog: Upload bitstreams')
+                if prog:
+                    await self.ib.set_fpga_bitstream_async(mode, force=(prog > 1), bitfile_override=bitfile)
+            else:
+                break # nothing to do, exit the trial loop
+
+            if init >= 2:
+                self.perf.start('FPGA open', description='Init level 2: Open MMI and PLL_SYNC')
+                try:
+                    await self.ib.open_fpga_async(
+                            udp_retries=udp_retries,
+                            fpga_ip_addr_fn=fpga_ip_addr_fn,
+                            interface_ip_addr=if_ip,
+                            irigb_source=sync_source)
+                    break  # it worked, exit the trial loop
+                except IOError:
+                    self.logger.warning(f'{self.fpga_array!r}: Error while initializing core firmware on trial {trial}/{max_trials}.')
+                    if trial == max_trials:
+                        raise IOError(
+                            f'{self.fpga_array!r}: Unable to initializing FPGA core firmware '
+                            f'after {trial} trials. Giving up.')
+                    else:
+                        prog = 2  # force reprogramming the FPGA on next trial
+                        self.logger.warning(f'{self.fpga_array!r}: Reprogramming FPGA and trying again.')
+            else:
+                break # We skipped this step, so let's assume it worked, exit the trial loop
+
+        # Now that we have a firmware object, update the array methods list with the methods provided by this firmware.  
         self.fpga_array.get_array_methods()
 
         if init >= 3:
             self.logger.info(f'{self.fpga_array!r}: Initializing FPGA firmware')
+            self.perf.start('FPGA firmware init', description='Init level 3a: Initialize channelizers and CT/X engines')
             await self.ib.init_fpga_async(
-                init=open,
                 adc_mode=adc_mode,
                 adc_bandwidth=adc_bandwidth,
                 sampling_frequency=sampling_frequency,
                 **kwargs)
 
         if init >= 3:
-            self.logger.info(f'{self.fpga_array!r}: Initializing Backplane')
+            self.logger.info(f'{self.fpga_array!r}: Init level 3b: Initializing Backplane')
+            self.perf.start('Backplane init', description='Initialize backplanes')
             if self.ic:
                 self.ic.init()
 
@@ -164,13 +172,14 @@ class chFPGAArrayMethods(ArrayMethods):
                 raise RuntimeError(
                     f'An operational mode must be specified for init={init}')
 
+            # Infer the sync method if not explicitly specified
             if sync_method is None:
-                if all(self.ib.crate):
+                if all(self.ib.crate):  # Use IRIG-B sync method if all boards are in crates
                     sync_method = 'irig-b'
                     self.logger.info(
                         f'{self.fpga_array!r}: sync_method is not specified but was '
                         f'automatically set to "irig-b" since all boards are in crates')
-                elif not any(self.ib.crate):
+                elif not any(self.ib.crate):  # Use local sync method if no boards are in crates
                     sync_method = 'local'
                     self.logger.info(
                         f'{self.fpga_array!r}: sync_method is not specified but was '
@@ -180,9 +189,11 @@ class chFPGAArrayMethods(ArrayMethods):
                         f'{self.fpga_array!r}: Some motherboards are in crates and '
                         f'some are not. `sync_method` is not set.')
 
+            # Set the sync method if it is explicitly specified or if the sync source is specified
             if sync_method or sync_source:
                 self.logger.info(
                     f'{self.fpga_array!r}: Setting SYNC method to {sync_method}')
+                self.perf.start('SYNC method', description='Init level 3c: Configure sync method')
                 await self.set_sync_method_async(
                     method=sync_method,
                     source=sync_source,
@@ -190,6 +201,8 @@ class chFPGAArrayMethods(ArrayMethods):
                     master_source=sync_master_source,
                     master_output=sync_master_output)
 
+            # Set the operational mode
+            self.perf.start('Operational mode', description='Init level 3d: Set operational mode and sync')
             await self.set_operational_mode_async(
                 mode=mode,
                 frames_per_packet=frames_per_packet,
@@ -200,58 +213,27 @@ class chFPGAArrayMethods(ArrayMethods):
                 corner_turn_bad_links=corner_turn_bad_links,
                 corner_turn_bin_priority=corner_turn_bin_priority,
                 corner_turn_remap_level=corner_turn_remap_level)
+    
 
-    async def _prog_and_open_fpga_async(
-            self, mb, prog, init, mode, bitfile=None, max_trials=3, **kwargs):
-        """Program and open communication with one motherboard's FPGA."""
-        for trial in range(1, max_trials + 1):
-            if init >= 1 and prog:
-                await mb.set_fpga_bitstream_async(
-                    mode, force=(prog > 1) or (trial > 1), bitfile_override=bitfile)
-                self.logger.debug(
-                    f'{self.fpga_array!r}: Done configuring FPGAs on {mb!r}')
-
-            if init >= 2:
-                try:
-                    self.logger.info(
-                        f'{self.fpga_array!r}: Initializing core FPGA firmware for {mb!r}: '
-                        f'Trial {trial}/{max_trials}.')
-                    await mb.open_fpga_async(**kwargs)
-                    break
-                except IOError:
-                    raise
-                    self.logger.warning(
-                        f'{self.fpga_array!r}: Error while initializing core firmware on '
-                        f'trial {trial}/{max_trials}.')
-                    if trial == max_trials:
-                        raise IOError(
-                            f'{self.fpga_array!r}: Unable to initializing FPGA core firmware '
-                            f'after {trial} trials. Giving up.')
-                    else:
-                        self.logger.warning(
-                            f'{self.fpga_array!r}: Reprogramming FPGA and trying again.')
-            else:
-                break
-
-    async def sync_async(self, delay=2 - 0.006556800, check=True, align_to_seconds=True, max_trials=3, max_sync_time_difference=None):
+    async def sync_async(self, delay=0, check=True, align_to_seconds=True, max_trials=3, max_sync_time_difference=None):
         """Generate a SYNC event across the whole array.
 
         Parameters:
 
-        delay (float): Sets in how much time in the future after the current
-            time the sync time  will happen. The system will determine and the
-            time it takes to issue the command across the array. If
-            ``align_to_seconds`` is True, the delay is applied after the
-            current time + propagation time is rounded to the second, allowing
-            a find tuning of the trigger time down to 10 nanosecond
-            increments.
+        delay (float or list): Extra seconds added after the chosen trigger
+            base. With ``align_to_seconds`` this is applied after the next
+            safe integer second (and after
+            :data:`IRIG_SYNC_PIPELINE_OFFSET_S`). A list is a per-board
+            offset. Default 0: do not skip extra seconds.
 
         check (bool): If True, the method will read the SYNC
             counters on every board to confirm that the SYNC really happened
             everywhere.
 
-        align_to_seconds (bool): if True, the trigger time **before** the
-            ``delay`` is applied is rounded to the closest integer second.
+        align_to_seconds (bool): if True, the trigger base is the smallest
+            integer second at least ``slack`` in the future (``slack`` from a
+            dummy arm of the array), then the pipeline offset and ``delay``
+            are applied. ADC frames start on that second.
         """
 
         # Don't try to check the SYNC status if we don't have a SYNC engine (REFCLK) in the firmware of all boards
@@ -282,43 +264,95 @@ class chFPGAArrayMethods(ArrayMethods):
                 #             raise RuntimeError('Timout while waiting for the IRIG-B-based SYNC to complete')
 
                 elif self._sync_method in self.IRIGB_SYNC_METHODS:
-                    # Estimate how much time it takes to set the trigger time
-                    dt = await self.ib[0].get_irigb_time_async()
-                    t0 = time.time()
-                    # set the trigger far enough in time it should not happen before we reprogram another delay
-                    await self.ib.set_irigb_trigger_time_async(dt, delay=300)
-                    setting_time = (time.time() - t0)
-                    self.logger.info(f'{self!r}: It takes {setting_time:0.3f} seconds to set the trigger time across the array')
-                    setting_time = round(2 * setting_time)
-                    # Now set the trigger time using that delay
-                    dt = await self.ib[0].get_irigb_time_async()
-                    if align_to_seconds:
-                        self.logger.info(f'{self!r}: Rounding trigger time to the second')
-                        dt = dt.replace(microsecond=0)
-                    # self.print_flush()
-                    t0 = time.time()
-                    if isinstance(delay, (list, tuple)):
-                        max_delay = max(delay)
-                        sync_time = []
-                        for mb,dly in zip(self.ib, delay):
-                            self.logger.info(f'{self!r}: Triggering SYNC on {mb!r} {setting_time+dly:0.9f} seconds after {dt.isoformat()}')
-                            sync_time.append(await mb.set_irigb_trigger_time_async(dt, delay=setting_time+dly))
-                        self._sync_start_time = sync_time
-                    else:
-                        max_delay = delay
-                        self.logger.info(f'{self!r}: Triggering SYNC {setting_time+delay:0.9f} seconds after {dt.isoformat()}')
-                        self._sync_start_time = sync_time = await self.ib.set_irigb_trigger_time_async(
-                            dt, delay=setting_time+delay)
-                    self.logger.info(f'{self!r}: It took {time.time() - t0:0.3f} seconds to set the final trigger time')
-                    t0 = time.time()
-                    while True:
-                        still_waiting = await self.ib.is_irigb_before_trigger_time_async()
-                        if not any(still_waiting):
-                            break
-                        if time.time() - t0 > max_delay + 1:
-                            raise RuntimeError('Timout while waiting for the IRIG-B-based SYNC to complete')
-                        await asyncio.sleep(0.1)
-                    await asyncio.sleep(0.1)  # make sure the sync sequence has time to finish
+                    # Validity gate: after FPGA programming the decoder can take
+                    # ~1 s to see a full second. Fail before arming if any board
+                    # has no valid IRIG. Source is selected during FPGA open so
+                    # this is usually already valid.
+                    # Times here use get_irigb_time's datetime (latch + 1 s);
+                    # set_irigb_trigger_time programs the comparator 1 s earlier.
+                    self.perf.start('irig_validity', subtask=True, description='Wait for decoder recent on all boards')
+                    try:
+                        t_valid0 = time.time()
+                        dt = max(await self.ib.get_irigb_time_async(
+                            trig=True, format='datetime', noerror=False))
+                        self.logger.info(f'{self!r}: IRIG validity read took {time.time() - t_valid0:0.3f} s')
+                        self.perf.start('irig_dummy', description='Dummy arm to measure slack')
+                        t0 = time.time()
+                        # Dummy arm far in the future so it cannot fire; measures
+                        # real array arm time (RPC path, switch, load).
+                        await self.ib.set_irigb_trigger_time_async(
+                            dt, IRIG_SYNC_DUMMY_ARM_DELAY_S)
+                        t_arm = time.time() - t0
+                        slack = max(2 * t_arm, IRIG_SYNC_MIN_SLACK_S)
+                        self.logger.info(f'{self!r}: Dummy IRIG arm took {t_arm:0.3f} s; '
+                                         f'slack={slack:0.3f} s')
+                        t_now = max(await self.ib.get_irigb_time_async(format='datetime'))
+                        if align_to_seconds:
+                            deadline = t_now + datetime.timedelta(seconds=slack)
+                            second = deadline.replace(microsecond=0)
+                            if deadline.microsecond:
+                                second += datetime.timedelta(seconds=1)
+                            base = second
+                            pipeline = IRIG_SYNC_PIPELINE_OFFSET_S
+                            self.logger.info(
+                                f'{self!r}: Next safe IRIG second is '
+                                f'{second.isoformat()} '
+                                f'(t_now={t_now.isoformat()})')
+                        else:
+                            base = t_now + datetime.timedelta(seconds=slack)
+                            pipeline = 0.0
+
+                        t_prog0 = time.time()
+                        if isinstance(delay, (list, tuple)):
+                            extras = list(delay)
+                            max_extra = max(extras)
+                            totals = [pipeline + dly for dly in extras]
+                            for mb, total in zip(self.ib, totals):
+                                self.logger.info(
+                                    f'{self!r}: Triggering SYNC on {mb!r} '
+                                    f'{total:0.9f} s after {base.isoformat()}')
+                            self._sync_start_time = sync_time = await asyncio.gather(*[
+                                fpga.set_irigb_trigger_time_async(base, total)
+                                for fpga, total in zip(self.ib, totals)])
+                            target_dt = base + datetime.timedelta(
+                                seconds=pipeline + max_extra)
+                        else:
+                            extra = float(delay)
+                            total = pipeline + extra
+                            self.logger.info(
+                                f'{self!r}: Triggering SYNC {total:0.9f} s '
+                                f'after {base.isoformat()}')
+                            self._sync_start_time = sync_time = (
+                                await self.ib.set_irigb_trigger_time_async(
+                                    base, total))
+                            target_dt = base + datetime.timedelta(seconds=total)
+                        t_prog = time.time() - t_prog0
+                        self.logger.info(
+                            f'{self!r}: Final IRIG arm took {t_prog:0.3f} s; '
+                            f'target={target_dt.isoformat()}')
+
+                        self.perf.start('irig_wait', description='Sleep until comparator target')
+                        irig_until_target = (target_dt - t_now).total_seconds()
+                        sleep_s = irig_until_target - t_prog - IRIG_SYNC_POLL_LEAD_S
+                        if sleep_s > 0:
+                            self.logger.info(
+                                f'{self!r}: Sleeping {sleep_s:0.3f} s '
+                                f'until IRIG target')
+                            await asyncio.sleep(sleep_s)
+                        t_poll0 = time.time()
+                        while True:
+                            still_waiting = await self.ib.is_irigb_before_trigger_time_async()
+                            if not any(still_waiting):
+                                break
+                            if time.time() - t_poll0 > slack + 1:
+                                raise RuntimeError(
+                                    'Timout while waiting for the IRIG-B-based '
+                                    'SYNC to complete')
+                            await asyncio.sleep(0.1)
+                        await asyncio.sleep(0.1)  # make sure the sync sequence has time to finish
+                    finally:
+                        if self.perf._current[-1] != 'sync':
+                            self.perf.stop()
                 elif self._sync_method in self.LOCAL_SYNC_METHODS:
                     self.ib.sync()
                 # elif self.sync_method == 'external':
@@ -336,6 +370,9 @@ class chFPGAArrayMethods(ArrayMethods):
                 # Check if all boards of the array have sync'ed by looking at the sync counter
                 if check:
                     sync_ctr_after = self.ib.REFCLK.SYNC_CTR
+                    # self.logger.info(f'{self!r}: The SYNC counter before is:\n{sync_ctr_before}')
+                    # self.logger.info(f'{self!r}: The SYNC counter after boards is:\n{sync_ctr_after}')
+
                     bad_mb = [mb for i, mb in enumerate(self.ib) if (sync_ctr_after[i] - sync_ctr_before[i]) & 0xf != 1]
                     if bad_mb:
                         bad_boards_str = ','.join(repr(mb) for mb in bad_mb)
@@ -343,7 +380,7 @@ class chFPGAArrayMethods(ArrayMethods):
 
                 if self._sync_method in self.IRIGB_SYNC_METHODS:
                     self._sync_timestamps = ts = await self.ib.get_irigb_time_async(
-                        trig=False, format='raw')
+                        trig=False, format='raw', noerror=False)
                     self._sync_timestamp = ts[0]
 
                     delta_ts = max(ts.nano) - min(ts.nano)
@@ -1114,6 +1151,7 @@ class chFPGAArrayMethods(ArrayMethods):
         if tx_power is not None:
             self._tx_power = tx_power
         self.logger.info(f'{self.fpga_array!r}: Setting operational mode to {mode}')
+        self.perf.start('clock check', subtask=True, description='Crate vs backplane clock')
 
         # To make sure that the data acquisition and transmission will be done
         # at the same rate, refuse to operate if
@@ -1132,6 +1170,8 @@ class chFPGAArrayMethods(ArrayMethods):
             msg = ', '.join(f'{self.ib[i]!r}=>{clock_sources[i]}' for i in bad_clock_source_with_crate)
             raise RuntimeError(f'The following IceBoards are in crates but are not configured to use the backplane clock: {msg}')
 
+        self.perf.start('mode setup', description='Crossbars / correlator / corner-turn')
+        do_sync = False
         if mode == 'chan8':
             self.ib.set_fft_bypass(True)
             self.ib.set_scaler_bypass(True)
@@ -1150,13 +1190,13 @@ class chFPGAArrayMethods(ArrayMethods):
                     chan8_channel_map=chan8_channel_map)
                 for lane, stream_id in enumerate(stream_ids):
                     self.fpga_array.corner_turn_stream_ids[mb.get_id(lane)] = stream_id
-            # Sync board(s)
-            await self.sync_async()
+            do_sync = True
 
         elif mode in ('shuffle8',):
             # For use with the CRS
             for mb in self.ib:
                 mb.set_corr_reset(0)
+            do_sync = True
 
         elif mode in ('shuffle256', 'shuffle512', 'shuffle16', 'shuffle128', 'chord16'):
             if not all(self.ib.CROSSBAR2) or not all(self.ib.CROSSBAR3):
@@ -1173,11 +1213,12 @@ class chFPGAArrayMethods(ArrayMethods):
                 tx_power=tx_power,
                 bad_links=corner_turn_bad_links,
                 bin_priority=corner_turn_bin_priority,
-                remap_level=corner_turn_remap_level)
+                remap_level=corner_turn_remap_level,
+                sync=False)
             self.ib.BP_SHUFFLE.reset_stats()
             self.ib.CROSSBAR2.reset_stats()
             self.ib.CROSSBAR3.reset_stats()
-            # Sync was performed by init_corner_turn()
+            do_sync = True
 
         elif mode in ('corr4', 'corr8', 'corr16', 'corr32', 'corr64'):
             #if not all(self.ib.CORR):
@@ -1195,10 +1236,14 @@ class chFPGAArrayMethods(ArrayMethods):
             # self.ib.set_offset_binary_encoding()  # The firmware correlator engine expects offset encoding
             if integration_period:
                 self.ib.start_correlator(integration_period=integration_period, autocorr_only=autocorr_only)
-            # Sync board(s)
-            await self.sync_async()
+            do_sync = True
         else:
             raise ValueError(f"Unknown operational mode '{mode}'")
+
+        if do_sync:
+            self.perf.start('sync', description='IRIG-B wait plus trigger RPCs')
+            await self.sync_async()
+        self.perf.stop()
 
     
 
@@ -1235,6 +1280,16 @@ class chFPGAArrayMethods(ArrayMethods):
             tx_power (dict): Describes the initial (training) and final TX
                  power to be used by the backplane PCB and QSFP links. applied
                  to the backplane PCB GTX links.
+
+            bin_map (dict): Bin map to be passed to mb.init_crossbar(). Defaults to None.   
+
+            bad_links (list): List of bad links to be passed to mb.init_crossbar(). Defaults to None.
+
+            bin_priority (list): List of bin priority to be passed to mb.init_crossbar(). Defaults to None.
+
+            remap_level (int): Remap level to be passed to mb.init_crossbar(). Defaults to 0.
+
+            sync (bool): Whether to sync the boards after initialization. Defaults to True.
 
 
         The GTX receivers that have no corresponding transmitter is put in
@@ -1513,6 +1568,9 @@ class chFPGAArrayMethods(ArrayMethods):
         UDPPacketReceiver or TCPPacketReceiver
         """
         if force:
+            close = getattr(self._packet_receiver, "close", None)
+            if callable(close):
+                close()  # stop the background rx thread before dropping a UDP receiver
             self._packet_receiver = None
         if self._packet_receiver is not None:
             have_tcp = isinstance(self._packet_receiver, TCPPacketReceiver)
@@ -3685,141 +3743,120 @@ class chFPGAArrayMethods(ArrayMethods):
 
         return stream_id_map
 
-    def get_config(self):
+    def update_config(self):
         """Refresh each board's firmware config tree and return board configs.
 
         Returns:
-            list of each board's ``config`` State after :meth:`chFPGA.get_config`.
+            list of each board's ``config`` State after :meth:`chFPGA.update_config`.
         """
-        return [mb.get_config() for mb in self.ib]
-
-    @staticmethod
-    def get_common_config_attr(configs, attr):
-        """Return ``attr`` from ``configs``; all values must match (``State._values_equal``).
-
-        Returns the first value by identity so nested ``State`` objects (e.g.
-        ``capture_format``) stay shared with firmware. Empty ``configs`` or a
-        mismatch raises ``ValueError`` naming ``attr``.
-        """
-        if not configs:
-            raise ValueError(
-                f"Cannot get common config attribute {attr!r}: no configs"
-            )
-        first = configs[0][attr]
-        for cfg in configs[1:]:
-            if not State._values_equal(first, cfg[attr]):
-                raise ValueError(
-                    f"Config attribute {attr!r} differs across boards"
-                )
-        return first
+        return [mb.update_config() for mb in self.ib]
 
     def get_raw_data_config(self):
-        """Assemble array-wide raw capture config from firmware module States."""
+        """Get an updated array-wide raw capture config aggregated from the configs of every board in the array."""
         boards = list(self.ib)
         if not boards:
             raise RuntimeError(
                 f'{self.fpga_array!r}: No boards available to build data config'
             )
 
-        ctx = ('get_raw_data_config', self)
-        if self._raw_data_config is not None:
+        ctx = ('get_raw_data_config', self)  # Context object used to identify config changes that matter to this function  
+
+        # Return the existing config if it exists and none of the boards have changed their configs since the last time
+        if self._raw_data_config is not None:  
             if not any(mb.fpga.config.has_changed(context=ctx) for mb in boards):
                 return self._raw_data_config
 
-        for mb in boards:
-            mb.fpga.get_config()
-
         fpgas = [mb.fpga for mb in boards]
-        cfgs = [fpga.config for fpga in fpgas]
-        capture_engine = self.get_common_config_attr(cfgs, "capture_engine")
+
+        # Get a list of updated configs for each board (i.e update derived parameters if needed)
+        cfgs = [fpga.update_config() for fpga in fpgas]
+
+
+        # If the config object doesn't exist, build one and include the static parameters that won't change (so we don't have to fetch and check them every time)
+        if self._raw_data_config is None:
+            bytes_per_frame = State.get_common_attr(cfgs, "bytes_per_frame")
+            subframes_per_frame = State.get_common_attr(cfgs, "subframes_per_frame")
+            self._raw_data_config = State(
+                # Static parameters that won't change (so we don't have to fetch and check them every time)
+                bytes_per_sample=State.get_common_attr(cfgs, "adc_bytes_per_sample"),
+                samples_per_frame=State.get_common_attr(cfgs, "samples_per_frame"),
+                fft_bins_per_word=State.get_common_attr(cfgs, "fft_bins_per_word"),
+                capture_bits_per_word=State.get_common_attr(cfgs, "capture_bits_per_word"),
+                bytes_per_frame=bytes_per_frame,
+                subframes_per_frame=subframes_per_frame,
+                bytes_per_subframe=bytes_per_frame // subframes_per_frame,
+            )
+            self._raw_data_config.capture_format = [State(), State()]
+
+        # Get the type of capture engine so we will gather the raw data config based in the correct parameters. Must be the same for every board.
+        capture_engine = State.get_common_attr(cfgs, "capture_engine")
 
         if capture_engine == "UCAP":
-            ucaps = [fpga.config.ucap for fpga in fpgas]
-            channels = self.get_common_config_attr(ucaps, "active_channels")
+            ucap_cfgs = [fpga.config.ucap for fpga in fpgas]
+            active_channels = State.get_common_attr(ucap_cfgs, "active_channels")  # list of *local* channel numbers handled by each board (e.g CRS boards all have channels 0-7) 
+
+
+            # Build a list of stream ids for every channel of every board. Unicity is required for proper capture and is tested below.
             stream_ids = tuple(
                 int(fpga.config.ucap.ucap_stream_ids[ch])
-                for fpga in fpgas for ch in channels
+                for fpga in fpgas for ch in active_channels
             )
-            capture_fields = dict(
-                source=self.get_common_config_attr(ucaps, "source"),
-                channels=channels,
-                frames_per_burst=self.get_common_config_attr(ucaps, "frames_per_burst"),
-                target_mode=self.get_common_config_attr(ucaps, "mode"),
-            )
+            # Test for unicity of stream ids across the array.
+            if len(stream_ids) != len(set(stream_ids)):
+                raise ValueError(f'{self.fpga_array!r}: stream_ids are not unique across the array: {list(stream_ids)}')
+
+            # Gather all engine-dependent parameters in a dict
+            source=State.get_common_attr(ucap_cfgs, "source")
+            frames_per_burst=State.get_common_attr(ucap_cfgs, "frames_per_burst")
+            target_mode=State.get_common_attr(ucap_cfgs, "mode")
+
         elif capture_engine == "PROBER":
-            channels = self.get_common_config_attr(cfgs, "channels")
-            probers = [
+            active_channels = State.get_common_attr(cfgs, "channels")
+            prober_cfgs = [
                 fpga.chan[ch].PROBER.config
-                for fpga in fpgas for ch in channels
+                for fpga in fpgas for ch in active_channels
             ]
             stream_ids = tuple(
                 int(fpga.chan[ch].PROBER.config.stream_id)
-                for fpga in fpgas for ch in channels
+                for fpga in fpgas for ch in active_channels
             )
-            capture_fields = dict(
-                source=self.get_common_config_attr(probers, "source"),
-                channels=channels,
-                frames_per_burst=self.get_common_config_attr(
-                    probers, "frames_per_burst"
-                ),
-                subframes_per_frame=self.get_common_config_attr(
-                    probers, "subframes_per_frame"
-                ),
-                target_mode=0,
-            )
+
+            source=State.get_common_attr(prober_cfgs, "source")
+            frames_per_burst=State.get_common_attr(prober_cfgs, "frames_per_burst")
+            subframes_per_frame=State.get_common_attr(prober_cfgs, "subframes_per_frame")
+            target_mode=0
+
         else:
             raise ValueError(
                 f'{self.fpga_array!r}: unknown capture engine {capture_engine!r}'
             )
 
+        funcgen_cfgs = [ch.FUNCGEN.config for fpga in fpgas for ch in fpga.get_channelizers(active_channels)]
+        scaler_cfgs = [ch.SCALER.config for fpga in fpgas for ch in fpga.get_channelizers(active_channels)]
+        fft_cfgs = [ch.FFT.config for fpga in fpgas for ch in fpga.get_channelizers(active_channels)]
+
+        fft_bin_map=State.get_common_attr(fft_cfgs, "bin_ix_map") # get the reverse bin map, i.e. indices into a native bins vector
+
+        # Test for unicity of stream ids across the array.
         if len(stream_ids) != len(set(stream_ids)):
-            raise ValueError(
-                f'{self.fpga_array!r}: stream_ids are not unique across the array: '
-                f'{list(stream_ids)}'
-            )
+            raise ValueError(f'{self.fpga_array!r}: stream_ids are not unique across the array: {list(stream_ids)}')
 
-        ch_list = list(channels)
-        scalers = [fpga.chan[ch].SCALER.config for fpga in fpgas for ch in ch_list]
-        funcgens = [fpga.chan[ch].FUNCGEN.config for fpga in fpgas for ch in ch_list]
-        ffts = [fpga.chan[ch].FFT.config for fpga in fpgas for ch in ch_list]
-
-        if self._raw_data_config is None:
-            bytes_per_frame = self.get_common_config_attr(cfgs, "bytes_per_frame")
-            subframes_per_frame = self.get_common_config_attr(
-                cfgs, "subframes_per_frame"
-            )
-            raw = State(
-                bytes_per_sample=self.get_common_config_attr(
-                    cfgs, "adc_bytes_per_sample"
-                ),
-                samples_per_frame=self.get_common_config_attr(
-                    cfgs, "samples_per_frame"
-                ),
-                bytes_per_frame=bytes_per_frame,
-                fft_bins_per_word=self.get_common_config_attr(
-                    cfgs, "fft_bins_per_word"
-                ),
-                capture_bits_per_word=self.get_common_config_attr(
-                    cfgs, "capture_bits_per_word"
-                ),
-                subframes_per_frame=subframes_per_frame,
-                bytes_per_subframe=bytes_per_frame // subframes_per_frame,
-            )
-            raw.capture_format = [
-                self.get_common_config_attr(funcgens, "capture_format"),
-                self.get_common_config_attr(scalers, "capture_format"),
-            ]
-            self._raw_data_config = raw
-        else:
-            raw = self._raw_data_config
-
-        raw.update(
-            **capture_fields,
-            fft_bin_map=self.get_common_config_attr(ffts, "bin_map"),
+        self._raw_data_config.update(
+            source=source,
+            channels=active_channels,
             stream_ids=stream_ids,
+            frames_per_burst=frames_per_burst, 
+            subframes_per_frame=subframes_per_frame,
+            target_mode=target_mode,
+            fft_bin_map=fft_bin_map,
         )
-        raw.ack(context=ctx)
-        return raw
+        self._raw_data_config.capture_format[0]=State.get_common_attr(funcgen_cfgs, "capture_format")
+        self._raw_data_config.capture_format[1]=State.get_common_attr(scaler_cfgs, "capture_format")
+
+        # Acknowledge the configs of each board so we don't trigger an update if none of the boards have changed their configs since the last time
+        for mb in boards:
+            mb.fpga.config.ack(context=ctx)
+        return self._raw_data_config
 
     def get_corr_data_config(self):
         """Assemble array-wide correlator config from firmware CORR States."""
@@ -3829,38 +3866,41 @@ class chFPGAArrayMethods(ArrayMethods):
                 f'{self.fpga_array!r}: No boards available to build data config'
             )
 
-        corrs = []
-        for mb in boards:
-            corr = mb.fpga.CORR
-            if corr is None:
-                continue
-            corr.get_config()
-            corrs.append(corr.config)
+        ctx = ('get_corr_data_config', self)
+        corrs_cfgs = [mb.fpga.CORR.update_config() for mb in boards if mb.fpga.CORR is not None]
 
-        if not corrs:
+        if not corrs_cfgs:
             return None
-        if len(corrs) != len(boards):
-            raise ValueError(
-                f'{self.fpga_array!r}: correlator is missing on some boards'
-            )
+        if len(corrs_cfgs) != len(boards):
+            raise ValueError(f'{self.fpga_array!r}: correlator is missing on some boards')
 
-        fields = {
-            attr: self.get_common_config_attr(corrs, attr)
-            for attr in (
-                "NCHAN",
-                "NCLK",
-                "NDECIM",
-                "NCORRS",
-                "NPROD_PER_CMAC",
-                "NCMAC",
-                "NBINS",
-                "NPROD_PER_ARRAY",
-                "firmware_integ_period",
-                "bin_map",
-                "prod_map",
-            )
-        }
+        # If the config object doesn't exist, build an empty one
         if self._corr_data_config is None:
             self._corr_data_config = State()
-        self._corr_data_config.update(**fields)
+
+        # Return the existing config if it exists and none of the boards have changed their configs since the last time
+        if not any(cfg.has_changed(context=ctx) for cfg in corrs_cfgs):
+            return self._corr_data_config
+
+        # List of fields to include in the raw data config
+        corr_fields = (
+            "NCHAN",
+            "NCLK",
+            "NDECIM",
+            "NCORRS",
+            "NPROD_PER_CMAC",
+            "NCMAC",
+            "NBINS",
+            "NPROD_PER_ARRAY",
+            "firmware_integ_period",
+            "bin_map",
+            "prod_map",
+        )
+        # Update config with the common attributes
+        self._corr_data_config.update(**{
+            attr: State.get_common_attr(corrs_cfgs, attr)
+            for attr in corr_fields})
+        # Acknowledge the configs of each board so we don't trigger an update if none of the boards have changed their configs since the last time
+        for mb in boards:
+            mb.fpga.CORR.config.ack(context=ctx)
         return self._corr_data_config
