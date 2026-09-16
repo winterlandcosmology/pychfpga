@@ -29,7 +29,6 @@ from pychfpga.hardware.crs.crs_discovery import (  # noqa: E402
     CRSBeacon,
     DEFAULT_BIND,
     DEFAULT_DISCOVERY_PORT,
-    _format_discovery_serial,
     _usable_field,
     request_beacon,
 )
@@ -48,7 +47,6 @@ COLUMN_HEADERS = (
     "version",
     "ip",
     "motherboard",
-    "backplane",
     "crate",
     "slot",
     "other",
@@ -58,9 +56,9 @@ LIVE_COLUMN_HEADERS = (
     "bootloader",
     "version",
     "ip",
+    "first seen",
     "last seen",
     "motherboard",
-    "backplane",
     "crate",
     "slot",
     "other",
@@ -73,8 +71,7 @@ DEFAULT_COLUMN_WIDTHS = (
     8,   # version     ("TCPIPE/1")
     15,  # ip          (IPv4)
     20,  # motherboard ("t0 CRS SN0037 rev 4")
-    16,  # backplane   ("CBP SN0083")
-    16,  # crate       ("CCR SN0011")
+    18,  # crate       ("CCR SN011 rev 1")
     4,   # slot
     0,   # other
 )
@@ -91,18 +88,39 @@ _SHOWN_FIELD_KEYS = frozenset({
     "backplane-model",
     "backplane-serial",
     "backplane-slot",
+    "backplane-revision",
+    "backplane-manufacturer",
     "crate-part",
     "crate-model",
     "crate-serial",
     "crate-slot",
+    "crate-manufacturer",
+    "crate-revision",
+    "chassis-part",
+    "chassis-model",
+    "chassis-serial",
+    "chassis-manufacturer",
+    "chassis-revision",
 })
+
+# Short display names for long manufacturer strings in the live/dump tables.
+MANUFACTURER_ALIASES = {
+    "t0.technology": "t0*",
+    "t0 technology": "t0*",
+}
 
 
 class BoardRecord:
-    """One discovered board plus when its beacon was last received."""
+    """One discovered board plus when its beacon was first and last received."""
 
     def __init__(self, beacon):
-        self.update(beacon)
+        now_mono = time.monotonic()
+        now_wall = time.time()
+        self.first_seen_mono = now_mono
+        self.first_seen_wall = now_wall
+        self.beacon = beacon
+        self.last_seen_mono = now_mono
+        self.last_seen_wall = now_wall
 
     def update(self, beacon):
         self.beacon = beacon
@@ -112,6 +130,10 @@ class BoardRecord:
     @property
     def age(self):
         return time.monotonic() - self.last_seen_mono
+
+    @property
+    def first_age(self):
+        return time.monotonic() - self.first_seen_mono
 
     @property
     def stale(self):
@@ -197,6 +219,8 @@ def _column_sort_key(record, col):
     name = LIVE_COLUMN_HEADERS[col] if 0 <= col < len(LIVE_COLUMN_HEADERS) else ""
     if name == "ip":
         return _ip_sort_key(record.beacon.address)
+    if name == "first seen":
+        return (record.first_seen_mono,)
     if name == "last seen":
         return (record.last_seen_mono,)
     if name == "slot":
@@ -259,7 +283,7 @@ def _is_uboot(beacon):
 
 
 def _crate_slot_value(beacon):
-    """Board slot from EEPROM ``slot=`` (beacon Backplane Slot)."""
+    """Board slot from EEPROM ``slot=`` (Crate Slot, else Backplane Slot)."""
     if isinstance(beacon.slot, int) and beacon.slot > 0:
         return beacon.slot
     return None
@@ -270,34 +294,59 @@ def _crate_slot_text(beacon):
     return str(slot) if slot is not None else "-"
 
 
-def _identity_text(part, serial, default_part=None):
-    """Format ``MODEL SNxxxx``, or ``-`` if nothing usable is present."""
-    serial_text = _clean_text(serial)
-    part_text = _clean_text(part)
-    if part_text is None and serial_text is not None:
-        part_text = default_part
-    if part_text is None and serial_text is None:
-        return "-"
+def _serial_text(serial):
+    """Return ``SNxxx`` using the stored serial digits, or None if missing."""
+    text = _clean_text(serial)
+    if text is None:
+        return None
+    if text.upper().startswith("SN"):
+        text = text[2:]
+        if not text:
+            return None
+    return f"SN{text}"
+
+
+def _identity_text(part, serial, revision=None, manufacturer=None,
+                  expected=None, missing=""):
+    """Format manufacturer, model, serial, and revision.
+
+    Present fields are always included. Empty fields become ``missing`` only
+    when they are listed in ``expected``; unexpected empty fields are omitted.
+    """
+    rev = _clean_text(revision)
+    manufacturer = _clean_text(manufacturer)
+    slots = (
+        ("manufacturer",
+         MANUFACTURER_ALIASES.get(manufacturer.casefold(), manufacturer)
+         if manufacturer else None),
+        ("part", _clean_text(part)),
+        ("serial", _serial_text(serial)),
+        ("revision", f"rev {rev}" if rev else None),
+    )
+    if not any(value for _, value in slots):
+        return ""
+    expected = set(expected) if expected else set()
     bits = []
-    if part_text:
-        bits.append(part_text.upper())
-    if serial_text:
-        bits.append(_format_discovery_serial(serial_text))
-    return " ".join(bits) if bits else "-"
+    for name, value in slots:
+        if value:
+            bits.append(value)
+        elif missing and name in expected:
+            bits.append(missing)
+    return " ".join(bits)
 
 
 def _motherboard_text(beacon):
-    """Format ``t0 CRS SN0037 rev 4``."""
+    """Format manufacturer, product, serial, and revision as stored on the beacon."""
     bits = []
     manufacturer = _clean_text(beacon.fields.get("manufacturer"))
     if manufacturer:
-        bits.append(manufacturer)
+        bits.append(MANUFACTURER_ALIASES.get(manufacturer.casefold(), manufacturer))
     part = _clean_text(beacon.board_part)
     if part:
-        bits.append(part.upper())
-    serial = _clean_text(beacon.board_serial)
+        bits.append(part)
+    serial = _serial_text(beacon.board_serial)
     if serial:
-        bits.append(_format_discovery_serial(serial))
+        bits.append(serial)
     revision = _clean_text(beacon.fields.get("revision"))
     if revision:
         bits.append(f"rev {revision}")
@@ -321,6 +370,26 @@ def _protocol_text(beacon):
 
 def _other_text(beacon):
     parts = []
+    bp = _identity_text(
+        beacon.backplane_part,
+        beacon.backplane_serial,
+        beacon.backplane_revision,
+        manufacturer=beacon.backplane_manufacturer,
+        expected=("manufacturer", "part", "serial", "revision"),
+        missing="?",
+    )
+    if bp:
+        parts.append(f"(BP: {bp})")
+    chassis = _identity_text(
+        beacon.chassis_part,
+        beacon.chassis_serial,
+        beacon.chassis_revision,
+        manufacturer=beacon.chassis_manufacturer,
+        expected=("part", "serial"),
+        missing="?",
+    )
+    if chassis:
+        parts.append(f"(Chassis: {chassis})")
     for key, value in beacon.fields.items():
         if key in _SHOWN_FIELD_KEYS:
             continue
@@ -331,9 +400,40 @@ def _other_text(beacon):
     return " ".join(parts) if parts else "-"
 
 
+def _age_text(age_s):
+    """Integer age: seconds, minutes, ``1h23``, or ``2d3h23``."""
+    age = max(0, int(age_s))
+    if age < 60:
+        return f"{age}s"
+    if age < 3600:
+        return f"{age // 60}m"
+    minutes = (age // 60) % 60
+    hours = (age // 3600) % 24
+    days = age // 86400
+    if days:
+        if hours and minutes:
+            return f"{days}d{hours}h{minutes}"
+        if hours:
+            return f"{days}d{hours}h"
+        if minutes:
+            return f"{days}d{minutes}m"
+        return f"{days}d"
+    if minutes:
+        return f"{hours}h{minutes}"
+    return f"{hours}h"
+
+
+def _seen_text(wall, age_s):
+    clock = time.strftime("%H:%M:%S", time.localtime(wall))
+    return f"{clock} ({_age_text(age_s)})"
+
+
+def _first_seen_text(record):
+    return _seen_text(record.first_seen_wall, record.first_age)
+
+
 def _last_seen_text(record):
-    wall = time.strftime("%H:%M:%S", time.localtime(record.last_seen_wall))
-    return f"{wall} ({int(record.age):4d}s)"
+    return _seen_text(record.last_seen_wall, record.age)
 
 
 def board_columns(beacon):
@@ -344,24 +444,16 @@ def board_columns(beacon):
         beacon.address or "-",
         _motherboard_text(beacon),
         _identity_text(
-            beacon.backplane_part,
-            beacon.backplane_serial,
-            default_part="CBP",
-        ),
-        _identity_text(
-            beacon.crate_part,
-            beacon.crate_serial,
-            default_part="CCR",
-        ),
+            beacon.crate_part, beacon.crate_serial, beacon.crate_revision),
         _crate_slot_text(beacon),
         _other_text(beacon),
     )
 
 
 def live_columns(record):
-    """Return live-table cells, inserting last-seen after the IP column."""
+    """Return live-table cells, inserting first/last seen after the IP column."""
     cols = board_columns(record.beacon)
-    return cols[:3] + (_last_seen_text(record),) + cols[3:]
+    return cols[:3] + (_first_seen_text(record), _last_seen_text(record)) + cols[3:]
 
 
 def format_row(row, widths=DEFAULT_COLUMN_WIDTHS):
