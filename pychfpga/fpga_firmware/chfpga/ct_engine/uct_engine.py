@@ -146,7 +146,7 @@ class UCTEngine(MMIRouter):
             self.CT3.init()
         self.config.CT_LEVEL = ct_level
 
-    def get_config(self):
+    def update_config(self):
         """Refresh CT config subtree; returns ``self.config``."""
         return self.config
 

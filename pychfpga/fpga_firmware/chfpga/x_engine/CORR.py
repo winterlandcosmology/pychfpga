@@ -111,7 +111,7 @@ class CORR(MMIRouter):
         for corr in self.corr:
             corr.init()
 
-    def get_config(self):
+    def update_config(self):
         """Refresh CORR config subtree; returns ``self.config``."""
         return self.config
 

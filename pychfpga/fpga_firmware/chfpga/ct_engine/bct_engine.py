@@ -131,7 +131,7 @@ class BCTEngine(MMIRouter):
         # else:
         #     self.logger.warning(f"{self!r}: There is no BCT 3rd CROSSBAR module in this firmware build")
 
-    def get_config(self):
+    def update_config(self):
         """Refresh CT config subtree; returns ``self.config``."""
         return self.config
 
