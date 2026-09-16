@@ -13,6 +13,13 @@ class PacketProcessorBase(ABC):
     or integration index (UCORR, ``buf_ts // integ_period``).
     """
 
+    # Number of processed "frames" (logical packets) carried by one received UDP
+    # datagram. Default 1: one datagram is one frame (raw capture and every
+    # subclass that does not aggregate). Subclasses that pack several records per
+    # datagram (e.g. UCORR bin aggregation) override this so all per-packet scratch
+    # below is sized to the flat frame space ``M = n_packets * FRAMES_PER_PACKET``.
+    FRAMES_PER_PACKET = 1
+
     def __init__(
         self,
         packet_receiver,
@@ -32,15 +39,19 @@ class PacketProcessorBase(ABC):
         self._last_emitted_ts = np.uint64(0)
         self.n_ts = 0
 
-        n_packets = self.pr.n_packets
-        self.bix_mask = np.zeros((n_packets,), dtype=bool)
-        self.tmp_mask = np.zeros((n_packets + receive_window,), dtype=bool)
+        # Per-packet scratch is indexed by a 1D linear frame index ``bix`` (see
+        # ``filter_packets``/``store_packets``), so it must span the flat frame
+        # space, not just the datagram count. For non-aggregating subclasses
+        # FRAMES_PER_PACKET==1 leaves these byte-for-byte as before.
+        m = self.pr.n_packets * self.FRAMES_PER_PACKET
+        self.bix_mask = np.zeros((m,), dtype=bool)
+        self.tmp_mask = np.zeros((m + receive_window,), dtype=bool)
         # Extra timestamp row(s) for carryover before recomputing unique timestamps of a new UDP batch.
         self.pkt_ts_with_carry = np.empty(
-            (n_packets + receive_window,), dtype=np.uint64
+            (m + receive_window,), dtype=np.uint64
         )
-        self.pkt_ts = self.pkt_ts_with_carry[:n_packets]
-        self.pkt_tix = np.empty((n_packets + receive_window,), dtype=np.int64)
+        self.pkt_ts = self.pkt_ts_with_carry[:m]
+        self.pkt_tix = np.empty((m + receive_window,), dtype=np.int64)
 
         self.init()
 

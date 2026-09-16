@@ -166,7 +166,10 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
         while rows_completed < number_of_results:
             stop = self.out_rows.stop
             if self.current_row < stop:
-                n = min(number_of_results - rows_completed, stop - self.current_row)
+                # Format one integration at a time. A 2-row scatter is ~3x a 1-row
+                # scatter and stalls receive_packets long enough for the rx pool
+                # and kernel RCVBUF to overflow (the every-other-run drop pattern).
+                n = min(1, number_of_results - rows_completed, stop - self.current_row)
                 rows = slice(self.current_row, self.current_row + n)
                 result = self.get_formatted_data(rows)
                 if result is None:
