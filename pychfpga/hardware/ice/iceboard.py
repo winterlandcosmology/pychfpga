@@ -10,7 +10,6 @@ import shlex
 import traceback
 import os
 # Pypi packages
-import nest_asyncio
 
 # External private packages
 
@@ -224,7 +223,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         # The superclasses define:
         #   logger
         #   hostname, serial, slot, subarray: initialized from the specified parameters
-        #   extra_args : assigned any extra arguments captured in `kwargs`
+        #   extra_hwm_args : assigned any extra arguments captured in `kwargs`
         #   crate: set to None
         #   mezzanine: set to an empty dict
         #   fpga: set to None. Will be set to a FPGAFirmware instance when the FPGA is programmed.
@@ -263,7 +262,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
               timeout.
         """
         # print(f'{self!r} Ping_async()')
-        self.logger.info('%r: Pinging %s' % (self, self.tuber_uri))
+        self.logger.info(f'{self!r}: Pinging {self.tuber_uri}')
         try:
             await self._tuber_get_meta_async()  # make sure the tuber info is loaded
             await self._tuber_sleep_async(0)  # make a dummy call
@@ -406,8 +405,8 @@ class IceBoard(Motherboard, TuberIceBoardBase):
             # This is done to recognize the legacy non-IPMI EEPROM data format that the ARM cannot decode
             ipmi = None
             if eeprom_data is not None:
-                for cls in Mezzanine.get_all_classes():  # for each registered Mezzanine class
-                    if hasattr(cls, 'decode_eeprom'):  # If there si a decode method
+                for cls in Mezzanine.get_all_supported_classes(package='ice'):  # every Ice-platform Mezzanine in the manifest
+                    if hasattr(cls, 'decode_eeprom'):  # If there is a decode method
                         ipmi = cls.decode_eeprom(eeprom_data)   # try to decode
                         if ipmi:  # if not None, we're done
                             break
@@ -449,13 +448,10 @@ class IceBoard(Motherboard, TuberIceBoardBase):
 
             if not mezz_class[m]:
                 self.logger.warning(
-                    "%r: detect_mezzanines(): There is no known "
-                    "class for Mezzanine object of type '%r' "
-                    "in mezzanine slot %r" % (self, part_number, m))
+                    f"{self!r}: detect_mezzanines(): There is no known class for Mezzanine object of type '{part_number!r}' in mezzanine slot {m!r}")
             elif update:
                 self.logger.debug(
-                    '%r: detect_mezzanines(): Creating Mezzanine '
-                    'Serial %s in Mezzanine %i on iceboard %r' % (self, serial, m, self))
+                    f'{self!r}: detect_mezzanines(): Creating Mezzanine Serial {serial} in Mezzanine {int(m)} on iceboard {self!r}')
                 # new_mezz = get_unique_class_instance(
                 #     mezz_class[m],
                 new_mezz = mezz_class[m](
@@ -515,7 +511,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
                 f"with part number '{part_number}'")
 
         if icecrate_class and update:
-            crate_number = self.crate.crate_number if self.crate else None
+            crate_number = self.get_crate_number()
             crate = Crate.get_unique_instance(new_class=icecrate_class, serial=serial, crate_number=crate_number)
             self.update_instance(crate=crate)  # update crate info and repr
             self.logger.debug(f"{self} now has crate {self.crate}")
@@ -574,7 +570,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
 
         for display_name, sensor, sensor_name in mb_temp_sensors:
             value = await self.tuber_get_motherboard_temperature_async(sensor_name)
-            info[display_name] = '%0.1fC' % value
+            info[display_name] = f'{value:0.1f}C'
             metrics.add('fpga_motherboard_temp', value,  sensor=sensor)
 
         ####################################
@@ -596,7 +592,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         for display_name, sensor, tuber_sensor_name, add_to_total_power in mb_power_sensors:
             voltage = await self.tuber_get_motherboard_voltage_async(tuber_sensor_name)
             current = await self.tuber_get_motherboard_current_async(tuber_sensor_name)
-            info[display_name] = '%0.1fV@%0.3fA' % (voltage, current)
+            info[display_name] = f'{voltage:0.1f}V@{current:0.3f}A'
             metrics.add('fpga_motherboard_voltage', value=voltage, sensor=sensor)
             metrics.add('fpga_motherboard_current', value=current, sensor=sensor)
             if add_to_total_power:
@@ -615,11 +611,11 @@ class IceBoard(Motherboard, TuberIceBoardBase):
             for display_name, sensor, sensor_name in mezz_power_sensors:
                 voltage = await self.tuber_get_mezzanine_voltage_async(sensor_name, mezz_number)
                 current = await self.tuber_get_mezzanine_current_async(sensor_name, mezz_number)
-                info[display_name % mezz_number] = '%0.1fV@%0.3fA' % (voltage, current)
+                info[display_name % mezz_number] = f'{voltage:0.1f}V@{current:0.3f}A'
                 metrics.add('fpga_mezzanine_voltage', value=voltage, sensor=sensor, mezzanine=mezz_number)
                 metrics.add('fpga_mezzanine_current', value=current, sensor=sensor, mezzanine=mezz_number)
 
-        info['MB Total power'] = '%0.1fW' % total_power
+        info['MB Total power'] = f'{total_power:0.1f}W'
         metrics.add('fpga_motherboard_power', value=total_power)
 
         ####################################
@@ -647,7 +643,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         try:
             _, metrics = await self._get_motherboard_metrics_async()
         except Exception as e:
-            self.logger.error('%r: Error getting FPGA hardware metrics. Error is %r' % (self, e))
+            self.logger.error(f'{self!r}: Error getting FPGA hardware metrics. Error is {e!r}')
             metrics = Metrics()
         return metrics
 
@@ -680,7 +676,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         """
 
         info = dict()
-        crate_number = self.crate.crate_number if self.crate else None
+        crate_number = self.get_crate_number()
         crate_id = self.crate.get_string_id() if self.crate else None
         metrics = Metrics(crate_number=crate_number, crate_id=crate_id, type='GAUGE')
 
@@ -696,7 +692,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
 
                 for display_name, sensor, sensor_name in bp_temp_sensors:
                     value = await self.tuber_get_backplane_temperature_async(sensor_name)
-                    info[display_name] = '%0.1fC' % value
+                    info[display_name] = f'{value:0.1f}C'
                     metrics.add('fpga_backplane_temp', value, sensor=sensor)
 
                 ####################################
@@ -706,8 +702,8 @@ class IceBoard(Motherboard, TuberIceBoardBase):
                 voltage = await self.tuber_get_backplane_voltage_async()
                 current = await self.tuber_get_backplane_current_async()
                 power = await self.tuber_get_backplane_power_async()
-                info['BP VCC3V3'] = '%0.1fV@%0.3fA' % (voltage, current)
-                info['BP power'] = '%0.1fW' % power
+                info['BP VCC3V3'] = f'{voltage:0.1f}V@{current:0.3f}A'
+                info['BP power'] = f'{power:0.1f}W'
                 metrics.add('fpga_backplane_voltage', value=voltage)
                 metrics.add('fpga_backplane_current', value=current)
                 metrics.add('fpga_backplane_power', value=power)
@@ -728,7 +724,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
                     metrics.add('fpga_backplane_qsfp_present', value=is_present, slot=(slot-1))
 
             except Exception as e:
-                self.logger.error('%r: error getting backplane metrics: error is %r\n\n%s' % (self, e, traceback.format_exc()))
+                self.logger.error(f'{self!r}: error getting backplane metrics: error is {e!r}\n\n{traceback.format_exc()}')
         return metrics
 
         # backplane QSFP voltage, temp, signal-level
@@ -745,7 +741,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         try:
             metrics = await self._get_backplane_metrics_async()
         except Exception as e:
-            self.logger.error('%r: Error getting Backplane metrics. Error is %r' % (self, e))
+            self.logger.error(f'{self!r}: Error getting Backplane metrics. Error is {e!r}')
             metrics = Metrics()
         return metrics
 
@@ -816,7 +812,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         else:
             self.logger.debug(
                 f'{self!r}: FPGA is already configured. Skipping configuration.')
-        self.fpga = fw_cls(self, mode=firmware_mode, **fw_params)
+        self.set_fpga_firmware(fw_cls(self, mode=firmware_mode, **fw_params))
 
 
     FPGA_FIRMWARE_CRC32_ADDR = 4 * 3
@@ -1002,8 +998,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         """
 
         self.logger.warning(
-            "%r: Temporarily disconnecting the SFP to reset the %s FPGA's "
-            "UDP communication stack" % (self, self.hostname))
+            f"{self!r}: Temporarily disconnecting the SFP to reset the {self.hostname} FPGA's UDP communication stack")
         await self.tuber_set_pci_switch_direction_async('SEL_ARM')
         await self.tuber_set_pci_switch_direction_async('SEL_SFP')
 
@@ -1026,14 +1021,14 @@ class IceBoard(Motherboard, TuberIceBoardBase):
 
             - An AssertionError will be raised if the self.i2c object is not defined
         """
-        self.logger.debug('%r: Initializing Iceboard hardware' % self)
+        self.logger.debug(f'{self!r}: Initializing Iceboard hardware')
         assert self.i2c, "I2C interface is not initialized"
 
         # -------------------
         # Motherboard EEPROM
         # -------------------
 
-        self.logger.debug('%r: Instantiating Motherboard EEPROM managers' % self)
+        self.logger.debug(f'{self!r}: Instantiating Motherboard EEPROM managers')
         self._i2c_mb_eeprom_data = eeprom.eeprom(
             self.i2c, self._MOTHERBOARD_EEPROM_DATA_ADDR, 'GPIO',
             self._MOTHERBOARD_EEPROM_ADDR_WIDTH,
@@ -1058,9 +1053,9 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         # will be interpreted as data to be written. It would be equally bad
         # if there has another I2C device at the address following the EEPROM
         # address.
-        self.logger.debug('%r:  Instantiating FMC EEPROM managers' % self)
+        self.logger.debug(f'{self!r}:  Instantiating FMC EEPROM managers')
         if self.i2c.is_present(self._FMC_EEPROM_ADDR + 1, bus_name='FMCA'):
-            self.logger.debug('%r: Detected multipage EEPROM on FMCA. Assuming >16-bit addressing.' % self)
+            self.logger.debug(f'{self!r}: Detected multipage EEPROM on FMCA. Assuming >16-bit addressing.')
             self._fmca_eeprom = eeprom.eeprom(
                 self.i2c, self._FMC_EEPROM_ADDR, 'FMCA',
                 self._MCGILL_FMC_EEPROM_ADDR_WIDTH,
@@ -1072,7 +1067,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
                 self._FMC_EEPROM_PAGE_SIZE)
 
         if self.i2c.is_present(self._FMC_EEPROM_ADDR + 1, bus_name='FMCB'):
-            self.logger.debug('%r: Detected multipage EEPROM on FMCB. Assuming >16-bit addressing.' % self)
+            self.logger.debug(f'{self!r}: Detected multipage EEPROM on FMCB. Assuming >16-bit addressing.')
             self._fmcb_eeprom = eeprom.eeprom(
                 self.i2c, self._FMC_EEPROM_ADDR, 'FMCB',
                 self._MCGILL_FMC_EEPROM_ADDR_WIDTH, self._MCGILL_FMC_EEPROM_PAGE_SIZE)
@@ -1090,7 +1085,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         # I2C IO Expanders
         # -------------------
 
-        self.logger.debug('%r: Instantiating I2C GPIO manager' % self)
+        self.logger.debug(f'{self!r}: Instantiating I2C GPIO manager')
         self._gpio_power = pca9575.pca9575(self.i2c, self._GPIO_POWER_I2C_ADDR, 'GPIO')
         self._gpio_sw_leds = pca9575.pca9575(self.i2c, self._GPIO_SW_LEDS_ADDR, 'GPIO')
         self._gpio_arm_phy_leds = pca9575.pca9575(self.i2c, self._GPIO_ARM_PHY_LEDS_ADDR, 'GPIO')
@@ -1761,19 +1756,19 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         ARM processor through the Tuber protocol.
         """
         (meta, props, methods) = self._tuber_get_meta()  # get the meta info
-        print("Methods for tuber object '%s':" % self.tuber_objname)
+        print(f"Methods for tuber object '{self.tuber_objname}':")
         print('-----------------------------------------')
         for method_name, method_properties in sorted(methods.items()):
-            print('%-30s: %s' % (method_name, method_properties.summary))
+            print(f'{method_name:30}: {method_properties.summary}')
         print()
-        print("Properties for tuber object '%s':" % self.tuber_objname)
+        print(f"Properties for tuber object '{self.tuber_objname}':")
         print('-----------------------------------------')
         for prop_name, prop_properties in sorted(props.items()):
             try:
-                values = ', '.join('.%s' % p for p in prop_properties)
+                values = ', '.join(f'.{p}' for p in prop_properties)
             except TypeError:
-                values = '= %s' % prop_properties
-            print('%-30s: %s' % (prop_name, values))
+                values = f'= {prop_properties}'
+            print(f'{prop_name:30}: {values}')
 
     # ---------------------------
     # ARM Linux shell commands
@@ -1843,12 +1838,12 @@ class IceBoard(Motherboard, TuberIceBoardBase):
             data = fh.read(100)  # read a few bytes to make sure this is really a bz2 file
             if not data.startswith(image_header):
                 raise RuntimeError('The image does not seem to contain a compressed SDcard image')
-        print('%r: Sending file...' % self)
+        print(f'{self!r}: Sending file...')
         await self.arm_scp(image_filename, '/tmp/image.bz2')
-        print('%r: Writing SD card' % self)
+        print(f'{self!r}: Writing SD card')
         await self.arm_exec('bzcat /tmp/image.bz2 >/dev/mmcblk0')
-        self.logger.info('%r: Command completed. Waiting %i seconds to ensure cache is flushed' % (self, delay))
-        print('%r: Waiting %i seconds' % (self, delay))
+        self.logger.info(f'{self!r}: Command completed. Waiting {int(delay)} seconds to ensure cache is flushed')
+        print(f'{self!r}: Waiting {int(delay)} seconds')
         await asyncio.sleep(delay)
         return True
 
@@ -1871,20 +1866,20 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         else:
             filename_sd_card = '/usr/lib/iceboard/' + os.path.basename(filename)
 
-        print('%r: Remounting the SD card file system as readwrite' % self)
+        print(f'{self!r}: Remounting the SD card file system as readwrite')
         await self.arm_exec('mount / -o remount,rw')
 
-        print('%r: Making /usr/lib/iceboard folder if needed' % self)
+        print(f'{self!r}: Making /usr/lib/iceboard folder if needed')
         await self.arm_exec('mkdir -p /usr/lib/iceboard')
 
-        print('%r: Sending file to /usr/lib/iceboard/' % self)
+        print(f'{self!r}: Sending file to /usr/lib/iceboard/')
         await self.arm_scp(filename, filename_sd_card)
 
-        self.logger.info('%r: Command completed. Waiting %i seconds to ensure cache is flushed' % (self, delay))
-        print('%r: Waiting %i seconds' % (self, delay))
+        self.logger.info(f'{self!r}: Command completed. Waiting {int(delay)} seconds to ensure cache is flushed')
+        print(f'{self!r}: Waiting {int(delay)} seconds')
         await asyncio.sleep(delay)
 
-        print('%r: Remounting the SD card file system as readonly' % self)
+        print(f'{self!r}: Remounting the SD card file system as readonly')
         await self.arm_exec('mount / -o remount,ro')
         return True
 
@@ -1895,18 +1890,18 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         Remounts the file system back to read only
         """
 
-        print('%r: Remounting the SD card file system as readwrite' % self)
+        print(f'{self!r}: Remounting the SD card file system as readwrite')
         await self.arm_exec('mount / -o remount,rw')
 
         remove_file = 'rm /usr/lib/iceboard/' + os.path.basename(filename)
-        print('%r: Removing the requested file' % self)
+        print(f'{self!r}: Removing the requested file')
         await self.arm_exec(remove_file)
 
-        self.logger.info('%r: Command completed. Waiting %i seconds to ensure cache is flushed' % (self, delay))
-        print('%r: Waiting %i seconds' % (self, delay))
+        self.logger.info(f'{self!r}: Command completed. Waiting {int(delay)} seconds to ensure cache is flushed')
+        print(f'{self!r}: Waiting {int(delay)} seconds')
         await asyncio.sleep(delay)
 
-        print('%r: Remounting the SD card file system as readonly' % self)
+        print(f'{self!r}: Remounting the SD card file system as readonly')
         await self.arm_exec('mount / -o remount,ro')
         return True
 

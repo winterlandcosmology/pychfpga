@@ -48,6 +48,7 @@ import argparse
 
 # Import custom packages
 from pychfpga import fpga_array
+from pychfpga.common import run_async
 from pychfpga.network_utils import verify_network_settings
 
 class POCKET_CORRELATOR:
@@ -154,6 +155,8 @@ class POCKET_CORRELATOR:
         # Define useful variables
         self.fs = 3200 # MHz - Old firmware: 3000 MHz
         self.M = 2**14 # number of samples per ADC frame
+        self.sample_period = 1/(self.fs*1e6) # sample period in seconds
+        self.frame_period = self.M*self.sample_period
         self.NBINS = int(self.M/2) # number of frequency bins, half the number of ADC samples per frame
         self.f_res = self.fs/self.M # frequency resolution of FFT
         self.f = self.f_res*np.arange(self.NBINS) # an array containing the frequency bins
@@ -314,39 +317,15 @@ class POCKET_CORRELATOR:
         # get the number of captures needed    
         ncap = int(n_frames/n_frames_per_capture)
 
-        # # Verify that 'data_source' has been specified correctly
-        # valid_data_sources = ['adc', 'funcgen']
-        # if data_source not in valid_data_sources:
-        #     raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
-
         # Ensure UCAP is configured to receive channelizer data, not correlated data:
         if self.ucap.OUTPUT_SOURCE_SEL != 0:
             self.ucap.OUTPUT_SOURCE_SEL = 0
 
-        # for n in range(self.NPOLS):
-
-        #     if data_source == 'adc':
-        #         # Set the data source
-        #         self.i.chan[n].FUNCGEN.set_data_source(data_source)
-
-        #     elif data_source == 'funcgen':
-        #         # Don't set the data source, but verify that the function 
-        #         # specified is the one that is being used
-        #         current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
-        #         if current_data_source != 'buffer':
-        #             raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
-
-        #     # Bypass the FFT
-        #     self.i.chan[n].FFT.BYPASS = 1
-
-        #     # Bypass the SCALER
-        #     self.i.chan[n].SCALER.BYPASS = 1
-
         # Configure the channelizers
         self.i.set_channelizer(data_source = data_source,
                                function = None,
-                               # funcgen_left_shift=None,
-                               # funcgen_right_shift=None,
+                               funcgen_left_shift = 0, # Both shifts set to 0. 
+                               funcgen_right_shift = 0, # Might want to allow a user to set this at some point.
                                channels = channels,
                                **function_kwargs
                                )
@@ -354,15 +333,13 @@ class POCKET_CORRELATOR:
         # Start data capture, always setting the source to 'adc' (meaning that the data is
         # always captured at the output of the FUNCGEN module, no matter if it is real ADC 
         # data, or a test pattern written to the buffer of the FUNCGEN)
-        # self.i.start_data_capture(period = period, 
-        #                           source = 'adc'
-        #                           )
 
         self.i.start_data_capture(period = period, 
-                                  source = 'adc',
+                                  source = 'funcgen', # 'adc',
                                   mode = self.ucap.MODE,
                                   channels = channels,
-                                  select = True
+                                  select = True,
+                                  data_type = None # only used when source = 'scaler', this avoids errors
                                   )
 
         # Capture data!
@@ -480,7 +457,7 @@ class POCKET_CORRELATOR:
         channels : (list) A list of the input channels (i.e., 0 for ADC1, 1 for ADC2, etc.) for which you'd like to recover data.
         The default is to receive data from all channels [0, .., 7].
 
-        fft_bypass : (bool) Whether or not to bypass the FFT. Why include an option to bypass the FFT when you are requesting post-gain frames,
+        fft_bypass : (bool) Whether or not to bypass the FFT. Why include an option to bypass the FFT when you are requesting FFT frames,
         you might ask? Well, sometimes it is useful to use the FUNCGEN to create a simulated spectrum, in which case you wouldn't want 
         the signal you have set in the FUNCGEN to propagate through the firmware FFT. 
         
@@ -535,34 +512,9 @@ class POCKET_CORRELATOR:
         # get the number of captures needed    
         ncap = int(n_frames/n_frames_per_capture)
 
-        # # Verify that 'data_source' has been specified correctly
-        # valid_data_sources = ['adc', 'funcgen']
-        # if data_source not in valid_data_sources:
-        #     raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
-
         # Ensure UCAP is configured to receive channelizer data, not correlated data:
         if self.ucap.OUTPUT_SOURCE_SEL != 0:
             self.ucap.OUTPUT_SOURCE_SEL = 0
-
-        # # Configure each channelizer
-        # for n in range(self.NPOLS):
-
-        #     if data_source == 'adc':
-        #         # Set the data source
-        #         self.i.chan[n].FUNCGEN.set_data_source(data_source)
-
-        #     elif data_source == 'funcgen':
-        #         # Don't set the data source, but verify that the function 
-        #         # specified is the one that is being used
-        #         current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
-        #         if current_data_source != 'buffer':
-        #             raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
-
-        #     # Do not bypass the FFT
-        #     self.i.chan[n].FFT.BYPASS = 0
-
-        #     # Bypass the SCALER
-        #     self.i.chan[n].SCALER.BYPASS = 1
 
         if fft_bit_res == '16+16':
 
@@ -572,12 +524,12 @@ class POCKET_CORRELATOR:
 
             # Configure the channelizers
             self.i.set_channelizer(data_source = data_source,
-                                   # funcgen_left_shift=0,
-                                   # funcgen_right_shift=0,
+                                   funcgen_left_shift = 0, # Both shifts set to 0. 
+                                   funcgen_right_shift = 0, # Might want to allow a user to set this at some point.
                                    fft_bypass = fft_bypass,
+                                   fft_shift = 0b00000000000000, # Always set to 0 just in case
                                    scaler_bypass = True,
                                    scaler_cap_data_type = 1,
-                                   scaler_bypass_data_type = None,
                                    channels = channels,
                                    **function_kwargs
                                    )
@@ -588,7 +540,7 @@ class POCKET_CORRELATOR:
                                       source = 'scaler',
                                       mode = self.ucap.MODE,
                                       channels = channels, 
-                                      data_type = 1,
+                                      data_type = 'fft',
                                       select = True
                                       )
 
@@ -601,87 +553,52 @@ class POCKET_CORRELATOR:
 
         elif fft_bit_res == '32+32':
 
-            for n in range(ncap):
+            if period is not None:
+                raise NotImplementedError('Specifying the period for fft_bit_res = \'32+32\' is currently disabled. Please pass None as the period when using this configuration.')
 
-                # for m in range(self.NPOLS):
-                #     # Capture even bins
-                #     self.i.chan[m].SCALER.CAP_DATA_TYPE = 4 
-
-                # Configure the channelizers to get even FFT bins
-                self.i.set_channelizer(data_source = data_source,
-                                       # funcgen_left_shift=0,
-                                       # funcgen_right_shift=0,
-                                       fft_bypass = fft_bypass,
-                                       scaler_bypass = True,
-                                       scaler_cap_data_type = 4,
-                                       scaler_bypass_data_type = None,
-                                       channels = channels,
-                                       **function_kwargs
-                                       )
-
-                # Start data capture for even bins (recall that we have bypassed the SCALER, 
-                # but UCAP still captures data from the output of the SCALER)
-                self.i.start_data_capture(period = period, 
-                                          source = 'scaler',
-                                          mode = self.ucap.MODE,
-                                          channels = channels, 
-                                          data_type = 4,
-                                          select = True
-                                          )
-
-                # Capture data for even bins
-                t, d_fft_even, c = self.u_receiver.read_raw_frames(format = fft_bit_res, 
-                                                                   ncap = 1, 
-                                                                   split = split,
-                                                                   verbose = verbose
-                                                                   )
-
-                # for m in range(self.NPOLS):
-                #     # Capture odd bins
-                #     self.i.chan[m].SCALER.CAP_DATA_TYPE = 5 
-
-                # Configure the channelizers to get odd FFT bins
-                self.i.set_channelizer(data_source = data_source,
-                                       # funcgen_left_shift=0,
-                                       # funcgen_right_shift=0,
-                                       fft_bypass = fft_bypass,
-                                       scaler_bypass = True,
-                                       scaler_cap_data_type = 5,
-                                       scaler_bypass_data_type = None,
-                                       channels = channels,
-                                       **function_kwargs
-                                       )
-
-                # Start data capture for odd bins (recall that we have bypassed the SCALER, 
-                # but UCAP still captures data from the output of the SCALER)
-                self.i.start_data_capture(period = period, 
-                                          source = 'scaler',
-                                          mode = self.ucap.MODE,
-                                          channels = channels, 
-                                          data_type = 5,
-                                          select = True
-                                          )
-
-                # Capture data for odd bins
-                t, d_fft_odd, c = self.u_receiver.read_raw_frames(format = fft_bit_res, 
-                                                                  ncap = 1, 
-                                                                  split = split,
-                                                                  verbose = verbose
-                                                                  )
-
-                # Stitch together even and odd bins into a single array
-                d_fft_full = np.zeros((self.NPOLS, n_frames_per_capture, self.NBINS), dtype = np.complex128)
-                d_fft_full[..., ::2] = d_fft_even
-                d_fft_full[..., 1::2] = d_fft_odd
-
-                # Either create the d_fft array (i.e., FFT data) or stack new frames onto the array
-                if n == 0:
-                    # Create d_fft array
-                    d_fft = d_fft_full
-                else:
-                    # Add d_fft_full to to bottom of axis 1 of d_fft
-                    d_fft = np.concatenate((d_fft, d_fft_full), axis = 1)
+            # Verify that the period always ensures that the value of
+            # the first frame returned is even, which gaurantees that the 
+            # first frame contains even bins. Adopted convention.
+            # period_fast_enough = period > 0.01
+            # period_multiple_of_4_frames = 
+            # period_ok = period_fast_enough & period_multiple_of_4_frames
         
+            # Configure the channelizers
+            self.i.set_channelizer(data_source = data_source,
+                                   funcgen_left_shift = 0, # Both shifts set to 0. 
+                                   funcgen_right_shift = 0, # Might want to allow a user to set this at some point.
+                                   fft_bypass = fft_bypass,
+                                   fft_shift = 0b00000000000000, # Always set to 0 just in case
+                                   scaler_bypass = True,
+                                   scaler_cap_data_type = 4,
+                                   scaler_bypass_data_type = None,
+                                   channels = channels,
+                                   **function_kwargs
+                                   )
+
+            # Start data capture
+            self.i.start_data_capture(period = 4*self.frame_period*489, # always use a period that guarantees even bins first
+                                      source = 'scaler',
+                                      mode = self.ucap.MODE,
+                                      channels = channels, 
+                                      data_type = 'fft_2x',
+                                      select = True
+                                      )
+
+            # Capture date. In the case of 'fft_2x', the 
+            # argument for split must be True. We need to request
+            # ncap = n_frames in this case since we are switching 
+            # between even and odd bins on each frame sent by UCAP.
+            t, d_fft_32_32_raw, c = self.u_receiver.read_raw_frames(format = fft_bit_res, 
+                                                                    ncap = n_frames,
+                                                                    split = True,
+                                                                    verbose = verbose
+                                                                    )
+            
+            # Stitch together even and odd bins
+            s = d_fft_32_32_raw.shape
+            d_fft = d_fft_32_32_raw.reshape(s[0], -1, 2, s[2]).reshape(s[0], -1, s[2]*2, order = 'F')
+    
         # Return the FFT data with the frequency bins in their proper order
         return d_fft[..., self.bin_map]
 
@@ -703,24 +620,23 @@ class POCKET_CORRELATOR:
         digital gains are used, the digital gains correspond to an 11-bit "linear" (i.e., mantissa) component 
         which is directly multiplied with the FFT data, and a 5-bit "logarithmic" (i.e., exponent) component 
         which applies a bit shift, with a maximum value of 2^5 = 32 bits, or equivalently a multiplication by 2^32. 
-        The maximum digital gain that can be applied is therefore
-
-            maximum_gain = maximum_gain_lin * maximum_gain_log = 2^11 * 2^32.
+        The maximum digital gain is
+        ``maximum_gain_lin * maximum_gain_log = 2^11 * 2^32``.
 
         The application of the digital gains results in a "post-gain" value with a bit-depth of 48+48 bits, of which the
         upper 4+4 MSBSs are taken and rounded to perform the 4+4-bit quantization.
 
         Since we can recover the full resolution of the FFT data, we can compute directly the digital gains
         necessary for optimial quantization in the SCALER, which is defined as a "target" SCALER magnitude. 
-        We can express the application of digital gains as
+        We can express the application of digital gains as::
 
             target_full = gain * |FFT|,
 
-        where target_full = target * 2^44, and |FFT| refers to the magnitude of FFT data, averaged for a 
-        specified number of frames to reduce noise. The digital gains are therefore simply
+        where ``target_full = target * 2^44``, and ``|FFT|`` refers to the magnitude of FFT data, averaged for a 
+        specified number of frames to reduce noise. The digital gains are therefore simply::
 
             gain = target_full / |FFT|.
-
+            
         This function uses the set_gain_table() function of the SCALER module (see scaler.py), which performs 
         additional processing of the digital gains as computed with the equation above prior to writing them
         to the memory banks of the SCALER. Therefore, the "theoretical" gains, since they are computed as 
@@ -734,6 +650,7 @@ class POCKET_CORRELATOR:
 
         Parameters
         ----------
+
         target : (float) The average magnitude of the 4+4-bit SCALER frames. If target is too low, quantization
         noise will begin to dominate over the signal. If target is too high, both the SCALER and the accumulator 
         of the correlator might saturate. The recommended value is borrowed from that used in the CHIME F-Engine,
@@ -782,15 +699,16 @@ class POCKET_CORRELATOR:
 
         Returns
         -------
+
         d_fft : (np.ndarray) The raw FFT frames used for the digital gain computation. The shape is 
-        (NPOLS, n_fft_frames, NBINS).
+        ``(NPOLS, n_fft_frames, NBINS)``.
 
         d_fft_mean_mag : (np.ndarray) The average magnitude of the FFT frames, used for computing the digital gains.
-        The shape is (NPOLS, NBINS).
+        The shape is ``(NPOLS, NBINS)`` .
 
-        gain_lin_actual : (np.ndarray) The linear component of the "actual" digital gains. The shape is (NPOLS, NBINS).
+        gain_lin_actual : (np.ndarray) The linear component of the "actual" digital gains. The shape is ``(NPOLS, NBINS)``.
 
-        gain_log_actual : (np.ndarray) The logarithmic component of the "actual" digital gains. The shape is (NPOLS, NBINS).
+        gain_log_actual : (np.ndarray) The logarithmic component of the "actual" digital gains. The shape is ``(NPOLS, NBINS)``.
 
         d_sclr : (np.ndarray) An array of SCALER frames, returned if return_scaler_frames = True. The SCALER frames 
         are captured after the digital gains have been computed and applied, so these frames can be used to verify 
@@ -825,7 +743,7 @@ class POCKET_CORRELATOR:
                                              fft_bit_res = '32+32',
                                              data_source = data_source,
                                              fft_bypass = fft_bypass,
-                                             period = 0.02,
+                                             period = None,
                                              split = True,
                                              verbose = 0,
                                              **function_kwargs
@@ -845,8 +763,6 @@ class POCKET_CORRELATOR:
                     print(f'ADC overranges detected:', [f'ADC{n + 1}' for n in range(8) if adc_or_arr[n] != 0])
                 if adc_ov != 0:
                     print(f'ADC overvoltages detected:', [f'ADC{n + 1}' for n in range(8) if adc_ov_arr[n] != 0])
-                # print(f'ADC Overrange = {bin(adc_or).zfill(8)}')
-                # print(f'ADC Overvoltage = {bin(adc_ov).zfill(8)}')
                 print('')
 
                 # Break loop if no flags are high
@@ -879,6 +795,11 @@ class POCKET_CORRELATOR:
         gain_lin_actual = np.zeros(gain_theory.shape)
         gain_log_actual = np.zeros(gain_theory.shape)
 
+        # return (d_fft, 
+        #         d_fft_mean_mag, 
+        #         gain_theory
+        #         )
+    
         # Set the gains, and recover the actual gains as stored in the FPGA
         for n in range(self.NPOLS):
 
@@ -1099,41 +1020,15 @@ class POCKET_CORRELATOR:
         # Divide the number of captures by the number of frames per capture to
         # get the number of captures needed    
         ncap = int(n_frames/n_frames_per_capture)
-
-        # # Verify that 'data_source' has been specified correctly
-        # valid_data_sources = ['adc', 'funcgen']
-        # if data_source not in valid_data_sources:
-        #     raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
-
+        
         # Ensure UCAP is configured to receive channelizer data, not correlated data:
         if self.ucap.OUTPUT_SOURCE_SEL != 0:
             self.ucap.OUTPUT_SOURCE_SEL = 0
 
-        # # Configure each channelizer
-        # for n in range(self.NPOLS):
-
-        #     if data_source == 'adc':
-        #         # Set the data source
-        #         self.i.chan[n].FUNCGEN.set_data_source(data_source)
-
-        #     elif data_source == 'funcgen':
-        #         # Don't set the data source, but verify that the function 
-        #         # specified is the one that is being used
-        #         current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
-        #         if current_data_source != 'buffer':
-        #             raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
-
-        #     # Do not bypass the FFT
-        #     self.i.chan[n].FFT.BYPASS = 0
-
-        #     # Bypass the SCALER, and set the mode so that we send the most significant 16+16 bits of the saturated post-gain FFT values
-        #     self.i.chan[n].SCALER.BYPASS = 1
-        #     self.i.chan[n].SCALER.CAP_DATA_TYPE = 2 
-
         # Configure the channelizers
         self.i.set_channelizer(data_source = data_source,
-                               # funcgen_left_shift=0,
-                               # funcgen_right_shift=0,
+                               funcgen_left_shift = 0,
+                               funcgen_right_shift = 0,
                                fft_bypass = fft_bypass,
                                scaler_bypass = True,
                                scaler_cap_data_type = 2,
@@ -1148,7 +1043,7 @@ class POCKET_CORRELATOR:
                                   source = 'scaler',
                                   mode = self.ucap.MODE,
                                   channels = channels, 
-                                  data_type = 2,
+                                  data_type = 'fft_gain',
                                   select = True
                                   )
 
@@ -1257,40 +1152,14 @@ class POCKET_CORRELATOR:
         # get the number of captures needed    
         ncap = int(n_frames/n_frames_per_capture)
 
-        # # Verify that 'data_source' has been specified correctly
-        # valid_data_sources = ['adc', 'funcgen']
-        # if data_source not in valid_data_sources:
-        #     raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
-
         # Ensure UCAP is configured to receive channelizer data, not correlated data:
         if self.ucap.OUTPUT_SOURCE_SEL != 0:
             self.ucap.OUTPUT_SOURCE_SEL = 0
 
-        # # Configure each channelizer
-        # for n in range(self.NPOLS):
-
-        #     if data_source == 'adc':
-        #         # Set the data source
-        #         self.i.chan[n].FUNCGEN.set_data_source(data_source)
-
-        #     elif data_source == 'funcgen':
-        #         # Don't set the data source, but verify that the function 
-        #         # specified is the one that is being used
-        #         current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
-        #         if current_data_source != 'buffer':
-        #             raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
-
-        #     # Do not bypass the FFT
-        #     self.i.chan[n].FFT.BYPASS = 0
-
-        #     # Do not bypass the SCALER, and set the mode so that we read 4+4-bit SCALER data
-        #     self.i.chan[n].SCALER.BYPASS = 0
-        #     self.i.chan[n].SCALER.CAP_DATA_TYPE = 2 # Main scaler output
-
         # Configure the channelizers
         self.i.set_channelizer(data_source = data_source,
-                               # funcgen_left_shift=0,
-                               # funcgen_right_shift=0,
+                               funcgen_left_shift = 0,
+                               funcgen_right_shift = 0,
                                fft_bypass = fft_bypass,
                                scaler_bypass = scaler_bypass,
                                scaler_cap_data_type = 0,
@@ -1300,7 +1169,7 @@ class POCKET_CORRELATOR:
                                scaler_rounding_mode = 2,
                                symmetric_saturation = True,
                                zero_on_sat = False,
-                               #  offset_binary_encoding=None,
+                               offset_binary_encoding=False,
                                **function_kwargs
                                )
 
@@ -1328,15 +1197,27 @@ class POCKET_CORRELATOR:
         return d_scaler[..., self.bin_map]
 
     def configure_corr(self,
+                       n_firmware_frames = 16384,
                        autocorr_only = 0,
                        no_accum = 0,
-                       n_firmware_frames = 16384 - 1
+                       verbose = 0
                        ):
         """
         Configure the receiver for correlated data.
 
         Parameters
         ----------
+        n_firmware_frames : (int) Number of frames to accumulate in firmware. Take care not to set this too 
+        low (see minimum), as this will increase the data rate, and could lead to overrun condition. Also take
+        care not to set this too high (see maximum), as this may cause increased saturation. The firmware 
+        accumulator can add numbers up to 18+18-bit values, at which point they saturate.
+
+        Use the recommended value!
+
+            8192 : minimum
+            16384: recommended
+            32768: maximum
+        
         autocorr_only : (int) Bit to choose between return all correlated products, or only autocorrelations.
         Default is to send all N(N-1)/2 correlated products.
 
@@ -1349,16 +1230,7 @@ class POCKET_CORRELATOR:
             0: do accumulate
             1: do not accumulate
 
-        n_firmware_frames : (int) Number of frames to accumulate in firmware. Take care not to set this too 
-        low (see minimum), as this will increase the data rate, and could lead to overrun condition. Also take
-        care not to set this too high (see maximum), as this may cause increased saturation. The firmware 
-        accumulator can add numbers up to 18+18-bit values, at which point they saturate.
-
-        Use the recommended value!
-
-            8192 - 1 : minimum
-            16384 - 1: recommended
-            32768 - 1: maximum
+        verbose : (int) Verbosity level. 0: no messages, 1: basic messages, 2: detailed messages
 
         Returns
         -------
@@ -1368,11 +1240,15 @@ class POCKET_CORRELATOR:
 
         # Configure the parameters of the correlator
         self.corr = self.i.CORR # UCORR object
-        self.corr_receiver = self.i.get_corr_receiver() # instantiate a correlator receiver object
-        self.corr.AUTOCORR_ONLY = autocorr_only 
-        self.corr.NO_ACCUM = no_accum 
+        self.corr_receiver = run_async(self.ca.get_corr_receiver_async())
         self.NCORR_PROD = int(self.NPOLS*(self.NPOLS + 1) // 2)
-        self.corr.INTEGRATION_PERIOD = n_firmware_frames
+
+        # Start the correlator
+        self.i.start_correlator(integration_period = n_firmware_frames,
+                                autocorr_only = autocorr_only,
+                                no_accum = no_accum,
+                                verbose = verbose 
+                                )
         
         # Update corr_is_configured flag to True
         self.corr_is_configured = True
@@ -1547,48 +1423,15 @@ class POCKET_CORRELATOR:
         is (number_of_results, NBINS, NCORR_PROD).
 
         """
-
-        # TEMPORARY: if more than one software frame is requested, throw an error. There is a bug somewhere
-        # that shows up for > 1 software frame.
-        if n_software_frames > 1:
-            raise ValueError(f'{n_software_frames} software frames requested. More than one software frame is untrusted in this commit.')
-
-        # # Verify that 'data_source' has been specified correctly
-        # valid_data_sources = ['adc', 'funcgen']
-        # if data_source not in valid_data_sources:
-        #     raise ValueError(f'Data source {data_source} is invalid. Valid data sources are {valid_data_sources}.')
-
+        
         # Ensure UCAP is configured to receive correlated data, not channelizer data:
         if self.ucap.OUTPUT_SOURCE_SEL != 1:
             self.ucap.OUTPUT_SOURCE_SEL = 1
 
-        # # Configure each channelizer
-        # for n in range(self.NPOLS):
-
-        #     if data_source == 'adc':
-        #         # Set the data source
-        #         self.i.chan[n].FUNCGEN.set_data_source(data_source)
-
-        #     elif data_source == 'funcgen':
-        #         # Don't set the data source, but verify that the function 
-        #         # specified is the one that is being used
-        #         current_data_source = pc.i.chan[n].FUNCGEN.get_data_source() 
-        #         if current_data_source != 'buffer':
-        #             raise ValueError(f'Data source {data_source} was specified, but {current_data_source} is currently in use. Verify that the function generator has been configured prior to capturing data.')
-
-        #     # Do not bypass the FFT
-        #     self.i.chan[n].FFT.BYPASS = 0
-
-        #     # Do not bypass the SCALER, and set the mode so that we read 4+4-bit SCALER data.
-        #     # Note that we need to set the DATA_TYPE control byte rather than the CAP_DATA_TYPE
-        #     # control byte now that we want to configure the data type being sent to the correlator.
-        #     self.i.chan[n].SCALER.BYPASS = 0
-        #     self.i.chan[n].SCALER.DATA_TYPE = 0 # Send 4-bit scaler values
-
         # Configure the channelizers
         self.i.set_channelizer(data_source = data_source,
-                               # funcgen_left_shift=0,
-                               # funcgen_right_shift=0,
+                               funcgen_left_shift = 0,
+                               funcgen_right_shift = 0,
                                fft_bypass = fft_bypass,
                                scaler_bypass = scaler_bypass,
                                scaler_cap_data_type = 0,
@@ -1598,27 +1441,28 @@ class POCKET_CORRELATOR:
                                scaler_rounding_mode = 2,
                                symmetric_saturation = True,
                                zero_on_sat = False,
-                               #  offset_binary_encoding=None,
+                                offset_binary_encoding=False,
                                **function_kwargs
                                )
 
         # Configure correlator if it has not been done so
         if not self.corr_is_configured:
-            self.configure_corr(autocorr_only = autocorr_only,
+            self.configure_corr(n_firmware_frames = n_firmware_frames,
+                                autocorr_only = autocorr_only,
                                 no_accum = no_accum,
-                                n_firmware_frames = n_firmware_frames
+                                verbose = verbose
                                 )
 
-        t1 = time.time() # This is our timestamp  
-        d_corr, count, sat, = self.corr_receiver.read_corr_frames(soft_integ_period = n_software_frames,
-                                                                  number_of_results = number_of_results,
-                                                                  filename = None,
-                                                                  flush = flush,
-                                                                  data_timeout = data_timeout,
-                                                                  flush_timeout = flush_timeout,
-                                                                  return_format = return_format,
-                                                                  verbose = verbose
-                                                                  )
+        t1 = time.time() # This is our rough timestamp  
+        # Note: ``return_format`` is currently a no-op (kept for API compatibility); only 'raw' has been validated.
+        _ = return_format
+        _integ_ts, d_corr, count, sat = self.corr_receiver.read_corr_frames(soft_integ_period = n_software_frames,
+                                                                            number_of_results = number_of_results,
+                                                                            flush = flush,
+                                                                            data_timeout = data_timeout,
+                                                                            flush_timeout = flush_timeout,
+                                                                            verbose = verbose
+                                                                            )
         t2 = time.time()
 
         print(f'Took {t2 - t1} s to capture correlated data')
@@ -1626,12 +1470,12 @@ class POCKET_CORRELATOR:
         # Reshape the d_corr array according to the number of correlators (4 in the case of corr8) and the number of bins
         # per stream (2048 for corr8 mode); i.e., there are 4 individual firmware correlator modules, each responsible
         # for correlating 2048 frequency bins
-        d_corr = d_corr.reshape(number_of_results, self.corr_receiver.NCORR*self.corr_receiver.NBINS_PER_STREAM, self.corr_receiver.NPROD)
-        count = count.reshape(number_of_results, self.corr_receiver.NCORR*self.corr_receiver.NBINS_PER_STREAM)
-        sat = sat.reshape(number_of_results, self.corr_receiver.NCORR*self.corr_receiver.NBINS_PER_STREAM, self.corr_receiver.NPROD)
+        # d_corr = d_corr.reshape(number_of_results, self.corr_receiver.NCORR*self.corr_receiver.NBINS_PER_STREAM, self.corr_receiver.NPROD)
+        # count = count.reshape(number_of_results, self.corr_receiver.NCORR*self.corr_receiver.NBINS_PER_STREAM)
+        # sat = sat.reshape(number_of_results, self.corr_receiver.NCORR*self.corr_receiver.NBINS_PER_STREAM, self.corr_receiver.NPROD)
 
         # Apply the bin map when returning the array
-        return t1, d_corr[:, self.bin_map], count[:, self.bin_map], sat
+        return t1, d_corr, count, sat
 
     def make_time_string(self):
         """
@@ -1694,7 +1538,7 @@ class POCKET_CORRELATOR:
                 n_software_frames = 119, # 119 software frames with 16384 firmware frames is approximately 10 s
                 autocorr_only = 0, # Get all products by default
                 no_accum = 0, # accumulate by default
-                n_firmware_frames = 16384 - 1,
+                n_firmware_frames = 16384,
                 gain_target = 1.5*np.sqrt(2), # borrowed from CHIME
                 n_fft_frames_for_gain_comp = 2*500,
                 capture_adc_bursts = True,
@@ -1713,46 +1557,56 @@ class POCKET_CORRELATOR:
 
         Parameters
         ----------
-        data_path : (str) The path to the directory to which visibility data will be written. If it doesn't exist, a parent directory will be created according
-        to data_path. Within this directory, another directory will be created according to the date and time of the acquisition. HDF5 files will be written within 
-        this directory, beginning with 0.hdf5 and incrementing the number by 1 with each new file. In this manner, all data can be stored in a parent directory,
-        with specific acquisitions identified by the date and time of the acquisiton.
 
-        obs_tag : (str) Observation tag added to end of obs_string, which together correspond to the observation file name.
+        data_path (str): The path to the directory to which visibility data will be written. If it doesn't exist, a parent directory will be created according
+            to data_path. Within this directory, another directory will be created according to the date and time of the acquisition. HDF5 files will be written within 
+            this directory, beginning with 0.hdf5 and incrementing the number by 1 with each new file. In this manner, all data can be stored in a parent directory,
+            with specific acquisitions identified by the date and time of the acquisiton.
+
+        obs_tag (str): Observation tag added to end of ``obs_string``, which together correspond to the observation file name.
 
             For D3A, obs_tag = '_D3A_rfsoc' for backwards compatibility. 
 
         digital_gains_path : (str) The path to which digital gains will be stored, or the file from which digital gains will be called. If None, then observe()
-        will compute the digital gains with self.compute_gains(), which will be stored in the directory f'{data_path}/digital_gains/{obs_string}_digitalgain' as
-        the file 'gains.hdf5'. The obs_string corresponds to the date and time of the acquisition, as with the data itself.
+            will compute the digital gains with self.compute_gains(), which will be stored in the directory ``f'{data_path}/digital_gains/{obs_string}_digitalgain'`` as
+            the file ``'gains.hdf5'``. The obs_string corresponds to the date and time of the acquisition, as with the data itself.
 
-        If digitial_gains_path is specified, observe() will search for a 'gains.hdf5' file within the specified directory. These gains will be opened and set 
-        in the Scaler during the observation. 
+            If `digital_gains_path` is specified, observe() will search for a 'gains.hdf5' file within the specified directory. These gains will be opened and set 
+            in the Scaler during the observation. 
 
-        n_vis_per_file : (int) The number of visibilities to store per HDF5 file. Increasing this number will increase the size of each HDF5 file. Reducing this
-        may be useful to collect more ADC and/or FFT snapshots during the observation, as the ADC and/or FFT snapshots are collected when a new HDF5 file is created. 
+        n_vis_per_file (int): The number of visibilities to store per HDF5 file. Increasing this number will increase the size of each HDF5 file. Reducing this
+            may be useful to collect more ADC and/or FFT snapshots during the observation, as the ADC and/or FFT snapshots are collected when a new HDF5 file is created. 
 
-        n_software_frames : (int) The number of pre-integrated firmware frames to integrate in Python.
-        Increasing this value increases the total integration time.
+        n_software_frames (int): The number of pre-integrated firmware frames to integrate in Python.
+            Increasing this value increases the total integration time.
 
-        autocorr_only : (int) Bit to choose between return all correlated products, or only autocorrelations.
-        Default is to send all N(N-1)/2 correlated products.
+        autocorr_only  (int): Bit to choose between return all correlated products, or only autocorrelations.
+            Default is to send all ``N(N-1)/2`` correlated products.
 
             0: return all products
             1: return autocorrelations only
 
-        no_accum : (int) Bit to choose between accumulating (i.e., summing) correalted SCALER frames, and not
-        accumulating. Default is to accumulate.
+        no_accum (int): Bit to choose between accumulating (i.e., summing) correalted SCALER frames, and not
+            accumulating. Default is to accumulate.
 
             0: do accumulate
             1: do not accumulate
 
-        n_firmware_frames : (int) Number of frames to accumulate in firmware. Take care not to set this too 
-        low (see minimum), as this will increase the data rate, and could lead to overrun condition. Also take
-        care not to set this too high (see maximum), as this may cause increased saturation. The firmware 
-        accumulator can add numbers up to 18+18-bit values, at which point they saturate.
+        n_firmware_frames (int): Number of frames to accumulate in firmware. Take care not to set this too 
+            low (see minimum), as this will increase the data rate, and could lead to overrun condition. Also take
+            care not to set this too high (see maximum), as this may cause increased saturation. The firmware 
+            accumulator can add numbers up to 18+18-bit values, at which point they saturate.
 
-        Use the recommended value!
+            Use the recommended value!
+
+        capture_adc_bursts (bool): If True, capture ADC snapshots at the start of each HDF5 file.
+
+        n_adc_frames_per_file (int): ADC frames per file when ``capture_adc_bursts`` is True.
+
+        capture_fft_bursts (bool): If True, capture FFT snapshots at the start of each HDF5 file.
+
+        n_fft_frames_per_file (int): FFT frames per file when ``capture_fft_bursts`` is True.
+            FFT frames per file when ``capture_fft_bursts`` is True.
 
             8192 - 1 : minimum
             16384 - 1: recommended
@@ -1776,20 +1630,21 @@ class POCKET_CORRELATOR:
         capture_adc_bursts : (bool) Specifies whether to capture ADC frames at the beginning of each HDF5 file. If True, capture ADC data. If False, don't capture
         ADC data.
 
-        n_adc_frames_per_file : (int) The number of ADC frames to capture for each HDF5 file if capture_adc_bursts = True. Note that the data volume for a single capture is
+        n_adc_frames_per_file : (int) The number of ADC frames to capture for each HDF5 file if capture_adc_bursts = True. Note that the data volume for a single capture is::
 
             16384 samples per frames * 16 frames per capture * 16 bits per sample / 8 bits per byte / 1e6 B per MB = 0.524288 MB of data.
 
         capture_fft_bursts : (bool) Specifies whether to capture FFT frames at the beginning of each HDF5 file. If True, capture FFT data. If False, don't capture
         FFT data.
 
-        n_fft_frames_per_file : (int) The number of FFT frames to capture for each HDF5 file if capture_fft_bursts = True. Note that the data volume for a single capture is
+        n_fft_frames_per_file : (int) The number of FFT frames to capture for each HDF5 file if capture_fft_bursts = True. Note that the data volume for a single capture is::
 
             16384 samples * 16 frames per capture * (32+32) bit per sample / 8 bits per byte / 1e6 B per MB = 2.097152 MB of data.
 
         Returns
         -------
-        None.
+
+        None
 
         """
 
@@ -1891,12 +1746,10 @@ class POCKET_CORRELATOR:
 
         print('Configuring correlator')
         if not self.corr_is_configured:
-            self.configure_corr(autocorr_only = autocorr_only,
+            self.configure_corr(n_firmware_frames = n_firmware_frames,
+                                autocorr_only = autocorr_only,
                                 no_accum = no_accum,
-                                n_firmware_frames = n_firmware_frames
                                 )
-
-        # print(self.corr.status()) # print corr configuration status
 
         # ===========
         # Capture and write data
@@ -1932,7 +1785,7 @@ class POCKET_CORRELATOR:
 
                 # Create data sets
                 dset_vis    = f.create_dataset('vis', (n_vis_per_file, self.NBINS, self.NCORR_PROD), dtype = np.complex128) # Create vis dataset
-                dset_counts = f.create_dataset('counts', (n_vis_per_file, self.NBINS), dtype = np.uint32) # Create counts dataset
+                dset_counts = f.create_dataset('counts', (n_vis_per_file), dtype = np.uint32) # Create counts dataset
                 dset_sat    = f.create_dataset('sat', (n_vis_per_file, self.NBINS, self.NCORR_PROD), dtype = np.complex64) # Create sat dataset
 
                 # Assign attributes to vis dataset:
@@ -1951,7 +1804,7 @@ class POCKET_CORRELATOR:
                 # Make numpy buffers for index_map
                 t_buf = np.zeros(n_vis_per_file, dtype = np.float64)
                 vis_buf = np.zeros((n_vis_per_file, self.NBINS, self.NCORR_PROD), dtype = np.complex128)
-                counts_buf = np.zeros((n_vis_per_file, self.NBINS), dtype = np.uint32)
+                counts_buf = np.zeros(n_vis_per_file, dtype = np.uint32)
                 sat_buf = np.zeros((n_vis_per_file, self.NBINS, self.NCORR_PROD), dtype = np.complex64)
 
                 # Make statistics group
@@ -1964,6 +1817,7 @@ class POCKET_CORRELATOR:
                 dset_SCALER_OVERFLOWS = stats_grp.create_dataset('scaler_overflows', (n_vis_per_file, self.NPOLS), dtype = int)
                 dset_SCALER_STATS_READY = stats_grp.create_dataset('scaler_stats_ready', (n_vis_per_file, self.NPOLS), dtype = int)
                 dset_CORR_OVERRUN = stats_grp.create_dataset('corr_overrun', (n_vis_per_file, ), dtype = int)
+                dset_TEMPERATURE = stats_grp.create_dataset('temperature', (n_vis_per_file, ), dtype = np.float64)
 
                 # Make numpy buffers for statistics
                 frame_count_buf = np.zeros((n_vis_per_file, self.NPOLS), dtype = int)
@@ -1974,6 +1828,7 @@ class POCKET_CORRELATOR:
                 scaler_overflows_buf = np.zeros((n_vis_per_file, self.NPOLS), dtype = int)
                 scaler_stats_ready_buf = np.zeros((n_vis_per_file, self.NPOLS), dtype = int)
                 corr_overrun_buf = np.zeros(n_vis_per_file, dtype = int)
+                temperature_buf = np.zeros(n_vis_per_file, dtype = np.float64)
 
                 if capture_adc_bursts:
                     # Capture ADC data. Note: a single capture for all 8 pols in mode 0 is equal to
@@ -1996,6 +1851,17 @@ class POCKET_CORRELATOR:
                     # Write to file
                     dset_adc[...] = d_adc
 
+                    # Print the RMS power for each ADC
+                    rms_voltage_LSBs = np.array([np.sqrt((1/(d_adc.shape[1]*d_adc.shape[2]))*np.sum(d_adc[n].flatten()**2)) for n in range(8)])
+                    rms_voltage_V = rms_voltage_LSBs*(1/2**14)
+                    rms_power_lin = rms_voltage_V**2/100
+                    rms_power_dBm = 10*np.log10(rms_power_lin/1e-3)
+
+                    print('')
+                    print('ADC RMS power:')
+                    for n in range(8):
+                        print(f'ADC{n + 1}: {np.round(rms_power_dBm[n], 2)} dBm')
+
                 if capture_fft_bursts:
                     # Capture FFT data. Note: a single capture for all 8 pols in mode 0 is equal to
                     # 16384 samples * 16 frames per capture * (32+32) bit per sample / 8 bits per byte / 1e6 B per MB = 2.097152 MB of data.
@@ -2004,11 +1870,12 @@ class POCKET_CORRELATOR:
                     dset_fft = f.create_dataset('fft', (self.NPOLS, n_fft_frames_per_file, self.NBINS), dtype = np.complex128) 
                     
                     # Capture bursts
+                    print('')
                     print(f'Capturing {n_fft_frames_per_file} FFT frames...')
                     d_fft = self.read_fft_frames(n_frames = n_fft_frames_per_file,
                                                  fft_bit_res = '32+32',
                                                  data_source = 'adc',
-                                                 period = 0.02,
+                                                 period = None,
                                                  split = True,
                                                  verbose = 0
                                                  )
@@ -2047,21 +1914,37 @@ class POCKET_CORRELATOR:
                         # Scaler stats reset
                         self.i.chan[m].SCALER.STATS_CAPTURE = 1
 
-                    # Capture data, filling the NumPy buffer on each iteration
-                    if n == 0:
-                        flush = True # Not very pythonic, but flush on first capture
-                    else:
-                        flush = False # Otherwise, no flush
+                    # Capture data, filling the NumPy buffer on each iteration, flush on first capture
+                    flush = True if n == 0 else False
+
+                    try:
                         
-                    # Capture correlated data (note that many default arguments are used here)
-                    t, vis, counts, sat = self.read_corr_frames(data_source = 'adc',
-                                                                fft_bypass = False,
-                                                                scaler_bypass = False,
-                                                                n_software_frames = n_software_frames,
-                                                                number_of_results = 1,
-                                                                flush = True, # flush,
-                                                                corr_is_configured = self.corr_is_configured
-                                                                )
+                        # Capture correlated data (note that many default arguments are used here)
+                        t, vis, counts, sat = self.read_corr_frames(data_source = 'adc',
+                                                                    fft_bypass = False,
+                                                                    scaler_bypass = False,
+                                                                    n_software_frames = n_software_frames,
+                                                                    number_of_results = 1,
+                                                                    flush = flush,
+                                                                    corr_is_configured = self.corr_is_configured
+                                                                    )
+
+                    except RuntimeError as e:
+                        print('Caught an error while capturing correlated data')
+                        print(f'RuntimeError: {e}')
+
+                        # Try capturing data again, this time flushing the buffer
+                        t, vis, counts, sat = self.read_corr_frames(data_source = 'adc',
+                                                                    fft_bypass = False,
+                                                                    scaler_bypass = False,
+                                                                    n_software_frames = n_software_frames,
+                                                                    number_of_results = 1,
+                                                                    flush = True,
+                                                                    corr_is_configured = self.corr_is_configured
+                                                                    )
+
+                    # Reset the early timestamp error flag after capturing new data
+                    early_timestamp_error = False
                     
                     t_buf[n] = t
                     vis_buf[n] = vis[0] # vis is a 3D array even if we only request 1 result
@@ -2105,6 +1988,9 @@ class POCKET_CORRELATOR:
                     # Correlator stats
                     corr_overrun_buf[n] = self.corr.OVERRUN
 
+                    # FPGA die temperature
+                    temperature_buf[n] = self.i.get_temperatures()['FPGA_core']
+
                     # Create arrays to print the overrange/overflow status of individual ADCs,
                     # reversing the array so that the ADCs are indexed in ascending order from ADC1 to ADC8
                     adc_or_arr = np.array([(adc_overrange_buf[n] & bitmask[m]) >> m for m in bitshifts])[::-1]
@@ -2124,6 +2010,7 @@ class POCKET_CORRELATOR:
                     print(f'FFT Overflows: {fft_overflows_buf[n]}')
                     print(f'Scaler Overflows: {scaler_overflows_buf[n]}')
                     print(f'Correlator Overruns: {corr_overrun_buf[n]}')
+                    print(f'FPGA Die Temperature: {temperature_buf[n]} C')
 
                 # Once the loop is complete, write the numpy buffers to disk
                 print('')
@@ -2145,6 +2032,7 @@ class POCKET_CORRELATOR:
                 dset_SCALER_OVERFLOWS[...] = scaler_overflows_buf
                 dset_SCALER_STATS_READY[...] = scaler_stats_ready_buf
                 dset_CORR_OVERRUN[...] = corr_overrun_buf
+                dset_TEMPERATURE[...] = temperature_buf
 
                 print('Data written!')
 
@@ -2177,6 +2065,7 @@ class POCKET_CORRELATOR:
             dset_SCALER_OVERFLOWS[...] = scaler_overflows_buf
             dset_SCALER_STATS_READY[...] = scaler_stats_ready_buf
             dset_CORR_OVERRUN[...] = corr_overrun_buf
+            dset_TEMPERATURE[...] = temperature_buf
 
             print('Done!')
             print('')

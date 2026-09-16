@@ -87,12 +87,9 @@ class GPIO(MMI):
     USER_MUX_SOURCE1           = BitField(CONTROL, 49, 0, width=4, doc='Selects which signal is sent to the Motherboard FPGA LED1 and Backplane SMA output.')
     USER_MUX_SOURCE2           = BitField(CONTROL, 49, 4, width=4, doc='Selects which signal is sent to the Motherboard SMA-B and FPGA LED2 output.')
 
-    # USER_BIT0                  = BitField(CONTROL, 50, 7, doc='Control the USER_BIT0 signal that can be routed to any user outputs')  # *** are bit0 and bit1 inverted?
-    # USER_BIT1                  = BitField(CONTROL, 50, 6, doc='Control the USER_BIT1 signal that can be routed to any user outputs')
     USER_BITS                  = BitField(CONTROL, 50, 6, width=2, doc='Control the USER_BIT signals that can be routed to any user outputs')
-    IRIG_DELAY_RESET           = BitField(CONTROL, 50, 5, doc='Loads the IRIG signal delay value into the delay block')
-    IRIG_DELAY_RESET           = BitField(CONTROL, 50, 5, doc='Loads the IRIG signal delay value into the delay block')
-    IRIGB_DELAY                = BitField(CONTROL, 50, 0, width=5, doc='IRIG-B signal delay')
+    # IRIG_DELAY_RESET           = BitField(CONTROL, 50, 5, doc='Loads the IRIG signal delay value into the delay block')
+    # IRIGB_DELAY                = BitField(CONTROL, 50, 0, width=5, doc='IRIG-B signal delay')
 
     TIMESTAMP_VALID            = BitField(STATUS, 0, 7, doc='Timestamp data valid (i.e. can be read)')
     MMI_COOKIE                 = BitField(STATUS, 0, 0, width=7, doc='Firmware cookie (BSB-MMI access only), should be 0x42')
@@ -123,12 +120,11 @@ class GPIO(MMI):
     ADC_PLL_LOCK0              = BitField(STATUS, 33, 6,  doc='Lock status of the ADC PLL in FMC0')
     ADC_PLL_LOCK1              = BitField(STATUS, 33, 7,  doc='Lock status of the ADC PLL in FMC1')
     CMD_RPLY_PACKET_COUNTERS   = BitField(STATUS, 35, 0, width=16, doc='Number of reply packets received since last FPGA configuration. MSB=Commands, LSB=Replies')
-    NUMBER_OF_BP_SHUFFLE_LANES = BitField(STATUS, 36, 0, width=8, doc='Number of backplane links (including the direct internal link)')
     EXTRA_IO                   = BitField(STATUS, 37, 0, width=8, doc='Various input IO signals provided by the platform. Used to QC the board.')
     ADC_CM_OV                  = BitField(STATUS, 38, 0, width=8, doc='ADC common-mode overvoltage flag')
-    ADC_CM_OV                  = BitField(STATUS, 39, 0, width=8, doc='ADC common-mode undervoltage flag')
+    ADC_CM_UV                  = BitField(STATUS, 39, 0, width=8, doc='ADC common-mode undervoltage flag')
     ADC_CM_OT1                 = BitField(STATUS, 40, 0, width=8, doc='ADC over thresold1 flag')
-    ADC_CM_OT1                 = BitField(STATUS, 41, 0, width=8, doc='ADC over thresold2 flag')
+    ADC_CM_OT2                 = BitField(STATUS, 41, 0, width=8, doc='ADC over thresold2 flag')
     CT_TYPE                    = BitField(STATUS, 42, 0, width=4, doc='Type of Corner-Turn engine used. 0=None, 1=BCT, 2=UCT')
     CT_LEVEL                   = BitField(STATUS, 42, 4, width=4, doc='Level of corner-turning implemented in the CT Engine. CT_LEVEL=1 Means internal CT only, which is hardwired for BCT and UCT')
     FFT_TYPE                   = BitField(STATUS, 43, 0, width=4, doc='Type of FFT implemented in the channelizers')
@@ -143,8 +139,9 @@ class GPIO(MMI):
     GPIO_RST_IN                = BitField(CONTROL, 37, 1, doc="FPGA I/O line")
     ARM_IRQ_IN                 = BitField(CONTROL, 37, 0, doc="FPGA I/O line")
 
-    def __init__(self, *,  router,  router_port):
+    def __init__(self, *,  router,  router_port, config):
         super().__init__(router=router, router_port=router_port)
+        self.config = config
         self._lock() # prevent further property creation to avoid creating attributes by mistake
 
     def get_bitstream_date(self):
@@ -157,7 +154,7 @@ class GPIO(MMI):
         year = (timestamp >> 17) & 0x3F
         month = (timestamp >> 23) & 0x0F
         day = (timestamp >> 27) & 0x1F
-        string = '%04i-%02i-%02i %02i:%02i:%02i' % (year + 2000, month, day, hour, minutes, seconds)
+        string = f'{int(year + 2000):04}-{int(month):02}-{int(day):02} {int(hour):02}:{int(minutes):02}:{int(seconds):02}'
         return string
 
     def set_global_trig(self, trigger_state):
@@ -188,8 +185,7 @@ class GPIO(MMI):
         every board will operate on a random offsets. The PWM generator is always reset by SYNC events.
         A system-wide SYNC will therefore make the PWM signal synchronized across all boards.
         """
-        self.logger.info('%r: Setting PWM generator to enable=%i, offset=%i, high_time=%i, period=%i' %
-                         (self, enable, offset, high_time, period))
+        self.logger.info(f'{self!r}: Setting PWM generator to enable={int(enable)}, offset={int(offset)}, high_time={int(high_time)}, period={int(period)}')
         self.PWM_OFFSET = offset
         self.PWM_HIGH_TIME = high_time - 1  # The actual high time is PWM_HIGH_TIME + 1
         self.PWM_PERIOD = period - 1  # The actual period is PWM_PERIOD + 1
@@ -272,11 +268,9 @@ class GPIO(MMI):
         valid values is shown.
         """
         if source not in self.USER_OUTPUT_SOURCE_TABLE:
-            raise AttributeError("Invalid source '%s'. Valid sources are %s." % (
-                source, ', '.join(list(self.USER_OUTPUT_SOURCE_TABLE.keys()))))
+            raise AttributeError(f"Invalid source '{source}'. Valid sources are {', '.join(list(self.USER_OUTPUT_SOURCE_TABLE.keys()))}.")
         if output not in self.USER_OUTPUTS:
-            raise AttributeError("Invalid output '%s'. Valid outputs are %s." % (
-                output, ', '.join(str(k) for k in list(self.USER_OUTPUTS.keys()))))
+            raise AttributeError(f"Invalid output '{output}'. Valid outputs are {', '.join((str(k) for k in list(self.USER_OUTPUTS.keys())))}.")
 
         self.write_bitfield(self.USER_OUTPUTS[output], self.USER_OUTPUT_SOURCE_TABLE[source])
 
@@ -284,8 +278,7 @@ class GPIO(MMI):
         """ Return the current user output source as a string """
 
         if output not in self.USER_OUTPUTS:
-            raise AttributeError("Invalid output '%s'. Valid outputs are %s." % (
-                output, ', '.join(str(k) for k in list(self.USER_OUTPUTS.keys()))))
+            raise AttributeError(f"Invalid output '{output}'. Valid outputs are {', '.join((str(k) for k in list(self.USER_OUTPUTS.keys())))}.")
 
         current_value = self.read_bitfield(self.USER_OUTPUTS[output])
 

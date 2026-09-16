@@ -18,6 +18,10 @@ class WiredCrossbar(MMI):
 
     """
 
+    def __init__(self, *, router, router_port, config):
+        super().__init__(router=router, router_port=router_port)
+        self.config = config
+
     def init(self):
         pass
 
@@ -28,8 +32,8 @@ class WiredCrossbar(MMI):
         return 4
 
     def set_frames_per_packet(self, frames):
-        if frames != 1:
-            self.logger.warning(f'{self!r}: CT engine only supports packaging 1 frame per packet. {frames} frames are not supported')
+        if not 0 < frames < 5:
+            self.logger.warning(f'{self!r}: CT engine only supports packaging from 1 to 4 frame per packet. {frames} frames are not supported')
 
     def get_frames_per_packet(self):
         return 1
@@ -50,11 +54,12 @@ class BCTEngine(MMIRouter):
         'SHUFFLE': 3
         }
 
-    def __init__(self, *, router, router_port, verbose=1):
+    def __init__(self, *, router, router_port, config, verbose=1):
         self.logger = logging.getLogger(__name__)
         self.verbose = verbose
 
         super().__init__(router=router, router_port=router_port)
+        self.config = config
 
         self.BP_SHUFFLE = None
         self.CROSSBAR = None
@@ -62,36 +67,37 @@ class BCTEngine(MMIRouter):
         self.CROSSBAR3 = None
 
         CT_LEVEL = self.CT_LEVEL = self.fpga.CT_LEVEL
+        self.config.CT_LEVEL = CT_LEVEL
 
         self.logger.debug(f'{self!r}: === Instantiating Corner-turn engine Type BCT Level {CT_LEVEL}')
 
         if CT_LEVEL == 1:
 
             self.logger.debug(f'{self!r}: ===     Instantiating 1st CROSSBAR (Wired)')
-            self.CROSSBAR = WiredCrossbar(router=self, router_port='CB1')
+            self.CROSSBAR = WiredCrossbar(router=self, router_port='CB1', config=self.config.add("crossbar"))
 
         elif CT_LEVEL == 3:
             self.logger.debug(f'{self!r}: ===     Instantiating 1st CROSSBAR (Programmable)')
-            self.CROSSBAR = chan_crossbar.ChanCrossbar(router=self, router_port='CB1')
+            self.CROSSBAR = chan_crossbar.ChanCrossbar(router=self, router_port='CB1', config=self.config.add("crossbar"))
 
-            if self.fpga.NUMBER_OF_BP_SHUFFLE_LANES:
-                self.logger.debug(f'{self!r}: ===     Instantiating Backplane shuffle subsystem')
-                self.BP_SHUFFLE = shuffle.Shuffle(router=self, router_port='SHUFFLE')
+            self.logger.debug(f'{self!r}: ===     Instantiating Backplane shuffle subsystem')
+            self.BP_SHUFFLE = shuffle.Shuffle(router=self, router_port='SHUFFLE', config=self.config.add("bp_shuffle"))
 
-            if self.fpga.NUMBER_OF_BP_SHUFFLE_LANES and self.NUMBER_OF_GPU_LINKS:
-                self.logger.debug(f'{self!r}: ===     Instantiating 2nd CROSSBAR')
-                self.CROSSBAR2 = shuffle_crossbar.ShuffleCrossbar(
-                    router=self,
-                    router_port='CB2',
-                    crossbar_level=2,
-                    number_of_bin_sel=2)  # CROSSBAR block
+            self.logger.debug(f'{self!r}: ===     Instantiating 2nd CROSSBAR')
+            self.CROSSBAR2 = shuffle_crossbar.ShuffleCrossbar(
+                router=self,
+                router_port='CB2',
+                crossbar_level=2,
+                config=self.config.add("crossbar2"),
+                number_of_bin_sel=2)  # CROSSBAR block
 
-                self.logger.debug(f'{self!r}: ===     Instantiating 3rd CROSSBAR')
-                self.CROSSBAR3 = shuffle_crossbar.ShuffleCrossbar(
-                    router = self,
-                    router_port='CB3',
-                    crossbar_level=3,
-                    number_of_bin_sel=8)  # CROSSBAR block
+            self.logger.debug(f'{self!r}: ===     Instantiating 3rd CROSSBAR')
+            self.CROSSBAR3 = shuffle_crossbar.ShuffleCrossbar(
+                router = self,
+                router_port='CB3',
+                crossbar_level=3,
+                config=self.config.add("crossbar3"),
+                number_of_bin_sel=8)  # CROSSBAR block
         else:
             raise RuntimeError("BCT-type Corner turn engine only supports CT_LEVEL of 1 or 3. Received CT_LEVEL={CT_LEVEL}")
 
@@ -124,6 +130,10 @@ class BCTEngine(MMIRouter):
             self.CROSSBAR3.init()
         # else:
         #     self.logger.warning(f"{self!r}: There is no BCT 3rd CROSSBAR module in this firmware build")
+
+    def update_config(self):
+        """Refresh CT config subtree; returns ``self.config``."""
+        return self.config
 
     def set_data_width(self, width):
         if self.CROSSBAR:
@@ -400,14 +410,11 @@ class BCTEngine(MMIRouter):
         cb3_ignore_lane = 0
 
         if not (cb1_bin_indices is None or len(cb1_bin_indices) == number_of_cb1_bin_sel):
-            raise ValueError('1st crossbar bin map should have %i lists of bins. Ir currently has %i' % (
-                number_of_cb1_bin_sel, len(cb1_bin_indices)))
+            raise ValueError(f'1st crossbar bin map should have {int(number_of_cb1_bin_sel)} lists of bins. Ir currently has {len(cb1_bin_indices)}')
         if not (cb2_bin_indices is None or len(cb2_bin_indices) == number_of_cb2_bin_sel):
-            raise ValueError('2nd crossbar bin map should have %i lists of bins. Ir currently has %i' % (
-                number_of_cb2_bin_sel, len(cb2_bin_indices)))
+            raise ValueError(f'2nd crossbar bin map should have {int(number_of_cb2_bin_sel)} lists of bins. Ir currently has {len(cb2_bin_indices)}')
         if not (cb3_bin_indices is None or len(cb3_bin_indices) == number_of_cb3_bin_sel):
-            raise ValueError('3rd crossbar bin map should have %i lists of bins. Ir currently has %i' % (
-                number_of_cb3_bin_sel, len(cb3_bin_indices)))
+            raise ValueError(f'3rd crossbar bin map should have {int(number_of_cb3_bin_sel)} lists of bins. Ir currently has {len(cb3_bin_indices)}')
 
         def get_dest_slot_for_src_lane(src_lane):
             tx = (self.slot, src_lane)  # unique transmitter id (slot, lane)
@@ -476,7 +483,7 @@ class BCTEngine(MMIRouter):
             # Bypassed. No channel reordering.
             cb3_lane_map = list(range(8))
             cb3_bypass = True
-            crate_number = self.crate.crate_number or 0 if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             cb3_bin_select_map = [[]] * number_of_cb3_bin_sel
 
             cb3_output_bins = 0  # debug
@@ -535,7 +542,7 @@ class BCTEngine(MMIRouter):
             cb3_lane_map = list(range(8))
             cb3_bin_select_map = []
             cb3_bypass = True
-            crate_number = self.crate.crate_number if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             stream_type = 0
 
         elif mode in ('shuffle16', 'chord16'):
@@ -626,7 +633,7 @@ class BCTEngine(MMIRouter):
             cb2_output_data_flags_words_per_bin = cb2_input_data_flags_words_per_bin
             cb2_output_frame_flags_words_per_frame = cb2_input_frame_flags_words_per_frame
 
-            crate_number = self.crate.crate_number or 0 if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             stream_type = 1
 
             #################################
@@ -747,7 +754,7 @@ class BCTEngine(MMIRouter):
             cb2_output_data_flags_words_per_bin = cb2_input_data_flags_words_per_bin
             cb2_output_frame_flags_words_per_frame = cb2_input_frame_flags_words_per_frame
 
-            crate_number = self.crate.crate_number or 0 if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             stream_type = 1
 
             #################################
@@ -920,7 +927,7 @@ class BCTEngine(MMIRouter):
                 cb2_input_frame_flags_words_per_frame * cb2_input_lanes_per_output_lane)
 
             cb2_output_bins = cb2_bins
-            crate_number = (self.crate.crate_number or 0) if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             stream_type = 2
 
             #################################
@@ -1061,7 +1068,7 @@ class BCTEngine(MMIRouter):
             # CB2 ALIGN
             # cb2_timeout_period = 0
 
-            crate_number = (self.crate.crate_number or 0) if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             stream_type = 3  # crossbar 3-level data
 
             # Input packet geometry
@@ -1322,7 +1329,7 @@ class BCTEngine(MMIRouter):
             #################################
             crate_shuffle_bypass = 1
 
-            crate_number = self.crate.crate_number if self.crate else 0
+            crate_number = self.fpga.mb.get_crate_number(default=0)
             stream_type = 4
 
             cb2_input_bins = cb1_bins
@@ -1367,16 +1374,7 @@ class BCTEngine(MMIRouter):
         #   * (cb2_input_words_per_bin * cb2_bins* cb2_lanes + 1*cb2_bins*cb2_lanes/2 + cb2_lanes) * 4
 
         self.logger.debug(
-            '%r: Configuring crossbars 1 & 2 with frames_per_packet=%i, cb1_lanes=%s, cb1_bins=%i, '
-            'cb2_lanes=%s, cb2_bins=%i, cb2_bypass=%s, bp_shuffle_bypass=%s' % (
-                self,
-                frames_per_packet,
-                cb1_lanes,
-                cb1_bins,
-                cb2_lanes,
-                cb2_bins,
-                bool(cb2_bypass),
-                bool(bp_shuffle_bypass)))
+            f'{self!r}: Configuring crossbars 1 & 2 with frames_per_packet={int(frames_per_packet)}, cb1_lanes={cb1_lanes}, cb1_bins={int(cb1_bins)}, cb2_lanes={cb2_lanes}, cb2_bins={int(cb2_bins)}, cb2_bypass={bool(cb2_bypass)}, bp_shuffle_bypass={bool(bp_shuffle_bypass)}')
 
         # Put everything in reset
         self.fpga.set_chan_reset(1)

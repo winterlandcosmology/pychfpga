@@ -74,7 +74,9 @@ class QSFP(object):
 
             gpio_prefix (str): String that is prefixed to the GPIO names to access GPIOs provided by the `gpio` object
 
-            gpio (GPIO): GPIO-class object that provides read() and write() methods to access the QSFP hardware control lines.
+            gpio (:class:`~pychfpga.hardware.i2c_devices.gpio.GPIO`): GPIO-class object
+                that provides read() and write() methods to access the QSFP hardware
+                control lines.
                 The object must define the following GPIOs:
 
                     - <prefix>ModPrsL
@@ -99,7 +101,7 @@ class QSFP(object):
         self._gpio = gpio
         self.parent = parent
 
-        self._logger.debug('%r: Instantiating QSFP+ object' % self)
+        self._logger.debug(f'{self!r}: Instantiating QSFP+ object')
 
         self._qsfp_eeprom = EEPROM(
             self._i2c, bus_name=self._bus_name,
@@ -108,31 +110,85 @@ class QSFP(object):
             write_page_size=256)
 
     def __repr__(self):
-        return "%r.%s" % (self.parent, self.__class__.__name__)
+        """Return a compact string representation.
+
+        Returns:
+            Any: Returned value.
+        """
+        return f"{self.parent!r}.{self.__class__.__name__}"
 
     def open(self):
+        """Open or acquire access to the device.
+
+        Returns:
+            None: No value is returned.
+        """
         pass
 
     def close(self):
+        """Close or release access to the device.
+
+        Returns:
+            None: No value is returned.
+        """
         pass
 
     def init(self, enable_i2c=False):
-        """Initializes the QSFP module to a known state (enable it)"""
+        """Initializes the QSFP module to a known state (enable it)
+
+        Args:
+            enable_i2c (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self.reset()
         # Note: Enable by default only of this is the only device at that address on the bus
         self.enable_i2c(enable_i2c)
         self.set_power_mode(0)  # Low power
 
     def set_control_bit(self, name, value, select=True):
+        """Set control bit configuration.
+
+        Args:
+            name (Any): Parameter value.
+            value (Any): Parameter value.
+            select (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self._gpio.write(self._gpio_prefix + name, value, select=select)
 
     def get_control_bit(self, name, select=True):
+        """Return control bit value.
+
+        Args:
+            name (Any): Parameter value.
+            select (Any): Parameter value.
+
+        Returns:
+            Any: Returned value.
+        """
         return self._gpio.read(self._gpio_prefix + name, select=select)
 
     def set_led(self, state):
+        """Set led configuration.
+
+        Args:
+            state (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self.set_control_bit('Led', state)
 
     def get_led(self):
+        """Return led value.
+
+        Returns:
+            Any: Returned value.
+        """
         return self.get_control_bit('Led')
 
     def reset(self, state=None):
@@ -166,10 +222,81 @@ class QSFP(object):
         return not self.get_control_bit('ModPrsL')
 
     def set_power_mode(self, state):
-        """ 0 = low power, 1 = High power """
+        """ 0 = low power, 1 = High power.
+
+        Drives the LPMode hardware pin and, when enabling high power, also
+        programs byte 93 (PowerSet) so that modules declaring Power Class 5-8
+        (>3.5 W) are actually allowed to draw their full rated power. Per
+        SFF-8636 the LPMode pin alone only gates Power Classes 1-4; classes
+        5-7 additionally require the "High Power Class Enable" bit and
+        class 8 requires the "Class 8 Enable" bit.
+        """
+        if state:
+            try:
+                self.enable_high_power_class()
+            except Exception:
+                self._logger.exception(
+                    '%r: Failed to program PowerSet (byte 93) for high power '
+                    'class; module may stay clamped to Power Class 1.', self)
         self.set_control_bit('LPMode', not state)
 
+    def get_power_class(self):
+        """ Return the QSFP module's declared Power Class (1..8) based on
+        byte 129 (ExtIdentifier) per SFF-8636.
+
+        Returns None if the module is not present or cannot be read.
+        """
+        if not self.is_present():
+            return None
+        try:
+            ext = self.read_byte('ExtIdentifier')
+        except Exception:
+            self._logger.exception('%r: Failed to read ExtIdentifier', self)
+            return None
+        # bit 5: Power Class 8 implemented (max power encoded in byte 107)
+        if ext & (1 << 5):
+            return 8
+        # bits [1:0]: Power Class 5-7 extension (00 => use bits [7:6])
+        ext_low = ext & 0b11
+        if ext_low:
+            return 4 + ext_low  # 01->5, 10->6, 11->7
+        # bits [7:6]: Power Class 1-4 (00->1 .. 11->4)
+        return ((ext >> 6) & 0b11) + 1
+
+    def enable_high_power_class(self):
+        """ Program byte 93 (PowerSet) according to the module's declared
+        Power Class so that classes >3.5 W are allowed to power up.
+
+        - Always sets Power_override (bit 0) so software controls the class.
+        - Clears Power_set (bit 1) so the module is not forced to low power.
+        - Sets High Power Class Enable (bit 2) for Power Class 5-8.
+        - Sets Class 8 Enable (bit 3) for Power Class 8.
+
+        Returns the value written to byte 93, or None if no module is present.
+        """
+        power_class = self.get_power_class()
+        if power_class is None:
+            return None
+        value = 0x01  # bit 0: Power_override
+        if power_class >= 5:
+            value |= 0x04  # bit 2: High Power Class Enable (classes 5-7, also required for 8)
+        if power_class >= 8:
+            value |= 0x08  # bit 3: Class 8 Enable
+        self._logger.info(
+            '%r: Module declares Power Class %d; writing PowerSet=0x%02X',
+            self, power_class, value)
+        self.write('PowerSet', bytes([value]))
+        return value
+
     def __getattr__(self, name):
+        """Resolve dynamic attributes through device accessors.
+
+        Args:
+            name (Any): Parameter value.
+
+        Returns:
+            Any: Returned value.
+        """
         if name in self.QSFP_EEPROM_MAP:
             (type, __, __, __) = self.QSFP_EEPROM_MAP[name]
             if isinstance(type, str):
@@ -180,10 +307,26 @@ class QSFP(object):
             return self.get_control_bit(name)
 
     def get_power_mode(self):
+        """Return power mode value.
+
+        Returns:
+            Any: Returned value.
+        """
         return getattr(self, 'LPMode', None)
 
     def write(self, addr, data, page=0, enable=True):
 
+        """Write data to the device.
+
+        Args:
+            addr (Any): Parameter value.
+            data (Any): Parameter value.
+            page (Any): Parameter value.
+            enable (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         if enable:
             self.enable_i2c(True)
 
@@ -241,6 +384,16 @@ class QSFP(object):
         return data
 
     def read_str(self, addr=148, length=16, page=0):
+        """Read and decode a fixed-length text field.
+
+        Args:
+            addr (Any): Parameter value.
+            length (Any): Parameter value.
+            page (Any): Parameter value.
+
+        Returns:
+            Any: Returned value.
+        """
         self.enable_i2c(True)
         # data = ''.join([chr(x) for x in self.read(addr, length, page, enable=False)])
         data = self.read(addr, length, page, enable=False)
@@ -248,32 +401,75 @@ class QSFP(object):
         return data.rstrip()
 
     def read_byte(self, addr, page=0, enable=True):
-        """ Read 8-bit byte. """
+        """ Read 8-bit byte. 
+
+        Args:
+            addr (Any): Parameter value.
+            page (Any): Parameter value.
+            enable (Any): Parameter value.
+
+        Returns:
+            Any: Returned value.
+        """
         data = self.read(addr, length=1, page=page, enable=enable)
         return data[0]
 
     def read_word(self, addr, page=0, type=np.uint16, enable=True):
-        """ Read 16-bit word as an unsigned big endian. """
+        """ Read 16-bit word as an unsigned big endian. 
+
+        Args:
+            addr (Any): Parameter value.
+            page (Any): Parameter value.
+            type (Any): Parameter value.
+            enable (Any): Parameter value.
+
+        Returns:
+            Any: Returned value.
+        """
         data = self.read(addr, length=2, page=page, enable=enable)
         return (data[0] << 8) + data[1]
 
     def get_temperature(self):
+        """Return temperature value.
+
+        Returns:
+            Any: Returned value.
+        """
         word = self.read_word('MeasuredTemp', type=np.int16)
         return word / 256.
 
     def get_supply_voltage(self):
+        """Return supply voltage value.
+
+        Returns:
+            Any: Returned value.
+        """
         return self.read_word('MeasuredSupV') * 100e-6
 
     def get_rx_power(self):
-        """ Return the optical power (in Watts) received by each of the 4 channels"""
-        return [self.read_word('RxPow%i' % chan) * 0.1e-6 for chan in [1, 2, 3, 4]]
+        """ Return the optical power (in Watts) received by each of the 4 channels
+
+        Returns:
+            Any: Returned value.
+        """
+        return [self.read_word(f'RxPow{chan}') * 0.1e-6 for chan in [1, 2, 3, 4]]
 
     def get_uid(self):
+        """Return uid value.
+
+        Returns:
+            Any: Returned value.
+        """
         if not self.is_present():
             return None
-        return '%s_%s_SN%s' % (self.read_str('VendName'), self.read_str('VenPN'), self.read_str('VenSN'))
+        return '{}_{}_SN{}'.format(self.read_str('VendName'), self.read_str('VenPN'), self.read_str('VenSN'))
 
     def get_serial_number(self):
+        """Return serial number value.
+
+        Returns:
+            Any: Returned value.
+        """
         if not self.is_present():
             return None
         return self.read_str('VenSN')
@@ -347,21 +543,26 @@ class QSFP(object):
             }
         print('Hardware lines')
         print('--------------')
-        print('Module is Present: %s' % bool(self.is_present()))
-        print('Module I2C is Responding: %s' % bool(self._qsfp_eeprom.is_present()))
-        print('Module type: %s' % ['Low power', 'High power'][self.get_power_mode() or 0])
+        print(f'Module is Present: {bool(self.is_present())}')
+        print(f'Module I2C is Responding: {bool(self._qsfp_eeprom.is_present())}')
+        print('Module type: {}'.format(['Low power', 'High power'][self.get_power_mode() or 0]))
         print('I2C info')
         print('--------------')
-        print('   Module temperature: %0.1f C' % self.get_temperature())
-        print('   Module supply voltage: %0.2f V' % self.get_supply_voltage())
-        print('   Received optical power: %s'
-              % ', '.join(['Ch%i=%0.3f mW' % (i+1, rx_pow/1e-3) for (i, rx_pow) in enumerate(self.get_rx_power())]))
-        print('   Manufacturer: %s' % self.read_str('VendName'))
-        print('   Model: %s Revision %s' % (self.read_str('VenPN'), self.read_str('VenRev')))
-        print('   Serial Number: %s' % (self.read_str('VenSN')))
-        print('   Cable length (if copper): %im' % self.read_byte('CopperLength'))
-        print('   Device Technology: %s' % tech_table[self.read_byte('DeviceTech') >> 4])
-        print('   Connector type: %s, %s' % (identifier_table.get(self.read_byte('Identifier2', 'Unknown')),
+        print(f'   Module temperature: {self.get_temperature():0.1f} C')
+        print(f'   Module supply voltage: {self.get_supply_voltage():0.2f} V')
+        rx_powers = self.get_rx_power()
+        print(
+            '   Received optical power: '
+            + ', '.join(
+                f'Ch{i + 1}={rx_pow / 1e-3:0.3f} mW' for i, rx_pow in enumerate(rx_powers)
+            )
+        )
+        print('   Manufacturer: {}'.format(self.read_str('VendName')))
+        print('   Model: {} Revision {}'.format(self.read_str('VenPN'), self.read_str('VenRev')))
+        print('   Serial Number: {}'.format(self.read_str('VenSN')))
+        print(f'   Cable length (if copper): {self.read_byte("CopperLength")}m')
+        print('   Device Technology: {}'.format(tech_table[self.read_byte('DeviceTech') >> 4]))
+        print('   Connector type: {}, {}'.format(identifier_table.get(self.read_byte('Identifier2', 'Unknown')),
                                              connector_types.get(self.read_byte('Connector', 'Unknown'))))
 
         data = {}

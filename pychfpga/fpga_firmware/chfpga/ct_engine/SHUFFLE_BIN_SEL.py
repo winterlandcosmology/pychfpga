@@ -64,11 +64,12 @@ class SHUFFLE_BIN_SEL_base(MMI):
     # IN_FRAME_CTR             = BitField(STATUS, 0x02, 0, width=8, doc="Number of frames received on lane 0 before the alignment FIFOs. Rolls over.")
     # LANE_CTR                = BitField(STATUS, 0x04, 0, width=4, doc="Debug")
 
-    def __init__(self, fpga_instance, base_address, instance_number, crossbar_level):
+    def __init__(self, *, router, router_port, instance_number, crossbar_level, config):
         # self.parent = parent
         # self.fpga = fpga_instance
         self.crossbar_level = crossbar_level
-        super().__init__(fpga_instance, base_address, instance_number)
+        super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.config = config
         self.logger = logging.getLogger(__name__)
         self.NUMBER_OF_INPUTS = None
         self.cached_bin_select_table = None
@@ -124,12 +125,7 @@ class SHUFFLE_BIN_SEL_base(MMI):
             mask[j // 8] |= (1 << (j % 8))
         # verbose = False
         # if verbose: print (bins_to_enable)
-        self.logger.debug('%r: CROSSBAR%i.BIN_SEL[%i] configured to capture %i frequency bins: %s...' % (
-            self.fpga,
-            self.crossbar_level,
-            self.instance_number,
-            len(bins_to_enable),
-            repr(bins_to_enable[:10])))
+        self.logger.debug(f'{self.fpga!r}: CROSSBAR{int(self.crossbar_level)}.BIN_SEL[{int(self.instance_number)}] configured to capture {len(bins_to_enable)} frequency bins: {bins_to_enable[:10]!r}...')
         # self.logger.debug('%r: Mask pattern is: %s' % (self.fpga, ' '.join('%02X'% byte for byte in mask)))
 
         self.cached_bin_select_table = mask
@@ -203,7 +199,7 @@ class SHUFFLE_BIN_SEL_base(MMI):
 
     def status(self):
         """Displays the status of SHUFFLE_BIN_SEL."""
-        self.logger.debug('%r: --- SHUFFLE_BIN_SEL[%i] STATUS' % (self.fpga, self.instance_number))
-        self.logger.debug('%r:    RESET: %i' % (self.fpga, self.RESET))
-        self.logger.debug('%r:    FIFO EMPTY: %i' % (self.fpga, self.FIFO_EMPTY))
+        self.logger.debug(f'{self.fpga!r}: --- SHUFFLE_BIN_SEL[{int(self.instance_number)}] STATUS')
+        self.logger.debug(f'{self.fpga!r}:    RESET: {int(self.RESET)}')
+        self.logger.debug(f'{self.fpga!r}:    FIFO EMPTY: {int(self.FIFO_EMPTY)}')
         # self.logger.debug('   FIFO OVERFLOW: %i' % self.FIFO_OVERFLOW)

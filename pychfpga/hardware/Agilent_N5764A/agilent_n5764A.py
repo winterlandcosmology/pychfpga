@@ -9,6 +9,19 @@ from .agilent_N5700 import agilent_N5700
 class AgilentN5764A:
     """
     Provide the basic methods to operate an Agilent N5700-series power supply.
+
+    Available commands:
+    | Command      | Action                                                                                                                                                           | Example                 |
+    | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+    | unlock       | Unlocks the access to configuring the PS                                                                                                                         | ps.unlock()             |
+    | lock         | Locks the access to configuring the PS                                                                                                                           | ps.lock()               |
+    | status       | Shows current config and status                                                                                                                                  | ps.status()             |
+    | is_enabled   |                                                                                                                                                                  | ps.is_enabled()         |
+    | is_ok        | True: power supply is turned on and operates normally<br>False: can either be turned off, faulted or in current limit mode                                       | ps.is_ok()              |
+    | power_enable | Enables or disables power output. The only argument value can be:<br>'on', 'On', 'ON', 1, True – Enables power<br>'off', 'Off', 'OFF', 0, False – Disables power | ps.power_enable(False)  |
+    | power_on     | Shortcut to ps.power_enable(True)                                                                                                                                | ps.power_on()           |
+    | power_off    | Shortcut to ps.power_enable(False)                                                                                                                               | ps.power_off()          |
+    | power_cycle  | Runs power_off and then power_on after a delay in seconds                                                                                                        | ps.power_cycle(delay=4) |
     """
 
     hostname = None
@@ -34,7 +47,7 @@ class AgilentN5764A:
 
     def __repr__(self):
         if self.ps:
-            return '%s %s @%s' % (self.ps.instrument_name, self.ps.instrument_model, self.hostname)
+            return f'{self.ps.instrument_name} {self.ps.instrument_model} @{self.hostname}'
         else:
             return 'Unknown power supply'
 

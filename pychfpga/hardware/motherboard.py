@@ -10,6 +10,7 @@ from wtl.metrics import Metrics
 # local Packages
 from .hardware_map import HardwareMap
 from .crate import Crate
+from pychfpga.common import array_methods
 
 
 class Motherboard(HardwareMap):
@@ -41,12 +42,21 @@ class Motherboard(HardwareMap):
 
     SERIAL_NUMBER_LENGTH = 4  # number of digits in the serial number. Used to convert integers to a valid serial number.
 
+    # Array method provider class for this motherboard.
+    array_method_class = None
+
     # _cached_repr = None  # Stores a pre-processed string representation of the board repr() for efficiency
 
     NUMBER_OF_FMC_SLOTS = 0  # Number of supported mezzanines
     FMC_MEZZ_NUMBERS = () # Logical mezzanine numbers
 
     port = None  # port number on which to access the platform `hostname`. Must be defined by subclasses. Is used by fpga_master.
+
+    # Array method providers accessible from this instance.
+    # Defined here as defaults so __getattr__ does not fall in a recursive
+    # loop until instance attributes shadow them.
+    _array_method_classes = frozenset()
+    fpga = None
 
     cls_logger = logging.getLogger(__name__)
 
@@ -117,6 +127,11 @@ class Motherboard(HardwareMap):
         # parameters.
         self._cached_repr = None
 
+        # Instance default for the FPGAArray-method provider cache. Shadows
+        # the class attribute; refreshed by ``update_array_methods`` when the
+        # firmware changes.
+        self._array_method_classes = self.get_array_method_classes()
+
         self.logger = logging.getLogger(__name__)
 
 
@@ -135,7 +150,7 @@ class Motherboard(HardwareMap):
         self.serial = serial
         self.slot = slot
         self.subarray = subarray
-        self.extra_args = kwargs
+        self.extra_hwm_args = kwargs
 
         self.crate = None  # Crate (or backplane) object on which the motherboard is mounted
         self.mezzanine = {}  # Mezzanines attached to this motherboard ({slot:mezz_object, ...})
@@ -172,6 +187,39 @@ class Motherboard(HardwareMap):
         """ Returns bothe the Motherboard's and FPGA Firmware's attributes"""
         return list(set(super().__dir__()
                     + (self.fpga.__dir__() if self.fpga else [])))
+
+    def get_array_method_classes(self):
+        """Return array-method provider classes for this board and firmware."""
+        return frozenset(
+            cls for cls in (
+                self.array_method_class,
+                self.fpga.array_method_class if self.fpga else None) if cls)
+
+    def update_array_methods(self):
+        """Refresh the cached set of FPGAArray-method provider classes.
+
+        Always builds a new ``frozenset`` object so :class:`FPGAArray` can
+        detect firmware/provider changes by comparing its tuple of
+        per-motherboard sets.
+        """
+        self._array_method_classes = self.get_array_method_classes()
+        return self._array_method_classes
+
+    @classmethod
+    def get_network_discovery_function(cls):
+        """Return the function to use for network discovery of CRS backplanes."""
+        from pychfpga.common.mdns_discovery import mdns_discover
+
+        return mdns_discover
+
+    @classmethod
+    async def set_platform_firmware(
+            cls,
+            boards=None,
+            arm_firmware_pathname=None,
+            **kwargs):
+        """Ensure platform ARM firmware is loaded and running before opening connections."""
+        return None
 
     # *************************
     # Motherboard-specific hardware map management methods
@@ -231,14 +279,14 @@ class Motherboard(HardwareMap):
                 that matches the specified crate number, or one is created
                 with that crate number to hold the desired crate number value.
 
-            **kwargs: Any other argument is stored in the extra_args
+            **kwargs: Any other argument is stored in the extra_hwm_args
                 dictionary, and will be transferred if this instance is
                 converted into a new class.
         """
         # print(f"In et_unique_instance")
 
         matching_boards = [
-            c for c in cls.get_all_instances() if (
+            c for c in cls.get_all_registered_instances() if (
                 (hostname is not None and c.hostname == hostname)
                 or ((new_class or cls).part_number
                     and serial
@@ -315,12 +363,11 @@ class Motherboard(HardwareMap):
         hostname = hostname or self.hostname
         slot = slot if slot is not None else self.slot
         subarray = subarray if subarray is not None else self.subarray
-        crate_number = (crate_number if crate_number is not None
-                        else self.crate.crate_number if self.crate else None)
-        extra_args = {**self.extra_args, **kwargs}
+        crate_number = self.get_crate_number()
+        extra_hwm_args = {**self.extra_hwm_args, **kwargs}
         if new_class and self.__class__ is not new_class:
-            self.logger.debug(f"update_instance: Creating new instance with {new_class.__name__}(serial={serial}, hostname={hostname}, slot={slot}, subarray={subarray}, **{extra_args})")
-            other = new_class(serial=serial, hostname=hostname, slot=slot, subarray=subarray, **extra_args)
+            self.logger.debug(f"update_instance: Creating new instance with {new_class.__name__}(serial={serial}, hostname={hostname}, slot={slot}, subarray={subarray}, **{extra_hwm_args})")
+            other = new_class(serial=serial, hostname=hostname, slot=slot, subarray=subarray, **extra_hwm_args)
             self.logger.debug(f"{self!r}: Updating newly created instance...")
             other.update_instance(crate_number=crate_number, crate=self.crate)  # update crate and backrefs
             # Update Mezzanine references to the new instance
@@ -337,7 +384,7 @@ class Motherboard(HardwareMap):
             self.hostname = hostname
             self.serial = serial
             self.subarray = subarray
-            self.extra_args = extra_args
+            self.extra_hwm_args = extra_hwm_args
             # remove previous crate backref if it exists
             if self.crate and self.slot:
                 self.crate.slot.pop(self.slot, None)
@@ -359,6 +406,28 @@ class Motherboard(HardwareMap):
     # *************************
     # Board identification
     # *************************
+
+    def get_crate_number(self, default=None):
+        """Return the numeric crate index for this board, or ``default`` if unknown.
+
+        The value comes from the attached :class:`Crate` instance (``self.crate.crate_number``).
+        If there is no crate, or the crate has no assigned number (``None``), this method
+        returns ``default``. That unifies the two cases so callers do not repeat
+        ``self.crate and self.crate.crate_number is not None`` checks.
+
+        Parameters:
+
+            default: Value to return when there is no :attr:`crate` or when
+                ``crate.crate_number`` is ``None``. Common choices are ``None`` (unknown /
+                omit from labels) or ``0`` (integer stream IDs, sorting keys).
+
+        Returns:
+
+            The configured crate number (typically ``int``), or ``default``.
+        """
+        if not self.crate or self.crate.crate_number is None:
+            return default
+        return self.crate.crate_number
 
     def get_id(self, lane=None, default_crate=None, default_slot=None, numeric_only=False):
         """ Returns a (crate, slot) tuple representing a unique IceBoard ID,
@@ -439,17 +508,17 @@ class Motherboard(HardwareMap):
 
         """
         if self.crate:  # if there is a crate/backplane, do not allow empty crate field but allow empty slot.
-            crate_number = self.crate.crate_number
+            crate_number = self.get_crate_number()
             if crate_number is None:  # if there is no valid crate number
                 if numeric_only:
-                    raise RuntimeError('The crate %s does not have a valid crate number' % self.crate)
+                    raise RuntimeError(f'The crate {self.crate} does not have a valid crate number')
                 crate_number = default_crate if default_crate is not None else self.crate.get_string_id()
 
             if self.slot:  # if there is a valid slot (not 0 or None)
                 slot = self.slot - 1
             else:
                 if numeric_only:
-                    raise RuntimeError('The crate %s does not have a valid slot number' % self.crate)
+                    raise RuntimeError(f'The crate {self.crate} does not have a valid slot number')
                 slot = default_slot
 
         else:  # if there is no crate, allow empty crate but not an empty slot
@@ -493,8 +562,9 @@ class Motherboard(HardwareMap):
             - id=140529531550992 # nothing, last resort
 
         """
-        if self.crate and self.crate.crate_number is not None and self.slot:
-            return f"({self.crate.crate_number},{self.slot-1})"
+        cn = self.get_crate_number()
+        if self.crate and cn is not None and self.slot:
+            return f"({cn},{self.slot-1})"
         if self.crate and self.crate.part_number and self.crate.serial and self.slot:
             return f"({self.crate.part_number}_SN{self.crate.serial},{self.slot-1})"
         elif self.serial:
@@ -521,11 +591,38 @@ class Motherboard(HardwareMap):
         raise NotImplementedError('This method must be implemented by a subclass')
 
     # *************************
-    # FPGA Programming methods
+    # FPGA Firmware methods
     # *************************
 
+    def set_fpga_firmware(self, fpga_fw):
+        """ Set the FPGA firmware class for this motherboard.
+
+        Parameters:
+
+            fpga_fw (FPGAFirmware subclass): The firmware class to program the FPGA with.
+
+        Returns:
+            None
+        """
+        self.fpga = fpga_fw
+        self.update_array_methods() # update the array-method providers used by FPGAArray
+
     async def set_fpga_bitsream_async(self, firmware_class, force=True):
-        """ Programs the FPGA with the specified bitstream
+        """ Programs the FPGA with the specified bitstream.
+
+        Once the FPGA is programmed, the firmware class is stored in the `fpga` attribute.
+
+        Make sure to call `update_array_methods()` after programming the FPGA
+        to update the array-method providers used by FPGAArray.
+
+        Parameters:
+
+            firmware_class (FPGAFirmware subclass): The firmware class to program the FPGA with.
+
+            force (bool): If True, the FPGA will be programmed even if it is already programmed.
+
+        Returns:
+            None
         """
         raise NotImplementedError('This method must be implemented by a subclass')
 
@@ -602,7 +699,7 @@ class Motherboard(HardwareMap):
             slot=(self.slot or 0) - 1,
             id=self.get_string_id(),
             crate_id=self.crate.get_string_id() if self.crate else None,
-            crate_number=self.crate.crate_number if self.crate else None)
+            crate_number=self.get_crate_number())
 
         return metrics
 
@@ -615,7 +712,7 @@ class Motherboard(HardwareMap):
         metrics = Metrics(
             type='GAUGE',
             crate_id=self.crate.get_string_id() if self.crate else None,
-            crate_number=self.crate.crate_number if self.crate else None)
+            crate_number=self.get_crate_number())
 
         return metrics
 

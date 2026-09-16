@@ -23,8 +23,8 @@ FRAME_HEADER_LENGTH = 9
 data = bytearray(BUF_SIZE)
 data_buf = buffer(data)
 data_block = np.zeros((256,8,2048), dtype=np.int8)
-channels = np.zeros((256,8), dtype=np.int)
-timestamps = np.zeros((256,8), dtype=np.int)
+channels = np.zeros((256,8), dtype=int)
+timestamps = np.zeros((256,8), dtype=int)
 
 def get_frames(nframes = 256):
     first = True
@@ -58,4 +58,3 @@ def get_frames(nframes = 256):
 if __name__ == '__main__':
     #ts, adcs, ad = get_frames()
     adcs = get_frames()
-

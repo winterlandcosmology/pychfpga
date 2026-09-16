@@ -14,6 +14,21 @@ __all__ = [
 ]
 
 
+class _CcollGather:
+    """Awaitable that gathers coroutines and wraps results in a Ccoll."""
+
+    def __init__(self, coros, keys=None):
+        self._keys = keys
+        self._fut = asyncio.gather(*coros)
+
+    def __await__(self):
+        return self._await().__await__()
+
+    async def _await(self):
+        results = await self._fut
+        return Ccoll(results, self._keys)
+
+
 class Ccoll(object):
     """
     Class representing a collection of objects that can be accessed and/or
@@ -29,9 +44,10 @@ class Ccoll(object):
     itself returns an iterable to the objects, not their keys. This behavior is
     consistent with a HWMQuery object.
 
-    Calling the mapping will concurrently call every object with the provided
-    arguments and will return the result in another Ccoll with
-    identical keys.
+    Calling the mapping will call every object with the provided arguments and
+    return the results in another Ccoll with identical keys. For coroutine
+    functions, the call returns an awaitable that gathers concurrently and
+    resolves to a Ccoll of results (``await coll.foo_async(x)``).
 
     Accessing an attribute of the mapping will return a new HWMQueryAttribute
     containing the that attribute for each of the element of the mapping.
@@ -108,16 +124,10 @@ class Ccoll(object):
 
     def __repr__(self):
         if self._has_keys:
-            return '%s containing: {\n%s}' % (
-                type(self).__name__,
-                ',\n'.join('%s: %r' % (key, value) for
-                           (key, value) in self.items())
-                )
-        else:
-            return '%s containing: [\n%s]' % (
-                type(self).__name__,
-                ',\n'.join(['%r' % (value, ) for value in self])
-                )
+            body = ',\n'.join(f'{key!s}: {value!r}' for key, value in self.items())
+            return f'{type(self).__name__} containing: {{\n{body}\n}}'
+        body = ',\n'.join(f'{value!r}' for value in self)
+        return f'{type(self).__name__} containing: [\n{body}\n]'
 
     def __dir__(self):
         """Retrieve a list of interesting attributes."""
@@ -129,7 +139,7 @@ class Ccoll(object):
     # Mirror the main attributes of _proto if it is callable so we can mimic
     # its signature.
     __doc__ = property(lambda self: self._proto.__doc__ if callable(self._proto)
-                       else 'Collection of %s objects' % type(self._proto))
+                       else f'Collection of {type(self._proto)} objects')
     __class__ = property(lambda self: self._proto.__class__ if callable(self._proto) else Ccoll)
     __name__ = property(lambda self: self._proto.__name__ if callable(self._proto) else Ccoll.__name__)
     __func__ = property(lambda self: self._proto.__func__)
@@ -165,41 +175,24 @@ class Ccoll(object):
                         "instead of 'x in ccoll'")
 
     def __call__(self, *args, **kwargs):
-        """Call all objects in the array concurrently if they are coroutines,
-        otherwise call them serially.
+        """Call every object in the collection with the same arguments.
+
+        For ordinary callables, returns a Ccoll of return values.
+        For coroutine functions, returns an awaitable that gathers them and
+        resolves to a Ccoll of results, e.g.::
+
+            results = await self.ib.foo_async(x)
         """
-
-        # By default, presume a fancy asynchronous version has been coded and
-        # invoke it synchronously. This is often all the serial version needs
-        # to do anyways.
         is_coro = [asyncio.iscoroutinefunction(f) for f in self._dict.values()]
-
-        if all(is_coro):  # If all the functions are coroutines
-
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-
-            futures = asyncio.gather(*(f(*args, **kwargs) for f in self._dict.values()))
-            # results = async.async_call(self._dict.values(), None, *args, **kwargs)
-            results = loop.run_until_complete(futures)
-
-        elif not any(is_coro):  # Otherwise, fall back on a looped invocation.
-            results = [f(*args, **kwargs) for f in self._dict.values()]
-        else:
-            raise RuntimeError('Ccoll: cannot call on a mix of both async and standard methods)')
-
-        return Ccoll(results, self._dict.keys() if self._has_keys else None)
-
-    async def __acall__(self, *args, **kwargs):
-        '''Stub for asynchronous call that returns a Future.'''
-        is_coro = [iscoroutine(f) for f in func_list]
-        if all(is_coro):  # If all the functions are coroutines
-            results = await asyncio.gather(*(f(*args, **kwargs) for f in self._dict.values()))
-            return Ccoll(results, self._dict.keys() if self._has_keys else None)
-        else:
-            raise RuntimeError('Ccoll: cannot call on a mix of both async and standard methods)')
+        if any(is_coro) and not all(is_coro):
+            raise TypeError(
+                'Ccoll: cannot call on a mix of both async and standard methods'
+            )
+        results = [f(*args, **kwargs) for f in self._dict.values()]
+        keys = self._dict.keys() if self._has_keys else None
+        if is_coro and is_coro[0]:
+            return _CcollGather(results, keys)
+        return Ccoll(results, keys)
 
     def map(self, func, *args, **kwargs):
         return Ccoll((func(i, *args, **kwargs) for i in self.values()), self._dict.keys() if self._has_keys else None)
@@ -298,11 +291,9 @@ class Ccoll(object):
         attribute name, otherwise raise an exception"""
         attr_present = [hasattr(obj, name) for obj in self]
         if not any(attr_present):
-            raise AttributeError("Attribute %s does not exist on any element "
-                                 "of the current results" % name)
+            raise AttributeError(f"Attribute {name} does not exist on any element of the current results")
         elif not all(attr_present):
-            raise AttributeError("Attribute %s must exist on all elements "
-                                 "of the current results" % name)
+            raise AttributeError(f"Attribute {name} must exist on all elements of the current results")
 
 
 # vim: sts=4 ts=4 sw=4 tw=78 smarttab expandtab

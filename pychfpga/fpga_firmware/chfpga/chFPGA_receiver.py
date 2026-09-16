@@ -154,7 +154,7 @@ class ReceiverThread(threading.Thread):
                 # corr_number &= 0x0F  # mask the FRAME ID bits
                 if nbytes <= 12 or nbytes > self.MAX_CORR_FRAME_LENGTH:
                     if self.verbose:
-                        print("Corr Receiver: Bad frame length of %i bytes" % nbytes)
+                        print(f"Corr Receiver: Bad frame length of {int(nbytes)} bytes")
                 elif (cmac_number >= self.Ncmac):
                     if self.verbose:
                         print("Corr Receiver: Bad multiplier number")
@@ -187,8 +187,7 @@ class ReceiverThread(threading.Thread):
                         last_corr_time = corr_time
                     if nc >= self.Ncmac * self.Ncorr:
                         if self.verbose:
-                            print('Corr Receiver: Received extra correlator frames for Corr#%i Mult#%i' % (
-                                corr_number, cmac_number))
+                            print(f'Corr Receiver: Received extra correlator frames for Corr#{int(corr_number)} Mult#{int(cmac_number)}')
                     else:
                         # print 'Corr#%i Mult#%i ts=%i, time=%0.3f, dt=%0.3fs' % (
                         #       corr_number, cmac_number, timestamp, corr_time, corr_time-last_corr_time)
@@ -241,25 +240,17 @@ class ReceiverThread(threading.Thread):
                     # Copy the new vector into the block memory buffer
                     if n < 0 or n >= 16:
                         if self.verbose:
-                            print('Timestream Receiver: received %i Timestrem/Spectrum frames '
-                                  'with the same timestamp.' % n)
+                            print(f'Timestream Receiver: received {int(n)} Timestrem/Spectrum frames with the same timestamp.')
                     elif nbytes != 2048 + 10:
                         if self.verbose:
-                            print('Timestream Receiver: Timestrem/Spectrum frame has %i bytes instead of '
-                                  '2048+9=2057 bytes. First bytes are: 0x%s' % (
-                                        nbytes,
-                                        ' '.join('%02X' % c for c in self.data[:32])))
+                            print(f"Timestream Receiver: Timestrem/Spectrum frame has {int(nbytes)} bytes instead of 2048+9=2057 bytes. First bytes are: 0x{' '.join((f'{c:02X}' for c in self.data[:32]))}")
                     else:
                         self.data_block[n, :] = self.data[: 2048 + 10]
                         n += 1
             # Unknown frame type
             else:  # unknown frame format
                 if self.verbose:
-                    print('Receiver: Frame of %i bytes with unknown identifier 0x%2X has been received. '
-                          'It was discarded. First bytes are 0x%s' % (
-                                nbytes,
-                                frame_id,
-                                ' '.join('%02X' % c for c in self.data[:32])))
+                    print(f"Receiver: Frame of {int(nbytes)} bytes with unknown identifier 0x{frame_id:2X} has been received. It was discarded. First bytes are 0x{' '.join((f'{c:02X}' for c in self.data[:32]))}")
 
         # self.queue.task_done() # JFC: Must be used by queue consumer, not the producer (this thread)
         # self.queue_corr.task_done()
@@ -273,12 +264,7 @@ class ReceiverThread(threading.Thread):
                 t = time.time()
                 dt = t-last_display_time
                 if dt > print_delay:
-                    print('Received %i frames at %f frames/s (%f Mb/s), buffer size = %i, overflows= %i' % (
-                        self.n_frames,
-                        self.n_frames / dt,
-                        self.n_frames / dt * (2048 + 10) * 8 / 1e6,
-                        self.queue.qsize(),
-                        self.queue_overflow))
+                    print(f'Received {int(self.n_frames)} frames at {self.n_frames / dt:f} frames/s ({self.n_frames / dt * (2048 + 10) * 8 / 1000000.0:f} Mb/s), buffer size = {int(self.queue.qsize())}, overflows= {int(self.queue_overflow)}')
                     last_display_time = t
                     self.n_frames = 0
         except KeyboardInterrupt:
@@ -363,9 +349,7 @@ class chFPGA_receiver(object):
         # self.sock.flush_data_socket() # This cause conflict with the background socket operations
         self.frame_receiver.flush(1)
         while (not self.frame_queue.empty()) or (not self.frame_queue_corr.empty()):
-            print('data_queue_empty=%s, corr_queue_empty=%s' % (
-                self.frame_queue.empty(),
-                self.frame_queue_corr.empty()))
+            print(f'data_queue_empty={self.frame_queue.empty()}, corr_queue_empty={self.frame_queue_corr.empty()}')
             time.sleep(0.1)
         self.frame_receiver.flush(0)
         # with self.frame_queue.mutex:
@@ -410,7 +394,7 @@ class chFPGA_receiver(object):
 
         for j in range(frames):
             if verbose > 1 or (verbose == 1 and (j % 100 == 99 or j == frames - 1)):
-                print('Acquiring Frame %i (%.0f%%)' % ((j + 1), (100 * (j + 1) / frames)))
+                print(f'Acquiring Frame {int(j + 1)} ({100 * (j + 1) / frames:.0f}%)')
             data_block = self.frame_queue.get(timeout=timeout)
 
             block_timestamp = data_block[0]
@@ -442,7 +426,7 @@ class chFPGA_receiver(object):
                     raw_data^=0x80
 
                 if verbose >= 2:
-                    print('Packet received from port %i. Frame header information:  probe_id #=%i, stream_id #=%i, flags=%i words, timestamp=%i, flags=%i' % (channel, probe_id, stream_id, flags, timestamp, flags))
+                    print(f'Packet received from port {int(channel)}. Frame header information:  probe_id #={int(probe_id)}, stream_id #={int(stream_id)}, flags={int(flags)} words, timestamp={int(timestamp)}, flags={int(flags)}')
                     print(data)
                 # Make sure there is an empty vector on the first storage so we can concatenate to it the new data
 
@@ -517,19 +501,16 @@ class chFPGA_receiver(object):
                         (_, _, corr_id, cmac_id, _, timestamp) = struct.unpack_from('<BBBBLL', frame)
 
                     if verbose >= 4:
-                        print('Frame data: %s' % (''.join('%02X' % np.uint8(c) for c in frame)))
+                        print(f"Frame data: {''.join((f'{np.uint8(c):02X}' for c in frame))}")
 
                     if len(frame[12:]) % 5:
-                        print('Error: number of product bytes (%i) not a multiple of 5' % (frame[12:]))
+                        print(f'Error: number of product bytes ({int(frame[12:])}) not a multiple of 5')
 
                     num_products = len(frame[12:]) // 5  # Total number of products in the frame (for all channels)
                     if num_products % self.Nch:
-                        print('Error: number of products (%i)  not a multiple of the number of channelizers (%i)' % (
-                            num_products,
-                            self.Nch))
+                        print(f'Error: number of products ({int(num_products)})  not a multiple of the number of channelizers ({int(self.Nch)})')
                     if verbose >= 2:
-                        print('Frame header information:  corr#=%i, cmac#=%i, timestamp=0x%X ' % (
-                            corr_id, cmac_id, timestamp))
+                        print(f'Frame header information:  corr#={int(corr_id)}, cmac#={int(cmac_id)}, timestamp=0x{timestamp:X} ')
 
                     # chop the data in 5-byte chunks and compute ``num_products`` 40-bit words
                     # print frame[12:].reshape(num_products, 5)                                    #nice spaghetti :) it confuses the linter
@@ -546,10 +527,10 @@ class chFPGA_receiver(object):
                 print('There are missing frames')
             else:
                 if verbose:
-                    print('Got %i frames instead of %i' % (len(frames), self.Ncorr * self.Ncmac))
+                    print(f'Got {len(frames)} frames instead of {int(self.Ncorr * self.Ncmac)}')
             trial += 1
             if trial >= max_trials:
-                raise RuntimeError('Could not get a complete correlator frame set after %i trials' % trial)
+                raise RuntimeError(f'Could not get a complete correlator frame set after {int(trial)} trials')
             if verbose:
                 print('Retrying')
 

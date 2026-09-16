@@ -1,0 +1,11 @@
+---
+description: Do not strip existing comments or docstrings unless they are patently wrong
+alwaysApply: true
+---
+
+# Preserve comments
+
+- Do **not** delete or strip existing comments or docstring sections when editing code unless they are patently wrong (e.g. contradict the code, refer to removed APIs incorrectly, or are clearly corrupted).
+- When refactoring or rewriting a block, **carry forward** nearby comments and inline notes that still apply (including TODOs, hardware caveats, and explanatory comments).
+- Prefer updating a comment to match new code over removing it.
+- New comments should still follow the usual rule: avoid obvious/narrating comments; keep useful ones.

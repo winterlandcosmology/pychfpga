@@ -29,6 +29,10 @@ class GPU(xglink.XGLinkCore):
 
     """
 
+    # Map of loopback lanes for the 8-lane 10G links
+    # This assumes we connect the two QSFP connectors together with a cable
+    LOOPBACK_LANE_MAP = {0:4, 1:5, 2:6, 3:7, 4:8, 5:0, 6:1, 7:2}
+
     CONTROL = BitField.CONTROL
     STATUS = BitField.STATUS
 
@@ -44,9 +48,9 @@ class GPU(xglink.XGLinkCore):
     DATA_FIFO_OVERFLOW  = BitField(STATUS, 2+2, 0, width=8, doc='Indicates if the data FIFO has overflows on the last 8 GPU links. Bit 0 is for lane 0.')
     FRAME_FIFO_OVERFLOW = BitField(STATUS, 2+3, 0, width=8, doc='Indicates if the frame header FIFO has overflows on the last 8 GPU links. Bit 0 is for lane 0.')
 
-    def __init__(self, *, router, router_port, verbose=0):
+    def __init__(self, *, router, router_port, config, verbose=0):
         self.verbose = verbose
-        super().__init__(router=router, router_port=router_port)
+        super().__init__(router=router, router_port=router_port, config=config)
 
     def set_enable(self, state):
         #  self.LINK_ENABLE = state

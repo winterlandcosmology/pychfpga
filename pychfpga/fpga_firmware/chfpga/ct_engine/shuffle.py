@@ -19,7 +19,8 @@ class Shuffle(xglink.XGLinkArray):
     through PBC lanes or QSFP cables.
     """
 
-    def __init__(self, *, parent_module, router_port, verbose=1):
+    def __init__(self, *, router=None, parent_module=None, router_port, config, verbose=1):
+        router = router if router is not None else parent_module
 
         self.NUMBER_OF_PCB_DIRECT_LANES = 1
         self.NUMBER_OF_QSFP_DIRECT_LANES = 4
@@ -31,7 +32,7 @@ class Shuffle(xglink.XGLinkArray):
 
         self.lane_group_names = [name for (name, _, _) in self.lane_groups]
 
-        super().__init__(parent_module=parent_module, router_port=router_port, lane_groups=self.lane_groups, verbose=verbose)
+        super().__init__(router=router, router_port=router_port, lane_groups=self.lane_groups, config=config, verbose=verbose)
 
         self.NUMBER_OF_PCB_LANES = 16
         self.NUMBER_OF_QSFP_LANES = 8
@@ -153,7 +154,7 @@ class Shuffle(xglink.XGLinkArray):
         elif all(group in self.lane_group_names for group in lane_group):
             groups = lane_group
         else:
-            raise ValueError('Invalid lane group. Can be one of %r' % lane_groups)
+            raise ValueError(f'Invalid lane group. Can be one of {lane_groups!r}')
 
         # cache the bypass flags obtained from the FPGA
         bypass_pcb_shuffle = self.BYPASS_PCB_SHUFFLE
@@ -235,7 +236,7 @@ class Shuffle(xglink.XGLinkArray):
         elif all(group in self.lane_group_names for group in lane_group):
             groups = lane_group
         else:
-            raise ValueError('Invalid lane group. Can be one of %r' % lane_groups)
+            raise ValueError(f'Invalid lane group. Can be one of {lane_groups!r}')
 
         # cache the bypass flags obtained from the FPGA
         bypass_pcb_shuffle = self.BYPASS_PCB_SHUFFLE

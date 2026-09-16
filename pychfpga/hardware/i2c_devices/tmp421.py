@@ -103,7 +103,7 @@ class tmp421(object):
 
         if (mask & 0xFF) != 0xff:
             old_value = self.i2c.write_read(self.address, data=[register], read_length=1)[0]
-            new_value = (old_value & (~ mask)) | (value & mask)
+            new_value = (old_value & (~mask & 0xff)) | (value & mask)
         else:
             new_value = value
 

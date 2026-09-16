@@ -12,6 +12,9 @@ History:
     2012-10-17 JFC: Added correlator frequency
     2012-11-09 JFC: Modified to use Module. Uses fpga SYSTEM_CLOCK_FREQUENCY variable.
 """
+import asyncio
+import time
+
 from ..mmi import MMI, BitField, CONTROL, STATUS
 
 class FreqCtr(MMI):
@@ -21,6 +24,8 @@ class FreqCtr(MMI):
     ADDRESS_WIDTH = 12
 
     _SYSTEM_CLOCK_FREQUENCY = 200e6  # in Hz
+    # Extra time allowed after the FPGA gate before declaring the counter stuck.
+    _FREQ_DONE_TIMEOUT_MARGIN = 1.0
 
     # Frequency counter port definitions
     PORTS = {
@@ -73,9 +78,10 @@ class FreqCtr(MMI):
     FREQ_COUNT = BitField(STATUS, 3, 0, width=32, doc='Frequency count (number of rising edges seen on the source signal during the gate time)')
     DONE = BitField(STATUS, 4, 0, doc='Frequency counting is complete (gate time has been reached).')
 
-    def __init__(self, *, router, router_port, verbose=1):
+    def __init__(self, *, router, router_port, config, verbose=1):
         self.verbose = verbose
         super().__init__(router=router, router_port=router_port)
+        self.config = config
         self._lock()  # prevent further property creation to avoid creating attributes by mistake
 
 
@@ -85,6 +91,24 @@ class FreqCtr(MMI):
         """
         pass
 
+    def _start_frequency_count(self, port, gate_time):
+        """Program and start a frequency measurement. Returns the numeric port id."""
+        if isinstance(port, str):
+            port = self.PORTS[port]
+        self.GATE_COUNT = int(self._SYSTEM_CLOCK_FREQUENCY * gate_time)
+        self.SOURCE = port  # Sets the signal source to be measured
+        self.START = 0  # Clears the counter
+        self.START = 1  # starts the frequency counter
+        return port
+
+    def _frequency_from_count(self, gate_time):
+        return self.FREQ_COUNT * 2.0 / gate_time
+
+    def _frequency_done_timeout(self, port, gate_time):
+        return RuntimeError(
+            f'{self!r}: Frequency counter did not complete within '
+            f'{gate_time + self._FREQ_DONE_TIMEOUT_MARGIN:.3f} s '
+            f'(port={port}, gate_time={gate_time})')
 
     def read_frequency(self, port, gate_time=0.01):
         """ Read the frequency (in Hz) of the specified frequency counter input port.
@@ -101,20 +125,53 @@ class FreqCtr(MMI):
 
         Note:
             The frequency resolution is given by resolution = 2/`gate_time`
-        """
-        ref_freq = self._SYSTEM_CLOCK_FREQUENCY
-        gate_ctr = int(ref_freq * gate_time)
-        self.GATE_COUNT = gate_ctr
 
-        if type(port) is str:
-            port = self.PORTS[port]
-        self.SOURCE = port  # Sets the signal source to be measured
-        self.START = 0  # Clears the counter
-        self.START = 1  # starts the frequncy counter
+            Prefer :meth:`read_frequency_async` from async code so the gate wait
+            yields to other boards.
+        """
+        port = self._start_frequency_count(port, gate_time)
+        t0 = time.monotonic()
+        deadline = t0 + gate_time + self._FREQ_DONE_TIMEOUT_MARGIN
         while not self.DONE:
-            pass
-        freq = self.FREQ_COUNT
-        return freq * 2.0 / gate_time
+            now = time.monotonic()
+            if now >= deadline:
+                raise self._frequency_done_timeout(port, gate_time)
+            remaining = gate_time - (now - t0)
+            time.sleep(remaining if remaining > 0 else 0.001)
+        return self._frequency_from_count(gate_time)
+
+    async def read_frequency_async(self, port, gate_time=0.01):
+        """Async version of :meth:`read_frequency`.
+
+        Sleeps for the FPGA gate time instead of busy-waiting on ``DONE``, so
+        other boards can make progress on the event loop.
+
+        Parameters:
+            port (str or int): port name or port number from which to measure the frequency. See  `PORTS` table.
+
+            gate_time (float): Time (in seconds) during which the frequency of the selected source
+               will be measured. Affects the measurement time and the resolution. Maximum is limited
+               by the gating counter width (32 bits) to 21.47 seconds (2^32/200 MHz).
+
+        Returns:
+            (float): Frequency of the selected source (port) in Hz.
+
+        Note:
+            The frequency resolution is given by resolution = 2/`gate_time`
+
+            Prefer :meth:`read_frequency` from synchronous code so the gate wait
+            yields to other boards.
+        """
+        port = self._start_frequency_count(port, gate_time)
+        t0 = time.monotonic()
+        deadline = t0 + gate_time + self._FREQ_DONE_TIMEOUT_MARGIN
+        while not self.DONE:
+            now = time.monotonic()
+            if now >= deadline:
+                raise self._frequency_done_timeout(port, gate_time)
+            remaining = gate_time - (now - t0)
+            await asyncio.sleep(remaining if remaining > 0 else 0.001)
+        return self._frequency_from_count(gate_time)
 
     def status(self):
         """
@@ -136,24 +193,24 @@ class FreqCtr(MMI):
         gpu_txclk = self.read_frequency('GPU_TXCLK', gate_time=gate_time)
 
         print('System Frequencies:')
-        print('   IceBoard Reference clock source: %s' % (fpga.mb.get_iceboard_clock_source_sync()))
+        print(f'   IceBoard Reference clock source: {fpga.mb.get_iceboard_clock_source_sync()}')
         print(' External clock sources')
-        print('   RAW CLK (no PLL, SE):     %7.3f MHz' % (self.read_frequency('RAW_CLK', gate_time=gate_time) / 1e6))
-        print('   Reference clock (via PLL):%7.3f MHz' % (self.read_frequency('CLK10', gate_time=gate_time) / 1e6))
-        print('   MGT CLK100 (via PLL, not used):%7.3f MHz' % (self.read_frequency('MGT_CLK100', gate_time=gate_time) / 1e6))
-        print('   MGT CLK125 (via PLL, not used):%7.3f MHz' % (self.read_frequency('MGT_CLK125', gate_time=gate_time) / 1e6))
-        print('   MGT CLK200 (via PLL, not used):%7.3f MHz' % (self.read_frequency('MGT_CLK200', gate_time=gate_time) / 1e6))
-        print('   SFP REFCLK (via PLL):          %7.3f MHz' % (self.read_frequency('SFP_REFCLK', gate_time=gate_time) / 1e6))
-        print('   BP Shuffle Ref clock:     %7.3f MHz' % (self.read_frequency('BP_SHUFFLE_REFCLK', gate_time=gate_time) / 1e6))
-        print('   GPU link Ref clock:       %7.3f MHz' % (self.read_frequency('GPU_REFCLK', gate_time=gate_time) / 1e6))
+        print(f"   RAW CLK (no PLL, SE):     {self.read_frequency('RAW_CLK', gate_time=gate_time) / 1000000.0:7.3f} MHz")
+        print(f"   Reference clock (via PLL):{self.read_frequency('CLK10', gate_time=gate_time) / 1000000.0:7.3f} MHz")
+        print(f"   MGT CLK100 (via PLL, not used):{self.read_frequency('MGT_CLK100', gate_time=gate_time) / 1000000.0:7.3f} MHz")
+        print(f"   MGT CLK125 (via PLL, not used):{self.read_frequency('MGT_CLK125', gate_time=gate_time) / 1000000.0:7.3f} MHz")
+        print(f"   MGT CLK200 (via PLL, not used):{self.read_frequency('MGT_CLK200', gate_time=gate_time) / 1000000.0:7.3f} MHz")
+        print(f"   SFP REFCLK (via PLL):          {self.read_frequency('SFP_REFCLK', gate_time=gate_time) / 1000000.0:7.3f} MHz")
+        print(f"   BP Shuffle Ref clock:     {self.read_frequency('BP_SHUFFLE_REFCLK', gate_time=gate_time) / 1000000.0:7.3f} MHz")
+        print(f"   GPU link Ref clock:       {self.read_frequency('GPU_REFCLK', gate_time=gate_time) / 1000000.0:7.3f} MHz")
         print(' Internally generated system clocks (from SFP_REFCLK)')
-        print('   CLK200:                   %7.3f MHz' % (self.read_frequency('CLK200', gate_time=gate_time) / 1e6))
-        print('   CTRL_CLK:                 %7.3f MHz' % (self.read_frequency('CTRL_CLK', gate_time=gate_time) / 1e6))
-        print('   SYSMON_CLK:               %7.3f MHz' % (self.read_frequency('SYSMON_CLK', gate_time=gate_time) / 1e6))
-        print('   Channelizers clock:       %7.3f MHz (Source= %i (%s))' % (self.read_frequency('ANT_CLK', gate_time=gate_time) / 1e6, PLL_CLK_SRC, ant_clock_source_string))
-        print('   Correlator:               %7.3f MHz' % (self.read_frequency('CORR_CLK', gate_time=gate_time) / 1e6))
-        print('   BP Shuffle TX word clock: %7.3f MHz (%0.3f Gbps)' % (bp_shuffle_txclk / 1e6, bp_shuffle_txclk * 32 * 32 /33 / 1e9))
-        print('   GPU link TX word clock:   %7.3f MHz (%0.3f Gbps)' % (gpu_txclk / 1e6, gpu_txclk * 32 * 32 / 33 / 1e9))
+        print(f"   CLK200:                   {self.read_frequency('CLK200', gate_time=gate_time) / 1000000.0:7.3f} MHz")
+        print(f"   CTRL_CLK:                 {self.read_frequency('CTRL_CLK', gate_time=gate_time) / 1000000.0:7.3f} MHz")
+        print(f"   SYSMON_CLK:               {self.read_frequency('SYSMON_CLK', gate_time=gate_time) / 1000000.0:7.3f} MHz")
+        print(f"   Channelizers clock:       {self.read_frequency('ANT_CLK', gate_time=gate_time) / 1000000.0:7.3f} MHz (Source= {int(PLL_CLK_SRC)} ({ant_clock_source_string}))")
+        print(f"   Correlator:               {self.read_frequency('CORR_CLK', gate_time=gate_time) / 1000000.0:7.3f} MHz")
+        print(f'   BP Shuffle TX word clock: {bp_shuffle_txclk / 1000000.0:7.3f} MHz ({bp_shuffle_txclk * 32 * 32 / 33 / 1000000000.0:0.3f} Gbps)')
+        print(f'   GPU link TX word clock:   {gpu_txclk / 1000000.0:7.3f} MHz ({gpu_txclk * 32 * 32 / 33 / 1000000000.0:0.3f} Gbps)')
         for fmc in range(mb.NUMBER_OF_FMC_SLOTS):
             if mb.is_fmc_present(fmc):
                 fmc_name = 'FMC' + chr(ord('A') + fmc)
@@ -170,8 +227,9 @@ class FreqCtr(MMI):
         print(' ADC clocks')
         for i in range(fpga.NUMBER_OF_ADCS or fpga.NUMBER_OF_CHANNELIZERS):
             # print('   ADC%02i clock:              %7.3f MHz%s' % (i, self.read_frequency('ADC_CLK%i' % i, gate_time=gate_time) / 1e6, '' if fpga.is_fmc_present(0) else ' (No ADC board in FMCA - Cannot clock the channelizers)'))
-            print('   ADC%02i clock:              %7.3f MHz' % (i, self.read_frequency('ADC_CLK%i' % i, gate_time=gate_time) / 1e6))
-        print('   Resolution:     %10.6f MHz' % (resolution / 1e6))
-        print('   Gate time:      %.3f s' % (gate_time))
-        print('   FPGA Fan speed: %7.0f RPM (resolution %.0f RPM)' % (self.read_frequency('FAN', gate_time=fan_gate_time) * 60. / 2, fan_resolution * 60. / 2)) # 1 Hz=60 RPM, divide by 2 because there is 2 pulses per fan turn
+            adc_mhz = self.read_frequency(f'ADC_CLK{i}', gate_time=gate_time) / 1e6
+            print(f'   ADC{i:02d} clock:              {adc_mhz:7.3f} MHz')
+        print(f'   Resolution:     {resolution / 1000000.0:10.6f} MHz')
+        print(f'   Gate time:      {gate_time:.3f} s')
+        print(f"   FPGA Fan speed: {self.read_frequency('FAN', gate_time=fan_gate_time) * 60.0 / 2:7.0f} RPM (resolution {fan_resolution * 60.0 / 2:.0f} RPM)") # 1 Hz=60 RPM, divide by 2 because there is 2 pulses per fan turn
 

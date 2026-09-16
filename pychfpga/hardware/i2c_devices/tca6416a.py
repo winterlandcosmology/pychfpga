@@ -77,7 +77,7 @@ class tca6416a(object):
 
         if (mask & 0xFF) != 0xff:
             old_value = self.i2c.write_read(self.address, data=[register], read_length=1)[0]
-            new_value = (old_value & (~ mask)) | (value & mask)
+            new_value = (old_value & (~mask & 0xff)) | (value & mask)
             # print(f'Pca9575 register={register} old_value={old_value}')
         else:
             new_value = value
@@ -99,7 +99,27 @@ class tca6416a(object):
         return self.i2c.write_read(self.address, data=[register], read_length=1)[0]
 
     def write(self, byte, value, mask=0xff, select=True):
-        self.write_reg('OUT%i' % byte, value, mask=mask, select=select)
+        """Write data to the device.
+
+        Args:
+            byte (Any): Parameter value.
+            value (Any): Parameter value.
+            mask (Any): Parameter value.
+            select (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
+        self.write_reg(f'OUT{int(byte)}', value, mask=mask, select=select)
 
     def read(self, byte, select=True):
-        return self.read_reg('IN%i' % byte, select=select)
+        """Read data from the device.
+
+        Args:
+            byte (Any): Parameter value.
+            select (Any): Parameter value.
+
+        Returns:
+            Any: Returned value.
+        """
+        return self.read_reg(f'IN{int(byte)}', select=select)

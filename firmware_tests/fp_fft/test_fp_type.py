@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-import fp_type
+from . import fp_type
 
 class TestFixedPointType(unittest.TestCase):
     def test_init(self):
@@ -91,15 +91,15 @@ class TestFixedPointType(unittest.TestCase):
         fpt3 = fp_type.FixedPointType(3, 2)
         fpt4 = fp_type.FixedPointType(8, 7)
         data = np.arange(10, dtype=np.int32)
-        np.testing.assert_equal(data.astype(np.float), fpt1.to_float(data))
-        np.testing.assert_equal(data.astype(np.float)/4, fpt2.to_float(data))
+        np.testing.assert_equal(data.astype(float), fpt1.to_float(data))
+        np.testing.assert_equal(data.astype(float)/4, fpt2.to_float(data))
         np.testing.assert_equal(np.array([0,0.25,0.5,0.75,-1,-0.75,-0.5,-0.25,0,0.25]), fpt3.to_float(data))
-        np.testing.assert_equal(data.astype(np.float)/128, fpt4.to_float(data))
+        np.testing.assert_equal(data.astype(float)/128, fpt4.to_float(data))
         data = -np.arange(10, dtype=np.int32)
-        np.testing.assert_equal(data.astype(np.float), fpt1.to_float(data))
-        np.testing.assert_equal(data.astype(np.float)/4, fpt2.to_float(data))
+        np.testing.assert_equal(data.astype(float), fpt1.to_float(data))
+        np.testing.assert_equal(data.astype(float)/4, fpt2.to_float(data))
         np.testing.assert_equal(np.array([0,-0.25,-0.5,-0.75,-1,0.75,0.5,0.25,0,-0.25]), fpt3.to_float(data))
-        np.testing.assert_equal(data.astype(np.float)/128, fpt4.to_float(data))
+        np.testing.assert_equal(data.astype(float)/128, fpt4.to_float(data))
     def test_from_float(self):
         fpt1 = fp_type.FixedPointType(8, 0)
         fpt2 = fp_type.FixedPointType(8, 2)

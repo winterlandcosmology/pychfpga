@@ -11,8 +11,6 @@ from collections import OrderedDict
 import socket
 import asyncio
 
-import nest_asyncio
-
 # External private packages
 from wtl.metrics import Metrics
 
@@ -220,12 +218,12 @@ class ZUBoard(Motherboard):
 
         if not is_fpga_programmed or force or (force is not None and not is_crc_valid):
             self.logger.debug(f'{self!r}: Configuring FPGA')
-            self.tcpipe.set_fpga_bitstream(bitstream, crc=crc32)
+            await self.tcpipe.set_fpga_bitstream_async(bitstream, crc=crc32)
         else:
             self.logger.debug(
                 f'{self!r}: FPGA is already configured. Skipping configuration.')
 
-        self.fpga = fw_cls(self, **fw_params)
+        self.set_fpga_firmware(fw_cls(self, **fw_params))
 
     # Mezzanine management
 
@@ -348,4 +346,3 @@ class ZUBoard(Motherboard):
         # Add ZCU111 monitoring data to metrics here
 
         return metrics
-

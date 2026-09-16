@@ -107,10 +107,9 @@ class IOExpander_base(object):
             # print 'setting ',name
             object.__setattr__(self, name, value)
         else:
-            print("Class '%s' is locked: cannot assign new attribute '%s'" % (self, name))
+            print(f"Class '{self}' is locked: cannot assign new attribute '{name}'")
             raise AttributeError(
-                "This instance of class '%s' is locked: cannot assign "
-                "new attribute '%s'" % (self.__class__.__name__, name))  # 120623 JFC
+                f"This instance of class '{self.__class__.__name__}' is locked: cannot assign new attribute '{name}'")  # 120623 JFC
 
     def _unlock(self):
         self.__dict__['_locked'] = False
@@ -151,7 +150,7 @@ class IOExpander_base(object):
         mask = 1 << bit_def.bit
         # print 'Writing data: old_data=%X, port %i, addr=%X, bit=%x'
         #       % (old_data, bit_def.port,self.REG_GPIOA+bit_def.port,bit_def.bit)
-        new_data = (old_data & ~mask) | (bool(data) * mask)
+        new_data = (old_data & (~mask & 0xff)) | (bool(data) * mask)
         data = self.write(self.REG_GPIOA + bit_def.port, new_data)
 
     def wait_for_bit(self, bit_name, timeout=1):
@@ -166,7 +165,7 @@ class IOExpander_base(object):
             if self.read_gpio_bit(bit_name):
                 return
             if (time.time() - t0) > timeout:
-                raise RuntimeError('Timeout exceeded while waiting for bit %s' % bit_name)
+                raise RuntimeError(f'Timeout exceeded while waiting for bit {bit_name}')
 
     def init(self, verbose=1):
         """
@@ -192,9 +191,7 @@ class IOExpander_base(object):
                 val[port] |= (bit_def.default << bit)  # set with new value
         if verbose or self.verbose:
             self.logger.debug(
-                '%r: IOExpander config: IODIRA=%02X , IODIRB=%02X, '
-                'GPIOA=%02X, GPIOB=%02X'
-                % (self.adc_board, direction[0], direction[1], val[0], val[1]))
+                f'{self.adc_board!r}: IOExpander config: IODIRA={direction[0]:02X} , IODIRB={direction[1]:02X}, GPIOA={val[0]:02X}, GPIOB={val[1]:02X}')
         self.write(self.REG_IODIRA, direction[self.PORT_A])
         self.write(self.REG_IODIRB, direction[self.PORT_B])
         self.write(self.REG_GPIOA, val[self.PORT_A])
@@ -202,7 +199,7 @@ class IOExpander_base(object):
 
     def status(self):
         """ Displays the status of the IOExpander. """
-        self.logger.info('%r: --- FMC %i IO Expander' % (self.adc_board, self.adc_board.fmc_number))
+        self.logger.info(f'{self.adc_board!r}: --- FMC {int(self.adc_board.fmc_number)} IO Expander')
         if not self.adc_board.is_mezzanine_present():
-            self.logger.info('%r: FMC board not present' % self.adc_board)
-        self.logger.info('%r: No status info' % self.adc_board)
+            self.logger.info(f'{self.adc_board!r}: FMC board not present')
+        self.logger.info(f'{self.adc_board!r}: No status info')

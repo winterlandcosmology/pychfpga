@@ -1,0 +1,56 @@
+"""Shared support for :class:`pychfpga.fpga_array.FPGAArray`-wide methods.
+
+Array-wide methods live on explicit :class:`ArrayMethods` provider classes.
+Motherboard and firmware classes opt in by assigning ``array_method_class`` to
+one provider class. ``FPGAArray`` instantiates the providers shared by every
+motherboard and exposes their public methods as array methods.
+"""
+
+import logging
+
+class ArrayMethods:
+    """Base class for explicit :class:`FPGAArray` method providers.
+
+    Provider methods should be regular instance methods. The provider receives
+    the calling :class:`FPGAArray` at construction and exposes ``ib`` and
+    ``ic`` attributes so methods can keep the old array-method shape.
+    """
+
+    _local_attrs = frozenset(('fpga_array', 'ib', 'ic', 'logger'))
+    array_method_names = None
+
+    def __init__(self, fpga_array):
+        self.fpga_array = fpga_array
+        self.ib = fpga_array.ib
+        self.ic = getattr(fpga_array, 'ic', None)
+        self.logger = logging.getLogger(__name__)
+
+    # def __repr__(self):
+    #     return repr(self.fpga_array)
+
+    # def __getattr__(self, name):
+    #     """Delegate old array-method attribute reads to the FPGAArray."""
+    #     return getattr(self.fpga_array, name)
+
+    # def __setattr__(self, name, value):
+    #     """Keep provider-local state local and delegate array state writes."""
+    #     if name.startswith('_') or name in self._local_attrs or 'fpga_array' not in self.__dict__:
+    #         object.__setattr__(self, name, value)
+    #     else:
+    #         setattr(self.fpga_array, name, value)
+
+    def get_array_methods(self):
+        """Return public callable methods exposed by this provider."""
+        if self.array_method_names is not None:
+            return {
+                name: method for name in self.array_method_names
+                if callable(method := getattr(self, name))
+            }
+        return {
+            name: method for name in dir(self)
+            if not name.startswith('_')
+            and name not in dir(ArrayMethods)
+            and callable(method := getattr(self, name))
+        }
+
+

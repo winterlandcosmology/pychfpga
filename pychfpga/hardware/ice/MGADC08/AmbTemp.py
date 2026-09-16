@@ -35,12 +35,12 @@ class AmbTemp_base(object):
         data = np.int16(data << 2) >> 2  # sign-extend bit 13 to bits 14 and 15 to obtain a 16-bit signed value
         temp = data / 32
         if self.verbose:
-            print('FMC Board Temperature is %.2f C' % (temp))
+            print(f'FMC Board Temperature is {temp:.2f} C')
         return temp
 
     temperature = property(get_temperature)
 
     def status(self):
-        self.logger.info('%r: --- Ambient Temperature Sensor' % self.adc_board)
-        self.logger.info('%r: Ambient Temperature of the ADC board: %.1f C' % (self.adc_board, self.temperature))
+        self.logger.info(f'{self.adc_board!r}: --- Ambient Temperature Sensor')
+        self.logger.info(f'{self.adc_board!r}: Ambient Temperature of the ADC board: {self.temperature:.1f} C')
 

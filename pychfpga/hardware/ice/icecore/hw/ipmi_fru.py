@@ -96,12 +96,12 @@ def get_area_data(read_fn, start_addr, area_name=''):
     data = read_fn(start_addr, 3)
     version = data[0]
     if version != 0x01:
-        raise ValueError('Unsupported version in the IPMI %s field' % area_name)
+        raise ValueError(f'Unsupported version in the IPMI {area_name} field')
     length = data[1] * 8
     # Now get all the data in the block and process it
     data = read_fn(start_addr, length)
     if sum(data) & 0xff:
-        raise ValueError('Bad ckecksum in the IPMI %s field' % area_name)
+        raise ValueError(f'Bad ckecksum in the IPMI {area_name} field')
     return data
 
 
@@ -115,7 +115,7 @@ def get_area_fields(data, area_name=''):
         length = (data[offset]) & 0x3F
         offset += 1
         if type_ != 0xC0:
-            raise ValueError('Unsupported field type 0x%02X' % type_)
+            raise ValueError(f'Unsupported field type 0x{type_:02X}')
         if length == 1:
             break
         else:
@@ -130,14 +130,14 @@ class Internal(object):
 
     def encode(self):
         """Reduce to a string containing binary IPMI data."""
-        return struct.pack('B %is 0q' % len(self.data), 0x01, self.data)
+        return struct.pack(f'B {len(self.data)}s 0q', 0x01, self.data)
 
     @classmethod
     def decode(cls, read_function, start, max_length):
         data = read_function(start, max_length)
         version = data[0]
         if version != 0x01:
-            raise ValueError('Unsupported version in the IPMI %s field' % cls.__name__)
+            raise ValueError(f'Unsupported version in the IPMI {cls.__name__} field')
         return cls(data[1:])
 
 class Chassis(object):
@@ -159,7 +159,7 @@ class Chassis(object):
 
         # Build up the structure.
         x = struct.pack(
-            'BBB B%is B%is B x 0q' % (lprt, lser),
+            f'BBB B{int(lprt)}s B{int(lser)}s B x 0q',
             0x01,            # version
             length // 8,      # length
             self.type_code,  # chassis type
@@ -219,8 +219,7 @@ class Board(object):
 
         # Build up the structure.
         x = struct.pack(
-            'BBB BBB B%is B%is B%is B%is B%is B x 0q' % (
-                lman, lprd, lser, lprt, lfru),
+            f'BBB BBB B{int(lman)}s B{int(lprd)}s B{int(lser)}s B{int(lprt)}s B{int(lfru)}s B x 0q',
             0x01,       # version
             length//8,   # length
             0x00,       # language code (english)
@@ -241,7 +240,7 @@ class Board(object):
         data = get_area_data(read_fn, start_addr, area_name=cls.__name__)
         language_code = data[2]
         if language_code != 0x00:
-            raise ValueError('Unsupported language code 0x%02x in the IPMI %s area' % (language_code, cls.__name__))
+            raise ValueError(f'Unsupported language code 0x{language_code:02x} in the IPMI {cls.__name__} area')
         mfg_minutes = data[3] + data[4] * 256 + data[5] * 65536
         mfg_date = datetime(1996, 1, 1) + timedelta(0, 60*mfg_minutes)
         fields = get_area_fields(data[6:], area_name=cls.__name__)
@@ -288,9 +287,7 @@ class Product(object):
 
         # Build up the structure.
         x = struct.pack(
-            'BBB B%is B%is B%is B%is B%is B%is B%is B x 0q' % (
-                lman, lprd, lprt, lver, lser, ltag, lfru
-            ),
+            f'BBB B{int(lman)}s B{int(lprd)}s B{int(lprt)}s B{int(lver)}s B{int(lser)}s B{int(ltag)}s B{int(lfru)}s B x 0q',
             0x01,       # version
             length//8,   # length
             0x00,       # language code (english)
@@ -312,7 +309,7 @@ class Product(object):
         data = get_area_data(read_fn, start_addr, area_name=cls.__name__)
         language_code = data[2]
         if language_code != 0x00:
-            raise ValueError('Unsupported language code 0x%02x in the IPMI %s area' % (language_code, cls.__name__))
+            raise ValueError(f'Unsupported language code 0x{language_code:02x} in the IPMI {cls.__name__} area')
         fields = get_area_fields(data[3:], area_name=cls.__name__)
         return cls(manufacturer=fields[0].decode(),
                    product_name=fields[1].decode(),
@@ -504,11 +501,11 @@ class FRU(object):
         for block_name in [name for name in vars(self) if not name.startswith('_')]:
             block = getattr(self, block_name)
             if block:
-                result += '   %s:\n' % block_name
+                result += f'   {block_name}:\n'
                 for field_name in [name for name in vars(block) if not name.startswith('_')]:
-                    result += '      %s: %r\n' % (field_name, getattr(block, field_name))
+                    result += f'      {field_name}: {getattr(block, field_name)!r}\n'
             else:
-                result += '   %s: Empty\n' % block_name
+                result += f'   {block_name}: Empty\n'
         return result
 
     @classmethod
@@ -551,9 +548,9 @@ class FRU(object):
          ) = struct.unpack("B BBBBB B x", buf)
 
         if version != 0x01:
-            raise ValueError('Bad version 0x%02X in the IPMI Common Header. Is the EEPROM initialized?' % version)
+            raise ValueError(f'Bad version 0x{version:02X} in the IPMI Common Header. Is the EEPROM initialized?')
         if pad:
-            raise ValueError('Bad pad 0x%02X in the IPMI Common Header. Is the EEPROM initialized?' % pad)
+            raise ValueError(f'Bad pad 0x{pad:02X} in the IPMI Common Header. Is the EEPROM initialized?')
 
         # Convert offsets to actual addresses
         internal_offset *= 8

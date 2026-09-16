@@ -1,6 +1,6 @@
 [build-system]
     requires = [
-        "setuptools>=64", # >=64 required for setuptools-scm
+        "setuptools>=64,<82", # >=64 required for setuptools-scm, <82 required for pymeasure (pulled in py labpy) because of missing pkg_resources
         "setuptools-scm>=8.0", # automatically manages version number from git
         "wheel"
         ]
@@ -20,11 +20,11 @@
         { name = "McGill University"},
         { name = "JF Cliche", email = "vhdl@jfcliche.com" }
         ]
-    requires-python = "==3.8.*"
+    requires-python = "==3.12.*"
     readme = "README"
 
     dependencies = [
-        "setuptools>=64", # required by setuptools-scm
+        "setuptools>=64,<82", # required by setuptools-scm, <82 required for pymeasure (pulled in py labpy) because of missing pkg_resources
         "setuptools-scm>=8.0",
 
         # Private packages
@@ -35,20 +35,27 @@
         "wtl.config @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.config.git@1.1.1",
         "wtl.h5-archive @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.h5-archive.git",   # was @v1.0.3, testing 1.1.0
 
+        # t0.technology packages
+        "psucontrol @ git+https://github.com/t0/psucontrol.git",
+
         # PyPi packages
         "aiohttp",  # new, using 3.7.2
         "nest_asyncio", # new, using 1.4.3 (Tuber)
         "ujson",  # new , using 3.17.2 (Tuber)
-
+        "freetype-py",
         "numpy",  # was ==1.15.2, testing 1.19.2
         "h5py",  # was ==2.8.0, testing 3.0.0
         "matplotlib",  # was ==2.2.3, now testing 3.3.2
         "PyYAML",  # was 3.13, testing 5.3.1
         "psutil",  # was ==5.4.7, now testing 5.7.3
         "netifaces",   # was not specified, now using 0.10.9
+        "xmodem",  # CRS U-Boot netconsole firmware upload
         "zeroconf==0.34.3",  # new, was tested with 0.34.3
+        "freetype-py", # For CRS LCD fonts
         ]
-
+# also need for jupyter notebooks
+        # jupyter
+        # ipympl # for widgets
 [project.urls]
     # Homepage = "https://example.com"
     Documentation = "https://winterlandcosmology.bitbucket.io/pychfpga/jfc/dev"
@@ -121,11 +128,11 @@ errors-only = true
         # test-specific packages
         "pyserial", # (tested with 0.0.97 on Ubuntu) for memtest
         "pyftdi", # (tested with 0.53.3 on Ubuntu) tested with for PLL programming. Newer versions have another interface
-
+        "pytest-asyncio", # Needed for MTU test in firmware tests
         ]
 
 [project.scripts]
     fpga_master = "pychfpga.fpga_master:main"
-    chime_gps = "pychfpga.gps:main"
-    chime_raw_acq = "pychfpga.raw_acq:main"
-    chime_rx_ps = "pychfpga.ps:main"
+    pychfpga_gps = "pychfpga.gps:main"
+    pychfpga_raw_acq = "pychfpga.raw_acq.__main__:main"
+    pychfpga_ps = "pychfpga.ps:main"

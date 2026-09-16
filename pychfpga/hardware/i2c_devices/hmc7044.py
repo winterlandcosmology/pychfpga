@@ -88,42 +88,53 @@ class hmc7044(object):
         self.check = check
 
         # Initialize basic registers not handled below
-        self.init_registers()
+        regs = self.init_registers()
+        self.write_regs(regs)
 
         # print(f'reg[0x0001]=0x{self.read_reg(0x1):02X}')
         # Set PLL1 clock inputs
         enable_list = [input_sel == i or (input_sel is None and i in input_priorities) for i in range(4)]
-        self.set_input('CLKIN0', enable=enable_list[0], term=True) # Ethernet recovered clock
-        self.set_input('CLKIN1', enable=enable_list[1], term=True) # Backplane 10 MHz reference
-        self.set_input('CLKIN2', enable=enable_list[2], term=True) # SMA 10 MHz reference
-        self.set_input('CLKIN3', enable=enable_list[3], term=True) # Recovered clock from FPGA
-        self.set_input('OSCIN', enable=True, term=True) # Oscillator
+        regs = []
+        regs += self.set_input('CLKIN0', enable=enable_list[0], term=True) # Ethernet recovered clock
+        regs += self.set_input('CLKIN1', enable=enable_list[1], term=True) # Backplane 10 MHz reference
+        regs += self.set_input('CLKIN2', enable=enable_list[2], term=True) # SMA 10 MHz reference
+        regs += self.set_input('CLKIN3', enable=enable_list[3], term=True) # Recovered clock from FPGA
+        regs += self.set_input('OSCIN', enable=True, term=True) # Oscillator
         # print(f'reg[0x0001]=0x{self.read_reg(0x1):02X}')
 
         # Program PLL2. Select the VCO range (high or low). Then
         # program the dividers (R2, N2, and reference doubler).
-        self.set_pll2(f_in=fosc, f_out=fvco)
-        self.set_oscout()
+        regs += self.set_pll2(f_in=fosc, f_out=fvco)
+        self.write_regs(regs)
+
+        # Start autotune
+        # self.restart()
+
+        regs = []
+        regs += self.set_oscout()
 
         # Program PLL1. Set the lock detect timer threshold based
         # on the PLL1 BW of the user system. Set the LCM, R1, and
         # N1 divider setpoints. Enable the reference and VCXO
         # input buffer terminations.
-        self.set_pll1(f_in=fref, f_out=fosc, input_sel=input_sel, input_priorities=input_priorities)
+        regs += self.set_pll1(f_in=fref, f_out=fosc, input_sel=input_sel, input_priorities=input_priorities)
         # print(f'reg[0x0001]=0x{self.read_reg(0x1):02X}')
 
         # Program the SYSREF timer. Set the divide ratio (a
         # submultiple of the lower output channel frequency). Set the
         # pulse generator mode configuration, for example, selecting
         # level sensitive option and the number of pulses desired.
-        self.set_sysref_timer()
+        regs += self.set_sysref_timer()
+        self.write_regs(regs)
 
         # Program the output channels. Set the output buffer modes
         # (for example, LVPECL, CML, and LVDS). Set the divide
         # ratio, channel start-up mode, coarse/analog delays, and
         # performance modes.
+        regs = []
         for output, freq in fout.items():
-            self.set_output(output, f_vco=fvco, f_out=freq)
+            regs += self.set_output(output, f_vco=fvco, f_out=freq)
+        self.write_regs(regs)
 
         # print(f'reg[0x0001]=0x{self.read_reg(0x1):02X}')
 
@@ -182,7 +193,7 @@ class hmc7044(object):
             if read_val != val:
                 self.log.warning(f'Warning: Readback on register 0x{reg:04x} is 0x{read_val:02x} instead of 0x{val:02x}')
 
-    def write_regs(self, regs):
+    def write_regs(self, regs, batch=False):
         """Write a list of (register, value) tuples to the PLL.
 
         Parameters:
@@ -195,10 +206,24 @@ class hmc7044(object):
         if isinstance(regs, dict):
             regs = regs.items()
 
-        for (reg, val) in regs:
-            # print(f'Writing Reg {reg:04X} with 0x{val:02X}')
-            self.write_reg(reg, val)
-            # time.sleep(0.1)
+        spi_segments = []
+        for i, (reg, val) in enumerate(regs):
+            if isinstance(val, tuple):
+                val, mask = val
+                if reg not in self.regs:
+                    raise RuntimeError('Cannot use masks if the register has not been initialized with a full 8-bit value')
+                val = self.regs[reg] & (~mask) | (val & mask)
+            spi_data = bytes([reg >> 8, reg & 0xFF, val])
+            spi_segments.append(spi_data)
+            self.regs[reg] = val
+
+        self.log.info(f'Writing {len(spi_segments)} HMC7044 registers')
+        self.spi.batch_write(self.spi_port, spi_segments, timeout=15)
+
+        # if not batch or len(spi_data) >= 240 or i == len(regs) - 1:
+        #     self.log.info(f'Writing {len(spi_data)} bytes to HMC7044')
+        #     self.spi.write_read(self.spi_port, spi_data, read_length=0)
+        #     spi_data = bytes()
 
     def read_reg(self, reg, timeout=None):
         """ Read the8-bit value from register `reg`.
@@ -261,7 +286,8 @@ class hmc7044(object):
         vco_selection=1,
         sysref_timer_enable=1,
         pll1_enable=1,
-        pll2_enable=1
+        pll2_enable=1,
+        force_holdover=0
        ):
         """ Initialize global registers and reserved control registers to the value recommended by Analog Device.
 
@@ -302,6 +328,7 @@ class hmc7044(object):
 
             pll2_enable (int): If 1, PLL2 is enabled
 
+            force_holdover (int): If 1, the holdover feature is enabled.
 
         """
 
@@ -316,7 +343,7 @@ class hmc7044(object):
             # glbl_cfg1_perf_pllvco[5:5] = 0x0
             # dist_cfg1_perf_floor[6:6] = 0x1
             # sysr_cfg1_reseed_req[7:7] = 0x0
-            (0x1, 0x40),
+            (0x1, 0x40 | (force_holdover << 4)),
             # sysr_cfg1_rev[0:0] = 0x0
             # sysr_cfg1_slipN_req[1:1] = 0x0
             # pll2_cfg1_autotune_trig[2:2] = 0x0
@@ -430,7 +457,8 @@ class hmc7044(object):
             (0xB7, 0x0),
             (0xB8, 0x0),
             ]
-        self.write_regs(regs)
+
+        return regs
 
 
     PLL1_INPUT_NAMES = {
@@ -454,6 +482,8 @@ class hmc7044(object):
                 3: CLKIN3
                 4: OSCIN
 
+        Returns:
+            dict: Dictionary of registers to be written.
         """
         if input_number in self.PLL1_INPUT_NAMES:
             input_number = self.PLL1_INPUT_NAMES[input_number]
@@ -464,9 +494,9 @@ class hmc7044(object):
         regs[0x000A + input_number] = (hi_z << 4) | (lvpecl << 3) | (ac << 2) | (term << 1) | enable
         regs[0x001C + input_number] = prescaler
 
-        self.write_regs(regs)
+        return regs.items()
 
-    def set_pll1(self, enable=True, input_priorities=[2,1,0,3], los_validation=7, input_sel=None, f_in=10e6, f_out=50e6, CP_gain=5, PFD_pol=0, restart=False):
+    def set_pll1(self, enable=True, input_priorities=[2,1,0,3], los_validation=7, input_sel=None, f_in=10e6, f_out=50e6, CP_gain=5, PFD_pol=0):
         """ Configure PLL1
 
         Parameters:
@@ -600,7 +630,7 @@ class hmc7044(object):
         # 1: Autorevertive ref switching
         # 0: Automode reference switching
         bypass_debouncer = 0
-        manual_ref_input = input_priorities[0] if input_sel is None else input_sel
+        manual_ref_input = input_sel if (input_sel is not None) else (input_priorities[0] if input_priorities else 0)
         holdover_uses_dac = 1
         auto_ref_revert = 0
         auto_ref_switching = 1 if input_sel is None else 0
@@ -616,15 +646,12 @@ class hmc7044(object):
 
 
         # Global enable control register
-        self.write_reg(0x0003, enable, mask=0b00000001)  # enable PLL1
+        regs[0x0003] = (enable, 0b00000001)  # enable PLL1
 
-        self.write_regs(regs)
+        return regs.items()
 
-        if restart:
-            # Start autotune
-            self.restart()
 
-    def set_pll2(self, enable=True, f_in=50e6, f_out=3000e6, CP_gain=8, PFD_pol=0, restart=False, vco_sel=None):
+    def set_pll2(self, enable=True, f_in=50e6, f_out=3000e6, CP_gain=8, PFD_pol=0, vco_sel=None):
         """ Configures PLL2
 
         Parameters:
@@ -639,7 +666,6 @@ class hmc7044(object):
 
             PFD_pol (int) : PFD polarity: 0=positive, 1 = negative
 
-            restart (bool): if True, dividers & FSMs are restarted. Needed if we need to immediatly start the VCO autoruning.
 
             vco_sel (int): Selects the VCO to use. If None, the proper internal VCO will be automatically selected based on f_out:
 
@@ -716,21 +742,18 @@ class hmc7044(object):
 
         # Global enable control register
         # Program VCO range and enable PLL2
-        self.write_reg(0x0003, (vco_sel<<3) | (enable << 1), mask=0b00011010)
+        regs[0x0003] = ((vco_sel<<3) | (enable << 1), 0b00011010)
 
         # configure R2, N2 etc.
-        self.write_regs(regs)
+        # self.write_regs(regs)
 
 
         # Global request and mode register
         # Set PLL2 VCO autotune
         # self.write_reg(0x0002, 0<<2, mask=1<<2)  # clear autotune trigger
-        self.write_reg(0x0002, 1<<2, mask=1<<2)  # set autotune trigger
+        regs[0x0002] = (1<<2, 1<<2)  # set autotune trigger
 
-
-        if restart:
-            # Start autotune
-            self.restart()
+        return regs.items()
 
     def set_output(self,
                    output_number,
@@ -915,7 +938,7 @@ class hmc7044(object):
 
         regs[0x00D0 + output_number * 10] = ((mute & 3) << 6) | (dynamic_driver << 5) | ((driver_mode & 3) << 3) | ((driver_impedance & 3) << 0)
 
-        self.write_regs(regs)
+        return regs.items()
 
     def set_sysref_timer(self,
             pulse_generator_mode=1,
@@ -976,10 +999,12 @@ class hmc7044(object):
             # sysr_cfg16_divrat_msb[3:0] = 0x6
             (0x5D, sysref_timer >> 8),
             # 0x005E reserved - not programmed by GUI
+
+            # Enable RF Reseeded and SYSREF timer, otherwise SYNC events won't work.
+            (0x0003, ((rf_seeder_enable << 5) | (sysref_timer_enable << 2), 0b00100100))
+
             ]
-        self.write_regs(regs)
-        # Enable RF Reseeded and SYSREF timer, otherwise SYNC events won't work.
-        self.write_reg(0x0003, (rf_seeder_enable << 5) | (sysref_timer_enable << 2), mask=0b00100100)
+        return regs
 
 
     def get_product_id(self):
@@ -995,7 +1020,7 @@ class hmc7044(object):
         return (reg_7a << 16) | (reg_79 << 8) | reg_78
 
     def get_clkin_status(self):
-        """ Returns the state (i.e. loss of signal (LOS)) if the reference clocks
+        """ Returns the state (i.e. loss of signal (LOS)) of the reference clocks
 
         Returns:
 
@@ -1020,7 +1045,7 @@ class hmc7044(object):
         active_input = (reg_82 >>3 ) & 0x3
 
         if not input_states[active_input]:
-            self.logger.warn(f'The input selected by the PLL is not active')
+            self.log.warning(f'The input selected by the PLL is not active')
         return active_input
 
     def get_pll1_status(self):
@@ -1197,5 +1222,5 @@ class hmc7044(object):
         regs[0x3A]= 0 # disable OSCOUT0
         regs[0x3B]= (driver_mode << 4) | (driver_impedance << 1) | driver_enable # set OSCOUT1
 
-        self.write_regs(regs)
+        return regs.items()
 

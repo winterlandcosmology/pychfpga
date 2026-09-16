@@ -8,6 +8,7 @@ History:
 """
 
 from ..mmi import MMI, BitField, CONTROL, STATUS
+from pychfpga.common.state import State
 import numpy as np
 import asyncio
 
@@ -169,16 +170,17 @@ class FUNCGEN(MMI):
         # '4bit_complex_ramp': (12, lambda self=None: (((np.arange(self.NS // 2) & 0xf0) << 8) + ((np.arange(self.NS // 2) & 0xf) << 4)).astype('>u2').view('u1')),  # Generates the ramp: 0x00, 0x00, 0x00, 0x10, 0x00, 0x20 ... 0xF0, 0xF0. The corner turn interpret these as (0+0j), (0+1j,) ...  (0+15j), (1+0j), ... (15+15j)
         '4bit_complex_ramp':  (12, FN_BUFFER, lambda self: np.ravel([((i>>4) & 0xf , i & 0xf) for i in range(self.NS//2)]) << (self.Nbits - 4)),  # Generates the ramp: 0x00, 0x00, 0x00, 0x10, 0x00, 0x20 ... 0xF0, 0xF0. The corner turn interpret these as (0+0j), (0+1j,) ...  (0+15j), (1+0j), ... (15+15j)
         '4bit_real_a':        (13, FN_BUFFER, lambda self, a: np.full((self.NB//2, 2), (a, 0)).ravel() << (self.Nbits - 4)),  # Generates the complex value (a+0j) in 4-bit mode. Not offset encoded.
-        '4bit_complex_ab':    (14, FN_BUFFER, lambda self, a, b: np.full((self.NB//2, 2), (a, b)).ravel() << (self.Nbits - 4)),  # Generates the complex value (a+jb) in 4-bit mode. Not offset encoded.
+        '4bit_complex_ab':    (14, FN_BUFFER, lambda self, a, b: np.full((self.NS//2, 2), (a, b)).ravel() << (self.Nbits - 4)),  # Generates the complex value (a+jb) in 4-bit mode. Not offset encoded.
         }
 
     # List the arguments used by the functions so we can validate those even if we don't call the function
-    FUNCTION_ARGS = ('overflow_buffer', 'buffer', 'data', 'a', 'b', 'freq', 'seed', 'freq_test_bins')
+    FUNCTION_ARGS = ('overflow_buffer', 'buffer', 'data', 'a', 'b', 'freq', 'seed', 'freq_test_bins', 'ampl')
 
     buffer_cache = None
 
-    def __init__(self,  *, router, router_port, instance_number):
+    def __init__(self,  *, router, router_port, instance_number, config):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.config = config
         self.SAMPLES_PER_FRAME = self.NS = self.fpga.ADC_SAMPLES_PER_FRAME
         self.BYTES_PER_FRAME = self.NB = self.fpga.ADC_BYTES_PER_FRAME
         self.BYTES_PER_SAMPLE = self.BPS = self.fpga.ADC_BYTES_PER_SAMPLE
@@ -196,16 +198,7 @@ class FUNCGEN(MMI):
         self.dtype = np.dtype(f'>u{self.BYTES_PER_SAMPLE}') # storage format, either dtype 'u1' or 'u2' (MSB is at lower byte address = big endian)
         self.lshift = self.dtype.itemsize*8 - self.fpga.ADC_BITS_PER_SAMPLE
 
-        # Prevent accidental addition of attributes (if, for example, a value is assigned to a wrongly-spelled property)
         self._lock()
-
-    def reset(self):
-        """ Resets the function generator"""
-        self.pulse_bit('RESET')
-
-    def reset_noise(self):
-        """Resets the seed of the noise generator and the output to 0"""
-        self.pulse_bit('RST_LFSR')
 
     def set_output_shifting(self, left_shift=0, right_shift=0):
         """Sets the left- and right-shifting of the FUNCGEN output
@@ -220,9 +213,10 @@ class FUNCGEN(MMI):
 
         """
         if left_shift is not None:
-            self.LEFT_SHIFT = left_shift
+            self.LEFT_SHIFT = self.config.left_shift = left_shift
         if right_shift is not None:
-            self.RIGHT_SHIFT = right_shift
+            self.RIGHT_SHIFT = self.config.right_shift = right_shift
+
     def set_data_source(self, source_name, verbose=0, **kwargs):
         """
         Selects the type of data outputted by the function generator.
@@ -276,6 +270,7 @@ class FUNCGEN(MMI):
         self.FN_ID = fn_id
         if buffer_fn:
             self.set_buffer(data=buffer_fn(self=self, **kwargs), verbose=verbose)
+        self.config.update(fn_name=source_name, fn_id=fn_id, fn_code=fn_code)
 
         # if seed is not None:
         #     self.BYTE_A = seed & 0xff
@@ -308,12 +303,15 @@ class FUNCGEN(MMI):
         Returns:
             str: name of the currently selected data source.
         """
+        if self.config.get("fn_name") is not None:
+            return self.config.fn_name
 
         current_fn_id = self.FN_ID
         fn_names = [fn_name for fn_name, (fn_id, *_) in self.FUNCTION_NAMES.items() if fn_id == current_fn_id]
         if not fn_names:
             raise RuntimeError(f'Cannot find current function number {current_fn_id} in the function table')
-        return fn_names[0]
+        self.config.fn_name = fn_names[0]
+        return self.config.fn_name
 
 
     def set_function(self, function_name, verbose=False, **kwargs):
@@ -496,9 +494,33 @@ class FUNCGEN(MMI):
         else:
             self.set_data_source('adc')  # use the ADC data
 
+        board_cfg = self.fpga.config
+
+        self.config.capture_format = State(
+            fmt_bus_width=8 * board_cfg.adc_bytes_per_sample,  # number of bits used to store the value on the on the capture bus (multiple of 8 bits)
+            fmt_data_width=board_cfg.adc_bits_per_sample,
+            fmt_is_complex=False,
+            fmt_interleave_factor=1,
+            use_offset_encoding=False,
+        )
+        self.config.update(
+            fn_id=self.FN_ID,
+            fn_code=self.FUNCTION,
+            left_shift=self.LEFT_SHIFT,
+            right_shift=self.RIGHT_SHIFT,
+        )
+
+    def update_config(self):
+        """Refresh derived attributes and return the config object."""
+        return self.config  # There are no derived attributes
+
     def status(self):
         """ Displays the status of the function generator module """
-        print('-------------- CHAN[%i].FUNCGEN STATUS --------------' % self.instance_number)
-        print(' Function number: %i' % self.FUNCTION)
+        print(f'-------------- CHAN[{int(self.instance_number)}].FUNCGEN STATUS --------------')
+        print(f' Function number: {int(self.FUNCTION)}')
         print(' Ramp counter status:')
-        print('    RAMP_CTR: %i' % self.RAMP_CTR)
+        print(f'    RAMP_CTR: {int(self.RAMP_CTR)}')
+
+    def reset(self):
+        self.RESET = 1
+        self.RESET = 0

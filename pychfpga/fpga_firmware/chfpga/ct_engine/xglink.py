@@ -49,9 +49,18 @@ class QPLL(MMI):
     COMMON_CFG0              = BitField(DRP, 0x0043, 0, width=16, doc="COMMON_CFG[15:0 ] 0-65535")
     COMMON_CFG1              = BitField(DRP, 0x0044, 0, width=16, doc="COMMON_CFG[31:16] 0-65535")
 
-    def __init__(self, *, router, router_port, instance_number):
+    def __init__(self, *, router, router_port, instance_number, config):
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.config = config
+
+    def select(self):
+        """No-op: this block has a dedicated DRP port (API parity with :class:`cge.CGECommon`)."""
+        return self
+
+    def unselect(self):
+        """No-op."""
+        return self
 
     def init(self):
         """ Initializes the antenna modules"""
@@ -197,12 +206,21 @@ class GTX(MMI):
 
 # Add DRP registers here...
 
-    def __init__(self, *, router, router_port, instance_number):
+    def __init__(self, *, router, router_port, instance_number, config):
         # self.fpga = fpga
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.config = config
         self.node_id = (self.fpga.slot, instance_number + 1)
         self._lock()
+
+    def select(self):
+        """No-op: this lane has a dedicated DRP port (API parity with :class:`cge.CGEChannel`)."""
+        return self
+
+    def unselect(self):
+        """No-op."""
+        return self
 
     def init(self):
         """ Initializes the GTX CHANNEL block"""
@@ -213,7 +231,7 @@ class GTX(MMI):
 
     def status(self):
         """ Displays the status of the GTX_CHANNEL"""
-        self.logger.info('--- GPU GTX CHANNEL %i ' % self.instance_number)
+        self.logger.info(f'--- GPU GTX CHANNEL {int(self.instance_number)} ')
 
     def get_rxdata(self):
         self.CAPTURE_ENABLE = 1
@@ -248,7 +266,7 @@ class GTX(MMI):
         'number_of_words' words are sampled randomly, so not all words in a packet may appear in the set.
         The values are resturned as a 8-digit hex value string.
         """
-        return set(['%08x' % self.get_rxdata() for x in range(number_of_words)])
+        return set([f'{self.get_rxdata():08x}' for x in range(number_of_words)])
 
     def get_eye_diagram(
             self,
@@ -304,14 +322,7 @@ class GTX(MMI):
                 self.ES_VERT_OFFSET = (abs(v_offset) & 0x7F) | (0x80 * (v_offset < 0)) | (0x100 * bool(ut_sign))
                 self.ES_HORZ_OFFSET = h_offset & 0xFFF
                 progress = (iv * nh + len(set(processed_ih))) / float(nh * nv - 1) * 100
-                print('%3.0f%% Vert offset %2i/%2i= %3i, Horiz offset %3i/%3i= %3i: ' % (
-                        progress,
-                        iv,
-                        nv-1,
-                        v_offset,
-                        ih,
-                        nh-1,
-                        h_offset), end=' ')
+                print(f'{progress:3.0f}% Vert offset {int(iv):2}/{int(nv - 1):2}= {int(v_offset):3}, Horiz offset {int(ih):3}/{int(nh - 1):3}= {int(h_offset):3}: ', end=' ')
 
                 while True:
                     self.ES_PRESCALE = prescale
@@ -323,7 +334,7 @@ class GTX(MMI):
                     error_count = self.ES_ERROR_COUNT
                     sample_count = self.ES_SAMPLE_COUNT
 
-                    print('(Prescale=%i => %i err / %i samples) ' % (prescale, error_count, sample_count), end=' ')
+                    print(f'(Prescale={int(prescale)} => {int(error_count)} err / {int(sample_count)} samples) ', end=' ')
                     if sample_count < 100:
                         if prescale == 0:
                             break
@@ -341,7 +352,7 @@ class GTX(MMI):
 
                 sample_count *= 2 ** (1 + prescale)
                 e = float(error_count) / float(sample_count)
-                print(' --- Got %i samples, %i errors, BER=%1.1e' % (sample_count, error_count, e))
+                print(f' --- Got {int(sample_count)} samples, {int(error_count)} errors, BER={e:1.1e}')
                 ber[ih, iv] = e
                 processed_ih.append(ih)
                 if dir == -1 and (ih == old_ih or ih == 0):
@@ -379,12 +390,7 @@ class GTX(MMI):
         plt.xlabel('Horizontal sampling offset')
         plt.ylabel('Vertical sampling offset')
         iceboard = eye_diag.gtx.fpga
-        plt.title('Eye diagram for IceBoard SN%s (Icecrate %s SN%s Slot %i) Lane %i' % (
-            iceboard.serial,
-            iceboard.crate.__class__.__name__,
-            iceboard.crate.serial,
-            iceboard.slot,
-            eye_diag.gtx.instance_number + 1))
+        plt.title(f'Eye diagram for IceBoard SN{iceboard.serial} (Icecrate {iceboard.crate.__class__.__name__} SN{iceboard.crate.serial} Slot {int(iceboard.slot)}) Lane {int(eye_diag.gtx.instance_number + 1)}')
 
 class XGLRouter(MMIRouter):
     ROUTER_PORT_NUMBER_WIDTH = 5
@@ -415,10 +421,11 @@ class XGLinkCore(MMI):
     RESET_DONE      = BitField(STATUS, 1, 4, doc='debug')
     QPLL_RESET_MON  = BitField(STATUS, 1, 3, doc='debug')
 
-    def __init__(self, *, router, router_port, verbose=1):
+    def __init__(self, *, router, router_port, config, verbose=1):
         # self.fpga = fpga
         self.logger = logging.getLogger(__name__)
         self.verbose = verbose
+        self.config = config
 
         xgl_router = XGLRouter(router=router, router_port=router_port)
 
@@ -428,19 +435,21 @@ class XGLinkCore(MMI):
 
         # Instantiate QUAD objects
         self.qpll = []
+        qpll_state = self.config.add("qpll")
         for j in range(self.NUMBER_OF_QUADS):
-            self.qpll.append(QPLL(router=xgl_router, router_port=i, instance_number=j))
+            self.qpll.append(QPLL(router=xgl_router, router_port=i, instance_number=j, config=qpll_state.add(j)))
             i += 1
 
         self.gtx = []
+        gtx_state = self.config.add("gtx")
         for j in range(self.NUMBER_OF_LINKS):
-            self.gtx.append(GTX(router=xgl_router, router_port=i, instance_number=j))
+            self.gtx.append(GTX(router=xgl_router, router_port=i, instance_number=j, config=gtx_state.add(j)))
             i += 1
 
     def init(self):
         """ Initializes the links"""
 
-        self.logger.debug('%r: Initializing GTX links (%i QUADs & %i GTXes)' % (self, len(self.qpll), len(self.gtx)))
+        self.logger.debug(f'{self!r}: Initializing GTX links ({len(self.qpll)} QUADs & {len(self.gtx)} GTXes)')
         for (i, qpll) in enumerate(self.qpll):
             qpll.init()
 
@@ -460,17 +469,17 @@ class XGLinkCore(MMI):
 
         print('Common Bitfields')
         for (name, value) in self.read_all_fields():
-            print('    %s = %i, 0x%X, %s' % (name, value, value, bin(value)))
+            print(f'    {name} = {int(value)}, 0x{value:X}, {bin(value)}')
 
         for (i, qpll) in enumerate(self.qpll):
-            print('QPLL[%i] Bitfields' % i)
+            print(f'QPLL[{int(i)}] Bitfields')
             for (name, value) in qpll.read_all_fields():
-                print('    %s = %i, 0x%X, %s' % (name, value, value, bin(value)))
+                print(f'    {name} = {int(value)}, 0x{value:X}, {bin(value)}')
 
         for (i, gtx) in enumerate(self.gtx):
-            print('GTX[%i] Bitfields' % i)
+            print(f'GTX[{int(i)}] Bitfields')
             for (name, value) in gtx.read_all_fields():
-                print('    %s = %i, 0x%X, %s' % (name, value, value, bin(value)))
+                print(f'    {name} = {int(value)}, 0x{value:X}, {bin(value)}')
 
 
 class XGLinkArray(XGLinkCore):
@@ -545,9 +554,9 @@ class XGLinkArray(XGLinkCore):
         # 'RX_CTR': 'RX_CTR',
         'RX_FRAME_CTR': 'RX_FRAME_CTR'}
 
-    def __init__(self, *, router, router_port, lane_groups, verbose=1):
+    def __init__(self, *, router, router_port, lane_groups, config, verbose=1):
 
-        super().__init__(router=router, router_port=router_port, verbose=verbose)
+        super().__init__(router=router, router_port=router_port, config=config, verbose=verbose)
 
         # lane_list = []
         phys_lane = 0
@@ -610,7 +619,7 @@ class XGLinkArray(XGLinkCore):
             List of integers.
         """
         if lane_group not in self.phys_lane_map:
-            raise ValueError('Invalid lane group name %s' % lane_group)
+            raise ValueError(f'Invalid lane group name {lane_group}')
         return self.phys_lane_map[lane_group]
 
     def get_lane_numbers(self, lane_group):
@@ -626,7 +635,7 @@ class XGLinkArray(XGLinkCore):
             List of integers.
         """
         if lane_group not in self.gtx_map:
-            raise ValueError('Invalid lane group name %s' % lane_group)
+            raise ValueError(f'Invalid lane group name {lane_group}')
         if lane_group is None:
             raise ValueError('Logical lane numbers cannot be obtained for lane group "None": '
                              'the lane numbers are not unique')
@@ -650,7 +659,7 @@ class XGLinkArray(XGLinkCore):
             List of GTX instances. Returns None for internal data links.
         """
         if lane_group not in self.gtx_map:
-            raise ValueError('Invalid lane group name %s' % lane_group)
+            raise ValueError(f'Invalid lane group name {lane_group}')
         gtx_map = self.gtx_map[lane_group]
         if lane is None:
             return gtx_map
@@ -676,7 +685,7 @@ class XGLinkArray(XGLinkCore):
         """
 
         if lane_group not in self.gtx_map:
-            raise ValueError('Invalid lane group name %s' % lane_group)
+            raise ValueError(f'Invalid lane group name {lane_group}')
         gtx_map = self.gtx_map[lane_group]
 
         if isinstance(power, int):
@@ -689,7 +698,7 @@ class XGLinkArray(XGLinkCore):
         for lane, pwr in power:
             gtx = gtx_map[lane]
             if not gtx:
-                self.logger.warning('There is no GTX at the specified lane %i of group %s (it is a direct internal link)' % (lane, lane_group))
+                self.logger.warning(f'There is no GTX at the specified lane {int(lane)} of group {lane_group} (it is a direct internal link)')
             else:
                 gtx.TXDIFFCTRL = pwr
 
@@ -715,8 +724,7 @@ class XGLinkArray(XGLinkCore):
         bitfields = []
         for name in names:
             if name not in self.RX_LANE_MONITOR_TABLE:
-                raise ValueError('Invalid lane monitor name. valid names are %s' %
-                        ','.join(self.RX_LANE_MONITOR_TABLE.keys()))
+                raise ValueError(f"Invalid lane monitor name. valid names are {','.join(self.RX_LANE_MONITOR_TABLE.keys())}")
             bitfields.append(self.get_bitfield(self.RX_LANE_MONITOR_TABLE[name]))
 
         # get monitoring results
@@ -741,7 +749,7 @@ class XGLinkArray(XGLinkCore):
         """
         metrics = Metrics(
             crate_id=self.fpga.crate.get_string_id() if self.fpga.crate else None,
-            crate_number=self.fpga.crate.crate_number if self.fpga.crate else None,
+            crate_number=self.fpga.mb.get_crate_number(),
             slot=(self.fpga.slot or 0) - 1,
             id=self.fpga.get_string_id(),
             type='GAUGE')
@@ -810,18 +818,34 @@ class XGLinkArray(XGLinkCore):
         active_slots = set(self.fpga.crate.slot.keys())
         matching_gtx_ids = [self.fpga.crate.get_matching_tx(gtx_id) for gtx_id in gtx_ids]
 
-        print('%20s: %s' % ('XGLINK_Array Lane #', ' '.join('  L%2i ' % v for v in range(self.NUMBER_OF_LANES))))
-        print('%20s: %s' % ('--------------------', ' '+' '.join('------' for v in range(self.NUMBER_OF_LANES))))
-        print('%20s: %s' % ('GTX ID', ''.join('%7s' % ('(%i,%i)' % id_) for id_ in gtx_ids)))
-        print('%20s: %s' % ('Matching GTX ID',
-                            ''.join('%7s' % ('(%i,%i)' % matching_id) for matching_id in matching_gtx_ids)))
-        print('%20s: %s' % ('Matching GTX present',
-                            ' '.join(('%6s' % ('-N/A-', 'ok ')[matching_id[0] in active_slots])
-                                     for matching_id in matching_gtx_ids)))
+        print(
+            f"{'XGLINK_Array Lane #':>20}: "
+            f"{' '.join(f'  L{v:2d} ' for v in range(self.NUMBER_OF_LANES))}"
+        )
+        print(f"{'--------------------':>20}: {' ' + ' '.join(('------' for v in range(self.NUMBER_OF_LANES)))}")
+        print(
+            f"{'GTX ID':>20}: "
+            f"{''.join(f'({id_[0]},{id_[1]})'.rjust(7) for id_ in gtx_ids)}"
+        )
+        print(
+            f"{'Matching GTX ID':>20}: "
+            f"{''.join(f'({matching_id[0]},{matching_id[1]})'.rjust(7) for matching_id in matching_gtx_ids)}"
+        )
+        print(
+            f"{'Matching GTX present':>20}: "
+            f"{' '.join(('-N/A-', 'ok ')[matching_id[0] in active_slots].rjust(6) for matching_id in matching_gtx_ids)}"
+        )
         for name in self.RX_LANE_MONITOR_TABLE:
-            print('%20s: %s' % (name, ' '.join('%6i' % v for v in await self.get_rx_lane_monitor(name))))
-        print('%20s: %6s %s' % ('DMONITOR', 'N/A', ' '.join('%6i' % (g.DMONITOROUT & 0x7f) for g in self.gtx)))
-        print('%20s: %6s %s' % ('BLOCK_LOCK', 'N/A', ' '.join('%6i' % g.BLOCK_LOCK for g in self.gtx)))
+            vals = await self.get_rx_lane_monitor(name)
+            print(f"{name:>20}: {' '.join(f'{v:6d}' for v in vals)}")
+        print(
+            f"{'DMONITOR':>20}: {'N/A':>6} "
+            f"{' '.join(f'{(g.DMONITOROUT & 0x7f):6d}' for g in self.gtx)}"
+        )
+        print(
+            f"{'BLOCK_LOCK':>20}: {'N/A':>6} "
+            f"{' '.join(f'{g.BLOCK_LOCK:6d}' for g in self.gtx)}"
+        )
 
         if self.RESET_MON:
             print('WARNING: BP_SHUFFLE reset is active (areset=1)!')

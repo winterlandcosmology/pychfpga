@@ -46,9 +46,18 @@ class QPLL(MMI):
     COMMON_CFG0              = BitField(DRP, 0x0043, 0, width=16, doc="COMMON_CFG[15:0 ] 0-65535")
     COMMON_CFG1              = BitField(DRP, 0x0044, 0, width=16, doc="COMMON_CFG[31:16] 0-65535")
 
-    def __init__(self, *, router, router_port, instance_number):
+    def __init__(self, *, router, router_port, instance_number, config):
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.config = config
+
+    def select(self):
+        """No-op: this block has a dedicated DRP port (API parity with :class:`cge.CGECommon`)."""
+        return self
+
+    def unselect(self):
+        """No-op."""
+        return self
 
     def init(self):
         """ Initializes the antenna modules"""
@@ -131,9 +140,10 @@ class GTY(MMI):
 
     RXHEADER      = BitField(STATUS, 5, 6, width=2, doc='Debug')
     RXGEARBOXSLIP = BitField(STATUS, 5, 5, doc='Debug')
+    RXPRBSLOCKED  = BitField(STATUS, 5, 3, doc='GTY Output to indicate that the RX PRBS checker has been error free. Is reset by RXPRBSCNTRESET.')
     RXBUFSTATUS   = BitField(STATUS, 5, 0, width=3)
 
-    RXMONITOR     = BitField(STATUS, 6, 0, width=7, doc='Debug')
+    RXMONITOR     = BitField(STATUS, 6, 0, width=8, doc='Reserved port according to the GTY manuals. Not clear what this does.')
     RXDATA        = BitField(STATUS, 10, 0, width=32)
 
     # ERR_CTR       = BitField(STATUS, 10, 0, width=32)
@@ -156,60 +166,71 @@ class GTY(MMI):
     # GTRXRESET     = BitField(STATUS, 7, 6, doc='Debug')
 
 
-    RX_PRBS_ERR_CNT   = BitField(DRP, 0x015C, 0, width=16, doc="Pattern checker error counter since last RXPRBSCNTRESET")
-    GEARBOX_MODE      = BitField(DRP, 0x01C, 0, width=3, doc="")
-    RXGEARBOX_EN      = BitField(DRP, 0x04b, 15, doc="")
-    TXGEARBOX_EN      = BitField(DRP, 0x01c, 5, doc="")
-    TXBUF_EN          = BitField(DRP, 0x01c, 14, doc="")
-    RXBUF_EN          = BitField(DRP, 0x09d, 1, doc="")
+    RX_PRBS_ERR_CNT_LO = BitField(DRP, 0x25E, 0, width=16, doc='RX_PRBS_ERR_CNT[15:0]; read before 0x25F')
+    RX_PRBS_ERR_CNT_HI = BitField(DRP, 0x25F, 0, width=16, doc='RX_PRBS_ERR_CNT[31:16]; saturates at 0xFFFFFFFF')
+    GEARBOX_MODE      = BitField(DRP, 0x099, 11, width=5, doc='GEARBOX_MODE[4:0]')
+    RXGEARBOX_EN      = BitField(DRP, 0x064, 0, doc='RXGEARBOX_EN')
+    RXBUF_EN          = BitField(DRP, 0x064, 3, doc='RXBUF_EN')
+    TXGEARBOX_EN      = BitField(DRP, 0x07C, 13, doc='TXGEARBOX_EN')
+    TXBUF_EN          = BitField(DRP, 0x07C, 7, doc='TXBUF_EN')
 
-    RX_DEBUG_CFG      = BitField(DRP, 0x0A5, 0, width=12, doc='')
-    DMONITOR_CFG0     = BitField(DRP, 0x086, 0, width=16, doc='Bits 15:0 of the DMONITOR_CFG register. Bit 15 should always be 1. Bit 0 enables DMONITOR output when 1.')
-    DMONITOR_CFG1     = BitField(DRP, 0x087, 0, width=8, doc='Bits 23:16 of the DMONITOR_CFG register. Should always be 0x00')
-    # DMONITOR_SELECT   = BitField(DRP, 0x086, 0, doc='Bits 0 of the DMONITOR_CFG register. Enables DMONITOR output when 1.')
-    PCS_RSVD_ATTR_BIT6= BitField(DRP, 0x06F, 6, doc='Bit 6 of the PCS_RSVD_ATTR. Must be 1 to use DMONITOR.')
-    RX_DFE_GAIN_CFG0  = BitField(DRP, 0x01D, 0, width=16, doc='Bits 15:0 of RX_DFE_GAIN_CFG')
-    RX_DFE_GAIN_CFG0  = BitField(DRP, 0x01E, 0, width=7, doc='Bits 22:16 of RX_DFE_GAIN_CFG')
-    ES_PMA_CFG        = BitField(DRP, 0x0A6, 0, width=9, doc='')
-    ES_ERRDET_EN      = BitField(DRP, 0x03D, 9, doc='') #    0 FALSE 0 TRUE 1
-    ES_EYE_SCAN_EN    = BitField(DRP, 0x03D, 8, doc='') #    0 FALSE 0 TRUE 1
-    ES_CONTROL        = BitField(DRP, 0x03D, 0, width=6, doc='') #  5:0 0-63 0-63
-    PMA_RSV2_5        = BitField(DRP, 0x082, 5, doc="Must be '1' to enable the Eye Scan feature")
+    RX_DEBUG_CFG      = BitField(DRP, 0x0A5, 0, width=16, doc='DRP 0x0A5 is RXCDR_CFG3_GEN3 on GTY (legacy name)')
+    DMONITOR_CFG0     = BitField(DRP, 0x065, 0, width=10, doc='DMONITOR_CFG0[9:0]')
+    DMONITOR_CFG1     = BitField(DRP, 0x03A, 8, width=8, doc='DMONITOR_CFG1[7:0] at DRP 0x03A[15:8]; bit 0 enables monitor')
+    RXDFE_GC_CFG0     = BitField(DRP, 0x09F, 0, width=16, doc='RXDFE_GC_CFG0')
+    RXDFE_GC_CFG1     = BitField(DRP, 0x0A0, 0, width=16, doc='RXDFE_GC_CFG1')
+    RXDFE_GC_CFG2     = BitField(DRP, 0x0A1, 0, width=16, doc='RXDFE_GC_CFG2')
+    ES_PMA_CFG        = BitField(DRP, 0x051, 0, width=10, doc='ES_PMA_CFG[9:0]')
+    ES_ERRDET_EN      = BitField(DRP, 0x03C, 9, doc='ES_ERRDET_EN')
+    ES_EYE_SCAN_EN    = BitField(DRP, 0x03C, 8, doc='ES_EYE_SCAN_EN')
+    ES_CONTROL        = BitField(DRP, 0x03C, 10, width=6, doc='ES_CONTROL[5:0]; RUN=bit0, ARM=bit1')
+    PMA_RSV2_5        = BitField(DRP, 0x03C, 8, doc='7-series PMA_RSV2[5]; on GTY same bit as ES_EYE_SCAN_EN')
 
-    ES_QUALIFIER0     = BitField(DRP, 0x02C, 0, width=16, doc='')# 15:0  15:0 0-65535 0-65535
-    ES_QUALIFIER1     = BitField(DRP, 0x02D, 0, width=16, doc='')# 15:0  31:16 0-65535 0-65535
-    ES_QUALIFIER2     = BitField(DRP, 0x02E, 0, width=16, doc='')# 15:0  47:32 0-65535 0-65535
-    ES_QUALIFIER3     = BitField(DRP, 0x02F, 0, width=16, doc='')# 15:0  63:48 0-65535 0-65535
-    ES_QUALIFIER4     = BitField(DRP, 0x030, 0, width=16, doc='')# 15:0  79:64 0-65535 0-65535
-    ES_QUAL_MASK0     = BitField(DRP, 0x031, 0, width=16, doc='')# 15:0  15:0 0-65535 0-65535
-    ES_QUAL_MASK1     = BitField(DRP, 0x032, 0, width=16, doc='')# 15:0  31:16 0-65535 0-65535
-    ES_QUAL_MASK2     = BitField(DRP, 0x033, 0, width=16, doc='')# 15:0  47:32 0-65535 0-65535
-    ES_QUAL_MASK3     = BitField(DRP, 0x034, 0, width=16, doc='')# 15:0  63:48 0-65535 0-65535
-    ES_QUAL_MASK4     = BitField(DRP, 0x035, 0, width=16, doc='')# 15:0  79:64 0-65535 0-65535
-    ES_SDATA_MASK0    = BitField(DRP, 0x036, 0, width=16, doc='')# 15:0  15:0 0-65535 0-65535
-    ES_SDATA_MASK1    = BitField(DRP, 0x037, 0, width=16, doc='')# 15:0  31:16 0-65535 0-65535
-    ES_SDATA_MASK2    = BitField(DRP, 0x038, 0, width=16, doc='')# 15:0  47:32 0-65535 0-65535
-    ES_SDATA_MASK3    = BitField(DRP, 0x039, 0, width=16, doc='')# 15:0  63:48 0-65535 0-65535
-    ES_SDATA_MASK4    = BitField(DRP, 0x03A, 0, width=16, doc='')# 15:0  79:64 0-65535 0-65535
-    ES_PRESCALE       = BitField(DRP, 0x03B, 11, width=5, doc='')# 15:11 4:0 0-31 0-31
-    ES_VERT_OFFSET    = BitField(DRP, 0x03B, 0, width=9, doc='')# 8:0   8:0 0-511 0-511
-    ES_HORZ_OFFSET    = BitField(DRP, 0x03C, 0, width=12, doc='')# 11:0  11:0 0-4095 0-4095
+    ES_QUALIFIER0     = BitField(DRP, 0x03F, 0, width=16, doc='ES_QUALIFIER0[15:0]')
+    ES_QUALIFIER1     = BitField(DRP, 0x040, 0, width=16, doc='ES_QUALIFIER1[15:0]')
+    ES_QUALIFIER2     = BitField(DRP, 0x041, 0, width=16, doc='ES_QUALIFIER2[15:0]')
+    ES_QUALIFIER3     = BitField(DRP, 0x042, 0, width=16, doc='ES_QUALIFIER3[15:0]')
+    ES_QUALIFIER4     = BitField(DRP, 0x043, 0, width=16, doc='ES_QUALIFIER4[15:0]')
+    ES_QUAL_MASK0     = BitField(DRP, 0x044, 0, width=16, doc='ES_QUAL_MASK0[15:0]')
+    ES_QUAL_MASK1     = BitField(DRP, 0x045, 0, width=16, doc='ES_QUAL_MASK1[15:0]')
+    ES_QUAL_MASK2     = BitField(DRP, 0x046, 0, width=16, doc='ES_QUAL_MASK2[15:0]')
+    ES_QUAL_MASK3     = BitField(DRP, 0x047, 0, width=16, doc='ES_QUAL_MASK3[15:0]')
+    ES_QUAL_MASK4     = BitField(DRP, 0x048, 0, width=16, doc='ES_QUAL_MASK4[15:0]')
+    ES_SDATA_MASK0    = BitField(DRP, 0x049, 0, width=16, doc='ES_SDATA_MASK0[15:0]')
+    ES_SDATA_MASK1    = BitField(DRP, 0x04A, 0, width=16, doc='ES_SDATA_MASK1[15:0]')
+    ES_SDATA_MASK2    = BitField(DRP, 0x04B, 0, width=16, doc='ES_SDATA_MASK2[15:0]')
+    ES_SDATA_MASK3    = BitField(DRP, 0x04C, 0, width=16, doc='ES_SDATA_MASK3[15:0]')
+    ES_SDATA_MASK4    = BitField(DRP, 0x04D, 0, width=16, doc='ES_SDATA_MASK4[15:0]')
+    ES_PRESCALE       = BitField(DRP, 0x03C, 0, width=5, doc='ES_PRESCALE[4:0]')
+    RX_EYESCAN_VS_UT_SIGN = BitField(DRP, 0x097, 9, doc='RX_EYESCAN_VS_UT_SIGN (was ES_VERT_OFFSET[8])')
+    RX_EYESCAN_VS_NEG_DIR = BitField(DRP, 0x097, 10, doc='RX_EYESCAN_VS_NEG_DIR (was ES_VERT_OFFSET[7])')
+    RX_EYESCAN_VS_CODE    = BitField(DRP, 0x097, 2, width=7, doc='RX_EYESCAN_VS_CODE[6:0] (was ES_VERT_OFFSET[6:0])')
+    RX_EYESCAN_VS_RANGE   = BitField(DRP, 0x097, 0, width=2, doc='RX_EYESCAN_VS_RANGE[1:0]')
+    ES_HORZ_OFFSET    = BitField(DRP, 0x04F, 4, width=12, doc='ES_HORZ_OFFSET[11:0] at DRP 0x04F[15:4]')
 
+    RX_CM_SEL         = BitField(DRP, 0x061, 0, width=2, doc='RX_CM_SEL[1:0]')
+    RX_CM_TRIM        = BitField(DRP, 0x061, 2, width=4, doc='RX_CM_TRIM[3:0]')
 
-    RX_CM_SEL         = BitField(DRP, 0x061, 0, width=2, doc='')# 11:0  11:0 0-4095 0-4095
-    RX_CM_TRIM         = BitField(DRP, 0x061, 2, width=4, doc='')# 11:0  11:0 0-4095 0-4095
-
-    ES_ERROR_COUNT    = BitField(DRP, 0x14F, 0, width=15, doc='')
-    ES_SAMPLE_COUNT   = BitField(DRP, 0x150, 0, width=15, doc='')
-    ES_CONTROL_STATUS = BitField(DRP, 0x151, 0, width=4, doc='')
+    ES_ERROR_COUNT    = BitField(DRP, 0x251, 0, width=16, doc='es_error_count; valid in END/WAIT')
+    ES_SAMPLE_COUNT   = BitField(DRP, 0x252, 0, width=16, doc='es_sample_count; valid in END/WAIT')
+    ES_CONTROL_STATUS = BitField(DRP, 0x253, 0, width=4, doc='es_control_status: [0]=DONE, [3:1]=state')
 
 # Add DRP registers here...
 
-    def __init__(self, *, router, router_port, instance_number):
+    def __init__(self, *, router, router_port, instance_number, config):
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.config = config
         self.node_id = (self.fpga.slot, instance_number + 1)
         self._lock()
+
+    def select(self):
+        """No-op: this lane has a dedicated DRP port (API parity with :class:`cge.CGEChannel`)."""
+        return self
+
+    def unselect(self):
+        """No-op."""
+        return self
 
     def init(self):
         """ Initializes the GTY CHANNEL block"""
@@ -220,12 +241,24 @@ class GTY(MMI):
 
     def status(self):
         """ Displays the status of the GTY_CHANNEL"""
-        self.logger.info('--- GPU GTY CHANNEL %i ' % self.instance_number)
+        self.logger.info(f'--- GPU GTY CHANNEL {int(self.instance_number)} ')
 
     def get_rxdata(self):
         self.CAPTURE_ENABLE = 1
         self.CAPTURE_ENABLE = 0
         return self.RXDATA
+
+    def get_prbs_error_ctr(self):
+        """UG578 RX_PRBS_ERR_CNT: read low half (0x25E) then high (0x25F)."""
+        lo = int(self.RX_PRBS_ERR_CNT_LO)
+        hi = int(self.RX_PRBS_ERR_CNT_HI)
+        return lo | (hi << 16)
+
+    def _set_es_vert_offset(self, v_offset, ut_sign=0):
+        """Map legacy 9-bit ES_VERT_OFFSET packing to RX_EYESCAN_VS_* (DRP 0x097)."""
+        self.RX_EYESCAN_VS_CODE = abs(v_offset) & 0x7F
+        self.RX_EYESCAN_VS_NEG_DIR = int(v_offset < 0)
+        self.RX_EYESCAN_VS_UT_SIGN = int(bool(ut_sign))
 
     def configure(self):
         """ Execute only when there is a clock """
@@ -240,10 +273,9 @@ class GTY(MMI):
         self.TXPRECURSOR = 4  # DFE cannot compensate pre-cursor (but that seems to give the best result anyway!)
         self.TXPOSTCURSOR = 0b00000
         self.RXMONITORSEL = 1 # 1=AGC, 2=UL, 3=VP loop
-        self.RX_DEBUG_CFG = 0x14  # 0x14= Vpeak, 0x2C=AGC
-        self.DMONITOR_CFG1 = 0
-        self.DMONITOR_CFG0 = 0x8101
-        self.PCS_RSVD_ATTR_BIT6 = 1
+        self.RX_DEBUG_CFG = 0x14  # 0x14= Vpeak, 0x2C=AGC (legacy; DRP 0x0A5 is RXCDR_CFG3_GEN3 on GTY)
+        self.DMONITOR_CFG0 = 0x101  # DMONITOR_CFG0[9:0]: enable output (bit 0)
+        self.DMONITOR_CFG1 = 1  # DMONITOR_CFG1[0] at 0x03A[15:8]
 
     def reset_rx_equalizer(self):
         """ Execute only when there is a clock """
@@ -255,7 +287,7 @@ class GTY(MMI):
         'number_of_words' words are sampled randomly, so not all words in a packet may appear in the set.
         The values are resturned as a 8-digit hex value string.
         """
-        return set(['%08x' % self.get_rxdata() for x in range(number_of_words)])
+        return set([f'{self.get_rxdata():08x}' for x in range(number_of_words)])
 
 
 
@@ -306,7 +338,6 @@ class GTY(MMI):
         Vert offset: : -127 to 127
         """
         prescale_step = 4
-        self.PMA_RSV2_5 = 1
         self.ES_EYE_SCAN_EN = 1
         self.ES_ERRDET_EN = 1
         self.ES_SDATA_MASK0 = 0x00ff
@@ -344,29 +375,21 @@ class GTY(MMI):
             while True:
                 # print ih, len(horiz_offset)
                 h_offset = horiz_offset[ih]
-                self.ES_VERT_OFFSET = (abs(v_offset) & 0x7F) | (0x80 * (v_offset < 0)) | (0x100 * bool(ut_sign))
+                self._set_es_vert_offset(v_offset, ut_sign)
                 self.ES_HORZ_OFFSET = h_offset & 0xFFF
                 progress = (iv * nh + len(set(processed_ih))) / float(nh * nv - 1) * 100
-                print('%3.0f%% Vert offset %2i/%2i= %3i, Horiz offset %3i/%3i= %3i: ' % (
-                        progress,
-                        iv,
-                        nv-1,
-                        v_offset,
-                        ih,
-                        nh-1,
-                        h_offset), end=' ')
+                print(f'{progress:3.0f}% Vert offset {int(iv):2}/{int(nv - 1):2}= {int(v_offset):3}, Horiz offset {int(ih):3}/{int(nh - 1):3}= {int(h_offset):3}: ', end=' ')
 
                 while True:
                     self.ES_PRESCALE = prescale
                     self.ES_CONTROL = 0
                     self.ES_CONTROL = 1
-                    while self.ES_CONTROL_STATUS != 5:
-                        # print '.',
+                    while (self.ES_CONTROL_STATUS & 1) == 0:
                         time.sleep(.2)
                     error_count = self.ES_ERROR_COUNT
                     sample_count = self.ES_SAMPLE_COUNT
 
-                    print('(Prescale=%i => %i err / %i samples) ' % (prescale, error_count, sample_count), end=' ')
+                    print(f'(Prescale={int(prescale)} => {int(error_count)} err / {int(sample_count)} samples) ', end=' ')
                     if sample_count < 100:
                         if prescale == 0:
                             break
@@ -384,7 +407,7 @@ class GTY(MMI):
 
                 sample_count *= 2 ** (1 + prescale)
                 e = float(error_count) / float(sample_count)
-                print(' --- Got %i samples, %i errors, BER=%1.1e' % (sample_count, error_count, e))
+                print(f' --- Got {int(sample_count)} samples, {int(error_count)} errors, BER={e:1.1e}')
                 ber[ih, iv] = e
                 processed_ih.append(ih)
                 if dir == -1 and (ih == old_ih or ih == 0):
@@ -422,12 +445,7 @@ class GTY(MMI):
         plt.xlabel('Horizontal sampling offset')
         plt.ylabel('Vertical sampling offset')
         iceboard = eye_diag.gty.fpga
-        plt.title('Eye diagram for IceBoard SN%s (Icecrate %s SN%s Slot %i) Lane %i' % (
-            iceboard.serial,
-            iceboard.crate.__class__.__name__,
-            iceboard.crate.serial,
-            iceboard.slot,
-            eye_diag.gty.instance_number + 1))
+        plt.title(f'Eye diagram for IceBoard SN{iceboard.serial} (Icecrate {iceboard.crate.__class__.__name__} SN{iceboard.crate.serial} Slot {int(iceboard.slot)}) Lane {int(eye_diag.gty.instance_number + 1)}')
 
 class XXVGLRouter(MMIRouter):
     ROUTER_PORT_NUMBER_WIDTH = 4
@@ -466,9 +484,10 @@ class XXVGLinkCore(MMI):
     QPLL_RESET_MON  = BitField(STATUS, 1, 3, doc='debug')
     RX_CDR_STABLE   = BitField(STATUS, 1, 2, doc='debug')
 
-    def __init__(self, *, router, router_port, verbose=1):
+    def __init__(self, *, router, router_port, config, verbose=1):
         self.logger = logging.getLogger(__name__)
         self.verbose = verbose
+        self.config = config
         xxvgl_router = XXVGLRouter(router=router, router_port=router_port)
 
         super().__init__(router=xxvgl_router, router_port='COMMON')
@@ -476,17 +495,19 @@ class XXVGLinkCore(MMI):
         router_port = 1
 
         # Instantiate QUAD objects
-        self.logger.info(f'{self!r}: Instantiating {self.NUMBER_OF_QUADS} QPLLs')
-        print(f'{self!r}: Instantiating {self.NUMBER_OF_QUADS} QPLLs and {self.NUMBER_OF_LINKS} GTYs, XXVGLINK base addr={self.base_address:06x}, width={self.address_width}')
+        self.logger.info(f'{self!r}: Instantiating {self.NUMBER_OF_QUADS} QPLLs and {self.NUMBER_OF_LINKS} GTYs, XXVGLINK base addr={self.base_address:06x}, width={self.address_width}')
+        self.logger.debug(f'{self!r}: Instantiating {self.NUMBER_OF_QUADS} QPLLs ')
         self.qpll = []
+        qpll_state = self.config.add("qpll")
         for j in range(self.NUMBER_OF_QUADS):
-            self.qpll.append(QPLL(router=xxvgl_router, router_port=router_port, instance_number=j))
+            self.qpll.append(QPLL(router=xxvgl_router, router_port=router_port, instance_number=j, config=qpll_state.add(j)))
             router_port += 1
 
         self.logger.info(f'{self!r}: Instantiating {self.NUMBER_OF_LINKS} GTYs')
         self.gty = []
+        gty_state = self.config.add("gty")
         for j in range(self.NUMBER_OF_LINKS):
-            self.gty.append(GTY(router=xxvgl_router, router_port=router_port, instance_number=j))
+            self.gty.append(GTY(router=xxvgl_router, router_port=router_port, instance_number=j, config=gty_state.add(j)))
             router_port += 1
 
     def init(self):
@@ -512,17 +533,17 @@ class XXVGLinkCore(MMI):
 
         print('Common Bitfields')
         for (name, value) in self.read_all_fields():
-            print('    %s = %i, 0x%X, %s' % (name, value, value, bin(value)))
+            print(f'    {name} = {int(value)}, 0x{value:X}, {bin(value)}')
 
         for (i, qpll) in enumerate(self.qpll):
-            print('QPLL[%i] Bitfields' % i)
+            print(f'QPLL[{int(i)}] Bitfields')
             for (name, value) in qpll.read_all_fields():
-                print('    %s = %i, 0x%X, %s' % (name, value, value, bin(value)))
+                print(f'    {name} = {int(value)}, 0x{value:X}, {bin(value)}')
 
         for (i, gty) in enumerate(self.gty):
-            print('GTY[%i] Bitfields' % i)
+            print(f'GTY[{int(i)}] Bitfields')
             for (name, value) in gty.read_all_fields():
-                print('    %s = %i, 0x%X, %s' % (name, value, value, bin(value)))
+                print(f'    {name} = {int(value)}, 0x{value:X}, {bin(value)}')
 
 
 class XXVGLinkArray(XXVGLinkCore):
@@ -573,6 +594,7 @@ class XXVGLinkArray(XXVGLinkCore):
     BYPASS_PCB_SHUFFLE  = BitField(CONTROL, 5, 0, doc='')
     BYPASS_QSFP_SHUFFLE = BitField(CONTROL, 5, 1, doc='')
 
+    LANE_MON_EN       = BitField(CONTROL, 6, 6, doc='When True, allows RXCLK_MON_WORD and TXCLK_MON_WORD to update. Disable during register reads.')
     LANE_MON_SRC      = BitField(CONTROL, 6, 4, width=2, doc='Selects source of data being monitored for selected lane (TXCLK domain: 0=TX, 1=RX, RXCLK domain: no effect, always RX FIFO IN)')
     LANE_MON_TYPE      = BitField(CONTROL, 6, 0, width=4, doc='Selects type of data being monitored for selected lane (0: word counter, 1: packet length, 2: current packet length, 3: min packet length, 4: max packet length, 5: error counter, 6: FIFO overflow counter)')
 
@@ -612,9 +634,9 @@ class XXVGLinkArray(XXVGLinkCore):
         # 'RX_CTR': 'RX_CTR',
         'RX_FRAME_CTR': 'RX_FRAME_CTR'}
 
-    def __init__(self, *, router, router_port, lane_groups, verbose=1):
+    def __init__(self, *, router, router_port, lane_groups, config, verbose=1):
 
-        super().__init__(router=router, router_port=router_port, verbose=verbose)
+        super().__init__(router=router, router_port=router_port, config=config, verbose=verbose)
 
         # self.LANE_GROUPS = {}
         # group name : (first lane, number_of_bypass_lanes, number_of_links)
@@ -682,7 +704,7 @@ class XXVGLinkArray(XXVGLinkCore):
             List of integers.
         """
         if lane_group not in self.phys_lane_map:
-            raise ValueError('Invalid lane group name %s' % lane_group)
+            raise ValueError(f'Invalid lane group name {lane_group}')
         return self.phys_lane_map[lane_group]
 
     def get_lane_numbers(self, lane_group):
@@ -698,7 +720,7 @@ class XXVGLinkArray(XXVGLinkCore):
             List of integers.
         """
         if lane_group not in self.gty_map:
-            raise ValueError('Invalid lane group name %s' % lane_group)
+            raise ValueError(f'Invalid lane group name {lane_group}')
         if lane_group is None:
             raise ValueError('Logical lane numbers cannot be obtained for lane group "None": '
                              'the lane numbers are not unique')
@@ -722,7 +744,7 @@ class XXVGLinkArray(XXVGLinkCore):
             List of GTY instances. Returns None for internal data links.
         """
         if lane_group not in self.gty_map:
-            raise ValueError('Invalid lane group name %s' % lane_group)
+            raise ValueError(f'Invalid lane group name {lane_group}')
         gty_map = self.gty_map[lane_group]
         if lane is None:
             return gty_map
@@ -748,7 +770,7 @@ class XXVGLinkArray(XXVGLinkCore):
         """
 
         if lane_group not in self.gty_map:
-            raise ValueError('Invalid lane group name %s' % lane_group)
+            raise ValueError(f'Invalid lane group name {lane_group}')
         gty_map = self.gty_map[lane_group]
 
         if isinstance(power, int):
@@ -761,7 +783,7 @@ class XXVGLinkArray(XXVGLinkCore):
         for lane, pwr in power:
             gty = gty_map[lane]
             if not gty:
-                self.logger.warning('There is no GTY at the specified lane %i of group %s (it is a direct internal link)' % (lane, lane_group))
+                self.logger.warning(f'There is no GTY at the specified lane {int(lane)} of group {lane_group} (it is a direct internal link)')
             else:
                 gty.TXDIFFCTRL = pwr
 
@@ -787,8 +809,7 @@ class XXVGLinkArray(XXVGLinkCore):
         bitfields = []
         for name in names:
             if name not in self.RX_LANE_MONITOR_TABLE:
-                raise ValueError('Invalid lane monitor name. valid names are %s' %
-                        ','.join(self.RX_LANE_MONITOR_TABLE.keys()))
+                raise ValueError(f"Invalid lane monitor name. valid names are {','.join(self.RX_LANE_MONITOR_TABLE.keys())}")
             bitfields.append(self.get_bitfield(self.RX_LANE_MONITOR_TABLE[name]))
 
         # get monitoring results
@@ -813,7 +834,7 @@ class XXVGLinkArray(XXVGLinkCore):
         """
         metrics = Metrics(
             crate_id=self.fpga.crate.get_string_id() if self.fpga.crate else None,
-            crate_number=self.fpga.crate.crate_number if self.fpga.crate else None,
+            crate_number=self.fpga.mb.get_crate_number(),
             slot=(self.fpga.slot or 0) - 1,
             id=self.fpga.get_string_id(),
             type='GAUGE')
@@ -882,18 +903,34 @@ class XXVGLinkArray(XXVGLinkCore):
         active_slots = set(self.fpga.crate.slot.keys())
         matching_gty_ids = [self.fpga.crate.get_matching_tx(gty_id) for gty_id in gty_ids]
 
-        print('%20s: %s' % ('XXVGLINK_Array Lane #', ' '.join('  L%2i ' % v for v in range(self.NUMBER_OF_LANES))))
-        print('%20s: %s' % ('--------------------', ' '+' '.join('------' for v in range(self.NUMBER_OF_LANES))))
-        print('%20s: %s' % ('GTY ID', ''.join('%7s' % ('(%i,%i)' % id_) for id_ in gty_ids)))
-        print('%20s: %s' % ('Matching GTY ID',
-                            ''.join('%7s' % ('(%i,%i)' % matching_id) for matching_id in matching_gty_ids)))
-        print('%20s: %s' % ('Matching GTY present',
-                            ' '.join(('%6s' % ('-N/A-', 'ok ')[matching_id[0] in active_slots])
-                                     for matching_id in matching_gty_ids)))
+        print(
+            f"{'XXVGLINK_Array Lane #':>20}: "
+            f"{' '.join(f'  L{v:2d} ' for v in range(self.NUMBER_OF_LANES))}"
+        )
+        print(f"{'--------------------':>20}: {' ' + ' '.join(('------' for v in range(self.NUMBER_OF_LANES)))}")
+        print(
+            f"{'GTY ID':>20}: "
+            f"{''.join(f'({id_[0]},{id_[1]})'.rjust(7) for id_ in gty_ids)}"
+        )
+        print(
+            f"{'Matching GTY ID':>20}: "
+            f"{''.join(f'({matching_id[0]},{matching_id[1]})'.rjust(7) for matching_id in matching_gty_ids)}"
+        )
+        print(
+            f"{'Matching GTY present':>20}: "
+            f"{' '.join(('-N/A-', 'ok ')[matching_id[0] in active_slots].rjust(6) for matching_id in matching_gty_ids)}"
+        )
         for name in self.RX_LANE_MONITOR_TABLE:
-            print('%20s: %s' % (name, ' '.join('%6i' % v for v in await self.get_rx_lane_monitor(name))))
-        print('%20s: %6s %s' % ('DMONITOR', 'N/A', ' '.join('%6i' % (g.DMONITOROUT & 0x7f) for g in self.gty)))
-        print('%20s: %6s %s' % ('BLOCK_LOCK', 'N/A', ' '.join('%6i' % g.BLOCK_LOCK for g in self.gty)))
+            vals = await self.get_rx_lane_monitor(name)
+            print(f"{name:>20}: {' '.join(f'{v:6d}' for v in vals)}")
+        print(
+            f"{'DMONITOR':>20}: {'N/A':>6} "
+            f"{' '.join(f'{(g.DMONITOROUT & 0x7f):6d}' for g in self.gty)}"
+        )
+        print(
+            f"{'BLOCK_LOCK':>20}: {'N/A':>6} "
+            f"{' '.join(f'{g.BLOCK_LOCK:6d}' for g in self.gty)}"
+        )
 
         if self.RESET_MON:
             print('WARNING: BP_SHUFFLE reset is active (areset=1)!')

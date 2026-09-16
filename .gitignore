@@ -13,9 +13,10 @@
 out_*/
 /nbproject/
 /src/
-/venv/
+/venv*
 .py*venv/
-.venv/
+.venv*
+.venv-fmt/
 \.DS_Store
 .Xil
 *.str
@@ -23,3 +24,12 @@ out_*/
 *.egg-info
 .ipynb_checkpoints
 .vscode/
+corr16tests/
+docker-data/
+.codex
+.env
+xreport.xml
+.vscode
+*__pycache__*
+fw_test_results/
+firmware_tests/fft_of_data

@@ -28,7 +28,7 @@ except ImportError:
     comet = None
 
 # Local imports
-from pychfpga import __version__
+# from pychfpga import __version__
 
 class SpectrumInstrumentsTM4D(SocketContext):
     """
@@ -293,11 +293,11 @@ class SpectrumInstrumentsTM4D(SocketContext):
             lon (float): longitude in fractional degrees, positive=east, negative=west
             alt : altitude in meters
         """
-        self.command('19', '%02i%5.2f' % (abs(lat), abs(lat) % 1 * 60),
+        self.command('19', f'{int(abs(lat)):02}{abs(lat) % 1 * 60:5.2f}',
                            'N' if lat>=0 else 'S',
-                           '%03i%5.2f' % (abs(lon), abs(lon) % 1 * 60),
+                           f'{int(abs(lon)):03}{abs(lon) % 1 * 60:5.2f}',
                            'E' if lon>=0 else 'W',
-                           '%+06.0f' % alt)
+                           f'{alt:+06.0f}')
 
     def set_antenna_alarm_enable(self, enable):
         """ Enables or disables the antenna alarm.

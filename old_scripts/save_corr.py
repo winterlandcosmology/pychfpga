@@ -9,6 +9,7 @@ import sys
 import os
 import socket
 import struct
+from pychfpga.common.async_utils import run_async
 
 board_sn_to_ip = {'0343':'10.10.10.243', '0338':'10.10.10.244', '0336':'10.10.10.245',
                   '0270':'10.0.2.17', '0233':'10.0.2.65', '0315':'10.0.2.13', '0224':'10.0.2.93',
@@ -64,12 +65,12 @@ def save_frames(Nframe_pairs=10, cadence=1.00, setup='interhut', filename='/home
             for name, mezz in iceboard.mezzanine.iteritems():
                 mezz.set_refclk_source('sma')
 
-    ca.set_sync_method()
+    run_async(ca.set_sync_method_async())
     
     for brd in ca.ib:
         print brd.serial, brd.get_irigb_time()
     
-    ca.sync()
+    run_async(ca.sync_async())
     ca.ib.set_adc_mode('data')
     ca.ib.set_fft_bypass(True)
     #Get board info
@@ -92,7 +93,7 @@ def save_frames(Nframe_pairs=10, cadence=1.00, setup='interhut', filename='/home
     time.sleep(5)
 
     print 'SYNCING BOARDS'
-    ca.sync()
+    run_async(ca.sync_async())
     time.sleep(5)
 
     print 'CREATING DATA RECEIVERS'
@@ -172,12 +173,12 @@ def save_corr(Nframe_pairs=1000, cadence=0.01, setup='interhut', navg=100, filen
             for name, mezz in iceboard.mezzanine.iteritems():
                 mezz.set_refclk_source('sma')
 
-    ca.set_sync_method()
+    run_async(ca.set_sync_method_async())
     
     for brd in ca.ib:
         print brd.serial, brd.get_irigb_time()
     
-    ca.sync()
+    run_async(ca.sync_async())
     ca.ib.set_adc_mode('data')
     ca.ib.set_fft_bypass(True)
     #Get board info
@@ -198,7 +199,7 @@ def save_corr(Nframe_pairs=1000, cadence=0.01, setup='interhut', navg=100, filen
     time.sleep(5)
 
     print 'SYNCING BOARDS'
-    ca.sync()
+    run_async(ca.sync_async())
     time.sleep(5)
 
     print 'CREATING DATA RECEIVERS'

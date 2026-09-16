@@ -103,8 +103,9 @@ class ADCDAQ(MMI):
     MMCM_POWER =        BitField(DRP, 0x28, 0, width=16, doc='MCMM Power bits. Must be set to 0xFFFF in order to successfully program the other MMCM registers')
 
 
-    def __init__(self, *, router, router_port, instance_number):
+    def __init__(self, *, router, router_port, instance_number, config):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
+        self.config = config
         self._lock() # Prevent accidental addition of attributes (if, for example, a value is assigned to a wrongly-spelled property)
 
     def set_ADCDAQ_mode(self, mode):
@@ -229,15 +230,15 @@ class ADCDAQ(MMI):
         """
         Prints the ADCDAQ module status.
         """
-        print('-------------- CHAN[%i].ADCDAQ STATUS --------------' % self.instance_number)
+        print(f'-------------- CHAN[{int(self.instance_number)}].ADCDAQ STATUS --------------')
 
-        print('Clock source: %s' % ('ADC','SYSTEM CLOCK')[self.PLL_CLK_SRC])
+        print(f"Clock source: {('ADC', 'SYSTEM CLOCK')[self.PLL_CLK_SRC]}")
         print('Data Acquisition FIFO status')
         print('   Flag        Current   Sticky')
         print('   ----------- -------   ------')
-        print('   OVERFLOW    %5s     %5s' % (bool(self.FIFO_OVERFLOW), bool(self.FIFO_OVERFLOW_STICKY)))
-        print('   UNDERFLOW   %5s     %5s' % (bool(self.FIFO_UNDERFLOW), bool(self.FIFO_UNDERFLOW_STICKY)))
-        print('   EMPTY       %5s     %5s' % (bool(self.FIFO_EMPTY), bool(self.FIFO_EMPTY_STICKY)))
+        print(f'   OVERFLOW    {bool(self.FIFO_OVERFLOW):>5}     {bool(self.FIFO_OVERFLOW_STICKY):>5}')
+        print(f'   UNDERFLOW   {bool(self.FIFO_UNDERFLOW):>5}     {bool(self.FIFO_UNDERFLOW_STICKY):>5}')
+        print(f'   EMPTY       {bool(self.FIFO_EMPTY):>5}     {bool(self.FIFO_EMPTY_STICKY):>5}')
         print('Number of ramp errors: %i', self.RAMP_ERR_CTR)
 
         # fin=200

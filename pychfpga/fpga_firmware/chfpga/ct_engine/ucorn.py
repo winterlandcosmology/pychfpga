@@ -41,7 +41,7 @@ class UCorn(MMI):
     IN_FRAME_CTR        = BitField(STATUS, 1, 0, width=8, doc='Counts the number of frames coming in.')
     OUT_FRAME_CTR       = BitField(STATUS, 2, 0, width=8, doc='Counts the number of frames coming out.')
 
-    def __init__(self, *, router, router_port, verbose=0):
+    def __init__(self, *, router, router_port, config, verbose=0):
         """ Creates a UCorn corner-turn engine instance.
 
         ``__init__`` initializes the instnce but does not yet start communicating with. This allows
@@ -62,6 +62,7 @@ class UCorn(MMI):
 
         """
         super().__init__(router=router, router_port=router_port)
+        self.config = config
         # self.fpga = fpga_instance
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
@@ -83,33 +84,69 @@ class UCorn(MMI):
 
         """
 
-        self.RX_WRITE_EN = 0  # Do not allow F-Engine data wo be written - we will write test patterns manually into the data buffers.
-        self.RX_MASK_LOW_BINS = 1 # prevent F-ENgine data to be written in the first bins, as these are used for storing packet headers.
-
-        self.TX_TRIG_SEL = 1  # enable period-based transmission trigger
-        self.TX_ENABLE = 1 # enable packet transmission
-        self.TX_TOGGLE_BANK = 0 # always send data from the same bank
-        self.TX_INSERT_TIMESTAMP = 1  # insert the timestamp at the appropriate place in the payload header
-        self.TX_OVERRIDE_DATA = 0 # Do not override the output data (for low level debugging)
-        self.TX_RESET = 1 # put the module in reset state
-
-        # program data for one bin
-        self.set_bin_data(bin=1, frame=0, data=np.arange(8*16, dtype=np.uint8))
-
         first_bin = 300*8192//1600 # 1536
         last_bin= 1500*8192//1600  # Last bin is excluded
         number_of_bins = last_bin - first_bin
         number_of_packets = 128
         bins_per_packet = number_of_bins // number_of_packets
 
-        self.playlist = [
-            (dict(dest_mac_addr=f"01:23:34:67:89:{i+1:02X}",
-                  dest_ip_addr=f"10.88.0.{i+1}",
-                  dest_ip_port=41001),
-             np.arange(bins_per_packet) + first_bin + bins_per_packet*i)
-            for i in range(number_of_packets)]
-        # Set the playlist to send data from that bin
-        self.set_playlist(playlist=self.playlist)
+        self.TX_RESET = 1 # put the module in reset state
+        self.RX_MASK_LOW_BINS = 1 # prevent F-ENgine data to be written in the first bins, as these are used for storing packet headers.
+
+        # # Trigger-based, test packet transmission configuration
+        # self.RX_WRITE_EN = 0  # Do not allow F-Engine data wo be written - we will write test patterns manually into the data buffers.
+        # self.TX_TRIG_SEL = 1  # enable period-based transmission trigger
+        # self.TX_ENABLE = 1 # enable packet transmission
+        # self.TX_TOGGLE_BANK = 0 # always send data from the same bank
+        # self.TX_INSERT_TIMESTAMP = 1  # insert the timestamp at the appropriate place in the payload header
+        # self.TX_OVERRIDE_DATA = 0 # Do not override the output data (for low level debugging)
+
+        # # program data for one bin
+        # self.set_bin_data(bin=1, frame=0, data=np.arange(8*16, dtype=np.uint8))
+
+        # # Old version
+        # self.playlist = [
+        #     (dict(dest_mac_addr=f"01:23:34:67:89:{i+1:02X}",
+        #           dest_ip_addr=f"10.88.0.{i+1}",
+        #           dest_ip_port=41001),
+        #      np.arange(bins_per_packet) + first_bin + bins_per_packet*i)
+        #     for i in range(number_of_packets)]
+        # # Set the playlist to send data from that bin
+        # self.set_playlist(playlist=self.playlist)
+
+        # CHORD packet transmission configuration
+        self.RX_WRITE_EN = 1 # allow the buffer to be written with real data from the channelizers
+        self.TX_TRIG_SEL = 0 # do not do trigger-based sending. send data at the native clock rate instead.
+        self.TX_TOGGLE_BANK = 1 # bank toggling must be enabled with 1 since we'll be reading and writing at the same time
+        self.TX_INSERT_TIMESTAMP = 1  # insert the timestamp at the appropriate place in the payload header
+
+        # CHORD packet transmission
+        def make_bin_map():
+            f_nat = np.arange(8192)
+            f_rev = (f_nat>>11) | ((f_nat & 0b11111111111) << 2)
+            frev2 = (f_rev & 0b1111111111100) | ((f_rev + np.arange(8192)) & 0b11)
+            return frev2
+
+        bin_map = make_bin_map()
+            
+        real_bins = [first_bin + n + number_of_packets * np.arange(bins_per_packet) for n in range(number_of_packets)]
+        # playlist = [(dict(dest_mac_addr=f"01:23:34:67:89:{(n % 16):02X}",
+        #                   dest_ip_addr=f"10.88.0.{(n % 16) + 1}",
+        #                   dest_ip_port=41001
+        #                   ),
+        #              first_bin + n + number_of_packets * np.arange(bins_per_packet))
+        #              for n in range(number_of_packets)]
+
+        playlist = [(dict(dest_mac_addr=f"01:23:34:67:89:{(n % 16):02X}",
+                          dest_ip_addr=f"10.88.0.{(n % 16) + 1}",
+                          dest_ip_port=41001
+                          ),
+                     bin_map[real_bins[n]])
+                     for n in range(number_of_packets)]
+        
+        # Set the playlist to send data
+        # self.set_playlist(playlist = playlist)
+        self.set_playlist(playlist = playlist, sacrificial_bins = bin_map[np.arange(128)])
 
         self.TX_RESET = 0 # take the module out of reset. Packet transmisison starts.
 
@@ -141,7 +178,7 @@ class UCorn(MMI):
 
         Parameters:
 
-            target (any): key used to lookup ``self.targets`` for the destination address of a packet.
+            target (dict or key): dict containing the target information, or key used to lookup ``self.targets`` for that information.
 
             dest_bin (int): Index of bin whose memory space will be used to store the packet header
 
@@ -243,17 +280,22 @@ class UCorn(MMI):
         self.set_bin_data(bin=dest_bin, data=header)
 
 
-    def set_playlist(self, playlist=((0,[1]),), verbose=0):
+    def set_playlist(self, playlist=((0,[1]),), sacrificial_bins = list(range(128)), verbose=0):
         """ Configure the playlist buffer to send the selected bins
 
         Parameters:
 
-            bins (list): List of ``(target_id, bin_list)`` tuples describing the bin numbers to send to each
+            bins (list): List of ``(target, bin_list)`` tuples describing the bin numbers to send to each
                 target, where:
 
-                - ``target_id`` (int): key describing the destination IP address. Used to index the ``self.targets`` dict.
+                - ``target`` (dick or key): Dict containing the information on the destination for
+                  the packet, or key allowing to lookup self.targets to get that information..
 
                 - ``bin_list`` (list): list of integers describing the bin numbers (0 - 8191) to be sent.
+
+            sacrificial_bins (list): list of bins that wil lbe used to store Ethernet headers and
+                not actual bin data. The bin used to store the header of the first target is in
+                sacrifcial_bin[0], the header of the next target is in sacrifcial_bin[1] etc.
 
         The playlist buffer is an array of 16-bit words describing which bins to send:
 
@@ -279,6 +321,14 @@ class UCorn(MMI):
         RFI etc.).
 
         """
+
+        # Compute the masks indicating which bins can be written with live data
+        # We set the write-enable bit to '1' on every bin except the sactificial bins (those used for storing ethernet headers)
+        self.sacrificial_bins = sacrificial_bins
+        write_mask = np.full(8192//8, 0xFF, dtype=np.uint8) # 1 bit per bin, 8 bits per byte x 1024 bytes = 8192 bins
+        for b in self.sacrificial_bins:
+            write_mask[b//8] &=  (~ (1 << (b % 8))) & 0xFF
+        self.write_mask_buffer(0, write_mask)
 
         bins_total = sum(len(b) for t,b in playlist)
         self.logger.info(f'{self!r}: Total data rate: {1*(bins_total*16*8+64)*8*3200e6/16384/16/1e9} Gbps')
@@ -348,8 +398,22 @@ class UCorn(MMI):
 
         """
         self.RAM_SEL = 1  # select the playlist buffer
+        self.RAM_BANK = 0  # select the playlist buffer
         self.write_ram(addr, data)
 
+    def write_mask_buffer(self, addr, data):
+        """ Write data to the mask buffer
+
+        Parameters:
+
+            addr (int): byte address into the mask buffer
+
+            data (bytes): data to write
+
+        """
+        self.RAM_SEL = 1  # select the playlist buffer
+        self.RAM_BANK = 1  # select the playlist buffer
+        self.write_ram(addr, data)
 
     def set_data_width(self, width):
     #     """

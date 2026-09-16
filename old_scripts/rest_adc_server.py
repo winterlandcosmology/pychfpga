@@ -54,8 +54,8 @@ class GainCalc(object):
         #print g
         bad_values = (self.g > 2**31) | ~np.isfinite(self.g)
         g = np.ma.array(self.g,mask=bad_values)
-        glog = (np.ceil(np.log2(np.ma.median(np.abs(g)/2**13,axis=1)))).astype(np.int)
-        glin = np.zeros(g.shape, dtype=np.float)
+        glog = (np.ceil(np.log2(np.ma.median(np.abs(g)/2**13,axis=1)))).astype(int)
+        glin = np.zeros(g.shape, dtype=float)
         for i, glog_single in enumerate(glog):
             glin[i] = g[i]/2**glog[i]
         glog.data[glog.mask == True] = np.ma.median(glog)
@@ -85,7 +85,7 @@ class GainCalc(object):
         print self.glog
         bad_gains = self.glin > 2**14
         self.glin[bad_gains] = 2**14
-        self.glin = self.glin.astype(np.int).astype(np.float)
+        self.glin = self.glin.astype(int).astype(float)
         gain = []
         for channel in range(16):
             gain.append([channel,[self.glin[channel].tolist(), self.glog[channel]]])
@@ -102,7 +102,7 @@ class GainCalc(object):
         f_signal = np.fft.fft(np.r_[signal[signal_length/2:0:-1],signal,signal[-1:-signal_length/2:-1]])
         f_signal[num_components:-num_components] = 0
         filtered = np.fft.ifft(f_signal)[signal_length/2:-signal_length/2+1]
-        filtered = (filtered.real).astype(np.int).astype(np.float)
+        filtered = (filtered.real).astype(int).astype(float)
         return filtered
 
     def flag_rfi(self, in_arr, fit, threshold):
@@ -137,7 +137,7 @@ class GainCalc(object):
             if degree < 15:
                 degree += 2
         filtered = np.exp(fitarr)
-        filtered = (filtered.real).astype(np.int).astype(np.float)
+        filtered = (filtered.real).astype(int).astype(float)
         return filtered, masked.mask
 
     def run(self, filtertype='hybrid', num_components = 50):
@@ -156,7 +156,7 @@ class GainCalc(object):
                 output[mask] = self.signal[mask]
         else:
             raise ValueError
-        output = (output.real).astype(np.int).astype(np.float)
+        output = (output.real).astype(int).astype(float)
         return output
 
 
@@ -379,7 +379,7 @@ class Receiver(object):
         n_avg = 2
         gain_estimates = []
         number_of_frames = 0
-        spectrum = np.zeros((len(self.PORTS),n_avg, 16, 1024), dtype=np.complex)
+        spectrum = np.zeros((len(self.PORTS),n_avg, 16, 1024), dtype=complex)
         while number_of_frames < n_avg:
             self.all_ts, self.PORTS, self.all_data = self.read_data()        
             data_unpacked = (np.array(self.all_data).astype(np.int8) ^ np.int8(128)) >> 4

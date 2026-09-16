@@ -1,3 +1,5 @@
+"""I2C driver and frame-buffer renderer for SSD1306 OLED displays."""
+
 # Standard packages
 import time
 import os
@@ -80,6 +82,16 @@ class SSD1306:
 
 
     def __init__(self, i2c, address, port):
+        """Create a display driver bound to an I2C bus/address/port.
+
+        Args:
+            i2c (Any): Parameter value.
+            address (Any): Parameter value.
+            port (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
 
         self.i2c = i2c
         self.address = address
@@ -139,8 +151,15 @@ class SSD1306:
             # self.i2c.write_read(self.address, data)
 
     def write_data(self, data):
-            """ Sends graphics data to the display"""
-            self.i2c.write_read(self.address, [0x40] + list(data))
+        """ Sends graphics data to the display
+
+        Args:
+            data (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
+        self.i2c.write_read(self.address, [0x40] + list(data))
 
     def init(self):
         """ Initializes the display controller to the desired display mode
@@ -215,15 +234,41 @@ class SSD1306:
         # print(f'update took {(time.time()-t0)*1e6:.0f} us')
 
     def display_on(self):
+        """Enable panel output.
+
+        Returns:
+            None: No value is returned.
+        """
         self.write_command(SET_DISP_ON)
 
     def display_off(self):
+        """Disable panel output.
+
+        Returns:
+            None: No value is returned.
+        """
         self.write_command(SET_DISP_OFF)
 
     def set_contrast(self, contrast):
+        """Set SSD1306 contrast register value.
+
+        Args:
+            contrast (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self.write_command((SET_CONTRAST, contrast))
 
     def set_invert(self, invert):
+        """Toggle inverted rendering mode.
+
+        Args:
+            invert (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self.write_command(SET_NORM_INV_OFF if invert else SET_NORM_INV_OFF)
 
     # def set_scroll(self, nb_offset_cols, start_row, nb_rows, nb_offset_rows, time_interval=100):

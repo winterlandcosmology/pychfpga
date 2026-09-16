@@ -9,11 +9,10 @@
     2012-09-23 JFC: Removed MMCM status registers. Converted bitfield list to independent variables. Commented out set_refclk200_phase.
 """
 
-from ..mmi import MMI, BitField, CONTROL, STATUS, DRP
-
 import logging
 import time
 import numpy as np
+from ..mmi import MMI, BitField, CONTROL, STATUS, DRP
 
 class REFCLK(MMI):
 
@@ -48,9 +47,10 @@ class REFCLK(MMI):
     SYNC_IN                = BitField(STATUS, 0x02, 0, doc='reflects the level on the sync_in port')
     # SYNC_DELAY_READBACK  = BitField(STATUS, 0x02, 0, width=5,doc='Reads back the delay set onthe SYNC IODELAY')
 
-    def __init__(self, *, router, router_port):
+    def __init__(self, *, router, router_port, config):
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port)
+        self.config = config
 
     def init(self):
         # Sets the REFCLK delay to zero by default.
@@ -65,11 +65,10 @@ class REFCLK(MMI):
         # self.ENABLE_SYNC_DETECTION = 1
         # self.ENABLE_SYNC_GENERATION = 1
         if self.fpga.HAS_FMC and self.fpga.is_fmc_present(0):
-            self.logger.debug('%r:   REFCLK is using the 10 MHz reference clock from the ADC board' % self.fpga)
+            self.logger.debug(f'{self.fpga!r}:   REFCLK is using the 10 MHz reference clock from the ADC board')
             self.REFCLK_SEL = 0  # Use REFCLK coming from the FMC
         else:
-            self.logger.debug('%r:   REFCLK is using the 10 MHz reference clock from FPGA since the ADC board '
-                              'is not present in FMC slot 0' % self.fpga)
+            self.logger.debug(f'{self.fpga!r}:   REFCLK is using the 10 MHz reference clock from FPGA since the ADC board is not present in FMC slot 0')
             self.REFCLK_SEL = 1  # Use internally generated REFCLK
 
     SYNC_SOURCE_TABLE = {
@@ -85,7 +84,7 @@ class REFCLK(MMI):
     def set_sync_source(self, source):
         """ Set the source of the SYNC signal."""
         if source not in self.SYNC_SOURCE_TABLE:
-            raise ValueError('Invalid SYNC source name. Valid names are %s' % ', '.join(self.SYNC_SOURCE_TABLE))
+            raise ValueError(f"Invalid SYNC source name. Valid names are {', '.join(self.SYNC_SOURCE_TABLE)}")
         self.SYNC_SOURCE = self.SYNC_SOURCE_TABLE[source]
 
     def get_sync_source(self):
@@ -102,6 +101,12 @@ class REFCLK(MMI):
         self.set_sync_delays(delay)
         self.pulse_bit('REMOTE_SYNC')
         self.wait_for_bit('SYNC_DONE')
+
+    async def remote_sync_async(self, delay=None):
+        """Async version of :meth:`remote_sync`."""
+        self.set_sync_delays(delay)
+        self.pulse_bit('REMOTE_SYNC')
+        await self.wait_for_bit_async('SYNC_DONE')
 
     def local_sync(self, delay=None, max_trials=3):
         """
@@ -128,9 +133,24 @@ class REFCLK(MMI):
                 return
             trial += 1
             if trial >= max_trials:
-                raise RuntimeError('Local SYNC failed after %i trials' % trial)
+                raise RuntimeError(f'Local SYNC failed after {int(trial)} trials')
             else:
-                self.logger.warning('%r: Local SYNC failed on trial %i/%i. Retrying...' % (self, trial, max_trials))
+                self.logger.warning(f'{self!r}: Local SYNC failed on trial {int(trial)}/{int(max_trials)}. Retrying...')
+
+    async def local_sync_async(self, delay=None, max_trials=3):
+        """Async version of :meth:`local_sync`. Yields while waiting for ``SYNC_DONE``."""
+        self.set_sync_delays(delay)
+        trial = 0
+        while True:
+            self.LOCAL_SYNC = 1
+            self.LOCAL_SYNC = 0
+            if await self.wait_for_bit_async('SYNC_DONE', no_error=True):
+                return
+            trial += 1
+            if trial >= max_trials:
+                raise RuntimeError(f'Local SYNC failed after {int(trial)} trials')
+            self.logger.warning(
+                f'{self!r}: Local SYNC failed on trial {int(trial)}/{int(max_trials)}. Retrying...')
 
     def set_sync_delays(self, delay):
         """
@@ -249,7 +269,7 @@ class REFCLK(MMI):
             elif fe >= 0:
                 rising_edges[i] = (fe + stable_time + period / 2.0) % period
             else:
-                rising_edges[i] = np.NaN
+                rising_edges[i] = np.nan
         return rising_edges
 
     def find_centers(self, edge_map, threshold=4):
@@ -349,9 +369,9 @@ class REFCLK(MMI):
                 adc_board_average_sync_delays[i] = None
 
         if verbose:
-            print('ADC Clock waveform for %r' % self.fpga)
+            print(f'ADC Clock waveform for {self.fpga!r}')
             for sync_delay in range(32):
-                print('Sync delay %2i:' % (sync_delay, ), end=' ')
+                print(f'Sync delay {int(sync_delay):2}:', end=' ')
                 for i, ch in enumerate(channels):
                     # Compute string representing the bits. Pad in case there the clock period is longer than 32
                     bitstring = bytearray((waveforms[sync_delay][i].astype(np.int8) + ord(b'0')).tobytes() + (b' ' * (adc_data_clock_period - 32)))
@@ -367,7 +387,7 @@ class REFCLK(MMI):
                                      ' ')
                     else:
                         jump_flag = '?'
-                    print('CH%02i %3.0f %s: %s ' % (ch, rising_edges[sync_delay, i], jump_flag, bitstring.decode()), end=' ')
+                    print(f'CH{int(ch):02} {rising_edges[sync_delay, i]:3.0f} {jump_flag}: {bitstring.decode()} ', end=' ')
                 print()
             print('   ADC boards average sync delays:', adc_board_average_sync_delays)
 
@@ -432,8 +452,8 @@ class REFCLK(MMI):
             self.set_sync_delays(sync_delay)
         last_rising_edges = None
         if verbose:
-            print('Sync delay checks for %r' % (self.fpga))
-            print('ADC Clock waveform, Sync delay = %s' % (self.get_sync_delays(),))
+            print(f'Sync delay checks for {self.fpga!r}')
+            print(f'ADC Clock waveform, Sync delay = {self.get_sync_delays()}')
         for trial in range(trials):
             self.local_sync()
             time.sleep(sync_sleep)
@@ -454,11 +474,11 @@ class REFCLK(MMI):
                 jumps = [0] * len(channels)
             last_rising_edges = rising_edges
             if verbose:
-                print('Trial #%3i:' % (trial + 1), end=' ')
+                print(f'Trial #{int(trial + 1):3}:', end=' ')
                 for i, ch in enumerate(channels):
                     # Compute string representation of bits. Pad in case there the clock period is longer than 32
                     bitstring = bytearray((waveforms[i].astype(np.int8) + ord('0')).tobytes())
-                    print('CH%02i %s: %s ' % (ch, '!' if jumps[i] else ' ', bitstring.decode()), end=' ')
+                    print(f"CH{int(ch):02} {'!' if jumps[i] else ' '}: {bitstring.decode()} ", end=' ')
                 print()
         self.set_sync_delays(old_sync_delays)
         return errors

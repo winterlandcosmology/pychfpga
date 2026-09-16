@@ -107,13 +107,12 @@ class eeprom(object):
         if addr is not None:
             if (addr < 0 or (addr + length - 1) > (2**self.address_width - 1)):
                 raise ValueError(
-                    'Invalid EEPROM address range. All reads must be from adress 0x%x and 0x%x'
-                    % (0, (2**self.address_width-1)))
+                    f'Invalid EEPROM address range. All reads must be from adress 0x{0:x} and 0x{2 ** self.address_width - 1:x}')
 
         try:
             self.i2c.select_bus(self.bus_name, retry=retry)
         except Exception:
-            self.logger.error('%r: Failed to set I2C switch to %s.' % (self, self.bus_name))
+            self.logger.error(f'{self!r}: Failed to set I2C switch to {self.bus_name}.')
             raise
 
         data = b""
@@ -138,8 +137,7 @@ class eeprom(object):
                 # self.logger.warning('I2C Error while reading EEPROM at memory address %i. Retrying...' % addr)
                 # trial +=1
                 # if trial>retry:
-                self.logger.error('%r: Failed to read EEPROM at memory address %i after %i retries.'
-                                  % (self, addr, retry))
+                self.logger.error(f'{self!r}: Failed to read EEPROM at memory address {int(addr)} after {int(retry)} retries.')
                 raise
             data += block_data
             # print 'data=', data
@@ -175,7 +173,7 @@ class eeprom(object):
             #  2) The number of bytes that the I2C interface can send ( 3 - number of address bytes)
             #  3) The number of bytes until the end of the page
             block_length = min(len(data), self.max_write_length-len(addr_bytes)+1, (addr | self.address_page_mask) - addr + 1)
-            print(f'block_length={block_length}')
+            # print(f'block_length={block_length}')
             self.i2c.write_read(
                 self.address | addr_bytes[0],
                 addr_bytes[1:] + data[:block_length],
@@ -185,7 +183,15 @@ class eeprom(object):
             addr += block_length
 
     def set_addr(self, addr, **kwargs):
-        """ Sets the current read/write address of the EEPROM"""
+        """ Sets the current read/write address of the EEPROM
+
+        Args:
+            addr (Any): Parameter value.
+            **kwargs (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         self.i2c.select_bus(self.bus_name)
         addr_bytes = self._get_addr_bytes(addr)
         self.i2c.write_read(
@@ -204,15 +210,22 @@ class eeprom(object):
         return True
 
     def init(self):
-        """ Initializes the EEPROM handling module (the EEPROM is not accecssed)"""
+        """ Initializes the EEPROM handling module (the EEPROM is not accecssed)
+
+        Returns:
+            None: No value is returned.
+        """
         pass
 
     def status(self):
-        """ Shows EEPROM data"""
-        self.logger.info('%r: -- FMC EEPROM ' % self)
+        """ Shows EEPROM data
+
+        Returns:
+            None: No value is returned.
+        """
+        self.logger.info(f'{self!r}: -- FMC EEPROM ')
         try:
-            self.logger.info('%r: FMC EEPROM data at address 0x00-0x03 is: %s'
-                             % (self, ' '.join([hex(x) for x in self.read(0, length=4)])))
+            self.logger.info(f"{self!r}: FMC EEPROM data at address 0x00-0x03 is: {' '.join([hex(x) for x in self.read(0, length=4)])}")
         except Exception:
-            self.logger.info('%r: FMC EEPROM did not respond' % self)
+            self.logger.info(f'{self!r}: FMC EEPROM did not respond')
 

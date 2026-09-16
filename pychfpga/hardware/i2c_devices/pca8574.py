@@ -45,7 +45,7 @@ class PCA8574(object):
 
         if (mask & 0xFF) != 0xff:
             old_value = self.i2c.write_read(self.address, data=[register], read_length=1)[0]
-            new_value = (old_value & (~ mask)) | (value & mask)
+            new_value = (old_value & (~mask & 0xff)) | (value & mask)
             # print(f'Pca9575 register={register} old_value={old_value}')
         else:
             new_value = value
@@ -61,4 +61,3 @@ class PCA8574(object):
             self.select()
 
         return self.i2c.write_read(self.address, data=[], read_length=1)[0]
-

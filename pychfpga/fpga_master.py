@@ -7,6 +7,7 @@ engines of a radiotelescope.
 
 # Python Standard Library packages
 import collections
+import collections.abc
 import numpy
 import os
 import re
@@ -71,7 +72,7 @@ def convert_types(val):
         if not isinstance(val[0], str):
             try:
                 if val[0].dtype.kind in ('i', 'u', 'f'):
-                    val = list(numpy.asscalar(x) for x in val)
+                    val = list(x.item() for x in val)
             except:
                 if type(val[0]) == bool:
                     val = list(int(x) for x in val)
@@ -100,7 +101,7 @@ def convert_types(val):
         elif not isinstance(val, str):
             try:
                 if val.dtype.kind in ('i', 'u', 'f', 'b'):
-                    val = numpy.asscalar(val)
+                    val = val.item()
             except:
                     # Hopefully already a int/float
                     pass
@@ -117,15 +118,24 @@ def sanitize_for_json(obj):
         - other objects stay the same.
 
     """
-    if isinstance(obj, collections.Mapping) or hasattr(obj, 'items'):
+    if isinstance(obj, collections.abc.Mapping) or hasattr(obj, 'items'):
         if not all(isinstance(k, str) for k in obj.keys()):
             return [(k, sanitize_for_json(v)) for k, v in obj.items()]
         else:
             return {str(k): sanitize_for_json(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
+    elif isinstance(obj, (list, tuple)):
         return [sanitize_for_json(v) for v in obj]
+    elif isinstance(obj, np.ndarray):
+        return sanitize_for_json(obj.tolist())
+    elif isinstance(obj, (np.integer, np.floating, np.bool_)):
+        return obj.item()
     else:
         return obj
+
+
+def firmware_config_for_rest(fw_config):
+    """JSON-safe firmware config for raw_acq REST start (includes corr maps)."""
+    return sanitize_for_json(fw_config)
 
 
 def reap_cached_sockets():
@@ -193,6 +203,19 @@ class FPGAMaster(object):
     def set_config(self, config):
         self.config = NameSpace(config)
 
+    def get_data_config(self, source=None):
+        """Compose ``{raw, corr}`` dict for REST from array getters.
+
+        ``source`` is ignored; raw/corr configs are always assembled from
+        ``self.fpgas``.
+        """
+        raw = self.fpgas.get_raw_data_config()
+        corr = self.fpgas.get_corr_data_config()
+        return {
+            "raw": None if raw is None else raw.as_dict(),
+            "corr": None if corr is None else corr.as_dict(),
+        }
+
 
     #####################################
     # RAW_ACQ management methods
@@ -210,7 +233,7 @@ class FPGAMaster(object):
              self.raw_acq_ibs (dict): lists the iceboards objects associated with each RawAcq server.
 
         """
-        self.log.info('%r: Sending configuration to raw_acq servers' % self)
+        self.log.info(f'{self!r}: Sending configuration to raw_acq servers')
 
         # Create RawAcq REST clients.
         self.raw_acq = {}
@@ -226,7 +249,7 @@ class FPGAMaster(object):
         for raw_acq_server_name, raw_acq_client in self.raw_acq.items():
             present = await raw_acq_client.ping()
             if not present:
-                raise RuntimeError('%r: raw_acq server %s (%r) is not running' % (self, raw_acq_server_name, raw_acq_client))
+                raise RuntimeError(f'{self!r}: raw_acq server {raw_acq_server_name} ({raw_acq_client!r}) is not running')
 
         conf = self.config.raw_acq
         #print(conf)
@@ -276,7 +299,7 @@ class FPGAMaster(object):
         recv_names = {}  # name of the receiver assigned to each server
         for server_name, port_configs in self.raw_acq_ports.items():  # for each raw_acq server
             # Name of the receiver object, which can hande multiple ports.
-            recv_names[server_name] = '%sRecv' % server_name
+            recv_names[server_name] = f'{server_name}Recv'
             recv_ports[server_name] = []
             for port_entry in port_configs: # for each port definition entry
                 # If port=0 amd we want fixed port number, create an entry for each board with the appropriate numeric port derived from the crate and slot number
@@ -298,6 +321,7 @@ class FPGAMaster(object):
                 name=recv_names[server_name],
                 ports=recv_ports[server_name],
                 stream_ids=self.raw_acq_stream_ids[server_name],
+                config=firmware_config_for_rest(self.get_data_config()),
                 comet_broker=conf.common_config.comet_broker.as_dict(),
                 jump_thresholds=conf.common_config.jump_thresholds,
                 metrics_refresh_time=conf.common_config.metrics_refresh_time,
@@ -306,7 +330,7 @@ class FPGAMaster(object):
                 run_folder=self.run_folder,
                 run_name=self.run_name,
                 corr_name=self.corr_name,
-                fft_offset_encoding=self.config.fpga.channelizer_params.offset_binary_encoding  # scaler output encoding
+                no_ping=conf.get('no_ping', False),
                 )
             for server_name, raw_acq_server in self.raw_acq.items()])
 
@@ -319,7 +343,8 @@ class FPGAMaster(object):
             for ib in self.raw_acq_ibs[server_name]:
                     ip_addr, port, eth_addr = targets[(ib.hostname, ib.port)]
                     self.log.info(f'{self!r} Setting data transmission address of board {ib.get_id()} to {ip_addr}:{port}({eth_addr})')
-                    await ib.set_data_target_address_async(ip_addr, port, eth_addr)
+                    await ib.set_udp_data_target_address_async(ip_addr, port, eth_addr)
+        await self._sync_raw_acq_data_config()
         self.log.info(f'{self!r}: RawAcq server setup successfully')
 
 
@@ -368,7 +393,7 @@ class FPGAMaster(object):
         # If not done explicitely later, we must issue sync command after starting raw data capture,
         # otherwise raw frames will not be synced across boards.
         if capture_period and sync:
-            self.fpgas.sync()
+            await self.fpgas.sync_async()
 
 
     async def set_fpga_data_capture(self, targets=None, capture_rate=23, source=None):
@@ -430,7 +455,209 @@ class FPGAMaster(object):
             await self.fpgas.set_gains_async({ib.get_id(chan):gain for ib, chans in ib_chans for chan in chans}, bank=0, when='now')
 
 
+    def _collect_gain_calc_server_maps(self, ib_chans):
+        """Map raw_acq servers to channel/stream IDs for gain computation."""
+        server_channel_ids = {}
+        server_stream_ids = {}
+        all_channel_ids = []
+        all_stream_ids = []
+        for server_name, ibs in self.raw_acq_ibs.items():
+            server_channel_ids[server_name] = []
+            server_stream_ids[server_name] = []
+            for (ib, channels) in ib_chans:
+                if ib in ibs:
+                    cids = ib.get_channel_ids(channels)
+                    sids = ib.get_stream_ids(channels)
+                    server_channel_ids[server_name].extend(cids)
+                    server_stream_ids[server_name].extend(sids)
+                    all_channel_ids.extend(cids)
+                    all_stream_ids.extend(sids)
+        sid_index_map = {sid: i for i, sid in enumerate(all_stream_ids)}
+        return server_channel_ids, server_stream_ids, all_channel_ids, all_stream_ids, sid_index_map
+
+    async def _sync_raw_acq_data_config(self):
+        """Push updated data decoder config to all raw_acq servers.
+
+        *** TODO: check if we need this method.
+        """
+        if not self.raw_acq:
+            return
+        tasks = []
+        for server_name, server in self.raw_acq.items():
+            ibs = self.raw_acq_ibs.get(server_name)
+            if not ibs:
+                continue
+            fw = firmware_config_for_rest(self.get_data_config())
+            tasks.append(server.update_config(fw))
+        if tasks:
+            await asyncio.gather(*tasks)
+
+    async def _configure_gain_scaler_capture(self, targets, scaler_cap_data_type, capture_rate):
+        """Configure scaler bypass FFT capture and refresh raw_acq decoder state."""
+        ib_chans = self.fpgas.get_iceboards(targets, lane_type='chan').items()
+        for ib, channels in ib_chans:
+            ib.set_scaler_output_modes(
+                bypass=True,
+                cap_data_type=scaler_cap_data_type,
+                channels=channels)
+            ib.set_data_capture(
+                channels=channels,
+                sub_period=capture_rate,
+                source='scaler')
+            await asyncio.sleep(0)
+        # set_scaler_output_modes / set_data_capture already refreshed the cached
+        # firmware config; avoid another BSB read here (can timeout under load).
+        await self._sync_raw_acq_data_config()
+
     async def compute_gains(self,
+                            targets=None,
+                            method='direct',
+                            capture_rate=23,
+                            save_gains=False,
+                            enable=True,
+                            noise_injection=None,
+                            number_of_fft_averages=100,
+                            number_of_gain_update_iterations=20,
+                            weight=0.2,
+                            initial_gains=[('*', [1.0, 22])],
+                            scaler_cap_data_type='fft_2x',
+                            post_gain_bits=44,
+                            target_rms=None):
+        """Compute digital gains using the direct or legacy iterative method."""
+        if not enable:
+            return
+        if method == 'iterative':
+            return await self.compute_iterative_gains(
+                targets=targets,
+                capture_rate=capture_rate,
+                save_gains=save_gains,
+                noise_injection=noise_injection,
+                number_of_fft_averages=number_of_fft_averages,
+                number_of_gain_update_iterations=number_of_gain_update_iterations,
+                weight=weight,
+                initial_gains=initial_gains)
+        return await self.compute_direct_gains(
+            targets=targets,
+            capture_rate=capture_rate,
+            save_gains=save_gains,
+            noise_injection=noise_injection,
+            number_of_fft_averages=number_of_fft_averages,
+            scaler_cap_data_type=scaler_cap_data_type,
+            post_gain_bits=post_gain_bits,
+            target_rms=target_rms)
+
+    async def compute_direct_gains(self,
+                                   targets=None,
+                                   capture_rate=23,
+                                   save_gains=False,
+                                   noise_injection=None,
+                                   number_of_fft_averages=100,
+                                   scaler_cap_data_type='fft_2x',
+                                   post_gain_bits=44,
+                                   target_rms=None):
+        """Compute float digital gains in one shot from full-resolution FFT RMS."""
+        ib_chans = self.fpgas.get_iceboards(targets, lane_type='chan').items()
+        if not ib_chans:
+            self.log.error(
+                f'{self!r}: No target board was found for the specified '
+                f'targets {targets}. Available boards are '
+                f'{[ib.get_id() for ib in self.fpgas.ib]}')
+            raise RuntimeError('No target board was found for the specified patterns')
+
+        channels = ', '.join(str(ib.get_id()) + str(ch) for ib, ch in ib_chans)
+        self.log.info(
+            f'{self!r}: *** Gain calculator : Starting compute_direct_gains() '
+            f'on the following channels: {channels}')
+
+        if noise_injection is not None:
+            raise AttributeError('Noise injection settings are not yet '
+                                 'supported for gain computations')
+
+        await self._configure_gain_scaler_capture(
+            targets=targets,
+            scaler_cap_data_type=scaler_cap_data_type,
+            capture_rate=capture_rate)
+
+        server_channel_ids, server_stream_ids, _, _, sid_index_map = (
+            self._collect_gain_calc_server_maps(ib_chans))
+
+        first_ib, _ = next(iter(ib_chans))
+        n_bins = int(first_ib.fpga.NUMBER_OF_FREQUENCY_BINS)
+
+        if target_rms is None:
+            target_rms = 1.5 * np.sqrt(2)
+
+        wait_time = min(
+            2.56e-6 * 2**(capture_rate + 1) * number_of_fft_averages / 2, 1.0)
+
+        async def direct_gains(server, channel_ids, stream_ids):
+            self.log.info(
+                f'{self!r}: *** Gain calculator : Starting direct gain '
+                f'calculator process')
+            gc = calculate_gains.DirectGainCalc(
+                channel_ids=channel_ids,
+                stream_ids=stream_ids,
+                target_rms=target_rms,
+                post_gain_bits=post_gain_bits,
+                n_bins=n_bins)
+            await server.start_fft_rms(
+                stream_ids=stream_ids,
+                target_gain_bank=0,
+                number_of_frames=number_of_fft_averages)
+            while not gc.is_done():
+                self.log.info(
+                    f'{self!r}: *** Gain calculator : waiting for averaged '
+                    f'FFT RMS data from raw acq')
+                await asyncio.sleep(wait_time)
+                sids, rms = await server.get_fft_rms()
+                if not sids:
+                    continue
+                self.log.info(
+                    f'{self!r}: *** Gain calculator : Got FFT RMS values '
+                    f'for {len(sids)} channels')
+                gc.update_gains(np.array(sids), np.array(rms))
+                self.gain_calc_metrics.add('fpga_gains_done', value=np.sum(gc.done))
+                for j, sid in enumerate(sids):
+                    if sid not in sid_index_map:
+                        continue
+                    bix = sid_index_map[sid]
+                    cid = channel_ids[bix]
+                    self.gain_calc_metrics.add(
+                        'fpga_gain_calc_rms',
+                        stream_id=sid, channel_id=cid,
+                        value=np.mean(np.array(rms)[j, 1:]))
+                    self.gain_calc_metrics.add(
+                        'fpga_gain_calc_percent_complete',
+                        stream_id=sid, channel_id=cid,
+                        value=gc.percent_done())
+
+            filtered_gains, mask = gc.get_filtered_gains()
+            if channel_ids:
+                cid = channel_ids[0]
+                ib = self.fpgas.get_iceboard_from_id((cid[0], cid[1]))
+                filtered_gains = {
+                    chan_id: (gain_vec, glog)
+                    for chan_id, (gain_vec, glog) in filtered_gains.items()
+                }
+            await self.fpgas.set_gains_async(gains=filtered_gains, bank=0, when='now')
+            self.log.info(
+                f'{self!r}: *** Gain calculator : Finished computing direct '
+                f'gains for {len(filtered_gains)} channels.')
+
+        await asyncio.gather(*[
+            direct_gains(
+                raw_acq_server,
+                server_channel_ids[raw_acq_server_name],
+                server_stream_ids[raw_acq_server_name])
+            for raw_acq_server_name, raw_acq_server in self.raw_acq.items()])
+
+        await self.set_fpga_data_capture(targets=targets, source=None)
+
+        if save_gains:
+            self.log.info(f'{self!r}: *** Gain calculator : saving gains')
+            await self.save_gains(bank=0)
+
+    async def compute_iterative_gains(self,
                      targets=None,
                      capture_rate=23,
                      save_gains=False,
@@ -516,23 +743,8 @@ class FPGAMaster(object):
             raise AttributeError('Noise injection settings are not yet '
                                  'supported for gain computations')
 
-        # find the channel ID and stream ID associated with each raw_acq server
-        server_channel_ids = {} # will be returned with the new gains so set_gains can apply gains to the proper board
-        server_stream_ids = {} # will be used by raw_acq to select the proper channels
-        all_channel_ids = []
-        all_stream_ids = []
-        for server_name, ibs in self.raw_acq_ibs.items():
-            server_channel_ids[server_name] = []
-            server_stream_ids[server_name] = []
-            for (ib, channels) in ib_chans:
-                if ib in ibs:
-                    cids = ib.get_channel_ids(channels)
-                    sids = ib.get_stream_ids(channels)
-                    server_channel_ids[server_name].extend(cids)
-                    server_stream_ids[server_name].extend(sids)
-                    all_channel_ids.extend(cids)
-                    all_stream_ids.extend(sids)
-        sid_index_map = {sid:i for i,sid in enumerate(all_stream_ids)}
+        server_channel_ids, server_stream_ids, all_channel_ids, all_stream_ids, sid_index_map = (
+            self._collect_gain_calc_server_maps(ib_chans))
 
         # load the current gains as initial gains if an initial gain table is not provided.
         if not initial_gains:
@@ -807,6 +1019,7 @@ class FPGAMaster(object):
             capture_filename=None,
             capture_duration=None,
             capture_n_inputs=None,
+            autocorr_only=None,
             capture_elements_per_file=None):
         """
         Instructs the raw_acq server to start storing raw data in HDF5 files
@@ -840,31 +1053,28 @@ class FPGAMaster(object):
         capture_duration = capture_duration or conf.hdf5_capture_duration
         capture_elements_per_file = capture_elements_per_file or conf.hdf5_capture_elements_per_file
         capture_n_inputs = capture_n_inputs or conf.hdf5_capture_n_inputs
+        autocorr_only = autocorr_only or conf.autocorr_only
         software_integration_period = conf.software_integration_period
 
         if not (conf.enable and capture_duration is not None):
             return
 
-        # Get the correlator geometry and configuration parameters
-        corr_params = self.fpgas.get_correlator_params()
-
-
         self.log.info(
-            f'{self!r}: Starting HDF5 data capture for {capture_duration} '
+            f'{self!r}: Starting corr HDF5 data capture for {capture_duration} '
             f'seconds (0 = infinite)')
 
         self.log.debug(
-            f'{self!r}: firmware integ={self.corr_firmware_integration_period}, corr_params={corr_params}')
+            f'{self!r}: firmware integ={self.corr_firmware_integration_period}')
+        self.log.debug(f'{self!r}: Number of servers to iterate over: {len(self.raw_acq)}')
         await asyncio.gather(*[server.start_corr_hdf5(
             base_dir=capture_folder,
             base_filename=capture_filename,
             capture_duration=capture_duration,
             capture_n_inputs=capture_n_inputs,
+            autocorr_only=autocorr_only,
             elements_per_file=capture_elements_per_file,
             software_integration_period=software_integration_period,
-            firmware_integration_period=self.corr_firmware_integration_period, # also for time computation only
             frame0_irigb_time=self.frame0_irigb_time.nano if self.frame0_irigb_time else 0,  # update frame 0 time from last sync
-            **corr_params,  # add correlator parameters
             )         for server_name, server in self.raw_acq.items()])
 
 
@@ -897,7 +1107,7 @@ class FPGAMaster(object):
             enable_comet = config['comet_broker']['enabled']
         except KeyError:
             msg = "Missing config value 'comet_broker/enabled'."
-            self.log.error('%r: %s' % (self, msg))
+            self.log.error(f'{self!r}: {msg}')
             raise RuntimeError(msg)
         if enable_comet:
             if comet is None:
@@ -909,8 +1119,8 @@ class FPGAMaster(object):
                 comet_host = config['comet_broker']['host']
                 comet_port = config['comet_broker']['port']
             except KeyError as exc:
-                msg = "Failure registering initial config with comet broker: 'comet_broker/{}' " \
-                      "not defined in config.".format(exc)
+                msg = f"Failure registering initial config with comet broker: 'comet_broker/{exc}' " \
+                      "not defined in config."
                 self.log.error(f'{self!r}: {msg}')
                 raise RuntimeError(msg)
             self.comet_manager = comet.Manager(comet_host, comet_port)
@@ -920,7 +1130,7 @@ class FPGAMaster(object):
                     self.startup_time, __version__, config, register_datasets=True)
                 # comet_manager.register_config(config)
             except comet.CometError as exc:
-                msg = 'Comet failed registering fpga_master start and initial config: {}'.format(exc)
+                msg = f'Comet failed registering fpga_master start and initial config: {exc}'
                 self.log.error(f'{self!r}: {msg}')
                 raise RuntimeError(msg)
         else:
@@ -975,7 +1185,7 @@ class FPGAMaster(object):
 
         # Give a more meaningful error if the user did not provide a valid config file
         if not hasattr(conf, 'corr_name'):
-            raise RuntimeError('CHIME master configuration data does not define the correlator name. Was the correct object selected in the configuration file (i.e. config.yaml:object)')
+            raise RuntimeError('Master configuration data does not define the correlator name. Was the correct object selected in the configuration file (i.e. config.yaml:object)')
 
         self.corr_name = conf.corr_name
 
@@ -1060,22 +1270,21 @@ class FPGAMaster(object):
         conf = self.config  # shortcut to shorten the code below
         fpga_array_params = conf.fpga.fpga_array_params
 
-        #Define some FPGA-related system constants
-        self.SAMPLING_FREQUENCY = float(fpga_array_params.samp_freq) * 1e6  # frequency in Hz
-        self.SAMPLES_PER_FRAME = 2048
-        self.SECONDS_PER_FRAME = self.SAMPLES_PER_FRAME / self.SAMPLING_FREQUENCY
-
-        self.log.info(f"Sampling frequency is {self.SAMPLING_FREQUENCY / 1e6:.3f} MHz.")
-
         # Create the FPGAArray object. This object will create a database of all FPGA boards, crates and
         # mezzanines as described by the ``fpga_array_params`` parameters.fpga_array_params If specified
         # in the parameters, the FPGAs will be loaded with their bitstream, communication with the FPGAs
         # will be established and all the Python objects needed to operate the FPGA firmware will be
         # created and initialized.
-        self.fpgas = ca = fpga_array.FPGAArray(ioloop=True, **fpga_array_params)  # Starts an independent ioloop while initializing. Web clients/server stop while
-        await ca.run()
+        self.fpgas = ca = await fpga_array.FPGAArray(**fpga_array_params)
 
         self.register_hardware()
+
+        if ca.ib:
+            fpga = ca.ib[0].fpga
+            self.SAMPLING_FREQUENCY = float(fpga._sampling_frequency)
+            self.SAMPLES_PER_FRAME = int(fpga.ADC_SAMPLES_PER_FRAME)
+            self.SECONDS_PER_FRAME = self.SAMPLES_PER_FRAME / self.SAMPLING_FREQUENCY
+            self.log.info(f"Sampling frequency is {self.SAMPLING_FREQUENCY / 1e6:.3f} MHz.")
 
         if not ca.ib: # if there are no boards in the array
             if conf.debug.get('allow_empty_fpga_array', False):
@@ -1086,9 +1295,10 @@ class FPGAMaster(object):
                     'No IceBoard could be found. Are the boards powered up? '
                     'Is the network connection functional?')
 
-        if fpga_array_params.get('open', None) == 0:
+        init_level = fpga_array_params.get('init', None)
+        if init_level is not None and init_level < 2:
             self.log.warning(
-                "fpga_array is initialized with open=0. "
+                f"fpga_array is initialized with init={init_level}. "
                 "Aborting the rest of the FPGA array initialization.")
             return
 
@@ -1123,34 +1333,27 @@ class FPGAMaster(object):
         self.log.info("Setting-up channelizers")
         await ca.set_channelizers_async(**conf.fpga.channelizer_params)
 
-
-        # Set-up raw_acq servers to receive data from the boards specified in
-        # the config. This will set-up the FPGA data transmission ports.
-        # self.log.info("Sending configuration to raw_acq server(s)")
-        self.log.info("Starting raw_acq servers")
-        await self.start_raw_acq_servers()
-
-
         # Setup noise injection for normal operation
         # Allow the noise injection field to be omitted or null
         self.log.info("Setting up noise injection")
         self.setup_noise_injection(conf.fpga.get('noise_injection',{}))
 
-        # Start correlator data transmission if present in the FPGA-based
-        # firmware correlationlator is present in the FPGA
-
+        # Start correlator before raw_acq so get_data_config() composes the
+        # programmed firmware integration period for UCORR assembly.
         corr_config = self.config.fpga.get('firmware_correlator', {})
 
         if corr_config and corr_config.enable:
-            self.log.info("Setting up firmware corelator")
+            self.log.info("Setting up firmware correlator")
             self.corr_firmware_integration_period = corr_config.firmware_integration_period
             self.corr_autocorr_only = corr_config.autocorr_only
             await self.fpgas.start_correlators_async(
                 self.corr_firmware_integration_period,
                 autocorr_only=self.corr_autocorr_only)
             self.log.info(
-                f'{self!r}: Enabling corr with integ={self.corr_firmware_integration_period}'
-                f' and autocorr_only={self.corr_autocorr_only}')
+                f'{self!r}: Enabling corr with firmware_integ='
+                f'{self.corr_firmware_integration_period}, '
+                f'software_integ={corr_config.get("software_integration_period", 1)}, '
+                f'autocorr_only={self.corr_autocorr_only}')
         else:
             self.corr_firmware_integration_period = None
             self.corr_autocorr_only = None
@@ -1159,17 +1362,33 @@ class FPGAMaster(object):
                 f"Corr_config={corr_config!r}, "
                 f"enable={corr_config.enable if corr_config else 'none'}")
 
-        # Start raw_data capture
-        self.log.info("Starting baseline raw data data capture")
-        await self.start_fpga_raw_data_transmission(sync=False)
+        # Set-up raw_acq servers to receive data from the boards specified in
+        # the config. This will set-up the FPGA data transmission ports.
+        if conf.raw_acq.enable:
+            self.log.info("Starting raw_acq servers")
+            await self.start_raw_acq_servers()
+        else:
+            self.log.info('raw_acq disabled. Not starting any raw_acq servers.')
+
+        if conf.raw_acq.enable:
+            # Start raw_data capture
+            self.log.info("Starting baseline raw data data capture")
+            await self.start_fpga_raw_data_transmission(sync=False)
+        else:
+            self.log.info("raw_acq disabled. Not starting baseline raw data data capture")
 
         self.log.info("Synchronizing the array...")
         self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% This is the last SYNC %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-        ca.sync()  # synchronize all the boards in the array
+        if conf.fpga.sync_params.enable:
+            # Use config params
+            await ca.sync_async(**conf.fpga.sync_params)
+        else:
+            # Use default params
+            await ca.sync_async()
         self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Last SYNC is done %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 
         # save the time of frame0 after sync
-        self.frame0_irigb_time = self.fpgas.sync_timestamp
+        self.frame0_irigb_time = self.fpgas.get_sync_timestamp()
 
 
         #######
@@ -1180,8 +1399,9 @@ class FPGAMaster(object):
         # Clear errors accumulated during start and initialization
         self.log.info("Resetting FPGA statistics counters")
         self.reset_fpga_stats()
-        self.reset_crossbar_stats()
-        self.reset_bp_shuffle_stats()
+        if ca.get_operational_mode() in ['shuffle16', 'shuffle128', 'shuffle256', 'shuffle512']: # FIXME. Temporary hack to bypass crossbar and bp_shuffle stats for CRS platform.
+            self.reset_crossbar_stats()
+            self.reset_bp_shuffle_stats()
 
 
 
@@ -1193,16 +1413,20 @@ class FPGAMaster(object):
 
 
         # Initialize the digital gain hdf5 writer
-        self.log.info(f"{self!r}: Initializing HDF5 gain archive reader/writer")
-        self.initialize_gain_hdf5()
+        if self.config.raw_acq.enable:
+            self.log.info(f"{self!r}: Initializing HDF5 gain archive reader/writer")
+
+        # Initialize gain HDF5 file
+        if not self.gain_hdf5:
+            self.initialize_gain_hdf5()
 
         # Load most recent gains from archive into gain bank #0
         if conf.fpga.load_initial_gains and self.gain_hdf5:
-            await self.load_gains(update_id=None, bank=0, when='now')
-
+            await self.load_gains(update_id=None, bank=0, when='now') # update_id = None loads the most recent gains
 
         # Compute new gains if requested
-        await self.compute_gains(**conf.fpga.compute_gains)
+        if self.config.fpga.compute_gains.enable:
+            await self.compute_gains(**conf.fpga.compute_gains)
 
         # self.log.info("Waiting for 2 seconds")
         # await asyncio.sleep(2)
@@ -1210,12 +1434,12 @@ class FPGAMaster(object):
 
         # Read the FPGA setting back from the FPGA
         self.log.info("Getting configuration data from all FPGAs")
-        self.fpga_conf = await self.fpgas.get_fpga_config_async(basic=True)
-
+        self.fpga_conf = await self.fpgas.get_system_config_async(basic=True)
 
         # Start storage of raw_data received by the raw_acq server in HDF5 files
-        self.log.info("Starting Raw data HDF5 data capture")
-        await self.start_hdf5_capture()
+        if self.config.raw_acq.enable:
+            self.log.info("Starting Raw data HDF5 data capture")
+            await self.start_hdf5_capture()
 
         # Start correlator data capture
         if corr_config and corr_config.enable:
@@ -1244,7 +1468,7 @@ class FPGAMaster(object):
     async def update_channelizers(self, **params):
 
         # Log the new parameters
-        output_str = ["  %-32s  %s" % (key + ':',  params[key]) for key in sorted(params.keys())]
+        output_str = [f"  {key + ':':32}  {params[key]}" for key in sorted(params.keys())]
         output_str.insert(0, 'Updating channelizer parameters:')
         self.log.info('\n'.join(output_str))
 
@@ -1277,10 +1501,10 @@ class FPGAMaster(object):
         If no board is specified for an entry (.board evaluates to False), the parameters are ignored.
         """
         if not ni_params:
-            self.log.info("%r: No noise injection settings; setup skipped." % (self))
+            self.log.info(f"{self!r}: No noise injection settings; setup skipped.")
         else:
             for source_name, source_params in ni_params.items():
-                self.log.info("%r: Setting noise injection for source '%s' with parameters %s" % (self, source_name, source_params))
+                self.log.info(f"{self!r}: Setting noise injection for source '{source_name}' with parameters {source_params}")
                 if source_params.board:
                     self.fpgas.set_noise_injection(local_sync=True, **source_params)
 
@@ -1436,18 +1660,22 @@ class FPGAMaster(object):
 
         # Convert the keys from serial numbers to (crate, slot, chan) tuples
         gains = {key_to_chan_id_map[key]: val
-                 for key, val in gains.items() if key in key_to_chan_id_map}
+                    for key, val in gains.items() if key in key_to_chan_id_map}
+            
         gain_timestamps = {key_to_chan_id_map[key]: val
                            for key, val in gain_timestamps.items() if key in key_to_chan_id_map}
 
         # Load to requested bank
         self.log.info(f"{self!r}: Loading digital gains in bank #{bank}")
-        # print(f'gains={gains}')
         await self.fpgas.set_gains_async(
             gains,
             bank=bank,
             when=when,
             gain_timestamps=gain_timestamps)
+
+        # Instantiate gains_filename and gains_uid for REST server endpoint
+        self.gains_filename = self.gain_hdf5.reader.last_value.filename
+        self.gains_uid = uid
 
         # Return the unique identifier of the gains that were loaded
         return uid
@@ -1460,13 +1688,24 @@ class FPGAMaster(object):
         axis_dtypes = {axis_name:axis_dtype['dtype'] for axis_name, axis_dtype in digital_gain.DigitalGainArchive._axes.items()}
 
         # Create frequency axis
-        freq = self.SAMPLING_FREQUENCY - np.fft.fftfreq(self.SAMPLES_PER_FRAME, 1.0 / self.SAMPLING_FREQUENCY)
-        freq = 1e-6 * freq[0: self.SAMPLES_PER_FRAME // 2]
+        PLATFORM_ID = self.fpgas.ib[0].GPIO.PLATFORM_ID
+        if PLATFORM_ID not in [4, 5]: 
+            # ICE
+            freq = self.SAMPLING_FREQUENCY - np.fft.fftfreq(self.SAMPLES_PER_FRAME, 1.0 / self.SAMPLING_FREQUENCY)
+            freq = 1e-6 * freq[0: self.SAMPLES_PER_FRAME // 2]
+        elif PLATFORM_ID == 4:
+            # ZCU111
+            raise NotImplementedError("Gain HDF5 initialization for ZCU111 not supported.")
+        elif PLATFORM_ID == 5: # FIXME: temporary hack to access the PLATFORM_ID to deteremine frequency bins. Should be more human readable and not go into GPIO.
+            # CRS
+            self.log.info(f"{self!r}: Made it under CRS")
+            f_res = self.SAMPLING_FREQUENCY / self.SAMPLES_PER_FRAME
+            freq = 1e-6 * np.arange(0, self.SAMPLING_FREQUENCY/2, f_res)
+
         freq = np.array(list(zip(freq, [np.median(np.abs(np.diff(freq)))] * freq.size)),
                         dtype=axis_dtypes['freq'])
 
         # Create input axis
-
         if self.config.input_reorder:
             # If we already have a channel_id to channel SN map,
             # use it. We assume that the map contains all the channels IDs
@@ -1480,10 +1719,8 @@ class FPGAMaster(object):
             sid_to_sn_map = [(sid, self._chan_id_to_serial_number(sid_to_cid_map.get(sid,(0,0,0)))) for sid in range(max_sid+1)]
             inputs = np.array(sid_to_sn_map, dtype=axis_dtypes['input'])
 
-            # inputs = np.array([(stream_id, self._chan_id_to_serial_number(chan_id))
-            #                    for chan_id, stream_id in sorted(self.fpgas.get_stream_id_map().items(), key=lambda x:x[1])],
-            #                   dtype=axis_dtypes['input'])
-        # self.log.debug(f'{self!r}: Created input axis as {inputs} with dtypes {inputs.dtype}')
+        self.log.info(f"{self!r}: inputs {inputs}")
+
         # Expand some strings
         hdf5_conf = self.config.fpga.gain_hdf5.copy()
         hdf5_conf['output_dir'] = self.expand_path(hdf5_conf.get('output_dir', '.'))
@@ -1591,13 +1828,13 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         # self.port = port # port on which the web server will be run
         self.dummy = dummy
 
-        # Use a dummy CHIME Master object if dummy is True
+        # Use a dummy Master object if dummy is True
         FPGAMasterClass = DummyFPGAMaster if self.dummy else FPGAMaster
 
         self.fpga_master = FPGAMasterClass()
         self.future = None
-        self.metrics = Metrics()
-        self.last_metrics_client = None
+        # latest_only=True: keep only the most recent value per metric+labels.
+        self.metrics = Metrics(latest_only=True)
         self.metrics_request_last_number_of_metrics = 0
         self.metrics_requests = 0
 
@@ -1615,10 +1852,10 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         self._gps_lock = asyncio.Lock()
 
     async def shutdown(self):
-        self.log.info('Shutting down CHIME Master')
+        self.log.info('Shutting down fpga_master')
         await self.fpga_master.stop()
         await asyncio.sleep(3)
-        self.log.info('CHIME Master is shut down')
+        self.log.info('fpga_master is shut down')
 
     def print_iceboard_info_callback(self):
         if self.fpga_master.fpgas:
@@ -1649,7 +1886,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
     @endpoint('start')
     async def start(self, **config):
         # print('%r: Received start command' % self)
-        self.log.info('%r: Received start command' % self)
+        self.log.info(f'{self!r}: Received start command')
 
         # def done(future):
         #     # print('Done')
@@ -1707,6 +1944,26 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         else:
             result['start_result'] = None
         return result
+
+    @endpoint('config')
+    async def config(self):
+        """ Return the full configuration currently loaded in the FPGAMaster.
+
+        The configuration is set by the /start endpoint. If /start has not
+        yet been called, the returned value will be None.
+
+        Returns:
+
+            dict: The configuration that was passed to /start (served up as json).
+            None if no configuration is currently loaded.
+
+        Example:
+
+            curl http://localhost:54321/config
+        """
+        if self.fpga_master.config is None:
+            return None
+        return self.fpga_master.config.as_dict()
 
     @endpoint('stop')
     async def stop(self):
@@ -1791,6 +2048,92 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             self.log.warning(f"{self}: FPGA array is not ready to accept command")
             return dict(message="FPGA not ready")
         return await self.fpga_master.get_noise_injection_status(name)
+
+    @endpoint('get-current-gain-filename')
+    async def get_current_gain_filename(self):
+        """ REST endpoint to return the absolute path of the current digital gains file.
+
+        Returns: 
+
+            current_gain_file_info (dict):
+
+                current_gain_file: (str) the full file path to the current gains, including the name of the .h5 file
+                current_update_id: (str) the update id of the current gains
+
+        Example:
+
+            curl http://localhost:54321/get-current-gain-filename
+        """
+        if not (self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas):
+            self.log.warning(f"{self!r}: FPGA array is not ready to accept command")
+            return dict(message="FPGA not ready")
+
+        try:
+            # Recover information on the current digital gains
+            # current_gain_file = self.gain_hdf5.reader.last_value.filename
+            # current_update_id = gain_hdf5.last_update_id
+
+            # self.gains_filename = self.gain_hdf5.reader.last_value.filename
+            # self.gains_uid = uid
+
+            return dict(current_gain_file = self.fpga_master.gains_filename, current_update_id = self.fpga_master.gains_uid)
+            
+        except Exception as e:
+            self.log.error(f'{self!r}: Error recovering current digital gains file path: {e}')
+            return {}
+
+    @endpoint('get-current-gain-file')
+    async def get_current_gain_file(self):
+        """ REST endpoint that returns the current digital gains .h5 file over HTTP.
+
+        Returns the file contents themselves (not just the path). The original
+        filename is reported in the Content-Disposition header so clients using
+        `curl -OJ` (or equivalent) will save it under the same name.
+
+        Responses:
+
+            200 - application/octet-stream, body is the raw .h5 file bytes.
+                  Content-Disposition: attachment; filename="<basename>"
+
+            503 - FPGA array is not ready (state != 'on'). Body is a short
+                  plain-text message.
+
+            404 - No current gain file is set, or the referenced path does
+                  not exist on disk. Body is a short plain-text message.
+
+        Example:
+
+            curl -OJ http://localhost:54321/get-current-gain-file
+
+        Note:
+
+            The gain file is written to by the server as new gains are
+            loaded. A download taken concurrently with a write may observe
+            partially-flushed HDF5 state.
+        """
+        if not (self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas):
+            self.log.warning(f"{self!r}: FPGA array is not ready to accept command")
+            return aiohttp.web.Response(status=503, text='FPGA array is not ready')
+
+        path = self.fpga_master.gains_filename
+        if not path:
+            return aiohttp.web.Response(
+                status=404, text='No current gain file is set')
+        if not os.path.isfile(path):
+            self.log.error(f"{self!r}: Current gain file does not exist on disk: {path}")
+            return aiohttp.web.Response(
+                status=404, text=f'Current gain file does not exist on disk: {path}')
+
+        self.log.info(f"{self!r}: Serving gain file {path}")
+        with open(path, 'rb') as h:
+            body = h.read()
+        return aiohttp.web.Response(
+            body=body,
+            content_type='application/octet-stream',
+            headers={
+                'Content-Disposition': f'attachment; filename="{os.path.basename(path)}"',
+            },
+        )
 
     @endpoint('compute-gains')
     async def compute_gains(self, **params):
@@ -1968,7 +2311,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
 
                         frame_number, gps_ts = await self.fpga_master.fpgas.ib[0].capture_frame_time_async(format='raw')
 
-                        frame0_ts = self.fpga_master.fpgas.sync_timestamp
+                        frame0_ts = self.fpga_master.fpgas.get_sync_timestamp()
 
                         self._gps_time = dict(
                             frame_number=frame_number,  # 48-bit frame number
@@ -2022,9 +2365,9 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
 
         """
         if (self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas and
-            self.fpga_master.fpgas.sync_timestamp):
+            self.fpga_master.fpgas.get_sync_timestamp()):
 
-            frame0_ts = self.fpga_master.fpgas.sync_timestamp
+            frame0_ts = self.fpga_master.fpgas.get_sync_timestamp()
 
             gps_time = dict(start_ctime=self.fpga_master.start_time,
                             frame0_time=frame0_ts.time_struct,
@@ -2179,12 +2522,12 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         # Don't monitor raw_acq servers at all if not is defined
         try:
             while True:
-                self.log.debug('%r: ============ Checking status of Raw_acq servers' % (self, ))
+                self.log.debug(f'{self!r}: ============ Checking status of Raw_acq servers')
                 if (self.fpga_master and self.fpga_master.raw_acq and
                     self.fpga_master.state == 'on' and self.fpga_master.fpgas):
                     for server_name, server in self.fpga_master.raw_acq.items():
                         try:
-                            self.log.debug('%r: Checking status of Raw_acq server %s' % (self, server_name))
+                            self.log.debug(f'{self!r}: Checking status of Raw_acq server {server_name}')
                             result = await server.status()
                             if not result['started']:
                                 self.log.warn(f'{self!r}: Raw_acq server {server_name} seems to be stopped. Restarting.')
@@ -2308,50 +2651,23 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             self.metrics.add('fpga_noise_injection_pwm_period', value=status['pwm_period'], ni_name=ni_name)
 
     @endpoint('get-monitoring-data')
-    async def get_monitoring_data(self, request):
+    async def get_monitoring_data(self):
+        """ REST endpoint that returns the current metric values in Prometheus text format.
+
+        Example:
+
+            curl --compressed http://localhost:54321/get-monitoring-data
         """
-        Parameters:
-
-            request (aiohttp.web.Request): request object, automatically inserted by the call handler.
-
-        Returns:
-
-            Compressed set of metrics.
-
-        """
-        self.metrics_requests +=1
-        try:
-            t0 = time.time()
-            # metrics = self.metrics #  Metrics()
-            number_of_metrics = len(self.metrics)
-            # get IP address of the remote client initialing the HTTP request
-            client_ip = request.remote
-            self.log.debug(f'{self!r}: Received metrics request from {client_ip}')
-            if self.last_metrics_client and client_ip != self.last_metrics_client:
-                self.log.warning(
-                    f'{self!r}: A new client at {client_ip} is pulling metrics '
-                    f'from this server. Previous client was {self.last_metrics_client}')
-            self.last_metrics_client = client_ip
-
-            metrics = self.metrics.pop()
-            response = aiohttp.web.Response(
-                body=metrics.get_gzip(),
-                headers={'Content-Encoding': 'gzip'})
-
-            self.log.debug(f'{self!r}: Returning {number_of_metrics} FPGA metrics '
-                          f'(compression ratio {metrics.last_compression_ratio * 100:.1f}%)')
-
-            # handler.write(self.metrics.pop().get_gzip())
-            self.log.debug(
-                f'{self!r}: Metrics request took {time.time()-t0:.3f} seconds to execute')
-
-            self.metrics_request_last_number_of_metrics = number_of_metrics
-
-            return response
-
-        except Exception as e:
-            self.log.error(f'{self!r}: Exception in get-monitoring-data. Error is: {e!r}')
-            raise
+        self.metrics_requests += 1
+        t0 = time.time()
+        n_metrics = len(self.metrics)
+        self.metrics_request_last_number_of_metrics = n_metrics
+        self.log.debug(
+            f'{self!r}: Returning {n_metrics} metrics '
+            f'built in {time.time() - t0:.3f}s')
+        return aiohttp.web.Response(
+            body=self.metrics.get_gzip(),
+            headers={'Content-Encoding': 'gzip'})
 
 
     @endpoint('get-hw-map')
@@ -2368,12 +2684,12 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             # Get icecrates
             for ic in self.fpga_master.fpgas.ic:
                 cn = ic.crate_number or 0
-                hwm['FCC%02d' % cn] = 'K7BP16-0%s' % ic.serial
+                hwm[f'FCC{int(cn):02}'] = f'K7BP16-0{ic.serial}'
             # Get iceboards and mezzanines
             for ib in self.fpga_master.fpgas.ib:
                 slot = ib.slot or 1
-                crate = ib.crate.crate_number or 0 if ib.crate else 0
-                hwm['FCC%02d%02d' % (crate, slot-1)] = (
+                crate = ib.get_crate_number(default=0)
+                hwm[f'FCC{int(crate):02}{int(slot - 1):02}'] = (
                     [f'{ib.part_number}-{ib.serial}'] +
                     [f'{m.part_number}-{m.serial}' for m in ib.mezzanine.values()]
                     )
@@ -2434,7 +2750,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         """
         if self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas:
             self.log.info(f'{self!r}: received sync() request')
-            self.fpga_master.fpgas.sync()
+            await self.fpga_master.fpgas.sync_async()
             self.log.info(f'{self!r}: sync() done')
 
 
@@ -2468,7 +2784,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
             # Update channelizers
             await self.fpga_master.update_channelizers(**new_params)
 
-            return 'Channelizers updated with configuration: %s' % config
+            return f'Channelizers updated with configuration: {config}'
 
         else:
             return 'FPGA array not yet initialized.'
@@ -2546,7 +2862,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
                 ib.BP_SHUFFLE.set_tx_power(int(power), link_type)
                 self.log.info(
                     f'{self!r}: Set gtx power level of '
-                    f'FCC{ib.crate.crate_number:02d}{ib.slot-1:02d} (SN{ib.serial}) to {power}.')
+                    f'FCC{ib.get_crate_number(default=0):02d}{ib.slot-1:02d} (SN{ib.serial}) to {power}.')
 
             else:
                 self.fpga_master.fpgas.ib.BP_SHUFFLE.set_tx_power(int(power), link_type)
@@ -2641,12 +2957,29 @@ class FPGAMasterAsyncRESTClient(AsyncRESTClient):
         result = await self.get('status')
         return result
 
+    async def config(self):
+        """
+        Get the full configuration currently loaded in fpga_master.
+
+        Returns None if no configuration has been loaded (i.e. the server
+        is running but /start has not yet been called).
+        """
+        result = await self.get('config')
+        return result
+
     async def stop(self):
         """
         Stop fpga_master.
         """
         r = await self.get('stop')
         self.print_result(r)
+
+    async def get_current_gain_filename(self):
+        """
+        Get information about the current digital gains file.
+        """
+        current_gain_info = await self.get('get-current-gain-filename')
+        return current_gain_info
 
     async def get_frequency_map(self):
         """
@@ -2684,7 +3017,7 @@ class FPGAMasterAsyncRESTClient(AsyncRESTClient):
         hwm = await self.get('get-hw-map')
         # Save hardware map
         time_str = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
-        pickle.dump(hwm, open( '/home/chime/ch_acq/%s_hardware_map.pkl' %time_str, 'wb'))
+        pickle.dump(hwm, open( f'/home/chime/ch_acq/{time_str}_hardware_map.pkl', 'wb'))
         # Print hardware map
         for key in np.sort(hwm.keys()):
             print(f'{key}: {hwm[key]}')

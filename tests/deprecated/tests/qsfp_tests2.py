@@ -120,7 +120,7 @@ def run_test(interfaces=['ens1f0'], cycle_power=True, reset_gpu_links=True ):
         #     ca.ib.GPU.CORE_RESET = 1
         #     # time.sleep(.5)
         #     ca.ib.GPU.CORE_RESET = 0
-        #     # ca.sync()
+        #     # ca.sync_async()
         #     time.sleep(.1)
         #     for _ in xrange(30):
         #         get_packet_recv(iface=interfaces[0], interval=1)
@@ -142,7 +142,7 @@ def run_test(interfaces=['ens1f0'], cycle_power=True, reset_gpu_links=True ):
                 ca.ib.GPU.CORE_RESET = 1
                 time.sleep(.5)
                 ca.ib.GPU.CORE_RESET = 0
-                # ca.sync()
+                # ca.sync_async()
                 time.sleep(.5)
                 n_reset += 1
                 for _ in xrange(10):

@@ -133,7 +133,7 @@ class IceCrate(Crate, IceCrateBase):
             str: a string in the format backplane_model_name_crate_serial_number.
 
         """
-        return '%s_SN%s' % (self.part_number, str(self.serial))
+        return f'{self.part_number}_SN{self.serial!s}'
 
     def get_id(self, slot=None):
         """ Return a tuple that describes the crate and an optional slot number.
@@ -474,14 +474,14 @@ class IceCrate_MGK7BP16(IceCrate):
             address=self.BACKPLANE_QSFP_ADDRESS,
             address_width=self.BACKPLANE_QSFP_ADDRESS_WIDTH)
 
-        self.logger.debug('%r: Instantiating Backplane I2C temperature sensors' % self)
+        self.logger.debug(f'{self!r}: Instantiating Backplane I2C temperature sensors')
         self._tmp_slot1 = tmp421.tmp421(self.i2c_proxy, self._TMP_SLOT1_ADDR, 'BP')
         self._tmp_slot16 = tmp421.tmp421(self.i2c_proxy, self._TMP_SLOT16_ADDR, 'BP')
 
-        self.logger.debug('%r: Instantiating Backplane I2C current/power monitor' % self)
+        self.logger.debug(f'{self!r}: Instantiating Backplane I2C current/power monitor')
         self._power_3v3 = ina230.ina230(self.i2c_proxy, self._POWER_3V3_ADDR, 'BP')
 
-        self.logger.debug('%r: Instantiating Backplane I2C I/O expanders' % self)
+        self.logger.debug(f'{self!r}: Instantiating Backplane I2C I/O expanders')
         self._qsfp_ctrla = pca9698.pca9698(self.i2c_proxy, self._QSFP_CTRL_SETA_ADDR, 'BP')
         self._qsfp_ctrlb = pca9698.pca9698(self.i2c_proxy, self._QSFP_CTRL_SETB_ADDR, 'BP')
         self._reset_ctrl = pca9698.pca9698(self.i2c_proxy, self._RESETS_CTRL_ADDR, 'BP')
@@ -591,7 +591,7 @@ class IceCrate_MGK7BP16(IceCrate):
 
         self.qsfp = Ccoll(qsfp.QSFP(
             self.i2c_proxy, 'BP',
-            gpio_prefix='QSFP%i_' % (i + 1),
+            gpio_prefix=f'QSFP{int(i + 1)}_',
             gpio=self._gpio,
             parent=self) for i in range(self.NUMBER_OF_SLOTS))
 
@@ -637,7 +637,7 @@ class IceCrate_MGK7BP16(IceCrate):
         """ Establish communications with the backplane.
         """
         self.model = self._get_backplane_type()
-        self.id = '%s SN%s' % (self.model, self.serial)
+        self.id = f'{self.model} SN{self.serial}'
 
     def close(self):
         pass
@@ -649,13 +649,13 @@ class IceCrate_MGK7BP16(IceCrate):
         """
         super().init()
 
-        self.logger.info('%r: Starting backplane initialization' % self)
+        self.logger.info(f'{self!r}: Starting backplane initialization')
         for trial in range(10):
-            self.logger.info('%r: Backplane initialization trial #%i' % (self, trial))
+            self.logger.info(f'{self!r}: Backplane initialization trial #{int(trial)}')
             try:
                 # Check if the fan controller is connected
                 self._fan_ctrl_present = self._fan_ctrl.is_present()
-                self.logger.info('%r: Fan controller %s present' % (self, ('is NOT', 'IS')[self._fan_ctrl_present]))
+                self.logger.info(f"{self!r}: Fan controller {('is NOT', 'IS')[self._fan_ctrl_present]} present")
                 # Check if the power/reset control IO expander is accessible
                 # self._reset_ctrl_present = self._reset_ctrl.is_present()
 
@@ -668,22 +668,20 @@ class IceCrate_MGK7BP16(IceCrate):
 
                 if self._fan_ctrl_present:
                     self._fan_ctrl.init()
-                    self.logger.info('%r: Initialized fan controller from FPGA' % (self))
-                self.logger.info('%r: Successfully completed backplane initialization' % self)
+                    self.logger.info(f'{self!r}: Initialized fan controller from FPGA')
+                self.logger.info(f'{self!r}: Successfully completed backplane initialization')
                 return
             except (IOError, RuntimeError) as e:
-                self.logger.error('%r: IO Error during backplane INIT on trial %i. retrying. Error was:\n%s'
-                                   % (self, trial+1, e))
+                self.logger.error(f'{self!r}: IO Error during backplane INIT on trial {int(trial + 1)}. retrying. Error was:\n{e}')
             except Exception as e:
-                self.logger.info('%r: Unexpected exception during backplane INIT on trial %i. Retrying. Error was:\n%s'
-                                  % (self, trial+1, e))
+                self.logger.info(f'{self!r}: Unexpected exception during backplane INIT on trial {int(trial + 1)}. Retrying. Error was:\n{e}')
             finally:
                 try:
                     self.i2c_proxy.select_bus([])  # Make sure we don't load the bus
                 except (IOError, RuntimeError) as e:
-                    self.logger.info('%r: IO Error while trying to deselect bus. Error was:\n%s' % (self, e))
+                    self.logger.info(f'{self!r}: IO Error while trying to deselect bus. Error was:\n{e}')
                     pass
-        raise IOError('%r: Cannot initialize backplane peripherals' % self)
+        raise IOError(f'{self!r}: Cannot initialize backplane peripherals')
 
     def _init_temperature_sensors(self, temperature_sensor_name=None):
         """
@@ -706,7 +704,7 @@ class IceCrate_MGK7BP16(IceCrate):
                 try:
                     tmp_object.init()
                 except IOError:
-                    self.logger.error('%r: Error initializing the Backplane temperature sensors' % self)
+                    self.logger.error(f'{self!r}: Error initializing the Backplane temperature sensors')
 
     def _init_power_sensors(self, power_sensor_name='BP_3V3'):
         """
@@ -739,7 +737,7 @@ class IceCrate_MGK7BP16(IceCrate):
                         i_typ=power_sensor_list[3],
                         tol_i=power_sensor_list[4])
                 except IOError:
-                    self.logger.error('%r: Error initializing the Backplane Power sensors.' % self)
+                    self.logger.error(f'{self!r}: Error initializing the Backplane Power sensors.')
 
     def _init_qsfp_ctrl(self):
         """
@@ -761,7 +759,7 @@ class IceCrate_MGK7BP16(IceCrate):
             # IntL (dir=input, output = 0), ResetL and ModselL (dir=output,
             # output=1)
         except IOError:
-            self.logger.error('%r: Error initializing the Backplane QSFP GPIO control lines' % self)
+            self.logger.error(f'{self!r}: Error initializing the Backplane QSFP GPIO control lines')
 
     def _init_reset_ctrl(self):
         """
@@ -796,7 +794,7 @@ class IceCrate_MGK7BP16(IceCrate):
 
     def get_backplane_eeprom_serial_number(self):
         """ return the 128-bit hardware-coded EEPROM serial number as a hex string. """
-        return ''.join(['%02X' % ord(v) for v in self._eeprom_serial.read(0x80, length=16)])
+        return ''.join([f'{ord(v):02X}' for v in self._eeprom_serial.read(0x80, length=16)])
     
     def _get_backplane_type(self):
         """TODO: Implement as IPMI read"""
@@ -924,11 +922,11 @@ class IceCrate_MGK7BP16(IceCrate):
         if slots == 'ALL' and state == 1:  # We wish to perform a full crate reset
 
             if reset_type not in self.FULLBP_RESETS_MAP:
-                raise ValueError('Unknown reset type %s' % reset_type)
+                raise ValueError(f'Unknown reset type {reset_type}')
             else:
                 (reset_control_obj, controlreg, mask, inactive, active) = self.FULLBP_RESETS_MAP[reset_type]
-                reset_cfg_register = 'CFG%i' % controlreg
-                reset_output_register = 'OUT%i' % controlreg
+                reset_cfg_register = f'CFG{int(controlreg)}'
+                reset_output_register = f'OUT{int(controlreg)}'
 
                 # Flipping state of LED so that we know a reset was performed
                 self.set_led('LED1', not(self.get_led('LED1')['LED1']))
@@ -960,11 +958,11 @@ class IceCrate_MGK7BP16(IceCrate):
                 else:
                     (reset_control_obj, arm_reset_reg, power_down_reg, bitnumber) = self.SLOT_RESETS_MAP[slot]
                     if resettype == 'ARM':
-                        reset_cfg_register = 'CFG%i' % arm_reset_reg
-                        reset_output_register = 'OUT%i' % arm_reset_reg
+                        reset_cfg_register = f'CFG{int(arm_reset_reg)}'
+                        reset_output_register = f'OUT{int(arm_reset_reg)}'
                     elif resettype == 'POWER':
-                        reset_cfg_register = 'CFG%i' % power_down_reg
-                        reset_output_register = 'OUT%i' % power_down_reg
+                        reset_cfg_register = f'CFG{int(power_down_reg)}'
+                        reset_output_register = f'OUT{int(power_down_reg)}'
                     else:
                         raise ValueError(f'Unknown reset type, will not perform reset on slot {slot}')
 
@@ -1086,7 +1084,7 @@ class IceCrate_MGK7BP16(IceCrate):
                 cable_id = None
 
             for qsfp_lane in range(4):
-                cable_link_id = '%s_%i' % (cable_id, qsfp_lane) if cable_id else None
+                cable_link_id = f'{cable_id}_{int(qsfp_lane)}' if cable_id else None
                 # establish backplane connectivity (routing is inferred by this code)
                 if use_qsfp_link_id:
                     qsfp_link_id = (crate_id, qsfp_slot, qsfp_lane)
@@ -1254,7 +1252,7 @@ class IceCrate_MGK7BP1(IceCrate):
 
     def get_eeprom_serial_number(self):
         """ return the 128-bit hardware-coded EEPROM serial number as a hex string. """
-        return ''.join(['%02X' % v for v in self._eeprom_serial.read(0x80, length=16)])
+        return ''.join([f'{v:02X}' for v in self._eeprom_serial.read(0x80, length=16)])
 
     def set_led(self, led_name, state):
         """
@@ -1268,7 +1266,7 @@ class IceCrate_MGK7BP1(IceCrate):
 
         for pos, name in enumerate(led_name):
             if isinstance(name, int):
-                name = 'LED%i' % name
+                name = f'LED{int(name)}'
             led_name[pos] = name
 
         if isinstance(state, (bool, int)):
@@ -1280,9 +1278,9 @@ class IceCrate_MGK7BP1(IceCrate):
             else:
                 (led_control_object, led_control_register, led_control_bitnumber) = self.LED_MAP[led]
                 mask = 1 << led_control_bitnumber
-                led_control_object.write('CFG%i' % led_control_register, 0, mask=mask)  # Setting LED pin to output
+                led_control_object.write(f'CFG{int(led_control_register)}', 0, mask=mask)  # Setting LED pin to output
                 # Turning LED on and off
-                led_control_object.write('OUT%i' % led_control_register, mask * bool(not(led_state)), mask=mask)
+                led_control_object.write(f'OUT{int(led_control_register)}', mask * bool(not(led_state)), mask=mask)
 
     def get_led(self, led_name):
         """
@@ -1296,7 +1294,7 @@ class IceCrate_MGK7BP1(IceCrate):
 
         for pos, name in enumerate(led_name):
             if isinstance(name, int):
-                name = 'LED%i' % name
+                name = f'LED{int(name)}'
             led_name[pos] = name
 
         for led in led_name:
@@ -1305,7 +1303,7 @@ class IceCrate_MGK7BP1(IceCrate):
             else:
                 (led_control_object, led_control_register, led_control_bitnumber) = self.LED_MAP[led]
                 # Converting the resister in the map into the correct string format
-                led_control_register = 'IN%i' % led_control_register
+                led_control_register = f'IN{int(led_control_register)}'
                 # Note that we are cheating here, we are flipping the bits on
                 # the IO Expander from input mode to output mode, inputs are
                 # default floating
@@ -1326,12 +1324,12 @@ class IceCrate_MGK7BP1(IceCrate):
         slotnum -= 1  # Slot 1 is binary 0000, slot 16 is binary 1111
 
         for addr in range(0, 4):
-            (ctrlobj, reg, bitnum) = self._GPIO_CTRL_MAP['SLOTADDR%i' % addr]
+            (ctrlobj, reg, bitnum) = self._GPIO_CTRL_MAP[f'SLOTADDR{int(addr)}']
             mask = 1 << bitnum
-            ctrlobj.write('CFG%i' % reg, 0, mask=mask)  # Setting addr pin to output
+            ctrlobj.write(f'CFG{int(reg)}', 0, mask=mask)  # Setting addr pin to output
 
             bitlevel = (slotnum >> addr) & 1
-            ctrlobj.write('OUT%i' % reg, mask * bitlevel, mask=mask)  # Turning pin off
+            ctrlobj.write(f'OUT{int(reg)}', mask * bitlevel, mask=mask)  # Turning pin off
 
     def get_serial_number(self):
         """
@@ -1383,12 +1381,12 @@ class IceCrate_MGK7BP1(IceCrate):
         links = []
         # Get Cable unique ID. Include crates string id so the cable UID will
         # be unique even if multiple backplanes are in the array
-        cable_uid = '%s_QSFP_Loopback' % self.get_string_id()
+        cable_uid = f'{self.get_string_id()}_QSFP_Loopback'
         qsfp_slot = 0  # there is only one QSFP slot on this backplane
         for qsfp_lane in range(4):
             qsfp_link_id = (crate_id, qsfp_slot, qsfp_lane)
             bp_link_id = (crate_id, qsfp_lane, qsfp_slot + 1)
-            link_uid = '%s_%i' % (cable_uid, qsfp_lane)
+            link_uid = f'{cable_uid}_{int(qsfp_lane)}'
             links.append(('BP_QSFP', qsfp_link_id, bp_link_id, link_uid))
 
         return links

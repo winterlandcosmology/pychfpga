@@ -173,12 +173,12 @@ Method Summary (in alphabetical order)
 
 .. autosummary::
 
-      ~chFPGA_controller.get_fpga_core_cookie
-      ~chFPGA_controller.get_fpga_firmware_cookie
-      ~chFPGA_controller.get_fpga_firmware_timestamp
+      ~chFPGA_controller.get_fpga_core_cookie_async
+      ~chFPGA_controller.get_fpga_firmware_cookie_async
+      ~chFPGA_controller.get_fpga_firmware_timestamp_async
       ~chFPGA_controller.get_fpga_firmware_version
-      ~chFPGA_controller.get_fpga_serial_number
-      ~chFPGA_controller.get_fpga_application_cookie
+      ~chFPGA_controller.get_fpga_serial_number_async
+      ~chFPGA_controller.get_fpga_application_cookie_async
       ~chFPGA_controller.get_version
       ~chFPGA_controller.get_fpga_bitstream_crc
       ~chFPGA_controller.is_fmc_present

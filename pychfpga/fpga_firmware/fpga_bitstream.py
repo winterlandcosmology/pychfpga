@@ -74,7 +74,7 @@ class FPGABitstream(object):
         self.load_bitstream()
 
     def __repr__(self):
-        return '%s(%s)' % (self.__class__.__name__, self.url)
+        return f'{self.__class__.__name__}({self.url})'
 
     def reload(self):
         """ Force the bitstream to be reloaded into the cache.

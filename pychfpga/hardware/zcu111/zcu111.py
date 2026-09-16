@@ -11,7 +11,6 @@ from collections import OrderedDict
 import socket
 import asyncio
 
-import nest_asyncio
 # External private packages
 
 from wtl.metrics import Metrics
@@ -218,7 +217,7 @@ class ZCU111(Motherboard):
         Returns a boolean indicating whether the board is responding to network queries.
         """
         # print(f'{self!r} Ping_async()')
-        self.logger.info('%r: Pinging %s' % (self, self.hostname))
+        self.logger.info(f'{self!r}: Pinging {self.hostname}')
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(timeout)
         loop = asyncio.get_event_loop()
@@ -227,7 +226,7 @@ class ZCU111(Motherboard):
             if_addr = s.getsockname()
             s.close()
         except (socket.timeout, Exception) as e:
-            self.log.warn('Could not establish a TCP connection with %s:%s. Error is:\n %s' % (addr[0], addr[1], e))
+            self.log.warn(f'Could not establish a TCP connection with {addr[0]}:{addr[1]}. Error is:\n {e}')
             return False
         return True
 
@@ -322,12 +321,12 @@ class ZCU111(Motherboard):
 
         if not is_fpga_programmed or force or (force is not None and not is_crc_valid):
             self.logger.debug(f'{self!r}: Configuring FPGA')
-            self.tcpipe.set_fpga_bitstream(bitstream, crc=crc32)
+            await self.tcpipe.set_fpga_bitstream_async(bitstream, crc=crc32)
         else:
             self.logger.debug(
                 f'{self!r}: FPGA is already configured. Skipping configuration.')
 
-        self.fpga = fw_cls(self, **fw_params)
+        self.set_fpga_firmware(fw_cls(self, **fw_params))
 
     # Mezzanine management
 
@@ -451,4 +450,3 @@ class ZCU111(Motherboard):
         # Add ZCU111 monitoring data to metrics here
 
         return metrics
-

@@ -1,0 +1,49 @@
+# Notes:
+#     - Colons must be followed by a space
+#     - Floats must have a decimal point *AND* an exponent sign if an exponent is used (i.e. 10.0 and 10.e+3 is valid, 10e3, 10.e3, 10e+3 are all invalid)
+aliases:
+comment: |
+    This is a long note
+
+    That extends many lines
+        this is indented more
+
+test_results_folder: './test_results'
+# test_results_folder: '../../iceqc'  # relative to this config file's folder. "~" is allowed.
+#test_results_folder: '../../qc_results'  # relative to this config file's folder. "~" is allowed.
+test_results_folder_uses_git: false
+# xml_test_results_pathname: ""  # not needed for a pure menu
+
+xformat: ['pdf']  # Output formats for the test reports. xml is always saved.
+
+submenus:
+    # This list contains all the submenus accessible from the top level menu
+    # Paths are relative to this config file's folder.
+    - {name: 'adc', path: './MGADC08/test_config.yaml'}
+    - {name: 'mb',  path: './MGK7MB/test_config.yaml'}
+    - {name: 'bp',  path: './MGK7BP16/test_config.yaml'}
+    - {name: 'ic',  path: './ICE_crate/test_config.yaml'}
+    - {name: 'cc',  path: './CRS_crate/test_config.yaml'}
+
+menu:
+    # The menu item will match the user input to either the 'key' field or to the regular expression 'regex'. The matching dictionary is returned.
+    # If a regular expression is given, string parameters are replaced by string_param.format(regex_matched_group_list), i.e. '{0}' is replaced by the first matched group etc. The 'key' and 'regex' fields are excluded from this conversion.
+    # Entry types are:
+    #  test: a test to run. test_tag refers to the test to run in test_list (defined above). A regex entry will be added to match the tets tag and tets path. The description will be taken from the test description if none is provided here.
+    #  exit: exit the menu
+    #  text: do nothing. The description is shown in the menu if there is one.
+    #  board_info: Sets the current board model and serial number. The serial number can be extracted from string parsed by the regex
+    #
+    - {   description: "Start by choosing what kind of object you want to test or scan a barcode.",     type: text}
+    - { key: '1',                    action: run_submenu, submenu: adc, description: 'MGADC08 ADC tests'}
+    - { key: '2',                    action: run_submenu, submenu: mb,  description: 'MGK7MB IceBoard tests'}
+    - { key: '3',                    action: run_submenu, submenu: bp,  description: 'MGK7BP16 Backplane tests'}
+    - { key: '4',                    action: run_submenu, submenu: ic,  description: 'ICE F-Engine pre-deployment tests'}
+    - { key: '5',                    action: run_submenu, submenu: cc,  description: 'CRS F-Engine pre-deployment tests'}
+    - { key: 'S',                    action: push,                      description: 'Send all new test results data to McGill'}
+    - { key: 'R',                    action: summary,                   description: 'Generate summary of all tests'}
+    - { key: 'Q',                    action: exit,                      description: 'Exit'}
+    - { regex: '29821-0000-(\d{4})', action: run_submenu, submenu: 'adc', model: 'MGADC08', serial: '{0}', next_key: '1'}  #29821-0000-nnnn are MGADC08 Serial nnnn
+    - { regex: '35896-0000-(\d{4})', action: run_submenu, submenu: 'adc', model: 'MGADC08', serial: '{0}', next_key: '1'}  #35896-0000-nnnn are MGADC08 Serial nnnn
+    - { regex: '38161-0000-(\d{4})', action: run_submenu, submenu: 'adc', model: 'MGADC08', serial: '{0}', next_key: '1'}  #38161-0000-nnnn are MGADC08 Serial nnnn
+    - { regex: '38355-0000-(\d{4})', action: run_submenu, submenu: 'mb' , model: 'MGK7MB', serial: '{0}', next_key: '1'}  #38355-0000-nnnn are MGK7MB Serial nnnn

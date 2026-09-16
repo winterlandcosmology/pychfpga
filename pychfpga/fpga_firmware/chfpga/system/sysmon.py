@@ -53,10 +53,11 @@ class SYSMON(MMI):
     SEQ_ADC_ACQTIME1_ADDR = 0x4E
     SEQ_ADC_ACQTIME2_ADDR = 0x4F
 
-    def __init__(self, *, router, router_port, verbose=1):
+    def __init__(self, *, router, router_port, config, verbose=1):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port)
+        self.config = config
         fpga = self.fpga
         self.supported_by_platform = fpga.PLATFORM_ID in (
             fpga._PLATFORM_ID_ML605,
@@ -124,48 +125,24 @@ class SYSMON(MMI):
             Vin = self.voltage(self.VAUX_VOLT_ADDR, vref=1.0) * 24
             Iin = self.voltage(self.VAUX_CURR_ADDR, vref=1.0) / (0.002 * 50)
 
-            self.logger.info('%r: --- System Monitor statistics' % self.fpga)
+            self.logger.info(f'{self.fpga!r}: --- System Monitor statistics')
 
-            self.logger.info('%r:   Core Temperature:   %5.1f C (%.2f C min, %.1f C max)' % (
-                self.fpga,
-                self.temperature(self.TEMP_ADDR),
-                self.temperature(self.TEMP_MIN_ADDR),
-                self.temperature(self.TEMP_MAX_ADDR)))
+            self.logger.info(f'{self.fpga!r}:   Core Temperature:   {self.temperature(self.TEMP_ADDR):5.1f} C ({self.temperature(self.TEMP_MIN_ADDR):.2f} C min, {self.temperature(self.TEMP_MAX_ADDR):.1f} C max)')
 
-            self.logger.info('%r:   VccINT Voltage:     %5.2f V (%.2f V min, %.2f V max)' % (
-                self.fpga, self.voltage(self.VCCINT_ADDR),
-                self.voltage(self.VCCINT_MIN_ADDR),
-                self.voltage(self.VCCINT_MAX_ADDR)))
+            self.logger.info(f'{self.fpga!r}:   VccINT Voltage:     {self.voltage(self.VCCINT_ADDR):5.2f} V ({self.voltage(self.VCCINT_MIN_ADDR):.2f} V min, {self.voltage(self.VCCINT_MAX_ADDR):.2f} V max)')
 
-            self.logger.info('%r:   VccAUX Voltage:     %5.2f V (%.2f V min, %.2f V max)' % (
-                self.fpga,
-                self.voltage(self.VCCAUX_ADDR),
-                self.voltage(self.VCCAUX_MIN_ADDR),
-                self.voltage(self.VCCAUX_MAX_ADDR)))
+            self.logger.info(f'{self.fpga!r}:   VccAUX Voltage:     {self.voltage(self.VCCAUX_ADDR):5.2f} V ({self.voltage(self.VCCAUX_MIN_ADDR):.2f} V min, {self.voltage(self.VCCAUX_MAX_ADDR):.2f} V max)')
 
             if self.fpga.PLATFORM_ID == self.fpga._PLATFORM_ID_ML605:
-                self.logger.info('%r:   VccINT Current:     %5.2f A, (ADC input= %.2f mV' % (
-                    self.fpga,
-                    self.voltage(self.VAUX_VPVN_ADDR, vref=1.0) / 0.005,
-                    self.voltage(self.VAUX_VPVN_ADDR, vref=1.0) * 1000))
+                self.logger.info(f'{self.fpga!r}:   VccINT Current:     {self.voltage(self.VAUX_VPVN_ADDR, vref=1.0) / 0.005:5.2f} A, (ADC input= {self.voltage(self.VAUX_VPVN_ADDR, vref=1.0) * 1000:.2f} mV')
 
-                self.logger.info('%r:   12V Supply Voltage: %5.2f V (ADC input=%.2f V )' % (
-                    self.fpga,
-                    Vin,
-                    self.voltage(self.VAUX_VOLT_ADDR, vref=1.0)))
+                self.logger.info(f'{self.fpga!r}:   12V Supply Voltage: {Vin:5.2f} V (ADC input={self.voltage(self.VAUX_VOLT_ADDR, vref=1.0):.2f} V )')
 
-                self.logger.info('%r:   12V Supply Current: %5.2f A (ADC input=%.2f V )' % (
-                    self.fpga,
-                    Iin,
-                    self.voltage(self.VAUX_CURR_ADDR, vref=1.0)))
-                self.logger.info('%r:   12V Power         : %5.2f W ' % (self.fpga, Vin * Iin))
+                self.logger.info(f'{self.fpga!r}:   12V Supply Current: {Iin:5.2f} A (ADC input={self.voltage(self.VAUX_CURR_ADDR, vref=1.0):.2f} V )')
+                self.logger.info(f'{self.fpga!r}:   12V Power         : {Vin * Iin:5.2f} W ')
 
-            self.logger.info('%r:   VREFP Voltage:      %5.2f V' % (
-                self.fpga,
-                self.voltage(self.VAUX_VREFP_ADDR)))
-            self.logger.info('%r:   VREFN Voltage:      %5.2f V' % (
-                self.fpga,
-                self.voltage(self.VAUX_VREFN_ADDR)))
+            self.logger.info(f'{self.fpga!r}:   VREFP Voltage:      {self.voltage(self.VAUX_VREFP_ADDR):5.2f} V')
+            self.logger.info(f'{self.fpga!r}:   VREFN Voltage:      {self.voltage(self.VAUX_VREFN_ADDR):5.2f} V')
 
         else:
-            self.logger.debug('%r: SYSMON is not supported on this platform' % self.fpga)
+            self.logger.debug(f'{self.fpga!r}: SYSMON is not supported on this platform')

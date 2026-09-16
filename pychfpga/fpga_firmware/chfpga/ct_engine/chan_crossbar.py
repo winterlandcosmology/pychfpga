@@ -47,9 +47,10 @@ class ChanCrossbar(MMI):
     # ALIGN_GLOBAL_FRAME_CTR    = BitField(STATUS, 5, 0, width=8, doc='')
     DELAY_CAPTURE    = BitField(STATUS, 4, 0, width=16, doc="")
 
-    def __init__(self, *, router, router_port, verbose=0):
+    def __init__(self, *, router, router_port, config, verbose=0):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
+        self.config = config
         ccb_router = CCBRouter(router=router, router_port=router_port)
         super().__init__(router=ccb_router, router_port='COMMON')
         print(f'Reset Mon = {self.RESET_MON}')
@@ -57,8 +58,9 @@ class ChanCrossbar(MMI):
         self.BIN_SEL = []
         self.NUMBER_OF_CROSSBAR_INPUTS = self.fpga.NUMBER_OF_CROSSBAR_INPUTS
         self.NUMBER_OF_CROSSBAR_OUTPUTS = self.fpga.NUMBER_OF_CROSSBAR1_OUTPUTS
+        bin_sel_state = self.config.add("bin_sel")
         for i in range(self.fpga.NUMBER_OF_CROSSBAR1_OUTPUTS):
-            self.BIN_SEL.append(chan_bin_sel.ChanBinSel(router=ccb_router, router_port=i + 1, instance_number=i))
+            self.BIN_SEL.append(chan_bin_sel.ChanBinSel(router=ccb_router, router_port=i + 1, instance_number=i, config=bin_sel_state.add(i)))
 
     def __getitem__(self, key):
         """    Returns the bin selector instance specified by the key"""
@@ -95,7 +97,7 @@ class ChanCrossbar(MMI):
         elif width == 8:
             is_four_bits = 0
         else:
-            raise ValueError('Number of bits %i is invalid for the channelizers. Only 4 or 8 is allowed' % width)
+            raise ValueError(f'Number of bits {int(width)} is invalid for the channelizers. Only 4 or 8 is allowed')
 
         # Set the channelizer data width
         for bs in self.BIN_SEL:
@@ -151,7 +153,7 @@ class ChanCrossbar(MMI):
         table = self.CB1_LANE_MONITOR_TABLE
 
         if name not in table:
-            raise ValueError('Invalid lane monitor name. valid names are %s' % ','.join(table.keys()))
+            raise ValueError(f"Invalid lane monitor name. valid names are {','.join(table.keys())}")
         ix = table[name]
         self.LANE_MONITOR_SEL = ix
         value = self.LANE_MONITOR
@@ -168,8 +170,8 @@ class ChanCrossbar(MMI):
 
         lane_range = list(range(self.NUMBER_OF_CROSSBAR_INPUTS))
 
-        print('%20s: %s' % ('Monitor point', ' '.join('  L%2i ' % v for v in lane_range)))
-        print('%20s: %s' % ('--------------------', ' '+' '.join('------' for v in lane_range)))
+        print(f"{'Monitor point':>20}: {' '.join(f'  L{v:2d} ' for v in lane_range)}")
+        print(f"{'--------------------':>20}: {' ' + ' '.join(('------' for v in lane_range))}")
         input_frame_ctr = []
         align_frame_ctr = []
         reset_mon = []
@@ -181,11 +183,13 @@ class ChanCrossbar(MMI):
             input_frame_ctr.append(self.INPUT_FRAME_CTR)
             align_frame_ctr.append(self.ALIGN_FRAME_CTR)
 
-        print('%20s: %s' % ('RESET', ' '.join('%6s' % ('-', 'ERR!')[bool(v)] for v in reset_mon)))
-        print('%20s: %s' % ('ALIGN_FIFO_OVERFLOW',
-                            ' '.join('%6s' % ('-', 'ERR!')[bool(v)] for v in align_fifo_overflow)))
-        print('%20s: %s' % ('INPUT FRAME CTR', ' '.join('%6i' % v for v in input_frame_ctr)))
-        print('%20s: %s' % ('ALIGN FRAME CTR', ' '.join('%6i' % v for v in align_frame_ctr)))
+        print(f"{'RESET':>20}: {' '.join(('-', 'ERR!')[bool(v)].rjust(6) for v in reset_mon)}")
+        print(
+            f"{'ALIGN_FIFO_OVERFLOW':>20}: "
+            f"{' '.join(('-', 'ERR!')[bool(v)].rjust(6) for v in align_fifo_overflow)}"
+        )
+        print(f"{'INPUT FRAME CTR':>20}: {' '.join(f'{v:6d}' for v in input_frame_ctr)}")
+        print(f"{'ALIGN FRAME CTR':>20}: {' '.join(f'{v:6d}' for v in align_frame_ctr)}")
         # print '%20s: %s' % ('ALIGN GLOBAL FRAME CTR', '(common to all lanes) %6i' % self.ALIGN_GLOBAL_FRAME_CTR)
 
     def print_align_monitor(self, reset=True, N=100):
@@ -211,7 +215,7 @@ class ChanCrossbar(MMI):
         metrics = Metrics(
             type='GAUGE',
             crate_id=self.fpga.crate.get_string_id() if self.fpga.crate else None,
-            crate_number=self.fpga.crate.crate_number if self.fpga.crate else None,
+            crate_number=self.fpga.mb.get_crate_number(),
             slot=(self.fpga.slot or 0) - 1,
             id=self.fpga.get_string_id())
 

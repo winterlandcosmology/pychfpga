@@ -156,15 +156,11 @@ class ADC_chip:
             trial += 1
             if trial >= trials:
                 self.logger.error(
-                    '%r: Bad ADC test mode readout after %i trials. Aborting'
-                    % (self.adc.adc_board, trial))
+                    f'{self.adc.adc_board!r}: Bad ADC test mode readout after {int(trial)} trials. Aborting')
                 raise IOError(
-                    '%r: Bad ADC test mode readout after %i trials. Aborting'
-                    % (self.adc.adc_board, trial))
+                    f'{self.adc.adc_board!r}: Bad ADC test mode readout after {int(trial)} trials. Aborting')
             self.logger.warn(
-                '%r: Bad ADC test mode readout on trial %i: '
-                'control reg=0x%04X, test reg=0x%04X. Retrying'
-                % (self.adc.adc_board, trial, control_reg, test_reg))
+                f'{self.adc.adc_board!r}: Bad ADC test mode readout on trial {int(trial)}: control reg=0x{control_reg:04X}, test reg=0x{test_reg:04X}. Retrying')
 
         return (0, 0, 1, 2)[reg_value]
 
@@ -184,11 +180,9 @@ class ADC_chip:
         """ Display the status of this ADC chip """
         w = self.read(self.REG_CHIP_ID)
         self.logger.info(
-            '%r:  ADC[%i]: Chip type: 0x%x, Version: %i.%i, Branch: %i'
-            % (self.adc.adc_board, self.adc_number, w >> 8 , (w >> 2) & 0x03, w & 0x03, (w >> 4) & 0x0F))
+            f'{self.adc.adc_board!r}:  ADC[{int(self.adc_number)}]: Chip type: 0x{w >> 8:x}, Version: {int(w >> 2 & 3)}.{int(w & 3)}, Branch: {int(w >> 4 & 15)}')
         self.logger.info(
-            '%r:  ADC[%i] test mode: %s'
-            % (self.adc.adc_board, self.adc_number, ('Data', 'Ramp', 'Pulse')[self.get_test_mode()]))
+            f"{self.adc.adc_board!r}:  ADC[{int(self.adc_number)}] test mode: {('Data', 'Ramp', 'Pulse')[self.get_test_mode()]}")
 
 
 class ADC_base(object):
@@ -258,7 +252,7 @@ class ADC_base(object):
         data = brd.spi_read_write(brd.SPI_ADC0_TEMP_ADDR + adc_number, [0, 0], type=np.dtype('>u2'))
         temp = (data >> 3) / 16.0
         if self.verbose or verbose:
-            print('ADC%i Temperature is %.2f C (raw data=0x%04x)' % (adc_number, temp, data))
+            print(f'ADC{int(adc_number)} Temperature is {temp:.2f} C (raw data=0x{data:04x})')
         return temp  # 110918 JFC
 
     # Low-level methods
@@ -311,9 +305,9 @@ class ADC_base(object):
 
     def status(self):
         """ Prints the status of all ADCs on the board"""
-        self.logger.info('%r: --- ADCs' % self.adc_board)
+        self.logger.info(f'{self.adc_board!r}: --- ADCs')
         if not self.adc_board.is_mezzanine_present():
-            self.logger.info('%r: FMC board %i not present' % (self.adc_board, self.adc_board.fmc_number))
+            self.logger.info(f'{self.adc_board!r}: FMC board {int(self.adc_board.fmc_number)} not present')
             return
         for adc in self.ADC:
             adc.status()

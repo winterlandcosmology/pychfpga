@@ -119,12 +119,28 @@ class lmk04208spi(object):
         self.i2c.select_bus(self.bus_name)
 
     def write(self, data):
+        """Write data to the device.
+
+        Args:
+            data (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
         spi_data = bytes([1<<self.spi_port]) + data
         self.select()
         self.i2c.write_read(self.address, spi_data)
 
     def write_word(self, value):
-            self.write(value.to_bytes(4, 'big'))
+        """Write one encoded register word.
+
+        Args:
+            value (Any): Parameter value.
+
+        Returns:
+            None: No value is returned.
+        """
+        self.write(value.to_bytes(4, 'big'))
 
     # def write_reg(self, register, value, mask=0xff, select=True):
     #     """
