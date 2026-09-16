@@ -6,9 +6,25 @@ from . import crs_discovery
 class CRSBackplane(Crate):
     """Hardware-map object for CRS backplanes discovered from CRS beacons."""
 
-    part_number = 'CCR'
-    _ipmi_part_numbers = ['CCR']
+    part_number = 'CRC4'
+    _ipmi_part_numbers = ['CCR', 'CRC4']
     NUMBER_OF_SLOTS = 16
+
+    MANUFACTURER = 't0.technology'
+
+    BACKPLANE_MANUFACTURER = MANUFACTURER
+    BACKPLANE_MODEL = '4SBP'
+    BACKPLANE_PRODUCT_NAME = '4-slot backplane'
+    BACKPLANE_REVISION = '2'
+    BACKPLANE_SERIAL_NUMBER_LENGTH = 3
+
+    CRATE_MANUFACTURER = MANUFACTURER
+    CRATE_MODEL = part_number
+    CRATE_PRODUCT_NAME = 'CRS Crate'
+    CRATE_REVISION = '1'
+    CRATE_SERIAL_NUMBER_LENGTH = 3
+
+    CHASSIS_PART_NUMBER = 'Vector'
 
     # PCB link topology is not modeled yet; stubs keep ICE-style callers working.
     _BP_RX_TO_TX_MAP = {}
