@@ -635,10 +635,8 @@ class FPGAMaster(object):
             if channel_ids:
                 cid = channel_ids[0]
                 ib = self.fpgas.get_iceboard_from_id((cid[0], cid[1]))
-                inv_bin_map = ib.fpga.chan[cid[2]].FFT.get_bin_map(
-                    flatten=True, reverse=False)
                 filtered_gains = {
-                    chan_id: (gain_vec[inv_bin_map], glog)
+                    chan_id: (gain_vec, glog)
                     for chan_id, (gain_vec, glog) in filtered_gains.items()
                 }
             await self.fpgas.set_gains_async(gains=filtered_gains, bank=0, when='now')
@@ -1297,9 +1295,10 @@ class FPGAMaster(object):
                     'No IceBoard could be found. Are the boards powered up? '
                     'Is the network connection functional?')
 
-        if fpga_array_params.get('open', None) == 0:
+        init_level = fpga_array_params.get('init', None)
+        if init_level is not None and init_level < 2:
             self.log.warning(
-                "fpga_array is initialized with open=0. "
+                f"fpga_array is initialized with init={init_level}. "
                 "Aborting the rest of the FPGA array initialization.")
             return
 
@@ -1436,89 +1435,6 @@ class FPGAMaster(object):
         # Read the FPGA setting back from the FPGA
         self.log.info("Getting configuration data from all FPGAs")
         self.fpga_conf = await self.fpgas.get_system_config_async(basic=True)
-
-        # Take test Scaler data (debugging)
-        if conf.fpga.get('save_test_scaler_data', False):
-            self.log.info("Gathering a sample of Scaler data for debugging")
-            
-            r = await ca.get_data_receiver_async()
-            n_cap_scaler = 100
-            bin_map = ca.ib[0].chan[0].FFT.get_bin_map(flatten = True, reverse = True) # get the bin map
-            inv_bin_map = ca.ib[0].chan[0].FFT.get_bin_map(flatten = True, reverse = False) # get the inverse bin map
-
-            def select_stream(slot_sel = [], chan_sel = []):
-                '''
-                empty arrays --> select all
-                Want channel 2 on all boards --> slot_sel=[], chan_sel = [2]
-                Want channel 2 on boards 3,4 --> slot_sel=[3,4], chan_sel = [2]
-                '''
-                #Initialize array of all data streams
-                slots = np.arange(16)     
-                channels = np.arange(8)
-                streams = 16 * slots[:, None] + channels 
-                
-            
-                slot_sel = slot_sel if len(slot_sel) > 0 else slice(None)
-                chan_sel = chan_sel if len(chan_sel) > 0 else slice(None)
-                
-                # select and flatten
-                select_streams = np.ravel(streams[slot_sel, chan_sel])
-                
-                return select_streams
-                
-            streams = select_stream(slot_sel = [0, 1, 2, 3])
-
-            # Setup channelizers and data capture for raw FFT data
-            self.log.info('Setting up channelizers for Scaler capture')
-            await ca.set_channelizers_async(data_source = 'adc', fft_bypass = False, scaler_bypass = False, offset_binary_encoding = False)
-            await ca.start_data_capture_async(0.03, source='scaler', mode = 0, channels = list(range(8)), data_type = 'fft_4bit', select = True, sync = False)
-            
-            # Synchronize the crate again to ensure all frames are synchronized
-            # await ca.sync_async()
-            
-            # Capture data
-            self.log.info('Gathering Scaler data')
-            t, d_sclr, c = r.read_raw_frames(ncap = n_cap_scaler, format='16+16', stream_ids = streams, split=True, verbose=0)
-            self.log.info('Done gathering Scaler data')
-
-            # Shift to 4+4 bits
-            d_sclr /= 2**12
-            
-            # Flatten frequency axis
-            d_sclr = d_sclr.reshape(d_sclr.shape[0], d_sclr.shape[1], 8192)
-            
-            # Apply bin map
-            d_sclr = d_sclr[..., bin_map]
-
-            # Read back gains for comparison with archive
-            if conf.fpga.read_back_gains_for_verification:
-                gains_in_fpga = []
-                for n in range(len(ca.ib)):
-                    gain_list = ca.ib[n].get_gains(bank = 0, use_cache = False)
-                    gains_in_fpga.append([gain_list[n][1][0] for n in range(8)])
-                gains_in_fpga = np.array(gains_in_fpga)
-
-            import h5py
-            scaler_file_name = f'{self.run_folder}/sample_scaler_data.hdf5'
-            self.log.info(f'Creating Scaler file {scaler_file_name}')
-            scaler_file = h5py.File(scaler_file_name, 'w')
-            self.log.info(f'Writing to Scaler file {scaler_file_name}')
-
-            scaler_file.create_dataset('scaler_data', d_sclr.shape, d_sclr.dtype)
-            scaler_file.create_dataset('bin_map', bin_map.shape, bin_map.dtype)
-            scaler_file.create_dataset('inv_bin_map', inv_bin_map.shape, inv_bin_map.dtype)
-            scaler_file.create_dataset('gains_in_fpga', gains_in_fpga.shape, gains_in_fpga.dtype)
-
-            scaler_file['scaler_data'][:] = d_sclr
-            scaler_file['bin_map'][:] = bin_map
-            scaler_file['inv_bin_map'][:] = inv_bin_map
-            scaler_file['gains_in_fpga'][:] = gains_in_fpga
-
-            scaler_file.close()
-            self.log.info(f'Closing Scaler file {scaler_file_name}')
-
-            self.log.info("Reconfiguring channelizers to config file settings")
-            await ca.set_channelizers_async(**conf.fpga.channelizer_params)
 
         # Start storage of raw_data received by the raw_acq server in HDF5 files
         if self.config.raw_acq.enable:
@@ -1743,16 +1659,8 @@ class FPGAMaster(object):
         gains, gain_timestamps = self.gain_hdf5.read_gain(update_id=uid)
 
         # Convert the keys from serial numbers to (crate, slot, chan) tuples
-        if self.config.fpga.fpga_array_params.mode == 'shuffle8':
-            # Gains are stored in human-friendly frequency ordering, so we apply the inverse bin map to the gains if using CHORD firmware
-            ca = self.fpgas
-            inv_bin_map = ca.ib[0].chan[0].FFT.get_bin_map(flatten = True, reverse = False) # get the inverse bin map
-            gains = {key_to_chan_id_map[key]: [val[0][inv_bin_map], val[1]]
-                     for key, val in gains.items() if key in key_to_chan_id_map}
-        else:
-            # No bin mapping
-            gains = {key_to_chan_id_map[key]: val
-                     for key, val in gains.items() if key in key_to_chan_id_map}
+        gains = {key_to_chan_id_map[key]: val
+                    for key, val in gains.items() if key in key_to_chan_id_map}
             
         gain_timestamps = {key_to_chan_id_map[key]: val
                            for key, val in gain_timestamps.items() if key in key_to_chan_id_map}
