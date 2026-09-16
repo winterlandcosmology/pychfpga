@@ -173,7 +173,7 @@ class eeprom(object):
             #  2) The number of bytes that the I2C interface can send ( 3 - number of address bytes)
             #  3) The number of bytes until the end of the page
             block_length = min(len(data), self.max_write_length-len(addr_bytes)+1, (addr | self.address_page_mask) - addr + 1)
-            print(f'block_length={block_length}')
+            # print(f'block_length={block_length}')
             self.i2c.write_read(
                 self.address | addr_bytes[0],
                 addr_bytes[1:] + data[:block_length],
