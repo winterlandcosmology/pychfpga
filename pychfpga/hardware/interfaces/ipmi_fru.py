@@ -91,6 +91,15 @@ MULTI_OEM_RECORD_LAST = 0x0FF
 
 def get_area_data(read_fn, start_addr, area_name=''):
     """
+    Read the data from the EEPROM for the given area.
+
+    Args:
+        read_fn: A function that reads data from the EEPROM.
+        start_addr: The starting address of the area to read.
+        area_name: The name of the area to read.
+
+    Returns:
+        The data read from the EEPROM.
     """
     # Get the first 3 bytes of data so we can do some checks and figure out the whole block length
     data = read_fn(start_addr, 3)
@@ -107,6 +116,13 @@ def get_area_data(read_fn, start_addr, area_name=''):
 
 def get_area_fields(data, area_name=''):
     """ Extract all fields in an area data block.
+
+    Args:
+        data: The data to extract fields from.
+        area_name: The name of the area to extract fields from.
+
+    Returns:
+        A list of fields extracted from the data.
     """
     offset = 0
     fields = []
@@ -122,6 +138,45 @@ def get_area_fields(data, area_name=''):
             fields.append(data[offset:offset + length])
             offset += length
     return fields
+
+
+def _tl_ascii(value):
+    """Encode one 8-bit ASCII type/length field.
+
+    A 1-byte payload is padded to 2 bytes so it is not mistaken for the 0xC1
+    end-of-fields marker.
+    """
+    if isinstance(value, (bytes, bytearray)):
+        data = bytes(value)
+    elif value is None:
+        data = b''
+    else:
+        data = str(value).encode()
+    length = 2 if len(data) == 1 else len(data)
+    if length > 63:
+        raise ValueError(f'IPMI ASCII field is {length} bytes; maximum is 63')
+    return struct.pack(f'B{int(length)}s', 0xc0 | length, data)
+
+
+def _encode_info_area(header_without_length, fields):
+    """Build a checksummed, 8-byte-aligned IPMI info area.
+
+    ``header_without_length`` is the area prologue with the length byte
+    omitted (it is inserted at offset 1). ``fields`` is an iterable of string
+    or bytes values encoded as 8-bit ASCII type/length fields.
+    """
+    body = b''.join(_tl_ascii(field) for field in fields) + b'\xc1'
+    raw = len(header_without_length) + 1 + len(body) + 1  # + length byte + checksum
+    length = raw + (-raw % 8)
+    area = (
+        header_without_length[:1]
+        + bytes([length // 8])
+        + header_without_length[1:]
+        + body
+        + (b'\x00' * (length - raw))
+        + b'\x00'
+    )
+    return area[:-1] + bytes([(-sum(area)) & 0xff])
 
 
 class Internal(object):
@@ -141,35 +196,17 @@ class Internal(object):
         return cls(data[1:])
 
 class Chassis(object):
-    def __init__(self, type_code=CHASSIS_UNKNOWN, part_number='', serial_number=''):
+    def __init__(self, type_code=CHASSIS_UNKNOWN, part_number='', serial_number='',
+                 custom=None):
         self.type_code = type_code
         self.part_number = part_number
         self.serial_number = serial_number
+        self.custom = list(custom) if custom else []
 
     def encode(self):
         """Reduce to a string containing binary IPMI data."""
-        # If any string fields are of length 1, bump them to 2. Otherwise, we
-        # run into the terminator code 0xc1.
-        lprt = 2 if len(self.part_number) == 1 else len(self.part_number)
-        lser = 2 if len(self.serial_number) == 1 else len(self.serial_number)
-
-        # Work out the structure length, including padding to 8-byte alignment
-        length = 7 + lprt + lser
-        length += -length % 8
-
-        # Build up the structure.
-        x = struct.pack(
-            f'BBB B{int(lprt)}s B{int(lser)}s B x 0q',
-            0x01,            # version
-            length // 8,      # length
-            self.type_code,  # chassis type
-            0xc0 | lprt, self.part_number,
-            0xc0 | lser, self.serial_number,
-            0xc1
-        )
-
-        # Replace last byte with checksum
-        return x[:-1] + bytes([(-sum(x)) & 0xff])
+        fields = [self.part_number, self.serial_number] + list(self.custom)
+        return _encode_info_area(bytes([0x01, self.type_code]), fields)
 
     @classmethod
     def decode(cls, read_fn, start_addr):
@@ -178,7 +215,8 @@ class Chassis(object):
         fields = get_area_fields(data[3:], area_name=cls.__name__)
         return cls(type_code=chassis_type,
                    part_number=fields[0].decode(),
-                   serial_number=fields[1].decode())
+                   serial_number=fields[1].decode(),
+                   custom=[f.decode() for f in fields[2:]])
 
 
 class Board(object):
@@ -188,7 +226,8 @@ class Board(object):
                  product_name='',
                  serial_number='',
                  part_number='',
-                 fru_file=''):
+                 fru_file='',
+                 custom=None):
 
             self.mfg_date = mfg_date
             self.manufacturer = manufacturer
@@ -196,6 +235,7 @@ class Board(object):
             self.serial_number = serial_number
             self.part_number = part_number
             self.fru_file = fru_file
+            self.custom = list(custom) if custom else []
 
     def encode(self):
         """Reduce to a string containing binary IPMI data."""
@@ -207,33 +247,19 @@ class Board(object):
         else:
             mfg_date = 0  # unspecified date, as per IPMI standard
 
-        lman = 2 if len(self.manufacturer) == 1 else len(self.manufacturer)
-        lprd = 2 if len(self.product_name) == 1 else len(self.product_name)
-        lser = 2 if len(self.serial_number) == 1 else len(self.serial_number)
-        lprt = 2 if len(self.part_number) == 1 else len(self.part_number)
-        lfru = 2 if len(self.fru_file) == 1 else len(self.fru_file)
-
-        # Work out the structure length, including padding to 8-byte alignment
-        length = 13 + lman + lprd + lser + lprt + lfru
-        length += -length % 8
-
-        # Build up the structure.
-        x = struct.pack(
-            f'BBB BBB B{int(lman)}s B{int(lprd)}s B{int(lser)}s B{int(lprt)}s B{int(lfru)}s B x 0q',
-            0x01,       # version
-            length//8,   # length
+        header_without_length = bytes([
+            0x01,       # version; length inserted by _encode_info_area
             0x00,       # language code (english)
-            mfg_date >> 16, (mfg_date >> 8) & 0xff, mfg_date & 0xff,
-            0xc0 | lman, self.manufacturer.encode(),
-            0xc0 | lprd, self.product_name.encode(),
-            0xc0 | lser, self.serial_number.encode(),
-            0xc0 | lprt, self.part_number.encode(),
-            0xc0 | lfru, self.fru_file.encode(),
-            0xc1
-        )
-
-        # Replace last byte with checksum
-        return x[:-1] + bytes([(-sum(x)) & 0xff])
+            (mfg_date >> 16) & 0xff, (mfg_date >> 8) & 0xff, mfg_date & 0xff,
+        ])
+        fields = [
+            self.manufacturer,
+            self.product_name,
+            self.serial_number,
+            self.part_number,
+            self.fru_file,
+        ] + list(self.custom)
+        return _encode_info_area(header_without_length, fields)
 
     @classmethod
     def decode(cls, read_fn, start_addr):
@@ -249,7 +275,8 @@ class Board(object):
                    product_name=fields[1].decode(),
                    serial_number=fields[2].decode(),
                    part_number=fields[3].decode(),
-                   fru_file=fields[4])
+                   fru_file=fields[4],
+                   custom=[f.decode() for f in fields[5:]])
 
 
 class Product(object):
