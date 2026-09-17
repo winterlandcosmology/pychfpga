@@ -1093,7 +1093,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
 
             if self.UCORN:
-                self.logger.debug(f'{self!r}: === Initializing Frame aggregator (UCORN)')
+                self.logger.debug(f'{self!r}: === Initializing UPACK frame packetizer')
                 self.UCORN.init()
 
 
@@ -4816,6 +4816,17 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             return None
         else:
             return self.REFCLK.get_sync_source()
+
+    def get_sync_counter(self):
+        """Return the REFCLK SYNC event counter.
+
+        Returns:
+            int: 4-bit SYNC counter. ``None`` if this firmware has no REFCLK.
+        """
+        if not self.REFCLK:
+            self.logger.warning('The platform does not have a REFCLK module')
+            return None
+        return int(self.REFCLK.SYNC_CTR)
 
     def set_pwm(self, enable, offset, high_time, period, local_sync=False):
         """ Sets the frame-based PWM generator. All times are stated as the number of frames.
