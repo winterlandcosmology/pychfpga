@@ -9,7 +9,9 @@ a fully-populated crate, switch, power supply, GPS, etc.
 import asyncio
 import time
 import re
+import signal
 import socket
+from contextlib import contextmanager
 
 # Pypi packages
 import pytest
@@ -38,6 +40,20 @@ class PSUError(RuntimeError):
     handlers still catch it, while allowing callers to distinguish PSU
     failures from genuine FPGA programming / array-init errors via
     ``isinstance(e, PSUError)``.
+    """
+
+
+class IterationTimeout(RuntimeError):
+    """Raised when a single test iteration exceeds its allotted wall-clock time.
+
+    A frozen iteration is assumed to be caused by a hardware problem (the
+    crate/board stops responding and a blocking call never returns). Rather
+    than diagnosing it here, the watchdog aborts the stuck iteration so the
+    test can power-cycle and continue with the next one.
+
+    Subclasses ``RuntimeError`` so it is caught by the existing broad
+    ``except Exception`` handlers, while remaining distinguishable via
+    ``isinstance(e, IterationTimeout)``.
     """
 
 
@@ -84,6 +100,11 @@ class TestUtils:
         for attempt in range(1, retries + 1):
             try:
                 return fn(*args, **kwargs)
+            except IterationTimeout:
+                # The iteration watchdog fired while we were talking to the
+                # PSU. Let it through: retrying here would keep the test alive
+                # past the deadline it is supposed to enforce.
+                raise
             except Exception as e:
                 last_exc = e
                 print(f'PSU call {getattr(fn, "__name__", fn)!s} failed '
@@ -92,6 +113,73 @@ class TestUtils:
                     time.sleep(backoff)
         raise PSUError(f'PSU call {getattr(fn, "__name__", fn)!s} failed after '
                        f'{retries} attempts: {last_exc!r}') from last_exc
+
+    @contextmanager
+    def iteration_watchdog(self, timeout, label='Operation'):
+        """Abort the enclosed block if it takes longer than `timeout` seconds.
+
+        This guards against hardware problems that freeze an iteration: when a
+        board stops responding, a blocking call (e.g. `asyncio.run(...)` on an
+        FPGA transaction) can hang forever and stall the whole test run.
+        Simply measuring elapsed time after the fact cannot help, because
+        control never comes back. Instead we arm a SIGALRM timer that fires
+        *while* the blocking call is in progress and raises `IterationTimeout`
+        from the signal handler, which unwinds the stuck call so the caller can
+        move on to the next iteration.
+
+        Args:
+            timeout: Watchdog period in seconds. Values <= 0 (or None) disable
+                the watchdog, preserving the previous behaviour of waiting
+                indefinitely.
+            label: Optional text included in the exception message to identify
+                which iteration timed out.
+
+        Yields:
+            None. Control returns to the caller with the watchdog armed.
+
+        Raises:
+            IterationTimeout: if the block is still running when the timer
+                expires.
+
+        Notes:
+            SIGALRM is Unix-only and can only be delivered to the main thread,
+            which is how these QC tests are run (a CLI menu / plain pytest
+            session). If the watchdog cannot be armed (non-main thread or a
+            platform without SIGALRM) it degrades gracefully to a no-op and
+            prints a warning rather than breaking the test.
+            Resolution is 1 second, since `signal.alarm()` takes an integer.
+        """
+
+        timeout = int(timeout) if timeout else 0
+
+        if timeout <= 0 or not hasattr(signal, 'SIGALRM'):
+            # Watchdog disabled (or unsupported platform): run unguarded.
+            yield
+            return
+
+        def _on_timeout(signum, frame):
+            raise IterationTimeout(
+                f'{label} exceeded its {timeout} s time limit and was aborted '
+                f'(assuming a hardware problem froze the test)')
+
+        try:
+            previous_handler = signal.signal(signal.SIGALRM, _on_timeout)
+        except ValueError as e:
+            # signal.signal() only works in the main thread.
+            print(f'Warning: could not arm the iteration watchdog ({e!r}); '
+                  f'running without a time limit')
+            yield
+            return
+
+        signal.alarm(timeout)
+        try:
+            yield
+        finally:
+            # Always disarm the timer and restore the previous handler, so a
+            # pending alarm can never fire during the next iteration or during
+            # test teardown.
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, previous_handler)
 
     def crate_init(self, reset_power = True):
         """
@@ -469,6 +557,9 @@ class TestPreDeploymentCrate(TestUtils):
           - Power up crate
           - Cycle through crate initialization n_cycles times, count
             some relevant errors
+          - Each iteration is guarded by a watchdog (`iter_timeout` in the
+            config): a cycle that takes too long is assumed to be frozen by a
+            hardware problem, is aborted, and the test moves on to the next one
 
         """
 
@@ -478,6 +569,12 @@ class TestPreDeploymentCrate(TestUtils):
         percent_accept = cfg.percent_accept
         n_fails_accept = int(percent_accept*n_cycles) # Define number of acceptable fails
         t_cycle = cfg.t_cycle
+
+        # Maximum wall-clock time allowed for the work of a single iteration
+        # (crate init + sync + per-board checks). This excludes the t_cycle
+        # cool-down and the PSU power-off, which are done outside the watchdog.
+        # A missing or <= 0 value disables the watchdog.
+        iter_timeout = cfg.get('iter_timeout', 0)
 
         test_results = NameSpace()
 
@@ -490,6 +587,7 @@ class TestPreDeploymentCrate(TestUtils):
         # mmi_fails = 0
         other_fails = 0
         psu_fails = 0
+        timeout_fails = 0
 
         # Number of consecutive cycles that failed on PSU communication. If the
         # PSU becomes permanently unreachable, nothing can recover, so we abort
@@ -504,6 +602,11 @@ class TestPreDeploymentCrate(TestUtils):
         # mmi_err_tags = []
         other_err_tags = []
         psu_err_tags = []
+        timeout_err_tags = []
+
+        # Duration (in seconds) of the guarded part of every iteration, so slow
+        # cycles can be spotted in the report even when they do not time out.
+        iter_durations = []
 
         passed = False
 
@@ -518,111 +621,163 @@ class TestPreDeploymentCrate(TestUtils):
                 # can detect a permanently-unreachable PSU and abort early.
                 psu_failed_this_cycle = False
 
-                # Initialize the crate:
+                if iter_timeout > 0:
+                    print(f'Iteration time limit: {iter_timeout} s')
+
+                t_start = time.monotonic()
+
+                # Everything below (crate init, sync and the per-board checks)
+                # talks to the hardware, so any of it can hang forever if a
+                # board stops responding. The watchdog bounds the whole block
+                # and raises IterationTimeout, caught just below, so a frozen
+                # cycle is abandoned instead of stalling the entire test run.
                 try:
-                    self.ca = self.crate_init()
-             
-                except Exception as e:
-                    # PSU-related failures are raised as PSUError (see crate_init /
-                    # connect_psu) and are counted separately. Anything else is a
-                    # genuine FPGA programming / array-init failure.
-                    if isinstance(e, PSUError):
-                        print(f'PSU error while power cycling the crate: {e!r}')
-                        psu_fails += 1
-                        psu_failed_this_cycle = True
-                        psu_err_tags.append({'Cycle': n, 'exception': repr(e)})
-                    else:
-                        print(f'Failed initializing the array because of error {e!r}')
-                        init_fails += 1
-                        init_exception_tags.append({'Cycle': n, 'exception': repr(e)})
-                    
-                else:
+                    with self.iteration_watchdog(
+                            iter_timeout,
+                            label=f'Power-cycle iteration {n + 1}/{n_cycles}'):
 
-                    print('Got an FPGA array')
+                        # Initialize the crate:
+                        try:
+                            self.ca = self.crate_init()
 
-                    # Synchronize crate in its own try/except
-                    # clause to catch any sync errors
-                    try:
-                        asyncio.run(self.ca.sync_async())
-                    except Exception as e:
-                        sync_fails += 1
-                        sync_error_tags.append({'Cycle': n,
-                                        'sync_err_msgs': repr(e)})
+                        except IterationTimeout:
+                            # Watchdog fired: let it reach the handler below
+                            # instead of being logged as an init failure.
+                            raise
 
-                    try:
+                        except Exception as e:
+                            # PSU-related failures are raised as PSUError (see crate_init /
+                            # connect_psu) and are counted separately. Anything else is a
+                            # genuine FPGA programming / array-init failure.
+                            if isinstance(e, PSUError):
+                                print(f'PSU error while power cycling the crate: {e!r}')
+                                psu_fails += 1
+                                psu_failed_this_cycle = True
+                                psu_err_tags.append({'Cycle': n, 'exception': repr(e)})
+                            else:
+                                print(f'Failed initializing the array because of error {e!r}')
+                                init_fails += 1
+                                init_exception_tags.append({'Cycle': n, 'exception': repr(e)})
 
-                        # Buffer counters for storing temporary errors for each cycle
-                        adc_errors_cycle_n = 0
-                        udp_errors_cycle_n = 0
+                        else:
 
-                        for i in self.ca.ib:
+                            print('Got an FPGA array')
 
-                            # Reset error counters for each cycle
-                            i.adc_clk_err_ctr = 0
-                            i.adc_clk_err_msgs = []
-                            i.udp_err_ctr = 0
-                            i.udp_err_msgs = []
-    
-                            # Check counters and error lists
-                            print(f'Checking ADC clocks on: {i}')
-                            adc_error = i.check_adc_frequencies('after boot')
-                            if adc_error:
-                                print(adc_error)
-                                adc_errors_cycle_n += 1
-                                adc_err_tags.append({'Cycle': n,
-                                        'ib': i,
-                                        'n_clk_errs': i.adc_clk_err_ctr,
-                                        'clk_err_msgs': i.adc_clk_err_msgs})
-
-                            print(f'Checking UDP errors on: {i}')
-                            asyncio.run(i.get_fpga_udp_metrics_async())
-                            udp_temp_errors = i.get_temperatures()
-                            if i.udp_err_ctr != 0:
-                                print(i.udp_err_msgs)
-                                udp_errors_cycle_n += 1
-                                udp_err_tags.append({'Cycle': n,
-                                            'ib': i,
-                                            'n_udp_errs': i.udp_err_ctr,
-                                            'udp_err_msgs': i.udp_err_msgs,
-                                            'temps': udp_temp_errors})
-
-                            print(f'Slot {i.slot} got {adc_errors_cycle_n} ADC clock errors, {udp_errors_cycle_n} UDP communication errors')
-                            print('')
-
-                        if adc_errors_cycle_n != 0:
-                            clk_fails += 1
-                            
-                        if udp_errors_cycle_n != 0:
-                            udp_fails += 1
-
-                    except Exception as e:
-                        print(f'Got other error {e!r} during cycle {n}')
-                        other_fails += 1
-                        other_err_tags.append({'Cycle': n,
-                                            'exception': repr(e)})
-
-                    finally:
-                        # Close UDP communication with each iceboard to prevent
-                        # errors. This is cleanup (not a sub-test), so it runs
-                        # regardless of check outcome and each board is closed
-                        # independently so one failure does not skip the rest or
-                        # count as a test error.
-                        for i in self.ca.ib:
+                            # Synchronize crate in its own try/except
+                            # clause to catch any sync errors
                             try:
-                                print(f'Closing UDP connection to slot {i.slot}')
-                                asyncio.run(i.close_async())
+                                asyncio.run(self.ca.sync_async())
+                            except IterationTimeout:
+                                raise
                             except Exception as e:
-                                print(f'Failed to close UDP connection to slot {i.slot}: {e!r}')
+                                sync_fails += 1
+                                sync_error_tags.append({'Cycle': n,
+                                                'sync_err_msgs': repr(e)})
 
+                            try:
+
+                                # Buffer counters for storing temporary errors for each cycle
+                                adc_errors_cycle_n = 0
+                                udp_errors_cycle_n = 0
+
+                                for i in self.ca.ib:
+
+                                    # Reset error counters for each cycle
+                                    i.adc_clk_err_ctr = 0
+                                    i.adc_clk_err_msgs = []
+                                    i.udp_err_ctr = 0
+                                    i.udp_err_msgs = []
+    
+                                    # Check counters and error lists
+                                    print(f'Checking ADC clocks on: {i}')
+                                    adc_error = i.check_adc_frequencies('after boot')
+                                    if adc_error:
+                                        print(adc_error)
+                                        adc_errors_cycle_n += 1
+                                        adc_err_tags.append({'Cycle': n,
+                                                'ib': i,
+                                                'n_clk_errs': i.adc_clk_err_ctr,
+                                                'clk_err_msgs': i.adc_clk_err_msgs})
+
+                                    print(f'Checking UDP errors on: {i}')
+                                    asyncio.run(i.get_fpga_udp_metrics_async())
+                                    udp_temp_errors = i.get_temperatures()
+                                    if i.udp_err_ctr != 0:
+                                        print(i.udp_err_msgs)
+                                        udp_errors_cycle_n += 1
+                                        udp_err_tags.append({'Cycle': n,
+                                                    'ib': i,
+                                                    'n_udp_errs': i.udp_err_ctr,
+                                                    'udp_err_msgs': i.udp_err_msgs,
+                                                    'temps': udp_temp_errors})
+
+                                    print(f'Slot {i.slot} got {adc_errors_cycle_n} ADC clock errors, {udp_errors_cycle_n} UDP communication errors')
+                                    print('')
+
+                                if adc_errors_cycle_n != 0:
+                                    clk_fails += 1
+                            
+                                if udp_errors_cycle_n != 0:
+                                    udp_fails += 1
+
+                            except IterationTimeout:
+                                raise
+
+                            except Exception as e:
+                                print(f'Got other error {e!r} during cycle {n}')
+                                other_fails += 1
+                                other_err_tags.append({'Cycle': n,
+                                                    'exception': repr(e)})
+
+                            finally:
+                                # Close UDP communication with each iceboard to
+                                # prevent errors. This is cleanup (not a sub-test),
+                                # so it runs regardless of check outcome and each
+                                # board is closed independently so one failure does
+                                # not skip the rest or count as a test error.
+                                for i in self.ca.ib:
+                                    try:
+                                        print(f'Closing UDP connection to slot {i.slot}')
+                                        asyncio.run(i.close_async())
+                                    except IterationTimeout:
+                                        raise
+                                    except Exception as e:
+                                        print(f'Failed to close UDP connection to slot {i.slot}: {e!r}')
+
+                except IterationTimeout as e:
+                    # The iteration froze, most likely because of a hardware
+                    # problem. We deliberately do not diagnose it here: record
+                    # it, then let the loop power-cycle the crate and carry on
+                    # with the next iteration.
+                    elapsed = time.monotonic() - t_start
+                    print(f'TIMEOUT: {e}')
+                    print(f'Abandoning iteration {n + 1}/{n_cycles} after '
+                          f'{elapsed:.1f} s and moving on to the next one')
+                    timeout_fails += 1
+                    timeout_err_tags.append({'Cycle': n,
+                                             'elapsed_s': round(elapsed, 1),
+                                             'exception': repr(e)})
+
+                    # No board cleanup here on purpose: the board is presumed
+                    # wedged, so closing it could hang again, and the PSU
+                    # power-off at the end of this iteration tears down the
+                    # crate (and therefore those connections) anyway.
+
+                iter_duration = time.monotonic() - t_start
+                iter_durations.append(iter_duration)
 
                 print(50*'-')
                 print(f'Total accumulated errors so far at iteration {n + 1}/{n_cycles}')
+                print(f'Iteration duration = {iter_duration:.1f} s '
+                      f'(mean {np.mean(iter_durations):.1f} s, '
+                      f'max {max(iter_durations):.1f} s)')
                 print(f'Sync errors = {sync_fails}')
                 print(f'ADC clock errors = {clk_fails}')
                 print(f'UDP errors = {udp_fails}')
                 print(f'init_exceptions = {init_fails}')
                 print(f'Other errors = {other_fails}')
                 print(f'PSU errors = {psu_fails}')
+                print(f'Timed-out (frozen) iterations = {timeout_fails}')
                 print(50*'-')
                 
                 # Turn off crate and sleep before turning back on
@@ -671,12 +826,23 @@ class TestPreDeploymentCrate(TestUtils):
             for psu_err in psu_err_tags:
                 print(psu_err)
 
+            for timeout_err in timeout_err_tags:
+                print(timeout_err)
+
+            if iter_durations:
+                print(f'Iteration durations (s): mean {np.mean(iter_durations):.1f}, '
+                      f'min {min(iter_durations):.1f}, max {max(iter_durations):.1f}, '
+                      f'over {len(iter_durations)} iteration(s)')
+
             # assert (max(init_fails, clk_fails, udp_fails, delay_fails, backplane_fails) <= n_fails_accept), f'ADC errors on: {adc_err_tags}, UDP errors on: {udp_err_tags}, Init exceptions on: {init_exception_tags}, Delay exceptions on: {delay_exception_tags}, Backplane errors on: {backplane_err_tags}'
-            assert (max(init_fails, sync_fails, clk_fails, udp_fails, other_fails, psu_fails) <= n_fails_accept), 'Print check above '
+            assert (max(init_fails, sync_fails, clk_fails, udp_fails, other_fails, psu_fails, timeout_fails) <= n_fails_accept), 'Print check above '
             passed = True
 
         finally:
             test_results.passed = passed
+            test_results.timeout_fails = timeout_fails
+            test_results.timeout_err_tags = timeout_err_tags
+            test_results.iter_durations = iter_durations
             xr.save_data(test_results)
             if self.psu:
                 try:

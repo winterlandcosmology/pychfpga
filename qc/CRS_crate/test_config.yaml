@@ -85,4 +85,9 @@ f_engine_tests:
     n_cycles: 1000
     percent_accept: 0.05 #0.01
     t_cycle: 120  #time in seconds
+    # Watchdog for a single iteration (crate init + sync + per-board checks),
+    # in seconds. An iteration that exceeds this is assumed to be frozen by a
+    # hardware problem: it is aborted, counted as a failure, and the test moves
+    # on to the next iteration. Excludes the t_cycle cool-down. 0 disables it.
+    iter_timeout: 300
     

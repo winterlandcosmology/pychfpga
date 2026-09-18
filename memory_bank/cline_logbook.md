@@ -386,3 +386,36 @@ metrics = await fpga_master.get_metrics_async()
 - `pyproject.toml` (psucontrol pin)
 
 **Status**: ✅ Verified with `python -m py_compile`. Full end-to-end run still requires live crate + PSU hardware.
+
+---
+
+## September 18, 2026 - Power-Cycle Test Iteration Watchdog
+
+### Task: Stop a hardware freeze from stalling `test_power_cycle`
+
+**Objective**: A (currently undiagnosed) hardware problem intermittently freezes an iteration of the power cycle test, hanging the whole run. Rather than diagnosing it now, bound each iteration in time: if it takes too long, assume a hardware issue, kill the current cycle and move on to the next iteration.
+
+**Why a signal-based watchdog**: The freeze occurs *inside* a blocking call (e.g. `asyncio.run(...)` on an FPGA transaction), so control never returns and simply measuring elapsed time afterwards cannot help. A `SIGALRM` timer fires *while* the call is blocked and raises an exception that unwinds it. `asyncio.wait_for` was rejected as it would require rewriting every `asyncio.run` call site and would not cover synchronous code; threads were rejected since Python cannot force-kill one.
+
+#### Changes to `qc/CRS_crate/f_engine_tests.py`
+
+- **`IterationTimeout(RuntimeError)`**: new exception raised when an iteration exceeds its time limit.
+- **`TestUtils.iteration_watchdog(timeout, label)`**: a `@contextmanager` that arms `signal.alarm(timeout)`, raises `IterationTimeout` from the SIGALRM handler, and always disarms the timer and restores the previous handler on exit (so an alarm can never leak into the next iteration or into teardown). `timeout <= 0` disables it, and it degrades to a no-op with a warning if SIGALRM cannot be armed (non-main thread / non-Unix).
+- **`test_power_cycle`**: the hardware-facing part of each iteration (crate init + sync + per-board ADC/UDP checks) is wrapped in the watchdog. A new `except IterationTimeout` handler logs the event, increments `timeout_fails`, records `timeout_err_tags` (cycle + elapsed seconds), and lets the loop continue to the next iteration.
+- **`except IterationTimeout: raise` guards** added ahead of the pre-existing broad `except Exception` handlers (init, sync, checks, board close) and inside `_psu_call`, so the watchdog exception is never swallowed or retried past its deadline.
+- **Duration tracking**: `iter_durations` records every iteration; the per-cycle summary prints the current/mean/max duration and a `Timed-out (frozen) iterations` counter, and the end-of-test report prints mean/min/max.
+- **Pass/fail**: `timeout_fails` is included in the final `max(...) <= n_fails_accept` assertion, and `timeout_fails` / `timeout_err_tags` / `iter_durations` are saved to `test_results`.
+
+**Deliberately not done**: no board-close cleanup after a timeout. The board is presumed wedged (closing it could hang again), and the PSU power-off at the end of the iteration — which runs *outside* the watchdog, so it is never interrupted — tears down the crate and those connections anyway.
+
+#### Changes to `qc/CRS_crate/test_config.yaml`
+
+- New `f_engine_tests.p_cycle_test.iter_timeout: 300` (seconds). Covers crate init + sync + checks, excludes the `t_cycle` cool-down. `0` disables the watchdog.
+
+**Files Modified**:
+- `qc/CRS_crate/f_engine_tests.py`
+- `qc/CRS_crate/test_config.yaml`
+
+**Validation**: `python -m py_compile` clean; YAML parses. `git diff -w` confirms the only removed lines are a reflowed comment and the old assert (the large diff is re-indentation from the new `with` block). Verified off-hardware with two scripts: a unit-level check that the watchdog interrupts a frozen `asyncio.run`, restores the handler, leaks no alarm, and is disabled at `timeout=0`; and an end-to-end simulation of the real `test_power_cycle` with mocked hardware where iteration 2 of 4 freezes — it was aborted after ~2 s, counted once, and all 4 iterations ran.
+
+**Limitations**: SIGALRM is Unix-only and main-thread-only (fine for this CLI/pytest harness; it no-ops with a warning otherwise). Resolution is 1 second (`signal.alarm` takes an int). The 300 s default should be re-tuned against observed healthy iteration times on the bench. The underlying hardware freeze remains undiagnosed by design.
