@@ -816,7 +816,7 @@ class POCKET_CORRELATOR:
             # Apply some processing to recover the value in a fully linear unit.
             gain_actual = (np.array(self.i.chan[n].SCALER.get_gain_table(bank = bank)) & 0xFFFF).flatten() # Full 16-bit value, meaningless without being processed
             gain_lin_actual[n] = gain_actual & 0x7FF # Lower 11 bits, linear (mantissa) component
-            gain_log_actual[n] = (gain_actual >> 11) + self.i.chan[n].SCALER.SHIFT_LEFT # Upper 5 bits, logarithmic (exponential) component, plus common log component
+            gain_log_actual[n] = (gain_actual >> 11) + self.i.chan[n].SCALER.get_shift_left(bank) # Upper 5 bits, logarithmic (exponential) component, plus common log component
         
         if return_scaler_frames:
             n_sclr_frames = n_fft_frames # capture the same number of frames
@@ -871,7 +871,7 @@ class POCKET_CORRELATOR:
         gain_lin : (np.ndarray) The linear component of the "actual" digital gains. The shape is (NPOLS, NBINS).
 
         gain_log : (np.ndarray) The logarithmic component of the "actual" digital gains. The shape is (NPOLS, NBINS). gain_log should include the "common" log
-        gain, which can be read using self.i.chan[n].SCALER.SHIFT_LEFT.
+        gain, which can be read using self.i.chan[n].SCALER.get_shift_left(bank).
 
         digital_gains_parent_path : (str) A parent directory containing sub-directories of digital gains. 
 
