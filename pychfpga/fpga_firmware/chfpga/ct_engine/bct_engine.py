@@ -12,6 +12,7 @@ from ..mmi import MMI, MMIRouter, BitField, CONTROL, STATUS
 from . import chan_crossbar
 from . import shuffle_crossbar
 from . import shuffle
+from .bct_array_methods import BCTArrayMethods
 
 class WiredCrossbar(MMI):
     """ Trivial hardwired crossbar, typically used with the internal correlator engine. Does not have any MMI register.
@@ -62,6 +63,7 @@ class BCTEngine(MMIRouter):
 
         super().__init__(router=router, router_port=router_port)
         self.config = config
+        self.fpga.register_array_methods(BCTArrayMethods, key='CT')
 
         self.BP_SHUFFLE = None
         self.CROSSBAR = None

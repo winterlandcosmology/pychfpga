@@ -122,8 +122,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
     - TCPipe: TCP-based BSB bridge on the on-board processor (ZCU111 / CRS today).
     """
 
-    # Array method provider class for this firmware
-    array_method_class = chFPGAArrayMethods
+    _array_method_classes = {'chFPGA': chFPGAArrayMethods}
 
     #: Values for ``self.BSB_TRANSPORT`` and ``PLATFORM_SUPPORT[''bsb_transport'']`` (same strings).
     BSB_TRANSPORT_UDP = 'udp'
@@ -4641,7 +4640,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 glog = -1
 
             else:
-                glog = chan.SCALER.SHIFT_LEFT
+                glog = chan.SCALER.get_shift_left(bank)
 
             gain_list.append([chan.chan_number, [glin, glog]])
 

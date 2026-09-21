@@ -17,6 +17,30 @@ class FPGAFirmware():
         # Do not allow empty platform support tables
         if not cls.PLATFORM_SUPPORT:
             raise RuntimeError(f'Subclass {cls.__name__} must define a PLATFORM_SUPPORT table.')
+        if '_array_method_classes' not in cls.__dict__:
+            raise RuntimeError(
+                f'{cls.__name__} must define its own _array_method_classes dict')
+        if not isinstance(cls.__dict__['_array_method_classes'], dict):
+            raise RuntimeError(
+                f'{cls.__name__}._array_method_classes must be a dict')
+
+    def register_array_methods(self, cls, key):
+        """Register an array-method provider class on this firmware type.
+
+        ``_array_method_classes`` is a class dict shared by every instance of
+        this firmware subclass. Duplicate registration of the same class under
+        the same key still refreshes this board's Motherboard snapshot.
+        """
+        existing = self._array_method_classes.get(key)
+        if existing is cls:
+            self.mb.update_array_method_classes()
+            return
+        if key in self._array_method_classes:
+            raise RuntimeError(
+                f'{self!r}: array method key {key!r} already registered as '
+                f'{existing.__name__}, cannot replace with {cls.__name__}')
+        self._array_method_classes[key] = cls
+        self.mb.update_array_method_classes()
 
     # @classmethod
     # def get_fpga_firmware_class_by_name(cls, name):

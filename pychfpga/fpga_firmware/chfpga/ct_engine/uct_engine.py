@@ -10,6 +10,7 @@ import numpy as np
 from ..mmi import MMI, MMIRouter, BitField, CONTROL, STATUS
 
 from . import xxvglink
+from .uct_array_methods import UCTArrayMethods
 
 
 class CT1Regs(MMI):
@@ -113,6 +114,7 @@ class UCTEngine(MMIRouter):
 
         super().__init__(router=router, router_port=router_port)
         self.config = config
+        self.fpga.register_array_methods(UCTArrayMethods, key='CT')
 
         self.CT_LEVEL = self.fpga.CT_LEVEL
 
