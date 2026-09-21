@@ -164,9 +164,9 @@ class TestFuncgen(TestModule):
         logger = self.get_logger()
         logger.debug("Starting data capture for one period")
         self.board.start_data_capture(period=1)
-        receiver = self.board.get_data_receiver()
+        receiver = self.get_data_receiver()
         logger.debug("Reading raw frames")
-        ts, data, count = receiver.read_raw_frames(1)
+        ts, data, count = receiver.read_raw_frames(1, source=0)
         logger.info(f"Expected {len(count[0])} packages, received {np.sum(count[0])}.")
         assert np.all(count[0]), (f"Missing packages from ICE board. Received {count[0]} packets (per channel). "
                                f"Check connection and system configuration.")
@@ -184,7 +184,7 @@ class TestFuncgen(TestModule):
         logger.debug(f"Setting data source to {source.upper()}")
         self.board.set_channelizer(data_source=source, fft_bypass=1, scaler_bypass=1, **func_kwargs)
         logger.debug("Initializing data receiver")
-        receiver = self.board.get_data_receiver(
+        receiver = self.get_data_receiver(
             verbose=self.loglevelrecv,
         )
         receiver.flush()
@@ -194,7 +194,7 @@ class TestFuncgen(TestModule):
         # packets are discarded and the assembled first frame is zero-padded.
         # Capture one extra burst and drop the first when every frame is needed.
         ncap = number_of_bursts + 1 if keep_all_frames else number_of_bursts
-        _, data, _ = receiver.read_raw_frames(ncap=ncap, split=True)
+        _, data, _ = receiver.read_raw_frames(ncap=ncap, split=True, source=0)
         logger.debug(f"Received {len(data)} packets from FUNCGEN")
         if keep_all_frames:
             frames_per_cap = data.shape[1] // ncap
@@ -293,12 +293,12 @@ class TestFuncgen(TestModule):
         self.board.start_data_capture(period=1, source='funcgen', frames_per_burst=2, mode=0)
         self.board.set_channelizer(data_source='noise', seed=seed0, channels=range(half_chan))
         self.board.set_channelizer(data_source='noise', seed=seed1, channels=range(half_chan, 2 * half_chan))
-        receiver = self.board.get_data_receiver(verbose=self.loglevelrecv)
+        receiver = self.get_data_receiver(verbose=self.loglevelrecv)
         receiver.flush()
         self.board.chan[0].FUNCGEN.RST_LFSR = 1
         self.board.chan[0].FUNCGEN.RST_LFSR = 0
         self.board.sync()
-        _, data, _ = receiver.read_raw_frames(split=True)
+        _, data, _ = receiver.read_raw_frames(split=True, source=0)
         assert data.shape[0] == self.data.NUM_CHANNELS, (
             f"Expected {self.data.NUM_CHANNELS} channels, got shape {data.shape}"
         )

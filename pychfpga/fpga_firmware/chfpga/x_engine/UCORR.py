@@ -358,3 +358,7 @@ class UCORR(MMI):
             self.logger.warning(f"{self!r}: 'bandwidth_limit' argument is not yet supported by UCORR")
         self.verbose = verbose
 
+    def stop_correlator(self):
+        """Stop the correlator array from sending data."""
+        self.SOFT_RESET = 1
+

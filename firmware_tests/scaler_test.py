@@ -139,14 +139,15 @@ class TestScaler(TestModule):
         Sets the function generator to output a specific set of values and then captures data from the scaler.
         '''
         logger = self.get_logger()
-        if cap_data_type is None:
-            cap_data_type = int(self.board.chan[0].SCALER.CAP_DATA_TYPE)
         self.board.sync()
         source = gen_data(func, samples=self.data.NUM_SAMPLES, **func_kwargs) #setup has already been run, so self.data has been set
         self.board.set_data_source(source='arb', data=source)
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv) #NOTE: must be after earlier calls for some reason
+        receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv) #NOTE: must be after earlier calls for some reason
         receiver.flush()
-        self.board.start_data_capture(period=0.1, source='scaler', data_type=cap_data_type)
+        capture_kw = dict(period=0.1, source='scaler')
+        if cap_data_type is not None:
+            capture_kw['data_type'] = cap_data_type
+        self.board.start_data_capture(**capture_kw)
         self.board.sync()
         if not read:
             logger.debug(
@@ -160,21 +161,22 @@ class TestScaler(TestModule):
                 split=False,
                 source=1,
                 verbose=self.test_config.loglevelrecv,
-                complex_override=False,
+                # Packed integer stream is only needed to extract sticky flags
+                # from the low bits of ICE 4-bit readout words.
+                complex_override=False if get_flags else None,
             )
             assert np.all(np.equal(data[0], data))
             if get_flags:
                 return source, data & (2**self.data.READOUT_SHIFT-1)
-            return source, data // (2**self.data.READOUT_SHIFT)
+            return source, data
         #TODO: add capture mode for ucap
         else:
             _, data, _ = receiver.read_raw_frames(
-                    ncap=2, 
-                    flush=False, 
-                    split=True, 
-                    source=1, 
-                    verbose=self.test_config.loglevelrecv, 
-                    complex_override=False
+                    ncap=2,
+                    flush=False,
+                    split=True,
+                    source=1,
+                    verbose=self.test_config.loglevelrecv,
                 )
             data = data[:, -1, :] #get last frame to ensure no stale data
             assert np.all(np.equal(data[0], data))
@@ -792,7 +794,10 @@ class TestScaler(TestModule):
         source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=cap_data_type)
         source_i = source.astype(np.int64)
         if self.data.CAPTURE_WIDTH > 4: #even in 8bit mode, the 1 is placed in the 4th bit, so need to correct for that
-            data //= 16
+            if np.iscomplexobj(data):
+                data = (np.asarray(data.real) // 16) + 1j * (np.asarray(data.imag) // 16)
+            else:
+                data //= 16
         scaled = source_i * 2**self.data.IMPLICIT_SHIFT * 2**postscaler // 2**self.data.SCALER_SHIFT
         #only checks re saturation
         if out_mode == 1:
@@ -901,7 +906,7 @@ class TestScaler(TestModule):
             data_type=cap_data_type,
         )
         self.board.sync()
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv)
         receiver.flush()
         ts, data, count = receiver.read_raw_frames(ncap=4, split=True, source=1)
         data = data[:, -1, :]
@@ -1200,8 +1205,8 @@ class TestScaler(TestModule):
                     overflow_buffer=overflow_buffer,
                 )
                 self.board.start_data_capture(period=0.01, source='scaler', data_type=0)
-                receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
-                ts, data, count = receiver.read_raw_frames(ncap=2, split=False, source=1)
+                receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv)
+                ts, data, count = receiver.read_raw_frames(ncap=2, split=False, source=1, complex_override=False)
                 # Use the second frame to avoid potential source-switch transition effects.
                 flags_out = data[:, -1, :] & mask
                 logger.debug(
@@ -1262,10 +1267,12 @@ class TestScaler(TestModule):
             self.data.MIN_OUTPUT,
             self.data.MAX_OUTPUT,
         )
+        ref_before_frame = (ref_before_frame[::2] + 1j * ref_before_frame[1::2]).astype(np.complex64)
+        ref_after_frame = (ref_after_frame[::2] + 1j * ref_after_frame[1::2]).astype(np.complex64)
         assert(all(ch.SCALER.CURRENT_GAIN_BANK == 0 for ch in self.board.chan))
         # Match the known-good CRS path in `_set_capture_scaler`: slower burst
         # period, sync after arming capture, and take the last frame of ncap=2.
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv)
         receiver.flush()
         self.board.start_data_capture(
             period=0.1,
@@ -1281,10 +1288,7 @@ class TestScaler(TestModule):
             ncap=2,
             split=True,
             source=1,
-            complex_override=False,
         )
-        if self.data.READOUT_SHIFT > 0:
-            data_before //= 2 ** self.data.READOUT_SHIFT
         before_frame = np.asarray(data_before[0, -1, :])
         before_ts = int(ts_before[-1])
 
@@ -1298,11 +1302,7 @@ class TestScaler(TestModule):
             ncap=2,
             split=True,
             source=1,
-            complex_override=False,
         )
-
-        if self.data.READOUT_SHIFT > 0:
-            data_after //= 2 ** self.data.READOUT_SHIFT
         after_frame = np.asarray(data_after[0, -1, :])
         after_ts = int(ts_after[-1])
 
@@ -1370,7 +1370,7 @@ class TestScaler(TestModule):
             self.board.chan[ch].FUNCGEN.BYTE_A = randint(0, 255)
             self.board.chan[ch].FUNCGEN.BYTE_B = randint(0, 255)
         self.board.set_channelizer(data_source='noise', scaler_bypass=False, scaler_cap_data_type=0, scaler_rounding_mode=rounding_mode, symmetric_saturation=symmetric_saturation)
-        receiver = self.board.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv)
         avgs = np.zeros(postscaler_range[1]  - postscaler_range[0], dtype=np.float64)
         n = self.data.NUM_SAMPLES * len(self.board.chan) * num_frames
         num_bursts = num_frames // FRAMES_PER_BURST
@@ -1380,10 +1380,11 @@ class TestScaler(TestModule):
             self.board.sync()
             for i in range(num_bursts):
                 receiver.flush()
-                ts, data, count = receiver.read_raw_frames(ncap=1, split=False, source=1, complex_override=False)
-                if self.data.READOUT_SHIFT > 0:
-                    data //= 2 ** self.data.READOUT_SHIFT
-                avgs[postscaler-postscaler_range[0]] += np.sum(data)
+                ts, data, count = receiver.read_raw_frames(ncap=1, split=False, source=1)
+                if np.iscomplexobj(data):
+                    avgs[postscaler-postscaler_range[0]] += np.sum(data.real) + np.sum(data.imag)
+                else:
+                    avgs[postscaler-postscaler_range[0]] += np.sum(data)
                 if i == 0 and postscaler == postscaler_range[0]:
                     logger.debug(
                         f"test_averages: ts_shape={ts.shape} data_shape={data.shape} count_shape={count.shape} "

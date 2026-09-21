@@ -278,7 +278,7 @@ class TestFFT(TestModule):
             data_type=self.FFT_COMPLEX_CAPTURE_MODE,
         )
         self.board.sync()
-        receiver = self.board.get_data_receiver(port_number=0, verbose=self.test_config.loglevelrecv)
+        receiver = self.get_data_receiver(port_number=0, verbose=self.test_config.loglevelrecv)
         receiver.flush()
         # The PFB/FFT pipeline is continuously running. Read several completed
         # logical frames after changing FUNCGEN, then assert against the last one.
@@ -552,7 +552,7 @@ class TestFFT(TestModule):
         )
         self.board.sync()
 
-        receiver = self.board.get_data_receiver(port_number=0, verbose=self.test_config.loglevelrecv)
+        receiver = self.get_data_receiver(port_number=0, verbose=self.test_config.loglevelrecv)
         receiver.flush()
         ts, data, count = receiver.read_raw_frames(
             ncap=ncap,
