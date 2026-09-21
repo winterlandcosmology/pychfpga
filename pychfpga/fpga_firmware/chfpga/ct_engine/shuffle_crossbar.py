@@ -18,6 +18,8 @@ import logging
 import asyncio
 from collections import OrderedDict
 
+from pychfpga.common.async_utils import run_async
+
 # PyPi packages
 import numpy as np
 
@@ -478,13 +480,16 @@ class ShuffleCrossbar(MMI):
         lane_map = self.get_lane_map()
         rx_lane_group = {2: 'pcb', 3: 'qsfp'}[self.crossbar_level]
         active_slots = set(self.fpga.crate.slot.keys())
-        rx_errors = self.fpga.BP_SHUFFLE.get_rx_lane_monitor('ERROR_CTR', lane_group=rx_lane_group)
-        rx_max_frame = self.fpga.BP_SHUFFLE.get_rx_lane_monitor('MAX_FRAME_LENGTH', lane_group=rx_lane_group)
-        rx_min_frame = self.fpga.BP_SHUFFLE.get_rx_lane_monitor('MIN_FRAME_LENGTH', lane_group=rx_lane_group)
+        # get_rx_lane_monitor and capture_frame_number are coroutines; batch the
+        # three monitor reads into the single call the API already supports.
+        (rx_errors, rx_max_frame, rx_min_frame) = run_async(
+            self.fpga.BP_SHUFFLE.get_rx_lane_monitor(
+                ['ERROR_CTR', 'MAX_FRAME_LENGTH', 'MIN_FRAME_LENGTH'],
+                lane_group=rx_lane_group))
 
         stream_id = self.capture_stream_id()
         stream_id = [stream_id[lane] for lane in lane_map]
-        frame_number = self.capture_frame_number()
+        frame_number = run_async(self.capture_frame_number())
         frame_ref = frame_number[0]
         frame_number = [frame_number[lane] for lane in lane_map]
 

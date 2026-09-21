@@ -12,6 +12,7 @@ import time
 import numpy as np
 
 from pychfpga.common.array_methods import ArrayMethods
+from pychfpga.common.async_utils import run_async
 from pychfpga.common.udp_packet_receiver import UDPPacketReceiver
 
 
@@ -2503,30 +2504,40 @@ class chFPGAArrayMethods(ArrayMethods):
             if dest_slot in slots.keys():
                 cb = slots[dest_slot].CROSSBAR2
                 bp = slots[dest_slot].BP_SHUFFLE
-                bin_sel = cb.BIN_SEL[0]
                 shuffle_to_bin_sel_lane_map = cb.get_reverse_lane_map()
                 remapped_direct_lane = shuffle_to_bin_sel_lane_map[0]
                 if reset_stats:
                     bp.reset_stats()
-                stream_ids = bin_sel.capture_stream_id()
-                frame_number = bin_sel.capture_frame_number()
+                # The header capture lives on the crossbar, not on its bin
+                # selectors: it was moved there (along with the registers it
+                # touches) when the bin-sel capture logic was removed, so
+                # cb.BIN_SEL[0] has neither method.
+                stream_ids = cb.capture_stream_id()
+                frame_number = run_async(cb.capture_frame_number())
                 frame_number = [f - frame_number[remapped_direct_lane] for f in frame_number]
                 captured_source = {remapped_dest_lane: (((s >> 4) & 0xF) + 1, (s & 0xF))
                                    for remapped_dest_lane, s in enumerate(stream_ids)}
                 computed_source = {shuffle_to_bin_sel_lane_map[dest_lane]: crate.get_matching_tx((dest_slot, dest_lane))
                                    for dest_lane in lane_range}
-                valid_source = {shuffle_to_bin_sel_lane_map[dest_lane]: v
-                                for dest_lane, v in enumerate(cb.get_lane_monitor('INPUT_DETECT'))}
+                # One batched read per device rather than three separate passes.
+                # There is no 'INPUT_DETECT' monitor; INPUT_FRAME_CTR carries the
+                # same meaning here - has this lane ever delivered a frame?
+                (input_frame_ctr, missing, align_ovf) = run_async(cb.get_lane_monitor(
+                    ['INPUT_FRAME_CTR', 'MISSING_FRAME', 'ALIGN_FIFO_OVERFLOW']))
+                (rx_err, rx_ovf, rx_maxlen) = run_async(bp.get_rx_lane_monitor(
+                    ['ERROR_CTR', 'RX_FIFO_OVERFLOW', 'MAX_FRAME_LENGTH']))
+                valid_source = {shuffle_to_bin_sel_lane_map[dest_lane]: bool(v)
+                                for dest_lane, v in enumerate(input_frame_ctr)}
                 missing_frame = {shuffle_to_bin_sel_lane_map[dest_lane]: v
-                                 for dest_lane, v in enumerate(cb.get_lane_monitor('MISSING_FRAME'))}
+                                 for dest_lane, v in enumerate(missing)}
                 align_fifo_overflow = {shuffle_to_bin_sel_lane_map[dest_lane]: v
-                                       for dest_lane, v in enumerate(cb.get_lane_monitor('ALIGN_FIFO_OVERFLOW'))}
+                                       for dest_lane, v in enumerate(align_ovf)}
                 rx_errors = {shuffle_to_bin_sel_lane_map[dest_lane]: v
-                             for dest_lane, v in enumerate(bp.get_rx_lane_monitor('ERROR_CTR'))}
+                             for dest_lane, v in enumerate(rx_err)}
                 rx_fifo_overflow = {shuffle_to_bin_sel_lane_map[dest_lane]: v
-                                    for dest_lane, v in enumerate(bp.get_rx_lane_monitor('FIFO_OVERFLOW'))}
+                                    for dest_lane, v in enumerate(rx_ovf)}
                 rx_max_frame_length = {shuffle_to_bin_sel_lane_map[dest_lane]: v
-                                       for dest_lane, v in enumerate(bp.get_rx_lane_monitor('MAX_FRAME_LENGTH'))}
+                                       for dest_lane, v in enumerate(rx_maxlen)}
 
             else:
                 captured_source = {dest_lane: None for dest_lane in lane_range}
