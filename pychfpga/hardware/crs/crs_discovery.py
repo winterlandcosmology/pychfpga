@@ -6,6 +6,7 @@ import hashlib
 import logging
 import re
 import socket
+import sys
 import time
 import netifaces
 from pathlib import Path
@@ -40,6 +41,9 @@ TCPIPE_BEACON_REQUEST_INTERVAL = 2.0
 UPLOAD_METHODS = frozenset({"xmodem", "xmodem_pipe", "loads", "wget"})
 DEFAULT_UPLOAD_METHOD = "wget"
 FWREQ_COLLECT_TIMEOUT = 60.0
+XMODEM_PIPE_DEPTH = 2
+# 128 (SOH) for pipe smoke tests against ~2 KiB netconsole buffers; 1024 (STX) for 1K.
+XMODEM_BLOCK_SIZE = 128
 
 broadcast_addresses = []
 
@@ -74,11 +78,31 @@ def request_beacon(ip_addr=None, port=DEFAULT_DISCOVERY_PORT):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             sock.sendto(BEACON_REQUEST_PAYLOAD, (addr, port))
-            logger.info(f"Broadcasted a CRS beacon request on UDP port {port} via {addr}")
+            logger.debug(f"Broadcasted a CRS beacon request on UDP port {port} via {addr}")
 
 
 def _normalize_header_key(key):
     return key.strip().lower().replace("_", "-").replace(" ", "-")
+
+
+# Uninitialized EEPROMs (and U-Boot env fallbacks) advertise these instead of
+# a real part/serial. Treat them as missing crate identity.
+_PLACEHOLDER_FIELD_VALUES = frozenset({
+    "", "unknown", "?", "none", "n/a", "null", "uninitialized",
+})
+
+
+def _usable_field(value):
+    """Return a stripped field value, or None if it is empty or a placeholder."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text.lower() in _PLACEHOLDER_FIELD_VALUES:
+        return None
+    # Erased FRU bytes often show up as a run of 0xFF / non-ASCII.
+    if all(ord(c) >= 0x7F for c in text):
+        return None
+    return text
 
 
 def _parse_fwreq(data, kind="FWREQ"):
@@ -106,6 +130,35 @@ def _file_md5(path):
     """Return the MD5 hex digest of a file."""
     with open(path, "rb") as f:
         return hashlib.file_digest(f, "md5").hexdigest()
+
+
+_TCPIPE_GIT_MARKER = b"TCPIPE_GIT="
+
+
+def tcpipe_version_from_elf(pathname):
+    """Return the GIT_VERSION compiled into a TCPipe ELF, or None.
+
+    The firmware stores ``TCPIPE_GIT=<git describe>`` as a NUL-terminated
+    rodata string. Discovery beacons advertise the same value as
+    ``Bootloader Version``, so the uploader can skip boards that already
+    match the ELF being loaded.
+    """
+    if not pathname:
+        return None
+    path = Path(pathname)
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    start = data.find(_TCPIPE_GIT_MARKER)
+    if start < 0:
+        return None
+    start += len(_TCPIPE_GIT_MARKER)
+    end = data.find(b"\0", start)
+    if end < 0:
+        return None
+    version = data[start:end].decode("ascii", "replace").strip()
+    return version or None
 
 
 async def _async_sock_recvfrom(sock, bufsize, timeout):
@@ -455,30 +508,38 @@ class NetConsole:
 
     async def send_cmd_until_prompt(self, cmd, timeout=600.0, idle=5.0):
         """Send a command and wait until the shell prompt returns."""
-        self.log.info("%r: >>> %s", self, cmd)
+        self.log.debug("%r: >>> %s", self, cmd)
         self._sock.send((cmd + "\n").encode("utf-8"))
         output = await self._recv_until_prompt(timeout=timeout, idle=idle)
         if cmd in output:
             output = output.replace(cmd, "", 1)
         return output.strip()
 
-    async def xmodem_send(self, filename):
-        self.log.debug("%r: starting XMODEM send of %s", self, filename)
+    async def xmodem_send(self, filename, block_size=XMODEM_BLOCK_SIZE):
+        self.log.debug(
+            "%r: starting XMODEM send of %s (block_size=%d)",
+            self, filename, block_size)
         # Binary protocols need a blocking socket; restore after transfer.
         self._sock.setblocking(True)
         try:
-            ok = xmodem1k_send(self._sock, filename, log=self.log)
+            ok = xmodem1k_send(
+                self._sock, filename, log=self.log, block_size=block_size)
         finally:
             self._sock.setblocking(False)
         self.log.debug("%r: XMODEM send %s", self, "ok" if ok else "failed")
         return ok
 
-    async def xmodem_pipe_send(self, filename, pipe_depth=8):
-        self.log.debug("%r: starting XMODEM pipe send of %s", self, filename)
+    async def xmodem_pipe_send(
+            self, filename, pipe_depth=XMODEM_PIPE_DEPTH,
+            block_size=XMODEM_BLOCK_SIZE):
+        self.log.debug(
+            "%r: starting XMODEM pipe send of %s (pipe_depth=%d, block_size=%d)",
+            self, filename, pipe_depth, block_size)
         self._sock.setblocking(True)
         try:
             ok = xmodem1k_pipe_send(
-                self._sock, filename, pipe_depth=pipe_depth, log=self.log)
+                self._sock, filename, pipe_depth=pipe_depth, log=self.log,
+                block_size=block_size)
         finally:
             self._sock.setblocking(False)
         self.log.debug("%r: XMODEM pipe send %s", self, "ok" if ok else "failed")
@@ -500,7 +561,7 @@ class NetConsole:
         if timeout is None:
             timeout = self._md5_timeout_for_size(nbytes)
         cmd = "md5sum $loadaddr $filesize"
-        self.log.info(
+        self.log.debug(
             "%r: >>> %s (%d bytes, timeout %.0fs)",
             self, cmd, nbytes, timeout,
         )
@@ -516,7 +577,7 @@ class NetConsole:
                 self, expected_md5, output or "(no reply)",
             )
             return False
-        self.log.info("%r: MD5 OK (%s)", self, expected_md5)
+        self.log.debug("%r: MD5 OK (%s)", self, expected_md5)
         return True
 
     async def upload_and_boot_elf(self, elf_path, verify_md5=False, upload_method="xmodem"):
@@ -552,7 +613,7 @@ class NetConsole:
                     self, upload_cfg["label"], elf_path.name)
                 return False
             transfer_s = time.monotonic() - t0
-            self.log.info(
+            self.log.debug(
                 "%r: %s sent %d bytes in %.2fs (%.0f KB/s)",
                 self, upload_cfg["label"], expected_size, transfer_s,
                 expected_size / transfer_s / 1024,
@@ -566,7 +627,7 @@ class NetConsole:
             return False
 
         load_info = await self.send_cmd("printenv loadaddr filesize", timeout=2)
-        self.log.info("%r: loaded %s: %s", self, elf_path.name, load_info or "(no reply)")
+        self.log.debug("%r: loaded %s: %s", self, elf_path.name, load_info or "(no reply)")
         if "filesize=" in load_info:
             try:
                 loaded_size = int(load_info.split("filesize=", 1)[1].strip(), 16)
@@ -580,16 +641,16 @@ class NetConsole:
 
         if not await self.verify_loaded_md5(expected_md5, file_size=expected_size):
             return False
-        self.log.info(
+        self.log.debug(
             "%r: firmware upload took %.2fs", self, time.monotonic() - t_upload)
 
         t_boot = time.monotonic()
         output = await self.send_cmd(self.BOOTELF_CMD, timeout=10)
         if output:
-            self.log.info("%r: boot response: %s", self, output)
+            self.log.debug("%r: boot response: %s", self, output)
         ok = self._bootelf_ok(output)
         if ok:
-            self.log.info(
+            self.log.debug(
                 "%r: bootelf handoff took %.2fs", self, time.monotonic() - t_boot)
         return ok
 
@@ -618,7 +679,7 @@ class NetConsole:
 
         t_upload = time.monotonic()
         wget_cmd = f"setenv autostart yes; wget ${{loadaddr}} {url}"
-        self.log.info("%r: >>> %s", self, wget_cmd)
+        self.log.debug("%r: >>> %s", self, wget_cmd)
         self._sock.send((wget_cmd + "\n").encode("utf-8"))
 
         prompt = await self.wait_for_prompt(timeout=wget_timeout)
@@ -628,18 +689,18 @@ class NetConsole:
             return False
         if not await self.verify_loaded_md5(expected_md5, file_size=expected_size):
             return False
-        self.log.info(
+        self.log.debug(
             "%r: firmware upload took %.2fs", self, time.monotonic() - t_upload)
 
         t_boot = time.monotonic()
-        self.log.info("%r: >>> %s", self, self.BOOTELF_CMD)
+        self.log.debug("%r: >>> %s", self, self.BOOTELF_CMD)
         self._sock.send((self.BOOTELF_CMD + "\n").encode("utf-8"))
         output = await self._recv_after_bootelf()
         if output:
-            self.log.info("%r: boot response: %s", self, output)
+            self.log.debug("%r: boot response: %s", self, output)
         ok = self._bootelf_ok(output)
         if ok:
-            self.log.info(
+            self.log.debug(
                 "%r: bootelf handoff took %.2fs", self, time.monotonic() - t_boot)
         return ok
 
@@ -703,16 +764,85 @@ class CRSBeacon:
         self.address = address
         self.board_part = product.upper()
         self.board_serial = serial
-        self.crate_part = self.get_any_field(("backplane-part", "crate-part"))
-        self.crate_serial = self.get_any_field(("backplane-serial", "crate-serial"))
-        self.crate_number = _to_int(self.get_any_field(("backplane-number", "crate-number")))
-        self.slot = _to_int(self.get_any_field(("backplane-slot", "crate-slot", "slot")))
+        self.backplane_part = self.get_any_field(("backplane-part", "backplane-model"))
+        self.backplane_serial = self.get_any_field(("backplane-serial",))
+        self.backplane_revision = self.get_any_field(("backplane-revision",))
+        self.backplane_manufacturer = self.get_any_field(("backplane-manufacturer",))
+        self.backplane_slot = _to_int(self.get_any_field(("backplane-slot",)))
+        self.chassis_part = self.get_any_field(("chassis-part", "chassis-model"))
+        self.chassis_serial = self.get_any_field(("chassis-serial",))
+        self.chassis_manufacturer = self.get_any_field(("chassis-manufacturer",))
+        self.chassis_revision = self.get_any_field(("chassis-revision",))
+        self.crate_part = self.get_any_field(("crate-part", "crate-model"))
+        self.crate_serial = self.get_any_field(("crate-serial",))
+        self.crate_manufacturer = self.get_any_field(("crate-manufacturer",))
+        self.crate_revision = self.get_any_field(("crate-revision",))
+        self.crate_number = _to_int(self.get_any_field(("crate-number", "backplane-number")))
+        self.crate_slot = _to_int(self.get_any_field(("crate-slot",)))
+        # v1.2 TCPIPE publishes chassis custom ``slot=`` as Crate Slot.
+        # Current U-Boot still publishes it as Backplane Slot. IceBoard.slot
+        # prefers Crate Slot when present.
+        if isinstance(self.crate_slot, int) and self.crate_slot > 0:
+            self.slot = self.crate_slot
+        elif isinstance(self.backplane_slot, int) and self.backplane_slot > 0:
+            self.slot = self.backplane_slot
+        else:
+            self.slot = None
 
     def get_any_field(self, names):
         for name in names:
-            if (value := self.fields.get(name)) is not None:
+            value = _usable_field(self.fields.get(name))
+            if value is not None:
                 return value
         return None
+
+
+def _format_discovery_serial(serial):
+    """Format a board/crate/backplane serial for discovery log lines."""
+    if serial is None:
+        return "SN????"
+    text = str(serial).strip()
+    if text.upper().startswith("SN"):
+        text = text[2:]
+    try:
+        return f"SN{int(text):04d}"
+    except (TypeError, ValueError):
+        return f"SN{text}"
+
+
+def _format_discovered_board_line(beacon, mb=None, added_to_hwm=False):
+    """Build a one-line summary of a discovered CRS board."""
+    line = (
+        f"{beacon.board_part} {_format_discovery_serial(beacon.board_serial)} "
+        f"@ {beacon.address}"
+    )
+
+    if beacon.backplane_serial is not None or beacon.backplane_part is not None:
+        bp_part = beacon.backplane_part or "CBP"
+        bp_serial = _format_discovery_serial(beacon.backplane_serial)
+        line += f" on Backplane {bp_part} {bp_serial}"
+
+    crate_serial = beacon.crate_serial
+    if mb is not None and mb.crate is not None and mb.crate.serial:
+        crate_serial = crate_serial or mb.crate.serial
+    crate_slot = None
+    if mb is not None and mb.slot:
+        crate_slot = mb.slot
+    elif isinstance(beacon.slot, int) and beacon.slot > 0:
+        crate_slot = beacon.slot
+
+    if crate_serial is not None or crate_slot is not None:
+        crate_part = beacon.crate_part or "CCR"
+        crate_text = f"/ Crate {crate_part} {_format_discovery_serial(crate_serial)}"
+        if crate_slot is not None:
+            crate_text += f" Slot {crate_slot}"
+        line += f" {crate_text}"
+
+    version = f" {beacon.version}" if beacon.version else ""
+    line += f" ({beacon.kind}{version} beacon)"
+    if added_to_hwm:
+        line += " -> added to hardware map"
+    return line
 
 
 async def discover_crs(
@@ -830,13 +960,61 @@ class CRSDiscovery:
         self.discovered_crates = []
         self.seen_serials = set()
         self._fwreq_addr = {}
+        self._reported_boards = set()
+        self._progress_line_open = False
+        self._last_progress_dot = 0.0
 
     def __repr__(self):
         return f"{self.__class__.__name__}()"
 
+    @staticmethod
+    def _format_target(model, serial, default_model):
+        if model == "*" and serial == "*":
+            return f"any {default_model}"
+        label = model if model != "*" else default_model
+        if serial == "*":
+            return f"any {label}"
+        return f"{label} SN{serial}"
+
+    def _search_target_lines(self):
+        lines = []
+        if not self.board_targets and not self.crate_targets:
+            lines.append("any CRS board")
+        else:
+            for model, serial in self.board_targets:
+                lines.append(self._format_target(model, serial, "CRS"))
+            for model, serial in self.crate_targets:
+                lines.append(self._format_target(model, serial, "crate"))
+        return lines
+
+    def _progress_dot(self):
+        now = time.monotonic()
+        if now - self._last_progress_dot < 1.0:
+            return
+        sys.stdout.write(".")
+        sys.stdout.flush()
+        self._progress_line_open = True
+        self._last_progress_dot = now
+
+    def _end_progress_line(self):
+        if self._progress_line_open:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            self._progress_line_open = False
+
+    def _report_discovered_board(self, beacon, mb=None, added_to_hwm=False):
+        serial = str(beacon.board_serial)
+        if serial in self._reported_boards:
+            return
+        self._reported_boards.add(serial)
+        self._end_progress_line()
+        self.logger.info(
+            _format_discovered_board_line(beacon, mb=mb, added_to_hwm=added_to_hwm))
+
     async def run(self):
-        self.logger.info(f"{self!r}: Starting CRS beacon-based network discovery")
-        loop = asyncio.get_running_loop()
+        targets = self._search_target_lines()
+        self.logger.info("Looking for: %s", ", ".join(targets))
+        self._last_progress_dot = time.monotonic()
         request_beacon()
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
@@ -856,14 +1034,17 @@ class CRSDiscovery:
                 try:
                     data, addr = await _async_sock_recvfrom(sock, 4096, wait_time)
                 except asyncio.TimeoutError:
+                    self._progress_dot()
                     continue
                 try:
                     beacon = CRSBeacon(data, address=addr[0])
                 except (UnicodeDecodeError, ValueError):
-                    logger.debug(f"Ignoring non-CRS discovery packet from {addr[0]}:{addr[1]}")
+                    logger.debug(
+                        f"Ignoring non-CRS discovery packet from {addr[0]}:{addr[1]}")
                     continue
                 self._process_beacon(sock, beacon, addr)
         finally:
+            self._end_progress_line()
             sock.close()
         self._raise_if_incomplete()
 
@@ -872,11 +1053,11 @@ class CRSDiscovery:
 
         Returns the kind of the beacon that was processed, or None if the beacon was ignored.
         """
-        logger.info(
-            f"{self!r}: Detected {beacon.kind} {beacon.version} beacon from "
-            f"{beacon.board_part} SN{beacon.board_serial} at {beacon.address}")
+        self.logger.debug(
+            f"{self!r}: {beacon.kind} beacon from {beacon.board_part} "
+            f"SN{beacon.board_serial} at {beacon.address}")
         if not self._matches_requested_targets(beacon):
-            logger.debug(
+            self.logger.debug(
                 f"{self!r}: Ignoring {beacon.kind} beacon from serial "
                 f"{beacon.board_serial} (not in {self.board_targets} or {self.crate_targets})")
             return None
@@ -887,7 +1068,8 @@ class CRSDiscovery:
             if not self._matches_board_serial_target(beacon):
                 return None
             tcpipe_version = beacon.version if beacon.kind == "TCPIPE" else None
-            self._update_hardware_map(beacon, tcpipe_version=tcpipe_version)
+            mb = self._update_hardware_map(beacon, tcpipe_version=tcpipe_version)
+            self._report_discovered_board(beacon, mb=mb, added_to_hwm=True)
             self.discovered_serials.add(beacon.board_serial)
             self._clear_fwreq_ip(beacon.board_serial)
             self._record_discovered_crate(beacon)
@@ -978,28 +1160,48 @@ class CRSDiscovery:
             serial=beacon.board_serial,
             hostname=beacon.address)
         mb.tcpipe_version = tcpipe_version
-        if crate is not None or beacon.slot is not None:
-            mb.update_instance(slot=beacon.slot, crate=crate)
-        self.logger.info(
+        slot = beacon.slot
+        if mb.slot is not None:
+            if slot is not None and slot != mb.slot:
+                self.logger.debug(
+                    f"{self!r}: Keeping hardware-map slot {mb.slot} for SN{mb.serial}; "
+                    f"beacon advertises slot {slot} "
+                    f"(backplane slot {beacon.backplane_slot})")
+            slot = None
+        if crate is not None or slot is not None:
+            mb.update_instance(slot=slot, crate=crate)
+        self.logger.debug(
             f"{self!r}: Updated hardware map with {beacon.kind} beacon from "
             f"{beacon.board_part} SN{beacon.board_serial} @ {beacon.address} on crate "
-            f"{beacon.crate_part} SN{beacon.crate_serial} (crate number {beacon.crate_number})")
+            f"SN{beacon.crate_serial} backplane SN{beacon.backplane_serial} "
+            f"(crate number {beacon.crate_number}, slot {beacon.slot}, "
+            f"backplane slot {beacon.backplane_slot})")
         return mb
 
     def _update_crate(self, beacon):
-        if not (beacon.crate_part or beacon.crate_serial or beacon.crate_number is not None):
+        # Crate identity comes from crate-serial / crate-part. Backplane serial
+        # is a separate 4-slot segment and must not be used as the crate serial.
+        from pychfpga.hardware.crs.crs_bp import CRSBackplane
+
+        crate_part = beacon.crate_part or beacon.backplane_part
+        crate_serial = beacon.crate_serial
+        crate_number = beacon.crate_number
+        if isinstance(crate_number, int) and crate_number <= 0:
+            crate_number = None
+        if not crate_part and not crate_serial:
             return None
-        crate_cls = None
-        if beacon.crate_part:
-            crate_cls = Crate.get_class_by_ipmi_part_number(beacon.crate_part)
-            if crate_cls is None:
+        if crate_part:
+            crate_cls = Crate.get_class_by_ipmi_part_number(crate_part)
+            if crate_cls is None or not crate_cls.part_number:
                 self.logger.warning(
-                    f"{self!r}: Ignoring crate with unsupported part number {beacon.crate_part}")
+                    f"{self!r}: Ignoring crate with unsupported part number {crate_part}")
                 return None
+        else:
+            crate_cls = CRSBackplane
         return Crate.get_unique_instance(
             new_class=crate_cls,
-            serial=beacon.crate_serial,
-            crate_number=beacon.crate_number)
+            serial=crate_serial,
+            crate_number=crate_number)
 
 
 class CRSArmFirmwareUploader:
@@ -1027,12 +1229,33 @@ class CRSArmFirmwareUploader:
         return f"{self.__class__.__name__}()"
 
     def _boards_to_upload(self):
-        """Boards that need firmware and have a hostname (already in U-Boot)."""
+        """Boards that need firmware (U-Boot, or TCPipe that is not the required version)."""
         return [
             board for board in self.boards
             if board.hostname
             and board.tcpipe_version != self.required_tcpipe_version
         ]
+
+    def _tcpipe_version_mismatch(self, measured):
+        """True when ``measured`` is present and is not the required ELF version."""
+        required = self.required_tcpipe_version
+        return required is not None and measured is not None and measured != required
+
+    def _raise_tcpipe_version_mismatch(self, mismatches):
+        """Raise when boards are running TCPipe that cannot be replaced in-place.
+
+        ``mismatches`` is a sequence of ``(board, measured_version)``. Firmware
+        upload only works from U-Boot, so the boards must be rebooted first.
+        """
+        details = "; ".join(
+            f"SN{board.serial} @ {board.hostname}: measured {measured!r}, "
+            f"expected {self.required_tcpipe_version!r}"
+            for board, measured in mismatches
+        )
+        raise RuntimeError(
+            "TCPipe version mismatch: "
+            f"{details}. Reboot the boards so they return to U-Boot, then retry."
+        )
 
     async def run(self):
         firmware = Path(self.firmware_pathname)
@@ -1042,6 +1265,16 @@ class CRSArmFirmwareUploader:
         targets = self._boards_to_upload()
         if not targets:
             return
+
+        # Discovery already recorded a TCPIPE beacon version. Those boards are
+        # not in U-Boot, so waiting for FWREQ would hang until timeout.
+        running_wrong = [
+            (board, board.tcpipe_version)
+            for board in targets
+            if self._tcpipe_version_mismatch(board.tcpipe_version)
+        ]
+        if running_wrong:
+            self._raise_tcpipe_version_mismatch(running_wrong)
 
         http_site = None
         fwreq_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -1055,11 +1288,11 @@ class CRSArmFirmwareUploader:
                     if targets else self.bind)
                 http_site = HTTPFirmwareServer(firmware, bind=bind_host)
                 await http_site.start()
-                self.logger.info(
+                self.logger.debug(
                     "%r: serving %s on http://%s:%d/%s",
                     self, firmware.name, bind_host, http_site.port, firmware.name)
                 if bind_host not in ("0.0.0.0", ""):
-                    self.logger.info(
+                    self.logger.debug(
                         "%r: if wget hangs, allow inbound TCP port %d to %s "
                         "from the board subnet",
                         self, http_site.port, bind_host)
@@ -1092,7 +1325,7 @@ class CRSArmFirmwareUploader:
                 for board in booted:
                     if board.hostname in ready:
                         board.tcpipe_version = self.required_tcpipe_version
-                        self.logger.info(
+                        self.logger.debug(
                             "%r: TCPipe ready on SN%s @ %s (boot %.2fs after handoff)",
                             self, board.serial, board.hostname,
                             ready[board.hostname],
@@ -1130,8 +1363,6 @@ class CRSArmFirmwareUploader:
                 data, addr = await _async_sock_recvfrom(sock, 4096, wait)
             except asyncio.TimeoutError:
                 continue
-            if not data.startswith(b"FWREQ/"):
-                continue
             board_ip, reply_port = addr[0], addr[1]
             board = pending.get(board_ip)
             if board is None:
@@ -1140,16 +1371,20 @@ class CRSArmFirmwareUploader:
                 beacon = CRSBeacon(data, address=board_ip)
             except (UnicodeDecodeError, ValueError):
                 continue
-            if beacon.kind != "FWREQ":
-                continue
             if not _match_token(str(board.serial), beacon.board_serial, match_integers=True):
                 self.logger.debug(
-                    "%r: ignoring FWREQ from %s serial %s (expected %s)",
-                    self, board_ip, beacon.board_serial, board.serial)
+                    "%r: ignoring %s from %s serial %s (expected %s)",
+                    self, beacon.kind, board_ip, beacon.board_serial, board.serial)
+                continue
+            if beacon.kind == "TCPIPE":
+                if self._tcpipe_version_mismatch(beacon.version):
+                    self._raise_tcpipe_version_mismatch([(board, beacon.version)])
+                continue
+            if beacon.kind != "FWREQ":
                 continue
             reply_ports[board_ip] = reply_port
             pending.pop(board_ip)
-            self.logger.info(
+            self.logger.debug(
                 "%r: FWREQ from SN%s @ %s:%d",
                 self, beacon.board_serial, board_ip, reply_port)
 
@@ -1170,7 +1405,7 @@ class CRSArmFirmwareUploader:
         t0 = time.monotonic()
         deadline = t0 + timeout
         next_request_at = t0
-        self.logger.info(
+        self.logger.debug(
             "%r: waiting up to %.0fs for TCPIPE beacons from %s",
             self, timeout, ", ".join(sorted(pending)),
         )
@@ -1198,10 +1433,12 @@ class CRSArmFirmwareUploader:
                 continue
             if not _match_token(str(board.serial), beacon.board_serial, match_integers=True):
                 continue
+            if self._tcpipe_version_mismatch(beacon.version):
+                self._raise_tcpipe_version_mismatch([(board, beacon.version)])
             elapsed = time.monotonic() - t0
             ready[board_ip] = elapsed
             pending.pop(board_ip)
-            self.logger.info(
+            self.logger.debug(
                 "%r: TCPIPE %s beacon from SN%s @ %s after %.2fs",
                 self, beacon.version, beacon.board_serial, board_ip, elapsed,
             )
@@ -1222,7 +1459,7 @@ class CRSArmFirmwareUploader:
                 self, board.serial, board.hostname)
             return False
 
-        self.logger.info(
+        self.logger.debug(
             "%r: uploading TCPipe firmware %s to SN%s @ %s:%d via %s",
             self, short_path, board.serial, board.hostname, fwreq_port,
             self.upload_method)
@@ -1246,8 +1483,8 @@ class CRSArmFirmwareUploader:
 
         if ok:
             self.logger.info(
-                "%r: bootelf accepted for SN%s @ %s; waiting for TCPIPE beacon",
-                self, board.serial, board.hostname)
+                "uploaded firmware to SN%s @ %s",
+                board.serial, board.hostname)
         return ok
 
     def _iface_address_for(self, remote_host):
@@ -1279,7 +1516,7 @@ class HTTPFirmwareServer:
 
         async def handle(request):
             peer = request.transport.get_extra_info("peername")
-            self._log.info(
+            self._log.debug(
                 "firmware HTTP GET %s from %s",
                 request.path, peer[0] if peer else "?",
             )

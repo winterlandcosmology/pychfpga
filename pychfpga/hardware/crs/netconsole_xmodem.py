@@ -9,14 +9,22 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # XMODEM protocol bytes
+_SOH = 0x01
 _STX = 0x02
 _EOT = 0x04
 _ACK = 0x06
 _NAK = 0x15
 _CAN = 0x18
 _CRC = 0x43
+_BLOCK128_SIZE = 128
 _BLOCK1K_SIZE = 1024
+_VALID_BLOCK_SIZES = frozenset({_BLOCK128_SIZE, _BLOCK1K_SIZE})
 _PAD = 0x1A
+# Per-ACK wait inside a pipelined batch. U-Boot xyzModem char timeout is ~2s;
+# keep this slightly higher so a slow ACK is not mistaken for loss.
+_PIPE_ACK_TIMEOUT = 3.0
+_PIPE_MAX_RETRIES = 10
+_PIPE_LATE_ACK_WINDOW = 0.2
 
 # CCITT CRC-16 table (XMODEM polynomial)
 _CRC16_TABLE = np.array([
@@ -55,8 +63,18 @@ _CRC16_TABLE = np.array([
 ], dtype=np.uint16)
 
 
+def _normalize_block_size(block_size):
+    if block_size not in _VALID_BLOCK_SIZES:
+        raise ValueError(f"block_size must be one of {sorted(_VALID_BLOCK_SIZES)}")
+    return int(block_size)
+
+
 class XMODEM:
-    """XMODEM-1K sender over a connected netconsole UDP socket."""
+    """XMODEM sender over a connected netconsole UDP socket.
+
+    ``block_size`` selects classic XMODEM (128 / SOH) or XMODEM-1K (1024 / STX).
+    U-Boot ``loadx`` accepts both.
+    """
 
     def __init__(self, sock, log=None):
         self.sock = sock
@@ -73,22 +91,33 @@ class XMODEM:
         return int(crc)
 
     @staticmethod
-    def block_1k(seq, chunk, pad=_PAD):
-        """Build one XMODEM-1K (STX) frame from up to 1024 bytes of payload."""
-        payload = np.full(_BLOCK1K_SIZE, pad, dtype=np.uint8)
-        n = min(int(chunk.size), _BLOCK1K_SIZE)
+    def block(seq, chunk, block_size=_BLOCK1K_SIZE, pad=_PAD):
+        """Build one XMODEM frame (SOH/128 or STX/1024) from payload bytes."""
+        block_size = _normalize_block_size(block_size)
+        payload = np.full(block_size, pad, dtype=np.uint8)
+        n = min(int(chunk.size), block_size)
         if n:
             payload[:n] = chunk[:n]
         seq_b = seq & 0xFF
+        hdr = _SOH if block_size == _BLOCK128_SIZE else _STX
         crc = XMODEM.crc16_ccitt(payload)
         return (
-            bytes([_STX, seq_b, (~seq_b) & 0xFF])
+            bytes([hdr, seq_b, (~seq_b) & 0xFF])
             + payload.tobytes()
             + bytes([crc >> 8, crc & 0xFF])
         )
 
-    def _recv_response(self, timeout=5.0):
-        """Read inbound bytes until ACK, NAK, or cancel is observed."""
+    @staticmethod
+    def block_1k(seq, chunk, pad=_PAD):
+        """Build one XMODEM-1K (STX) frame from up to 1024 bytes of payload."""
+        return XMODEM.block(seq, chunk, block_size=_BLOCK1K_SIZE, pad=pad)
+
+    def _recv_response(self, timeout=5.0, crc_means_retry=False):
+        """Read inbound bytes until ACK, NAK, cancel, or optional retry-``C``.
+
+        When ``crc_means_retry`` is true (piped data phase), a lone ``C`` from
+        U-Boot xyzModem is treated as a retry request rather than ignored.
+        """
         deadline = time.monotonic() + timeout
         self.sock.settimeout(0.1)
         cancel_count = 0
@@ -106,6 +135,8 @@ class XMODEM:
                     return _ACK
                 if byte == _NAK:
                     return _NAK
+                if byte == _CRC and crc_means_retry:
+                    return _CRC
                 if byte == _CAN:
                     cancel_count += 1
                     if cancel_count >= 2:
@@ -113,6 +144,25 @@ class XMODEM:
                 elif byte != _CRC:
                     cancel_count = 0
         return None
+
+    def _collect_late_acks(self, window=_PIPE_LATE_ACK_WINDOW):
+        """Count ACKs that arrive just after a timeout; discard C/NAK noise."""
+        count = 0
+        deadline = time.monotonic() + window
+        self.sock.settimeout(0.05)
+        while time.monotonic() < deadline:
+            try:
+                data = self.sock.recv(4096)
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            if not data:
+                continue
+            for byte in data:
+                if byte == _ACK:
+                    count += 1
+        return count
 
     def _wait_for_crc_mode(self, timeout=60):
         """Wait for the receiver to request CRC mode (``C``)."""
@@ -149,39 +199,97 @@ class XMODEM:
             return self._recv_response(timeout=timeout) == _ACK
         return False
 
-    def send(self, filename, timeout=60, pad=_PAD):
-        """Standard XMODEM-1K: build, send, and ACK-sync each block in turn."""
+    def send(self, filename, timeout=60, pad=_PAD, block_size=_BLOCK1K_SIZE):
+        """Standard XMODEM: build, send, and ACK-sync each block in turn."""
+        block_size = _normalize_block_size(block_size)
+        # Load before the CRC handshake so the first frame follows 'C' immediately.
+        data = np.fromfile(filename, dtype=np.uint8)
         if not self._wait_for_crc_mode(timeout=timeout):
             return False
 
-        data = np.fromfile(filename, dtype=np.uint8)
         sequence = 1
         offset = 0
         size = int(data.size)
         while offset < size:
-            chunk = data[offset:offset + _BLOCK1K_SIZE]
-            block = self.block_1k(sequence, chunk, pad=pad)
+            chunk = data[offset:offset + block_size]
+            block = self.block(sequence, chunk, block_size=block_size, pad=pad)
             self.sock.sendall(block)
             if self._recv_response(timeout=timeout) != _ACK:
                 return False
             sequence = (sequence + 1) & 0xFF
-            offset += _BLOCK1K_SIZE
+            offset += block_size
 
         return self._send_eot(timeout=timeout)
 
-    def pipe_send(self, filename, pipe_depth=8, timeout=60, pad=_PAD):
-        """Pipelined XMODEM-1K: pre-build batches of blocks, send, then collect ACKs.
+    def _pipe_send_batch(
+            self, blocks, ack_timeout=_PIPE_ACK_TIMEOUT,
+            max_retries=_PIPE_MAX_RETRIES):
+        """Send one pipelined batch, resending from the first unacked frame."""
+        acked = 0
+        attempt = 0
+        while acked < len(blocks):
+            for block in blocks[acked:]:
+                self.sock.sendall(block)
+            while acked < len(blocks):
+                resp = self._recv_response(
+                    timeout=ack_timeout, crc_means_retry=True)
+                if resp == _ACK:
+                    acked += 1
+                    attempt = 0
+                    continue
+                if resp == _CAN:
+                    self.log.error("%s: cancelled by receiver", self.__class__.__name__)
+                    return False
+
+                # Only scavenge delayed ACKs on a silent timeout. NAK/``C`` means
+                # the receiver is already asking for a resend.
+                if resp is None:
+                    late = self._collect_late_acks()
+                    if late:
+                        acked = min(len(blocks), acked + late)
+                        attempt = 0
+                        if acked >= len(blocks):
+                            return True
+                        continue
+
+                attempt += 1
+                if attempt > max_retries:
+                    self.log.error(
+                        "%s: pipe batch failed after %d retries "
+                        "(%d/%d frames ACKed)",
+                        self.__class__.__name__, max_retries, acked, len(blocks),
+                    )
+                    return False
+                self.log.debug(
+                    "%s: missing ACK (resp=%r); resend from frame %d/%d "
+                    "(attempt %d/%d)",
+                    self.__class__.__name__, resp, acked + 1, len(blocks),
+                    attempt, max_retries,
+                )
+                break
+        return True
+
+    def pipe_send(
+            self, filename, pipe_depth=8, timeout=60, pad=_PAD,
+            block_size=_BLOCK1K_SIZE, ack_timeout=_PIPE_ACK_TIMEOUT,
+            max_retries=_PIPE_MAX_RETRIES):
+        """Pipelined XMODEM: pre-build batches of blocks, send, then collect ACKs.
 
         Up to ``pipe_depth`` frames are transmitted back-to-back before waiting for
-        their ACKs.  This is faster on low-latency links but can overrun U-Boot's
-        512-byte netconsole input buffer; use :meth:`send` on high-RTT paths.
+        their ACKs.  On timeout/NAK/``C``, unacked frames of the batch are resent
+        (U-Boot re-ACKs duplicates).  Can overrun U-Boot's netconsole input buffer
+        (``pipe_depth * (3 + block_size + 2)`` bytes must fit).
         """
+        block_size = _normalize_block_size(block_size)
         if pipe_depth < 1:
             raise ValueError("pipe_depth must be >= 1")
+        if max_retries < 0:
+            raise ValueError("max_retries must be >= 0")
+        # Load before the CRC handshake so the first batch follows 'C' immediately.
+        data = np.fromfile(filename, dtype=np.uint8)
         if not self._wait_for_crc_mode(timeout=timeout):
             return False
 
-        data = np.fromfile(filename, dtype=np.uint8)
         sequence = 1
         offset = 0
         size = int(data.size)
@@ -189,27 +297,31 @@ class XMODEM:
             blocks = []
             batch_offset = offset
             while batch_offset < size and len(blocks) < pipe_depth:
-                chunk = data[batch_offset:batch_offset + _BLOCK1K_SIZE]
-                blocks.append(self.block_1k(sequence, chunk, pad=pad))
+                chunk = data[batch_offset:batch_offset + block_size]
+                blocks.append(
+                    self.block(sequence, chunk, block_size=block_size, pad=pad))
                 sequence = (sequence + 1) & 0xFF
-                batch_offset += _BLOCK1K_SIZE
+                batch_offset += block_size
 
-            for block in blocks:
-                self.sock.sendall(block)
-            for _ in blocks:
-                if self._recv_response(timeout=timeout) != _ACK:
-                    return False
+            if not self._pipe_send_batch(
+                    blocks, ack_timeout=ack_timeout, max_retries=max_retries):
+                return False
             offset = batch_offset
 
         return self._send_eot(timeout=timeout)
 
 
-def xmodem1k_send(sock, filename, timeout=60, log=None):
-    """Send a file with standard (per-block ACK) XMODEM-1K over netconsole."""
-    return XMODEM(sock, log=log).send(filename, timeout=timeout)
+def xmodem1k_send(sock, filename, timeout=60, log=None, block_size=_BLOCK1K_SIZE):
+    """Send a file with standard (per-block ACK) XMODEM over netconsole."""
+    return XMODEM(sock, log=log).send(
+        filename, timeout=timeout, block_size=block_size)
 
 
-def xmodem1k_pipe_send(sock, filename, pipe_depth=8, timeout=60, log=None):
-    """Send a file with batched/pipelined XMODEM-1K over netconsole."""
+def xmodem1k_pipe_send(
+        sock, filename, pipe_depth=8, timeout=60, log=None,
+        block_size=_BLOCK1K_SIZE, ack_timeout=_PIPE_ACK_TIMEOUT,
+        max_retries=_PIPE_MAX_RETRIES):
+    """Send a file with batched/pipelined XMODEM over netconsole."""
     return XMODEM(sock, log=log).pipe_send(
-        filename, pipe_depth=pipe_depth, timeout=timeout)
+        filename, pipe_depth=pipe_depth, timeout=timeout, block_size=block_size,
+        ack_timeout=ack_timeout, max_retries=max_retries)

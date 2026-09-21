@@ -41,23 +41,23 @@ class Chan(MMIRouter):
         'FUNCGEN': 5
     }
 
-    def __init__(self, router, router_port, instance_number, state):
+    def __init__(self, router, router_port, instance_number, config):
         self.chan_number = instance_number  # store current channelizer number for this instance
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
 
         if self.fpga.HAS_ADCDAQ:
-            self.ADCDAQ = adcdaq.ADCDAQ(router=self, router_port='ADCDAQ', instance_number=instance_number, state=self.state.add("adcdaq"))
+            self.ADCDAQ = adcdaq.ADCDAQ(router=self, router_port='ADCDAQ', instance_number=instance_number, config=self.config.add("adcdaq"))
         else:
             self.ADCDAQ = None
-        self.FFT = fft.FFT(router=self, router_port='FFT', instance_number=instance_number, state=self.state.add("fft"))
-        self.SCALER = scaler.SCALER(router=self, router_port='SCALER', instance_number=instance_number, state=self.state.add("scaler"))
+        self.FFT = fft.FFT(router=self, router_port='FFT', instance_number=instance_number, config=self.config.add("fft"))
+        self.SCALER = scaler.SCALER(router=self, router_port='SCALER', instance_number=instance_number, config=self.config.add("scaler"))
         if self.fpga.CAPTURE_TYPE == 'PROBER':
-            self.PROBER = prober.PROBER(router=self, router_port='PROBER', instance_number=instance_number, state=self.state.add("prober"))
+            self.PROBER = prober.PROBER(router=self, router_port='PROBER', instance_number=instance_number, config=self.config.add("prober"))
         else:
             self.PROBER = None
-        self.FUNCGEN = funcgen.FUNCGEN(router=self, router_port='FUNCGEN', instance_number=instance_number, state=self.state.add("funcgen"))
+        self.FUNCGEN = funcgen.FUNCGEN(router=self, router_port='FUNCGEN', instance_number=instance_number, config=self.config.add("funcgen"))
         self.frame_length = self.fpga.FRAME_LENGTH
 
     def __repr__(self):
@@ -118,16 +118,43 @@ class ChanArray(MMIRouter):
 
     ROUTER_PORT_NUMBER_WIDTH = 4
 
-    def __init__(self, *, router, router_port, state, verbose=0):
+    def __init__(self, *, router, router_port, config, verbose=0):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
         # Create an instance of ADC_chip for each chip of the FMC board
         self.frame_length = self.fpga.FRAME_LENGTH
         self.chan = []
         for i in range(self.fpga.NUMBER_OF_CHANNELIZERS):
-            self.chan.append(Chan(router=self, router_port=i, instance_number=i, state=self.state.add(i)))
+            self.chan.append(Chan(router=self, router_port=i, instance_number=i, config=self.config.add(i)))
+
+    def update_config(self):
+        """Refresh per-channel FUNCGEN/SCALER/FFT/PROBER configs.
+
+        Array raw/corr config assembly reads those submodule States directly.
+        """
+        has_prober = self.chan[0].PROBER is not None
+        ctx = ('ChanArray.update_config', self)
+        board = self.fpga.config
+        board_attrs = (
+            'platform_id', 'adc_bits_per_sample', 'adc_bytes_per_sample',
+            'fft_bins_per_word',
+        )
+        board_stale = board.has_changed(board_attrs, context=ctx)
+        for chan in self.chan:
+            ch_ctx = (ctx, chan.chan_number)
+            if not board_stale and not chan.config.has_changed(context=ch_ctx):
+                continue
+            chan.FUNCGEN.update_config()
+            chan.SCALER.update_config()
+            chan.FFT.update_config()
+            if has_prober:
+                chan.PROBER.update_config()
+            chan.config.ack(context=ch_ctx)
+        if board_stale:
+            board.ack(board_attrs, context=ctx)
+        return self.config
 
     def __repr__(self):
         """ Return a string that represents this object and its parent object.
@@ -219,6 +246,12 @@ class ChanArray(MMIRouter):
             if delay_table is not None:
                 self.set_adc_delays(delay_table)
 
+        for key in ("fft", "scaler", "funcgen"):
+            if key not in self.config:
+                self.config.add(key)
+        if self.chan[0].PROBER is not None and "prober" not in self.config:
+            self.config.add("prober")
+
     def status(self):
         """ Displays the status of all channelizer modules"""
         for chan in self.chan:
@@ -281,18 +314,9 @@ class ChanArray(MMIRouter):
                 - width=8: data is 8 bits Real + 8 bits Imaginary
         """
 
-        if width == 4:
-            is_four_bits = 1
-        elif width == 8:
-            is_four_bits = 0
-        else:
-            raise ValueError(f'Number of bits {int(width)} is invalid for the channelizers. Only 4 or 8 is allowed')
-
         # Set the channelizer data width
         for ch in self.chan:
-            if not is_four_bits and not ch.SCALER.EIGHT_BIT_SUPPORT:
-                raise ValueError('8-bit mode not supported in this build of the SCALER firmware')
-            ch.SCALER.FOUR_BITS = is_four_bits
+            ch.SCALER.set_output_bit_width(width)
 
     def get_data_width(self):
         """

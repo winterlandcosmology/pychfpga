@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from fpga_array import  FPGAArray, setup_logging 
+from pychfpga.common.async_utils import run_async
 
 setup_logging()
 
@@ -19,12 +20,12 @@ ib= ca.ib[0]
 
 
 print 'Setting up data processing'
-ca.set_sync_method('local_soft_trigger')
-ca.set_operational_mode('shuffle16', frames_per_packet=2)
+run_async(ca.set_sync_method_async('local_soft_trigger'))
+run_async(ca.set_operational_mode_async('shuffle16', frames_per_packet=2))
 ib.start_data_capture(period=0.1, source='adc')
 
 print 'Getting data receiver'
-r=ib.get_data_receiver()
+r=run_async(ca.get_data_receiver_async())
 ib.sync()
 
 

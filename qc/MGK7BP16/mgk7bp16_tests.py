@@ -15,6 +15,7 @@ from wtl.pytest_xreport import xr, run_test_menu
 
 # from icecore.tests.xreport import test_report
 from pychfpga.fpga_array import FPGAArray
+from pychfpga.common.async_utils import run_async
 from pychfpga.hardware.interfaces import ipmi_fru
 
 TEST_CONFIG_FILE = './MGK7BP16/test_config.yaml'
@@ -722,16 +723,16 @@ class TestMGK7BP16Crate:
             #     ib.set_irigb_source('bp_time')
 
             # if numberOfCrates == '1':
-            #     ca.init_corner_turn(mode = 'shuffle256')
+            #     ca.init_corner_turn_async(mode = 'shuffle256')
             # else:
-            #     ca.init_corner_turn(mode = 'shuffle512')
+            #     ca.init_corner_turn_async(mode = 'shuffle512')
 
             link_map = {}
             link_map.update(ca.get_backplane_pcb_link_map())
             link_map.update(ca.get_backplane_qsfp_link_map())
             link_map = {link: gtxes for link, gtxes in list(link_map.items()) if (('int' not in gtxes) and (None not in gtxes))}
 
-            result = ca.get_ber(link_list = link_map, period = cfg.period, print_ = True, tx_init_power=2, tx_power=6, tx_qsfp_power=14, minerrors_toprint=0)
+            result = run_async(ca.get_ber_async(link_list = link_map, period = cfg.period, print_ = True, tx_init_power=2, tx_power=6, tx_qsfp_power=14, minerrors_toprint=0))
             bp_rate = True
             qsfp_rate = True
             #gpu_rate = True
@@ -797,7 +798,7 @@ class TestMGK7BP16Crate:
 
                     delay_table= ib.get_adc_delays()
                     print('Opening data receiver socket')
-                    receiver = ib.get_data_receiver()
+                    receiver = run_async(ca.get_data_receiver_async())
 
                     print('Setting up ramp transmission...')
                     ib.set_adcdaq_mode('data')

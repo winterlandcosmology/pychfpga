@@ -47,10 +47,10 @@ class ChanCrossbar(MMI):
     # ALIGN_GLOBAL_FRAME_CTR    = BitField(STATUS, 5, 0, width=8, doc='')
     DELAY_CAPTURE    = BitField(STATUS, 4, 0, width=16, doc="")
 
-    def __init__(self, *, router, router_port, state, verbose=0):
+    def __init__(self, *, router, router_port, config, verbose=0):
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
-        self.state = state
+        self.config = config
         ccb_router = CCBRouter(router=router, router_port=router_port)
         super().__init__(router=ccb_router, router_port='COMMON')
         print(f'Reset Mon = {self.RESET_MON}')
@@ -58,9 +58,9 @@ class ChanCrossbar(MMI):
         self.BIN_SEL = []
         self.NUMBER_OF_CROSSBAR_INPUTS = self.fpga.NUMBER_OF_CROSSBAR_INPUTS
         self.NUMBER_OF_CROSSBAR_OUTPUTS = self.fpga.NUMBER_OF_CROSSBAR1_OUTPUTS
-        bin_sel_state = self.state.add("bin_sel")
+        bin_sel_state = self.config.add("bin_sel")
         for i in range(self.fpga.NUMBER_OF_CROSSBAR1_OUTPUTS):
-            self.BIN_SEL.append(chan_bin_sel.ChanBinSel(router=ccb_router, router_port=i + 1, instance_number=i, state=bin_sel_state.add(i)))
+            self.BIN_SEL.append(chan_bin_sel.ChanBinSel(router=ccb_router, router_port=i + 1, instance_number=i, config=bin_sel_state.add(i)))
 
     def __getitem__(self, key):
         """    Returns the bin selector instance specified by the key"""

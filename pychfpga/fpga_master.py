@@ -134,13 +134,8 @@ def sanitize_for_json(obj):
 
 
 def firmware_config_for_rest(fw_config):
-    """JSON-safe firmware config for raw_acq REST start (omit derived corr maps)."""
-    config = sanitize_for_json(fw_config)
-    corr = config.get("corr")
-    if isinstance(corr, dict):
-        corr.pop("bin_map", None)
-        corr.pop("prod_map", None)
-    return config
+    """JSON-safe firmware config for raw_acq REST start (includes corr maps)."""
+    return sanitize_for_json(fw_config)
 
 
 def reap_cached_sockets():
@@ -208,19 +203,24 @@ class FPGAMaster(object):
     def set_config(self, config):
         self.config = NameSpace(config)
 
+    def get_data_config(self, source=None):
+        """Compose ``{raw, corr}`` dict for REST from array getters.
+
+        ``source`` is ignored; raw/corr configs are always assembled from
+        ``self.fpgas``.
+        """
+        raw = self.fpgas.get_raw_data_config()
+        corr = self.fpgas.get_corr_data_config()
+        return {
+            "raw": None if raw is None else raw.as_dict(),
+            "corr": None if corr is None else corr.as_dict(),
+        }
+
 
     #####################################
     # RAW_ACQ management methods
     #####################################
 
-
-    def _set_correlator_soft_integ_period(self, software_integration_period):
-        """Store software integration period on each board UCORR state for get_receiver_config()."""
-        soft = int(software_integration_period or 1)
-        for ib in self.fpgas.ib:
-            corr = getattr(getattr(ib, 'fpga', None), 'CORR', None)
-            if corr is not None and corr.state is not None:
-                corr.state.soft_integ_period = soft
 
     async def start_raw_acq_servers(self):
         """ Start raw data acquisition servers and set the FPGAs raw data transmit addresses.
@@ -321,8 +321,7 @@ class FPGAMaster(object):
                 name=recv_names[server_name],
                 ports=recv_ports[server_name],
                 stream_ids=self.raw_acq_stream_ids[server_name],
-                config=firmware_config_for_rest(
-                    self.raw_acq_ibs[server_name][0].fpga.get_receiver_config().as_dict()),
+                config=firmware_config_for_rest(self.get_data_config()),
                 comet_broker=conf.common_config.comet_broker.as_dict(),
                 jump_thresholds=conf.common_config.jump_thresholds,
                 metrics_refresh_time=conf.common_config.metrics_refresh_time,
@@ -345,7 +344,7 @@ class FPGAMaster(object):
                     ip_addr, port, eth_addr = targets[(ib.hostname, ib.port)]
                     self.log.info(f'{self!r} Setting data transmission address of board {ib.get_id()} to {ip_addr}:{port}({eth_addr})')
                     await ib.set_udp_data_target_address_async(ip_addr, port, eth_addr)
-        await self._sync_raw_acq_firmware_config()
+        await self._sync_raw_acq_data_config()
         self.log.info(f'{self!r}: RawAcq server setup successfully')
 
 
@@ -394,7 +393,7 @@ class FPGAMaster(object):
         # If not done explicitely later, we must issue sync command after starting raw data capture,
         # otherwise raw frames will not be synced across boards.
         if capture_period and sync:
-            await self.fpgas.sync()
+            await self.fpgas.sync_async()
 
 
     async def set_fpga_data_capture(self, targets=None, capture_rate=23, source=None):
@@ -476,8 +475,8 @@ class FPGAMaster(object):
         sid_index_map = {sid: i for i, sid in enumerate(all_stream_ids)}
         return server_channel_ids, server_stream_ids, all_channel_ids, all_stream_ids, sid_index_map
 
-    async def _sync_raw_acq_firmware_config(self):
-        """Push updated firmware decoder config to all raw_acq servers.
+    async def _sync_raw_acq_data_config(self):
+        """Push updated data decoder config to all raw_acq servers.
 
         *** TODO: check if we need this method.
         """
@@ -488,8 +487,7 @@ class FPGAMaster(object):
             ibs = self.raw_acq_ibs.get(server_name)
             if not ibs:
                 continue
-            fw = firmware_config_for_rest(
-                ibs[0].fpga.get_receiver_config().as_dict())
+            fw = firmware_config_for_rest(self.get_data_config())
             tasks.append(server.update_config(fw))
         if tasks:
             await asyncio.gather(*tasks)
@@ -509,7 +507,7 @@ class FPGAMaster(object):
             await asyncio.sleep(0)
         # set_scaler_output_modes / set_data_capture already refreshed the cached
         # firmware config; avoid another BSB read here (can timeout under load).
-        await self._sync_raw_acq_firmware_config()
+        await self._sync_raw_acq_data_config()
 
     async def compute_gains(self,
                             targets=None,
@@ -637,10 +635,8 @@ class FPGAMaster(object):
             if channel_ids:
                 cid = channel_ids[0]
                 ib = self.fpgas.get_iceboard_from_id((cid[0], cid[1]))
-                inv_bin_map = ib.fpga.chan[cid[2]].FFT.get_bin_map(
-                    flatten=True, reverse=False)
                 filtered_gains = {
-                    chan_id: (gain_vec[inv_bin_map], glog)
+                    chan_id: (gain_vec, glog)
                     for chan_id, (gain_vec, glog) in filtered_gains.items()
                 }
             await self.fpgas.set_gains_async(gains=filtered_gains, bank=0, when='now')
@@ -1078,7 +1074,6 @@ class FPGAMaster(object):
             autocorr_only=autocorr_only,
             elements_per_file=capture_elements_per_file,
             software_integration_period=software_integration_period,
-            firmware_integration_period=self.corr_firmware_integration_period, # also for time computation only
             frame0_irigb_time=self.frame0_irigb_time.nano if self.frame0_irigb_time else 0,  # update frame 0 time from last sync
             )         for server_name, server in self.raw_acq.items()])
 
@@ -1280,8 +1275,7 @@ class FPGAMaster(object):
         # in the parameters, the FPGAs will be loaded with their bitstream, communication with the FPGAs
         # will be established and all the Python objects needed to operate the FPGA firmware will be
         # created and initialized.
-        self.fpgas = ca = fpga_array.FPGAArray(**fpga_array_params)
-        await ca.init()
+        self.fpgas = ca = await fpga_array.FPGAArray(**fpga_array_params)
 
         self.register_hardware()
 
@@ -1301,9 +1295,10 @@ class FPGAMaster(object):
                     'No IceBoard could be found. Are the boards powered up? '
                     'Is the network connection functional?')
 
-        if fpga_array_params.get('open', None) == 0:
+        init_level = fpga_array_params.get('init', None)
+        if init_level is not None and init_level < 2:
             self.log.warning(
-                "fpga_array is initialized with open=0. "
+                f"fpga_array is initialized with init={init_level}. "
                 "Aborting the rest of the FPGA array initialization.")
             return
 
@@ -1343,16 +1338,14 @@ class FPGAMaster(object):
         self.log.info("Setting up noise injection")
         self.setup_noise_injection(conf.fpga.get('noise_injection',{}))
 
-        # Start correlator before raw_acq so get_receiver_config() snapshots the
-        # programmed integration period and soft_integ_period for UCORR assembly.
+        # Start correlator before raw_acq so get_data_config() composes the
+        # programmed firmware integration period for UCORR assembly.
         corr_config = self.config.fpga.get('firmware_correlator', {})
 
         if corr_config and corr_config.enable:
             self.log.info("Setting up firmware correlator")
             self.corr_firmware_integration_period = corr_config.firmware_integration_period
             self.corr_autocorr_only = corr_config.autocorr_only
-            self._set_correlator_soft_integ_period(
-                corr_config.get('software_integration_period', 1))
             await self.fpgas.start_correlators_async(
                 self.corr_firmware_integration_period,
                 autocorr_only=self.corr_autocorr_only)
@@ -1388,10 +1381,10 @@ class FPGAMaster(object):
         self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% This is the last SYNC %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
         if conf.fpga.sync_params.enable:
             # Use config params
-            await ca.sync(**conf.fpga.sync_params)
+            await ca.sync_async(**conf.fpga.sync_params)
         else:
             # Use default params
-            await ca.sync()
+            await ca.sync_async()
         self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Last SYNC is done %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 
         # save the time of frame0 after sync
@@ -1441,90 +1434,7 @@ class FPGAMaster(object):
 
         # Read the FPGA setting back from the FPGA
         self.log.info("Getting configuration data from all FPGAs")
-        self.fpga_conf = await self.fpgas.get_fpga_config_async(basic=True)
-
-        # Take test Scaler data (debugging)
-        if conf.fpga.get('save_test_scaler_data', False):
-            self.log.info("Gathering a sample of Scaler data for debugging")
-            
-            r = ca.get_data_receiver()
-            n_cap_scaler = 100
-            bin_map = ca.ib[0].chan[0].FFT.get_bin_map(flatten = True, reverse = True) # get the bin map
-            inv_bin_map = ca.ib[0].chan[0].FFT.get_bin_map(flatten = True, reverse = False) # get the inverse bin map
-
-            def select_stream(slot_sel = [], chan_sel = []):
-                '''
-                empty arrays --> select all
-                Want channel 2 on all boards --> slot_sel=[], chan_sel = [2]
-                Want channel 2 on boards 3,4 --> slot_sel=[3,4], chan_sel = [2]
-                '''
-                #Initialize array of all data streams
-                slots = np.arange(16)     
-                channels = np.arange(8)
-                streams = 16 * slots[:, None] + channels 
-                
-            
-                slot_sel = slot_sel if len(slot_sel) > 0 else slice(None)
-                chan_sel = chan_sel if len(chan_sel) > 0 else slice(None)
-                
-                # select and flatten
-                select_streams = np.ravel(streams[slot_sel, chan_sel])
-                
-                return select_streams
-                
-            streams = select_stream(slot_sel = [0, 1, 2, 3])
-
-            # Setup channelizers and data capture for raw FFT data
-            self.log.info('Setting up channelizers for Scaler capture')
-            await ca.set_channelizers(data_source = 'adc', fft_bypass = False, scaler_bypass = False, offset_binary_encoding = False)
-            await ca.start_data_capture(0.03, source='scaler', mode = 0, channels = list(range(8)), data_type = 'fft_4bit', select = True, sync = False)
-            
-            # Synchronize the crate again to ensure all frames are synchronized
-            # await ca.sync()
-            
-            # Capture data
-            self.log.info('Gathering Scaler data')
-            t, d_sclr, c = r.read_raw_frames(ncap = n_cap_scaler, format='16+16', stream_ids = streams, split=True, verbose=0)
-            self.log.info('Done gathering Scaler data')
-
-            # Shift to 4+4 bits
-            d_sclr /= 2**12
-            
-            # Flatten frequency axis
-            d_sclr = d_sclr.reshape(d_sclr.shape[0], d_sclr.shape[1], 8192)
-            
-            # Apply bin map
-            d_sclr = d_sclr[..., bin_map]
-
-            # Read back gains for comparison with archive
-            if conf.fpga.read_back_gains_for_verification:
-                gains_in_fpga = []
-                for n in range(len(ca.ib)):
-                    gain_list = ca.ib[n].get_gains(bank = 0, use_cache = False)
-                    gains_in_fpga.append([gain_list[n][1][0] for n in range(8)])
-                gains_in_fpga = np.array(gains_in_fpga)
-
-            import h5py
-            scaler_file_name = f'{self.run_folder}/sample_scaler_data.hdf5'
-            self.log.info(f'Creating Scaler file {scaler_file_name}')
-            scaler_file = h5py.File(scaler_file_name, 'w')
-            self.log.info(f'Writing to Scaler file {scaler_file_name}')
-
-            scaler_file.create_dataset('scaler_data', d_sclr.shape, d_sclr.dtype)
-            scaler_file.create_dataset('bin_map', bin_map.shape, bin_map.dtype)
-            scaler_file.create_dataset('inv_bin_map', inv_bin_map.shape, inv_bin_map.dtype)
-            scaler_file.create_dataset('gains_in_fpga', gains_in_fpga.shape, gains_in_fpga.dtype)
-
-            scaler_file['scaler_data'][:] = d_sclr
-            scaler_file['bin_map'][:] = bin_map
-            scaler_file['inv_bin_map'][:] = inv_bin_map
-            scaler_file['gains_in_fpga'][:] = gains_in_fpga
-
-            scaler_file.close()
-            self.log.info(f'Closing Scaler file {scaler_file_name}')
-
-            self.log.info("Reconfiguring channelizers to config file settings")
-            await ca.set_channelizers_async(**conf.fpga.channelizer_params)
+        self.fpga_conf = await self.fpgas.get_system_config_async(basic=True)
 
         # Start storage of raw_data received by the raw_acq server in HDF5 files
         if self.config.raw_acq.enable:
@@ -1749,16 +1659,8 @@ class FPGAMaster(object):
         gains, gain_timestamps = self.gain_hdf5.read_gain(update_id=uid)
 
         # Convert the keys from serial numbers to (crate, slot, chan) tuples
-        if self.config.fpga.fpga_array_params.mode == 'shuffle8':
-            # Gains are stored in human-friendly frequency ordering, so we apply the inverse bin map to the gains if using CHORD firmware
-            ca = self.fpgas
-            inv_bin_map = ca.ib[0].chan[0].FFT.get_bin_map(flatten = True, reverse = False) # get the inverse bin map
-            gains = {key_to_chan_id_map[key]: [val[0][inv_bin_map], val[1]]
-                     for key, val in gains.items() if key in key_to_chan_id_map}
-        else:
-            # No bin mapping
-            gains = {key_to_chan_id_map[key]: val
-                     for key, val in gains.items() if key in key_to_chan_id_map}
+        gains = {key_to_chan_id_map[key]: val
+                    for key, val in gains.items() if key in key_to_chan_id_map}
             
         gain_timestamps = {key_to_chan_id_map[key]: val
                            for key, val in gain_timestamps.items() if key in key_to_chan_id_map}
@@ -2848,7 +2750,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         """
         if self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas:
             self.log.info(f'{self!r}: received sync() request')
-            await self.fpga_master.fpgas.sync()
+            await self.fpga_master.fpgas.sync_async()
             self.log.info(f'{self!r}: sync() done')
 
 

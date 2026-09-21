@@ -13,7 +13,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from pychfpga.common.state import State
-from pychfpga.common.ucorr_frame_receiver import UCorrFrameReceiver
 from pychfpga.common.udp_packet_receiver import UDPPacketReceiver
 
 from ..mmi import MMI, BitField, CONTROL, STATUS
@@ -51,19 +50,14 @@ class UCORR(MMI):
     OUT_FRAME_CTR = BitField(STATUS, 4, 0, width=8, doc="Output frame counter")
     NCLK_PER_BIN  = BitField(STATUS, 5, 0, width=4, doc="Number of clocks required to send all channels for one bin")
 
+    _MAP_CACHE = {}
+    _IJ_MAP_CACHE = {}
 
-    def __init__(self, *, router, router_port, state, verbose=0):
+    def __init__(self, *, router, router_port, config, verbose=0):
         super().__init__(router=router, router_port=router_port)
-        self.config = state
+        self.config = config
         self.verbose = verbose
         self.logger = logging.getLogger(__name__)
-        self.config.update(
-            corr_config_id=0,
-            bin_map=None,
-            prod_map=None,
-            last_fft_config_id=None,
-            soft_integ_period=1,
-        )
 
     def init(self):
         """ Inisializes all modules of a correlator block."""
@@ -71,14 +65,17 @@ class UCORR(MMI):
         self.config.update(
             bins_per_frame=self.fpga.FRAME_LENGTH // 2, # total number of bins at the output of the channelizers
             NCHAN=int(self.NCHAN),
+            NPROD = self.NCHAN * (self.NCHAN + 1) // 2, # total number of computed products
             NCLK=int(self.BIN_DECIMATION_FACTOR * self.NCLK_PER_BIN),  # Number of clocks available to compute all the products. Will reduce the number of required CMACs, but increase the number of products per CMAC
             NDECIM=int(self.BIN_DECIMATION_FACTOR),
             CT_LEVEL=int(self.fpga.CT.CT_LEVEL),
             firmware_integ_period=int(self.INTEGRATION_PERIOD + 1),
-            autocorr_only=bool(self.AUTOCORR_ONLY),
-            no_accum=bool(self.NO_ACCUM),
-        )
-        self.config.NPROD = self.config.NCHAN * (self.config.NCHAN + 1) // 2 # total number of computed products
+            capture_engine="UCORR",
+            sample_freq_mhz=float(self.fpga.config.sample_freq_mhz),
+            fft_bin_map=None,
+            bin_map=None,
+            prod_map=None,
+            )
 
     def status(self):
         """Displays the status of the correlator array"""
@@ -89,91 +86,78 @@ class UCORR(MMI):
         print(f' Overrun in one of the cores: {self.OVERRUN}')
 
 
-    def get_config(self):
-        """Return the correlator config dict. Deprecated: use ``config`` directly."""
-        warnings.warn(
-            "UCORR.get_config() is deprecated; use UCORR.config directly.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        self.get_bin_map()
-        return self.config.as_dict()
 
-    def get_input_bin_map(self):
-        return self.fpga.chan[0].FFT.get_bin_map()
 
-    def get_bin_map(self):
-        fft = self.fpga.chan[0].FFT
-        if (
-            fft.config_id != self.config.last_fft_config_id
-            or self.config.bin_map is None
-            or self.config.prod_map is None
-        ):
-            self.config.update(
-                CT_LEVEL=int(self.fpga.CT.CT_LEVEL),
-                NDECIM=int(self.config.NDECIM),
-                NCHAN=int(self.config.NCHAN),
-                NCLK=int(self.config.NCLK),
-                firmware_integ_period=int(self.INTEGRATION_PERIOD + 1),
-                fft_bin_map=fft.get_bin_map(),
-            )
-            self.config.last_fft_config_id = fft.config_id
-        # Always run map update: cheap when unchanged, and picks up autocorr_only flips.
-        self.update_corr_maps(self.config)
-        return self.config.bin_map, self.config.prod_map
+    def update_config(self):
+        """Refresh correlator maps if needed and return ``self.config``.
 
-    @classmethod
-    def update_corr_maps(cls, config):
-        """ Update the correlator bin and product maps and derived geometry parameters based on the new configuration.
+        Build ``bin_map`` / ``prod_map`` onto ``config`` from primary parameters.
 
-        If the following parameters are changed:
+        Maps produced here (and exposed via :meth:`update_config`) are authoritative
+        for packet processing; receivers should transmit ``bin_map`` /
+        ``prod_map`` rather than recomputing them.
+
+        Identical ``(CT_LEVEL, NDECIM, NCHAN, NCLK, fft_bin_map)`` inputs share one
+        class-level cache entry so every board in an array reuses the same arrays
+        instead of rebuilding a ~13 M-element map.
+
+        If the following primary parameters are changed:
         - CT_LEVEL: CT level
         - NDECIM: number of decimation bins
         - NCHAN: number of channels
         - NCLK: number of clocks
         - fft_bin_map: FFT bin map
-        - autocorr_only: whether packets carry only diagonal products
 
-        The following parameters are then updated:  
+        The following parameters are then updated:
         - bin_map: (bin_set, corr, clkbin, prod) = bin
         - prod_map: (corr, clkbin, prod) = pix
         - NDECIM: number of decimation bins
         - NCORRS: number of correlators
         - NPROD_PER_CMAC: number of products per CMAC
-        - NCMAC: number of CMACs (products per packet; shrinks when autocorr_only)
+        - NCMAC: number of CMACs
         - NBINS: number of bins
         - NPROD_PER_ARRAY: number of products per array
 
-        Parameters:
-            config (dict or State): Correlator configuration
-        Returns:
-            None
+
         """
-        # Ensure optional mode flags exist before change-tracking (older configs omit them).
-        if 'autocorr_only' not in config:
-            config.autocorr_only = False
+        config = self.config
+        fft = self.fpga.chan[0].FFT
+        ctx = ('update_config', self)
+        
 
-        map_attrs = ('CT_LEVEL', 'NDECIM', 'NCHAN', 'NCLK', 'fft_bin_map', 'autocorr_only')
-        if not config.has_changed(map_attrs, context=map_attrs):
-            return
+        fft.update_config()  # make sure the FFT bin map is updated
+        if fft.config.has_changed('bin_map', context=ctx):
+            config.update(fft_bin_map=fft.config.bin_map, fft_bin_ix_map=fft.config.bin_ix_map)
+            fft.config.ack('bin_map', context=ctx)
 
-        # Extract relevant configuration parameters for convenience
-        ct_level = config.CT_LEVEL
-        NDECIM = config.NDECIM
-        NCHAN = config.NCHAN
-        NCLK = config.NCLK
-        autocorr_only = bool(config.autocorr_only)
 
-        # Derive useful parameters
+        fft_bin_map = config.fft_bin_map
+        if not isinstance(fft_bin_map, np.ndarray):
+            fft_bin_map = np.asarray(fft_bin_map)
+            config.update(fft_bin_map=fft_bin_map)
+
+        map_attrs = ('CT_LEVEL', 'NDECIM', 'NCHAN', 'NCLK', 'fft_bin_map')
+        if config.has_changed(map_attrs, context=ctx):
+            map_params = self.compute_bin_prod_maps(config.CT_LEVEL, config.NDECIM, config.NCHAN, config.NCLK, config.fft_bin_map)
+            config.update(**map_params)
+            config.ack(map_attrs, context=map_attrs)
+
+        return self.config
+
+
+    @classmethod
+    def compute_bin_prod_maps(cls, ct_level, NDECIM, NCHAN, NCLK, fft_bin_map):
+        """Return derived correlator maps for one set of primary parameters."""
+
+        cache_key = (ct_level, NDECIM, NCHAN, NCLK, fft_bin_map.shape, id(fft_bin_map))
+        if cache_key in cls._MAP_CACHE:
+            return cls._MAP_CACHE[cache_key]
+ 
         NPROD = NCHAN * (NCHAN + 1) // 2
-        NPROD_PER_BINCLK =  NPROD // NCLK # number of products for each binclk, i.e number of products in each packet
-        # Match UCORR44 / UCMAC44_ARRAY: AUTOCORR_STRIDE = NCOL_PER_CLK
-        autocorr_stride = NCHAN // 2 // NCLK
-        #print(f"{NCHAN=}, {NCLK=}, {NPROD_PER_BINCLK=}, {NPROD=}")
-
+        NPROD_PER_BINCLK = NPROD // NCLK  # products per binclk, i.e. products in each packet
 
         # Map to convert a (i,j) coordinate in a NCHANxNCHAN matrix to a common-sense linearized product index (pix)
-        ij_to_pix_map = cls.get_ij_to_prod_map(NCHAN)
+        ij_to_prod_map = cls.get_ij_to_prod_map(NCHAN)
 
         # Get the (iv,jv) coordinate of each product generated by each correlator CMAC.
         # cmac_out_ij[clk, prod] = (iix, jix), where
@@ -184,15 +168,9 @@ class UCORR(MMI):
                                for i in range(NCHAN+1) for j in range(NCHAN//2//NCLK*clk, NCHAN//2//NCLK*(clk+1)) ]
                                for clk in range(NCLK) ])
 
-
-        fft_bin_map = config.fft_bin_map
-        if not isinstance(fft_bin_map, np.ndarray):
-            fft_bin_map = np.asarray(fft_bin_map)
-            config.fft_bin_map = fft_bin_map
-
+        fft_bin_map = np.asarray(fft_bin_map)
         if not ct_level:
-            raise RuntimeError(f'Incalid CT_LEVEL with value {ct_level}')
-
+            raise RuntimeError(f'Invalid CT_LEVEL with value {ct_level}')
 
         # Get CT Level 1 bin map
         if ct_level >= 1:
@@ -212,9 +190,17 @@ class UCORR(MMI):
             # In fact, the bin rotation is essential to ensure the culling affects all lanes equally.
             # ---------
             # ct2_bins: (lane, binid) = bin, ct2_bins.shape = (4,1984), 1984=2048-256/4
-            ct_bin_map = np.array([[b for clk,b in enumerate(lane_bins) if not (clk < 256 and clk & 0b11 == lane)] for lane, lane_bins in enumerate(ct_bin_map)])
+            # Non-vectorized version: ct_bin_map = np.array([[b for clk,b in enumerate(lane_bins) if not (clk < 256 and clk & 0b11 == lane)] for lane, lane_bins in enumerate(ct_bin_map)])
+            # Vectorized version:
+            n_lanes, n_clk = ct_bin_map.shape
+            clk = np.arange(n_clk)
+            lane = np.arange(n_lanes)[:, None]
+            keep = ~((clk < 256) & ((clk & 0b11) == lane))  # (n_lanes, n_clk) array of booleans, because of 'lane' broadcasting with 'clk'
+            n_keep = int(keep.sum(axis=1)[0]) # number of bins kept per lane
+            if set(keep.sum(axis=1)) != set((n_keep,)):
+                raise RuntimeError('CT2 culling did not drop the same number of bins on every lane')
+            ct_bin_map = ct_bin_map[keep].reshape(n_lanes, n_keep)  # ct_bin_map[kep] creates a 1D array (C-order) that selects the bins, then reshape(n_lanes, n_keep) reshapes it back to the original shape, minus the unkept bins
             chan_map = np.arange(NCHAN)
-            print(f'CT2 bin_map={ct_bin_map.shape}')
 
         # Get CT Level 3 bin map
         if ct_level >= 3:
@@ -233,52 +219,61 @@ class UCORR(MMI):
             #  clock 1 = (high half of low channels + high half of high channels)  = CH16-31 + CH48-63
             chan_map = np.array([i+NCHAN//4*clk + NCHAN//2*lane for clk in range(2) for lane in range(2) for i in range(NCHAN//4)], dtype=np.intp)
             # ct_bin_map = ct_bin_map[[0,4,1,5,2,6,3,7]] # take into account the cabling
-            print(f'CT3 bin_map={ct_bin_map.shape}')
 
-
-         # Compute a map that lists the bins seen by each CMAC after decimation
+        # Compute a map that lists the bins seen by each CMAC after decimation
         # corr_bins[bin_set, corr, bix] = bin
-        corr_bins = np.array([ct_bin_map[:, bs::NDECIM] for bs in range(NDECIM)])
-        #print(f'Post Corr decimation corr_bins={corr_bins.shape}, {NDECIM=}')
+        # non-vectorized version: corr_bins = np.array([ct_bin_map[:, bs::NDECIM] for bs in range(NDECIM)])
+        n_ct_bins = ct_bin_map.shape[1]
+        corr_bins = np.stack([ct_bin_map[:, bs::NDECIM] for bs in range(NDECIM)])  # (NDECIM, NCORRS, n_ct_bins/NDECIM)
 
+        n_decim, n_corrs, n_bins = corr_bins.shape
 
-
-
-        # print(f'{NCLK=}\n{ct2_bins=}\n{fft_bin_map=}\n{cmac_out_ij=}\n{cmac_out_pix=}')
 
         # Compute map that lists the bins corresponding to every product of every packet sent by each correlator for a specific bin_set
         # bin_map[bin_set, corr, clkbin, prod] = bin
-        # Note: bin is the save for every prod and for every NCLK clkbins.
-        bin_map = np.array([[[[ bin_ for prod in range(NPROD_PER_BINCLK)] for bin_ in bins for clk in range(NCLK)] for bins in bin_set_map] for bin_set_map in corr_bins])
+        # non-vectorized version: bin_map = np.array([[[[ bin_ for prod in range(NPROD_PER_BINCLK)] for bin_ in bins for clk in range(NCLK)] for bins in bin_set_map] for bin_set_map in corr_bins])
+        # Note: bin is the same for every prod and for every NCLK clkbins.
+        bin_map = np.repeat(corr_bins[..., None], NCLK, axis=-1)
+        bin_map = bin_map.reshape(n_decim, n_corrs, n_bins * NCLK)
+        bin_map = np.ascontiguousarray(
+            np.repeat(bin_map[..., None], NPROD_PER_BINCLK, axis=-1),
+            dtype=np.intp,
+        )
 
         # Compute the linearized product index corresponding to every product of every packet sent by each correlator.
         # We take into account the real channel numbers provided into the CMAC input vector position.
         # cmac_out_pix[clk, prod] = pix
-        #print(f'{cmac_out_ij.shape=}, {chan_map=}')
-        cmac_out_pix = ij_to_pix_map[chan_map[cmac_out_ij[...,0]], chan_map[cmac_out_ij[...,1]]]
+        # print(f'{cmac_out_ij.shape=}, {chan_map=}')
+        cmac_out_pix = ij_to_prod_map[chan_map[cmac_out_ij[...,0]], chan_map[cmac_out_ij[...,1]]]
 
         # Compute the linearized product index for each (corr, clkbin, prod) data sent by the correlator
         #   prod_map[corr, clkbin, prod] where:
         #     corr: 0 .. NCORR-1: correlator number
         #     clkbin: 0 .. NBINS_PER_CORR * NCLK, each product stored in ram = number of packets
         #     prod: 0 .. NPROD/NCLK, each product in a packet
-        prod_map = np.array([[[cmac_out_pix[clk, clkprod] for clkprod in range(NPROD_PER_BINCLK)] for _ in lane_bins for clk in range(NCLK)] for lane_bins in corr_bins[0]])
+        # non-vectorized version: prod_map = np.array([[[cmac_out_pix[clk, clkprod] for clkprod in range(NPROD_PER_BINCLK)] for _ in lane_bins for clk in range(NCLK)] for lane_bins in corr_bins[0]])        # prod_map[corr, clkbin, prod] = cmac_out_pix[clk, prod] (independent of bin)
+        prod_map = np.ascontiguousarray(
+            np.broadcast_to(
+                cmac_out_pix[None, None, :, :],
+                (n_corrs, n_bins, NCLK, NPROD_PER_BINCLK),
+            ).reshape(n_corrs, n_bins * NCLK, NPROD_PER_BINCLK),
+            dtype=np.intp,
+        )
 
-        #print(f'bin_map={bin_map.shape}, prod_map={prod_map.shape}')
-        # UCMAC44_ARRAY autocorr_only shortens each packet to the NCHAN diagonal
-        # products at CMAC indices i*AUTOCORR_STRIDE (packet length 10+5*NCHAN).
-        if autocorr_only:
-            ac_ix = np.arange(NCHAN) * autocorr_stride
-            bin_map = bin_map[..., ac_ix]
-            prod_map = prod_map[..., ac_ix]
-
-        config.bin_map = bin_map
-        config.prod_map = prod_map
-        config.NDECIM, config.NCORRS, config.NPROD_PER_CMAC, config.NCMAC = bin_map.shape
-        config.NBINS = int(bin_map.max()) + 1
-        config.NPROD_PER_ARRAY = config.NCORRS * config.NPROD_PER_CMAC
-        config.ack(map_attrs, context=map_attrs)
-
+        ndecim, ncorrs, nprod_per_cmac, ncmac = bin_map.shape
+        maps = dict(
+            ij_to_prod_map=ij_to_prod_map,
+            bin_map=bin_map,
+            prod_map=prod_map,
+            NDECIM=ndecim,
+            NCORRS=ncorrs,
+            NPROD_PER_CMAC=nprod_per_cmac,
+            NCMAC=ncmac,
+            NBINS=int(bin_map.max()) + 1,
+            NPROD_PER_ARRAY=ncorrs * nprod_per_cmac,
+        )
+        cls._MAP_CACHE[cache_key] = maps
+        return maps
 
     @classmethod
     def get_ij_to_prod_map(cls, NCHAN):
@@ -288,10 +283,14 @@ class UCORR(MMI):
         Returns:
             np.ndarray: Array that maps a (i,j) pair to a product index
         """
+        cached = cls._IJ_MAP_CACHE.get(NCHAN)
+        if cached is not None:
+            return cached
         z = np.empty((NCHAN, NCHAN), dtype=np.intp)
         i, j = np.triu_indices(NCHAN)
         z[i, j] = np.arange(len(i))
         z[j, i] = np.arange(len(i))
+        cls._IJ_MAP_CACHE[NCHAN] = z
         return z
 
 
@@ -336,6 +335,8 @@ class UCORR(MMI):
         self.INTEGRATION_PERIOD = integration_period-1
         self.AUTOCORR_ONLY = autocorr_only
         self.NO_ACCUM = no_accum
+        # Sticky in FPGA (and copied into every packet FLAGS LSB) until this pulse.
+        self.pulse_bit("OVERRUN_RESET")
         if bin_set is None:
             self.AUTO_BIN_SET = 1
             active_bin_set = None
@@ -344,59 +345,16 @@ class UCORR(MMI):
             self.BIN_SET = bin_set
             active_bin_set = int(bin_set)
 
+        self.config.update(
+            firmware_integ_period=int(integration_period),  
+            autocorr_only=bool(autocorr_only),
+            no_accum=bool(no_accum),
+            auto_bin_set=active_bin_set is None,
+            bin_set=active_bin_set
+        )
         if correlators is not None:
             raise RuntimeError("'correlators' argument is not supported by UCORR")
         if bandwidth_limit is not None:
-            self.logger.warn(f"{self!r}: 'bandwidth_limit' argument is not yet supported by UCORR")
+            self.logger.warning(f"{self!r}: 'bandwidth_limit' argument is not yet supported by UCORR")
         self.verbose = verbose
-        self.config.update(
-            firmware_integ_period=int(integration_period),
-            autocorr_only=bool(autocorr_only),
-            no_accum=bool(no_accum),
-            auto_bin_set=True,
-            bin_set=active_bin_set,
-            verbose=verbose,
-            corr_config_id=int(self.config.corr_config_id) + 1,  # indicate that some parameters (i.e. integration period) might have changed
-        )
-        # Refresh product/packet maps for autocorr_only (changes UDP payload length).
-        self.get_bin_map()
-        # Match CORR.start_correlator: hold the array in reset while programming,
-        # then release both the GPIO CORR_RESET and the UCORR soft reset so the
-        # pipeline can emit packets. Leaving GPIO CORR_RESET asserted (e.g. after
-        # a partial init) silences the correlator even when SOFT_RESET=0.
-        self.fpga.set_corr_reset(1)
-        self.SOFT_RESET = 1
-        self.SOFT_RESET = 0
-        self.fpga.set_corr_reset(0)
-    
-    def stop_correlator(self):
-        """ Stop all correlator cored from sending data.
-        """
-        self.SOFT_RESET = 1
-    
-    def get_data_receiver(self, sock, buf_size=2048, verbose=1, **kwargs):
-        """Return a :class:`UCorrFrameReceiver` for ``sock``.
 
-        Parameters:
-            sock: Bound UDP socket that receives correlator packets.
-            buf_size (int): Number of packets the UDP receiver can hold in one
-                batch (``UDPPacketReceiver`` buffer length). One full integration
-                is ``NCORRS * NBINS_PER_CORR`` packets (8192 for CRS corr8).
-            verbose (int): Verbosity for the packet receiver / frame receiver.
-            **kwargs: Forwarded to :class:`UCorrFrameReceiver`.
-        """
-        packet_receiver = UDPPacketReceiver(sock, buf_size=buf_size, verbose=verbose)
-        self.get_bin_map()
-        return UCorrFrameReceiver(packet_receiver, config=self.config, verbose=verbose, **kwargs)
-
-
-    @classmethod
-    def get_corr_receiver(cls, packet_receiver, config=None, pre_func=None):
-        """Return an instance of a correlator packet receiver."""
-        return UCorrFrameReceiver(packet_receiver, config=config, pre_func=pre_func)
-
-    @classmethod
-    def get_packet_receiver(cls, sock, n_packets=2048, max_packet_size=9000, verbose=0):
-        """ Return an instance of a UDP packet receiver
-        """
-        return UDPPacketReceiver(sock, n_packets=n_packets, max_packet_size=max_packet_size, verbose=verbose)

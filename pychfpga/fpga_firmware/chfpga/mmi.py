@@ -20,6 +20,7 @@
 import numpy as np
 import time
 import logging
+import asyncio
 
 # In python, we encode the page as extra address bits 20:19. Those are stripped out downstream and
 # converted into the appropriate opcode by BSB_MMI.
@@ -480,6 +481,20 @@ class MMI(object):
                     return False
                 else:
                     raise RuntimeError(f"Timeout exceeded while waiting for bitfield {bitfield_name}=={int(target_value)}")
+
+    async def wait_for_bit_async(self, bitfield_name, timeout=1, target_value=1, no_error=False, poll_interval=0.001):
+        """Async version of :meth:`wait_for_bit`. Yields between MMI polls."""
+        bitfield = self.get_bitfield(bitfield_name)
+        t0 = time.monotonic()
+        while True:
+            if self.read_bitfield(bitfield) == target_value:
+                return True
+            if (time.monotonic() - t0) > timeout:
+                if no_error:
+                    return False
+                raise RuntimeError(
+                    f"Timeout exceeded while waiting for bitfield {bitfield_name}=={int(target_value)}")
+            await asyncio.sleep(poll_interval)
 
     def read_all_fields(
             self,

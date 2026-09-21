@@ -24,28 +24,24 @@ class FFTDataProcessor:
         self,
         packet_receiver,
         raw_processor,
-        config=None,
+        config_getter,
         stream_ids=(),
         **kwargs,
     ):
         kwargs.pop("metrics_refresh_time", None)
         kwargs.pop("adc_rms_refresh_count", None)
-        kwargs.pop("fft_offset_encoding", None)
         kwargs.pop("receive_window", None)
         kwargs.pop("verbose", None)
         kwargs.pop("decode_strict", None)
         self.raw = raw_processor
         self.recv = packet_receiver
-        self.config = State(config).deepcopy() if config is not None else State()
-        if stream_ids and not self.config.get("stream_ids"):
-            self.config.stream_ids = tuple(stream_ids)
+        if config_getter is None:
+            raise TypeError("config_getter is required")
+        self._config_getter = config_getter
+        self.config = None
         self.log = log.get_logger(self)
         self.lock = threading.RLock()
         self.processed_packets = 0
-        self._sync_stream_id_helpers()
-        nchan = getattr(self.raw, "NCHAN", len(self.config.get("stream_ids") or ()))
-        if nchan:
-            self._init_fft_state(nchan=nchan)
 
     @property
     def NCHAN(self):
@@ -60,26 +56,12 @@ class FFTDataProcessor:
         """Packets per physical frame row after ``get_formatted_data`` split."""
         return self.raw.NUMBER_OF_SUBFRAMES
 
-    @property
-    def physical_frames_per_logical(self):
-        """Physical UCAP frame rows that form one logical FFT spectrum (e.g. 2 for fft_2x)."""
-        caps = self.raw.config.get('capture_format') or []
-        cf = caps[SOURCE_INDEX] if len(caps) > SOURCE_INDEX else None
-        if cf is not None and not isinstance(cf, State):
-            cf = State(cf)
-        if cf is not None and cf.fmt_is_complex and int(cf.fmt_interleave_factor or 1) > 1:
-            # ``get_formatted_data`` already deinterleaves physical frame pairs.
-            return 1
-        pplf = self.config.get('packets_per_logical_frame')
-        if pplf is None:
-            pplf = getattr(self.raw.config, 'packets_per_logical_frame', 1)
-        if isinstance(pplf, (list, tuple)):
-            pplf = pplf[SOURCE_INDEX]
-        return max(1, int(pplf or 1))
-
-    def update_config(self, config=None):
-        if config is not None:
-            self.config.update(config)
+    def update_config(self):
+        source = self._config_getter()
+        if self.config is None:
+            self.config = source
+        elif source is not self.config:
+            raise RuntimeError("config_getter must return a stable State")
         nchan_before = getattr(self, "NCHAN", 0)
         n_bins_before = getattr(self, "_fft_n_bins", 1)
         self._sync_stream_id_helpers()
@@ -182,7 +164,6 @@ class FFTDataProcessor:
         self.metrics_non_complex_frames = np.zeros(nchan, dtype=np.int32)
         self.fft_lock = threading.RLock()
         self._fft_n_bins = 1
-        self._logical_frame_parts = [[] for _ in range(nchan)]
         self._diag_last_log_time = 0.0
         self._diag_rows_emitted = 0
         self._diag_rows_complete = 0
@@ -234,22 +215,12 @@ class FFTDataProcessor:
         return re * re + im * im
 
     def _feed_logical_spectrum(self, cix, row):
-        """Buffer split physical frames until a full logical spectrum is ready."""
+        """Accumulate one formatted complex spectrum row into the RMS buffers."""
         row = np.asarray(row).reshape(-1)
         if not np.iscomplexobj(row):
             self.metrics_non_complex_frames[cix] += 1
             return
-        pfl = self.physical_frames_per_logical
-        if pfl <= 1:
-            self._accumulate_spectrum_power(cix, row)
-            return
-        parts = self._logical_frame_parts[cix]
-        parts.append(row)
-        if len(parts) < pfl:
-            return
-        combined = np.concatenate(parts, axis=-1)
-        self._logical_frame_parts[cix] = []
-        self._accumulate_spectrum_power(cix, combined)
+        self._accumulate_spectrum_power(cix, row)
 
     def _accumulate_spectrum_power(self, cix, row):
         """Add one logical spectrum to the running RMS acquisition for a channel."""
@@ -342,8 +313,6 @@ class FFTDataProcessor:
             self.fft_overflow[ix] = 0
             self.fft_rms_done[ix] = False
             self.fft_rms_started[ix] = True
-            for cix in ix:
-                self._logical_frame_parts[cix] = []
         self.log.info(
             f'{self!r}: FFT RMS acquisition started for stream_ids={stream_ids!r} '
             f'number_of_frames={number_of_frames} target_gain_bank={target_gain_bank} '

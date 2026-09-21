@@ -12,6 +12,7 @@ from pychfpga.common.raw_data_packet_processor import (
 from test_raw_data_processor import (
     DummyPacketReceiver,
     capture_format_for_tests,
+    config_getter_from_mapping,
     default_config,
     process_and_get,
     write_burst,
@@ -22,7 +23,10 @@ def make_dual(stream_ids=(10, 11)):
     pr = DummyPacketReceiver(n_packets=16, max_packet_size=64)
     cfg = default_config(stream_ids=stream_ids, packet_cookie=PACKET_COOKIE_ADC)
     cfg["capture_format"] = [capture_format_for_tests("8"), capture_format_for_tests("8")]
-    proc = RawDataPacketProcessor(pr, config=cfg, receive_window=3)
+    proc = RawDataPacketProcessor(
+        pr, config_getter=config_getter_from_mapping(cfg), receive_window=3
+    )
+    proc.update_config()
     return proc, pr
 
 
@@ -64,4 +68,4 @@ def test_dual_processors_on_ucap_burst():
     ts, data, counts = out0
     assert ts.shape[0] > 0
     assert counts.sum() > 0
-    assert np.all((proc.raw_source[: proc.n_out] & 1) == 0)
+    assert np.all((proc.raw_source[proc.out_rows] & 1) == 0)

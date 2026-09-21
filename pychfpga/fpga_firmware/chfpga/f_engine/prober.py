@@ -55,10 +55,10 @@ class PROBER(MMI):
 
     DATA_BUFFER_CAPACITY = 3 # Number of full frames that can fit in the FIFOs.
 
-    def __init__(self,  *, router, router_port, instance_number, state):
+    def __init__(self,  *, router, router_port, instance_number, config):
         self.logger = logging.getLogger(__name__)
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
-        self.state = state
+        self.config = config
         self._lock()  # Prevent accidental addition of attributes (if, for example, a value is assigned to a wrongly-spelled property)
     # Specialized functions
 
@@ -71,19 +71,41 @@ class PROBER(MMI):
         self.pulse_bit('FIFO_RESET')
 
     DATA_SOURCE_TABLE = {
-        'adc': 0,  # for old code. technically capature is done after funcgen
         'funcgen': 0,
         'scaler': 1}
+    DATA_SOURCE_NAMES_TABLE = {v:k for k,v in DATA_SOURCE_TABLE.items()}  # maps source number to name
+
+    @classmethod
+    def normalize_source(cls, source):
+        """Return ``(source_index, source_name)`` for a capture source specifier."""
+        if isinstance(source, str):
+            if source == 'adc':
+                source = 'funcgen'
+            if source not in cls.DATA_SOURCE_TABLE:
+                valid_sources = ', '.join(f"'{key}'" for key in cls.DATA_SOURCE_TABLE)
+                raise ValueError(f"Unknown data capture '{source}'. Valid sources are {valid_sources}.")
+            return cls.DATA_SOURCE_TABLE[source], source
+        source_index = int(source)
+        if source_index not in cls.DATA_SOURCE_NAMES_TABLE:
+            raise ValueError(
+                f"Unknown data capture source index {source_index}. Valid indices are 0 (funcgen) or 1 (scaler)"
+            )
+        return source_index, cls.DATA_SOURCE_NAMES_TABLE[source_index]
 
     def set_data_source(self, source):
-        if isinstance(source, str):
-            if source in self.DATA_SOURCE_TABLE:
-                source = self.DATA_SOURCE_TABLE[source]
-            else:
-                valid_sources = ', '.join(f"'{key}'" for key in self.DATA_SOURCE_TABLE)
-                raise ValueError(f"Unknown data capture '{source}'. Valid sources are {valid_sources}.")
-        self.SOURCE_SEL = source
+        source_index, source_name = self.normalize_source(source)
+        self.SOURCE_SEL = source_index
+        self.config.update(source=source_index, source_name=source_name)
 
+    def get_data_source(self):
+        return self.config.source_name
+
+    def set_sub_period(self, sub_period):
+        self.SUB_PERIOD = int(sub_period)
+        self.config.sub_period = int(sub_period)
+
+    def get_sub_period(self):
+        return int(self.config.sub_period)
 
     def set_burst_period(self, burst_period0=390625,   burst_period1=390625):
         """ Sets the interval between data capture bursts. The period is specified in number of frames. This method is used because the property does not yet handle multi-byte values well."""
@@ -141,6 +163,7 @@ class PROBER(MMI):
             raise RuntimeError(f'Capture send delay of {delay_in_seconds:.3f} s in combination with the capture period of {period_in_seconds:.3f} s will cause up to {int(buffered_packets)} packets to be buffered, wich exceed the capture buffer capability of {int(self.DATA_BUFFER_CAPACITY)} frames. Minimum period for the current send delay is {int(min_period)} frames ({min_period_in_seconds * 1000:.3f} ms)')
 
         self.BURST_LENGTH = frames_per_burst - 1 # BURST_LENGTH actually specifies the number of additional frames in the firmware
+        self.config.frames_per_burst = frames_per_burst
         self.set_burst_period(burst_period, burst_period)
         self.OFFSET = offset
         self.SEND_DELAY = send_delay
@@ -181,9 +204,10 @@ class PROBER(MMI):
             if not isinstance(crate, int):
                 crate = 0  # 0 if there is no backplane/crate, or the crate does not have an assigned crate number.
 
-            self.STREAM_ID = ((crate & 0xF) << 8) | ((slot & 0xF) << 4) | (channel & 0x0F)
+            stream_id = self.STREAM_ID = ((crate & 0xF) << 8) | ((slot & 0xF) << 4) | (channel & 0x0F)
         else:
             raise ValueError(f'Invalid stream id parameter {stream_id!r}')
+        self.config.stream_id = stream_id
 
     def get_stream_id(self):
         """ Return the stream ID of the current channel instance.
@@ -192,290 +216,31 @@ class PROBER(MMI):
             int: the stream id.
 
         """
-        return self.STREAM_ID
+        return self.config.stream_id
 
 
     def init(self, **kwargs):
         """ Initialize the data capture module"""
-        # self.config_capture(1, 100) # Capture 1 frame every 100 frames
+        source = int(self.SOURCE_SEL)
+        source_name = self.DATA_SOURCE_NAMES_TABLE[source]
+        self.config.update(
+            source=source,
+            source_name=source_name,
+            sub_period=int(self.SUB_PERIOD),
+            subframes_per_frame=1, # hardwired in PROBER
+            frames_per_burst=1, # default for PROBER
+        )
         channel = self.instance_number
         self.logger.debug(f'{self!r}: Initializing channel {int(channel)}')
-        # self.PROBE_ID = 0xA0 + channel  # For backwards compatibility
-        self.set_stream_id(self.fpga.get_id(channel))
+        self.set_stream_id(self.fpga.get_id(channel)) # get crate/slot/channel tuple, it will be converted into a numeric stream id
         self.RESET = 1  # Make sure no data is being transmitted at reset
+
+    def update_config(self):
+        """Return ``self.config``."""
+        return self.config
 
     def status(self):
         """ Displays the status of the data capture module"""
         print(f'-------------- CHAN[{int(self.instance_number)}] data capture --------------')
         print(f' Capture frame({self.BURST_LENGTH}) every {self.get_burst_period()} frames', end=' ')
 
-
-
-# class RawFrameReceiver(object):
-#     """
-#     Pure Python socket receiver to capture the raw ADC or FFT data from the FPGA.
-#
-#     Note that the packets are larger than 1500 bytes, which requires the
-#     networking equipment and the computer interface to be configured to
-#     receive Jumbo frames.
-#
-#     The receiver is fast enough to capture data exceeding 500
-#     Mbits/s, provided the system provides a sufficiently big UDP buffer to hold
-#     the data until the receiver method is called to process it (see below).
-#
-#     Parameters:
-#
-#         socket (socket.socket): An opened and bound UDP socket to which the
-#             FPGA correlator data will be sent. The socket will not be closed
-#             when the call is completed.
-#
-#     System Requirements:
-#
-#     The transmit rate must be fast enough to accommodate the desired bandwidth
-#     by setting ib.GPIO.HOST_FRAME_READ_RATE = rate. rate=16 limits to about
-#     260 Mbps but is slow enough to allow python to process the data with a
-#     small standard UDP buffer. ``rate`` =15 is good for about 500 Mbps, and
-#     ``rate`` =16 is good for the full Gigabit bandwidth. The latetr two require
-#     bigger UDP buffers. See below::
-#
-#         ib.GPIO.HOST_FRAME_READ_RATE = 14
-#
-#     The Ethernet interface must be set to receive Jumbo frames::
-#
-#         sudo ifconfig eno1 mtu 9000
-#
-#     The UDP buffers shall be increased to reduce packet loss to a minimum::
-#
-#         sudo sysctl -w net.core.rmem_max=26214400
-#         sudo sysctl -w net.core.rmem_default=26214400
-#         sudo sysctl -w net.ipv4.udp_mem='26214400 26214400 26214400'
-#         sudo sysctl -w net.ipv4.udp_rmem_min=26214400
-#
-#     Check udp buffers::
-#
-#         sysctl -a | grep mem
-#
-#     Monitor UDP buffer::
-#
-#         watch -cd -n .5 "grep :A6  /proc/net/udp"
-#     """
-#
-#     def __init__(self, socket, buffer_length=256):
-#
-#         self.socket = socket
-#         self.NPACKETS = buffer_length
-#         self.DATA_SIZE = 2048
-#         # self.ignore_packet_size = ignore_packet_size
-#         # Define numpy data types that will be used to efficiently parse the data
-#
-#         self.header_dtype = np.dtype(dict(
-#             names=['cookie', 'stream_id', 'frame_number', 'slot_chan', 'flags', 'ts'],
-#             offsets=[0, 1, 1, 2, 3, 2],
-#             formats=['u1', '>u2', 'u1', 'u1', 'u1', '>u8']))
-#
-#         self.packet_dtype = np.dtype([
-#             ('header', self.header_dtype, (1, )),
-#             ('data', np.int8, (self.DATA_SIZE, ))])
-#
-#         self.PACKET_SIZE = self.packet_dtype.itemsize
-#
-#         # Pre-allocate buffers
-#         # Buffer in which recv_into() will put the data directly
-#         self.buf = np.zeros((self.NPACKETS, self.PACKET_SIZE), dtype=np.int8)  # can use empty(), but the uninitialized data can be confusing for debugging
-#         self.n = 0  # buffer write index
-#         self.last_ts = None  # timestamp of the last packet written in the buffer
-#
-#         # Various views of the buffer to allow quick and easy access to the packet contents
-#
-#         self.buf_struct = self.buf.view(self.packet_dtype)[:,0]
-#
-#         self.buf_cookie = self.buf_struct['header']['cookie'][:, 0]
-#         self.buf_stream_id = self.buf_struct['header']['stream_id'][:, 0]
-#         self.buf_frame_number = self.buf_struct['header']['frame_number'][:, 0]
-#         self.buf_slot_chan = self.buf_struct['header']['slot_chan'][:, 0]
-#         self.buf_flags = self.buf_struct['header']['flags'][:, 0]
-#         self.buf_ts = self.buf_struct['header']['ts'][:, 0]
-#         self.buf_ts_dirty = self.buf_struct['header']['ts'][:, 0]
-#         self.buf_data = self.buf_struct['data']
-#         self.ts_mask = np.uint64(0xFFFFFFFFFFFF)  # just keep the last 48 bits
-#
-#     def flush(self, timeout, verbose):
-#             # Read packets until timeout to flush the OS UDP buffer
-#             self.socket.settimeout(timeout)
-#             while True:
-#                 try:
-#                     s = self.socket.recv_into(self.buf[0])
-#                     if verbose:
-#                         print(f'flushing packet len={s} cookie=0x{self.buf_cookie[0]:02x} ts={self.buf_ts[0] & self.ts_mask}')
-#
-#                 except socket.timeout:
-#                     break
-#             # We assume the buffer might have overflowed and contains partial
-#             # timestamp. We flush until we gen a new timestamp.
-#
-#     def wait_for_new_timestamp(self, cookie, timeout, verbose=0):
-#             self.socket.settimeout(timeout)
-#             while True:
-#                 try:
-#                     s = self.socket.recv_into(self.buf[0])
-#                     if self.buf_cookie[0] & 0xfe != cookie:
-#                         continue
-#                     ts = self.buf_ts[0] & self.ts_mask + self.buf_frame_number[0]
-#                     if self.last_ts is None:
-#                         self.last_ts = ts
-#                         continue
-#                     if self.last_ts == ts:
-#                         if verbose:
-#                             print(f'skipping packet len={s} cookie=0x{self.buf_cookie[0]:02x} ts={ts}')
-#                         continue
-#                     self.last_ts = ts
-#                     self.n = 1
-#                     break
-#                 except socket.timeout:
-#                     continue
-#
-#     def receive_packets(self, cookie, verbose=0):
-#         """ Receive some packets into the buffer until there is a timeout, there is a new timestamp, or the buffer is full
-#         """
-#         while True:
-#             if self.n == self.NPACKETS:
-#                 return
-#             try:
-#                 s = self.socket.recv_into(self.buf[self.n])
-#                 # check if the packet has the right cookie
-#                 if verbose:
-#                     print(f'got packet len={s} cookie=0x{self.buf_cookie[self.n]:02x} ts={self.buf_ts[self.n] & self.ts_mask}')
-#                 if self.buf_cookie[self.n] & 0xfe != cookie:
-#                     continue
-#
-#                 # Ignore packets that don't have the right length
-#                 if s != self.PACKET_SIZE:
-#                     continue
-#                 ts = self.buf_ts[self.n] & self.ts_mask + self.buf_frame_number[self.n]
-#                 self.n += 1
-#                 if verbose:
-#                     print(f'ts={ts}, last_ts={self.last_ts}, sid={self.buf_stream_id[self.n]:04x}')
-#                 if self.last_ts is None:
-#                     self.last_ts = ts
-#                     continue
-#                 if ts != self.last_ts:
-#                     break
-#             except socket.timeout:  # we have a timeout, so we probably have time to process data
-#                 if self.n:  # continue if we don't have any data to process
-#                     if verbose:
-#                         print('timeout')
-#                     break
-#         # we get here if there is a timeout, a timestamp change, or if the buffer is full
-#         if verbose:
-#             print(f'got {self.n} packets')
-#
-#     def read_raw_frames(
-#             self,
-#             stream_ids=range(16),
-#             flush=True,
-#             data_timeout=1,
-#             flush_timeout=0.001,
-#             number_of_frames=None,
-#             verbose=0
-#             ):
-#         """
-#         Reads raw data from PROBER.
-#
-#         We read until we have stored up to  number_of_frames+1 frames to make sure we dont stop
-#         prematurely, but return only number_of_frames frames. The extra frames are currently lost,
-#         so we will lose data even if we call `read_raw_frames()` repetitively.
-#
-#
-#         Parameters:
-#
-#             stream_ids (list of int): List of the stream IDs of the ADC channels to capture. Stream
-#                 IDs consist are values encoded as ``0b0000ccccssssnnnn`` where ``cccc`` is the crate
-#                 number (default to 0), ``ssss`` is the slot number (defaults to 0), and ``nnnn`` is
-#                 the channel number. Specify ``range(16)`` to capture all 16 channels of a single stand-alone board.
-#
-#             flush (bool): Indicates if the UDP system buffers should be flushed before capture. Set
-#                 to False if the on subsequent calls to this function if you want to continuously
-#                 capture packets bursts, assuming you call it often enough to prevent the system buffers to overflow.
-#
-#             data_timeout (float): Amout of time we wait for packets until we decide it's time to
-#                 process what we have acumulated in the buffer. This should be set to a delay smaller
-#                 that the dely between bursts if we want to have each burst processed immediately. If
-#                 the value is too big, we'll process data only when the buffer is full, which will
-#                 still work but might cause the user to wait unnecessarily.
-#
-#             flush_timeout (float): Amount of time we wait for packets before we decide there is no
-#                 more data in the system's UDP buffers. This should be much shorter than the delay
-#                 between packet transmission, otherwise we'll flush forever.
-#
-#             number_of_frames (int): number of frames to capture for each channel. Of 0 or None, only
-#                 a single frame will be captured, and the "frame number" dimension will be removed
-#                 from the returned arrays.
-#
-#             verbose (int): verbosity level.
-#
-#         Returns:
-#                 (times_stamp, data, data_count) where:
-#
-#                 if ``number_of_frames`` is 0 or `None`:
-#
-#                 - time_stamp is an integer  indicating frame number tat was received.
-#                 - data is a numpy array of dimention (NS, 2048) where NS is the number of stream IDs
-#                 - data count is a numpy vector indicating the number of frames received for each stream ID.
-#
-#                 otherwise:
-#
-#                 - time_stamp is a numpy vector of length `number of frames` indicating the value of each timestamp.
-#                 - data is a numpy array of dimention (NT, NS, 2048) where NT=`number of frames` and NS is the number of stream IDs
-#                 - data count is a numpy array indicating the number of frames received for each stream ID.
-#
-#         """
-#         sid_map = {sid:ix for ix, sid in enumerate(stream_ids)} # maps stream ID to a stream id slot
-#         ts_map = {}  # map of (timestamp:ix) that keep track in which timestamp slot the data with a give timestamp should go
-#
-#         NF = number_of_frames or 1
-#         NS = len(sid_map)
-#
-#         self.data = np.zeros((NS, NF + 1, self.DATA_SIZE), dtype=np.int8)
-#         self.data_count = np.zeros((NS, NF + 1), dtype=np.int32)
-#         self.ts = np.zeros((NF + 1,), dtype=np.int64)
-#         self.cookie = cookie = 0xa0
-#
-#         if flush:
-#             self.flush(flush_timeout, verbose=verbose)
-#             self.wait_for_new_timestamp(cookie, data_timeout, verbose=verbose)
-#             if verbose:
-#                 print(f'finished flushing')
-#
-#         # self.last_ts = None
-#         self.socket.settimeout(data_timeout)
-#         tix = 0 # timestamp index
-#         while tix < NF + 1: # capture packets until we have all the timestamps we need
-#             self.receive_packets(cookie=cookie, verbose=verbose)  # receive packets until timeout of buffer is full
-#             # Now process the packets
-#             for i in range(self.n):
-#                 bix = sid_map.get(self.buf_stream_id[i], None)
-#                 # print(f'Stream id={self.buf_stream_id[i]:04x} => index {bix}')
-#                 if bix is None:
-#                     continue
-#                 ts = self.buf_ts[i] & self.ts_mask
-#                 tix = ts_map.setdefault(ts, len(ts_map))
-#                 if tix >= NF + 1:
-#                     break
-#                 if verbose > 1:
-#                     print(f'Storing {bix=} {tix=} {i=} {ts=}')
-#                 self.ts[tix] = ts
-#                 self.data[bix, tix] = self.buf_data[i]
-#                 self.data_count[bix, tix] += 1
-#             self.n = 0
-#         if number_of_frames:
-#             return self.ts[:NF], self.data[:,:NF,:], self.data_count[:, :NF]
-#         else:
-#             return self.ts[0], self.data[:,0,:], self.data_count[:,0]
-#
-#     def read_raw_frames_double_resolution(self, *args, **kwargs):
-#         '''
-#         Thin wrapper around read_raw_frames which then combines adjacent bytes of data into a single 16-bit number
-#         '''
-#         ts, data, flags = self.read_raw_frames(*args, **kwargs)
-#         combined = data[:, ::2].astype(np.int16) * 2**8 + data[:, 1::2].astype(np.uint8)
-#         return ts, combined, flags

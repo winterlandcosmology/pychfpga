@@ -29,7 +29,7 @@ class TCPPacketReceiver:
 
     The data sockets are assumed stable for a session (firmware drops on
     backpressure instead of closing). Reconnect by calling
-    ``get_data_receiver(..., force=True)`` on array reinit.
+    ``get_data_receiver_async(..., force=True)`` on array reinit.
     """
 
     def __init__(

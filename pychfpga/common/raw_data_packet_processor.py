@@ -30,7 +30,7 @@ def decode_format_string(format):
 
     Returns:
         State with ``fmt_bus_width``, ``fmt_data_width``, ``fmt_is_complex``,
-        and ``fmt_interleave_factor`` (same fields as
+        ``fmt_interleave_factor``, and ``use_offset_encoding`` (same fields as
         ``config.capture_format[i]``).
 
     Raises:
@@ -64,6 +64,7 @@ def decode_format_string(format):
         fmt_data_width=base,
         fmt_is_complex=is_complex,
         fmt_interleave_factor=2 if deinterleave else 1,
+        use_offset_encoding=False,
     )
 
 
@@ -123,7 +124,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
     def __init__(
         self,
         packet_receiver,
-        config=None,
+        config_getter,
         receive_window=3,
         verbose=0,
         decode_strict=True,
@@ -134,21 +135,21 @@ class RawDataPacketProcessor(PacketProcessorBase):
         Parameters
         ----------
         packet_receiver: UDP packet source holding the shared packet buffer.
-        config: Flat capture configuration (geometry, streams, ``capture_format``, etc.).
-            Deep-copied into an internal State so the caller can retain and mutate their copy.
+        config_getter: Callable returning a stable :class:`State` capture config.
         receive_window: Maximum incomplete trailing timestamp rows retained as carryover.
         verbose: Verbosity level for debug prints.
         decode_strict: Strictness control for multi-packet logical decode.
         """
+        if config_getter is None:
+            raise TypeError("config_getter is required")
+        self._config_getter = config_getter
         self.decode_strict = decode_strict
-        self.config = State()
+        self.config = None
         self.packet_cookie_mask = PACKET_COOKIE_MASK
         self.source_target_mode = np.zeros((NUM_SOURCES,), dtype=np.uint8)
         self._capture_format = [None, None]
         self._fmt_scratch = [{}, {}]
         super().__init__(packet_receiver, receive_window, verbose)
-        if config is not None:
-            self.update_config(State(config).deepcopy())
 
     def init(self):
         self.header_dtype = np.dtype(
@@ -201,19 +202,19 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.fmt_cdata1 = [None, None]
         self.fmt_cdata2 = [None, None]
 
-    def update_config(self, config=None):
-        if config is not None:
-            self.config.update(config)
+    def update_config(self):
+        source = self._config_getter()
+        if self.config is None:
+            self.config = source
+        elif source is not self.config:
+            raise RuntimeError("config_getter must return a stable State")
 
         state = self.config
-        if state.get("capture_bits_per_word") is None:
-            state.capture_bits_per_word = int(state.get("bytes_per_sample", 1) or 1) * 8
 
         # List if state attributes that do not change during normal operation and will require reallocation of internal buffers
         # The tuple is used both as a list of attributes and the context token
 
         static_state_attrs = (
-            "capture_engine",
             "bytes_per_sample",
             "samples_per_frame",
             "frames_per_burst",
@@ -221,9 +222,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
             "capture_bits_per_word",
             "subframes_per_frame",
             "stream_ids",
-            "packets_per_logical_frame",
-            "logical_frames_per_burst",
-            "packet_header_format",
+            "target_mode",
         )
 
         # Recompute output buffer arrays if the packet geometry parameter has changed 
@@ -231,12 +230,11 @@ class RawDataPacketProcessor(PacketProcessorBase):
             if self.verbose:
                 print(f"update_config: static state attributes have changed. Buffers will be cleared.")
 
-            self.CAPTURE_ENGINE = state.capture_engine
             self.TARGET_MODE = state.target_mode
             self.BYTES_PER_SAMPLE = state.bytes_per_sample
             self.SAMPLES_PER_FRAME = state.samples_per_frame
             self.FRAMES_PER_BURST = state.frames_per_burst
-            self.NUMBER_OF_SUBFRAMES = state.subframes_per_frame or state.number_of_subframes or 1
+            self.NUMBER_OF_SUBFRAMES = state.subframes_per_frame
             self.stream_ids = state.stream_ids
 
             if len(set(self.stream_ids)) != len(self.stream_ids):
@@ -244,18 +242,11 @@ class RawDataPacketProcessor(PacketProcessorBase):
             if max(self.stream_ids) >= 1 << 12:
                 raise ValueError("stream_ids must be less than 1 << 12")
 
-            if state.get("bytes_per_frame") is not None:
-                self.BYTES_PER_FRAME = int(state.bytes_per_frame)
-            else:
-                self.BYTES_PER_FRAME = self.BYTES_PER_SAMPLE * self.SAMPLES_PER_FRAME
-            if state.get("bytes_per_subframe") is not None:
-                self.BYTES_PER_SUBFRAME = int(state.bytes_per_subframe)
-            else:
-                self.BYTES_PER_SUBFRAME = self.BYTES_PER_FRAME // max(1, self.NUMBER_OF_SUBFRAMES)
+            self.BYTES_PER_FRAME = int(state.bytes_per_frame)
+            self.BYTES_PER_SUBFRAME = int(state.bytes_per_subframe)
             self.PACKET_SIZE = self.header_dtype.itemsize + self.BYTES_PER_SUBFRAME
 
-            self.CAPTURE_SOURCE = state.source
-            self.FFT_BINS_PER_WORD = state.fft_bins_per_word or 1
+            self.FFT_BINS_PER_WORD = int(state.fft_bins_per_word)
             self.CAPTURE_BITS_PER_WORD = int(state.capture_bits_per_word)
 
             self.NCHAN = len(self.stream_ids)
@@ -293,8 +284,8 @@ class RawDataPacketProcessor(PacketProcessorBase):
             # No carryover
             self.carry_len = 0
             self.carry_tix = 0
-            self._last_emitted_ts = 0
-            self.n_out = 0
+            self._last_emitted_ts = np.uint64(0)
+            self._set_out_rows(0, 0)
 
             # Per (channel, frame_index) cell in ``raw_data_count``; used for carryover completion.
             self.packets_per_frame = self.NUMBER_OF_SUBFRAMES
@@ -349,36 +340,12 @@ class RawDataPacketProcessor(PacketProcessorBase):
                     self.fmt_cdata2[source] = self.resize_buffer(f"fmt_cdata_buf2_{source}", cdata2_dims, element_dtype=out_dtype)
             cf.ack(context=dynamic_state_attrs[source])
 
-    def _fft_offset_encoding_enabled(self):
-        """Return True if FFT offset-binary compensation is enabled in config."""
-        if self.config.get("offset_encoding") is not None:
-            return bool(self.config.offset_encoding)
-        return bool(self.config.get("fft_offset_encoding", False))
+    def process_udp_packets(self, verbose=None, update_config=True):
+        if update_config:
+            self.update_config()
+        super().process_udp_packets(verbose=verbose)
 
-    def _apply_fft_formatter_compensation(self, data, source, bit_width):
-        """Apply offset-binary decode and natural-order bin mapping for FFT spectra.
-
-        Downstream sinks assume natural frequency order with offset encoding removed.
-        """
-        if source != 1:
-            return data
-        if self._fft_offset_encoding_enabled():
-            # Offset-binary samples are unsigned around a midpoint; convert to signed.
-            bias = 1 << (int(bit_width) - 1)
-            data.real -= bias
-            data.imag -= bias
-        bin_map = self.config.get("fft_bin_map")
-        if bin_map is not None:
-            bin_map = np.asarray(bin_map, dtype=np.intp)
-            if bin_map.size and bin_map.size == data.shape[-1]:
-                data = data[..., bin_map]
-        return data
-
-
-
-
-
-    def get_formatted_data(self, rows=slice(None), source=None, split=False, format=None, complex_override=None):
+    def get_formatted_data(self, rows=slice(None), source=0, split=False, format=None, complex_override=None):
         """Transform assembled raw rows into ``(ts, data, counts)`` for source ``source``.
 
         Parameters
@@ -397,13 +364,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         ts = self.ts_array[rows]
         counts = self.raw_data_count[rows]
         sources = self.raw_source[rows]
-        SOURCE_MAP = {'funcgen': 0, 'scaler': 1}
-        if source is None:
-            capture_source = self.config.source
-            if capture_source in SOURCE_MAP:
-                source = SOURCE_MAP[capture_source]
-            else:
-                raise ValueError(f"Invalid source {capture_source!r} specified")
+
         if format is not None:
             cf = decode_format_string(format)
         else:
@@ -427,6 +388,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
             right_shift -= 64
         if right_shift > 0:
             np.right_shift(data, right_shift, data)
+
         if is_complex:
             split = True
         if split:  # split a burst into multiple independent frames. Frames are always split for complex data.
@@ -478,13 +440,9 @@ class RawDataPacketProcessor(PacketProcessorBase):
             bins_per_word = interleave_factor // 2
             v = data.reshape(logical_rows, interleave_factor, data.shape[1], data.shape[2])
             out = self.fmt_cdata2[source][:logical_rows]
-            # Lane scatter only writes lane::bins_per_word; clear first so a
-            # reused fmt_cdata2 buffer cannot leak samples from a prior decode.
-            out.fill(0)
             # Full-resolution frames carry Re/Im pairs in each physical row.
             complex_values_per_frame = data.shape[2] // 2
             cdata = self.fmt_cdata1[source][:data.shape[0], :, :complex_values_per_frame]
-            cdata.fill(0)
             np.copyto(cdata.real, data[:, :, ::2])
             np.copyto(cdata.imag, data[:, :, 1::2])
             cv = cdata.reshape(logical_rows, interleave_factor, data.shape[1], cdata.shape[2])
@@ -501,9 +459,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         else:
             # fmt_cdata* are sized for max_timestamps; only slice the active row prefix.
             n_rows = data.shape[0]
-            complex_values_per_frame = data.shape[2] // 2
-            cdata = self.fmt_cdata1[source][:n_rows, :, :complex_values_per_frame]
-            cdata.fill(0)
+            cdata = self.fmt_cdata1[source][:n_rows]
             np.copyto(cdata.real, data[:, :, ::2])
             np.copyto(cdata.imag, data[:, :, 1::2])
 
@@ -519,19 +475,27 @@ class RawDataPacketProcessor(PacketProcessorBase):
                         f'interleave_factor={interleave_factor}'
                     )
                 data = self.fmt_cdata2[source][:out_rows]
-                data.fill(0)
                 v = cdata.reshape(out_rows, interleave_factor, nchan, s2)
                 data[:] = v.transpose(0, 2, 1, 3).reshape(
                     out_rows, nchan, s2 * interleave_factor, order='F')
                 ts = ts.reshape(out_rows, interleave_factor)[:, 0]
                 counts = counts.reshape(out_rows, interleave_factor, nchan).min(axis=1)
 
-        data = self._apply_fft_formatter_compensation(data, source, base)
+        if cf.use_offset_encoding:
+            # Offset-binary samples are unsigned around a midpoint; convert to signed.
+            bias = 1 << (int(base) - 1)
+            data.real -= bias
+            data.imag -= bias
+        bin_map = self.config.get("fft_bin_map")
+        if bin_map is not None:
+            bin_map = np.asarray(bin_map, dtype=np.intp)
+            if bin_map.size and bin_map.size == data.shape[-1]:
+                data = data[..., bin_map]
 
         return ts, data, counts
 
 
-    def create_output_buffer(self, n_ts, source=None, split=False, format=None, complex_override=None):
+    def create_output_buffer(self, n_ts, source=0, split=False, format=None, complex_override=None):
         """Create arrays to store the timestamps, formatted data, and data counts returned by process_packets.
 
         This is used by applications that need to crate a storage space for the formatted data returned by the process_packets method.
@@ -566,14 +530,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         np.equal(self.pkt_cookie[:n], self.PACKET_COOKIE, out=bix_mask)
         np.equal(self.pr.pkt_len[:n], self.PACKET_SIZE, out=temp_mask[:n], where=bix_mask)
         np.bitwise_and(bix_mask, temp_mask[:n], out=bix_mask)
-
-        if self.verbose >= 2:
-            n_packets = bix_mask.sum()
-            if n_packets or self.verbose >= 3:
-                print(f"process_packets: found {n_packets} packets matching the cookie ({self.packet_cookie_mask}) and packet size")
-        # bix_mask[:n] = (self.buf_cookie[:n] & self.PACKET_COOKIE_MASK) == self.PACKET_COOKIE)
-        #     & (pkt_len[:n] == self.PACKET_SIZE)
-        # )
+        n_cookie = int(bix_mask.sum()) if self.verbose >= 2 else 0
 
         # Process packet fields (slice UDP buffer views to active prefix ``n``)
         np.bitwise_and(self.buf_ts[:n], self.ts_mask, out=self.pkt_ts[:n], where=bix_mask)
@@ -583,6 +540,11 @@ class RawDataPacketProcessor(PacketProcessorBase):
         np.right_shift(self.buf_mode_subframe[:n], 2, out=self.pkt_mode[:n], where=bix_mask)
         np.bitwise_and(self.pkt_mode[:n], 0x3, out=self.pkt_mode[:n], where=bix_mask)
         np.bitwise_and(self.buf_mode_subframe[:n], 0x3, out=self.pkt_subframe[:n], where=bix_mask)
+        packet_mode_str = "-"
+        if self.verbose >= 2 and n_cookie:
+            packet_mode_str = ",".join(
+                str(int(m)) for m in np.unique(self.pkt_mode[:n][bix_mask[:n]])
+            )
 
         # Compute the stream index for each packet
         np.take(self.six_map, self.pkt_stream_id[:n], out=self.pkt_six[:n]) # vectorized lookup of the stream index for each packet
@@ -590,23 +552,38 @@ class RawDataPacketProcessor(PacketProcessorBase):
         # Filter out packets with an invalid frame
         np.less(self.pkt_frame[:n], self.FRAMES_PER_BURST, out=temp_mask, where=bix_mask)
         np.bitwise_and(bix_mask, temp_mask, out=bix_mask)
+        n_frame = int(bix_mask.sum()) if self.verbose >= 2 else 0
         # Filter out packets with an invalid subframe number
         np.less(self.pkt_subframe[:n], self.NUMBER_OF_SUBFRAMES, out=temp_mask, where=bix_mask)
         np.bitwise_and(bix_mask, temp_mask, out=bix_mask)
         # Drop UDP packets with an invalid stream index
         np.greater_equal(self.pkt_six[:n].view(np.int16), 0, out=temp_mask, where=bix_mask)
         np.bitwise_and(bix_mask, temp_mask, out=bix_mask)
+        n_stream = int(bix_mask.sum()) if self.verbose >= 2 else 0
         # Drop UDP packets with the wrong mode
         np.equal(self.pkt_mode[:n], self.TARGET_MODE, out=temp_mask, where=bix_mask)
         np.bitwise_and(bix_mask, temp_mask, out=bix_mask)
+        n_mode = int(bix_mask.sum()) if self.verbose >= 2 else 0
         # Drop UDP packets at or before the latest timestamp already returned (monotonic emits).
         if self.verbose:
             rejected_packets = int(np.sum(bix_mask[:n] & (self.pkt_ts[:n] <= self._last_emitted_ts)))
         np.greater(self.pkt_ts[:n], self._last_emitted_ts, out=temp_mask, where=bix_mask)
         np.bitwise_and(bix_mask, temp_mask, out=bix_mask)
 
+        if self.verbose >= 2:
+            print(
+                f"process_packets: cookie/size={n_cookie} "
+                f"frame<{self.FRAMES_PER_BURST}={n_frame} "
+                f"stream_id={n_stream} mode={packet_mode_str} expected={self.TARGET_MODE} match={n_mode} "
+                f"after_ts_filter={int(bix_mask.sum())} "
+                f"(stream_ids={self.stream_ids})"
+            )
         if self.verbose and rejected_packets:
-            print(f"RawDataPacketProcessor: process_packets: rejected {rejected_packets} packets at or before the latest timestamp already returned (monotonic emits). {self._last_emitted_ts=} {self.pkt_ts[:n].min() =}.")
+            print(
+                f"RawDataPacketProcessor: process_packets: rejected {rejected_packets} packets "
+                f"at or before the latest timestamp already returned "
+                f"(monotonic emits). {self._last_emitted_ts=} {self.pkt_ts[:n].min()=}."
+            )
 
         # Byte offset: reuse pkt_frame / pkt_subframe (already decoded above) — no temp arrays.
         # Only ``pkt_off[bix]`` is read later; entries where ``bix_mask`` is false are left undefined.
@@ -665,7 +642,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         # Update the raw data count and raw data complete arrays
         np.add.at(self.raw_data_count, (tix, self.pkt_six[bix], self.pkt_frame[bix]), 1)
 
-    def flush(self, flush_timeout=0.001):
+    def flush(self, flush_timeout=None):
         """Flush UDP receiver and clear assembled-buffer state."""
         self.pr.flush(timeout=flush_timeout, verbose=self.verbose)
         if self.verbose >= 1:
@@ -676,5 +653,5 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.raw_source.fill(RAW_SOURCE_EMPTY)
         self.n_ts = 0
         self.carry_len = 0
-        self._last_emitted_ts = 0
-        self.n_out = 0
+        self._last_emitted_ts = np.uint64(0)
+        self._set_out_rows(0, 0)

@@ -9,6 +9,7 @@ import sys
 import os
 import socket
 import struct
+from pychfpga.common.async_utils import run_async
 
 
 def save_frames(Nframe_pairs=10, cadence=1.00, setup='interhut', filename='/home/chime/ch_acq/frame_pair_test.npz'):
@@ -46,12 +47,12 @@ def save_frames(Nframe_pairs=10, cadence=1.00, setup='interhut', filename='/home
             for mezz in iceboard.mezzanine:
                 mezz.set_refclk_source('sma')
 
-    ca.set_sync_method()
+    run_async(ca.set_sync_method_async())
     
     for brd in ca.ib:
         print brd.serial, brd.get_irigb_time()
     
-    ca.sync()
+    run_async(ca.sync_async())
     ca.ib.set_adc_mode('data')
     ca.ib.set_fft_bypass(True)
     #Get board info
@@ -72,7 +73,7 @@ def save_frames(Nframe_pairs=10, cadence=1.00, setup='interhut', filename='/home
     time.sleep(5)
 
     print 'SYNCING BOARDS'
-    ca.sync()
+    run_async(ca.sync_async())
     time.sleep(5)
 
     print 'CREATING DATA RECEIVERS'

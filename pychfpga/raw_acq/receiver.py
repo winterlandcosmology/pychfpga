@@ -21,12 +21,12 @@ from pychfpga.common.state import State
 from .corr_data_processor import CorrDataProcessor
 from .raw_data_processor import RawDataProcessor
 
-FIRMWARE_CONFIG_KEYS = ("raw", "corr")
-CAPTURE_CONFIG_KEYS = FIRMWARE_CONFIG_KEYS  # legacy alias
+DATA_CONFIG_KEYS = ("raw", "corr")
+CAPTURE_CONFIG_KEYS = DATA_CONFIG_KEYS  # legacy alias
 
 
-def _firmware_config_sections(config):
-    """Split a firmware State or partial processor patch dict into per-receiver sections."""
+def _data_config_sections(config):
+    """Split a data State or partial processor patch dict into per-receiver sections."""
     if config is None:
         return {}
     if isinstance(config, State):
@@ -34,9 +34,9 @@ def _firmware_config_sections(config):
     elif isinstance(config, dict):
         payload = config
     else:
-        raise TypeError(f"Expected firmware State or dict, got {type(config).__name__!r}")
-    if set(payload.keys()) >= set(FIRMWARE_CONFIG_KEYS):
-        return {key: payload[key] for key in FIRMWARE_CONFIG_KEYS}
+        raise TypeError(f"Expected data State or dict, got {type(config).__name__!r}")
+    if set(payload.keys()) >= set(DATA_CONFIG_KEYS):
+        return {key: payload[key] for key in DATA_CONFIG_KEYS}
     return payload
 
 # TCP port used to reach CRS/ICE boards for switch MAC learning (echo service).
@@ -86,44 +86,33 @@ class RawAcqReceiver(object):
         self.lock = threading.RLock()
         self.is_locked = False  # debug
         self.processors = {}
+        self.data_config = State(raw=State(), corr=State())
 
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.name})'
+    def get_raw_data_config(self):
+        return self.data_config.raw
+
+    def get_corr_data_config(self):
+        return self.data_config.corr
 
     def update_config(self, config=None, **kwargs):
-        """Apply firmware or per-processor configuration patches without merging subtrees."""
+        """Apply REST data-config patches and refresh processor bindings."""
         if kwargs:
             config = {**(config or {}), **kwargs}
         if not config:
             return
-        sections = _firmware_config_sections(config)
+        sections = _data_config_sections(config)
+        self.data_config.update_from(sections)
 
         raw_proc = self.processors.get("raw")
         if raw_proc is not None:
-            if "raw" in sections:
-                raw_proc.update_config(
-                    config=sections["raw"],
-                    adc_config=sections["raw"],
-                    fft_config=sections["raw"],
-                )
-            elif any(k in sections for k in ("adc", "fft")):
-                raw_proc.update_config(
-                    config=None,
-                    adc_config=sections.get("adc"),
-                    fft_config=sections.get("fft"),
-                )
-            else:
-                raw_proc.update_config(config=sections)
+            raw_proc.update_config()
 
         corr_proc = self.processors.get("corr")
         if corr_proc is not None:
-            if "corr" in sections:
-                corr_proc.update_config(sections["corr"])
-            elif (
-                "firmware_integ_period" in sections  # *** TODO: looks like an exception to he habdles some other way
-                or "soft_integ_period" in sections
-            ):
-                corr_proc.update_config(sections)
+            corr_proc.update_config()
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.name})'
 
     async def start_async(
             self,
@@ -252,14 +241,11 @@ class RawAcqReceiver(object):
         self.run_name = run_name
         self.data_folder = data_folder
         self.run_folder = run_folder
-        firmware_config = config if config is not None else raw_capture_state
-        if firmware_config is None:
-            firmware_config = {}
-        self.firmware_config = (
-            firmware_config.deepcopy()
-            if isinstance(firmware_config, State)
-            else State(firmware_config).deepcopy()
-        )
+        data_config = config if config is not None else raw_capture_state
+        if data_config is None:
+            data_config = {}
+        self.data_config = State(raw=State(), corr=State())
+        self.data_config.update_from(_data_config_sections(data_config) or data_config)
 
         # Socket creation variables
         self.sockets = []  # Sockets that were opened
@@ -301,22 +287,22 @@ class RawAcqReceiver(object):
         self.max_packet_size = int(self.MAX_RAW_PACKET_SIZE)
 
 
-        sections = _firmware_config_sections(self.firmware_config)
-        if set(sections.keys()) != set(FIRMWARE_CONFIG_KEYS):
+        sections = _data_config_sections(self.data_config)
+        if set(sections.keys()) != set(DATA_CONFIG_KEYS):
             raise ValueError(
-                f'{self!r}: firmware config must include {FIRMWARE_CONFIG_KEYS!r}'
+                f'{self!r}: data config must include {DATA_CONFIG_KEYS!r}'
             )
 
         raw_proc = RawDataProcessor(
             self,
-            config=sections["raw"],
-            adc_config=sections["raw"],
-            fft_config=sections["raw"],
+            config_getter=self.get_raw_data_config,
             stream_ids=stream_ids,
             metrics_refresh_time=metrics_refresh_time,
             adc_rms_refresh_count=adc_rms_refresh_count,
         )
-        corr_proc = CorrDataProcessor(self, config=sections["corr"])
+        corr_proc = CorrDataProcessor(
+            self, config_getter=self.get_corr_data_config
+        )
 
         self.processors = {
             "raw": raw_proc,
@@ -701,6 +687,7 @@ class RawAcqReceiver(object):
         for key, proc in self.processors.items():
             if proc is not None:
                 proc.flush()
+                proc.skip_first_incomplete = True
         return 0
 
     async def get_metrics_async(self):

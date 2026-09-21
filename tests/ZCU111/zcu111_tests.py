@@ -111,6 +111,7 @@ class TestZCU111(TestUtils):
             assert len(a.ib), 'No Iceboard was found with parameters %s' % kwargs
             assert len(a.ib) == 1, 'One than one Iceboard was found with parameters %s' % kwargs
             mb = a.ib[0]
+            self.ca = a
             self.model = mb.part_number
             self.serial = mb.serial
             return mb
@@ -653,7 +654,7 @@ class TestZCU111(TestUtils):
             delay_table = ib.get_adc_delays()
 
             print('\nOpening data receiver socket')
-            r = ib.get_data_receiver()
+            r = run_async(self.ca.get_data_receiver_async())
 
             print('Setting up ramp transmission...')
             # Begin Ramp test
@@ -766,7 +767,7 @@ class TestZCU111(TestUtils):
             print("Connecting to Iceboard")
             ib, mezz = self._get_iceboard(**cfg.fpga_array)
 
-            r = ib.get_data_receiver()
+            r = run_async(self.ca.get_data_receiver_async())
 
             if cfg.adc_trim_value is not None:
                 for adc in mezz.ADC:

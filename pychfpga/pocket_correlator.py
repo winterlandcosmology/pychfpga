@@ -48,6 +48,7 @@ import argparse
 
 # Import custom packages
 from pychfpga import fpga_array
+from pychfpga.common import run_async
 from pychfpga.network_utils import verify_network_settings
 
 class POCKET_CORRELATOR:
@@ -815,7 +816,7 @@ class POCKET_CORRELATOR:
             # Apply some processing to recover the value in a fully linear unit.
             gain_actual = (np.array(self.i.chan[n].SCALER.get_gain_table(bank = bank)) & 0xFFFF).flatten() # Full 16-bit value, meaningless without being processed
             gain_lin_actual[n] = gain_actual & 0x7FF # Lower 11 bits, linear (mantissa) component
-            gain_log_actual[n] = (gain_actual >> 11) + self.i.chan[n].SCALER.SHIFT_LEFT # Upper 5 bits, logarithmic (exponential) component, plus common log component
+            gain_log_actual[n] = (gain_actual >> 11) + self.i.chan[n].SCALER.get_shift_left(bank) # Upper 5 bits, logarithmic (exponential) component, plus common log component
         
         if return_scaler_frames:
             n_sclr_frames = n_fft_frames # capture the same number of frames
@@ -870,7 +871,7 @@ class POCKET_CORRELATOR:
         gain_lin : (np.ndarray) The linear component of the "actual" digital gains. The shape is (NPOLS, NBINS).
 
         gain_log : (np.ndarray) The logarithmic component of the "actual" digital gains. The shape is (NPOLS, NBINS). gain_log should include the "common" log
-        gain, which can be read using self.i.chan[n].SCALER.SHIFT_LEFT.
+        gain, which can be read using self.i.chan[n].SCALER.get_shift_left(bank).
 
         digital_gains_parent_path : (str) A parent directory containing sub-directories of digital gains. 
 
@@ -1239,7 +1240,7 @@ class POCKET_CORRELATOR:
 
         # Configure the parameters of the correlator
         self.corr = self.i.CORR # UCORR object
-        self.corr_receiver = self.i.get_corr_receiver() # instantiate a correlator receiver object
+        self.corr_receiver = run_async(self.ca.get_corr_receiver_async())
         self.NCORR_PROD = int(self.NPOLS*(self.NPOLS + 1) // 2)
 
         # Start the correlator
@@ -1455,7 +1456,7 @@ class POCKET_CORRELATOR:
         t1 = time.time() # This is our rough timestamp  
         # Note: ``return_format`` is currently a no-op (kept for API compatibility); only 'raw' has been validated.
         _ = return_format
-        _integ_ts, d_corr, sat, count = self.corr_receiver.read_corr_frames(soft_integ_period = n_software_frames,
+        _integ_ts, d_corr, count, sat = self.corr_receiver.read_corr_frames(soft_integ_period = n_software_frames,
                                                                             number_of_results = number_of_results,
                                                                             flush = flush,
                                                                             data_timeout = data_timeout,

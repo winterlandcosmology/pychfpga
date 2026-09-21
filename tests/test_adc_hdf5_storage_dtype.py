@@ -32,13 +32,14 @@ def _proc_16bit(**kw):
         storage_dtype="i2",
         **kw,
     )
-    return ADCDataProcessor(None, raw, config=cfg)
+    return ADCDataProcessor(None, raw, config_getter=lambda: cfg)
 
 
 def test_channel_frame_uses_format_data_for_16bit_be():
     """Match ``read_raw_frames(format='16')``: big-endian int16 on the wire."""
     wire = np.array([0, 12, 0, 36, 0, 60, 0, 84], dtype=np.uint8)
     p = _proc_16bit()
+    p.update_config()
     p.raw.raw_data[0, 0, : wire.size] = wire
     p.raw.ts_array[0] = 0
     p.raw.raw_data_count[0, 0, :] = p.raw.expected_packets
@@ -50,6 +51,7 @@ def test_channel_frame_uses_format_data_for_16bit_be():
 
 def test_channel_frame_full_scale_sinewave_shape():
     p = _proc_16bit()
+    p.update_config()
     p.raw.BYTES_PER_FRAME = 32768
     p.raw.FRAMES_PER_BURST = 1
     p._sync_adc_hdf5_layout()

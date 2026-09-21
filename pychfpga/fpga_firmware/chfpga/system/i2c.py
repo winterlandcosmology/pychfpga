@@ -50,9 +50,9 @@ class I2C(MMI):
     DONE_CTR        = BitField(STATUS, 0x07, 0, width=4, doc='Counts the number of DONE events')
 
 
-    def __init__(self, *, router, router_port, state):
+    def __init__(self, *, router, router_port, config):
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
         self.current_port = None
         self.logger = logging.getLogger(__name__)
 

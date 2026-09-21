@@ -3,11 +3,14 @@ cge.py module
     Implements interface to the 100G Ethernet FPGA module
 """
 import logging
+import time
+
 import numpy as np
 
 from ..mmi import MMI, MMIRouter, BitField, CONTROL, STATUS
 
 from . import xxvglink
+from .uct_array_methods import UCTArrayMethods
 
 
 class CT1Regs(MMI):
@@ -20,9 +23,9 @@ class CT1Regs(MMI):
     IN_FRAME_CTR = BitField(STATUS, 1, 0, width=8, doc='Counts frames coming into the CT engine')
     OUT_FRAME_CTR = BitField(STATUS, 2, 0, width=8, doc='Counts frames coming out of the CT engine')
 
-    def __init__(self, *, router, router_port, state):
+    def __init__(self, *, router, router_port, config):
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
 
 class CT2Regs(MMI):
 
@@ -37,9 +40,9 @@ class CT2Regs(MMI):
     NUMBER_OF_CT2_INPUTS = 4
     NUMBER_OF_CT2_OUTPUTS = 4
 
-    def __init__(self, *, router, router_port, state):
+    def __init__(self, *, router, router_port, config):
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
 
     def set_lane_map(self, premap, postmap):
         """ Sets the lane remapping.
@@ -84,9 +87,9 @@ class CT3Regs(MMI):
     RST_STATUS        = BitField(STATUS, 0, 0, doc='Reset line state')
     ALIGN_MON_WORD    = BitField(STATUS, 2, 0, width=16, doc='ALIGN monitoring word, selected by ALIGN_MON_SOURCE and ALIGN_MON_LANE')
 
-    def __init__(self, *, router, router_port, state):
+    def __init__(self, *, router, router_port, config):
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
 
     def init(self):
         self.SLOT_GROUP =  (self.fpga.slot - 1) // 4
@@ -105,12 +108,13 @@ class UCTEngine(MMIRouter):
         'BPLINKS': 3
         }
 
-    def __init__(self,*, router, router_port, state, verbose=1):
+    def __init__(self,*, router, router_port, config, verbose=1):
         self.logger = logging.getLogger(__name__)
         self.verbose = verbose
 
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
+        self.fpga.register_array_methods(UCTArrayMethods, key='CT')
 
         self.CT_LEVEL = self.fpga.CT_LEVEL
 
@@ -119,31 +123,36 @@ class UCTEngine(MMIRouter):
         self.CT1 = self.CT2 = self.CT3 = self.GTLINKS = None
 
         # Instantiate Level-1 CT registers
-        self.CT1 = CT1Regs(router=self, router_port='CT1', state=self.state.add("ct1"))
+        self.CT1 = CT1Regs(router=self, router_port='CT1', config=self.config.add("ct1"))
 
         if self.CT_LEVEL >=2:
             lane_groups = (('pcb', 1, 3),) # (name, # of bypass lanes, # of links)
-            self.CT2 = CT2Regs(router=self, router_port='CT2', state=self.state.add("ct2"))
+            self.CT2 = CT2Regs(router=self, router_port='CT2', config=self.config.add("ct2"))
             self.BPLINKS = xxvglink.XXVGLinkArray(
                 router = self,
                 router_port='BPLINKS',
                 lane_groups=lane_groups,
-                state=self.state.add("bplinks"),
+                config=self.config.add("bplinks"),
                 verbose=1)
 
         if self.CT_LEVEL >=3:
-            self.CT3 = CT3Regs(router=self, router_port='CT3', state=self.state.add("ct3"))
+            self.CT3 = CT3Regs(router=self, router_port='CT3', config=self.config.add("ct3"))
 
 
 
     def init(self):
         self.TEST_PACKET_ENABLE = 0
-
-        if self.CT_LEVEL >=2:
+        ct_level = int(self.CT_LEVEL)
+        if ct_level >=2:
             self.CT2.init()
 
-        if self.CT_LEVEL >=3:
+        if ct_level >=3:
             self.CT3.init()
+        self.config.CT_LEVEL = ct_level
+
+    def update_config(self):
+        """Refresh CT config subtree; returns ``self.config``."""
+        return self.config
 
     def capture_bytes(self, N=64, fmt='hex'):
         """ Captures N bytes
@@ -204,34 +213,80 @@ class UCTEngine(MMIRouter):
         return 1
 
 
+
+    @classmethod
+    async def init_corner_turn_array(
+            cls,
+            fpga_array,
+            mode,
+            frames_per_packet=1,
+            sync=True,
+            **kwargs):
+        """ Setup corner-turning across  the array.
+
+        """
+        non_none_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+        if non_none_kwargs:
+            fpga_array.logger.warning(f'{fpga_array!r}: init_corner_turn_array(): the following arguments will be ignored: {",".join(non_none_kwargs.keys())}')
+
+        (CT_LEVEL,) = {(mb.CT.CT_LEVEL if mb.CT else None) for mb in fpga_array.ib}  # get a set of all different CT engine types
+
+        fpga_array.logger.info(f'{fpga_array!r}: Configuring array-wide corner-turning')
+
+        # Initialize the bin map for every board
+        # bin_map = {mb.get_id(): {'cb1': None, 'cb2': None, 'cb3': None}
+        #            for mb in fpga_array.ib}
+
+
+        fpga_array.corner_turn_stream_ids = None # UCT stream IDs are handled by UPACK
+        fpga_array.corner_turn_frequency_bins = None # same
+
+        for mb in fpga_array.ib:
+            mb.set_corr_reset(0)  # Put the corner_turn engine out of reset
+            stream_ids = mb.CT.init_crossbars(mode=mode, frames_per_packet=frames_per_packet)
+
+
+
+        # Reset UPACK and CGE transmitters
+        # todo. CGE and UPACK init() settings are currently ok.
+
+        fpga_array.logger.info(f'{fpga_array!r}: Corner-turning initialization completed.')
+
+        if sync:
+            await fpga_array.sync_async()
+
     def init_crossbars(
             self,
             mode=None,
-            frames_per_packet=2,
-            bin_map=None,
+            frames_per_packet=1):
 
-            cb1_lanes=16,
-            cb1_bins=64,
-            dsmap=list(range(16)),
-            cb1_bypass=False,
-            cb1_combine_data_flags=0,
+        if frames_per_packet not in (1, None):
+            raise RuntimeError(f'UCT engine only supports 1 frame per packet. {frames_per_packet} frames/packet are not supported.')
 
-            bp_shuffle_bypass=1,
-
-            cb2_lanes=None,
-            cb2_bins=1,
-            cb2_bypass=False,
-
-            crate_shuffle_bypass=1,
-
-            remap=True,
-            chan8_channel_map=list(range(8)),
-            send_flags=True):
-
-        if mode == 'corr8':
+        # For now, just do some basic checks. There isn't much to do for UCT.
+        if mode in ('corr8', 'corr4'):
             if  self.CT_LEVEL != 1:
                 raise RuntimeError(f'CT_LEVEL must be 1 for {mode} mode')
-        return np.arange(8)
+            # Corner-turn is internal and hard-wired. Nothing to configure.
+        elif mode in ('shuffle8',):
+            if  self.CT_LEVEL != 1:
+                raise RuntimeError(f'CT_LEVEL must be 1 for {mode} mode')
+            # Corner-turn is internal and hard-wired. Nothing to configure.
+            # Might want to include configuring UPACK here in the future. That's where the actual corner-turn is done.
+        elif mode in ('corr32',):
+            if  self.CT_LEVEL != 2:
+                raise RuntimeError(f'CT_LEVEL must be 2 for {mode} mode')
+            # Corr32 uses fixed bin routing through backplane PCB links (4-way corner-turn)
+        elif mode in ('corr64',):
+            if  self.CT_LEVEL != 3:
+                raise RuntimeError(f'CT_LEVEL must be 3 for {mode} mode')
+            # Corr64 uses fixed bin routing through backplane PCB links (4-way corner-turn) and SFP links (2-way corner-turn)
+        else:
+            raise ValueError(f'Unknown UCT operational mode: {mode}')
+
+
+
+        return None
 
     # def status(self):
     #     """ Displays the status of the GPU GTX hardware"""

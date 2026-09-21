@@ -39,7 +39,7 @@ def _ucap_adc_state(stream_ids=None, target_mode=0):
     nchan = len(stream_ids)
     return dict(
         capture_engine="UCAP",
-        source="funcgen",
+        source=0,
         channels=tuple(range(nchan)),
         stream_ids=tuple(int(s) for s in stream_ids),
         frames_per_burst=frames_per_burst,
@@ -51,7 +51,6 @@ def _ucap_adc_state(stream_ids=None, target_mode=0):
         bytes_per_frame=32768,
         bytes_per_subframe=8192,
         packets_per_channel_per_burst=frames_per_burst * 4,
-        packets_per_logical_frame=1,
         logical_frames_per_burst=frames_per_burst,
         fft_bins_per_word=1,
         raw_decoder=dict(format="16"),
@@ -68,7 +67,6 @@ def _ucap_adc_state(stream_ids=None, target_mode=0):
             "frames_per_burst",
             "subframes_per_frame",
             "stream_ids",
-            "packets_per_logical_frame",
             "logical_frames_per_burst",
             "packet_header_format",
         ),
@@ -80,7 +78,7 @@ def _ucap_fft_state(stream_ids=None, target_mode=0):
     """Placeholder FFT/scaler state (not used while FPGA sends ``0xA0``)."""
     state = _ucap_adc_state(stream_ids=stream_ids, target_mode=target_mode)
     state = dict(state)
-    state.update(source="scaler", packet_cookie=0xA1, format="16", raw_decoder=dict(format="16"))
+    state.update(source=1, packet_cookie=0xA1, format="16", raw_decoder=dict(format="16"))
     return state
 
 
@@ -111,7 +109,8 @@ def _corr_state():
 
     corr = State(**_corr_state_minimal())
     corr.fft_bin_map = np.asarray(corr.fft_bin_map)
-    UCORR.update_corr_maps(corr)
+    # Offline stand-in for UCORR.get_bin_map() (no FPGA handle available).
+    UCORR._build_corr_maps(corr)
     return corr.as_dict()
 
 
@@ -132,10 +131,12 @@ def _json_safe(obj):
 
 def _capture_states(*, for_rest=False):
     stream_ids = tuple(range(8))
+    # Always include corr maps; the packet processor no longer synthesizes them.
+    corr = _json_safe(_corr_state()) if for_rest else _corr_state()
     return {
         "adc": _ucap_adc_state(stream_ids=stream_ids),
         "fft": _ucap_fft_state(stream_ids=stream_ids),
-        "corr": _corr_state_minimal() if for_rest else _corr_state(),
+        "corr": corr,
     }
 
 

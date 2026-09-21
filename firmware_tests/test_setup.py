@@ -49,6 +49,7 @@ def board_conn(request, delete_plots, pytestconfig):
         conn_config.get('hwm'),
     )
     ca = FPGAArray(**conn_config)
+    request.cls.ca = ca
     request.cls.board = ca.ib[0]
     logger.info(f"Firmware version: {ca.ib[0].get_version()}")
 

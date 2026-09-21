@@ -1,5 +1,6 @@
 """Burst-read wrapper around :class:`UCorrPacketProcessor`."""
 
+import time
 import warnings
 
 from .ucorr_packet_processor import UCorrPacketProcessor
@@ -83,19 +84,27 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
     def __init__(
         self,
         packet_receiver,
-        config=None,
+        config_getter,
         pre_func=None,
         receive_window=3,
         verbose=0,
     ):
+        if config_getter is None:
+            raise TypeError("config_getter is required")
         self.pre_func = pre_func
-        super().__init__(packet_receiver, config=config, receive_window=receive_window, verbose=verbose)
+        super().__init__(
+            packet_receiver,
+            config_getter=config_getter,
+            receive_window=receive_window,
+            verbose=verbose,
+        )
         self.current_row = 0
 
     def flush(self, flush_timeout=None):
         """Drain UDP, clear assembly state, and reset the read cursor."""
         super().flush(flush_timeout)
         self.current_row = 0
+        self.skip_first_incomplete = True
 
     def read_corr_frames(
         self,
@@ -104,14 +113,14 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
         flush=False,
         data_timeout=0.1,
         flush_timeout=0.001,
-        config=None,
         verbose=None,
+        skip_first_incomplete=None,
         **kwargs,
     ):
         """Capture ``number_of_results`` integrated frames into preallocated arrays.
 
-        Returns ``(integ_ts, data, sats, counts)`` of shapes
-        ``(N,)``, ``(N, NBINS, NPROD)``, ``(N, NBINS, NPROD)``, ``(N,)``.
+        Returns ``(integ_ts, data, counts, sats)`` of shapes
+        ``(N,)``, ``(N, NBINS, NPROD)``, ``(N,)``, ``(N, NBINS, NPROD)``.
 
         Parameters:
             number_of_results (int): Number of software-integrated frames to capture.
@@ -120,8 +129,9 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
             flush (bool): If True, drain the UDP buffer before starting capture.
             data_timeout (float): Socket timeout while waiting for packets.
             flush_timeout (float): Socket timeout used while flushing.
-            config: Configuration passed to :meth:`update_config`.
             verbose (int): Verbosity level for optional prints.
+            skip_first_incomplete (bool or None): If True, drop the first emitted
+                row when it is incomplete. ``None`` (default) follows ``flush``.
         """
         if verbose is not None:
             self.verbose = verbose
@@ -131,49 +141,82 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
 
         if self.pre_func:
             self.pre_func(self)
-        if config is not None:
-            self.update_config(config)
         if soft_integ_period != self.soft_integ_period:
-            self.update_config({"soft_integ_period": int(soft_integ_period)})
+            self.set_soft_integ_period(soft_integ_period)
+        self.update_config()
         if data_timeout is not None:
             self.pr.settimeout(data_timeout)
 
-        integ_ts, data, sats, counts = self.create_output_buffer(n_ts=number_of_results)
+        integ_ts, data, counts, sats = self.create_output_buffer(n_ts=number_of_results)
 
         rows_completed = 0
 
+        self.reset_profile()
+        stats_fn = getattr(self.pr, "udp_socket_stats", None)
+        udp0 = stats_fn() if callable(stats_fn) else None
+
         if flush:
+            t_flush = time.perf_counter()
             self.flush(flush_timeout)
+            self.profile["flush_s"] = time.perf_counter() - t_flush
+        if skip_first_incomplete is None:
+            skip_first_incomplete = bool(flush)
+        self.skip_first_incomplete = bool(skip_first_incomplete)
 
         while rows_completed < number_of_results:
-            if self.current_row < self.n_out:
-                n = min(number_of_results - rows_completed, self.n_out - self.current_row)
+            stop = self.out_rows.stop
+            if self.current_row < stop:
+                # Format one integration at a time. A 2-row scatter is ~3x a 1-row
+                # scatter and stalls receive_packets long enough for the rx pool
+                # and kernel RCVBUF to overflow (the every-other-run drop pattern).
+                n = min(1, number_of_results - rows_completed, stop - self.current_row)
                 rows = slice(self.current_row, self.current_row + n)
                 result = self.get_formatted_data(rows)
                 if result is None:
                     break
-                it_, d_, s_, c_ = result
-                out_rows = slice(rows_completed, rows_completed + n)
-                integ_ts[out_rows] = it_
-                data[out_rows] = d_
-                sats[out_rows] = s_
-                counts[out_rows] = c_
+                it_, d_, c_, s_ = result
+                dest = slice(rows_completed, rows_completed + n)
+                integ_ts[dest] = it_
+                data[dest] = d_
+                counts[dest] = c_
+                sats[dest] = s_
                 rows_completed += n
                 self.current_row += n
             if rows_completed >= number_of_results:
                 break
             while True:
+                t_recv = time.perf_counter()
                 self.pr.receive_packets(verbose=self.verbose)
-                self.current_row = 0
+                self.profile["recv_s"] += time.perf_counter() - t_recv
+                self.profile["recv_n"] += int(self.pr.n_stored)
+                self.profile["recv_calls"] += 1
                 if self.pr.n_stored:
-                    self.process_udp_packets()
+                    self.process_udp_packets(update_config=False)
+                    self.current_row = self.out_rows.start
                     if self.n_out:
                         break
 
+        udp1 = stats_fn() if callable(stats_fn) else None
         if rows_completed != number_of_results:
             warnings.warn(
                 f"read_corr_frames: received {rows_completed} integ(s), expected {number_of_results}; "
                 "remaining rows are zero-filled (timeouts, no packets passing filters, or slow source).",
                 UserWarning, stacklevel=2,
             )
-        return integ_ts, data, sats, counts
+        if self.verbose >= 1:
+            p = self.profile
+            drop = None
+            if udp0 is not None and udp1 is not None:
+                drop = udp1[1] - udp0[1]
+            print(
+                f"UCorrFrameReceiver: profile recv {p['recv_s']*1e3:.0f} ms "
+                f"({int(p['recv_n'])} pkts / {int(p['recv_calls'])} calls) "
+                f"process {p['process_s']*1e3:.0f} ms ({int(p['process_calls'])} calls, "
+                f"init_dest {p['init_dest_s']*1e3:.0f} ms move {p['init_dest_move_s']*1e3:.0f} ms, "
+                f"store {p['store_s']*1e3:.0f} ms) "
+                f"format {p['format_s']*1e3:.0f} ms ({int(p['format_calls'])} calls)"
+                + (f" flush {p.get('flush_s', 0)*1e3:.0f} ms" if p.get("flush_s") else "")
+                + (f" udp_drops +{drop} rxq={udp1[0]}" if drop is not None else "")
+                + f" counts={counts.tolist()} expected={self.expected_packets}"
+            )
+        return integ_ts, data, counts, sats

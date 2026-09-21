@@ -162,7 +162,7 @@ class CGEChannel(_CGEDrpPort):
     def __init__(self, cge, port, lane):
         super().__init__(cge, port, lane)
         self.instance_number = lane
-        self.state = cge.state
+        self.config = cge.config
         self.logger = logging.getLogger(__name__)
 
     def get_prbs_error_ctr(self):
@@ -410,11 +410,11 @@ class CGE(MMI):
 
     # Add DRP registers here...
 
-    def __init__(self, *, router, router_port, state, verbose=1):
+    def __init__(self, *, router, router_port, config, verbose=1):
         self.logger = logging.getLogger(__name__)
         self.verbose = verbose
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
         self.core = CGECore(self, self.PORT_CORE_DRP)
         self.gt_common = CGECommon(self, self.PORT_GT_CMN_DRP)
         # Per-lane GT access (same API as xxvglink array GTX instances)

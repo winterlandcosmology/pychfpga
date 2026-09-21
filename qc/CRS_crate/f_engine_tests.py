@@ -116,7 +116,7 @@ class TestPreDeploymentCrate(TestUtils):
 
     2) Check backplane errors (requires above to pass to be able to run)
         - initialize crate
-        - iterate through output of await ca.print_shuffle_status(verbose = 1)
+        - iterate through output of await ca.print_shuffle_status_async(verbose = 1)
         - maybe save the verbose = 2 one as well?
 
     3) Force IRIG-B syncs
@@ -276,7 +276,7 @@ class TestPreDeploymentCrate(TestUtils):
     #         - Start the bperr test on the computer
     #         - Power up crate
     #         - After initializing crate, check backplane errors using
-    #             await ca.print_shuffle_status()
+    #             await ca.print_shuffle_status_async()
 
     #     """
 
@@ -326,7 +326,7 @@ class TestPreDeploymentCrate(TestUtils):
 
             - Start the sync test on the computer
             - Power up crate
-            - After initializing crate, run self.ca.sync() in a loop, and
+            - After initializing crate, run self.ca.sync_async() in a loop, and
               only pass if it's able to successfully sync N times (e.g. N = 100)
 
         """
@@ -348,7 +348,7 @@ class TestPreDeploymentCrate(TestUtils):
             for n in range(n_syncs):
                 print(f'Sync {n+1}')
                 try:
-                    asyncio.run(self.ca.sync())
+                    asyncio.run(self.ca.sync_async())
                     # If no exception to the above, increment counter:
                     # sync_counter += 1
                 except Exception as e:
@@ -607,7 +607,7 @@ class TestPreDeploymentCrate(TestUtils):
                     # Synchronize crate in its own try/except
                     # clause to catch any sync errors
                     try:
-                        asyncio.run(self.ca.sync())
+                        asyncio.run(self.ca.sync_async())
                     except Exception as e:
                         sync_error_tags.append({'Cycle': n,
                                         'ib': i,

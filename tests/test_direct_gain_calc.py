@@ -93,7 +93,6 @@ class _MockRawProcessor:
     stream_ids = (10,)
     NUMBER_OF_SUBFRAMES = 1
     config = State(
-        packets_per_logical_frame=1,
         capture_format=[
             None,
             State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=2),
@@ -162,33 +161,35 @@ def test_fft_rms_averages_multiple_frames(fft_processor):
 
 def test_merge_fft_decoder_into_raw_complex_format():
     raw = State(
-        source='funcgen',
+        source=0,
         capture_format=[
             State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
             State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
         ],
-        packets_per_logical_frame=1,
     )
     fft = State(
-        source='scaler',
+        source=1,
         capture_format=[
             None,
-            State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=2),
+            State(
+                fmt_bus_width=32,
+                fmt_data_width=32,
+                fmt_is_complex=True,
+                fmt_interleave_factor=2,
+                use_offset_encoding=True,
+            ),
         ],
-        packets_per_logical_frame=2,
-        offset_encoding=True,
     )
     merged = _merge_fft_decoder_into_raw(raw, fft)
-    assert merged.source == 'scaler'
-    assert merged.packets_per_logical_frame == 2
+    assert merged.source == 1
     assert merged.capture_format[1].fmt_is_complex is True
     assert merged.capture_format[1].fmt_interleave_factor == 2
+    assert merged.capture_format[1].use_offset_encoding is True
 
 
 def test_start_fft_rms_rejects_non_complex_decoder():
     mock_raw = _MockRawProcessor()
     mock_raw.config = State(
-        packets_per_logical_frame=1,
         capture_format=[
             State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
             State(fmt_bus_width=16, fmt_data_width=16, fmt_is_complex=False, fmt_interleave_factor=1),
@@ -243,10 +244,9 @@ def test_fft_rms_accepts_ucap_split_frame_counts():
     mock_raw = _MockRawProcessor()
     mock_raw.NUMBER_OF_SUBFRAMES = 4
     mock_raw.config = State(
-        packets_per_logical_frame=2,
         capture_format=[
             None,
-            State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=1),
+            State(fmt_bus_width=32, fmt_data_width=32, fmt_is_complex=True, fmt_interleave_factor=2),
         ],
     )
     proc = FFTDataProcessor(_DummyPacketReceiver(), mock_raw, stream_ids=(10,))
@@ -255,15 +255,16 @@ def test_fft_rms_accepts_ucap_split_frame_counts():
 
     _start_fft_rms(proc, n_bins, n_frames)
 
-    half0 = np.array([1 + 0j, 2 + 0j, 3 + 0j, 4 + 0j], dtype=np.complex64)
-    half1 = np.array([5 + 0j, 6 + 0j, 7 + 0j, 8 + 0j], dtype=np.complex64)
-    full = np.concatenate([half0, half1])
+    spectrum = np.arange(1, n_bins + 1, dtype=np.float32) + 0j
+    # Incomplete subframe count must be ignored.
+    _emit_complex_frames(proc, spectrum.reshape(1, 1, n_bins), counts_val=2)
+    assert not proc.fft_rms_done[0]
+    # Full per-frame subframe count (NUMBER_OF_SUBFRAMES) accumulates.
     for _ in range(n_frames):
-        _emit_complex_frames(proc, half0.reshape(1, 1, 4), counts_val=4)
-        _emit_complex_frames(proc, half1.reshape(1, 1, 4), counts_val=4)
+        _emit_complex_frames(proc, spectrum.reshape(1, 1, n_bins), counts_val=4)
 
     assert proc.fft_rms_done[0]
-    np.testing.assert_allclose(proc.fft_rms[0], np.abs(full), rtol=1e-5)
+    np.testing.assert_allclose(proc.fft_rms[0], np.abs(spectrum), rtol=1e-5)
 
 
 def test_fft_rms_rejects_non_complex():
@@ -286,22 +287,53 @@ class _DummyPacketReceiver:
 
 
 def test_formatter_bin_map_and_offset_encoding():
-    """Formatter unscrambles bins and removes offset-binary bias on FFT source."""
+    """Formatter unscrambles bins and removes offset-binary bias from the format flag."""
     proc = object.__new__(RawDataPacketProcessor)
     proc.config = State(
-        offset_encoding=True,
+        capture_format=[
+            None,
+            State(
+                fmt_bus_width=16,
+                fmt_data_width=16,
+                fmt_is_complex=True,
+                fmt_interleave_factor=1,
+                use_offset_encoding=True,
+            ),
+        ],
         fft_bin_map=np.array([2, 0, 3, 1], dtype=np.intp),
     )
+    proc.FRAMES_PER_BURST = 1
+    proc.CAPTURE_BITS_PER_WORD = 16
     bias = 1 << 15
-    scrambled = np.array(
-        [complex(bias + 100, bias), complex(bias + 200, bias),
-         complex(bias + 300, bias), complex(bias + 400, bias)],
+    components = np.array(
+        [
+            100, 0,
+            200, 0,
+            300, 0,
+            400, 0,
+        ],
+        dtype=">i2",
+    )
+    proc.raw_data = components.view(np.uint8).reshape(1, 1, -1)
+    proc.ts_array = np.array([1], dtype=np.uint64)
+    proc.raw_data_count = np.ones((1, 1, 1), dtype=np.int64)
+    proc.raw_source = np.ones((1, 1, 1), dtype=np.uint8)
+    proc.fmt_cdata1 = [None, np.empty((1, 1, 4), dtype=np.complex64)]
+    proc.fmt_cdata2 = [None, np.empty((1, 1, 4), dtype=np.complex64)]
+
+    ts, data, counts = proc.get_formatted_data(source=1)
+    expected = np.array(
+        [
+            (300 - bias) - 1j * bias,
+            (100 - bias) - 1j * bias,
+            (400 - bias) - 1j * bias,
+            (200 - bias) - 1j * bias,
+        ],
         dtype=np.complex64,
     )
-    data = scrambled.reshape(1, 1, 4)
-    out = proc._apply_fft_formatter_compensation(data, source=1, bit_width=16)
-    expected = np.array([300 + 0j, 100 + 0j, 400 + 0j, 200 + 0j], dtype=np.complex64)
-    np.testing.assert_allclose(out[0, 0], expected, rtol=0, atol=1e-3)
+    np.testing.assert_array_equal(ts, np.array([1], dtype=np.uint64))
+    np.testing.assert_array_equal(counts, np.array([[1]], dtype=np.int64))
+    np.testing.assert_allclose(data[0, 0], expected, rtol=0, atol=1e-3)
 
 
 def test_full_resolution_complex_formatter_reconstructs_lanes():
@@ -310,10 +342,15 @@ def test_full_resolution_complex_formatter_reconstructs_lanes():
     proc.config = State(
         capture_format=[
             None,
-            State(fmt_bus_width=32, fmt_data_width=29, fmt_is_complex=True, fmt_interleave_factor=4),
+            State(
+                fmt_bus_width=32,
+                fmt_data_width=29,
+                fmt_is_complex=True,
+                fmt_interleave_factor=4,
+                use_offset_encoding=False,
+            ),
         ],
         fft_bin_map=np.array([0, 2, 1, 3], dtype=np.intp),
-        offset_encoding=False,
     )
     proc.FRAMES_PER_BURST = 4
     proc.CAPTURE_BITS_PER_WORD = 32

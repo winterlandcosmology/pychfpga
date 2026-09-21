@@ -48,10 +48,9 @@ class FFT(MMI):
     IMPLEMENT_FFT     = BitField(STATUS, 4, 7, doc="'1' if FFT in implemented")
     ROTATE_BINS       = BitField(STATUS, 4, 6, doc="'1' if FFT bin rotation is enabled")
     RESET_MON         = BitField(STATUS, 4, 5, doc="Monitors the reset line")
-    def __init__(self, *, router, router_port, instance_number, state):
+    def __init__(self, *, router, router_port, instance_number, config):
         super().__init__(router=router, router_port=router_port, instance_number=instance_number)
-        self.state = state
-        self.config_id = 0  # Increases every time a configuration change is made
+        self.config = config
 
     def reset(self):
         self.pulse_bit('RESET')
@@ -68,11 +67,36 @@ class FFT(MMI):
         self.n_bins_per_lane = self.n_bins // self.n_lanes
         self.is_scrambled = not info['unscrambled']
         self.is_rotated = self.ROTATE_BINS
+        self.config.update(
+            bypass = bool(self.BYPASS),
+            bin_map = None)
+        self.update_config()
 
         # For the CRS, the pipeline delay is not yet measured at this point, and is not measured even if we pulse SOFT_RESET.
         # So we can't check if it is right until the pipeline is running. This is why we disable the check below
         # if self.PIPELINE_DELAY != self.MEASURED_PIPELINE_DELAY:
         #    raise Exception('FFT pipeline delay is not set to the measured value!')
+
+    def set_bypass(self, bypass):
+        """Set FFT bypass and track it in ``config``."""
+        bypass = bool(bypass)
+        self.BYPASS = bypass
+        self.config.bypass = bypass
+
+    def get_bypass(self):
+        """Return tracked FFT bypass (seed from HW if unset)."""
+        return self.config.bypass
+
+    def update_config(self):
+        """Cache reverse+flatten bin_map on ``self.config`` for raw decode."""
+        cfg = self.config
+        ctx = ('FFT.update_config', self)
+        bin_map_attrs = ('bypass',) # bin map dependencies. 
+        if cfg.has_changed(bin_map_attrs, context=ctx):
+            bin_map, bin_ix_map = self.compute_bin_map()
+            cfg.update(bin_map=bin_map, bin_ix_map=bin_ix_map)
+            cfg.ack(bin_map_attrs, context=ctx)
+        return cfg
 
     def get_fft_overflow_count(self):
         return self.OVERFLOW_COUNT
@@ -81,7 +105,79 @@ class FFT(MMI):
         self.OVERFLOW_RESET = 1
         self.OVERFLOW_RESET = 0
 
-    def get_bin_map(self, flatten=False, reverse=False):
+    def get_bin_map(self, flatten=False):
+        """ Returns an array providing the bin number sent on every clock by every FFT output lane.
+
+        Note that the map changes  during operation if BYPASS is changed.
+
+        If BYPASS=1, the map is simply bin_number=real_sample_number//2 = complex_sample_number.
+
+        Parameters:
+
+            flatten (bool): If True, the map will be flatten into a 1D array representing the bin numbers in transmission order.
+
+        Returns:
+
+            If flatten=False, returns a (n_lanes, n_bins_per_lane) numpy array indicating the bin numbers emitted on each clock
+                by each output lane of the FFT. 
+            If flatten=True, returns a 1D array of length n_bins representing the bin numbers in transmission order, as serialized by the capture engine.
+        """
+        cfg = self.update_config()
+        if flatten:
+            return cfg.bin_map.flatten(order='F')
+        else:
+            return cfg.bin_map
+
+    def get_bin_ix_map(self):
+        """ Returns an array providing the index of each bin in the bin map. 
+
+        To be used like::
+
+            ordered_spectrum = raw_spectrum[fft.get_bin_ix_map()]
+
+        Note that the raw packet receivers already reorder the captured output in the natural bin order.
+        
+        """
+        cfg = self.update_config()
+        return cfg.bin_ix_map
+
+    def fft_to_natural_order(self, fft_bins):
+        """ Reorder vector in native FFT order into natural order.
+
+        Parameters:
+
+            fft_bins (ndarray): The bins from the FFT/scaler output.
+
+        Returns:
+            ndarray, reorganized in natural order.
+
+        Example::
+
+           fft_bins = [0, 2048, 4096, 6144, 1, 2049, 4097, 6145, 2, 2050, 4098, 6146, 3, 2051, 4099, 6147]
+           bin_ix_map = [0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15, ..., 2048, 2052, 2056, 2060, ...]  # from get_bin_ix_map()
+           fft_bins[bin_ix_map] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, ..., 2048, 2049, 2050, 2051, ...]
+        """
+        return fft_bins[self.get_bin_ix_map()]
+
+    def natural_to_fft_order(self, natural_bins):
+        """ Reorder vector in natural order into native FFT order.
+
+        Parameters:
+
+            natural_bins (ndarray): The bins in natural order.
+
+        Returns:
+            ndarray, reorganized in native FFT order.
+
+        Example::
+
+           natural_bins = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, ..., 2048, 2049, 2050, 2051, ...]
+           bin_map = [0, 2048, 4096, 6144, 1, 2049, 4097, 6145, 2, 2050, 4098, 6146, 3, 2051, 4099, 6147, ..., 2048, 2052, 2056, 2060, ...]  # from get_bin_map(flatten=True)
+           natural_bins[bin_map] = [0, 2048, 4096, 6144, 1, 2049, 4097, 6145, 2, 2050, 4098, 6146, 3, 2051, 4099, 6147, ..., 2048, 2052, 2056, 2060, ...]
+        """
+        return natural_bins[self.get_bin_map(flatten=True)]
+
+    def compute_bin_map(self):
         """ Returns an array providing the bin number sent on every clock by every FFT output lane.
 
         Note that the map changes  during operation if BYPASS is changed.
@@ -105,22 +201,19 @@ class FFT(MMI):
         # We split the data into 4 lanes since the FFT outputs 4 numbers per clock.
         # fft_bins = np.array([[n_bins_per_lane*((lane - (rotate*clk & 0b11)) & 0b11) + clk for clk in range(n_bins_per_lane)] for lane in range(n_lanes)])
 
-        if self.BYPASS:
-            bins = np.arange(self.n_bins).reshape((self.n_lanes, -1), order='F')
+        if self.get_bypass():
+            bin_map = np.arange(self.n_bins).reshape((self.n_lanes, -1), order='F')
         else:
             # bins coming out straight out of the CASPER FFT
-            bins = np.arange(self.n_bins).reshape((self.n_lanes, -1), order='C' if self.is_scrambled else 'F')
+            bin_map = np.arange(self.n_bins).reshape((self.n_lanes, -1), order='C' if self.is_scrambled else 'F')
             if self.is_rotated:
-                bins = (bins - np.arange(self.n_bins_per_lane) * self.n_bins_per_lane) % self.n_bins
+                bin_map = (bin_map - np.arange(self.n_bins_per_lane) * self.n_bins_per_lane) % self.n_bins
 
-        fbins = bins.flatten(order='F')
+        flat_bin_map = bin_map.flatten(order='F')
+        bin_ix_map = np.empty(self.n_bins, dtype=np.intp)
+        bin_ix_map[flat_bin_map] = np.arange(self.n_bins)
 
-        if reverse:
-            rbins = np.empty(self.n_bins, dtype=np.intp)
-            rbins[fbins] = np.arange(self.n_bins)
-            return rbins
-
-        return fbins if flatten else bins
+        return bin_map, bin_ix_map
 
     def status(self):
         """ Displays the status of the data capture module"""

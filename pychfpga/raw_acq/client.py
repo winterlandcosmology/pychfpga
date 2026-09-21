@@ -139,7 +139,6 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
             capture_n_inputs=4,
             autocorr_only=False,
             software_integration_period=1,
-            firmware_integration_period=1,
             frame0_irigb_time=0,
             **kwargs):
         """Start correlator HDF5 capture on the remote raw_acq server."""
@@ -153,7 +152,6 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
             autocorr_only=autocorr_only,
             elements_per_file=elements_per_file,
             frame0_irigb_time=frame0_irigb_time,
-            firmware_integration_period=firmware_integration_period,
             software_integration_period=software_integration_period,
         )
         return result

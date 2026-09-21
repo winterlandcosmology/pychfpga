@@ -32,10 +32,10 @@ class SPI(MMI):
 
 
 
-    def __init__(self, *, router, router_port, state):
+    def __init__(self, *, router, router_port, config):
         # self.fpga_instance = fpga;
         super().__init__(router=router, router_port=router_port)
-        self.state = state
+        self.config = config
         self.current_port = 0
         self.logger = logging.getLogger(__name__)
         self._lock() # Prevent inadvertent changes to the class instance
