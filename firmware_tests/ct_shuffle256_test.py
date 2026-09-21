@@ -422,12 +422,15 @@ class TestCTShuffle256(TestModule):
         '''
         Verify every CROSSBAR2 input lane carries the right board's stream, time-aligned.
 
-        The captured stream-id byte of post-remap input lane j must identify
-        source slot j+1 (the whole point of the lane remap), and the
-        captured frame numbers of all 16 lanes must agree within a small
-        tolerance - together this proves the backplane mesh, the programmed
-        lane map and the array-wide frame alignment, and it cross-validates
-        the get_lane_map() driver fix on silicon.
+        capture_stream_id()/capture_frame_number() are indexed by *physical*
+        (pre-remap) RX lane - LANE_MONITOR_SEL selects the input side of the
+        remap, as established by the 2026-09-18 on-hardware discriminator
+        (256/256 pre-remap vs 16/256 post-remap across all 16 boards). So the
+        stream captured on physical lane lane_map[j] must identify source
+        slot j+1, and the captured frame numbers of all 16 lanes must agree
+        within a small tolerance - together this proves the backplane mesh,
+        the programmed lane map and the array-wide frame alignment, and it
+        cross-validates the get_lane_map() driver fix on silicon.
         '''
         logger = self.get_logger()
         spread_limit = int(self.test_config.get('stream_frame_spread', 2))
@@ -447,7 +450,9 @@ class TestCTShuffle256(TestModule):
                 if tx_slot not in self._populated_slots():
                     continue
                 expected = ((tx_slot - 1) << 4) | tx_lane
-                sid = int(sids[j])
+                # sids is physical-lane indexed: the stream feeding post-remap
+                # lane j was captured on physical lane lane_map[j].
+                sid = int(sids[int(lane_map[j])])
                 if sid != expected:
                     failures.append(
                         f"[slot {mb.slot}] CROSSBAR2 input lane {j}: stream id {sid:#04x} "
@@ -461,11 +466,15 @@ class TestCTShuffle256(TestModule):
             logger.info(f"[slot {mb.slot}] CROSSBAR2 frame numbers={frames.tolist()} "
                         f"spread={spread}")
             if spread > spread_limit:
+                # frames is physical-lane indexed too; invert the lane map to
+                # name the slot whose stream sits on the worst physical lane.
                 worst = int(np.argmax(np.abs(centered)))
+                worst_slot = next((j + 1 for j in range(16)
+                                   if int(lane_map[j]) == worst), None)
                 failures.append(f"[slot {mb.slot}] CROSSBAR2 frame-number spread {spread} > "
-                                f"{spread_limit} across input lanes (worst: lane {worst} = "
-                                f"slot {worst + 1}) - boards are not frame-aligned; check the "
-                                f"crate sync")
+                                f"{spread_limit} across input lanes (worst: physical lane "
+                                f"{worst} = slot {worst_slot}) - boards are not "
+                                f"frame-aligned; check the crate sync")
         assert not failures, f"{len(failures)} alignment problem(s):\n" + '\n'.join(failures)
 
     @pytest.mark.ct_shuffle256
