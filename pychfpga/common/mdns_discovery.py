@@ -282,7 +282,13 @@ async def mdns_discover(
         try:
             zeroconf = AsyncZeroconf(
                 ip_version=IPVersion.V4Only,
-                unicast=True  # seems to prevent ICMP error on replies, but might just be luck
+                # Standard multicast replies. `unicast=True` (requesting
+                # unicast replies) was tried to avoid ICMP errors on replies,
+                # but it makes discovery fail outright on some hosts: on the
+                # McGill crate host not a single one of the 16 boards is found
+                # with unicast=True, while all 16 answer immediately with
+                # multicast replies on the same interface.
+                unicast=False
                 )
             # `_tcpipe._tcp.local.` is no longer registered by the firmware,
             # so we only browse for the JSON-RPC service.
