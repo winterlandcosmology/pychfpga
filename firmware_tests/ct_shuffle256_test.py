@@ -4,7 +4,7 @@ from pychfpga.fpga_array import FPGAArray
 from pychfpga.common.async_utils import run_async
 from pychfpga.fpga_firmware.chfpga.ct_engine.chan_bin_sel import pack_frame_flags_word
 import pytest
-from time import sleep
+from time import sleep, time
 from wtl.pytest_xreport import xr, get_xr_from
 from wtl.namespace import NameSpace
 from .module_test import TestModule
@@ -308,23 +308,10 @@ class TestCTShuffle256(TestModule):
     # tests (file order == required remote run order)
     # ------------------------------------------------------------------
 
-    @pytest.mark.ct_shuffle256
-    def test_crate_health(self, crate_setup, xr):
+    def _measure_crate_health(self, logger, boards, populated):
+        '''One full health pass: clear all monitors, let them re-accumulate on
+        live traffic for 0.5 s, then read every stage. Returns the failure list.
         '''
-        Verify the backplane links and both shuffle crossbars are error-free on every board.
-
-        Checks, per board: 64b66b BLOCK_LOCK on every backplane GTX whose
-        source slot is populated (RX_RESETDONE is deliberately not used - it
-        is timer-based and asserts with no cable); zero CRC errors, RX FIFO
-        overflows and frame-length variance on the PCB lanes; all CROSSBAR2
-        and CROSSBAR3 per-lane aligner monitors clear (MISSING_FRAME is the
-        real lane-absent flag; the DATA_TIMEOUT/HAD_TIMEOUT registers are
-        not driven by the firmware and are not consulted); zero packet
-        error counters; and INPUT/ALIGN/OUTPUT frame counters advancing.
-        '''
-        logger = self.get_logger()
-        boards = sorted(self.array.ib, key=lambda m: m.slot)
-        populated = self._populated_slots()
         failures = []
 
         for mb in boards:
@@ -409,6 +396,87 @@ class TestCTShuffle256(TestModule):
                     if a == b:
                         failures.append(f"[slot {mb.slot}] {name} {ctr_name}_FRAME_CTR static "
                                         f"at {a} - no dataflow through this stage")
+
+        return failures
+
+    def _stickies_quiet(self, boards, window=5.0):
+        '''Clear both crossbars' monitors on all boards, wait `window` seconds
+        of live traffic, and return True if no aligner sticky re-asserted and
+        no packet error was counted anywhere. A cheap settle probe - the full
+        health measurement is run separately once a quiet window is seen.
+        '''
+        for mb in boards:
+            for cb in (mb.CROSSBAR2, mb.CROSSBAR3):
+                cb.LANE_MONITOR_RESET = 1
+                cb.LANE_MONITOR_RESET = 0
+        sleep(window)
+        mon_names = ['BAD_TLAST', 'BAD_TVALID', 'BAD_FRAME_LENGTH',
+                     'MISSING_FRAME', 'ALIGN_FIFO_OVERFLOW']
+        for mb in boards:
+            for cb in (mb.CROSSBAR2, mb.CROSSBAR3):
+                mons = run_async(cb.get_lane_monitor(mon_names))
+                if any(int(v) for row in mons for v in row):
+                    return False
+                for sel in range(8):
+                    cb.LANE_MONITOR_SEL = sel
+                    if int(cb.PACKET_ERROR_CTR):
+                        return False
+                cb.LANE_MONITOR_SEL = 0
+        return True
+
+    @pytest.mark.ct_shuffle256
+    def test_crate_health(self, crate_setup, xr):
+        '''
+        Verify the backplane links and both shuffle crossbars are error-free on every board.
+
+        Checks, per board: 64b66b BLOCK_LOCK on every backplane GTX whose
+        source slot is populated (RX_RESETDONE is deliberately not used - it
+        is timer-based and asserts with no cable); zero CRC errors, RX FIFO
+        overflows and frame-length variance on the PCB lanes; all CROSSBAR2
+        and CROSSBAR3 per-lane aligner monitors clear (MISSING_FRAME is the
+        real lane-absent flag; the DATA_TIMEOUT/HAD_TIMEOUT registers are
+        not driven by the firmware and are not consulted); zero packet
+        error counters; and INPUT/ALIGN/OUTPUT frame counters advancing.
+
+        Known persistent failure mode (2026-09-21): after every shuffle256
+        bring-up the CROSSBAR2 aligners drop ~1% of frames on scattered
+        GTX-fed lanes indefinitely (measured stationary over 12 minutes:
+        ~126/240 lanes latch stickies per 5 s window, ~900k errored packets
+        per 5 s crate-wide) while the links themselves stay CRC-clean.
+        Earlier "it settles after a few minutes" observations were artifacts:
+        the diagnostic attaches used to observe quiet ran open_fpga(), which
+        asserts ANT_RESET/CORR_RESET and halts the datapath - a stopped
+        datapath reads as clean. The settle poll below (budget
+        `health_settle_budget`, default 300 s) is retained in case a future
+        firmware/bring-up fix makes the state recoverable, but until the root
+        cause is fixed it will exhaust its budget and the final pass fails
+        honestly.
+        '''
+        logger = self.get_logger()
+        boards = sorted(self.array.ib, key=lambda m: m.slot)
+        populated = self._populated_slots()
+
+        failures = self._measure_crate_health(logger, boards, populated)
+        if failures:
+            # TODO: remove the settle poll below once the aligner frame-loss
+            # root cause is fixed in firmware - while the defect persists it
+            # never finds a quiet window and only delays the (correct) failure
+            # by health_settle_budget seconds.
+            budget = float(self.test_config.get('health_settle_budget', 300))
+            logger.warning(
+                f'crate health: {len(failures)} problem(s) on the first pass - '
+                f'likely the post-bring-up aligner transient; polling for a '
+                f'quiet window (budget {budget:.0f} s) before the final pass')
+            t0 = time()
+            while time() - t0 < budget:
+                if self._stickies_quiet(boards, window=5.0):
+                    logger.info(f'crate health: quiet window observed '
+                                f'{time() - t0:.0f} s into the settle poll')
+                    break
+            else:
+                logger.warning(f'crate health: no quiet window within '
+                               f'{budget:.0f} s - the errors are persistent')
+            failures = self._measure_crate_health(logger, boards, populated)
 
         if failures:
             try:
