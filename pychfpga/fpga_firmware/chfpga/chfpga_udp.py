@@ -294,10 +294,16 @@ class chFPGA_UDP:
         ip_addr_int = int.from_bytes(socket.inet_aton(ip_addr), 'big') if ip_addr else 0
         mac_addr_int = int.from_bytes(bytes.fromhex(mac_addr.replace(':', '')), 'big') if mac_addr else 0
 
-        self.logger.debug(
+        # INFO, not DEBUG: this is the only place the data destination MAC/IP is
+        # written, and whether it is explicit or left at zero (auto-learn) decides
+        # where every capture packet goes. It fires once per board per flow.
+        self.logger.info(
             f'{self!r}: setting data target address to '
             f'ip={ip_addr}({ip_addr_int}), port={port}({port}), '
-            f'mac={mac_addr}({mac_addr_int})')
+            f'mac={mac_addr}({mac_addr_int})'
+            + ('' if (mac_addr_int or ip_addr_int)
+               else ' - zeroed: the firmware will auto-learn the destination '
+                    'from the host that last sent a valid MMI packet'))
 
         await self.fpga_core_reg_write_async(self._FPGA_DATA_DEST_MAC_ADDR_LSW_ADDR, mac_addr_int & 0xFFFFFFFF)
         await self.fpga_core_reg_write_async(

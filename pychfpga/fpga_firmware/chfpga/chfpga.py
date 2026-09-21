@@ -3380,6 +3380,55 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self.set_data_socket(sock)
         return sock
 
+    def _log_data_destination(self, host_ip_addr, host_port_number):
+        """ Report at INFO level where the FPGA will actually send capture data.
+
+        A zeroed destination MAC/IP is not a misconfiguration: the firmware then
+        targets the host that last sent it a valid MMI packet ("auto-learn" - see
+        the ``port==0`` note in :meth:`set_local_data_port_number_async` and the
+        stale-port scrub in ``chfpga_udp.open_udp_mmi_async``). Only an explicitly
+        programmed destination, as used by the raw_acq flow to reach a *different*
+        host, differs from that. Which of the two regimes is in force decides
+        whether a silent capture is a network fault or a destination fault, so it
+        is worth one line in the log.
+
+        Called from :meth:`set_data_socket`, which runs once per board per session
+        (see its early return and the ``if not self.recv`` gate in
+        :meth:`get_data_receiver`), so a full test run gains one line per board.
+        """
+        if self.BSB_TRANSPORT != self.BSB_TRANSPORT_UDP:
+            self.logger.info(
+                f'{self!r}: FPGA data destination: port={host_port_number} '
+                f'(host socket {host_ip_addr}:{host_port_number}); '
+                f'MAC/IP are managed by the platform')
+            return
+
+        # No guard needed: set_local_data_port_number_async() just performed a
+        # read-modify-write on the MSW register, so MMI is proven live.
+        lsw = int(run_async(self.fpga_core_reg_read_async(
+            self._FPGA_DATA_DEST_MAC_ADDR_LSW_ADDR)))
+        msw = int(run_async(self.fpga_core_reg_read_async(
+            self._FPGA_DATA_DEST_MAC_ADDR_MSW_IP_PORT_ADDR)))
+        ip_int = int(run_async(self.fpga_core_reg_read_async(
+            self._FPGA_DATA_DEST_IP_ADDR_ADDR)))
+
+        mac_int = ((msw >> 16) << 32) | lsw   # packing per _set_udp_data_target_address_async
+        mac_addr = ':'.join(f'{(mac_int >> s) & 0xFF:02x}' for s in range(40, -8, -8))
+        ip_addr = '.'.join(str((ip_int >> s) & 0xFF) for s in (24, 16, 8, 0))
+
+        if not mac_int and not ip_int:
+            regime = 'auto-learn (firmware targets the host that last sent a valid MMI packet)'
+            log = self.logger.info
+        elif mac_int and ip_int:
+            regime = 'explicit'
+            log = self.logger.info
+        else:
+            regime = 'INCONSISTENT - only one of MAC/IP is set, so data will not be delivered'
+            log = self.logger.warning
+
+        log(f'{self!r}: FPGA data destination: port={msw & 0xFFFF} MAC={mac_addr} '
+            f'IP={ip_addr} -> {regime}; host socket is {host_ip_addr}:{host_port_number}')
+
     def set_data_socket(self, sock, force=False):
         """ Specified the data socket to which data will be sent
 
@@ -3401,6 +3450,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             self.logger.warning(f'{self!r}: Abandonning previously allocated socket {self._data_socket} for new socket {sock}')
         self._data_socket = sock
         run_async(self.set_local_data_port_number_async(actual_port_number))
+        self._log_data_destination(actual_ip_addr, actual_port_number)
 
 
     def set_data_capture_stream_ids(self, stream_ids):
