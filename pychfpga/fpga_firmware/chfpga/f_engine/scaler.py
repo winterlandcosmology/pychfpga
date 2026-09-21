@@ -26,7 +26,7 @@ class SCALER(MMI):
     RESET                 = BitField(CONTROL, 0x00, 7, doc="Reset the SCALER.")
     BYPASS                = BitField(CONTROL, 0x00, 6, doc="Bypass the SCALER")
     FOUR_BITS             = BitField(CONTROL, 0x00, 5, doc="Enables 4-bit operation")
-    SHIFT_LEFT            = BitField(CONTROL, 0x00, 0, width=5, doc="Number of bits to shift left the incoming data")
+    SHIFT_LEFT_BANK0      = BitField(CONTROL, 0x00, 0, width=5, doc="Post-scaler left shift for gain bank 0. Use get_shift_left/set_shift_left.")
     USE_OFFSET_BINARY     = BitField(CONTROL, 0x01, 6, doc="When '1', offset binary encoding is used.")
     READ_COEFF_BANK       = BitField(CONTROL, 0x01, 4, doc="Target gain coefficients bank to be used by the scaler")
     WRITE_COEFF_BANK_A      = BitField(CONTROL, 0x01, 0, width=4, doc="Indicates in which data page the gain coefficients are being written to. Page 0-7 are coefficients fri bank0, Page 8-15 are for Bank 1 coefficients.")
@@ -61,6 +61,7 @@ class SCALER(MMI):
                                 "   4: Dual resolution FFT with automatic switching between even and odd bins. Odd bins are send on odd frames, even bins on even frames\n"
                                 "   5: Quad resolution FFT with automatic switching between even and odd bins. Odd bins are send on odd frames, even bins on even frames\n"
                                 )
+    SHIFT_LEFT_BANK1      = BitField(CONTROL, 0x0D, 0, width=5, doc="Post-scaler left shift for gain bank 1. Use get_shift_left/set_shift_left.")
 
     STATS_READY            = BitField(STATUS, 0x00, 7, doc="Indicates that new stats results are ready")
     CURRENT_GAIN_BANK      = BitField(STATUS, 0x00, 6, doc="Currently active gain bank.")
@@ -108,7 +109,8 @@ class SCALER(MMI):
         else:
             self.BYPASS = 1
         self.set_capture_data_type(0)
-        self.SHIFT_LEFT = 31
+        self.set_shift_left(0, 31)
+        self.set_shift_left(1, 31)
         self.set_offset_binary_encoding(1)
         self.set_gain_table(1)
         self.SATURATE_ON_MINUS_7 = 1
@@ -265,15 +267,53 @@ class SCALER(MMI):
         self.WRITE_COEFF_BANK_B = (page >> 4) & 1
         self.WRITE_COEFF_BANK_C = (page >> 5) & 1
 
+    def get_shift_left(self, bank=0):
+        """Return the post-scaler left shift programmed for ``bank``.
+
+        Parameters:
+            bank (int): Gain bank (0 or 1).
+
+        Returns:
+            int: Left-shift amount in 0..31.
+        """
+        bank = int(bank)
+        if bank not in (0, 1):
+            raise ValueError(f'bank must be 0 or 1, got {bank}')
+        if bank == 0:
+            return int(self.SHIFT_LEFT_BANK0)
+        return int(self.SHIFT_LEFT_BANK1)
+
+    def set_shift_left(self, bank, value):
+        """Set the post-scaler left shift for ``bank``.
+
+        The value is stored in that bank's register immediately. The datapath
+        uses it only while that bank is active, aligned with the gain table
+        after RAM latency.
+
+        Parameters:
+            bank (int): Gain bank (0 or 1).
+            value (int): Left-shift amount in 0..31.
+        """
+        bank = int(bank)
+        if bank not in (0, 1):
+            raise ValueError(f'bank must be 0 or 1, got {bank}')
+        value = int(value)
+        if value < 0 or value > 31:
+            raise ValueError(f'shift left must be in 0..31, got {value}')
+        if bank == 0:
+            self.SHIFT_LEFT_BANK0 = value
+        else:
+            self.SHIFT_LEFT_BANK1 = value
+
     def set_gain_table(self, gain_list, bank=0, gain_timestamp=None, log_gain=None):
         """
         Sets the scaler's digital gain table for the specified bank.
 
         Gains are provided in natural bin order (increasing frequency order). This method reorders the gains internally to match the native FFT bin order. 
 
-        If USE_COMPLEX_GAINS is True, the gain_list is interpreted as a 16+16 bit complex number, with log_gain stored in SHIFT_LEFT register if not None.
-        If USE_COMPLEX_GAINS is False and log_gain >=0, the gain_list is interpreted as a 16-bit integer real gain and the log_gain is stored in SHIFT_LEFT register.
-        If USE_COMPLEX_GAINS is False and log_gain < 0 or log_gain is None, the gain_list is interpreted as a floating point real gain and a common log gain is computed automatically and stored in SHIFT_LEFT register.
+        If USE_COMPLEX_GAINS is True, the gain_list is interpreted as a 16+16 bit complex number, with log_gain stored in that bank's left-shift register if not None.
+        If USE_COMPLEX_GAINS is False and log_gain >=0, the gain_list is interpreted as a 16-bit integer real gain and the log_gain is stored in that bank's left-shift register.
+        If USE_COMPLEX_GAINS is False and log_gain < 0 or log_gain is None, the gain_list is interpreted as a floating point real gain and a common log gain is computed automatically and stored in that bank's left-shift register.
     
         Parameters:
 
@@ -287,14 +327,16 @@ class SCALER(MMI):
 
                 - if `gain_list` is `None`, no gains are set.
 
-            bank (int): The bank in which the gains are to be written. If ``bank`` is None or is -1,
-                the currently inactive bank is used. The method does not set the active bank.
+            bank (int): The bank in which the gains and left-shift are written (0 or 1).
+                Sets ``READ_COEFF_BANK`` to this bank (the target bank, which becomes
+                active on the next frame TLAST if synchronized switching is off).
 
             gain_timestamp: unix timestamp when the gains were calculated. If not provided, defaults
                 to current time.
 
-            log_gain (int): binary left shift to apply after the linear gain has been applied. Change is immediate and
-                is not synchronized to bank switching. See above to see when log_gain is interpreted and applied. 
+            log_gain (int): binary left shift to apply after the linear gain has been applied.
+                Stored in this bank's left-shift register via ``set_shift_left``. The datapath
+                uses it when this bank is active. See above for when log_gain is interpreted. 
 
         Returns:
             actual_gains (np.array): the gains that were actually set, after quantization and normalization, in natural bin order. 
@@ -327,7 +369,7 @@ class SCALER(MMI):
 
             # Set the postscaler value
             if log_gain is not None:
-                self.SHIFT_LEFT = int(log_gain)
+                self.set_shift_left(bank, int(log_gain))
 
             self.cached_gain_table[bank] = gains
             self.cached_gain_timestamp[bank] = time.time() if gain_timestamp is None else gain_timestamp
@@ -353,7 +395,7 @@ class SCALER(MMI):
                 self.USE_FLOAT_GAINS = 1
                 glog = (np.floor(np.log2(gains))-10).astype(np.int32).clip(0,63)  #
                 glog_common = int(min(glog).clip(0, 31))
-                self.SHIFT_LEFT = glog_common
+                self.set_shift_left(bank, glog_common)
                 glog -= glog_common
                 gains /= 2.0**(glog + glog_common)
                 if any(gains < 0) or any(gains >= 2**11):
@@ -374,11 +416,7 @@ class SCALER(MMI):
                         # Set the postscaler value
 
                 log_gain = int(log_gain)
-                old_log_gain = self.SHIFT_LEFT
-
-                self.SHIFT_LEFT = log_gain
-                if old_log_gain != log_gain:
-                    self.logger.warning(f'{self!r} SCALER log_gain was changed. Note that this change will not be synchronized to bank switching.')
+                self.set_shift_left(bank, log_gain)
 
                 gain_words = gains.astype(np.int16)
                 actual_gains = gain_words.astype(float) # excludes log gain
@@ -412,12 +450,12 @@ class SCALER(MMI):
             gain_table (np.array): an array of gain values for every bin, in natural frequency order.self.fpga.NUMBER_OF_FREQUENCY_BINS values. 
             
             If ``self.USE_COMPLEX_GAINS == True``, the gain table is a complex array, where the real and imaginary parts are 16 bit integers. 
-            The log gain in **not** included in the gain gain values. It must be read separately from the SHIFT_LEFT register.
+            The log gain in **not** included in the gain gain values. It must be read separately with ``get_shift_left(bank)``.
             
             If ``self.USE_COMPLEX_GAINS == False`` and ``self.USE_FLOAT_GAINS == False``, The gain table is an array of 16-bit integers. 
-            The log gain in **not** included in the gain gain values. It must be read separately from the SHIFT_LEFT register.
+            The log gain in **not** included in the gain gain values. It must be read separately with ``get_shift_left(bank)``.
 
-            If ``self.USE_COMPLEX_GAINS == False`` and ``self.USE_FLOAT_GAINS == True``, The gain table is an array of floating point values that includes **both the per-bin log gain and the common log gain (from the SHIFT LEFT register).
+            If ``self.USE_COMPLEX_GAINS == False`` and ``self.USE_FLOAT_GAINS == True``, The gain table is an array of floating point values that includes **both the per-bin log gain and the common log gain (from ``get_shift_left(bank)``).
 
         """
         if use_cache and bank in self.cached_gain_table:
@@ -462,7 +500,7 @@ class SCALER(MMI):
                 # Additional processing to return floating point gains as a single value for each frequency bin
                 gain_table = (np.array(gain_table) & 0xFFFF).flatten() # Full 16-bit value, meaningless without being processed
                 gain_mant = (gain_table & 0x7FF).astype(float) # Lower 11 bits, linear (mantissa) component
-                gain_exp = ((gain_table >> 11) + self.SHIFT_LEFT).astype(float) # Upper 5 bits, logarithmic (exponential) component, plus common log component
+                gain_exp = ((gain_table >> 11) + self.get_shift_left(bank)).astype(float) # Upper 5 bits, logarithmic (exponential) component, plus common log component
                 gain_table = gain_mant * 2**gain_exp # Full gain can be expressed as a single value 
 
             # Reorder into natural order.
@@ -489,7 +527,8 @@ class SCALER(MMI):
         """ Displays the status of the scaler module"""
         print(f'-------------- CHAN[{int(self.instance_number)}].SCALER STATUS --------------')
         print(f' SCALER Bypass: {bool(self.BYPASS)}')
-        print(f' Shift left: {int(self.SHIFT_LEFT)}')
+        print(f' Shift left bank 0: {self.get_shift_left(0)}')
+        print(f' Shift left bank 1: {self.get_shift_left(1)}')
 
     def get_sim_output(self, scaler_input):
         bypass = self.BYPASS
@@ -512,7 +551,7 @@ class SCALER(MMI):
             data_real = np.reshape([word[0], word[2]], (number_of_frames, 2 * words_per_frame), order='F')
             data_imag = np.reshape([word[1], word[3]], (number_of_frames, 2 * words_per_frame), order='F')
             gains = self.get_gain_table()  # 16 bits
-            shift_left = self.SHIFT_LEFT
+            shift_left = self.get_shift_left(self.CURRENT_GAIN_BANK)
             rounding_mode = self.ROUNDING_MODE
             zero_on_sat = self.ZERO_ON_SATURATION
             offset_binary = self.USE_OFFSET_BINARY
