@@ -122,8 +122,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
     - TCPipe: TCP-based BSB bridge on the on-board processor (ZCU111 / CRS today).
     """
 
-    # Array method provider class for this firmware
-    array_method_class = chFPGAArrayMethods
+    _array_method_classes = {'chFPGA': chFPGAArrayMethods}
 
     #: Values for ``self.BSB_TRANSPORT`` and ``PLATFORM_SUPPORT[''bsb_transport'']`` (same strings).
     BSB_TRANSPORT_UDP = 'udp'
@@ -1093,7 +1092,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
 
             if self.UCORN:
-                self.logger.debug(f'{self!r}: === Initializing Frame aggregator (UCORN)')
+                self.logger.debug(f'{self!r}: === Initializing UPACK frame packetizer')
                 self.UCORN.init()
 
 
@@ -4641,7 +4640,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 glog = -1
 
             else:
-                glog = chan.SCALER.SHIFT_LEFT
+                glog = chan.SCALER.get_shift_left(bank)
 
             gain_list.append([chan.chan_number, [glin, glog]])
 
@@ -4816,6 +4815,17 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             return None
         else:
             return self.REFCLK.get_sync_source()
+
+    def get_sync_counter(self):
+        """Return the REFCLK SYNC event counter.
+
+        Returns:
+            int: 4-bit SYNC counter. ``None`` if this firmware has no REFCLK.
+        """
+        if not self.REFCLK:
+            self.logger.warning('The platform does not have a REFCLK module')
+            return None
+        return int(self.REFCLK.SYNC_CTR)
 
     def set_pwm(self, enable, offset, high_time, period, local_sync=False):
         """ Sets the frame-based PWM generator. All times are stated as the number of frames.

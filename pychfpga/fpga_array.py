@@ -522,10 +522,10 @@ class FPGAArray(object):
     async def init_async(self, **kwargs):
         """Co-routine implementation of fpga_array initialization.
 
-        Hardware-map / discovery parameters are consumed here. Remaining
-        ``kwargs`` are forwarded unchanged to
-        :meth:`_run_provider_array_init` (and thus firmware ``array_init_async``).
-        Constructor parameters are documented on :meth:`__init__`.
+        Hardware-map / discovery parameters are consumed here. FPGA
+        programming and open (with retry) run here. Remaining ``kwargs`` are
+        forwarded to firmware ``array_init_async``. Constructor parameters
+        are documented on :meth:`__init__`.
         """
         # Hardware-map / discovery params (not forwarded to array_init)
         hwm = kwargs.pop('hwm', None)
@@ -541,7 +541,13 @@ class FPGAArray(object):
         syslog_log_level = kwargs.pop('syslog_log_level', None)
         # Used here for platform firmware load; array_init_async no longer consumes it.
         platform_firmware_pathname = kwargs.pop('platform_firmware_pathname', None)
+        # Used here for FPGA programming / open; not forwarded to array_init.
+        bitfile = kwargs.pop('bitfile', None)
+        prog = kwargs.pop('prog', None)
+        udp_retries = kwargs.pop('udp_retries', 10)
         # Bound to locals for repeated use below; left in kwargs for array_init_async.
+        mode = kwargs.get('mode')
+        init = kwargs.get('init')
         if_ip = kwargs.get('if_ip')
         fpga_ip_addr_fn = kwargs.get('fpga_ip_addr_fn', '(a,b,3,d)')
 
@@ -601,9 +607,9 @@ class FPGAArray(object):
         self.logger.info(f'{self!r}:     mdns_timeout = {mdns_timeout}')
         self.logger.info(f'{self!r}:     platform_firmware_pathname = {platform_firmware_pathname}')
         self.logger.info(f'{self!r}:     exclude_iceboards = {exclude_iceboards}')
-        self.logger.info(f'{self!r}:     bitfile = {kwargs.get("bitfile")}')
-        self.logger.info(f'{self!r}:     prog = {kwargs.get("prog")}')
-        self.logger.info(f'{self!r}:     init = {kwargs.get("init")}')
+        self.logger.info(f'{self!r}:     bitfile = {bitfile}')
+        self.logger.info(f'{self!r}:     prog = {prog}')
+        self.logger.info(f'{self!r}:     init = {init}')
         self.logger.info(f'{self!r}:     no_mezz = {no_mezz}')
         self.logger.info(f'{self!r}:     sampling_frequency = {kwargs.get("sampling_frequency")}')
         # self.logger.info(f'{self!r}:     reference_frequency = {reference_frequency}')
@@ -1088,7 +1094,7 @@ class FPGAArray(object):
 
         # We have our final hardware map. Update the `repr` caches and array method lists
         for mb in self.ib:
-            mb.update_array_methods()
+            mb.update_array_method_classes()
             mb.set_cache()
 
 
@@ -1096,7 +1102,52 @@ class FPGAArray(object):
 
         self.logger.info(f'{self!r}: Done creating {self!r}')
 
-        await self._run_provider_array_init(**kwargs)
+        if mode:
+            if init is None:
+                init = 3
+            if prog is None:
+                prog = 2
+        else:
+            init = 0
+        kwargs['init'] = init
+
+        if self.ib:
+            # try programming the FPGA and establishing communicaiton with it up to 3 times
+            max_trials = 3
+            for trial in range(1, max_trials + 1):
+
+                if init >= 1:
+                    self.logger.info(f'{self!r}: Configuring FPGAs...')
+                    self.perf.start('FPGA programming', description='Init Level 1/prog: Upload bitstreams')
+                    if prog:
+                        await self.ib.set_fpga_bitstream_async(mode, force=(prog > 1), bitfile_override=bitfile)
+                else:
+                    break # nothing to do, exit the trial loop
+
+                if init >= 2:
+                    self.perf.start('FPGA open', description='Init level 2: Open MMI and PLL_SYNC')
+                    try:
+                        await self.ib.open_fpga_async(
+                                udp_retries=udp_retries,
+                                fpga_ip_addr_fn=kwargs.get('fpga_ip_addr_fn'),
+                                interface_ip_addr=if_ip,
+                                irigb_source=kwargs.get('sync_source'))
+                        break  # it worked, exit the trial loop
+                    except IOError:
+                        self.logger.warning(f'{self!r}: Error while initializing core firmware on trial {trial}/{max_trials}.')
+                        if trial == max_trials:
+                            raise IOError(
+                                f'{self!r}: Unable to initializing FPGA core firmware '
+                                f'after {trial} trials. Giving up.')
+                        else:
+                            prog = 2  # force reprogramming the FPGA on next trial
+                            self.logger.warning(f'{self!r}: Reprogramming FPGA and trying again.')
+                else:
+                    break # We skipped this step, so let's assume it worked, exit the trial loop
+
+        array_init = self.get_array_methods().get('array_init_async')
+        if array_init is not None:
+            await array_init(**kwargs)
         self.perf.stop()
         self.logger.info(f'{self!r}: Init timing\n{self.perf.summary()}')
         self.logger.info(f'{self!r}: *** Initialization completed in {self.perf.get_delay()}')
@@ -1106,37 +1157,6 @@ class FPGAArray(object):
         #################################
         # Completed array creation and initialization
         #################################
-
-    async def _run_provider_array_init(self, **init_kwargs):
-        """Delegate firmware-specific initialization to array method providers."""
-        provider_classes = set()
-        for mb in self.ib:
-            provider_classes.update(mb.get_array_method_classes())
-
-        if not provider_classes:
-            mode = init_kwargs.get('mode')
-            if mode and self.ib:
-                from pychfpga.fpga_firmware.fpga_firmware import FPGAFirmware
-                bitfile = init_kwargs.get('bitfile')
-                for mb in self.ib:
-                    part_number = getattr(mb, 'part_number', None)
-                    if not part_number:
-                        continue
-                    fw_cls, _, _ = FPGAFirmware.get_firmware(
-                        part_number, mode, bitfile_override=bitfile)
-                    array_method_class = getattr(fw_cls, 'array_method_class', None)
-                    if array_method_class is not None:
-                        provider_classes.add(array_method_class)
-
-        for cls in provider_classes:
-            provider = self._array_method_instances.get(cls) or cls(self)
-            self._array_method_instances[cls] = provider
-            init_fn = getattr(provider, 'array_init_async', None)
-            if init_fn is not None:
-                await init_fn(**init_kwargs)
-                break
-
-        self.get_array_methods()
 
     @staticmethod
     def _to_integer(x):

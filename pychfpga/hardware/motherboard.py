@@ -128,9 +128,9 @@ class Motherboard(HardwareMap):
         self._cached_repr = None
 
         # Instance default for the FPGAArray-method provider cache. Shadows
-        # the class attribute; refreshed by ``update_array_methods`` when the
+        # the class attribute; refreshed by ``update_array_method_classes`` when the
         # firmware changes.
-        self._array_method_classes = self.get_array_method_classes()
+        self.update_array_method_classes()
 
         self.logger = logging.getLogger(__name__)
 
@@ -189,20 +189,29 @@ class Motherboard(HardwareMap):
                     + (self.fpga.__dir__() if self.fpga else [])))
 
     def get_array_method_classes(self):
-        """Return array-method provider classes for this board and firmware."""
-        return frozenset(
-            cls for cls in (
-                self.array_method_class,
-                self.fpga.array_method_class if self.fpga else None) if cls)
+        """Return the cached array-method provider classes for this board."""
+        return self._array_method_classes
 
-    def update_array_methods(self):
-        """Refresh the cached set of FPGAArray-method provider classes.
+    def update_array_method_classes(self):
+        """Rebuild the cached frozenset of array-method provider classes.
 
-        Always builds a new ``frozenset`` object so :class:`FPGAArray` can
-        detect firmware/provider changes by comparing its tuple of
-        per-motherboard sets.
+        Merges this board's ``array_method_class`` with the firmware class
+        dict ``fpga._array_method_classes``. Assigns a new ``frozenset`` so
+        :class:`FPGAArray` can detect provider changes by comparing its tuple
+        of per-motherboard sets.
         """
-        self._array_method_classes = self.get_array_method_classes()
+        merged = {}
+        if self.array_method_class:
+            merged[type(self).__name__] = self.array_method_class
+        if self.fpga:
+            for key, cls in self.fpga._array_method_classes.items():
+                existing = merged.get(key)
+                if existing is not None and existing is not cls:
+                    raise RuntimeError(
+                        f'{self!r}: array method key {key!r} conflict: '
+                        f'{existing.__name__} vs {cls.__name__}')
+                merged[key] = cls
+        self._array_method_classes = frozenset(merged.values())
         return self._array_method_classes
 
     @classmethod
@@ -605,14 +614,14 @@ class Motherboard(HardwareMap):
             None
         """
         self.fpga = fpga_fw
-        self.update_array_methods() # update the array-method providers used by FPGAArray
+        self.update_array_method_classes() # update the array-method providers used by FPGAArray
 
     async def set_fpga_bitsream_async(self, firmware_class, force=True):
         """ Programs the FPGA with the specified bitstream.
 
         Once the FPGA is programmed, the firmware class is stored in the `fpga` attribute.
 
-        Make sure to call `update_array_methods()` after programming the FPGA
+        Make sure to call `update_array_method_classes()` after programming the FPGA
         to update the array-method providers used by FPGAArray.
 
         Parameters:

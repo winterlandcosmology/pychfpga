@@ -485,7 +485,7 @@ class TestScaler(TestModule):
 
         Notes:
             Uses `_set_capture_scaler` in capture mode 0 and checks both register-level
-            state (`USE_FLOAT_GAINS`, `SHIFT_LEFT`) and data-path output consistency.
+            state (`USE_FLOAT_GAINS`, `get_shift_left`) and data-path output consistency.
         '''
         logger = self.get_logger()
         if any(chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
@@ -501,8 +501,8 @@ class TestScaler(TestModule):
             if not self.board.chan[ch].SCALER.USE_FLOAT_GAINS:
                 logger.error(f'Floating point gains not enabled in channel {ch}')
                 assert(False)
-            if not self.board.chan[ch].SCALER.SHIFT_LEFT == expected_shift_left:
-                logger.error(f'Common log gain incorrectly set to {self.board.chan[ch].SCALER.SHIFT_LEFT} in channel {ch}')
+            if not self.board.chan[ch].SCALER.get_shift_left(0) == expected_shift_left:
+                logger.error(f'Common log gain incorrectly set to {self.board.chan[ch].SCALER.get_shift_left(0)} in channel {ch}')
                 assert(False)
         source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
         ref_data = np.clip(source *  2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
@@ -547,8 +547,8 @@ class TestScaler(TestModule):
             if not self.board.chan[ch].SCALER.USE_FLOAT_GAINS:
                 logger.error(f'Floating point gains not enabled in channel {ch}')
                 assert(False)
-            if not self.board.chan[ch].SCALER.SHIFT_LEFT == expected_shift_left:
-                logger.error(f'Common log gain incorrectly set to {self.board.chan[ch].SCALER.SHIFT_LEFT} in channel {ch}')
+            if not self.board.chan[ch].SCALER.get_shift_left(0) == expected_shift_left:
+                logger.error(f'Common log gain incorrectly set to {self.board.chan[ch].SCALER.get_shift_left(0)} in channel {ch}')
                 assert(False)
         source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
         ref_data = np.clip(np.repeat(gains, 2) * source // 2**self.data.IDENTITY_POSTSCALER, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
