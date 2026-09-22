@@ -13,6 +13,27 @@ test_config:
                             # "class" if you want to reuse connection.
     only_plot: False              #Don't compare results, only plot them
 
+    # FPGA modes each test module may run in. connection_config.mode must be
+    # in the list or that module's tests are skipped.
+    supported_modes:
+        scaler_test: [corr16]
+        funcgen_test: [corr16]
+        fft_test: [corr16]
+        corr_test: [corr16]
+
+    # GPIO / firmware geometry for collection-time eval. Must match the live
+    # board (post-connect assert). CAPTURE_WIDTH is the test capture path.
+    constants:
+        PLATFORM: MGK7MB
+        ADC_BITS_PER_SAMPLE: 8
+        NUM_CHANNELS: 16
+        SAMPLES_PER_FRAME: 2048
+        NUM_BINS: 1024
+        FFT_WIDTH: 18
+        BINS_PER_WORD: 2
+        CAPTURE_BUS_WIDTH: 32
+        CAPTURE_WIDTH: 4
+
     #parameters for scaler tests 
     platform: 'ICE-8bit-r'
     rtol: 0.015

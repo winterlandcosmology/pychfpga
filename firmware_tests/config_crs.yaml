@@ -1,16 +1,39 @@
 connection_config:
     prog: 1                 # 0 - do not reprogram, 1 - reprogram if outdated, 2 - always reprogram
-    mode: 'shuffle8'          # Default for scaler/funcgen/fft. Use corr8 (or --xreport-config override) for corr_test.py.
-    hwm: 'crs 77'           # For a different board change the serial number
+    mode: 'corr8'          # Bitstream loaded for this run. Tests outside supported_modes are skipped.
+    hwm: 'crs 55'           # For a different board change the serial number
+    ignore_missing_boards: true
+    sync_method: 'local'
 
 test_config:
     loglevelconn: "INFO"   # Log level during connection to the board
     logleveltest: "INFO"   # Log level during tests
-    loglevelrecv: 0        # 0-3
+    loglevelrecv: 2        # 0-3
     conn_scope: "class"     # Select "function" to re-establish connection for each test or
                             # "class" if you want to reuse connection.
     only_plot: False              #Don't compare results, only plot them
-    always_plot: True 
+    always_plot: True
+
+    # FPGA modes each test module may run in. connection_config.mode must be
+    # in the list or that module's tests are skipped.
+    supported_modes:
+        scaler_test: [shuffle8, corr8]
+        funcgen_test: [shuffle8, corr8]
+        fft_test: [shuffle8, corr8]
+        corr_test: [corr8]
+
+    # GPIO / firmware geometry for collection-time eval. Must match the live
+    # board (post-connect assert). CAPTURE_WIDTH is the test capture path.
+    constants:
+        PLATFORM: CRS
+        ADC_BITS_PER_SAMPLE: 14
+        NUM_CHANNELS: 8
+        SAMPLES_PER_FRAME: 16384
+        NUM_BINS: 8192
+        FFT_WIDTH: 32
+        BINS_PER_WORD: 4
+        CAPTURE_BUS_WIDTH: 128
+        CAPTURE_WIDTH: 4 
 
     #parameters for scaler tests
     rtol: 0.015
