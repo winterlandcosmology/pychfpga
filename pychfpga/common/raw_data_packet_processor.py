@@ -389,6 +389,15 @@ class RawDataPacketProcessor(PacketProcessorBase):
         if right_shift > 0:
             np.right_shift(data, right_shift, data)
 
+        if cf.use_offset_encoding:
+            # Offset-binary codes are fmt_data_width bits, MSB-aligned in the bus
+            # slot. Arithmetic right-shift sign-extends from the offset MSB, so
+            # recover the unsigned field and subtract the data_width midpoint
+            # (not fmt_bus_width, which would subtract 2^15 on a 16-bit CRS slot).
+            data_width = int(cf.fmt_data_width)
+            unsigned = data.astype(np.int64) & ((1 << data_width) - 1)
+            data = (unsigned - (1 << (data_width - 1))).astype(data.dtype, copy=False)
+
         if is_complex:
             split = True
         if split:  # split a burst into multiple independent frames. Frames are always split for complex data.
@@ -481,11 +490,6 @@ class RawDataPacketProcessor(PacketProcessorBase):
                 ts = ts.reshape(out_rows, interleave_factor)[:, 0]
                 counts = counts.reshape(out_rows, interleave_factor, nchan).min(axis=1)
 
-        if cf.use_offset_encoding:
-            # Offset-binary samples are unsigned around a midpoint; convert to signed.
-            bias = 1 << (int(base) - 1)
-            data.real -= bias
-            data.imag -= bias
         bin_map = self.config.get("fft_bin_map")
         if bin_map is not None:
             bin_map = np.asarray(bin_map, dtype=np.intp)
