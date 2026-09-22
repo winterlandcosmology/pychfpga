@@ -139,17 +139,51 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
     # procrssing clock. For the CRS, the processing clock is Fs/8 and the monitoring clock is Fs/16. For the
     # IceBoard, it's both fs/4. (fs=sampling frequency)
     PLATFORM_SUPPORT = ( # [ {"platform":<platform_model>, "modes":<supported_modes>, "firmware_url":<firmware filename_or_url>, <other platform key-value parameters>}, ...]
-        dict(platform="MGK7MB", modes=("shuffle16", "shuffle128",
-                                       "shuffle256", "shuffle512",
-                                       "chan8", "chan4"),    firmware_url='chfpga_ice_ct.bit',         bsb_transport=BSB_TRANSPORT_UDP,    sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4),
-        dict(platform="MGK7MB", modes=("corr16",),           firmware_url='chfpga_ice_corr16_pbg_jun16.bit', bsb_transport=BSB_TRANSPORT_UDP,    sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4),
-        dict(platform="MGK7MB", modes=("chord16",),          firmware_url='chordFPGA_MGK7MB_Rev2.bit', bsb_transport=BSB_TRANSPORT_UDP,    sampling_frequency=1200e6, processing_frequency=300e6),
-        dict(platform="ZCU111", modes=("corr4", "corr8"),    firmware_url='sifpga_zcu111_wrapper.bit', bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16),
-        dict(platform="ZCU111", modes=("chan8",),            firmware_url='chfpga_zcu111.bit',         bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16),
-        dict(platform="CRS",    modes=("corr4","corr8"),     firmware_url='chfpga_crs_corr8.bit',      bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
-        dict(platform="CRS",    modes=("corr32",),           firmware_url='chfpga_crs_corr32.bit',     bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
-        dict(platform="CRS",    modes=("corr64",),           firmware_url='chfpga_crs_corr64.bit',     bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
-        dict(platform="CRS",    modes=("chan8", "shuffle8"), firmware_url='chfpga_crs_ct.bit',         bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
+        dict(platform="MGK7MB", modes=("shuffle16", "shuffle128", "shuffle256", "shuffle512","chan8", "chan4"),    
+            firmware_url='chfpga_ice_ct.bit',         
+            bsb_transport=BSB_TRANSPORT_UDP,    
+            sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4,
+            corr_readout_bins=None),
+        dict(platform="MGK7MB", modes=("corr16",),           
+            firmware_url='chfpga_ice_corr16_pbg_jun16.bit', 
+            bsb_transport=BSB_TRANSPORT_UDP,   
+            sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4,
+            corr_readout_bins=(0,0)),
+        dict(platform="MGK7MB", modes=("chord16",),          
+            firmware_url='chordFPGA_MGK7MB_Rev2.bit', 
+            bsb_transport=BSB_TRANSPORT_UDP,   
+            sampling_frequency=1200e6, processing_frequency=300e6, adc_clock_divider=4,
+            corr_readout_bins=None),
+        dict(platform="ZCU111", modes=("corr4", "corr8"),    
+            firmware_url='sifpga_zcu111_wrapper.bit', 
+            bsb_transport=BSB_TRANSPORT_TCPIPE, 
+            sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16,
+            corr_readout_bins=(0,1,2,3)),
+        dict(platform="ZCU111", modes=("chan8",),            
+            firmware_url='chfpga_zcu111.bit',         
+            bsb_transport=BSB_TRANSPORT_TCPIPE, 
+            sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16,
+            corr_readout_bins=None),
+        dict(platform="CRS",    modes=("corr8",),     
+            firmware_url='chfpga_crs_corr8.bit',     
+            bsb_transport=BSB_TRANSPORT_TCPIPE, 
+            sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32,
+            corr_readout_bins=(0,1,2,3)),
+        dict(platform="CRS",    modes=("corr32",),           
+            firmware_url='chfpga_crs_corr32.bit',     
+            bsb_transport=BSB_TRANSPORT_TCPIPE, 
+            sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32,
+            corr_readout_bins=(0,)),
+        dict(platform="CRS",    modes=("corr64",),           
+            firmware_url='chfpga_crs_corr64.bit',     
+            bsb_transport=BSB_TRANSPORT_TCPIPE, 
+            sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32,
+            corr_readout_bins=(0,)),
+        dict(platform="CRS",    modes=("chan8", "shuffle8"), 
+            firmware_url='chfpga_crs_ct.bit',        
+            bsb_transport=BSB_TRANSPORT_TCPIPE, 
+            sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32,
+            corr_readout_bins=None),
     )
 
     FFT_INFO = fft.FFT_INFO
@@ -955,7 +989,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self._reference_frequency = reference_frequency  or self.fw_params.get('reference_frequency') or 10e6;
         self.adc_clock_divider = adc_clock_divider  or self.fw_params.get('adc_clock_divider');
         self._processing_frequency = processing_frequency  or self.fw_params.get('processing_frequency') or self._sampling_frequency / 4;
-
+        self.CORR_READOUT_BINS = self.fw_params.get('corr_readout_bins')
         self.FRAME_PERIOD = float(self.FRAME_LENGTH) / self._sampling_frequency
         self.FRAME_RATE = 1 / self.FRAME_PERIOD
 
@@ -5084,8 +5118,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             integration_period=16384,
             autocorr_only=False,
             no_accum=False,
-            correlators=None,
-            bandwidth_limit=0.5e9,
             verbose=1):
         """
         (Re)starts the correlator with the specified integration time.
@@ -5108,17 +5140,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             no_accum (bool): When 'True', the correlator does not accumulate products from multiple
                 frames. It just returns the product from the last frame on the integration period.
 
-            correlators (list of int): List of correlator cores to enable. All other cores will be
-               disabled. Default is None, which means all correlators will be enabled. Each
-               correlator core process the frequency bins selected with its corresponding bin
-               selector. Using a smaller number of cores will process less frequency bins but will
-               proportionnally usee less data bandwidth.
-
-            bandwidth_limit (float): Maximum acceptable data bandwidth that the correlator can
-               produce, in bits/s. Default is 0.5 Gbps. If the correlator parameters are to make the
-               data exceed this bandwidth, an exception will be raised, with a message that describe
-               alternate settings. In this case, no changes are made to the correlator operation.
-
         Returns:
             None
 
@@ -5134,8 +5155,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self.CORR.start_correlator(integration_period=integration_period,
                                    autocorr_only=autocorr_only,
                                    no_accum=no_accum,
-                                   correlators=correlators,
-                                   bandwidth_limit=bandwidth_limit,
                                    verbose=verbose)
 
     def stop_correlator(self):

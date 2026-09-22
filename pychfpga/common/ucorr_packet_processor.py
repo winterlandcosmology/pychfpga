@@ -297,17 +297,21 @@ class UCorrPacketProcessor(PacketProcessorBase):
         config = self._config_getter()
         return UCORR.get_ij_to_prod_map(int(config.NCHAN))
 
-    def get_good_bins_map(self):
+    def get_good_bin_mask(self):
         """Return a boolean map of FFT bins expected to contain valid correlator data.
 
-        True for bins present in ``bin_map``, except correlator sacrificial bins
-        (clkbin 0 of every correlator; firmware ``READOUT_BIN=0``, stolen for the
-        accumulation-memory readout cycle). Culled bins (e.g. the first 256 FFT
-        bins dropped at CT level 2) stay False because they are absent from
-        ``bin_map``.
+        True for bins present in ``bin_map``, except correlator sacrificial
+        readout bins (stolen for the accumulation-memory readout cycle). Culled
+        bins (e.g. the first 256 FFT bins dropped at CT level 2) stay False
+        because they are absent from ``bin_map``.
 
-        The mask length is ``NBINS`` (typically 8192). Reads ``bin_map`` /
-        ``NBINS`` from the correlator config. Does not call :meth:`update_config`.
+        ``READOUT_BIN`` is a compile-time generic and does not follow FFT
+        bypass. ``config.READOUT_BINS`` is one clkbin per correlator (from
+        ``chFPGA.CORR_READOUT_BINS``).
+
+        The mask length is ``NBINS`` (typically 8192). Reads ``bin_map``,
+        ``NBINS``, and ``READOUT_BINS`` from the correlator config. Does not
+        call :meth:`update_config`.
         """
         config = self._config_getter()
         bin_map = np.asarray(config.bin_map)
@@ -316,9 +320,16 @@ class UCorrPacketProcessor(PacketProcessorBase):
             n_bins = max(n_bins, int(config.NBINS))
         mask = np.zeros(n_bins, dtype=bool)
         mask[bin_map.reshape(-1)] = True
-        # Sacrificial readout bins: clkbin 0 of every (bin_set, correlator).
         # Product index does not matter; the FFT bin is the same for every CMAC.
-        mask[bin_map[:, :, 0, 0]] = False
+        n_corrs = bin_map.shape[1]
+        readout_bins = config.READOUT_BINS if config.has_attr("READOUT_BINS") else None
+        if readout_bins is None or len(readout_bins) != n_corrs:
+            raise ValueError(
+                f"READOUT_BINS length {0 if readout_bins is None else len(readout_bins)} "
+                f"does not match number of correlators {n_corrs}"
+            )
+        for corr, clkbin in enumerate(readout_bins):
+            mask[bin_map[:, corr, clkbin, 0]] = False
         return mask
 
     def create_output_buffer(self, n_ts):
@@ -594,8 +605,9 @@ class UCorrPacketProcessor(PacketProcessorBase):
         ``prod_map`` (3D) broadcast together to place each product into the dense ``(NBINS, NPROD)``
         plane. The scatter uses a single precomputed flat index (see
         :meth:`_ensure_flat_scatter_idx`): we build a compact ``(nrows, K)`` complex source
-        from the real/imag accumulators, then scatter it once per output array. Only mapped
-        cells are written (unmapped cells keep prior contents, as before).
+        from the real/imag accumulators, then scatter it once per output array. The
+        output rows are cleared first so cells the maps do not cover stay zero
+        rather than leftover data from the previous integration.
 
         Parameters:
             rows (slice or int): Physical index rows in the internal assembly buffer.
@@ -639,6 +651,10 @@ class UCorrPacketProcessor(PacketProcessorBase):
         # both are C-contiguous). Scatter along the flattened bin/prod axis.
         data_flat = self.integ_data.reshape(self.max_timestamps, -1)
         sats_flat = self.integ_sats.reshape(self.max_timestamps, -1)
+        # Unmapped cells used to keep the previous integration. Clear the rows
+        # before scattering so only products present in the maps are nonzero.
+        data_flat[rows] = 0
+        sats_flat[rows] = 0
 
         # Compact complex source built from the contiguous real/imag accumulators, then
         # scattered once (one complex write instead of separate strided real/imag writes).
