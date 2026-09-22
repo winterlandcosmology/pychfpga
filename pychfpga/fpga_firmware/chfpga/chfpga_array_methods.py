@@ -821,12 +821,10 @@ class chFPGAArrayMethods(ArrayMethods):
             await self.sync_async()
 
     async def start_correlators_async(self, integration_period, autocorr_only=False, no_accum=False,
-                                      bandwidth_limit=0.5e9, verbose=0):
+                                      verbose=0):
         """Start all firmware correlators in the array.
 
-        Calls each board's ``start_correlator``. The per-board
-        ``bandwidth_limit`` is this method's ``bandwidth_limit`` divided by
-        the number of boards.
+        Calls each board's ``start_correlator``.
 
         Parameters:
 
@@ -839,12 +837,6 @@ class chFPGAArrayMethods(ArrayMethods):
             no_accum (bool): If True, do not accumulate across frames; return
                 the product from the last frame of the integration period.
 
-            bandwidth_limit (float): Maximum acceptable *array-total* correlator
-                data bandwidth in bits/s. Default 0.5e9. Each board is limited
-                to ``bandwidth_limit / len(self.ib)``. An exception is raised
-                if the settings would exceed that (to avoid operating in heavy
-                packet loss). (Not implemented for UCORR)
-
             verbose (int): Verbosity passed to each board's
                 ``start_correlator``.
 
@@ -856,7 +848,6 @@ class chFPGAArrayMethods(ArrayMethods):
             mb.start_correlator(integration_period=integration_period,
                                 autocorr_only=autocorr_only,
                                 no_accum=no_accum,
-                                bandwidth_limit=bandwidth_limit/len(self.ib),
                                 verbose=verbose)
             await asyncio.sleep(0)
 
@@ -1836,6 +1827,9 @@ class chFPGAArrayMethods(ArrayMethods):
             source=State.get_common_attr(ucap_cfgs, "source")
             frames_per_burst=State.get_common_attr(ucap_cfgs, "frames_per_burst")
             target_mode=State.get_common_attr(ucap_cfgs, "mode")
+            # Static on UCAP, but the local is only set when building _raw_data_config
+            # the first time. Re-read it on every refresh so update() below is bound.
+            subframes_per_frame = State.get_common_attr(ucap_cfgs, "subframes_per_frame")
 
         elif capture_engine == "PROBER":
             active_channels = State.get_common_attr(cfgs, "channels")
@@ -1891,7 +1885,9 @@ class chFPGAArrayMethods(ArrayMethods):
         Cached until any board's CORR config ``has_changed`` for context
         ``('get_corr_data_config', self)``. Common fields (``NCHAN``,
         ``NBINS``, ``bin_map``, ``prod_map``, ``firmware_integ_period``, …)
-        must match across boards.
+        must match across boards. ``READOUT_BINS`` is per-board (one clkbin
+        per local correlator) and is concatenated in board order so its
+        length matches the array-wide ``NCORRS`` axis of ``bin_map``.
 
         Returns:
 
@@ -1925,11 +1921,12 @@ class chFPGAArrayMethods(ArrayMethods):
         if not any(cfg.has_changed(context=ctx) for cfg in corrs_cfgs):
             return self._corr_data_config
 
-        # List of fields to include in the raw data config
+        # List of fields that must be identical on every board
         corr_fields = (
             "NCHAN",
             "NCLK",
             "NDECIM",
+            "CT_LEVEL",
             "NCORRS",
             "NPROD_PER_CMAC",
             "NCMAC",
@@ -1943,6 +1940,10 @@ class chFPGAArrayMethods(ArrayMethods):
         self._corr_data_config.update(**{
             attr: State.get_common_attr(corrs_cfgs, attr)
             for attr in corr_fields})
+        # COncatenate the readout bins for each board into a single tuple
+        self._corr_data_config.update(
+            READOUT_BINS=tuple(rb for cfg in corrs_cfgs for rb in cfg.READOUT_BINS)
+        )
         # Acknowledge the configs of each board so we don't trigger an update if none of the boards have changed their configs since the last time
         for mb in boards:
             mb.fpga.CORR.config.ack(context=ctx)

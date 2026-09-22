@@ -131,43 +131,42 @@ class CORR(MMIRouter):
             self,
             integration_period=16384,
             autocorr_only=False,
-            correlators=None,
             bins_per_frame=128,
-            bandwidth_limit=0.5e9,
             verbose=1):
         """ Start the correlator with specified parameters.
 
         """
 
-        if correlators is None:
-            correlators = list(range(self.fpga.NUMBER_OF_CORRELATORS))
-
-        Ncorr = len(set(correlators))  # Number of active correlators
-        Ncmac = 4 if autocorr_only else self.NUMBER_OF_CMACS_PER_CORRELATOR
-        # Compute number of products. Assumes the CROSSBAR is setup this way...
-        Nprod = self.PRODUCTS_PER_BIN * self.fpga.FRAME_LENGTH // 2 // self.fpga.NUMBER_OF_CORRELATORS
-        frame_rate = self.fpga.FRAME_RATE
-        integ_rate = frame_rate / integration_period
-        cmac_frame_size = (42 + 12 + 5 * Nprod)  # for all specified correlators, in bytes
-        all_corr_frame_size = Ncorr * Ncmac * cmac_frame_size  # for all specified correlators, in bytes
-
-        bit_rate = integ_rate * all_corr_frame_size * 8
-        min_integ_period = frame_rate / (bandwidth_limit / 8 / all_corr_frame_size)
-        autocorr_only_bit_rate = integ_rate * Ncorr * 4 * cmac_frame_size
-        if verbose:
-            print(f'Integration rate: {integ_rate:.1f} integ/s ({1 / integ_rate:.3f}s/integ)')
-            print(f'Bit rate ={bit_rate / 1000000000.0:.3f} Gbps')
-        if bit_rate > bandwidth_limit:
-            raise ValueError(
-                f'The correlator setting would make it produce {bit_rate / 1000000000.0:.3f} Gbps of data, which exceeds the specified bandwith limit of {bandwidth_limit / 1000000000.0:.3f} Gbps. Try using a longer integration period ({int(min_integ_period)} frames min).Note that sending only the autocorrlation products with autocorr_only=True will produce {autocorr_only_bit_rate / 1000000000.0:.3f} Gbps)')
+        # Optional bandwidth_limit guard (removed from API; restore if needed):
+        # Ncorr = self.fpga.NUMBER_OF_CORRELATORS
+        # Ncmac = 4 if autocorr_only else self.NUMBER_OF_CMACS_PER_CORRELATOR
+        # Nprod = self.PRODUCTS_PER_BIN * self.fpga.FRAME_LENGTH // 2 // self.fpga.NUMBER_OF_CORRELATORS
+        # frame_rate = self.fpga.FRAME_RATE
+        # integ_rate = frame_rate / integration_period
+        # cmac_frame_size = (42 + 12 + 5 * Nprod)
+        # all_corr_frame_size = Ncorr * Ncmac * cmac_frame_size
+        # bit_rate = integ_rate * all_corr_frame_size * 8
+        # bandwidth_limit = 0.5e9
+        # min_integ_period = frame_rate / (bandwidth_limit / 8 / all_corr_frame_size)
+        # autocorr_only_bit_rate = integ_rate * Ncorr * 4 * cmac_frame_size
+        # if verbose:
+        #     print(f'Integration rate: {integ_rate:.1f} integ/s ({1 / integ_rate:.3f}s/integ)')
+        #     print(f'Bit rate ={bit_rate / 1000000000.0:.3f} Gbps')
+        # if bit_rate > bandwidth_limit:
+        #     raise ValueError(
+        #         f'The correlator setting would make it produce {bit_rate / 1000000000.0:.3f} Gbps of data, '
+        #         f'which exceeds the specified bandwith limit of {bandwidth_limit / 1000000000.0:.3f} Gbps. '
+        #         f'Try using a longer integration period ({int(min_integ_period)} frames min).'
+        #         f'Note that sending only the autocorrlation products with autocorr_only=True will produce '
+        #         f'{autocorr_only_bit_rate / 1000000000.0:.3f} Gbps)')
 
         self.fpga.set_corr_reset(1)
-        for i, corr in enumerate(self.corr):
+        for corr in self.corr:
             corr.SOFT_RESET = 1  # make sure we stop sending readouts in progres
             corr.INTEGRATION_PERIOD = integration_period - 1
             corr.AUTOCORR_ONLY = autocorr_only
             corr.BINS_PER_FRAME = bins_per_frame - 1
-            corr.SOFT_RESET = i not in correlators
+            corr.SOFT_RESET = 0
         self.fpga.set_corr_reset(0)
 
     def stop_correlator(self):
