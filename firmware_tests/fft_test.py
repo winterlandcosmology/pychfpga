@@ -61,12 +61,12 @@ class TestFFT(TestModule):
         return constants
 
     @pytest.fixture(scope='function', autouse=True)
-    def setup(self, xr):
+    async def setup(self, xr, request):
         self.test_config = xr.config.test_config
         self.connection_config = xr.config.connection_config
         #xr.data.update(self.get_widths(self.test_config))
         self.data = xr.data
-        self.board = self.board_conn(xr)
+        self.board = await self.board_conn(xr, request)
         conn_logger_name = FPGAArray.__name__.rsplit('.', 1)[0] if '.' in __name__ else ''
         self.logger = logging.getLogger(conn_logger_name)
         self.logger.setLevel(xr.config.test_config.logleveltest)
@@ -86,12 +86,14 @@ class TestFFT(TestModule):
         assert all(v == 0 for v in post_flags_after)
 
     @pytest.fixture(scope='function')
-    def setup_fft(self, setup):
+    async def setup_fft(self, setup):
         if int(getattr(self.board, 'FFT_TYPE', 0)) == 0:
             pytest.skip("Firmware reports no FFT implementation")
 
         channels = [0]
-        scaler_eight_bit = self.data.CAPTURE_WIDTH > 4 and self.data.PLATFORM == 'ICE'
+        # CAPTURE_WIDTH is a yaml test-path pin, not an FFT get_constants field.
+        capture_width = int(self.test_config.constants.CAPTURE_WIDTH)
+        scaler_eight_bit = capture_width > 4 and self.data.PLATFORM == 'ICE'
         self.board.set_channelizer(
             fft_bypass=False,
             scaler_bypass=False,
@@ -124,7 +126,6 @@ class TestFFT(TestModule):
             chan = self.board.chan[ch]
             chan.FFT.FFT_SHIFT = fft_shift
             chan.FFT.reset_fft_overflow_count()
-        bin_map = np.asarray(self.board.chan[0].FFT.get_bin_map(flatten=True, reverse=True), dtype=np.intp)
         fft_info = self.board.FFT_INFO.get(int(self.board.FFT_TYPE), {})
         self.logger.debug(
             "Setup channelizer for receiver-formatted complex FFT capture "
@@ -132,9 +133,7 @@ class TestFFT(TestModule):
             f"postscaler={self.SCALER_COMPLEX_POSTSCALER}, fft_shift={fft_shift}, "
             f"fft_type={int(self.board.FFT_TYPE)}, fft_info={fft_info}, "
             f"adc_lanes={int(getattr(self.board, 'SAMPLES_PER_WORD', 1) or 1)}, "
-            f"scaler_eight_bit={scaler_eight_bit}, "
-            f"bin_map_is_identity={np.array_equal(bin_map, np.arange(bin_map.size))}, "
-            f"bin_map_first16={bin_map[:16].tolist()})"
+            f"scaler_eight_bit={scaler_eight_bit})"
         )
 
     def rtol(self):
@@ -243,7 +242,7 @@ class TestFFT(TestModule):
         adc_lanes = waveform.reshape(-1, n_lanes).T
         return self.pack_funcgen_adc_lanes(adc_lanes)
 
-    def capture_fft_complex(self, waveform, *, ch=0, ncap=4):
+    async def capture_fft_complex(self, waveform, *, ch=0, ncap=4):
         logger = self.get_logger()
         funcgen_input = self.pack_scalar_waveform_for_funcgen(waveform)
         self.board.sync()
@@ -259,8 +258,7 @@ class TestFFT(TestModule):
         )
         # Use the receiver's complex FFT formatter instead of manually pairing
         # bytes from the regular 8-bit scaler stream. Capture mode 4 is decoded
-        # as complex data by RawFrameReceiver, which also applies the firmware
-        # FFT bin map when the selected bitstream reports scrambled output.
+        # as complex data in natural bin order.
         self.board.set_scaler_output_modes(
             bypass=False,
             cap_data_type=self.FFT_COMPLEX_CAPTURE_MODE,
@@ -278,7 +276,7 @@ class TestFFT(TestModule):
             data_type=self.FFT_COMPLEX_CAPTURE_MODE,
         )
         self.board.sync()
-        receiver = self.get_data_receiver(port_number=0, verbose=self.test_config.loglevelrecv)
+        receiver = await self.get_data_receiver(port_number=0, verbose=self.test_config.loglevelrecv)
         receiver.flush()
         # The PFB/FFT pipeline is continuously running. Read several completed
         # logical frames after changing FUNCGEN, then assert against the last one.
@@ -290,9 +288,6 @@ class TestFFT(TestModule):
         )
         spectrum = data[-1, 0, :].astype(np.complex128)
         overflow_count = int(self.board.chan[ch].FFT.get_fft_overflow_count())
-        receiver_bin_map = receiver.config.get("fft_bin_map")
-        bin_map = np.asarray(receiver_bin_map, dtype=np.intp) if receiver_bin_map is not None else np.array([], dtype=np.intp)
-        bin_map_is_identity = np.array_equal(bin_map, np.arange(bin_map.size)) if bin_map.size else None
         logger.debug(
             f"capture_fft_complex: ch={ch} ncap={ncap} capture_mode={capture_mode} "
             f"frames_per_burst={frames_per_burst} "
@@ -304,8 +299,6 @@ class TestFFT(TestModule):
             f"rtol={self.rtol()} "
             f"overflow_count={overflow_count} funcgen_left_shift={self.board.chan[ch].FUNCGEN.LEFT_SHIFT} "
             f"funcgen_right_shift={self.board.chan[ch].FUNCGEN.RIGHT_SHIFT} "
-            f"receiver_bin_map_is_identity={bin_map_is_identity} "
-            f"receiver_bin_map_first16={bin_map[:16].tolist() if bin_map.size else None} "
             f"funcgen_input_first16={funcgen_input[:16].tolist()}"
         )
         assert spectrum.size == self.data.NUM_BINS
@@ -518,7 +511,7 @@ class TestFFT(TestModule):
             )
         return rounded.astype(np.int64)
 
-    def capture_fft_simulation_frame(self, funcgen_input, *, ch=0, ncap=4, sim_config):
+    async def capture_fft_simulation_frame(self, funcgen_input, *, ch=0, ncap=4, sim_config):
         logger = self.get_logger()
         self.board.sync()
         self.board.set_funcgen(
@@ -552,7 +545,7 @@ class TestFFT(TestModule):
         )
         self.board.sync()
 
-        receiver = self.get_data_receiver(port_number=0, verbose=self.test_config.loglevelrecv)
+        receiver = await self.get_data_receiver(port_number=0, verbose=self.test_config.loglevelrecv)
         receiver.flush()
         ts, data, count = receiver.read_raw_frames(
             ncap=ncap,
@@ -626,7 +619,7 @@ class TestFFT(TestModule):
         xr.insert_plot()
         plt.close(fig)
 
-    def assert_fft_matches_simulation(self, xr, stem, *, ch=0):
+    async def assert_fft_matches_simulation(self, xr, stem, *, ch=0):
         platform = self.data.PLATFORM
         if platform not in self.SIM_COMPARE_CONFIGS:
             valid = ', '.join(sorted(self.SIM_COMPARE_CONFIGS))
@@ -640,7 +633,7 @@ class TestFFT(TestModule):
 
         self.setup_fft_simulation_compare(ch, sim_config)
         sim_case = self.load_fft_simulation_case(stem, sim_config=sim_config)
-        captured = self.capture_fft_simulation_frame(sim_case['funcgen_input'], ch=ch, sim_config=sim_config)
+        captured = await self.capture_fft_simulation_frame(sim_case['funcgen_input'], ch=ch, sim_config=sim_config)
 
         captured_real = captured['real']
         captured_imag = captured['imag']
@@ -712,9 +705,9 @@ class TestFFT(TestModule):
 
     @pytest.mark.fft
     @pytest.mark.parametrize("ch", (0,))
-    def test_fft_dc_peak(self, ch, setup_fft, xr):
+    async def test_fft_dc_peak(self, ch, setup_fft, xr):
         waveform = self.gen_waveform('dc', amplitude=16)
-        hardware_fft = self.capture_fft_complex(waveform, ch=ch)
+        hardware_fft = await self.capture_fft_complex(waveform, ch=ch)
         numpy_fft = self.numpy_fft_reference(waveform)
         self.assert_spectrum_peaks(
             xr,
@@ -727,9 +720,9 @@ class TestFFT(TestModule):
     @pytest.mark.fft
     @pytest.mark.parametrize("ch", (0,))
     @pytest.mark.parametrize("tone_bin", (8, 11, 37))
-    def test_fft_single_tone_peak(self, tone_bin, ch, setup_fft, xr):
+    async def test_fft_single_tone_peak(self, tone_bin, ch, setup_fft, xr):
         waveform = self.gen_waveform('tone', amplitude=16, bins=(tone_bin,))
-        hardware_fft = self.capture_fft_complex(waveform, ch=ch)
+        hardware_fft = await self.capture_fft_complex(waveform, ch=ch)
         numpy_fft = self.numpy_fft_reference(waveform)
         self.assert_spectrum_peaks(
             xr,
@@ -741,10 +734,10 @@ class TestFFT(TestModule):
 
     @pytest.mark.fft
     @pytest.mark.parametrize("ch", (0,))
-    def test_fft_two_tone_peaks(self, ch, setup_fft, xr):
+    async def test_fft_two_tone_peaks(self, ch, setup_fft, xr):
         tone_bins = (11, 53)
         waveform = self.gen_waveform('two_tone', amplitude=8, bins=tone_bins)
-        hardware_fft = self.capture_fft_complex(waveform, ch=ch)
+        hardware_fft = await self.capture_fft_complex(waveform, ch=ch)
         numpy_fft = self.numpy_fft_reference(waveform)
         self.assert_spectrum_peaks(
             xr,
@@ -756,12 +749,12 @@ class TestFFT(TestModule):
 
     @pytest.mark.fft
     @pytest.mark.parametrize("ch", (0,))
-    def test_fft_ramp_spectrum_shape(self, ch, setup_fft, xr):
+    async def test_fft_ramp_spectrum_shape(self, ch, setup_fft, xr):
         # The explicit all-stage FFT shift attenuates broadband spectra enough
         # that small inputs are dominated by 8-bit quantization. Use a high but
         # non-clipping ramp so this remains a shape/order test.
         waveform = self.gen_waveform('ramp', amplitude=96)
-        hardware_fft = self.capture_fft_complex(waveform, ch=ch)
+        hardware_fft = await self.capture_fft_complex(waveform, ch=ch)
         numpy_fft = self.numpy_fft_reference(waveform)
         self.assert_spectrum_shape(
             xr,
@@ -772,12 +765,12 @@ class TestFFT(TestModule):
 
     @pytest.mark.fft
     @pytest.mark.parametrize("ch", (0,))
-    def test_fft_noise_spectrum_shape(self, ch, setup_fft, xr):
+    async def test_fft_noise_spectrum_shape(self, ch, setup_fft, xr):
         # Seeded noise exercises many bins at once. With all FFT stages shifted,
         # low-amplitude noise is mostly quantization residue, so keep it high
         # enough for a stable spectral-shape comparison without input clipping.
         waveform = self.gen_waveform('noise', amplitude=96, seed=0x5EED)
-        hardware_fft = self.capture_fft_complex(waveform, ch=ch)
+        hardware_fft = await self.capture_fft_complex(waveform, ch=ch)
         numpy_fft = self.numpy_fft_reference(waveform)
         self.assert_spectrum_shape(
             xr,
@@ -788,15 +781,15 @@ class TestFFT(TestModule):
 
     @pytest.mark.fft
     @pytest.mark.parametrize("ch", (0,))
-    def test_compare_to_simulation_ramp(self, ch, setup, xr):
-        self.assert_fft_matches_simulation(xr, 'ramp', ch=ch)
+    async def test_compare_to_simulation_ramp(self, ch, setup, xr):
+        await self.assert_fft_matches_simulation(xr, 'ramp', ch=ch)
 
     @pytest.mark.fft
     @pytest.mark.parametrize("ch", (0,))
-    def test_compare_to_simulation_two_tone(self, ch, setup, xr):
-        self.assert_fft_matches_simulation(xr, 'two_tone', ch=ch)
+    async def test_compare_to_simulation_two_tone(self, ch, setup, xr):
+        await self.assert_fft_matches_simulation(xr, 'two_tone', ch=ch)
 
     @pytest.mark.fft
     @pytest.mark.parametrize("ch", (0,))
-    def test_compare_to_simulation_noise(self, ch, setup, xr):
-        self.assert_fft_matches_simulation(xr, 'noise', ch=ch)
+    async def test_compare_to_simulation_noise(self, ch, setup, xr):
+        await self.assert_fft_matches_simulation(xr, 'noise', ch=ch)
