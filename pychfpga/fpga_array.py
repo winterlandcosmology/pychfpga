@@ -158,6 +158,11 @@ class FPGAArray(object):
         """Return the normal attributes plus every array-wide method name."""
         return sorted(set(super().__dir__()) | set(self.get_array_methods()))
 
+    def get_mode(self):
+        """Return the operational FPGA mode programmed on the boards.
+        """
+        return getattr(self, 'mode', None)
+
     def __init__(
             self,
 
@@ -1110,6 +1115,10 @@ class FPGAArray(object):
         else:
             init = 0
         kwargs['init'] = init
+
+        # Store the operational FPGA mode for the array
+        self.mode = mode
+
 
         if self.ib:
             # try programming the FPGA and establishing communicaiton with it up to 3 times
