@@ -227,7 +227,7 @@ class UCTEngine(MMIRouter):
         """
         non_none_kwargs = {k: v for k, v in kwargs.items() if v is not None}
         if non_none_kwargs:
-            fpga_array.logger.warning(f'{fpga_array!r}: init_corner_turn_array(): the following arguments will be ignored: {",".join(non_none_kwargs.keys())}')
+            fpga_array.logger.debug(f'{fpga_array!r}: init_corner_turn_array(): the following arguments will be ignored: {",".join(non_none_kwargs.keys())}')
 
         (CT_LEVEL,) = {(mb.CT.CT_LEVEL if mb.CT else None) for mb in fpga_array.ib}  # get a set of all different CT engine types
 
