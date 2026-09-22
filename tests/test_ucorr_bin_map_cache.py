@@ -162,6 +162,30 @@ def test_same_config_second_call_does_not_rebuild():
     assert UCORR._MAP_CACHE == {}
 
 
+def test_autocorr_only_slices_last_axis_without_touching_cache():
+    """Diagonal CMACs become NCMAC; the cached full triangle stays intact."""
+    NCHAN, NCLK = 8, 1
+    fft = np.arange(16, dtype=np.intp).reshape(2, 8)
+    maps = UCORR.compute_bin_prod_maps(1, 1, NCHAN, NCLK, fft)
+    cached = next(iter(UCORR._MAP_CACHE.values()))
+    full_ncmac = maps["NCMAC"]
+    assert full_ncmac == NCHAN * (NCHAN + 1) // 2 // NCLK
+    assert cached["bin_map"] is maps["bin_map"]
+
+    sliced = UCORR.slice_autocorr_maps(maps, NCHAN, NCLK)
+    assert sliced["NCMAC"] == NCHAN
+    assert sliced["bin_map"].shape[-1] == NCHAN
+    assert sliced["prod_map"].shape[-1] == NCHAN
+    assert sliced["NPROD_PER_ARRAY"] == maps["NPROD_PER_ARRAY"]
+    assert maps["NCMAC"] == full_ncmac
+    assert maps["bin_map"].shape[-1] == full_ncmac
+    assert cached["bin_map"].shape[-1] == full_ncmac
+    assert cached["bin_map"] is maps["bin_map"]
+
+    diagonal = UCORR.get_ij_to_prod_map(NCHAN)[np.arange(NCHAN), np.arange(NCHAN)]
+    assert set(np.unique(sliced["prod_map"])) == set(diagonal)
+
+
 def test_corr64_map_shapes():
     fft = np.arange(8192, dtype=np.intp).reshape(4, 2048)
     maps = UCORR._compute_bin_prod_maps(3, 8, 64, 16, fft)

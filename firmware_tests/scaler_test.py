@@ -50,8 +50,6 @@ TODO: 1. Import pytest_generate_tests into .utils so that both funcgen, scaler a
 #   reference model below.
 
 class TestScaler(TestModule):
-
-
     ROUNDING_MODES = ['truncation', 'normal', 'convergent']
     
     def get_logger(self):
@@ -76,12 +74,12 @@ class TestScaler(TestModule):
         return constants
 
     @pytest.fixture(scope='function', autouse=True)
-    def setup(self, xr):
+    async def setup(self, xr, request):
         self.data = xr.data
         #transfer to namespace of self
         self.test_config = xr.config.test_config
         self.connection_config = xr.config.connection_config
-        self.board = self.board_conn(xr)
+        self.board = await self.board_conn(xr, request)
         self.data.NUM_SAMPLES = self.board.ADC_SAMPLES_PER_FRAME
         self.data.NUM_BINS = self.board.NUMBER_OF_FREQUENCY_BINS
         conn_logger_name = FPGAArray.__name__.rsplit('.', 1)[0] if '.' in __name__ else ''
@@ -105,7 +103,7 @@ class TestScaler(TestModule):
 
 
     @pytest.fixture(scope='function')
-    def setup_scaler(self, setup, xr):
+    async def setup_scaler(self, setup, xr):
         self.logger.debug(f"Attempting to setup scaler on instance {self}")
         self.board.set_channelizer(
             fft_bypass=True,
@@ -134,7 +132,7 @@ class TestScaler(TestModule):
         '''
         return np.full(int(self.data.NUM_BINS), float(gain), dtype=np.float64)
 
-    def _set_capture_scaler(self, func, read=True, get_flags=False, cap_data_type=None, **func_kwargs):
+    async def _set_capture_scaler(self, func, read=True, get_flags=False, cap_data_type=0, **func_kwargs):
         '''
         Sets the function generator to output a specific set of values and then captures data from the scaler.
         '''
@@ -142,12 +140,9 @@ class TestScaler(TestModule):
         self.board.sync()
         source = gen_data(func, samples=self.data.NUM_SAMPLES, **func_kwargs) #setup has already been run, so self.data has been set
         self.board.set_data_source(source='arb', data=source)
-        receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv) #NOTE: must be after earlier calls for some reason
+        receiver = await self.get_data_receiver(verbose=self.test_config.loglevelrecv) #NOTE: must be after earlier calls for some reason
         receiver.flush()
-        capture_kw = dict(period=0.1, source='scaler')
-        if cap_data_type is not None:
-            capture_kw['data_type'] = cap_data_type
-        self.board.start_data_capture(**capture_kw)
+        self.board.start_data_capture(period=0.1, source='scaler', data_type=cap_data_type)
         self.board.sync()
         if not read:
             logger.debug(
@@ -186,7 +181,7 @@ class TestScaler(TestModule):
     
 
     @pytest.mark.scaler
-    def test_all_zeroes(self, setup_scaler, xr):
+    async def test_all_zeroes(self, setup_scaler, xr):
         '''
         Verify that zero digital gain forces scaler output to zero for the full input range.
 
@@ -197,7 +192,7 @@ class TestScaler(TestModule):
         logger = self.get_logger()
         self.board.set_gains(self._uniform_real_gains(0), postscaler=0)
 
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        source, data = await self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
         ref_data = source * 0
         logger.debug(
             f"test_all_zeroes: source_shape={source.shape} data_shape={data.shape} ref_shape={ref_data.shape}"
@@ -211,7 +206,7 @@ class TestScaler(TestModule):
     @pytest.mark.scaler
     @pytest.mark.parametrize('symmetric_saturation', (False,))
     #@pytest.mark.parametrize('cap_data_type', (1, 2, 3))
-    def test_all_ones(self, postscaler, symmetric_saturation, setup_scaler, xr):
+    async def test_all_ones(self, postscaler, symmetric_saturation, setup_scaler, xr):
         '''
         Verify unity gain path for a full-range ramp
 
@@ -225,7 +220,7 @@ class TestScaler(TestModule):
         self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
         self.board.set_symmetric_saturation(symmetric_saturation)
 
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        source, data = await self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
         ref_data = np.clip(source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT + (symmetric_saturation), self.data.MAX_OUTPUT)
         logger.debug(
             f"test_all_ones: postscaler={postscaler} "
@@ -240,7 +235,7 @@ class TestScaler(TestModule):
         self.plot_and_test(xr, data[0], ref_data, f'All ones (postscaler={postscaler}, symmetric_saturation={symmetric_saturation})')
 
     @pytest.mark.scaler
-    def test_alternating_gain(self, period, setup_scaler, xr):
+    async def test_alternating_gain(self, period, setup_scaler, xr):
         '''
         Verify per-bin gain alignment using a periodic sparse gain mask.
 
@@ -256,7 +251,7 @@ class TestScaler(TestModule):
         gains = np.append(gains, (np.repeat(0, self.data.NUM_SAMPLES//2 - gains.size)))
         self.board.set_gains(gains, postscaler=self.data.MAPPING_POSTSCALER)
 
-        source, data = self._set_capture_scaler('periodic_ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        source, data = await self._set_capture_scaler('periodic_ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
 
         ref_data = np.clip(source * np.repeat(gains, 2) * 2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
         logger.debug(f"test_alternating_gain: gains_first32={gains[:32]}")
@@ -269,7 +264,7 @@ class TestScaler(TestModule):
     @pytest.mark.scaler
     #@pytest.mark.parametrize('symmetric_saturation', (False, True))
     @pytest.mark.parametrize('force_float_gains', (False, True))
-    def test_constant_gain(self, postscaler, gain, force_float_gains, setup_scaler, xr, symmetric_saturation = False):
+    async def test_constant_gain(self, postscaler, gain, force_float_gains, setup_scaler, xr, symmetric_saturation = False):
         '''
         Sets linear gains to a consant values and tests if output corresponds to scaled, shifted and truncated copy of the input.
         
@@ -295,7 +290,7 @@ class TestScaler(TestModule):
             assert(all(ch.SCALER.USE_FLOAT_GAINS == False for ch in self.board.chan))
         self.board.set_symmetric_saturation(symmetric_saturation)
 
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        source, data = await self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
 
         ref_data = np.clip(gain * source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT + symmetric_saturation, self.data.MAX_OUTPUT)
         logger.debug(
@@ -312,7 +307,7 @@ class TestScaler(TestModule):
         
 
     @pytest.mark.scaler
-    def test_ramp_gains(self, setup_scaler, xr):
+    async def test_ramp_gains(self, setup_scaler, xr):
         '''
         Sets the gains to a periodic ramp betwen gain_min and gain_max and ensures that they are correctly applied to the input bins
 
@@ -325,7 +320,7 @@ class TestScaler(TestModule):
         gains = np.concatenate((gains, gains[::-1]))
         logger.debug(f'Gain shape: '  + str(gains.shape))
         self.board.set_gains(gains, postscaler=self.data.MAPPING_POSTSCALER)
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
+        source, data = await self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT)
         ref_data  = np.clip(np.repeat(gains, 2) * source * 2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
         logger.debug(
             f"test_ramp_gains: gains_shape={gains.shape} source_shape={source.shape} data_shape={data.shape} ref_shape={ref_data.shape}"
@@ -338,7 +333,7 @@ class TestScaler(TestModule):
 
     @pytest.mark.scaler
     @pytest.mark.complex
-    def test_alternating_complex_gains(self, setup_scaler, xr):
+    async def test_alternating_complex_gains(self, setup_scaler, xr):
         '''
         Alternates the gains between 1+0j and 0+1j. The test ensures not only that the gains are aligned, but that complex multiplier is working and multiplies the correct coefficients together,
 
@@ -354,7 +349,7 @@ class TestScaler(TestModule):
         nfreq = self.data.NUM_SAMPLES // 2
         gains = np.tile((1+0j, 0+1j), (nfreq + 1) // 2)[:nfreq]
         self.board.set_gains(gains, postscaler=self.data.MAPPING_POSTSCALER)
-        split_source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
+        split_source, data = await self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
         source = (split_source[::2] + split_source[1::2]*1j).astype(np.complex64)
         ref_data = np.stack((np.real(gains * source), np.imag(gains * source)), axis=1).reshape(-1).astype(np.int64)
         ref_data = np.clip(ref_data * 2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
@@ -372,7 +367,7 @@ class TestScaler(TestModule):
     @pytest.mark.scaler
     @pytest.mark.complex
     @pytest.mark.parametrize("use_4bit_cap_mode", (False, True))
-    def test_periodic_complex_gains(self, use_4bit_cap_mode, setup_scaler, xr):
+    async def test_periodic_complex_gains(self, use_4bit_cap_mode, setup_scaler, xr):
         '''
         Tests complex multiplier by setting the gains to a complex ramp (0+0j, 0+1j, ..., 1+32j, +0j, ..., 32+31j, 32+32j) and ensures these coefficients are correctly multiplied with the input.
         
@@ -400,7 +395,7 @@ class TestScaler(TestModule):
         split_gains = gen_data('complex_ramp', min=0, max=32, samples=2 * nfreq)
         gains = (split_gains[::2] + split_gains[1::2]*1j).astype(np.complex64) #collapse interleaved real/imag values into complex coefficients
         self.board.set_gains(gains, postscaler=self.data.MAPPING_POSTSCALER)
-        split_source, data = self._set_capture_scaler(
+        split_source, data = await self._set_capture_scaler(
             'ramp',
             min=self.data.MIN_OUTPUT,
             max=self.data.MAX_OUTPUT,
@@ -423,13 +418,13 @@ class TestScaler(TestModule):
 
     @pytest.mark.scaler
     @pytest.mark.floating
-    def test_uniform_common_log_gain(self, setup_scaler, xr):
+    async def test_uniform_common_log_gain(self, setup_scaler, xr):
         '''
         Ensures floating point gains are properly calculated by setting all gains to a uniform power of 2 and ensures this is all moved to the common log gain. It does this test via manually inspecting the common log gain as well as by inspecting the scaling of the input.
 
         Notes:
             Uses `_set_capture_scaler` in capture mode 0 and checks both register-level
-            state (`USE_FLOAT_GAINS`, `SHIFT_LEFT`) and data-path output consistency.
+            state (`USE_FLOAT_GAINS`, `get_shift_left()`) and data-path output consistency.
         '''
         logger = self.get_logger()
         if any(chan.SCALER.USE_COMPLEX_GAINS for chan in self.board.chan):
@@ -445,10 +440,11 @@ class TestScaler(TestModule):
             if not self.board.chan[ch].SCALER.USE_FLOAT_GAINS:
                 logger.error(f'Floating point gains not enabled in channel {ch}')
                 assert(False)
-            if not self.board.chan[ch].SCALER.SHIFT_LEFT == expected_shift_left:
-                logger.error(f'Common log gain incorrectly set to {self.board.chan[ch].SCALER.SHIFT_LEFT} in channel {ch}')
+            shift_left = self.board.chan[ch].SCALER.get_shift_left()
+            if not shift_left == expected_shift_left:
+                logger.error(f'Common log gain incorrectly set to {shift_left} in channel {ch}')
                 assert(False)
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
+        source, data = await self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
         ref_data = np.clip(source *  2**self.data.IMPLICIT_SHIFT * 2**self.data.MAPPING_POSTSCALER // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
         logger.debug(
             f"test_uniform_common_log_gain: source_shape={source.shape} data_shape={data.shape} ref_shape={ref_data.shape}"
@@ -460,7 +456,7 @@ class TestScaler(TestModule):
 
     @pytest.mark.scaler
     @pytest.mark.floating
-    def test_common_log_gain(self, setup_scaler, xr):
+    async def test_common_log_gain(self, setup_scaler, xr):
         '''
         Similar to the test above, except the gains are first initialised to a random value within their range and then multiply them by a common power of 2. Tis ensures that the common log gain can correctly be exracted from an arbitray set of gains and the two sources of the left shiftnae
 
@@ -491,10 +487,11 @@ class TestScaler(TestModule):
             if not self.board.chan[ch].SCALER.USE_FLOAT_GAINS:
                 logger.error(f'Floating point gains not enabled in channel {ch}')
                 assert(False)
-            if not self.board.chan[ch].SCALER.SHIFT_LEFT == expected_shift_left:
-                logger.error(f'Common log gain incorrectly set to {self.board.chan[ch].SCALER.SHIFT_LEFT} in channel {ch}')
+            shift_left = self.board.chan[ch].SCALER.get_shift_left()
+            if not shift_left == expected_shift_left:
+                logger.error(f'Common log gain incorrectly set to {shift_left} in channel {ch}')
                 assert(False)
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
+        source, data = await self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
         ref_data = np.clip(np.repeat(gains, 2) * source // 2**self.data.IDENTITY_POSTSCALER, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
         logger.debug(
             f"test_common_log_gain: source_shape={source.shape} data_shape={data.shape} ref_shape={ref_data.shape}"
@@ -506,7 +503,7 @@ class TestScaler(TestModule):
 
     @pytest.mark.scaler
     @pytest.mark.floating
-    def test_ramp_float_gains(self, setup_scaler, xr):
+    async def test_ramp_float_gains(self, setup_scaler, xr):
         '''
         Sets the gains to range over many possible linear gains for each of a variety of log gains. This ensures that the multiplication with the floating-point gain does not contain any bugs that surface only with specific vkalues and also provides a good visualisation of the floating-point format.
 
@@ -529,7 +526,7 @@ class TestScaler(TestModule):
         logger.debug(f"test_ramp_float_gains: lin_gains_first16={lin_gains[:16]}")
         logger.debug(f"test_ramp_float_gains: gains_first16={gains[:16]}")
         self.board.set_gains((gains, -1))
-        source, data = self._set_capture_scaler('a', a=1, cap_data_type=0)
+        source, data = await self._set_capture_scaler('a', a=1, cap_data_type=0)
         ref_data = np.clip((source * np.repeat(gains, 2)) * 2**self.data.IMPLICIT_SHIFT // 2**self.data.SCALER_SHIFT, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT)
         logger.debug(
             f"test_ramp_float_gains: source_shape={source.shape} data_shape={data.shape} ref_shape={ref_data.shape}"
@@ -541,7 +538,7 @@ class TestScaler(TestModule):
 
     @pytest.mark.scaler
     @pytest.mark.parametrize('rounding_mode', (0, 1, 2))
-    def test_rounding_modes(self, value, num_fractional_bits, rounding_mode, setup_scaler, xr):
+    async def test_rounding_modes(self, value, num_fractional_bits, rounding_mode, setup_scaler, xr):
         '''
         Tests the 3 rounding modes of the scaler by ensuring the input number is rounded up or down at the correct threshold according to the value of its fractional bits (bits in the scaled word that can be non-zero but are not incorporated into the scaler output.
         Additionally tests the capture mode which captures the raw scaled data by ensuring it is unrounded.
@@ -567,7 +564,7 @@ class TestScaler(TestModule):
         postscaler = self.data.IDENTITY_POSTSCALER - num_fractional_bits
         self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
         self.board.set_scaler_rounding_mode(rounding_mode)
-        source, data = self._set_capture_scaler(
+        source, data = await self._set_capture_scaler(
             'ramp',
             min=(value * 2**num_fractional_bits),
             max=((value + 1) * 2**num_fractional_bits - 1),
@@ -604,7 +601,7 @@ class TestScaler(TestModule):
     @pytest.mark.parametrize('num_fractional_bits', (9,))
     @pytest.mark.parametrize('force_float_gains', (False,))
     @pytest.mark.parametrize('use_4bit_cap_mode', (False,))
-    def test_post_rounding_saturation(self, rounding_mode, symmetric_saturation, num_fractional_bits, force_float_gains, use_4bit_cap_mode, setup_scaler, xr):
+    async def test_post_rounding_saturation(self, rounding_mode, symmetric_saturation, num_fractional_bits, force_float_gains, use_4bit_cap_mode, setup_scaler, xr):
         '''
         Tests that if rounding and not scaling which causes a bin to saturate, it is nevertheless corrected. The test is run for a range of fractional bits (see rounding for definition), but a more limited range because more bits are needed to produce both rounding and a saturation.
         The test ensures that this works correctly for a variety of rounding modes, symmetric saturations, and capture modes from the scaler.
@@ -648,7 +645,7 @@ class TestScaler(TestModule):
         else:
             self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
             assert(all(ch.SCALER.USE_FLOAT_GAINS == False for ch in self.board.chan))
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=cap_data_type)
+        source, data = await self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=cap_data_type)
         ref_data = source * 2**self.data.IMPLICIT_SHIFT * 2**postscaler  // 2**self.data.SCALER_SHIFT
         bottom = abs(source % (2**num_fractional_bits))
         if rounding_mode == 0:
@@ -680,7 +677,7 @@ class TestScaler(TestModule):
 
     @pytest.mark.scaler
     @pytest.mark.parametrize('symmetric_saturation', (False, True))
-    def test_zero_on_sat(self, symmetric_saturation, setup_scaler, xr):
+    async def test_zero_on_sat(self, symmetric_saturation, setup_scaler, xr):
         '''
         Tests the zero on saturation functionality by ensuring that both the real and imaginary components are zeroed when either exceeds the bounds. The input is a complex ramp (see  test_periodic_complex_gains for details)
         
@@ -696,7 +693,7 @@ class TestScaler(TestModule):
         self.board.set_zero_on_sat(True)
         self.board.set_symmetric_saturation(symmetric_saturation)
         try:
-            source, data = self._set_capture_scaler(
+            source, data = await self._set_capture_scaler(
                 func='complex_ramp',
                 min=self.data.MIN_OUTPUT//2 - 1,
                 max=self.data.MAX_OUTPUT//2 + 1,
@@ -723,7 +720,7 @@ class TestScaler(TestModule):
 
 
     @pytest.mark.scaler
-    def test_offset_encoding(self, postscaler, setup_scaler, xr):
+    async def test_offset_encoding(self, postscaler, setup_scaler, xr):
         '''
         Similar to the all_ones test, but ensures that binary offset encoding is correctly applied to the output.
         
@@ -731,8 +728,9 @@ class TestScaler(TestModule):
             postscaler (int): postscaler(s) to employ with this test
 
         Notes:
-            Uses scaler capture mode 0 and validates host-side offset-binary mapping
-            of the signed clipped scaler output.
+            Uses scaler capture mode 0. The packet processor already converts
+            offset-binary samples to signed, so the reference is the signed
+            clipped scaler output.
         '''
         logger = self.get_logger()
         self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
@@ -742,19 +740,11 @@ class TestScaler(TestModule):
             pytest.skip("Current correlator mode requires 2's-complement output; offset-binary cannot be enabled.")
         self.board.set_offset_binary_encoding(True)
         try:
-            source, data = self._set_capture_scaler(func='ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
+            source, data = await self._set_capture_scaler(func='ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
             source_i = source.astype(np.int64)
             ref_data = source_i * (2 ** self.data.IMPLICIT_SHIFT) * (2 ** postscaler)
             ref_data //= 2 ** self.data.SCALER_SHIFT
             ref_data = np.clip(ref_data, self.data.MIN_OUTPUT, self.data.MAX_OUTPUT).astype(np.int64)
-
-            # Convert signed two's-complement codes to offset-binary and interpret
-            # them back as signed values, matching capture decode semantics.
-            modulus = 2 ** self.data.CAPTURE_WIDTH
-            half = modulus // 2
-            twos_unsigned = (ref_data + modulus) % modulus
-            offset_unsigned = twos_unsigned ^ half
-            ref_data = np.where(offset_unsigned >= half, offset_unsigned - modulus, offset_unsigned).astype(np.int64)
             logger.debug(
                 f"test_offset_encoding: postscaler={postscaler} source_shape={source.shape} "
                 f"data_shape={data.shape} ref_shape={ref_data.shape}"
@@ -773,7 +763,7 @@ class TestScaler(TestModule):
     @pytest.mark.scaler
     @pytest.mark.parametrize('out_mode', (1, 2, 3))
     @pytest.mark.parametrize('symmetric_saturation', (False, True))
-    def test_overflow_detection(self, postscaler, out_mode, symmetric_saturation, setup_scaler, xr):
+    async def test_overflow_detection(self, postscaler, out_mode, symmetric_saturation, setup_scaler, xr):
         '''
         Ensures that the alternate output modes of the scaler work correctly by providing an input which overflows and underflows in the real and imaginary components and verifies that the correct pattern is prodcued given this and the output mode.
         
@@ -791,7 +781,7 @@ class TestScaler(TestModule):
         self.board.set_scaler_output_modes(bypass=True, bypass_data_type=out_mode, cap_data_type=cap_data_type)
         self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
         self.board.set_symmetric_saturation(symmetric_saturation)
-        source, data = self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=cap_data_type)
+        source, data = await self._set_capture_scaler('ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=cap_data_type)
         source_i = source.astype(np.int64)
         if self.data.CAPTURE_WIDTH > 4: #even in 8bit mode, the 1 is placed in the 4th bit, so need to correct for that
             if np.iscomplexobj(data):
@@ -825,7 +815,7 @@ class TestScaler(TestModule):
 
     @pytest.mark.scaler
     @pytest.mark.parametrize("bypass_to_output", (False, True))
-    def test_bypass(self, bypass_to_output, setup_scaler, xr):
+    async def test_bypass(self, bypass_to_output, setup_scaler, xr):
         '''
         Tests whether scaler bypass works correctly by ensuring FFT data is correctly forwarded through the scaler.
 
@@ -851,14 +841,16 @@ class TestScaler(TestModule):
                 bypass_data_type=0,
                 cap_data_type=cap_data_type,
             ) #send FFT to capture directly
-        source, data = self._set_capture_scaler(
+        source, data = await self._set_capture_scaler(
             'periodic_ramp',
             min=self.data.MIN_INPUT,
             max=self.data.MAX_INPUT,
             cap_data_type=cap_data_type,
         )
         source_i = source.astype(np.int64)
-        output_width = self.data.CAPTURE_WIDTH if bypass_to_output else self.data.CAPTURE_BUS_WIDTH//(2*self.data.BINS_PER_WORD)
+        # Type 0 uses the 4/8-bit science capture width. Type 1 (raw FFT MSBs)
+        # with FFT bypass uses ADC width (`INPUT_WIDTH`), not the 16-bit CRS slot width.
+        output_width = self.data.CAPTURE_WIDTH if bypass_to_output else self.data.INPUT_WIDTH
         print(self.data.FFT_WIDTH , self.data.CAPTURE_BUS_WIDTH, output_width)
         ref_data = source_i * 2**self.data.IMPLICIT_SHIFT // 2**(self.data.FFT_WIDTH - output_width)
         logger.debug(
@@ -872,7 +864,7 @@ class TestScaler(TestModule):
     
     @pytest.mark.scaler
     @pytest.mark.parametrize("cap_data_type", (4, 5))
-    def test_mult_resolution_capture(self, cap_data_type, setup_scaler, xr):
+    async def test_mult_resolution_capture(self, cap_data_type, setup_scaler, xr):
         '''
         Tests that the double and full resolution capture modes extract the right bits of the FFT data from the right bins
 
@@ -906,7 +898,7 @@ class TestScaler(TestModule):
             data_type=cap_data_type,
         )
         self.board.sync()
-        receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        receiver = await self.get_data_receiver(verbose=self.test_config.loglevelrecv)
         receiver.flush()
         ts, data, count = receiver.read_raw_frames(ncap=4, split=True, source=1)
         data = data[:, -1, :]
@@ -941,7 +933,7 @@ class TestScaler(TestModule):
     @pytest.mark.scaler
     @pytest.mark.parametrize("ch", (0,))
     #@pytest.mark.parametrize('postscaler, symmetric_saturation, frame_cnt', product(range(TEST_CONFIG['overflow_stats'].get('postscaler_min', 0), TEST_CONFIG['overflow_stats'].get('postscaler_max', 31)), (False, True), TEST_CONFIG['overflow_stats'].get('frame_cnt', 1)))
-    def test_scaler_overflow_stats(self, ch, frame_cnt, setup_scaler, xr):
+    async def test_scaler_overflow_stats(self, ch, frame_cnt, setup_scaler, xr):
         '''
         Tests the collection of scaler overflow statistics by setting the input to cause a precise number of scaler overflows per frame (2), and ensuring that the scaler counts a number of overflows equal to this number times the integration period in frames.
 
@@ -965,7 +957,7 @@ class TestScaler(TestModule):
         data[0] = pos_overflow_marker
         data[-1] = neg_overflow_marker
 
-        _, _ = self._set_capture_scaler(read=False, func='arb', data=data, cap_data_type=0)
+        _, _ = await self._set_capture_scaler(read=False, func='arb', data=data, cap_data_type=0)
         # SCALER stats are continuously accumulated in firmware; STATS_CAPTURE only
         # exposes the next completed window. Discard one window after changing the
         # input pattern so the asserted read reflects this test's waveform.
@@ -988,7 +980,7 @@ class TestScaler(TestModule):
     @pytest.mark.scaler
     @pytest.mark.parametrize("ch", (0,))
     @pytest.mark.parametrize("fft_bypass", [True, False])
-    def test_adc_overflow_stats(self, ch, frame_cnt, fft_bypass, setup_scaler, xr):
+    async def test_adc_overflow_stats(self, ch, frame_cnt, fft_bypass, setup_scaler, xr):
         '''
         Tests the collection of adc overflow statistics by setting the adc overflow flag each frame and ensuring that the scaler counts a number of adc overflows equal to the number of frames integrated.
 
@@ -1045,7 +1037,7 @@ class TestScaler(TestModule):
         assert scaler_adc_overflows == expected_overflows
 
     @pytest.mark.scaler
-    def test_delay_counter(self, setup_scaler, xr):
+    async def test_delay_counter(self, setup_scaler, xr):
         '''
         Tests that all channelisers all start recieving data at the same by ensuring that the delay counters, which measure clocks from sync until first data is recieved, are equal.
 
@@ -1059,7 +1051,7 @@ class TestScaler(TestModule):
         sleep(0.1)
         for ch in self.board.chan:
             ch.SCALER.RESET = 0
-        source, data = self._set_capture_scaler('a', a=1, cap_data_type=0)
+        source, data = await self._set_capture_scaler('a', a=1, cap_data_type=0)
         delay_ctrs = [ch.SCALER.DELAY_CTR for ch in self.board.chan]
         logger.debug(
             f"test_delay_counter: source_shape={source.shape} data_shape={data.shape} "
@@ -1070,7 +1062,7 @@ class TestScaler(TestModule):
         assert(len(set(delay_ctrs)) == 1) #ensure all delay counters are the same
 
     @pytest.mark.scaler
-    def test_counter_reset(self, setup_scaler, xr):
+    async def test_counter_reset(self, setup_scaler, xr):
         '''
         Tests the reset signal by ensure that various counters are always 0 as long as the reset signal is high, and that they are (mostly) non-zero when it is low.
 
@@ -1129,7 +1121,7 @@ class TestScaler(TestModule):
     @pytest.mark.scaler
     @pytest.mark.parametrize("bank", (0, 1))
     @pytest.mark.parametrize("adc_overflow", (False, True))
-    def test_flags(self, postscaler, bank, adc_overflow, setup_scaler, xr):
+    async def test_flags(self, postscaler, bank, adc_overflow, setup_scaler, xr):
         '''
         Tests the tuser flags that the scaler outputs and the prober places in the bottom 4 bits of the capture output. These include scaler overflow flags (1 for each bin in the word), 1 adc overflow flag, and the current gain bank, the latter two only asserted at the end of the frame.
         The test ensures these are accurate by causing scaler overflows, switching between gain banks and forcing adc overflows.
@@ -1158,7 +1150,7 @@ class TestScaler(TestModule):
         adc_overflow_i = int(adc_overflow)
         self.board.set_scaler_output_modes(bypass=False, cap_data_type=0)
         self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler, bank=bank, when='now')
-        source, flags = self._set_capture_scaler(
+        source, flags = await self._set_capture_scaler(
             'ramp',
             min=self.data.MIN_INPUT,
             max=self.data.MAX_INPUT,
@@ -1195,7 +1187,7 @@ class TestScaler(TestModule):
             overflow_buffer = np.zeros(self.data.NUM_SAMPLES, dtype=np.int64)
             tail_width = 4
 
-            def capture_flags_from_frame8(inject_overflow):
+            async def capture_flags_from_frame8(inject_overflow):
                 overflow_buffer.fill(0)
                 if inject_overflow:
                     overflow_buffer[0] = 1
@@ -1205,7 +1197,7 @@ class TestScaler(TestModule):
                     overflow_buffer=overflow_buffer,
                 )
                 self.board.start_data_capture(period=0.01, source='scaler', data_type=0)
-                receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv)
+                receiver = await self.get_data_receiver(verbose=self.test_config.loglevelrecv)
                 ts, data, count = receiver.read_raw_frames(ncap=2, split=False, source=1, complex_override=False)
                 # Use the second frame to avoid potential source-switch transition effects.
                 flags_out = data[:, -1, :] & mask
@@ -1216,8 +1208,8 @@ class TestScaler(TestModule):
                 logger.debug(f"test_flags(frame8): flags_last16={flags_out[0][-16:]}")
                 return flags_out
 
-            flags_noinj = capture_flags_from_frame8(inject_overflow=False)
-            flags_inj = capture_flags_from_frame8(inject_overflow=True)
+            flags_noinj = await capture_flags_from_frame8(inject_overflow=False)
+            flags_inj = await capture_flags_from_frame8(inject_overflow=True)
 
             noinj_tail = flags_noinj[0][-tail_width:]
             inj_tail = flags_inj[0][-tail_width:]
@@ -1241,7 +1233,7 @@ class TestScaler(TestModule):
             assert np.equal(flags_inj[0] & 0x1, 1).all()
     
     @pytest.mark.scaler
-    def test_gain_bank_switching(self, setup_scaler, xr):
+    async def test_gain_bank_switching(self, setup_scaler, xr):
         '''
         Test that gain-bank switching takes effect and that the gain bank status variable reflects the switch.
 
@@ -1272,7 +1264,7 @@ class TestScaler(TestModule):
         assert(all(ch.SCALER.CURRENT_GAIN_BANK == 0 for ch in self.board.chan))
         # Match the known-good CRS path in `_set_capture_scaler`: slower burst
         # period, sync after arming capture, and take the last frame of ncap=2.
-        receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        receiver = await self.get_data_receiver(verbose=self.test_config.loglevelrecv)
         receiver.flush()
         self.board.start_data_capture(
             period=0.1,
@@ -1341,7 +1333,7 @@ class TestScaler(TestModule):
     @pytest.mark.statistical
     @pytest.mark.parametrize('rounding_mode', (0, 1, 2))
     @pytest.mark.parametrize('symmetric_saturation', (False, True))
-    def test_averages(self, num_frames, postscaler_range, rounding_mode, symmetric_saturation, setup_scaler, xr):
+    async def test_averages(self, num_frames, postscaler_range, rounding_mode, symmetric_saturation, setup_scaler, xr):
         '''
         Returns the average scaler output for a range of postscalers given a uniform, random distribution of input values (white noise). Performs the averaging for all possible rounding modes and with symmetric saturation enabled and disabled.
 
@@ -1370,7 +1362,7 @@ class TestScaler(TestModule):
             self.board.chan[ch].FUNCGEN.BYTE_A = randint(0, 255)
             self.board.chan[ch].FUNCGEN.BYTE_B = randint(0, 255)
         self.board.set_channelizer(data_source='noise', scaler_bypass=False, scaler_cap_data_type=0, scaler_rounding_mode=rounding_mode, symmetric_saturation=symmetric_saturation)
-        receiver = self.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        receiver = await self.get_data_receiver(verbose=self.test_config.loglevelrecv)
         avgs = np.zeros(postscaler_range[1]  - postscaler_range[0], dtype=np.float64)
         n = self.data.NUM_SAMPLES * len(self.board.chan) * num_frames
         num_bursts = num_frames // FRAMES_PER_BURST

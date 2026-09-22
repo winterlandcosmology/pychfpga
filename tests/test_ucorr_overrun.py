@@ -317,7 +317,7 @@ def test_get_ij_to_prod_map_does_not_need_update_config():
     assert int(got[0, 3]) == int(got[3, 0])
 
 
-def test_get_good_bins_map_does_not_need_update_config():
+def test_get_good_bin_mask_does_not_need_update_config():
     """Good-bin map is bins in bin_map minus correlator sacrificial clkbin 0."""
     pr = DummyPacketReceiver()
     n_bins = 8
@@ -329,6 +329,7 @@ def test_get_good_bins_map_does_not_need_update_config():
         NCHAN=1,
         NCLK=1,
         NDECIM=1,
+        READOUT_BINS=(0, 0),
         NCORRS=n_corrs,
         NPROD_PER_CMAC=n_bins,
         NCMAC=1,
@@ -340,7 +341,7 @@ def test_get_good_bins_map_does_not_need_update_config():
         prod_map=np.zeros((n_corrs, n_bins, 1), dtype=np.intp),
     )
     proc = UCorrPacketProcessor(pr, config_getter=lambda: cfg, receive_window=3)
-    mask = proc.get_good_bins_map()
+    mask = proc.get_good_bin_mask()
     assert proc.config is None  # update_config was not called
     assert mask.shape == (16,)
     assert mask.dtype == bool
@@ -349,3 +350,37 @@ def test_get_good_bins_map_does_not_need_update_config():
     assert not mask[8]
     assert mask[1:8].all()
     assert mask[9:16].all()
+
+
+def test_get_good_bin_mask_corr8_sacrifices_clkbin_equal_to_correlator():
+    """READOUT_BINS=(0, 1, 2, 3) sacrifices clkbin i on correlator i."""
+    pr = DummyPacketReceiver()
+    n_corrs = 4
+    n_clk = 4
+    # Bypass layout: lane c, clock k -> FFT bin c + n_corrs*k (0,4,8,12 / 1,5,9,13 / ...).
+    bin_map = np.zeros((1, n_corrs, n_clk, 1), dtype=np.intp)
+    for corr in range(n_corrs):
+        for clk in range(n_clk):
+            bin_map[0, corr, clk, 0] = corr + n_corrs * clk
+    cfg = State(
+        NCHAN=8,
+        NCLK=1,
+        NDECIM=1,
+        READOUT_BINS=(0, 1, 2, 3),
+        NCORRS=n_corrs,
+        NPROD_PER_CMAC=n_clk,
+        NCMAC=1,
+        NBINS=16,
+        NPROD=1,
+        NPROD_PER_ARRAY=n_clk * n_corrs,
+        firmware_integ_period=1,
+        bin_map=bin_map,
+        prod_map=np.zeros((n_corrs, n_clk, 1), dtype=np.intp),
+    )
+    proc = UCorrPacketProcessor(pr, config_getter=lambda: cfg, receive_window=3)
+    mask = proc.get_good_bin_mask()
+    # READOUT_BINS = (0, 1, 2, 3) -> FFT bins 0, 5, 10, 15.
+    assert not mask[[0, 5, 10, 15]].any()
+    # clkbin 0 of correlators 1..3 is valid data in bypass (FFT bins 1, 2, 3).
+    assert mask[[1, 2, 3]].all()
+    assert mask[[4, 6, 7, 8, 9, 11, 12, 13, 14]].all()
