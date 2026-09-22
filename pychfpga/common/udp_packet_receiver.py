@@ -309,6 +309,8 @@ class UDPPacketReceiver:
         Note: Partial frame data may start to fill the UDP buffer while we start to flush it. There is still likely a partial frame in the buffer after this operation.
 
         """
+        if timeout is None:
+            timeout = 0.001
         if not self._threaded:
             return self._flush_inline(timeout, max_flush_time, verbose)
 
