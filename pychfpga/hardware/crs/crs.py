@@ -72,7 +72,6 @@ class CRS(Motherboard):
     _ipmi_part_numbers = ['CRS']
     SERIAL_NUMBER_LENGTH = 4  # number of digits in the serial number. Used to convert integers to a valid serial number.
 
-    NUMBER_OF_CHANNELIZERS = 4
     # List serial numbers of Rev 0 boards. This is a temporary hack that is used to properly select the SPI port of the PLL.
     # One day we'll be able to query the board directly.
     REV0_SERIALS = ('429', '0429', # returned by SN003 with old TCPipe firmware that didn't read the EEPROM and used the FPGA DNA
