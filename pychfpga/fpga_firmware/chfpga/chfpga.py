@@ -3487,6 +3487,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 - 3: Output 4+4 bit scaled FFT data (e.g. normal scaler output, even if the science output is set to another mode)
                 - 4: Output the input FFT data of the even bins and then the odd bins in an alternating fashion, at double the bitwidth.
                 - 5: Output the input FFT data of each Re and Im component one at a time, at the full bitwidth.
+                - 6: Output post-gain saturation flags per bin (Re/Im as 0, +1, or -1 in each capture field).
             For modes 4 and 5, one host logical frame is reconstructed from packets produced by consecutive
             physical frames (not from a single fully buffered physical frame).
         '''
@@ -4213,9 +4214,12 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             channels (list of int): List of channels to which the command is applied
 
         """
-        if self.CORR and offset != self.CORR.REQUIRES_OFFSET_BINARY_ENCODING:
+        if self.CORR and self.CORR.REQUIRES_OFFSET_BINARY_ENCODING and not offset:
             self.logger.warning(f'Offset binary encoding is set to {bool(offset)}. The correlator required it to be {self.CORR.REQUIRES_OFFSET_BINARY_ENCODING}. Correlator output will not make sense.')
             raise RuntimeError()
+
+        if self.CORR is not None and hasattr(self.CORR, "set_offset_binary_encoding"):
+            self.CORR.set_offset_binary_encoding(offset)
 
         if channels is None:
             channels = self.default_channels

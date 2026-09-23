@@ -91,8 +91,11 @@ class UCORR(MMI):
         print(f' Firmware integration period: {self.INTEGRATION_PERIOD} frames')
         print(f' Overrun in one of the cores: {self.OVERRUN}')
 
-
-
+    def set_offset_binary_encoding(self, offset):
+        """Match scaler/crossbar offset-binary mode on the UCORR input path."""
+        enabled = bool(offset)
+        self.OFFSET_ENCODING = enabled
+        self.config.update(offset_binary_encoding=enabled)
 
     def update_config(self):
         """Refresh correlator maps if needed and return ``self.config``.
