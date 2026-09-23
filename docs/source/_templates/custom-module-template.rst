@@ -1,10 +1,14 @@
-{% if module == name %}
+{% if modules or module == name %}
 {% set objtype = "Package" %}
 {% else %}
 {% set objtype = "Module" %}
 {% endif %}
 
-{{ (":py:mod:`" + name + "` *" + (objtype | lower)  + "*" ) | underline}}
+{% if modules or module == name %}
+{{ (":py:mod:`" + name + "/ <" + fullname + ">`") | underline }}
+{% else %}
+{{ (":py:mod:`" + name + ".py <" + fullname + ">`") | underline }}
+{% endif %}
 
 .. currentmodule:: {{ module }}
 
