@@ -141,6 +141,7 @@ class SCALER(MMI):
         'fft_4bit': 3, # 4+4 bit scaled values\n"
         'fft_2x': 4, # Dual resolution FFT
         'fft_full': 5, # Full resolution FFT
+        'sat_flags': 6, # Post-gain saturation flags (+1/-1 per Re/Im field, VHDL mode "110")
     }
 
     def set_capture_data_type(self, data_type):
@@ -240,7 +241,11 @@ class SCALER(MMI):
             # CRS: 128-bit complex, ICE: 32-bit complex. TODO: have this parametrized by the firmware
             integer_width = capture_bus_width  # in full resolution, each Re or Im integer uses the full capture bus width
             data_width = adc_bit_width if fft_bypass else min(fft_data_width, integer_width)
-            interleave_factor = 2 * fft_bins_per_word  
+            interleave_factor = 2 * fft_bins_per_word
+        elif cap_data_type == 6:  # Post-gain saturation flags (0, +1, -1 MSB-aligned per Re/Im)
+            integer_width = capture_bus_width // fft_bins_per_word // 2
+            data_width = integer_width
+            interleave_factor = 1
         else:
             raise ValueError(f'Invalid capture data type: {cap_data_type}')
 
@@ -437,26 +442,32 @@ class SCALER(MMI):
         return actual_gains
 
     def get_gain_table(self, bank=0, use_cache=False):
-        """Gets the scaler's complex gain table for the specified bank. Converts to numpy array.
+        """Gets the scaler's complex gain table for the specified bank.
 
-        Args:
+        Converts the FPGA table to a numpy array. Linear (mantissa) values
+        are returned; the left-shift must be read separately except in
+        floating-gain mode (see below).
 
-            bank (int): bank number for which the gain is requested
-
-            use_cache (bool): if True, the gain table will be returned from the cache if it exists, without reading from the FPGA. If False, the gain table will be read from the FPGA. 
+        Parameters:
+            bank (int): Bank number for which the gain is requested.
+            use_cache (bool): If True, return the cached table when present
+                without reading the FPGA. If False, always read the FPGA.
 
         Returns:
+            numpy.ndarray: One gain per bin, in natural frequency order
+            (``self.fpga.NUMBER_OF_FREQUENCY_BINS`` values).
 
-            gain_table (np.array): an array of gain values for every bin, in natural frequency order.self.fpga.NUMBER_OF_FREQUENCY_BINS values. 
-            
-            If ``self.USE_COMPLEX_GAINS == True``, the gain table is a complex array, where the real and imaginary parts are 16 bit integers. 
-            The log gain in **not** included in the gain gain values. It must be read separately with ``get_shift_left(bank)``.
-            
-            If ``self.USE_COMPLEX_GAINS == False`` and ``self.USE_FLOAT_GAINS == False``, The gain table is an array of 16-bit integers. 
-            The log gain in **not** included in the gain gain values. It must be read separately with ``get_shift_left(bank)``.
+            If ``self.USE_COMPLEX_GAINS`` is True, complex 16-bit integer
+            Re/Im. The log gain is **not** included; read it with
+            ``get_shift_left(bank)``.
 
-            If ``self.USE_COMPLEX_GAINS == False`` and ``self.USE_FLOAT_GAINS == True``, The gain table is an array of floating point values that includes **both the per-bin log gain and the common log gain (from ``get_shift_left(bank)``).
+            If complex gains are off and float gains are off, 16-bit
+            integers. The log gain is **not** included; read it with
+            ``get_shift_left(bank)``.
 
+            If complex gains are off and float gains are on, floating-point
+            values that include **both** the per-bin log gain and the common
+            log gain from ``get_shift_left(bank)``.
         """
         if use_cache and bank in self.cached_gain_table:
             return self.cached_gain_table[bank]
