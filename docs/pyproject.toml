@@ -1,24 +1,14 @@
 # Documentation build environment (Sphinx only — not the full pychfpga runtime).
 # Private wtl.* packages are mocked in source/conf.py for autodoc.
-
-[build-system]
-    requires = [
-        "setuptools>=64,<82",
-        "setuptools-scm>=8.0",
-        "wheel",
-        ]
-    build-backend = "setuptools.build_meta"
+#
+# Not installed as a Python package (see tool.uv.package); only dependencies are synced.
 
 [project]
     name = "pychfpga_docs"
+    version = "0.0.0"
     description = "Documentation builder for pychfpga"
-    dynamic = ["version"]
-    authors = [
-        { name = "JF Cliche", email = "vhdl@jfcliche.com" },
-        ]
     requires-python = "==3.12.*"
     dependencies = [
-        "setuptools>=64,<82",
         "setuptools-scm>=8.0",
         "sphinx",
         "sphinx_rtd_theme",
@@ -37,10 +27,5 @@
         "xmodem",
         ]
 
-[tool.setuptools.packages.find]
-    where = ["."]
-    exclude = ["source", "build"]
-
-[tool.setuptools_scm]
-    version_file = "source/_version.py"
-    root = ".."
+[tool.uv]
+    package = false
