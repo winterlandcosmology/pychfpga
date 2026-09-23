@@ -16,15 +16,40 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
+import importlib.util
 import os
 import sys
-import sphinx_rtd_theme
-from pychfpga import __version__
 
 # sys.path.insert(0, os.path.abspath('.'))
 
 sys.path.insert(0, os.path.abspath("../../")) # pychfpga
 sys.path.insert(1, os.path.abspath("../../pychfpga/"))  # pychfpga/pychfpga
+
+# Version without importing pychfpga (its __init__ pulls in private wtl.* packages).
+try:
+    import setuptools_scm
+
+    __version__ = setuptools_scm.get_version(
+        root=os.path.abspath("../.."),
+        relative_to=__file__,
+    )
+except (ImportError, LookupError):
+    _version_scm_path = os.path.abspath("../../pychfpga/_version_scm.py")
+    _spec = importlib.util.spec_from_file_location("_version_scm", _version_scm_path)
+    _mod = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    __version__ = _mod.version
+
+# Private/runtime deps not needed to render API docs.
+autodoc_mock_imports = [
+    "wtl",
+    "wtl.metrics",
+    "wtl.namespace",
+    "wtl.config",
+    "wtl.rest",
+    "wtl.archive",
+    "psucontrol",
+]
 # sys.path.insert(2, os.path.abspath("./"))  # pychfpga/docs/source (for TuberMethods.py)
 
 # -- General configuration ------------------------------------------------
@@ -38,16 +63,14 @@ sys.path.insert(1, os.path.abspath("../../pychfpga/"))  # pychfpga/pychfpga
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    # 'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
     'sphinx.ext.coverage',
     'sphinx.ext.autosummary',
-    'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
-    # 'wtl.sphinx_paramlinks',
     'sphinx.ext.mathjax',
-    # 'sphinx.ext.viewcode'
     ]
+
+autosummary_generate = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -124,7 +147,6 @@ html_theme_options = {
 
 html_logo = "images/pychfpga_logo_v3.svg"
 html_favicon = "images/chime_favicon.png"
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 html_short_title = "pychfpga"
 
@@ -195,7 +217,11 @@ texinfo_documents = [
 # for mod_name in MOCK_MODULES:
 #     sys.modules[mod_name] = mock.Mock()
 
+napoleon_google_docstring = True
+napoleon_numpy_docstring = True
 napoleon_use_rtype = False
+napoleon_use_param = True
+napoleon_use_ivar = True
 
 
 
