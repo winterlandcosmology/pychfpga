@@ -855,15 +855,14 @@ class CRS(Motherboard):
         ``crate_in_chassis=False``, chassis Part/Serial are the Vector
         chassis identity (v1.2). Chassis custom fields are only ``slot=N``.
 
-        Layout:
+        EEPROM areas:
 
-            Chassis  — crate or Vector part/serial (see ``crate_in_chassis``)
-                       plus custom ``slot=N`` crate slot (1-16)
-            Board    — this 4-slot backplane segment, plus custom
-                       ``revision=N``
-            Product  — the crate (CCR) sold as the product (v1.2)
+        - Chassis: crate or Vector part/serial (see ``crate_in_chassis``)
+          plus custom ``slot=N`` crate slot (1-16).
+        - Board: this 4-slot backplane segment, plus custom ``revision=N``.
+        - Product: the crate (CCR) sold as the product (v1.2).
 
-        Args:
+        Parameters:
             backplane_serial: 3-digit backplane serial (Board Serial Number).
             crate_serial: 3-digit crate serial (Product Serial Number).
             chassis_serial: Vector chassis serial. Used only when

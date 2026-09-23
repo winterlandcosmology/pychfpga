@@ -20,10 +20,21 @@
    :maxdepth: 4
    :caption: Operation and Development
 
+   howto/quick_start
+   howto/installation
+   howto/ssh_keys
+   howto/setup_python
+   howto/networking
+   howto/hardware_setup
+   howto/fpga_array
+   howto/takeData
+   howto/server_operation
    howto/pocket_correlator
-   howto/deploy
-   howto/scaler_test
    howto/chfpga_state
+   howto/scaler_test
+   howto/testing
+   howto/deploy
+   howto/common_issues
 
 .. toctree::
    :hidden:
@@ -39,19 +50,7 @@
    :caption: API Reference
    :hidden:
 
-   _autosummaries/pychfpga
-   _autosummaries/firmware_tests.scaler_test
-
-
-.. toctree::
-   :maxdepth: 3
-   :caption: External module docs
-   :hidden:
-
-   _autosummaries/wtl.metrics
-   _autosummaries/wtl.rest
-
-CHIME-specific modules:
+   api
 
 .. toctree::
    :maxdepth: 1
@@ -59,8 +58,3 @@ CHIME-specific modules:
    :hidden:
 
    chime/index
-
-
-
-
-

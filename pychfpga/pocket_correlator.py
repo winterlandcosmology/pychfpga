@@ -70,25 +70,17 @@ class POCKET_CORRELATOR:
         for computing and storing visibilities at the Deep Dish Development Array (D3A) at the Dominion Radio Astrophysical 
         Observatory (DRAO), the site of the Canadian Hydrogen Observatory and Radio transient Detector (CHORD).
 
-        Parameters
-        ----------
-        hwm : (str) The hardware map (hwm) provides a description of the part number and serial number of the part
-        to which you'd like to connect. This script is designed for t0.CRS boards, so the part number will always
-        be "crs" (unless this script is upgraded in the future.) 
+        Parameters:
+            hwm (str): Hardware map: part and serial, for example
+                ``'crs 0016'`` to find t0.CRS SN0016. This wrapper is for
+                CRS boards, so the part is ``crs`` unless upgraded later.
+            stderr_log_level (str): Logging level. See
+                :mod:`pychfpga.fpga_array`. Default ``'info'``.
+            prog (str or int): FPGA programming: ``0`` never, ``1`` only if
+                not already programmed, ``2`` always reprogram.
 
-        Ex) hwm = 'crs 0016' will search the network for t0.CRS SN0016.
-
-        stderr_log_level : (str) Specifies the logging level. See pychfpga/pychfpga/fpga_array.py for details.
-        Default is 'info'. 'debug' provides the most information, while 'warning' is the most silent.
-
-        prog : (str) Specifies whether to force the FPGA to be programmed. '0' does not program the FPGA.
-        '1' programs the FPGA only if it is not already programmed; if it is, the board is not re-programmed.
-        '2' forces the FPGA to be programmed, even if it is already programmed.
-
-        Returns
-        -------
-        None.
-
+        Returns:
+            None
         """
 
         # Extract serial number from hwm for CRS board discovery
@@ -648,72 +640,36 @@ class POCKET_CORRELATOR:
 
         for more information on how the "theoretical" gains are processed.
 
-        Parameters
-        ----------
+        Parameters:
+            target (float): Average magnitude of 4+4-bit SCALER frames. Too
+                low and quantization noise dominates; too high and the
+                scaler or correlator accumulator may saturate. The default
+                is the CHIME F-engine empirical target.
+            n_fft_frames (int): Number of FFT frames whose magnitudes are
+                averaged when computing gains.
+            data_source (str): ``'adc'`` for live ADC data, otherwise a
+                FUNCGEN function name from
+                :mod:`pychfpga.fpga_firmware.chfpga.f_engine.funcgen`.
+            channels (list): Input channels to recover (0 = ADC1, …).
+                Default is all eight.
+            fft_bypass (bool): Bypass the FFT (useful when FUNCGEN already
+                holds a simulated spectrum). Default False.
+            bank (int): Gain bank to write (0 or 1).
+            return_scaler_frames (bool): If True, also return scaler frames
+                after the new gains are applied (same count as
+                ``n_fft_frames``).
+            save_gains (bool): If True, write gains via ``save_gains()``.
+            digital_gains_parent_path (str): Parent directory for gain
+                files. Used only if ``save_gains`` is True.
+            digital_gains_dir_name (str): Subdirectory under the parent.
+                Used only if ``save_gains`` is True.
+            function_kwargs (dict): FUNCGEN arguments forwarded to
+                ``set_channelizer()`` when ``data_source`` is not ``'adc'``.
 
-        target : (float) The average magnitude of the 4+4-bit SCALER frames. If target is too low, quantization
-        noise will begin to dominate over the signal. If target is too high, both the SCALER and the accumulator 
-        of the correlator might saturate. The recommended value is borrowed from that used in the CHIME F-Engine,
-        which was determined empirically by Prof. Juan Mena-Parra of UofT. 
-
-        n_fft_frames : (int) The number of FFT frames whose magnitudes are average when computing the digital gains.
-
-        data_source : (str) A string that sets whether real ADC data or data stored in the FUNCGEN buffer are sent out of the FUNCGEN.
-
-            If 'adc', then real digitized data from the ADC will pass through the CHAN signal chain.
-
-            Otherwise, the user can specify a desired function listed in pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py
-            Keyword arguments can be included (see below).
-
-        channels : (list) A list of the input channels (i.e., 0 for ADC1, 1 for ADC2, etc.) for which you'd like to recover data.
-        The default is to receive data from all channels [0, .., 7].
-
-        fft_bypass : (bool) Whether or not to bypass the FFT. Why include an option to bypass the FFT when you are requesting post-gain frames,
-        you might ask? Well, sometimes it is useful to use the FUNCGEN to create a simulated spectrum, in which case you wouldn't want 
-        the signal you have set in the FUNCGEN to propagate through the firmware FFT. 
-        
-            With the fft_bypass option, you have the power to create simulated FFT outputs for signal path validation.
-
-            If True, the FFT is bypassed.
-
-            If False, the FFT is not bypassed. Default.
-
-        bank : (int) The FPGA has enough memory to store two sets of digital gains, each of which are stored in different "banks".
-        The digital gains computed in a given call of compute_gains() will be written to the specified bank.
-        Possible values are 0 or 1.
-
-        return_scaler_frames : (bool) Whether or not to read SCALER frames and return to the user, which can
-        be used to verify if the digital gains have been set properly. By default, the number of frames returned is
-        equivalent to n_fft_frames.
-
-        save_gains : (bool) Whether or not to save the digital gains in an HDF5 file, which calls save_gains() if True.
-        Set to True, for example, if you are saving correlated data and need to apply the digital gains for offline analysis.
-
-        digital_gains_parent_path : (str) A parent directory containing sub-directories of digital gains. Only used if save_gains is True.
-
-        digital_gains_dir_name : (str) The directory in which the digital gains will be stored. This directory lives within
-        the parent digital_gains_path directory. Only used if save_gains is True.
-
-        function_kwargs : (dict) Arguments for FUNCGEN functions passed to set_channelizer(). Used when data_source is not 'adc'.
-        See pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py for functions and their arguments.
-
-        Returns
-        -------
-
-        d_fft : (np.ndarray) The raw FFT frames used for the digital gain computation. The shape is 
-        ``(NPOLS, n_fft_frames, NBINS)``.
-
-        d_fft_mean_mag : (np.ndarray) The average magnitude of the FFT frames, used for computing the digital gains.
-        The shape is ``(NPOLS, NBINS)`` .
-
-        gain_lin_actual : (np.ndarray) The linear component of the "actual" digital gains. The shape is ``(NPOLS, NBINS)``.
-
-        gain_log_actual : (np.ndarray) The logarithmic component of the "actual" digital gains. The shape is ``(NPOLS, NBINS)``.
-
-        d_sclr : (np.ndarray) An array of SCALER frames, returned if return_scaler_frames = True. The SCALER frames 
-        are captured after the digital gains have been computed and applied, so these frames can be used to verify 
-        whether the digital gains were set properly. The shape is (NPOLS, n_fft_frames, NBINS).
-
+        Returns:
+            tuple: ``(d_fft, d_fft_mean_mag, gain_lin_actual,
+            gain_log_actual)`` and optionally ``d_sclr``. Shapes use number
+            of polarizations and number of frequency bins.
         """
 
         # =========================================================
@@ -868,9 +824,9 @@ class POCKET_CORRELATOR:
 
         Parameters
         ----------
-        gain_lin : (np.ndarray) The linear component of the "actual" digital gains. The shape is (NPOLS, NBINS).
+        gain_lin : (np.ndarray) The linear component of the "actual" digital gains. The shape is (NPOLS, n_bins).
 
-        gain_log : (np.ndarray) The logarithmic component of the "actual" digital gains. The shape is (NPOLS, NBINS). gain_log should include the "common" log
+        gain_log : (np.ndarray) The logarithmic component of the "actual" digital gains. The shape is (NPOLS, n_bins). gain_log should include the "common" log
         gain, which can be read using self.i.chan[n].SCALER.get_shift_left(bank).
 
         digital_gains_parent_path : (str) A parent directory containing sub-directories of digital gains. 
@@ -1410,17 +1366,17 @@ class POCKET_CORRELATOR:
 
             Synchronized timestamps will be included in future upgrades to the Pocket Correlator.
 
-        d_corr : (np.ndarray) The correlated data. The shape is (number_of_results, NBINS, NCORR_PROD). Note that the
+        d_corr : (np.ndarray) The correlated data. The shape is (number_of_results, n_bins, NCORR_PROD). Note that the
         final axis of size NCORR_PROD must be indexed using self.prod, which is created using generate_prod_map().
 
         count : (np.ndarray) The actual number of software frames that have been integrated for each 
-        frequency bins. count should be a 1D array of length NBINS, whose values are equivalent to 
+        frequency bins. count should be a 1D array of length n_bins, whose values are equivalent to 
         n_software_frames; any lower values indicate that packets are being dropped, or otherwise not 
         integrated in Python. count there informs the user of dropped packets, which is important to keep
         track of due to the relationship between integration time and noise through the radiometer equation.
 
         sat : (np.ndarray) The number of saturations that occurred in the firmware accumulator. The shape
-        is (number_of_results, NBINS, NCORR_PROD).
+        is (number_of_results, n_bins, NCORR_PROD).
 
         """
         
@@ -1547,105 +1503,44 @@ class POCKET_CORRELATOR:
                 n_fft_frames_per_file = 2*5
                 ):
 
-        """
-        A method for computing and storing visibility data for a small interferometer. 
+        """Compute and store visibility data for a small interferometer.
 
-        Keep in mind that the default UCAP mode is 0, meaning that bursts of ADC and FFT data have 2 frames per input channel.
+        Default UCAP mode is 0: ADC/FFT bursts have two frames per input
+        channel. Channelizers are configured for live ADC data when this
+        method is called.
 
-        observe() is only used with the channelizers configured to capture real data from each ADC. The channelizer is configured
-        automatically when this function is called.
+        Parameters:
+            data_path (str): Parent directory for visibility HDF5 files. A
+                timestamped subdirectory is created per acquisition.
+            obs_tag (str): Suffix on the observation name (for D3A use
+                ``'_D3A_rfsoc'`` for compatibility).
+            digital_gains_path (str): Directory containing ``gains.hdf5`` to
+                load, or None to compute gains with :meth:`compute_gains`
+                and store them under ``data_path``.
+            n_vis_per_file (int): Visibilities per HDF5 file.
+            n_software_frames (int): Host-side integrations of firmware
+                frames. Larger values increase total integration time.
+            autocorr_only (int): ``0`` all products, ``1`` autocorrelations
+                only.
+            no_accum (int): ``0`` accumulate in firmware, ``1`` do not.
+            n_firmware_frames (int): Frames accumulated in firmware. Too
+                low increases data rate; too high may saturate the 18+18-bit
+                accumulator. Use the recommended default.
+            capture_adc_bursts (bool): Capture ADC snapshots at the start of
+                each HDF5 file.
+            n_adc_frames_per_file (int): ADC frames per file when capturing
+                ADC bursts.
+            capture_fft_bursts (bool): Capture FFT snapshots at the start of
+                each HDF5 file.
+            n_fft_frames_per_file (int): FFT frames per file when capturing
+                FFT bursts.
+            gain_target (float): Scaler magnitude target forwarded to
+                :meth:`compute_gains`.
+            n_fft_frames_for_gain_comp (int): FFT frames used for gain
+                computation (about 1000 recommended).
 
-        Parameters
-        ----------
-
-        data_path (str): The path to the directory to which visibility data will be written. If it doesn't exist, a parent directory will be created according
-            to data_path. Within this directory, another directory will be created according to the date and time of the acquisition. HDF5 files will be written within 
-            this directory, beginning with 0.hdf5 and incrementing the number by 1 with each new file. In this manner, all data can be stored in a parent directory,
-            with specific acquisitions identified by the date and time of the acquisiton.
-
-        obs_tag (str): Observation tag added to end of ``obs_string``, which together correspond to the observation file name.
-
-            For D3A, obs_tag = '_D3A_rfsoc' for backwards compatibility. 
-
-        digital_gains_path : (str) The path to which digital gains will be stored, or the file from which digital gains will be called. If None, then observe()
-            will compute the digital gains with self.compute_gains(), which will be stored in the directory ``f'{data_path}/digital_gains/{obs_string}_digitalgain'`` as
-            the file ``'gains.hdf5'``. The obs_string corresponds to the date and time of the acquisition, as with the data itself.
-
-            If `digital_gains_path` is specified, observe() will search for a 'gains.hdf5' file within the specified directory. These gains will be opened and set 
-            in the Scaler during the observation. 
-
-        n_vis_per_file (int): The number of visibilities to store per HDF5 file. Increasing this number will increase the size of each HDF5 file. Reducing this
-            may be useful to collect more ADC and/or FFT snapshots during the observation, as the ADC and/or FFT snapshots are collected when a new HDF5 file is created. 
-
-        n_software_frames (int): The number of pre-integrated firmware frames to integrate in Python.
-            Increasing this value increases the total integration time.
-
-        autocorr_only  (int): Bit to choose between return all correlated products, or only autocorrelations.
-            Default is to send all ``N(N-1)/2`` correlated products.
-
-            0: return all products
-            1: return autocorrelations only
-
-        no_accum (int): Bit to choose between accumulating (i.e., summing) correalted SCALER frames, and not
-            accumulating. Default is to accumulate.
-
-            0: do accumulate
-            1: do not accumulate
-
-        n_firmware_frames (int): Number of frames to accumulate in firmware. Take care not to set this too 
-            low (see minimum), as this will increase the data rate, and could lead to overrun condition. Also take
-            care not to set this too high (see maximum), as this may cause increased saturation. The firmware 
-            accumulator can add numbers up to 18+18-bit values, at which point they saturate.
-
-            Use the recommended value!
-
-        capture_adc_bursts (bool): If True, capture ADC snapshots at the start of each HDF5 file.
-
-        n_adc_frames_per_file (int): ADC frames per file when ``capture_adc_bursts`` is True.
-
-        capture_fft_bursts (bool): If True, capture FFT snapshots at the start of each HDF5 file.
-
-        n_fft_frames_per_file (int): FFT frames per file when ``capture_fft_bursts`` is True.
-            FFT frames per file when ``capture_fft_bursts`` is True.
-
-            8192 - 1 : minimum
-            16384 - 1: recommended
-            32768 - 1: maximum
-
-        gain_target : (float) The average magnitude of the 4+4-bit SCALER frames. If target is too low, quantization
-        noise will begin to dominate over the signal. If target is too high, both the SCALER and the accumulator 
-        of the correlator might saturate. The recommended value is borrowed from that used in the CHIME F-Engine,
-        which was determined empirically by Prof. Juan Mena-Parra of UofT. 
-
-        To check that you're meeting the target, run compute_gains(), and recover many (e.g., 100) Scaler frames, compute their magnitude, and take the
-        mean across the frame ("time") axis. Compare the mean to the target; the mean magnitude should look like noise whose average value should
-        approximately meet the target.
-
-        n_fft_frames_for_gain_comp : (int) The number of FFT frames used to calculate the digital gains. It is recommended 
-        to set this to approximately 1000 to reduce the noiise of the averaged magnitude of the FFT data.
-
-        gain_type : (str) Specifies whether any post-processing is applied to the computed digital gains. The default is 'raw', meaning no additional processing
-        is done after computing digital gains. See compute_gains() for further details --- note that 'raw' has performed the best out of the current algorithms.
-
-        capture_adc_bursts : (bool) Specifies whether to capture ADC frames at the beginning of each HDF5 file. If True, capture ADC data. If False, don't capture
-        ADC data.
-
-        n_adc_frames_per_file : (int) The number of ADC frames to capture for each HDF5 file if capture_adc_bursts = True. Note that the data volume for a single capture is::
-
-            16384 samples per frames * 16 frames per capture * 16 bits per sample / 8 bits per byte / 1e6 B per MB = 0.524288 MB of data.
-
-        capture_fft_bursts : (bool) Specifies whether to capture FFT frames at the beginning of each HDF5 file. If True, capture FFT data. If False, don't capture
-        FFT data.
-
-        n_fft_frames_per_file : (int) The number of FFT frames to capture for each HDF5 file if capture_fft_bursts = True. Note that the data volume for a single capture is::
-
-            16384 samples * 16 frames per capture * (32+32) bit per sample / 8 bits per byte / 1e6 B per MB = 2.097152 MB of data.
-
-        Returns
-        -------
-
-        None
-
+        Returns:
+            None
         """
 
         # ===========

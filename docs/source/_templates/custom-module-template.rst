@@ -48,7 +48,7 @@
       .. rubric:: Module attributes summary
 
       .. autosummary::
-         :toctree:
+         :nosignatures:
 
          {% for item in attributes %}
          {{ item }}
@@ -65,7 +65,7 @@
       .. rubric:: Module exceptions summary
 
       .. autosummary::
-         :toctree:
+         :nosignatures:
 
          {% for item in exceptions %}
          {{ item }}

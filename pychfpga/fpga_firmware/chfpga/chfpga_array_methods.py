@@ -165,61 +165,60 @@ class chFPGAArrayMethods(ArrayMethods):
         If the array has no motherboards, this returns immediately.
 
         Parameters:
-
             mode (str): Operational mode to apply at init >= 3. Required when
                 ``init >= 3``. See :meth:`set_operational_mode_async` for
                 platform-specific names (``shuffle8``, ``corr16``, …). Stored
                 as the default for later mode changes.
-
-            bitfile, prog, if_ip, fpga_ip_addr_fn, udp_retries:
-                Accepted for :class:`~pychfpga.fpga_array.FPGAArray` kwargs
-                compatibility. Unused here — FPGAArray pops ``bitfile`` /
-                ``prog`` / ``udp_retries`` before calling this method, and
-                already used ``if_ip`` / ``fpga_ip_addr_fn`` while opening MMI.
-
-            init (int or None): Firmware init level. ``None`` becomes ``3`` if
-                ``mode`` is set, else ``0``.
-
-                - ``init < 3``: no firmware init (FPGAArray already mapped
-                  hardware and, depending on its own ``init``/``prog``, may
-                  have programmed and opened the FPGAs).
-                - ``init >= 3``: ``init_fpga`` on every board, crate
-                  ``init()``, then sync method and operational mode.
-
-            sync_method, sync_source, sync_master, sync_master_source,
-            sync_master_output:
-                Forwarded to :meth:`set_sync_method_async`. If ``sync_method``
-                is ``None`` at init >= 3, it is inferred as ``'irig-b'`` when
-                every board is in a crate, or ``'local'`` when none are. A
-                mixed crate/no-crate array logs a warning and leaves the
-                method unset unless ``sync_source`` is also given.
-
+            bitfile: Accepted for FPGAArray kwargs compatibility. Unused
+                here; FPGAArray pops it before calling this method.
+            prog: Same as ``bitfile``.
+            if_ip: Used by FPGAArray while opening MMI, not here.
+            fpga_ip_addr_fn: Same as ``if_ip``.
+            udp_retries: Popped by FPGAArray before calling this method.
+            init (int or None): Firmware init level. ``None`` becomes ``3``
+                if ``mode`` is set, else ``0``. Values below 3 skip firmware
+                init (FPGAArray may already have programmed and opened the
+                FPGAs). Values of 3 or more run ``init_fpga`` on every board,
+                crate ``init()``, then sync method and operational mode.
+            sync_method: Forwarded to :meth:`set_sync_method_async`. If
+                ``None`` at init >= 3, inferred as ``'irig-b'`` when every
+                board is in a crate, or ``'local'`` when none are. A mixed
+                crate/no-crate array logs a warning and leaves the method
+                unset unless ``sync_source`` is also given.
+            sync_source: Forwarded to :meth:`set_sync_method_async`.
+            sync_master: Forwarded to :meth:`set_sync_method_async`.
+            sync_master_source: Forwarded to :meth:`set_sync_method_async`.
+            sync_master_output: Forwarded to :meth:`set_sync_method_async`.
             max_sync_time_difference (float): Maximum allowed Frame-0 IRIG
                 spread in nanoseconds, stored for later :meth:`sync_async`
                 checks. Default 100 ns.
-
             adc_mode (int): ADC chip mode passed to each board's
                 ``init_fpga_async``. Default 0 (normal data).
-
             adc_bandwidth (int): ADC analog bandwidth setting passed to
                 ``init_fpga_async``. Default 2.
-
-            frames_per_packet, chan8_channel_map, tx_power,
-            integration_period, autocorr_only, corner_turn_bad_links,
-            corner_turn_bin_priority, corner_turn_remap_level:
-                Forwarded to :meth:`set_operational_mode_async` at init >= 3.
-
+            frames_per_packet: Forwarded to
+                :meth:`set_operational_mode_async` at init >= 3.
+            chan8_channel_map: Forwarded to
+                :meth:`set_operational_mode_async` at init >= 3.
+            tx_power: Forwarded to :meth:`set_operational_mode_async`.
+            integration_period: Forwarded to
+                :meth:`set_operational_mode_async`.
+            autocorr_only: Forwarded to :meth:`set_operational_mode_async`.
+            corner_turn_bad_links: Forwarded to
+                :meth:`set_operational_mode_async`.
+            corner_turn_bin_priority: Forwarded to
+                :meth:`set_operational_mode_async`.
+            corner_turn_remap_level: Forwarded to
+                :meth:`set_operational_mode_async`.
             sampling_frequency (float): ADC sampling frequency in Hz, passed
                 to ``init_fpga_async``. ``None`` uses the platform/mode
                 default.
-
             **kwargs: Extra arguments forwarded to each board's
                 ``init_fpga_async`` (firmware ``init_async``), e.g.
                 ``processing_frequency``, ``reference_frequency``,
                 ``data_width``.
 
         Returns:
-
             None
 
         Notes:
@@ -801,18 +800,14 @@ class chFPGAArrayMethods(ArrayMethods):
         can time out MMI.
 
         Parameters:
-
-            *args, **kwargs: Passed through to each board's
-                ``start_data_capture`` (period, frames_per_burst, channels,
-                source, mode, offset, …). See that method. Do not pass
-                ``sync`` if you intend to control the board-local sync; this
-                wrapper steals that name.
-
+            *args: Passed through to each board's ``start_data_capture``
+                (period, frames_per_burst, channels, source, mode, offset, …).
+            **kwargs: Same as ``*args``. Do not pass ``sync`` if you intend
+                to control the board-local sync; this wrapper steals that name.
             sync (bool): If true, run a full array :meth:`sync_async` after
                 every board has started capture.
 
         Returns:
-
             None
         """
         for b in self.ib:
@@ -1071,28 +1066,21 @@ class chFPGAArrayMethods(ArrayMethods):
         ``board`` with :meth:`~pychfpga.fpga_array.FPGAArray.get_iceboard`.
 
         Parameters:
-
-            board (tuple/list, str, Motherboard): Target board: ``(crate,
-                slot)``, serial/hostname string, or motherboard object. Falsy
-                skips hardware reads and returns only ``board``, ``output``,
-                and ``output_source=None``.
-
+            board (tuple or list or str or Motherboard): Target board:
+                ``(crate, slot)``, serial/hostname string, or motherboard
+                object. Falsy skips hardware reads and returns only
+                ``board``, ``output``, and ``output_source=None``.
             output (str): User-output name the noise-injection hardware is
                 wired to (used to check whether PWM is actually routed there).
                 Default ``'bp_sma'``.
 
         Returns:
-
-            dict with:
-
-                board: as passed in
-                output: as passed in
-                output_source (str or None): source driving that output
-                pwm_offset, pwm_high_time, pwm_period (int): PWM waveform in
-                    frames
-                pwm_enabled (bool): True when the PWM generator is not in reset
-                user_bit0, user_bit1 (int): static user bits (relevant when
-                    ``output_source`` is ``user_bit0`` / ``user_bit1``)
+            dict: Mapping with keys ``board``, ``output``, ``output_source``,
+            ``pwm_offset``, ``pwm_high_time``, ``pwm_period``,
+            ``pwm_enabled``, ``user_bit0``, and ``user_bit1``. PWM times are
+            in frames. ``pwm_enabled`` is True when the PWM generator is not
+            in reset. ``user_bit0`` / ``user_bit1`` matter when
+            ``output_source`` is one of those static bits.
         """
         status = dict(board=board,
                       output=output,
@@ -1436,28 +1424,25 @@ class chFPGAArrayMethods(ArrayMethods):
         unless ``tcp`` explicitly requests the other transport, in which case a
         ``RuntimeError`` is raised.
 
-        Parameters
-        ----------
-        port_number : int or None
-            For UDP: 
-                - If ``None``, attempts to open a socket at the destination port currently programmed in the FPGA. If that port is zero, act as if ``port_number`` =0.
-                - If zero, open a socket at a random  (OS-provided) port, and set the corresponding destination port in the FPGA.
-                - If non-zero, get a socket bound to the specified port. An exception will be raised if that port is already used by another program.
-            For TCP: board listen port (``None`` = default).
-        tcp : bool or None
-            If ``True``, use :class:`~pychfpga.common.tcp_packet_receiver.TCPPacketReceiver`.
-            If ``False``, use :class:`~pychfpga.common.udp_packet_receiver.UDPPacketReceiver`.
-            If ``None`` (default), reuse the existing receiver's transport, or
-            UDP if none exists.
-        rcvbuf : int
-            TCP ``SO_RCVBUF`` when ``tcp=True``.
-        force : bool
-            If True, discard the cached receiver (and reconnect TCP data sockets).
-            Needed after control TCP drops, which closes DATA_TCP on the board.
+        Parameters:
+            port_number (int or None): For UDP: ``None`` opens the FPGA
+                destination port (or behaves as ``0`` if that port is zero);
+                ``0`` binds a random OS port and programs it into the FPGA;
+                non-zero binds that port (raises if already in use). For TCP:
+                board listen port (``None`` uses the default).
+            tcp (bool or None): If ``True``, use
+                :class:`~pychfpga.common.tcp_packet_receiver.TCPPacketReceiver`.
+                If ``False``, use
+                :class:`~pychfpga.common.udp_packet_receiver.UDPPacketReceiver`.
+                If ``None`` (default), reuse the existing receiver's
+                transport, or UDP if none exists.
+            rcvbuf (int): TCP ``SO_RCVBUF`` when ``tcp=True``.
+            force (bool): If True, discard the cached receiver (and reconnect
+                TCP data sockets). Needed after control TCP drops, which
+                closes DATA_TCP on the board.
 
-        Returns
-        -------
-        UDPPacketReceiver or TCPPacketReceiver
+        Returns:
+            UDPPacketReceiver or TCPPacketReceiver: Shared packet receiver.
         """
         if force:
             close = getattr(self._packet_receiver, "close", None)
@@ -1486,7 +1471,7 @@ class chFPGAArrayMethods(ArrayMethods):
         return self._packet_receiver
 
     async def get_data_receiver_async(self, port_number=None, tcp=None, force=False, **kwargs):
-        """ Returns a raw data receiver for the whole array.
+        """Returns a raw data receiver for the whole array.
 
         A packet receiver and associated socket(s) will be created if none
         already exist, otherwise the existing ones will be reused.
@@ -1497,29 +1482,29 @@ class chFPGAArrayMethods(ArrayMethods):
         creation; later calls reuse the receiver and refresh config via the getter
         on each ``process_udp_packets``.
 
-
         Parameters:
-
-            port_number (int): Specifies the port to use if a socket has not already been allocated for the packet receiver.
-                - For UDP (``tcp=False``):
-                    - If ``None``, attempts to open a socket at the destination port currently programmed in the FPGA. If that port is zero, act as if ``port_number`` =0.
-                    - If zero, open a socket at a random (OS-provided) port, and set the corresponding destination port in the FPGA.
-                    - If non-zero, get a socket bound to the specified port. An exception will be raised if that port is already used by another program.
-                - For TCP (``tcp=True``): board listen port; ``None`` uses the default TCPipe TCP data port.
+            port_number (int): Port to use if a socket has not already been
+                allocated. For UDP (``tcp=False``): ``None`` opens the FPGA
+                destination port (or behaves as ``0`` if that port is zero);
+                ``0`` binds a random OS port and programs it into the FPGA;
+                non-zero binds that port (raises if already in use). For TCP
+                (``tcp=True``): board listen port; ``None`` uses the default
+                TCPipe TCP data port.
             tcp (bool or None): If ``True``, use TCP
                 (:class:`~pychfpga.common.tcp_packet_receiver.TCPPacketReceiver`).
                 If ``False``, use UDP
                 (:class:`~pychfpga.common.udp_packet_receiver.UDPPacketReceiver`).
                 If ``None`` (default), reuse the existing packet receiver's
                 transport, or UDP if none exists.
-            force (bool): If ``True``, discard cached packet/data receivers and reconnect
-                TCP data sockets (call on array reinit).
-            **kwargs: Forwarded to :class:`~pychfpga.common.raw_frame_receiver.RawFrameReceiver`
-                when creating the receiver (e.g. ``verbose``, ``ring_buffer_size``).
+            force (bool): If ``True``, discard cached packet/data receivers
+                and reconnect TCP data sockets (call on array reinit).
+            **kwargs: Forwarded to
+                :class:`~pychfpga.common.raw_frame_receiver.RawFrameReceiver`
+                when creating the receiver (e.g. ``verbose``,
+                ``ring_buffer_size``).
 
         Returns:
-
-            :class:`~pychfpga.common.raw_frame_receiver.RawFrameReceiver`
+            RawFrameReceiver: Array raw-data receiver.
         """
         if force:
             self._data_recv = None
@@ -1549,25 +1534,23 @@ class chFPGAArrayMethods(ArrayMethods):
         creation; later calls reuse the receiver and refresh config via the
         getter on each packet-processing call.
 
-        Parameters
-        ----------
-        port_number : int or None
-            Port for the packet receiver if one has not already been allocated.
-            - If ``None``, use the FPGA destination port (or behave as ``0`` if that is zero).
-            - If zero, bind a random OS port and program it into the FPGA.
-            - If non-zero, bind that port (raises if already in use).
-        tcp : bool or None
-            If ``True``, use TCP. If ``False``, use UDP. If ``None`` (default),
-            reuse the existing packet receiver's transport, or UDP if none exists.
-        force : bool
-            If ``True``, discard cached correlator/packet receivers and reconnect.
-        **kwargs
-            Forwarded to :class:`~pychfpga.common.ucorr_frame_receiver.UCorrFrameReceiver`
-            when creating the receiver (e.g. ``verbose``, ``pre_func``).
+        Parameters:
+            port_number (int or None): Port for the packet receiver if one
+                has not already been allocated. ``None`` uses the FPGA
+                destination port (or behaves as ``0`` if that is zero);
+                ``0`` binds a random OS port and programs it into the FPGA;
+                non-zero binds that port (raises if already in use).
+            tcp (bool or None): If ``True``, use TCP. If ``False``, use UDP.
+                If ``None`` (default), reuse the existing packet receiver's
+                transport, or UDP if none exists.
+            force (bool): If ``True``, discard cached correlator/packet
+                receivers and reconnect.
+            **kwargs: Forwarded to
+                :class:`~pychfpga.common.ucorr_frame_receiver.UCorrFrameReceiver`
+                when creating the receiver (e.g. ``verbose``, ``pre_func``).
 
-        Returns
-        -------
-        UCorrFrameReceiver
+        Returns:
+            UCorrFrameReceiver: Array correlator receiver.
         """
         if force:
             self._corr_recv = None

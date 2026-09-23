@@ -106,21 +106,21 @@ class FFT(MMI):
         self.OVERFLOW_RESET = 0
 
     def get_bin_map(self, flatten=False):
-        """ Returns an array providing the bin number sent on every clock by every FFT output lane.
+        """Return the bin number sent on every clock by every FFT output lane.
 
-        Note that the map changes  during operation if BYPASS is changed.
-
-        If BYPASS=1, the map is simply bin_number=real_sample_number//2 = complex_sample_number.
+        The map changes during operation if ``BYPASS`` is changed. If
+        ``BYPASS=1``, ``bin_number = real_sample_number // 2``
+        (complex sample number).
 
         Parameters:
-
-            flatten (bool): If True, the map will be flatten into a 1D array representing the bin numbers in transmission order.
+            flatten (bool): If True, flatten the map into a 1D array of bin
+                numbers in transmission order.
 
         Returns:
-
-            If flatten=False, returns a (n_lanes, n_bins_per_lane) numpy array indicating the bin numbers emitted on each clock
-                by each output lane of the FFT. 
-            If flatten=True, returns a 1D array of length n_bins representing the bin numbers in transmission order, as serialized by the capture engine.
+            numpy.ndarray: If ``flatten`` is False, shape
+            ``(n_lanes, n_bins_per_lane)`` with the bin numbers emitted on
+            each clock by each FFT output lane. If True, a 1D array of
+            length ``n_bins`` in capture-engine serialization order.
         """
         cfg = self.update_config()
         if flatten:
