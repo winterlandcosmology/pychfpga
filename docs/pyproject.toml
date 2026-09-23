@@ -13,6 +13,7 @@
         "sphinx",
         "sphinx_rtd_theme",
         "sphinxcontrib.restbuilder",
+        "gitpython",
         # Imported by pychfpga modules during autodoc (PyPI only)
         "numpy",
         "matplotlib",
