@@ -2,6 +2,10 @@
 clone:
   lfs: true  # make sure LFS files are fetched, otherwise we don't have our images...
 
+# bitbucketpipelines/uv-cli-setup is a *Pipe* image (runs setup-uv.sh via pipe:), not a step
+# runtime — it has no python3/uv on PATH when used as `image:` here.
+image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
 definitions:
   caches:
     uv-cache:
@@ -17,7 +21,6 @@ pipelines:
     '**':
       - step:
           name: Automatic static code analysis
-          image: bitbucketpipelines/uv-cli-setup:latest
           # Test which require no configuaration of hardware components and are therefore platform agnostic
           # This test will ensure that none of the modifications made into the deploy branch cause any disturbances to other elements of the project
           caches:
@@ -29,7 +32,6 @@ pipelines:
     '{master,develop,jfc/dev}':
       - step:
           name: Build and publish documentation
-          image: bitbucketpipelines/uv-cli-setup:latest
           caches:
             - uv-cache
           script:
@@ -38,8 +40,7 @@ pipelines:
             - DOC_SPHINX_ROOT_FOLDER='docs'
             - DOC_BUILD_FOLDER='build'
             - DOC_PUBLISH_FOLDER='pychfpga/'$BITBUCKET_BRANCH
-            - cd docs && uv sync --locked
-            - cd ..
+            - uv sync --locked ./docs
             - echo 'Building for '$BITBUCKET_REPO_SLUG/$BITBUCKET_BRANCH
             - make docs
             - cd $DOC_SPHINX_ROOT_FOLDER

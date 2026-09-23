@@ -49,6 +49,7 @@ autodoc_mock_imports = [
     "wtl.rest",
     "wtl.archive",
     "psucontrol",
+    "netifaces",
 ]
 # sys.path.insert(2, os.path.abspath("./"))  # pychfpga/docs/source (for TuberMethods.py)
 
