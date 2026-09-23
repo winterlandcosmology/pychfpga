@@ -2,9 +2,7 @@
 clone:
   lfs: true  # make sure LFS files are fetched, otherwise we don't have our images...
 
-# bitbucketpipelines/uv-cli-setup is a *Pipe* image (runs setup-uv.sh via pipe:), not a step
-# runtime — it has no python3/uv on PATH when used as `image:` here.
-image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+image: python:3.12
 
 definitions:
   caches:
@@ -26,6 +24,10 @@ pipelines:
           caches:
             - uv-cache
           script:
+            - pipe: atlassian/uv-cli-setup:0.1.1
+              variables:
+                UV_VERSION: "0.11.5"
+            - ./setup-uv.sh
             #the errors only tags limits the scope of the linter to purely functional errors and ignores style concerns
             - make lint
   branches:
@@ -35,6 +37,10 @@ pipelines:
           caches:
             - uv-cache
           script:
+            - pipe: atlassian/uv-cli-setup:0.1.1
+              variables:
+                UV_VERSION: "0.11.5"
+            - ./setup-uv.sh
             - DOC_REPO='winterlandcosmology.bitbucket.io'
             - DOC_REPO_URL='git@bitbucket.org:winterlandcosmology/'$DOC_REPO'.git'
             - DOC_SPHINX_ROOT_FOLDER='docs'
