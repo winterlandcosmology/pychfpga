@@ -40,7 +40,7 @@ pipelines:
             - DOC_SPHINX_ROOT_FOLDER='docs'
             - DOC_BUILD_FOLDER='build'
             - DOC_PUBLISH_FOLDER='pychfpga/'$BITBUCKET_BRANCH
-            - uv sync --locked ./docs
+            - uv sync --locked --project ./docs
             - echo 'Building for '$BITBUCKET_REPO_SLUG/$BITBUCKET_BRANCH
             - make docs
             - cd $DOC_SPHINX_ROOT_FOLDER
