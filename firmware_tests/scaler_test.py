@@ -11,6 +11,15 @@ import matplotlib.pyplot as plt
 from textwrap import wrap
 from .module_test import TestModule
 
+
+def _flags_from_cap_type6(cpx):
+    """Decode scaler capture mode 6 into ICE-style overflow nibbles (12 = scaler sat)."""
+    re = np.asarray(np.real(cpx), dtype=np.int64)
+    im = np.asarray(np.imag(cpx), dtype=np.int64)
+    overflow = (re != 0) | (im != 0)
+    return overflow.astype(np.int64) * 12
+
+
 '''
 Control flow
 ==============
@@ -164,7 +173,6 @@ class TestScaler(TestModule):
             if get_flags:
                 return source, data & (2**self.data.READOUT_SHIFT-1)
             return source, data
-        #TODO: add capture mode for ucap
         else:
             _, data, _ = receiver.read_raw_frames(
                     ncap=2,
@@ -176,7 +184,11 @@ class TestScaler(TestModule):
             data = data[:, -1, :] #get last frame to ensure no stale data
             assert np.all(np.equal(data[0], data))
             if get_flags:
-                raise Exception("Flag feature not implemented on UCAP")
+                if cap_data_type != 6:
+                    raise ValueError('CRS/UCAP scaler flags require cap_data_type=6')
+                flags_1d = _flags_from_cap_type6(data[0])
+                flags = np.broadcast_to(flags_1d, data.shape)
+                return source, flags
             return source, data #only return first frame of data
     
 
@@ -736,8 +748,8 @@ class TestScaler(TestModule):
         self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler)
         required_offset = bool(self.board.CORR.REQUIRES_OFFSET_BINARY_ENCODING) if self.board.CORR else False
         previous_offset = bool(self.board.chan[0].SCALER.USE_OFFSET_BINARY)
-        if self.board.CORR and not required_offset:
-            pytest.skip("Current correlator mode requires 2's-complement output; offset-binary cannot be enabled.")
+        # if self.board.CORR and not required_offset:
+        #     pytest.skip("Current correlator mode requires 2's-complement output; offset-binary cannot be enabled.")
         self.board.set_offset_binary_encoding(True)
         try:
             source, data = await self._set_capture_scaler(func='ramp', min=self.data.MIN_INPUT, max=self.data.MAX_INPUT, cap_data_type=0)
@@ -928,7 +940,7 @@ class TestScaler(TestModule):
         logger.debug(f"test_mult_resolution_capture: source_first16={source[:16]}")
         logger.debug(f"test_mult_resolution_capture: received_first16={data[0][:16]}")
         logger.debug(f"test_mult_resolution_capture: reference_first16={ref_data[:16]}")
-        self.plot_and_test(xr, data[0], ref_data, f'Mult-resolution capture (capture mode = {cap_data_type})', split_complex=False)
+        self.plot_and_test(xr, data[0], ref_data, f'Mult-resolution capture (capture mode = {cap_data_type})')
 
     @pytest.mark.scaler
     @pytest.mark.parametrize("ch", (0,))
@@ -1135,34 +1147,40 @@ class TestScaler(TestModule):
                 using FUNCGEN `frame8` with `overflow_buffer`.
 
         Notes:
-            Uses explicit scaler capture mode 0 with flag extraction from the low
-            4 bits on 4-bit ICE readout (`READOUT_SHIFT=4`).
-            The ramp path (`arb`) is used to validate scaler-overflow and bank bits.
-            ADC-overflow forcing is validated through `frame8` + `overflow_buffer`
-            because writing `BYTE_A` does not inject ADC overflow in `arb` mode.
+            ICE: capture mode 0 with PROBER flag mux in the low 4 bits (`READOUT_SHIFT=4`).
+            CRS/UCAP: capture mode 6 (post-gain saturation symbols per bin); bank bits are
+            not embedded in the capture payload.
+            The ramp path (`arb`) validates scaler overflow flags.
+            ADC-overflow stream flags are validated on ICE only (below); CRS ADC
+            overflow belongs in ``funcgen_test`` / scaler stats tests.
         '''
-        if self.data.PLATFORM == "CRS":
-            pytest.skip("CRS platform does not support capture of scaler flags")
         logger = self.get_logger()
         if self.data.CAPTURE_WIDTH > 4: #no room for flags:
             pytest.skip("Output is too wide for flags")
         adc_overflow = bool(adc_overflow)
         adc_overflow_i = int(adc_overflow)
-        self.board.set_scaler_output_modes(bypass=False, cap_data_type=0)
+        cap_data_type = 0 if self.data.PLATFORM == 'ICE' else 6
+        self.board.set_scaler_output_modes(bypass=False, cap_data_type=cap_data_type)
         self.board.set_gains(self._uniform_real_gains(1), postscaler=postscaler, bank=bank, when='now')
         source, flags = await self._set_capture_scaler(
             'ramp',
             min=self.data.MIN_INPUT,
             max=self.data.MAX_INPUT,
             get_flags=True,
-            cap_data_type=0,
+            cap_data_type=cap_data_type,
         )
         source_i = source.astype(np.int64)
         scaled = source_i * 2**self.data.IMPLICIT_SHIFT * 2**postscaler // 2**self.data.SCALER_SHIFT
         overflow = ((scaled > self.data.MAX_OUTPUT) | (scaled < self.data.MIN_OUTPUT)).astype(np.int64)
-        tlast_flags = np.zeros(self.data.NUM_SAMPLES, dtype=np.int64)
-        # In ramp/arb mode, only bank is expected on the tail bits.
-        tlast_flags[-4:] = bank * 2
+        flags_ch0 = flags[0] if flags.ndim > 1 else flags
+        n_cap = int(flags_ch0.shape[-1])
+        if overflow.size != n_cap:
+            # Scaler capture is one flag per FFT bin; arb ramp is interleaved Re/Im samples.
+            overflow = (overflow[::2] | overflow[1::2]).astype(np.int64)
+        tlast_flags = np.zeros(n_cap, dtype=np.int64)
+        if self.data.PLATFORM == 'ICE':
+            # In ramp/arb mode, only bank is expected on the tail bits.
+            tlast_flags[-4:] = bank * 2
         ref_data = overflow * 12 + tlast_flags
 
         logger.debug(
@@ -1170,19 +1188,19 @@ class TestScaler(TestModule):
             f"source_shape={source.shape} flags_shape={flags.shape} ref_shape={ref_data.shape}"
         )
         logger.debug(f"test_flags: source_first16={source[:16]}")
-        logger.debug(f"test_flags: flags_first16={flags[0][:16]}")
+        logger.debug(f"test_flags: flags_first16={flags_ch0[:16]}")
         logger.debug(f"test_flags: reference_first16={ref_data[:16]}")
-        logger.debug(f"test_flags: flags_last16={flags[0][-16:]}")
+        logger.debug(f"test_flags: flags_last16={flags_ch0[-16:]}")
         logger.debug(f"test_flags: reference_last16={ref_data[-16:]}")
 
         self.plot_and_test(
             xr,
-            flags,
+            flags_ch0,
             ref_data,
             f'Flags (postscaler={postscaler}, bank={bank}, adc overflow={adc_overflow})',
         )
 
-        if adc_overflow:
+        if adc_overflow and self.data.PLATFORM == 'ICE':
             mask = 2 ** self.data.READOUT_SHIFT - 1
             overflow_buffer = np.zeros(self.data.NUM_SAMPLES, dtype=np.int64)
             tail_width = 4
