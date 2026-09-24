@@ -140,7 +140,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
     PLATFORM_SUPPORT = ( # [ {"platform":<platform_model>, "modes":<supported_modes>, "firmware_url":<firmware filename_or_url>, <other platform key-value parameters>}, ...]
         dict(platform="MGK7MB", modes=("shuffle16", "shuffle128",
                                        "shuffle256", "shuffle512",
-                                       "chan8", "chan4"),    firmware_url='chfpga_ice_ct_pbg_aug11.bit', bsb_transport=BSB_TRANSPORT_UDP,    sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4),
+                                       "chan8", "chan4"),    firmware_url='chfpga_ice_ct_pbg_sep24.bit', bsb_transport=BSB_TRANSPORT_UDP,    sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4),
         dict(platform="MGK7MB", modes=("corr16",),           firmware_url='chfpga_ice_corr16_pbg_jun16.bit', bsb_transport=BSB_TRANSPORT_UDP,    sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4),
         dict(platform="MGK7MB", modes=("chord16",),          firmware_url='chordFPGA_MGK7MB_Rev2.bit', bsb_transport=BSB_TRANSPORT_UDP,    sampling_frequency=1200e6, processing_frequency=300e6),
         dict(platform="ZCU111", modes=("corr4", "corr8"),    firmware_url='sifpga_zcu111_wrapper.bit', bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16),
