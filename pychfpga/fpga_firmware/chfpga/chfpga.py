@@ -3771,8 +3771,19 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         # Stop data from going into the PROBER and MASTER to minimize the risk
         # of malformed packets and unstable communications
         self.stop_data_capture()
-        reset_state = self.get_chan_reset()
-        self.set_chan_reset(1)
+        # The channelizer reset protects the per-channel PROBER/MASTER
+        # reconfiguration below from emitting malformed packets. A 'ct'
+        # capture configures only the CT_PROBER, which is held in its own
+        # RESET during configuration, so the channelizer can keep running.
+        # Crucially, on a crate member toggling the channelizer reset
+        # restarts this board's frame phase at an arbitrary offset, knocking
+        # its stream out of every receiver's corner-turn alignment window
+        # until the next array-wide sync (verified on the 16-board crate,
+        # 2026-09-22) - so 'ct' captures must not touch it.
+        toggle_chan_reset = source != 'ct'
+        if toggle_chan_reset:
+            reset_state = self.get_chan_reset()
+            self.set_chan_reset(1)
         try:
             if normalized_cap_type is not None:
                 for ch in channels:
@@ -3886,7 +3897,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 self.UCAP.USER_RESET = 0
             self.set_trig(1)
         finally:
-            self.set_chan_reset(reset_state)
+            if toggle_chan_reset:
+                self.set_chan_reset(reset_state)
 
     def set_data_capture(self, channels=None, sub_period=23, source='adc', lane=None):
         """ Set the dynamic data capture parameters that can be changed on the
