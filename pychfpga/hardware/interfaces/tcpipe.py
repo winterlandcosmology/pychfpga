@@ -162,6 +162,7 @@ class TCPipe:
     RPC_ADC_GET_IMR_PASS_MODE = 0x3A
     RPC_ADC_SET_PWR_MODE = 0x3B
     RPC_ADC_GET_PWR_MODE = 0x3C
+    RPC_ADC_GET_SIGNAL_DETECTOR_STATUS = 0x3D
 
     ADC_TILE = 0
     DAC_TILE = 1
@@ -176,6 +177,7 @@ class TCPipe:
     _RFDC_CAL_FREEZE = '<III'
     _RFDC_CAL_COEFF = '<8I'
     _RFDC_SIGNAL_DETECTOR = '<BBBBHHHB'
+    _RFDC_SIGNAL_DETECTOR_STATUS = '<HHHHBBBB'
     _RFDC_THRESHOLD = '<9I'
     _RFDC_PWR_MODE = '<II'
     _RFDC_TILE_CLOCK = 'BBIddBBB'
@@ -232,6 +234,7 @@ class TCPipe:
         RPC_ADC_GET_CAL_COEFFICIENTS: 'adc_get_cal_coefficients',
         RPC_ADC_SET_SIGNAL_DETECTOR: 'adc_set_signal_detector',
         RPC_ADC_GET_SIGNAL_DETECTOR: 'adc_get_signal_detector',
+        RPC_ADC_GET_SIGNAL_DETECTOR_STATUS: 'adc_get_signal_detector_status',
         RPC_ADC_SET_CLK_DISTRIBUTION: 'adc_set_clk_distribution',
         RPC_ADC_GET_CLK_DISTRIBUTION: 'adc_get_clk_distribution',
         RPC_ADC_SET_THRESHOLD_SETTINGS: 'adc_set_threshold_settings',
@@ -1866,6 +1869,31 @@ class TCPipe:
         data = self._rfdc_rpc(self.RPC_ADC_GET_SIGNAL_DETECTOR, struct.pack('<BB', tile_id, block_id),
                               reply_fmt=self._RFDC_SIGNAL_DETECTOR)
         return self._unpack_signal_detector(data)
+
+    def adc_get_signal_detector_status(self, tile_id, block_id):
+        """Return live ADC signal detector magnitude and threshold compare (Gen3+).
+
+        On Dual/HS ADCs the PL ``signal_detect`` pin is the AND of both interleaved
+        slices. ``magnitude`` is this user block; ``pair_magnitude`` is the companion
+        slice. ``pl_signal_detect`` matches that AND (instant compare, not debounce).
+        """
+        data = self._rfdc_rpc(
+            self.RPC_ADC_GET_SIGNAL_DETECTOR_STATUS,
+            struct.pack('<BB', tile_id, block_id),
+            reply_fmt=self._RFDC_SIGNAL_DETECTOR_STATUS)
+        (magnitude, pair_magnitude, threshold, pair_threshold, above_threshold,
+         pair_above_threshold, pl_signal_detect, high_speed) = struct.unpack(
+            self._RFDC_SIGNAL_DETECTOR_STATUS, data)
+        return {
+            'magnitude': magnitude,
+            'pair_magnitude': pair_magnitude,
+            'threshold': threshold,
+            'pair_threshold': pair_threshold,
+            'above_threshold': above_threshold,
+            'pair_above_threshold': pair_above_threshold,
+            'pl_signal_detect': pl_signal_detect,
+            'high_speed': high_speed,
+        }
 
     def adc_set_clk_distribution(self, settings):
         """Set RFDC clock distribution (Gen3+). ``settings`` matches ``adc_get_clk_distribution`` entries."""
