@@ -3,10 +3,16 @@
 
 # You can set these variables from the command line.
 SPHINXOPTS    =
-SPHINXBUILD   = sphinx-build
+UV            ?= uv
+SPHINXBUILD   ?= $(UV) run sphinx-build
 SPHINXPROJ    = pychfpga
 SOURCEDIR     = source
 BUILDDIR      = build
+
+# User-friendly check for uv (creates/syncs .venv from pyproject.toml via uv run)
+ifeq ($(shell which $(UV) >/dev/null 2>&1; echo $$?), 1)
+$(error The '$(UV)' command was not found. Install uv (https://docs.astral.sh/uv/) or set UV to its full path.)
+endif
 
 # Put it first so that "make" without argument is like "make help".
 help:

@@ -26,7 +26,7 @@ class SCALER(MMI):
     RESET                 = BitField(CONTROL, 0x00, 7, doc="Reset the SCALER.")
     BYPASS                = BitField(CONTROL, 0x00, 6, doc="Bypass the SCALER")
     FOUR_BITS             = BitField(CONTROL, 0x00, 5, doc="Enables 4-bit operation")
-    SHIFT_LEFT            = BitField(CONTROL, 0x00, 0, width=5, doc="Number of bits to shift left the incoming data")
+    SHIFT_LEFT_BANK0      = BitField(CONTROL, 0x00, 0, width=5, doc="Post-scaler left shift for gain bank 0. Use get_shift_left/set_shift_left.")
     USE_OFFSET_BINARY     = BitField(CONTROL, 0x01, 6, doc="When '1', offset binary encoding is used.")
     READ_COEFF_BANK       = BitField(CONTROL, 0x01, 4, doc="Target gain coefficients bank to be used by the scaler")
     WRITE_COEFF_BANK_A      = BitField(CONTROL, 0x01, 0, width=4, doc="Indicates in which data page the gain coefficients are being written to. Page 0-7 are coefficients fri bank0, Page 8-15 are for Bank 1 coefficients.")
@@ -61,6 +61,7 @@ class SCALER(MMI):
                                 "   4: Dual resolution FFT with automatic switching between even and odd bins. Odd bins are send on odd frames, even bins on even frames\n"
                                 "   5: Quad resolution FFT with automatic switching between even and odd bins. Odd bins are send on odd frames, even bins on even frames\n"
                                 )
+    SHIFT_LEFT_BANK1      = BitField(CONTROL, 0x0D, 0, width=5, doc="Post-scaler left shift for gain bank 1. Use get_shift_left/set_shift_left.")
 
     STATS_READY            = BitField(STATUS, 0x00, 7, doc="Indicates that new stats results are ready")
     CURRENT_GAIN_BANK      = BitField(STATUS, 0x00, 6, doc="Currently active gain bank.")
@@ -101,26 +102,31 @@ class SCALER(MMI):
     def init(self):
         """ Initialize the SCALER module"""
         # Bypass the scaler by default if the FFT is not present
+        self.fft = self.fpga.chan[self.instance_number].FFT  # cache the FFT object for convenience
+
         if self.instance_number in self.fpga.LIST_OF_ANTENNAS_WITH_FFT:
             self.BYPASS = 0
         else:
             self.BYPASS = 1
         self.set_capture_data_type(0)
-        self.SHIFT_LEFT = 31
+        self.set_shift_left(0, 31)
+        self.set_shift_left(1, 31)
         self.set_offset_binary_encoding(1)
         self.set_gain_table(1)
         self.SATURATE_ON_MINUS_7 = 1
         self.STATS_CAPTURE = 1
         self.STATS_FRAME_COUNT = int(800e6 / 2048 * 30)
+
         self.config.update(
             bypass=bool(self.BYPASS),
             bypass_data_type=int(self.DATA_TYPE),
             eight_bit=not bool(self.FOUR_BITS),
             eight_bit_support=bool(self.EIGHT_BIT_SUPPORT),
             use_offset_binary=bool(self.USE_OFFSET_BINARY),
-            cap_data_type=int(self.CAP_DATA_TYPE),
+            cap_data_type=int(self.CAP_DATA_TYPE)
         )
-        self.get_config()
+        self.config.capture_format = State()
+        self.update_config()
 
     def set_scaler_output(self, data_type, bypass):
         self.BYPASS = bypass
@@ -135,6 +141,7 @@ class SCALER(MMI):
         'fft_4bit': 3, # 4+4 bit scaled values\n"
         'fft_2x': 4, # Dual resolution FFT
         'fft_full': 5, # Full resolution FFT
+        'sat_flags': 6, # Post-gain saturation flags (+1/-1 per Re/Im field, VHDL mode "110")
     }
 
     def set_capture_data_type(self, data_type):
@@ -176,67 +183,81 @@ class SCALER(MMI):
         self.FOUR_BITS = not eight_bit
         self.config.eight_bit = eight_bit
 
-    def get_config(self):
-        """Derive FFT capture_format onto ``self.config``."""
+    def update_config(self):
+        """ Update the capture_format field in the current scaler config and return that config.
+        
+        Returns:
+            cfg (Config): the current scaler config with the updated capture_format field.
+        """
         cfg = self.config
         board = self.fpga.config
-        fft_bypass = bool(self.fpga.chan[self.instance_number].FFT.config.bypass)
-        map_attrs = (
-            'cap_data_type', 'eight_bit', 'use_offset_binary',
-        )
-        board_attrs = ('platform_id', 'adc_bits_per_sample', 'fft_bins_per_word')
-        ctx = ('SCALER.get_config', self.instance_number)
-        if (
-            cfg.has_attr('capture_format')
-            and not cfg.has_changed(map_attrs, context=ctx)
-            and not board.has_changed(board_attrs, context=ctx)
-            and not self.fpga.chan[self.instance_number].FFT.config.has_changed(
-                ('bypass',), context=ctx)
-        ):
+        fft = self.fft  
+        scaler_fmt_attrs = ('cap_data_type', 'eight_bit', 'use_offset_binary') # SCALER attributes that affect the format
+        fft_fmt_attrs = ('bypass',) # FFT attributes that affect the format.'bypass' is a direct attribute, no need to update the FFT config
+        ctx = ('SCALER.update_config', self)
+
+        # If the SCALER or FFT configuration has not changed, do nothing
+        if (not cfg.has_changed(scaler_fmt_attrs, context=ctx)
+            and not fft.config.has_changed(fft_fmt_attrs, context=ctx)):
             return cfg
 
-        # We store in the capture format both the bus width, which is the total number of bits available to send the captured data
-        # and the data length, which is the number of bits that actual contain the desired data. Since these are placed in the MSBs
-        # of the bus, we must right shift by the difference to extract our desired data
+        # Dynamic parameters
+        fft_bypass = bool(fft.config.bypass)
         cap_data_type = int(cfg.cap_data_type)
         eight_bit = bool(cfg.eight_bit)
         use_offset_encoding = bool(cfg.use_offset_binary)
+
+        # Constants
         adc_bit_width = int(board.adc_bits_per_sample)
         fft_bins_per_word = int(board.fft_bins_per_word)
-        is_crs = int(board.platform_id) == self.fpga._PLATFORM_ID_CRS
-        fft_data_width = self.fpga.FFT_INFO[self.fpga.FFT_TYPE]['bits_per_bin'] // 2
+        fft_data_width = self.fpga.FFT_INFO[self.fpga.FFT_TYPE]['bits_per_bin'] // 2 # Width of the FFT Re or Im component
+        capture_bus_width = board.capture_bus_width # total number of bits in the capture bus (capture word)
 
-        if cap_data_type == 4:
-            capture_bus_width = 32 if is_crs else 16
-            data_width = adc_bit_width if fft_bypass else min(fft_data_width, capture_bus_width)
-            interleave_factor = 2
+        # Compute the capture format parameters
+        # integer_width: number of bits used un the capture bus to store each Re or Im element
+        # data_width: actual number of bits of the Re or Im elements. The are MSB-aligned in the integer_width
+        # interleave_factor: number of consecutive frames to read to get all the data
+        if cap_data_type == 0: # Normal output, 4+4 bit or 8+8 bit
+            integer_width = capture_bus_width // fft_bins_per_word // 2 # 16 for CRS, 8 for ICE
+            data_width = 8 if eight_bit else 4
+            interleave_factor = 1
+        elif cap_data_type == 1: # MSBs of the raw FFT values
+            integer_width = capture_bus_width // fft_bins_per_word // 2
+            data_width = adc_bit_width if fft_bypass else min(fft_data_width, integer_width)
+            interleave_factor = 1
+        elif cap_data_type == 2: # MSBs of the post-gain FFT values
+            integer_width = capture_bus_width // fft_bins_per_word // 2  
+            data_width = integer_width
+            interleave_factor = 1 
+        elif cap_data_type == 3: # 4+4 bit values
+            integer_width = capture_bus_width // fft_bins_per_word // 2 
+            data_width = 8 if eight_bit else 4
+            interleave_factor = 1 
+        elif cap_data_type == 4: # Dual resolution FFT
+            integer_width = capture_bus_width // fft_bins_per_word // 2 * 2 # each Re and Im is twice the standard width (sending half the bins on each frame) (32 for CRS, 16 for ICE)
+            data_width = adc_bit_width if fft_bypass else min(fft_data_width, integer_width)
+            interleave_factor = 2 # one frame is even bins, one is odd bins
         elif cap_data_type == 5:  # Full resolution FFT
             # CRS: 128-bit complex, ICE: 32-bit complex. TODO: have this parametrized by the firmware
-            capture_bus_width = 128 if is_crs else 32
-            data_width = adc_bit_width if fft_bypass else min(fft_data_width, capture_bus_width)
+            integer_width = capture_bus_width  # in full resolution, each Re or Im integer uses the full capture bus width
+            data_width = adc_bit_width if fft_bypass else min(fft_data_width, integer_width)
             interleave_factor = 2 * fft_bins_per_word
-        else:
-            capture_bus_width = 16 if is_crs else 8
-            if cap_data_type in (1, 2):
-                # Raw and post-gain FFT capture modes use the full Re/Im
-                # component width available on the scaler capture bus.
-                data_width = 16 if is_crs else 8
-            else:
-                data_width = 8 if eight_bit else 4
+        elif cap_data_type == 6:  # Post-gain saturation flags (0, +1, -1 MSB-aligned per Re/Im)
+            integer_width = capture_bus_width // fft_bins_per_word // 2
+            data_width = integer_width
             interleave_factor = 1
+        else:
+            raise ValueError(f'Invalid capture data type: {cap_data_type}')
 
-        if not cfg.has_attr('capture_format'):
-            cfg.capture_format = State()
         cfg.capture_format.update(
-            fmt_bus_width=capture_bus_width,
+            fmt_bus_width=integer_width, # number of bits used to store the value on the on the capture bus (multiple of 8 bits)
             fmt_data_width=data_width,
             fmt_is_complex=True,
             fmt_interleave_factor=interleave_factor,
             use_offset_encoding=use_offset_encoding,
         )
-        cfg.ack(map_attrs, context=ctx)
-        board.ack(board_attrs, context=ctx)
-        self.fpga.chan[self.instance_number].FFT.config.ack(('bypass',), context=ctx)
+        cfg.ack(scaler_fmt_attrs, context=ctx)
+        fft.config.ack(fft_fmt_attrs, context=ctx)
         return cfg
 
     def get_bypass(self):
@@ -251,26 +272,57 @@ class SCALER(MMI):
         self.WRITE_COEFF_BANK_B = (page >> 4) & 1
         self.WRITE_COEFF_BANK_C = (page >> 5) & 1
 
+    def get_shift_left(self, bank=0):
+        """Return the post-scaler left shift programmed for ``bank``.
+
+        Parameters:
+            bank (int): Gain bank (0 or 1).
+
+        Returns:
+            int: Left-shift amount in 0..31.
+        """
+        bank = int(bank)
+        if bank not in (0, 1):
+            raise ValueError(f'bank must be 0 or 1, got {bank}')
+        if bank == 0:
+            return int(self.SHIFT_LEFT_BANK0)
+        return int(self.SHIFT_LEFT_BANK1)
+
+    def set_shift_left(self, bank, value):
+        """Set the post-scaler left shift for ``bank``.
+
+        The value is stored in that bank's register immediately. The datapath
+        uses it only while that bank is active, aligned with the gain table
+        after RAM latency.
+
+        Parameters:
+            bank (int): Gain bank (0 or 1).
+            value (int): Left-shift amount in 0..31.
+        """
+        bank = int(bank)
+        if bank not in (0, 1):
+            raise ValueError(f'bank must be 0 or 1, got {bank}')
+        value = int(value)
+        if value < 0 or value > 31:
+            raise ValueError(f'shift left must be in 0..31, got {value}')
+        if bank == 0:
+            self.SHIFT_LEFT_BANK0 = value
+        else:
+            self.SHIFT_LEFT_BANK1 = value
+
     def set_gain_table(self, gain_list, bank=0, gain_timestamp=None, log_gain=None):
         """
         Sets the scaler's digital gain table for the specified bank.
 
-        NOTE: if using the CRS platform with bitgrowth FFT, the gain_list must correspond to the frequency mapping within the FPGA. If your gains are ordered
-        in standard order, i.e., in increasing frequency order, you must first apply the "inverse" bin map, which translates the nominal frequency bin ordering
-        to that used within the FPGA. 
-        
-        Here is an example of how you can do this, assuming the frequency axis of your gain array is the last axis:
+        Gains are provided in natural bin order (increasing frequency order). This method reorders the gains internally to match the native FFT bin order. 
 
-            inv_bin_map = ca.ib[0].chan[0].FFT.get_bin_map(flatten = True, reverse = False) # get the inverse bin map
-            gain_inv = gain[..., inv_bin_map]
-
-        Then, you can set the gain table in the FPGA using
-
-            ca.ib[0].chan[0].SCALER.set_gain_table(gain_inv) # And include other arguments as needed
+        If USE_COMPLEX_GAINS is True, the gain_list is interpreted as a 16+16 bit complex number, with log_gain stored in that bank's left-shift register if not None.
+        If USE_COMPLEX_GAINS is False and log_gain >=0, the gain_list is interpreted as a 16-bit integer real gain and the log_gain is stored in that bank's left-shift register.
+        If USE_COMPLEX_GAINS is False and log_gain < 0 or log_gain is None, the gain_list is interpreted as a floating point real gain and a common log gain is computed automatically and stored in that bank's left-shift register.
     
         Parameters:
 
-            gain_list: gains to set:
+            gain_list: gains to set. Those are in natural bin order.
 
                 - if `gain_list` is an NBIN-element list or ndarray, the numeric gains therein are
                   applied to each bin.
@@ -280,14 +332,23 @@ class SCALER(MMI):
 
                 - if `gain_list` is `None`, no gains are set.
 
-            bank (int): The bank in which the gains are to be written. If ``bank`` is None or is -1,
-                the currently inactive bank is used. The method does not set the active bank.
+            bank (int): The bank in which the gains and left-shift are written (0 or 1).
+                Sets ``READ_COEFF_BANK`` to this bank (the target bank, which becomes
+                active on the next frame TLAST if synchronized switching is off).
 
             gain_timestamp: unix timestamp when the gains were calculated. If not provided, defaults
                 to current time.
 
-            log_gain (int): binary left shift to apply after the linear gain has been applied. Change is immediate and i
-                is not synchronized to bank switching. If `None`, floating point gains will be used.
+            log_gain (int): binary left shift to apply after the linear gain has been applied.
+                Stored in this bank's left-shift register via ``set_shift_left``. The datapath
+                uses it when this bank is active. See above for when log_gain is interpreted. 
+
+        Returns:
+            actual_gains (np.array): the gains that were actually set, after quantization and normalization, in natural bin order. 
+            
+            Complex and integer real gains do not include the log gain and should match 'gain_list' exactly after expansion to NBIN elements unless the provided gains wer enot integers.
+ 
+            However, floating point gains **do** include the automatically computed common log gain. The actual will roughly match the provided gains, plus or minus the quantization effects if the mantissa has more than 11 bits of precision.
         """
 
         if gain_list is None:
@@ -296,9 +357,6 @@ class SCALER(MMI):
         total_bins = self.fpga.NUMBER_OF_FREQUENCY_BINS
         use_complex_gains = self.USE_COMPLEX_GAINS
 
-        # Set the postscaler value
-        if log_gain is not None:
-            self.SHIFT_LEFT = int(log_gain)
 
 
         if use_complex_gains:
@@ -314,12 +372,19 @@ class SCALER(MMI):
             if len(gains) != total_bins:
                 raise ValueError(f'Either a scalar gain or a {total_bins} element gain vector must be provided')
 
+            # Set the postscaler value
+            if log_gain is not None:
+                self.set_shift_left(bank, int(log_gain))
+
             self.cached_gain_table[bank] = gains
             self.cached_gain_timestamp[bank] = time.time() if gain_timestamp is None else gain_timestamp
 
-            gain_string = np.reshape(np.vstack((gains.imag, gains.real)).T, 2 * total_bins).astype('<i2').tobytes()
+            actual_gains = gains  # excludes log gain
 
-        else: # use real gains
+            gains_in_native_order = self.fft.natural_to_fft_order(gains) # reorder into the FPGA's internal bin order
+            gain_string = np.reshape(np.vstack((gains_in_native_order.imag, gains_in_native_order.real)).T, 2 * total_bins).astype('<i2').tobytes()
+
+        else: # use real or floating point gains
             # print(f'Setting gains to {gain_list}')
             if np.isscalar(gain_list):
                 gains = np.ones(total_bins) * gain_list
@@ -335,7 +400,7 @@ class SCALER(MMI):
                 self.USE_FLOAT_GAINS = 1
                 glog = (np.floor(np.log2(gains))-10).astype(np.int32).clip(0,63)  #
                 glog_common = int(min(glog).clip(0, 31))
-                self.SHIFT_LEFT = glog_common
+                self.set_shift_left(bank, glog_common)
                 glog -= glog_common
                 gains /= 2.0**(glog + glog_common)
                 if any(gains < 0) or any(gains >= 2**11):
@@ -343,17 +408,29 @@ class SCALER(MMI):
                 if any(glog < 0) or any(glog >31):
                     raise ValueError(f'Floating point gain exponent of {max(glog)} exceeds 31 even after removal of the common exponent of {glog_common}')
 
-                gains = (glog.astype(np.uint16) << 11) | gains.astype(np.uint16)
+                glin = gains.astype(np.int16)
+                glog = np.int16(glog)
+                gain_words = (glog.astype(np.uint16) << 11) | glin
+                actual_gains = 2**(glog + glog_common) * gains  # includes auto-computed log gain
+                
 
             else: # use linear + log gains
                 self.USE_FLOAT_GAINS = 0
                 if any(gains < 0) or any(gains > 65535) or any(gains != gains.astype('<u2')):
                     raise ValueError('All gains must be integers between 0 and 65535')
+                        # Set the postscaler value
 
-            self.cached_gain_table[bank] = gains.astype(float)
+                log_gain = int(log_gain)
+                self.set_shift_left(bank, log_gain)
+
+                gain_words = gains.astype(np.int16)
+                actual_gains = gain_words.astype(float) # excludes log gain
+
+            self.cached_gain_table[bank] = actual_gains.astype(float)
             self.cached_gain_timestamp[bank] = time.time() if gain_timestamp is None else gain_timestamp
 
-            gain_string = gains.astype('<i2').tobytes()
+            gain_words_in_native_order = self.fft.natural_to_fft_order(gain_words) # reorder into the FPGA's internal bin order
+            gain_string = gain_words_in_native_order.astype('<i2').tobytes()
 
         n_pages = len(gain_string) // 512
         for page in range(n_pages):  # there are 8 pages of coefficients per bank
@@ -362,29 +439,35 @@ class SCALER(MMI):
 
         self.READ_COEFF_BANK = bank
 
+        return actual_gains
+
     def get_gain_table(self, bank=0, use_cache=False):
-        """Gets the scaler's complex gain table for the specified bank. Converts to numpy array.
+        """Gets the scaler's complex gain table for the specified bank.
 
-        Args:
+        Converts the FPGA table to a numpy array. Linear (mantissa) values
+        are returned; the left-shift must be read separately except in
+        floating-gain mode (see below).
 
-            bank (int): bank number for which the gain is requested
-
-            use_cache (bool): if True, the gain table will be returned from the cache if it exists, without reading from the FPGA. If False, the gain table will be read from the FPGA. 
-
-                NOTE: if the CRS platform with bitgrowth FFT is used, the gain cache will correspond to the frequency bin ordering of the FPGA, and will require the user to 
-                apply the bin mapping transformation from fft.py to recover the gains in standard frequency ordering. 
+        Parameters:
+            bank (int): Bank number for which the gain is requested.
+            use_cache (bool): If True, return the cached table when present
+                without reading the FPGA. If False, always read the FPGA.
 
         Returns:
+            numpy.ndarray: One gain per bin, in natural frequency order
+            (``self.fpga.NUMBER_OF_FREQUENCY_BINS`` values).
 
-            gain_table (np.array): an array of self.fpga.NUMBER_OF_FREQUENCY_BINS values. If ``self.USE_COMPLEX_GAINS == True``, we
-            have complex values, where the real and imaginary parts are 16 bit integers. If ``self.USE_COMPLEX_GAINS == False``,
-            we just have real gains.
+            If ``self.USE_COMPLEX_GAINS`` is True, complex 16-bit integer
+            Re/Im. The log gain is **not** included; read it with
+            ``get_shift_left(bank)``.
 
-            If self.USE_FLOAT_GAINS == True, floating point gains have been enabled, and extra processing is applied such that the user
-            is returned an array of gain values which corresponds to the *full* gain for that frequency bin, including the mantissa, exponent, and
-            common exponent components. Further, the returned gain_table is in the standard frequency bin ordering, i.e., in increasing frequency
-            ordering, rather than the FPGA's internal ordering for the bitgrowth FFT.
+            If complex gains are off and float gains are off, 16-bit
+            integers. The log gain is **not** included; read it with
+            ``get_shift_left(bank)``.
 
+            If complex gains are off and float gains are on, floating-point
+            values that include **both** the per-bin log gain and the common
+            log gain from ``get_shift_left(bank)``.
         """
         if use_cache and bank in self.cached_gain_table:
             return self.cached_gain_table[bank]
@@ -404,8 +487,11 @@ class SCALER(MMI):
                     gain_table.append(g_real + 1j * g_imag)  # [bin] = g_real +1j*g_imag
 
             gain_table = np.array(gain_table)
+            gain_table_in_natural_order = self.fft.fft_to_natural_order(gain_table) # reorder into natural order
 
-        else: # if not self.USE_COMPLEX_GAINS
+        else: # if we don't have complex gains, it's 16-bit or floating point real gains.
+
+            # First, read the 16-bit values for each bin in the bank.
             pages_per_bank = 32
             for page in range(32):  # there are 32 pages of coefficients per bank
 
@@ -420,18 +506,18 @@ class SCALER(MMI):
                 #     g = struct.unpack('<hh', page_table[2 * ix: 2 * ix + 2])
                 gain_table.append(page_table.tolist())
 
-        if self.USE_FLOAT_GAINS:
-            # Additional processing to return floating point gains as a single value for each frequency bin
-            gain_table = (np.array(gain_table) & 0xFFFF).flatten() # Full 16-bit value, meaningless without being processed
-            gain_mant = (gain_table & 0x7FF).astype(float) # Lower 11 bits, linear (mantissa) component
-            gain_exp = ((gain_table >> 11) + self.SHIFT_LEFT).astype(float) # Upper 5 bits, logarithmic (exponential) component, plus common log component
-            gain_table = gain_mant * 2**gain_exp # Full gain can be expressed as a single value 
+            # Decode floating point values if needed.
+            if self.USE_FLOAT_GAINS:
+                # Additional processing to return floating point gains as a single value for each frequency bin
+                gain_table = (np.array(gain_table) & 0xFFFF).flatten() # Full 16-bit value, meaningless without being processed
+                gain_mant = (gain_table & 0x7FF).astype(float) # Lower 11 bits, linear (mantissa) component
+                gain_exp = ((gain_table >> 11) + self.get_shift_left(bank)).astype(float) # Upper 5 bits, logarithmic (exponential) component, plus common log component
+                gain_table = gain_mant * 2**gain_exp # Full gain can be expressed as a single value 
 
-            # Get the bin map and apply to the gain_table (can be recovered from any channelizer)
-            bin_map = self.fpga.chan[0].FFT.get_bin_map(flatten=True, reverse=True)
-            gain_table = gain_table[bin_map]
+            # Reorder into natural order.
+            gain_table_in_natural_order = self.fft.fft_to_natural_order(gain_table) # reorder into natural order
 
-        return gain_table
+        return gain_table_in_natural_order
 
     def get_gains_timestamp(self, bank=0):
         """
@@ -452,7 +538,8 @@ class SCALER(MMI):
         """ Displays the status of the scaler module"""
         print(f'-------------- CHAN[{int(self.instance_number)}].SCALER STATUS --------------')
         print(f' SCALER Bypass: {bool(self.BYPASS)}')
-        print(f' Shift left: {int(self.SHIFT_LEFT)}')
+        print(f' Shift left bank 0: {self.get_shift_left(0)}')
+        print(f' Shift left bank 1: {self.get_shift_left(1)}')
 
     def get_sim_output(self, scaler_input):
         bypass = self.BYPASS
@@ -475,7 +562,7 @@ class SCALER(MMI):
             data_real = np.reshape([word[0], word[2]], (number_of_frames, 2 * words_per_frame), order='F')
             data_imag = np.reshape([word[1], word[3]], (number_of_frames, 2 * words_per_frame), order='F')
             gains = self.get_gain_table()  # 16 bits
-            shift_left = self.SHIFT_LEFT
+            shift_left = self.get_shift_left(self.CURRENT_GAIN_BANK)
             rounding_mode = self.ROUNDING_MODE
             zero_on_sat = self.ZERO_ON_SATURATION
             offset_binary = self.USE_OFFSET_BINARY

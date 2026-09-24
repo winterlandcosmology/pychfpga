@@ -3,7 +3,11 @@
 Installation
 ============
 
-This page describes how to install and configure the software required to run ch_master and all the other software included in :mod:`pychfpga` package.
+This page describes how to install and configure the software required to run
+``fpga_master`` and the rest of the :mod:`pychfpga` package.
+
+Private repositories require SSH access first: see :doc:`ssh_keys`. For
+IceBoard wiring, see :doc:`hardware_setup`.
 
 Requirements
 ------------

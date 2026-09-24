@@ -1,12 +1,20 @@
-#Pull request pipeline
-#Validation of pull requests into the main deployment branch
 
 clone:
   lfs: true  # make sure LFS files are fetched, otherwise we don't have our images...
 
 image: python:3.12
 
+definitions:
+  caches:
+    uv-cache:
+      key:
+        files:
+          - docs/uv.lock
+      path: ~/.cache/uv
+
 pipelines:
+  # Pull request pipeline
+  # Validation of pull requests into the main deployment branch
   pull-requests:
     '**':
       - step:
@@ -14,27 +22,34 @@ pipelines:
           # Test which require no configuaration of hardware components and are therefore platform agnostic
           # This test will ensure that none of the modifications made into the deploy branch cause any disturbances to other elements of the project
           caches:
-            - pip
+            - uv-cache
           script:
-            - if [ -f pyproject.toml ]; then pip install -e .; fi
-            - pip install pylint
+            - pipe: atlassian/uv-cli-setup:0.1.1
+              variables:
+                UV_VERSION: "0.11.5"
+            - ./setup-uv.sh
             #the errors only tags limits the scope of the linter to purely functional errors and ignores style concerns
-            - pylint pychfpga/ --errors-only
+            - make lint
   branches:
     '{master,develop,jfc/dev}':
       - step:
+          name: Build and publish documentation
           caches:
-            - pip
-          script: # Modify the commands below to build your repository.
+            - uv-cache
+          script:
+            - pipe: atlassian/uv-cli-setup:0.1.1
+              variables:
+                UV_VERSION: "0.11.5"
+            - ./setup-uv.sh
             - DOC_REPO='winterlandcosmology.bitbucket.io'
             - DOC_REPO_URL='git@bitbucket.org:winterlandcosmology/'$DOC_REPO'.git'
             - DOC_SPHINX_ROOT_FOLDER='docs'
             - DOC_BUILD_FOLDER='build'
             - DOC_PUBLISH_FOLDER='pychfpga/'$BITBUCKET_BRANCH
-            - pip install -e .[docs]
-            - cd $DOC_SPHINX_ROOT_FOLDER
+            - uv sync --locked --project ./docs
             - echo 'Building for '$BITBUCKET_REPO_SLUG/$BITBUCKET_BRANCH
-            - make html
+            - make docs
+            - cd $DOC_SPHINX_ROOT_FOLDER
             - cd $DOC_BUILD_FOLDER
             - git clone $DOC_REPO_URL
             - rm -rf $DOC_REPO/$DOC_PUBLISH_FOLDER/*
@@ -46,5 +61,3 @@ pipelines:
             - git add --all $DOC_PUBLISH_FOLDER
             - git diff-index --quiet HEAD -- || git commit -a -m "bitbucket-pipelines updated $BITBUCKET_BRANCH branch into $DOC_PUBLISH_FOLDER sphinx-generated documentation"
             - git push
-
-

@@ -1,0 +1,23 @@
+/* Use full browser width (sphinx-rtd-theme defaults to ~800px). */
+.wy-nav-content {
+    max-width: none;
+}
+
+.wy-nav-content-wrap {
+    max-width: none;
+}
+
+/* RTD/docutils shrink <code>; match surrounding text in nav and headings. */
+.wy-nav-content code.literal,
+.wy-nav-content code.xref,
+.wy-menu-vertical code.literal,
+.wy-menu-vertical code.xref {
+    font-size: 1em;
+}
+
+.wy-nav-content h1 code.literal,
+.wy-nav-content h2 code.literal,
+.wy-nav-content h3 code.literal,
+.wy-nav-content h4 code.literal {
+    font-size: inherit;
+}

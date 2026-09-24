@@ -122,6 +122,26 @@ class State(NameSpace):
             raise TypeError("has_attr() requires at least one name")
         return all(name in self for name in names)
 
+    @classmethod
+    def get_common_attr(cls, states, attr):
+        """Return ``attr`` from ``states``; all values must match (``_values_equal``).
+
+        Returns the first value by identity so nested ``State`` objects stay
+        shared. Empty ``states`` or a mismatch raises ``ValueError`` naming
+        ``attr``.
+        """
+        if not states:
+            raise ValueError(
+                f"Cannot get common attribute {attr!r}: no states"
+            )
+        first = states[0][attr]
+        for state in states[1:]:
+            if not cls._values_equal(first, state[attr]):
+                raise ValueError(
+                    f"Attribute {attr!r} differs across states"
+                )
+        return first
+
     def update(self, **values):
         """Assign flat keyword values with equality checking.
 

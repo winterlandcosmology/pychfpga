@@ -54,6 +54,7 @@ from wtl.namespace import NameSpace, merge_dict
 from wtl.config import load_yaml_config
 
 from pychfpga.common import Ccoll
+from pychfpga.common.perf import Perf
 
 from pychfpga.hardware import HardwareMap, Motherboard, Crate
 
@@ -157,6 +158,11 @@ class FPGAArray(object):
         """Return the normal attributes plus every array-wide method name."""
         return sorted(set(super().__dir__()) | set(self.get_array_methods()))
 
+    def get_mode(self):
+        """Return the operational FPGA mode programmed on the boards.
+        """
+        return getattr(self, 'mode', None)
+
     def __init__(
             self,
 
@@ -174,7 +180,6 @@ class FPGAArray(object):
 
             bitfile=None,
             prog=None,
-            open=None,
             init=None,
             if_ip=None,
             udp_retries=10,
@@ -356,13 +361,6 @@ class FPGAArray(object):
                   objects representing the firmware modules.
                 - init=3: full initialization of the FPGA in the specified `mode` is performed
 
-            open (int): Alternate method to set the initialization
-                level:
-
-                - open=None: Use the default init level
-                - open=0: sets init=1 (do not open communication with FPGA firmware; only connect to the platform)
-                - open=1: sets init=3 (connect with the FPGA firmware and initializes it fully)
-
             if_ip (str): string corresponding to the IP address of adapter through
                 which the connection to the FPGA will be established. If not
                 specified, the system will assume that the FPGA is reached trough
@@ -529,10 +527,10 @@ class FPGAArray(object):
     async def init_async(self, **kwargs):
         """Co-routine implementation of fpga_array initialization.
 
-        Hardware-map / discovery parameters are consumed here. Remaining
-        ``kwargs`` are forwarded unchanged to
-        :meth:`_run_provider_array_init` (and thus firmware ``array_init_async``).
-        Constructor parameters are documented on :meth:`__init__`.
+        Hardware-map / discovery parameters are consumed here. FPGA
+        programming and open (with retry) run here. Remaining ``kwargs`` are
+        forwarded to firmware ``array_init_async``. Constructor parameters
+        are documented on :meth:`__init__`.
         """
         # Hardware-map / discovery params (not forwarded to array_init)
         hwm = kwargs.pop('hwm', None)
@@ -548,7 +546,13 @@ class FPGAArray(object):
         syslog_log_level = kwargs.pop('syslog_log_level', None)
         # Used here for platform firmware load; array_init_async no longer consumes it.
         platform_firmware_pathname = kwargs.pop('platform_firmware_pathname', None)
+        # Used here for FPGA programming / open; not forwarded to array_init.
+        bitfile = kwargs.pop('bitfile', None)
+        prog = kwargs.pop('prog', None)
+        udp_retries = kwargs.pop('udp_retries', 10)
         # Bound to locals for repeated use below; left in kwargs for array_init_async.
+        mode = kwargs.get('mode')
+        init = kwargs.get('init')
         if_ip = kwargs.get('if_ip')
         fpga_ip_addr_fn = kwargs.get('fpga_ip_addr_fn', '(a,b,3,d)')
 
@@ -608,10 +612,9 @@ class FPGAArray(object):
         self.logger.info(f'{self!r}:     mdns_timeout = {mdns_timeout}')
         self.logger.info(f'{self!r}:     platform_firmware_pathname = {platform_firmware_pathname}')
         self.logger.info(f'{self!r}:     exclude_iceboards = {exclude_iceboards}')
-        self.logger.info(f'{self!r}:     bitfile = {kwargs.get("bitfile")}')
-        self.logger.info(f'{self!r}:     prog = {kwargs.get("prog")}')
-        self.logger.info(f'{self!r}:     open = {kwargs.get("open")}')
-        self.logger.info(f'{self!r}:     init = {kwargs.get("init")}')
+        self.logger.info(f'{self!r}:     bitfile = {bitfile}')
+        self.logger.info(f'{self!r}:     prog = {prog}')
+        self.logger.info(f'{self!r}:     init = {init}')
         self.logger.info(f'{self!r}:     no_mezz = {no_mezz}')
         self.logger.info(f'{self!r}:     sampling_frequency = {kwargs.get("sampling_frequency")}')
         # self.logger.info(f'{self!r}:     reference_frequency = {reference_frequency}')
@@ -619,6 +622,8 @@ class FPGAArray(object):
         self.logger.info(f'{self!r}:     sync_source = {kwargs.get("sync_source")}')
         self.logger.info(f'{self!r}:     fpga_ip_addr_fn = {fpga_ip_addr_fn}')
         self.logger.info(f'{self!r}: ------------------------')
+        self.perf = Perf()
+        self.perf.start('hardware map', description='Parse HWM and build the board list')
 
         __main__._host_interface_ip_addr = if_ip
 
@@ -704,6 +709,7 @@ class FPGAArray(object):
         if ping:
             boards_to_ping = [mb for mb in motherboards if mb.hostname]
             if boards_to_ping:
+                self.perf.start('ping', description='TCP-ping boards with explicit hostnames')
                 # Find iceboards to ping. Use `as_dict` so mb_to_ping does not change as we delete boards from the hwm
                 self.logger.info(f'{self!r}: Pinging {len(boards_to_ping)} Motherboards with explicit hostnames')
                 # TCP-ping boards. Make is an asynchronous parallel call to all boards
@@ -798,6 +804,7 @@ class FPGAArray(object):
             if mb.serial == '*':
                 mb.delete_instance()
         if discovery_groups:
+            self.perf.start('network discovery', description='Find boards and crates by serial number')
             self.logger.info(f'{self!r}: Discovering Motherboards and Crates specified by serial number')
             explicit_board_serials = set()
             for targets in discovery_groups.values():
@@ -845,6 +852,7 @@ class FPGAArray(object):
 
         # Set the platform firmware on the motherboards that have a hostname
         # We separate the motherboards by platform class, then call the platform-specific firmware set function for each class with the list of boards belonging to that class.
+        self.perf.start('open platform', description='Load platform firmware and open TCPipe')
         platform_firmware_groups = dict()
         for mb in motherboards:
             if mb.hostname:
@@ -872,6 +880,7 @@ class FPGAArray(object):
         # Complete serial, crate and slot information on Motherboard that miss
         # that information by talking directly to the ARM
         # (i.e without using mDNS).
+        self.perf.start('board discovery', description='Resolve serial, slot, and crate from the boards')
         mb_without_serial = [mb for mb in motherboards if mb.hostname and mb.serial is None]
         if mb_without_serial:
             t0 = time.time()
@@ -1002,6 +1011,7 @@ class FPGAArray(object):
         #################################
         # Auto-discover mezzanines and add them to the hardware map.
         if motherboards and not no_mezz:
+            self.perf.start('mezzanines', description='Discover mezzanines on each motherboard')
             self.logger.info(f'{self!r}: Discovering Mezzanines...')
             # make sure we see the previous prints right away so we have a better feeling of what is happening
             self.print_flush()
@@ -1089,7 +1099,7 @@ class FPGAArray(object):
 
         # We have our final hardware map. Update the `repr` caches and array method lists
         for mb in self.ib:
-            mb.update_array_methods()
+            mb.update_array_method_classes()
             mb.set_cache()
 
 
@@ -1097,44 +1107,65 @@ class FPGAArray(object):
 
         self.logger.info(f'{self!r}: Done creating {self!r}')
 
-        await self._run_provider_array_init(**kwargs)
+        if mode:
+            if init is None:
+                init = 3
+            if prog is None:
+                prog = 2
+        else:
+            init = 0
+        kwargs['init'] = init
+
+        # Store the operational FPGA mode for the array
+        self.mode = mode
+
+
+        if self.ib:
+            # try programming the FPGA and establishing communicaiton with it up to 3 times
+            max_trials = 3
+            for trial in range(1, max_trials + 1):
+
+                if init >= 1:
+                    self.logger.info(f'{self!r}: Configuring FPGAs...')
+                    self.perf.start('FPGA programming', description='Init Level 1/prog: Upload bitstreams')
+                    if prog:
+                        await self.ib.set_fpga_bitstream_async(mode, force=(prog > 1), bitfile_override=bitfile)
+                else:
+                    break # nothing to do, exit the trial loop
+
+                if init >= 2:
+                    self.perf.start('FPGA open', description='Init level 2: Open MMI and PLL_SYNC')
+                    try:
+                        await self.ib.open_fpga_async(
+                                udp_retries=udp_retries,
+                                fpga_ip_addr_fn=kwargs.get('fpga_ip_addr_fn'),
+                                interface_ip_addr=if_ip,
+                                irigb_source=kwargs.get('sync_source'))
+                        break  # it worked, exit the trial loop
+                    except IOError:
+                        self.logger.warning(f'{self!r}: Error while initializing core firmware on trial {trial}/{max_trials}.')
+                        if trial == max_trials:
+                            raise IOError(
+                                f'{self!r}: Unable to initializing FPGA core firmware '
+                                f'after {trial} trials. Giving up.')
+                        else:
+                            prog = 2  # force reprogramming the FPGA on next trial
+                            self.logger.warning(f'{self!r}: Reprogramming FPGA and trying again.')
+                else:
+                    break # We skipped this step, so let's assume it worked, exit the trial loop
+
+        array_init = self.get_array_methods().get('array_init_async')
+        if array_init is not None:
+            await array_init(**kwargs)
+        self.perf.stop()
+        self.logger.info(f'{self!r}: Init timing\n{self.perf.summary()}')
+        self.logger.info(f'{self!r}: *** Initialization completed in {self.perf.get_delay()}')
 
         self.print_flush()
 
         #################################
         # Completed array creation and initialization
         #################################
-
-    async def _run_provider_array_init(self, **init_kwargs):
-        """Delegate firmware-specific initialization to array method providers."""
-        provider_classes = set()
-        for mb in self.ib:
-            provider_classes.update(mb.get_array_method_classes())
-
-        if not provider_classes:
-            mode = init_kwargs.get('mode')
-            if mode and self.ib:
-                from pychfpga.fpga_firmware.fpga_firmware import FPGAFirmware
-                bitfile = init_kwargs.get('bitfile')
-                for mb in self.ib:
-                    part_number = getattr(mb, 'part_number', None)
-                    if not part_number:
-                        continue
-                    fw_cls, _, _ = FPGAFirmware.get_firmware(
-                        part_number, mode, bitfile_override=bitfile)
-                    array_method_class = getattr(fw_cls, 'array_method_class', None)
-                    if array_method_class is not None:
-                        provider_classes.add(array_method_class)
-
-        for cls in provider_classes:
-            provider = self._array_method_instances.get(cls) or cls(self)
-            self._array_method_instances[cls] = provider
-            init_fn = getattr(provider, 'array_init_async', None)
-            if init_fn is not None:
-                await init_fn(**init_kwargs)
-                break
-
-        self.get_array_methods()
 
     @staticmethod
     def _to_integer(x):
@@ -1899,7 +1930,7 @@ def add_fpga_array_arguments(parser):
                         '--prog or prog 1: programs the FPGA only if not already programmed (requires --mode). '
                         '--prog 2: always program the FPGA (requires --mode).')
     parser.add_argument('-b', '--bitfile',   type=str, help='Folder in which to search for FPGA bitstream or full path to a bistream to use explicitely (mode must still be specified)')
-    parser.add_argument('-m', '--mode',      type=str, help="Operational mode ('shuffle16', 'shuffle256', etc.). When specified, the FPGA is programmed with the proper firmware bitstream (unless blocked with --prog 0) and the mode is initialized (unless blocked with -open 0). If not specified, only a connection to the platform is established")
+    parser.add_argument('-m', '--mode',      type=str, help="Operational mode ('shuffle16', 'shuffle256', etc.). When specified, the FPGA is programmed with the proper firmware bitstream (unless blocked with --prog 0) and the mode is initialized (unless blocked with --init 0). If not specified, only a connection to the platform is established")
     parser.add_argument('--init',      type=int, nargs='?', const=None,
                         help='Overrides FPGA initialization level'
                         '--init 0: only connect to platform'
@@ -1907,10 +1938,6 @@ def add_fpga_array_arguments(parser):
                         '--init 2: establish connection with FPGA firmware and create firmware objects'
                         '--init 3: initialize the desired operational mode (requires --mode)')
 
-    parser.add_argument('-o', '--open',      type=int, nargs='?', const=None,
-                        help='Alternate way of overriding the array initialization level'
-                        '--open 0: equivalent to --init 0'
-                        '--open 1: equivalent to --init 3')
     parser.add_argument('--sync_method',     type=str, help="Sets the global syncing method ('distributed_time', 'centralized_time_trigger', 'centralized_soft_trigger', 'local_soft_trigger')")
     parser.add_argument('--sync_source',     type=str, help="Sets the global syncing source ('bp_gpio_int', 'bp_time', 'bp_trig')")
     parser.add_argument('--sync_master',     type=str, help="Serial number of the Motherboard that generates the time or trig signal")
@@ -2091,8 +2118,6 @@ def create_fpga_array(args=None):
     - prog: Overrides the default FPGA bitstream configuration level. 0=Do not program, 1=program if needed, 2=always program.
 
     - init: Overrides the array initialization level. 0=just connect to platform, 1= program FPGA, 2= connect to firmware and configure firmware object, 3=initialize firmware indesired mode.
-
-    - open: Alternate way of specified init. 0: just connect to platform, 1: program FPGA, connect to firmware and configure objects and initialize operational mode.
 
     - if_ip: address of the interface used to communicate with the FPGA. If
         not specified, the same interface as the one used for communicate

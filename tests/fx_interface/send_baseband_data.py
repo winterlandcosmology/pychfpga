@@ -185,7 +185,7 @@ for n in range(NPOLS):
     # Apply some processing to recover the value in a fully linear unit.
     gain_actual = (np.array(i.chan[n].SCALER.get_gain_table(bank = 0)) & 0xFFFF).flatten() # Full 16-bit value, meaningless without being processed
     gain_lin_actual[n] = gain_actual & 0x7FF # Lower 11 bits, linear (mantissa) component
-    gain_log_actual[n] = (gain_actual >> 11) + i.chan[n].SCALER.SHIFT_LEFT # Upper 5 bits, logarithmic (exponential) component, plus common log component
+    gain_log_actual[n] = (gain_actual >> 11) + i.chan[n].SCALER.get_shift_left(bank = 0) # Upper 5 bits, logarithmic (exponential) component, plus common log component
 
 # Return the data arrays, ensuring that bin maps are applied where needed (i.e., if inverse bin
 # maps were applied earlier)

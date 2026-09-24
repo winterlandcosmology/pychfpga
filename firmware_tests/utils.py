@@ -19,7 +19,7 @@ def plot(datasets, split_complex=False, title="test"):
     # Check all datasets are the same length
     lengths = [d.size for d in datasets]
     if len(set(lengths)) != 1:
-        raise ValueError("All datasets must be the same length if data_range is not specified")
+        raise ValueError(f"All datasets must be the same length. Instead, they are the following sizes: {lengths}")
 
     fig, axs = plt.subplots(2 if split_complex else 1)
     for i in range(2*len(datasets)):
@@ -74,3 +74,38 @@ async def ping_sources_async(port_map):
                  for src in port_info['sources']]
     src_if_addrs = await asyncio.gather(*[ping_async(src) for src in src_addrs])
     return dict(zip(src_addrs, src_if_addrs))
+
+def gen_data(func, samples, **kwargs):
+    if func == 'a': #constant input
+        return np.ones(samples) * kwargs.get('a', 1)
+    elif func == 'ab': #alternating input
+        period = kwargs.get('period', 1)
+        res = np.tile(np.concatenate((np.repeat(kwargs.get('a', 0), period), np.repeat(kwargs.get('b', 1), period))), samples//(2*period))
+        return np.append(res, np.repeat(kwargs.get('a', 0), samples - res.size))
+    elif func  == 'tile':
+        pattern = kwargs.get('pattern', [0, 1])
+        res = np.tile(pattern, samples // len(pattern))
+        return np.append(res, pattern[:samples - res.size])
+    elif func == 'ramp': #single ramp from min to max inclusive
+        min = kwargs.get('min', 0)
+        max = kwargs.get('max', samples)
+        res = np.repeat(np.arange(min, max + 1), samples // (max - min + 1))
+        return np.append(res, max * np.ones(samples - res.size))
+    elif func == 'periodic_ramp': #periodic ramp from min to max inclusive
+        #TODO: fix to ensure bounds are always exactly respected
+        min = kwargs.get('min', 0)
+        max = kwargs.get('max', samples)
+        res = np.tile(np.arange(min, max + 1), samples // (max - min + 1))
+        return np.append(res, np.arange(min, min + (samples - res.size)))
+    elif func == 'complex_ramp': #complex ramp from min+min*j to max+max*j
+        min = kwargs.get('min', 0)
+        max = kwargs.get('max', np.sqrt(samples))
+        half_samples = samples // 2
+        reals = np.repeat(np.arange(min, max + 1), half_samples // (max - min + 1))
+        reals = np.append(reals, max * np.ones(half_samples - reals.size))
+        cmplx = np.tile(np.arange(min, max + 1), half_samples // (max - min + 1))
+        cmplx = np.append(cmplx, np.arange(min, min + half_samples - cmplx.size))
+        return np.stack((reals, cmplx), axis=1).reshape(-1) #interleave the real and complex arrays
+    elif func == 'arb': #user-provided data buffer
+        return kwargs.get('data', np.zeros(samples))
+    raise ValueError(f"Unknown data generation function '{func}'")

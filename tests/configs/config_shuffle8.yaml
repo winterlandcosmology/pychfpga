@@ -166,7 +166,7 @@ def: &default  # defaults, referenced below
             mode: none  # Must specify. shuffle 256 and 512 require crate numbers
             prog: 1
             open: 1
-            frames_per_packet: 2     # how many frames per packet sent to gpu
+            frames_per_packet: 1     # how many frames per packet sent to gpu
             sync_method: 'distributed_time'
             sync_source: 'bp_time'
             sync_master : null # Serial number of the board that provides the sync for the all the boards in fpga crate

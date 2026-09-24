@@ -136,5 +136,7 @@ errors-only = true
 [project.scripts]
     fpga_master = "pychfpga.fpga_master:main"
     pychfpga_gps = "pychfpga.gps:main"
+    raw_acq = "pychfpga.raw_acq.__main__:main"
+    chime_raw_acq = "pychfpga.raw_acq.__main__:main"
     pychfpga_raw_acq = "pychfpga.raw_acq.__main__:main"
     pychfpga_ps = "pychfpga.ps:main"

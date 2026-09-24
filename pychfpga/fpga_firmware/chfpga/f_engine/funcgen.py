@@ -494,33 +494,25 @@ class FUNCGEN(MMI):
         else:
             self.set_data_source('adc')  # use the ADC data
 
+        board_cfg = self.fpga.config
+
+        self.config.capture_format = State(
+            fmt_bus_width=8 * board_cfg.adc_bytes_per_sample,  # number of bits used to store the value on the on the capture bus (multiple of 8 bits)
+            fmt_data_width=board_cfg.adc_bits_per_sample,
+            fmt_is_complex=False,
+            fmt_interleave_factor=1,
+            use_offset_encoding=False,
+        )
         self.config.update(
             fn_id=self.FN_ID,
             fn_code=self.FUNCTION,
             left_shift=self.LEFT_SHIFT,
             right_shift=self.RIGHT_SHIFT,
         )
-        self.get_config()
 
-    def get_config(self):
-        """Refresh ADC capture_format on ``self.config`` from board constants."""
-        cfg = self.config
-        board = self.fpga.config
-        fmt_attrs = ('adc_bytes_per_sample', 'adc_bits_per_sample')
-        if cfg.has_attr('capture_format') and not board.has_changed(fmt_attrs, context=self):
-            return cfg
-
-        if not cfg.has_attr('capture_format'):
-            cfg.capture_format = State()
-        cfg.capture_format.update(
-            fmt_bus_width=8 * board.adc_bytes_per_sample,
-            fmt_data_width=board.adc_bits_per_sample,
-            fmt_is_complex=False,
-            fmt_interleave_factor=1,
-            use_offset_encoding=False,
-        )
-        board.ack(fmt_attrs, context=self)
-        return cfg
+    def update_config(self):
+        """Refresh derived attributes and return the config object."""
+        return self.config  # There are no derived attributes
 
     def status(self):
         """ Displays the status of the function generator module """

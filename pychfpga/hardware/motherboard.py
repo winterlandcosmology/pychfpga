@@ -128,9 +128,9 @@ class Motherboard(HardwareMap):
         self._cached_repr = None
 
         # Instance default for the FPGAArray-method provider cache. Shadows
-        # the class attribute; refreshed by ``update_array_methods`` when the
+        # the class attribute; refreshed by ``update_array_method_classes`` when the
         # firmware changes.
-        self._array_method_classes = self.get_array_method_classes()
+        self.update_array_method_classes()
 
         self.logger = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ class Motherboard(HardwareMap):
         self.serial = serial
         self.slot = slot
         self.subarray = subarray
-        self.extra_args = kwargs
+        self.extra_hwm_args = kwargs
 
         self.crate = None  # Crate (or backplane) object on which the motherboard is mounted
         self.mezzanine = {}  # Mezzanines attached to this motherboard ({slot:mezz_object, ...})
@@ -189,20 +189,29 @@ class Motherboard(HardwareMap):
                     + (self.fpga.__dir__() if self.fpga else [])))
 
     def get_array_method_classes(self):
-        """Return array-method provider classes for this board and firmware."""
-        return frozenset(
-            cls for cls in (
-                self.array_method_class,
-                self.fpga.array_method_class if self.fpga else None) if cls)
+        """Return the cached array-method provider classes for this board."""
+        return self._array_method_classes
 
-    def update_array_methods(self):
-        """Refresh the cached set of FPGAArray-method provider classes.
+    def update_array_method_classes(self):
+        """Rebuild the cached frozenset of array-method provider classes.
 
-        Always builds a new ``frozenset`` object so :class:`FPGAArray` can
-        detect firmware/provider changes by comparing its tuple of
-        per-motherboard sets.
+        Merges this board's ``array_method_class`` with the firmware class
+        dict ``fpga._array_method_classes``. Assigns a new ``frozenset`` so
+        :class:`FPGAArray` can detect provider changes by comparing its tuple
+        of per-motherboard sets.
         """
-        self._array_method_classes = self.get_array_method_classes()
+        merged = {}
+        if self.array_method_class:
+            merged[type(self).__name__] = self.array_method_class
+        if self.fpga:
+            for key, cls in self.fpga._array_method_classes.items():
+                existing = merged.get(key)
+                if existing is not None and existing is not cls:
+                    raise RuntimeError(
+                        f'{self!r}: array method key {key!r} conflict: '
+                        f'{existing.__name__} vs {cls.__name__}')
+                merged[key] = cls
+        self._array_method_classes = frozenset(merged.values())
         return self._array_method_classes
 
     @classmethod
@@ -279,7 +288,7 @@ class Motherboard(HardwareMap):
                 that matches the specified crate number, or one is created
                 with that crate number to hold the desired crate number value.
 
-            **kwargs: Any other argument is stored in the extra_args
+            **kwargs: Any other argument is stored in the extra_hwm_args
                 dictionary, and will be transferred if this instance is
                 converted into a new class.
         """
@@ -364,10 +373,10 @@ class Motherboard(HardwareMap):
         slot = slot if slot is not None else self.slot
         subarray = subarray if subarray is not None else self.subarray
         crate_number = self.get_crate_number()
-        extra_args = {**self.extra_args, **kwargs}
+        extra_hwm_args = {**self.extra_hwm_args, **kwargs}
         if new_class and self.__class__ is not new_class:
-            self.logger.debug(f"update_instance: Creating new instance with {new_class.__name__}(serial={serial}, hostname={hostname}, slot={slot}, subarray={subarray}, **{extra_args})")
-            other = new_class(serial=serial, hostname=hostname, slot=slot, subarray=subarray, **extra_args)
+            self.logger.debug(f"update_instance: Creating new instance with {new_class.__name__}(serial={serial}, hostname={hostname}, slot={slot}, subarray={subarray}, **{extra_hwm_args})")
+            other = new_class(serial=serial, hostname=hostname, slot=slot, subarray=subarray, **extra_hwm_args)
             self.logger.debug(f"{self!r}: Updating newly created instance...")
             other.update_instance(crate_number=crate_number, crate=self.crate)  # update crate and backrefs
             # Update Mezzanine references to the new instance
@@ -384,7 +393,7 @@ class Motherboard(HardwareMap):
             self.hostname = hostname
             self.serial = serial
             self.subarray = subarray
-            self.extra_args = extra_args
+            self.extra_hwm_args = extra_hwm_args
             # remove previous crate backref if it exists
             if self.crate and self.slot:
                 self.crate.slot.pop(self.slot, None)
@@ -605,14 +614,14 @@ class Motherboard(HardwareMap):
             None
         """
         self.fpga = fpga_fw
-        self.update_array_methods() # update the array-method providers used by FPGAArray
+        self.update_array_method_classes() # update the array-method providers used by FPGAArray
 
     async def set_fpga_bitsream_async(self, firmware_class, force=True):
         """ Programs the FPGA with the specified bitstream.
 
         Once the FPGA is programmed, the firmware class is stored in the `fpga` attribute.
 
-        Make sure to call `update_array_methods()` after programming the FPGA
+        Make sure to call `update_array_method_classes()` after programming the FPGA
         to update the array-method providers used by FPGAArray.
 
         Parameters:
@@ -679,13 +688,7 @@ class Motherboard(HardwareMap):
     async def init_fpga_async(self, **kwargs):
         """ Initializes the FPGA firmware.
         """
-        # Only TCPipe-backed platforms support BSB command aggregation.
-        tcpipe = self.__dict__.get('tcpipe')
-        if tcpipe is not None:
-            with tcpipe.aggregate_commands():
-                await self.fpga.init_async(**kwargs)
-        else:
-            await self.fpga.init_async(**kwargs)
+        await self.fpga.init_async(**kwargs)
 
     # ****************************
     # Metrics

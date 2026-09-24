@@ -34,6 +34,19 @@ class UCorrPacketProcessor(PacketProcessorBase):
     NBYTES_PER_HEADER = 10 # Number of bytes in the UDP payload header
     NBYTES_PER_PROD = 5  # Number of bytes used to store each complex correlator product ( (18+18) bits = 36 bits, 5 bytes = 40 bits)
 
+    # Firmware aggregates this many UCORR bins (each a full header+products record)
+    # into one AXIS frame / UDP datagram by gating TLAST (``BINS_PER_FRAME_LOG2`` in
+    # UCMAC44_ARRAY.vhd; 2**3 = 8). The receiver parses each datagram as up to this
+    # many records along an added sub-packet axis. Must match the firmware factor.
+    FRAMES_PER_PACKET = 8
+
+    # Dtype of the formatted correlation output (:meth:`get_formatted_data`). complex64
+    # halves the format-stage scatter write and the returned buffer versus complex128,
+    # and is lossless here: accumulated products are integers < ~2**21 (soft_integ_period
+    # * 2**17), well within float32's exact-integer range (2**24). Set to np.complex128
+    # if a consumer requires double precision.
+    OUTPUT_COMPLEX_DTYPE = np.complex64
+
 
     def __init__(self, packet_receiver, config_getter, receive_window=3, verbose=0):
         """Build a packet parser and linear integ-buffer pipeline.
@@ -80,10 +93,18 @@ class UCorrPacketProcessor(PacketProcessorBase):
         self.ts_mask = np.uint64(0xFFFFFFFFFFFF)
         self.bin_mask = np.uint16(0b111_11111111)
 
-        n_packets = self.pr.n_packets
-        self.pkt_corr = np.empty((n_packets,), dtype=np.uint16)
-        self.pkt_bin = np.empty((n_packets,), dtype=np.uint16)
-        self.pkt_bin_set = np.empty((n_packets,), dtype=np.uint8)
+        # Per-frame decode scratch is indexed by the flat frame index ``bix``
+        # (one entry per aggregated sub-packet), so size it to the flat space
+        # M = n_packets * FRAMES_PER_PACKET, matching the base-class scratch.
+        # Was one slot per datagram (FRAMES_PER_PACKET == 1):
+        #     n_packets = self.pr.n_packets
+        #     self.pkt_corr = np.empty((n_packets,), dtype=np.uint16)
+        #     self.pkt_bin = np.empty((n_packets,), dtype=np.uint16)
+        #     self.pkt_bin_set = np.empty((n_packets,), dtype=np.uint8)
+        m = self.pr.n_packets * self.FRAMES_PER_PACKET
+        self.pkt_corr = np.empty((m,), dtype=np.uint16)
+        self.pkt_bin = np.empty((m,), dtype=np.uint16)
+        self.pkt_bin_set = np.empty((m,), dtype=np.uint8)
 
         # Linear buffers, sized in update_config().
         self.acc_re_buf = np.empty(0, dtype=np.uint8)
@@ -158,19 +179,43 @@ class UCorrPacketProcessor(PacketProcessorBase):
                 print("UCorrPacketProcessor: bin_map changed; rebuilding views and buffers.")
 
             # Packet view depends on NCMAC.
+            # Was one record per datagram (no sub-packet axis):
+            #     self.buf_struct = self.pr.buf[:, :self.packet_dtype.itemsize].view(self.packet_dtype)[:, 0]
+            #     self.buf_cookie = self.buf_struct["header"]["cookie"][:, 0]          # (n_packets,)
+            #     self.buf_flags = self.buf_struct["header"]["flags"][:, 0]
+            #     self.buf_stream_id = self.buf_struct["header"]["stream_id"][:, 0]
+            #     self.buf_ts = self.buf_struct["header"]["ts"][:, 0]
+            #     self.buf_data_h = self.buf_struct["data"]["h"]    # (n_packets, NCMAC)
+            #     self.buf_data_l = self.buf_struct["data"]["l"]
+            #     self.buf_data_sat = self.buf_struct["data"]["sat"]
+            #     self.temp32 = self.resize_buffer("temp32_buf", (self.pr.n_packets, NCMAC), np.int32)
             NCMAC = config.NCMAC
             self.packet_dtype = np.dtype([("header", self.header_dtype, (1,)), ("data", self.product_dtype, (NCMAC,))])
-            self.buf_struct = self.pr.buf[:, :self.packet_dtype.itemsize].view(self.packet_dtype)[:, 0]
-            self.buf_cookie = self.buf_struct["header"]["cookie"][:, 0]
-            self.buf_flags = self.buf_struct["header"]["flags"][:, 0]
-            self.buf_stream_id = self.buf_struct["header"]["stream_id"][:, 0]
-            self.buf_ts = self.buf_struct["header"]["ts"][:, 0]
-            self.buf_data_h = self.buf_struct["data"]["h"]    # (NPACKETS, NCMAC)
-            self.buf_data_l = self.buf_struct["data"]["l"]    # (NPACKETS, NCMAC)
-            self.buf_data_sat = self.buf_struct["data"]["sat"]  # (NPACKETS, NCMAC)
+            # Each datagram now holds up to FRAMES_PER_PACKET aggregated records
+            # (firmware TLAST gating). View the leading sz*nf bytes of every buffer
+            # row as an (n_packets, nf) record grid; these are zero-copy strided
+            # views into pr.buf, so NEVER reshape/ravel the product views below
+            # (element stride 5 B, record stride sz B, row stride buf-row) — that
+            # would silently copy the whole buffer. Gather with two indices instead.
+            sz = self.packet_dtype.itemsize
+            nf = self.FRAMES_PER_PACKET
+            if sz * nf > self.pr.buf.shape[1]:
+                raise ValueError(
+                    f"UCorrPacketProcessor: {nf} frames x {sz} B = {sz * nf} B exceeds "
+                    f"UDP buffer row of {self.pr.buf.shape[1]} B"
+                )
+            self.buf_struct = self.pr.buf[:, :sz * nf].view(self.packet_dtype)   # (n_packets, nf)
+            self.buf_cookie = self.buf_struct["header"]["cookie"][:, :, 0]       # (n_packets, nf)
+            self.buf_flags = self.buf_struct["header"]["flags"][:, :, 0]         # (n_packets, nf)
+            self.buf_stream_id = self.buf_struct["header"]["stream_id"][:, :, 0] # (n_packets, nf)
+            self.buf_ts = self.buf_struct["header"]["ts"][:, :, 0]               # (n_packets, nf)
+            self.buf_data_h = self.buf_struct["data"]["h"]    # (n_packets, nf, NCMAC)
+            self.buf_data_l = self.buf_struct["data"]["l"]    # (n_packets, nf, NCMAC)
+            self.buf_data_sat = self.buf_struct["data"]["sat"]  # (n_packets, nf, NCMAC)
 
-            # Per-packet sign-extend scratch (one int32 lane per CMAC entry).
-            self.temp32 = self.resize_buffer("temp32_buf", (self.pr.n_packets, NCMAC), np.int32)
+            # Per-frame sign-extend scratch (one int32 lane per CMAC entry), sized to
+            # the flat frame space so it can be sliced by the number of selected frames.
+            self.temp32 = self.resize_buffer("temp32_buf", (self.pr.n_packets * nf, NCMAC), np.int32)
 
             self.n_ts = 0
             self.carry_len = 0
@@ -204,12 +249,22 @@ class UCorrPacketProcessor(PacketProcessorBase):
             self.expected_packets = self.NPROD_PER_ARRAY * self.soft_integ_period
             self.max_timestamps = math.ceil(self.pr.n_packets / max(1, self.expected_packets)) + self.receive_window
 
-            self.acc_re = self.resize_buffer("acc_re_buf", (self.max_timestamps, self.NDECIM, self.NCORRS, self.NPROD_PER_CMAC, self.NCMAC), np.int64)
-            self.acc_im = self.resize_buffer("acc_im_buf", (self.max_timestamps, self.NDECIM, self.NCORRS, self.NPROD_PER_CMAC, self.NCMAC), np.int64)
+            # Accumulator dtype: each packet product is an 18-bit signed value (|v| < 2**17)
+            # and a row sums only soft_integ_period of them, so int32 (|.| < 2**31) is safe
+            # while soft_integ_period * 2**17 stays < 2**31 (i.e. <= 16384). int32 halves the
+            # memory bandwidth of the store scatter-add and the format read (both bandwidth
+            # bound on these ~100 MiB buffers); fall back to int64 for huge soft integrations.
+            # Was always:
+            #     self.acc_re = ...(..., np.int64)
+            #     self.acc_im = ...(..., np.int64)
+            #     self.integ_data = ...(..., np.complex128)
+            acc_dtype = np.int32 if self.soft_integ_period <= 8192 else np.int64
+            self.acc_re = self.resize_buffer("acc_re_buf", (self.max_timestamps, self.NDECIM, self.NCORRS, self.NPROD_PER_CMAC, self.NCMAC), acc_dtype)
+            self.acc_im = self.resize_buffer("acc_im_buf", (self.max_timestamps, self.NDECIM, self.NCORRS, self.NPROD_PER_CMAC, self.NCMAC), acc_dtype)
             self.sat = self.resize_buffer("sat_buf", (self.max_timestamps, self.NDECIM, self.NCORRS, self.NPROD_PER_CMAC, self.NCMAC, 2), np.int32)
             self.raw_data_count = self.resize_buffer("raw_data_count_buf", (self.max_timestamps,), np.int64)
             self.ts_array = self.resize_buffer("integ_array_buf", (self.max_timestamps,), np.uint64)
-            self.integ_data = self.resize_buffer("integ_data_buf", (self.max_timestamps, self.NBINS, self.NPROD), np.complex128)
+            self.integ_data = self.resize_buffer("integ_data_buf", (self.max_timestamps, self.NBINS, self.NPROD), self.OUTPUT_COMPLEX_DTYPE)
             self.integ_sats = self.resize_buffer("integ_sats_buf", (self.max_timestamps, self.NBINS, self.NPROD), np.complex64)
             self.overrun_row = self.resize_buffer("overrun_row_buf", (self.max_timestamps,), np.uint8)
             self.acc_re.fill(0)
@@ -233,7 +288,49 @@ class UCorrPacketProcessor(PacketProcessorBase):
         self.profile["process_calls"] += 1
 
     def get_ij_to_prod_map(self):
-        return self.ij_to_prod_map
+        """Return the ``(i, j)`` → linear product-index map for the current ``NCHAN``.
+
+        Reads ``NCHAN`` from the correlator config returned by ``config_getter``.
+        Does not call :meth:`update_config` (no packet-buffer reallocation).
+        """
+        from pychfpga.fpga_firmware.chfpga.x_engine.UCORR import UCORR
+        config = self._config_getter()
+        return UCORR.get_ij_to_prod_map(int(config.NCHAN))
+
+    def get_good_bin_mask(self):
+        """Return a boolean map of FFT bins expected to contain valid correlator data.
+
+        True for bins present in ``bin_map``, except correlator sacrificial
+        readout bins (stolen for the accumulation-memory readout cycle). Culled
+        bins (e.g. the first 256 FFT bins dropped at CT level 2) stay False
+        because they are absent from ``bin_map``.
+
+        ``READOUT_BIN`` is a compile-time generic and does not follow FFT
+        bypass. ``config.READOUT_BINS`` is one clkbin per correlator (from
+        ``chFPGA.CORR_READOUT_BINS``).
+
+        The mask length is ``NBINS`` (typically 8192). Reads ``bin_map``,
+        ``NBINS``, and ``READOUT_BINS`` from the correlator config. Does not
+        call :meth:`update_config`.
+        """
+        config = self._config_getter()
+        bin_map = np.asarray(config.bin_map)
+        n_bins = int(bin_map.max()) + 1
+        if config.has_attr("NBINS"):
+            n_bins = max(n_bins, int(config.NBINS))
+        mask = np.zeros(n_bins, dtype=bool)
+        mask[bin_map.reshape(-1)] = True
+        # Product index does not matter; the FFT bin is the same for every CMAC.
+        n_corrs = bin_map.shape[1]
+        readout_bins = config.READOUT_BINS if config.has_attr("READOUT_BINS") else None
+        if readout_bins is None or len(readout_bins) != n_corrs:
+            raise ValueError(
+                f"READOUT_BINS length {0 if readout_bins is None else len(readout_bins)} "
+                f"does not match number of correlators {n_corrs}"
+            )
+        for corr, clkbin in enumerate(readout_bins):
+            mask[bin_map[:, corr, clkbin, 0]] = False
+        return mask
 
     def create_output_buffer(self, n_ts):
         """Allocate caller-side output arrays matching the shapes produced by :meth:`get_formatted_data`."""
@@ -244,29 +341,77 @@ class UCorrPacketProcessor(PacketProcessorBase):
         return ts, data, counts, sats
 
     def filter_packets(self, n: int) -> Optional[np.ndarray]:
-        """Decode UCORR headers; leave integration index in ``pkt_ts``; return row indices."""
-        # Cookie filter — UCORR packets only. Header layout is fixed so no packet-size check needed.
-        bix_mask = self.bix_mask[:n]
-        np.equal(self.buf_cookie[:n], self.CORR_PACKET_COOKIE, out=bix_mask)
-        n_cookie = int(bix_mask.sum()) if self.verbose >= 2 else 0
+        """Decode UCORR headers; leave integration index in ``pkt_ts``; return frame indices.
+
+        Each of the ``n`` received datagrams packs up to ``FRAMES_PER_PACKET``
+        aggregated records (firmware TLAST gating). We decode over the flat
+        ``(n, nf)`` record grid and return a 1D *linear* frame index ``bix`` into
+        the ``M = n_packets * nf`` scratch space, so the base-class pipeline
+        (``pkt_ts[bix]``, ``bix_mask[bix]``, unique-timestamp merge) is reused as-is.
+        """
+        # Decode over an (n, nf) record grid. Was one record per datagram:
+        #     bix_mask = self.bix_mask[:n]
+        #     np.equal(self.buf_cookie[:n], self.CORR_PACKET_COOKIE, out=bix_mask)
+        #     np.right_shift(self.buf_stream_id[:n], 11, out=self.pkt_corr[:n], where=bix_mask)
+        #     np.bitwise_and(self.buf_stream_id[:n], self.bin_mask, out=self.pkt_bin[:n], where=bix_mask)
+        #     np.right_shift(self.buf_flags[:n], 4, out=self.pkt_bin_set[:n], where=bix_mask)
+        #     np.bitwise_and(self.buf_ts[:n], self.ts_mask, out=self.pkt_ts[:n], where=bix_mask)
+        #     np.floor_divide(self.pkt_ts[:n], self.integ_period, out=self.pkt_ts[:n], where=bix_mask)
+        #     np.greater(self.pkt_ts[:n], self._last_emitted_ts, out=tmp_mask, where=bix_mask)
+        #     np.bitwise_and(bix_mask, tmp_mask, out=bix_mask)
+        #     return np.flatnonzero(bix_mask)
+        # The reshape views below write the same pkt_* / bix_mask flat arrays; bix is
+        # then a linear frame index (datagram * nf + sub-packet) instead of a datagram row.
+        nf = self.FRAMES_PER_PACKET
+        m = n * nf
+        sz = self.packet_dtype.itemsize
+        # (n, nf) views of the flat scratch — no copy; writes land in the flat arrays.
+        mask = self.bix_mask[:m].reshape(n, nf)
+        corr = self.pkt_corr[:m].reshape(n, nf)
+        bin_ = self.pkt_bin[:m].reshape(n, nf)
+        binset = self.pkt_bin_set[:m].reshape(n, nf)
+        ts = self.pkt_ts[:m].reshape(n, nf)
+
+        # Validity = correct cookie AND the record slot actually arrived. A genuine
+        # aggregated corr datagram is EXACTLY n_rec*sz bytes (firmware shifts sz bytes
+        # per bin with no padding; the final group may be < nf bins). We therefore
+        # accept records only when pkt_len is an exact multiple of sz, up to nf slots.
+        # A non-multiple length means the datagram is not a clean corr frame (foreign
+        # packet, or a size mismatch) — reject it wholesale rather than trust a floored
+        # pkt_len//sz, which could otherwise admit a stale/garbage slot whose byte at a
+        # record boundary happens to equal the cookie. The per-slot cookie test below
+        # is kept as a second line of defense (and masks the short final group). This
+        # replaces the old "header layout fixed, no size check needed" assumption now
+        # that a datagram holds a variable number of records.
+        pkt_len = self.pr.pkt_len[:n]
+        n_rec = np.where((pkt_len % sz) == 0, pkt_len // sz, 0)
+        np.equal(self.buf_cookie[:n], self.CORR_PACKET_COOKIE, out=mask)
+        n_cookie = int(mask.sum()) if self.verbose >= 2 else 0
+        mask &= np.arange(nf) < n_rec[:, None]
 
         # Decode header fields. stream_id top 5 bits = corr id, low 11 bits = bin index, flags hi nibble = bin_set.
-        np.right_shift(self.buf_stream_id[:n], 11, out=self.pkt_corr[:n], where=bix_mask)
-        np.bitwise_and(self.buf_stream_id[:n], self.bin_mask, out=self.pkt_bin[:n], where=bix_mask)
-        np.right_shift(self.buf_flags[:n], 4, out=self.pkt_bin_set[:n], where=bix_mask)
-        np.bitwise_and(self.buf_ts[:n], self.ts_mask, out=self.pkt_ts[:n], where=bix_mask)
+        np.right_shift(self.buf_stream_id[:n], 11, out=corr, where=mask)
+        np.bitwise_and(self.buf_stream_id[:n], self.bin_mask, out=bin_, where=mask)
+        np.right_shift(self.buf_flags[:n], 4, out=binset, where=mask)
+        np.bitwise_and(self.buf_ts[:n], self.ts_mask, out=ts, where=mask)
         # integ_period is uint64 — keep dividend uint64 to avoid float promotion.
-        np.floor_divide(self.pkt_ts[:n], self.integ_period, out=self.pkt_ts[:n], where=bix_mask)
+        np.floor_divide(ts, self.integ_period, out=ts, where=mask)
 
         # Drop packets at or before the latest integration already returned (monotonic emits).
-        tmp_mask = self.tmp_mask[:n]
-        np.greater(self.pkt_ts[:n], self._last_emitted_ts, out=tmp_mask, where=bix_mask)
-        np.bitwise_and(bix_mask, tmp_mask, out=bix_mask)
+        tmp_mask = self.tmp_mask[:m].reshape(n, nf)
+        np.greater(ts, self._last_emitted_ts, out=tmp_mask, where=mask)
+        np.bitwise_and(mask, tmp_mask, out=mask)
 
         if self.verbose >= 2:
-            bix = np.flatnonzero(bix_mask)
+            # Datagrams whose length is not a clean multiple of the record size are
+            # rejected above; a large count here usually means sz (NCMAC) disagrees
+            # with the firmware, so surface it to make that failure mode obvious.
+            n_badlen = int(((pkt_len % sz) != 0).sum())
+            bix = np.flatnonzero(self.bix_mask[:m])
+            print(f"UCorrPacketProcessor: filter sz={sz} badlen={n_badlen}/{n}")
             if bix.size:
-                hw_ts = np.bitwise_and(self.buf_ts[bix], self.ts_mask)
+                p_idx, s_idx = np.divmod(bix, nf)
+                hw_ts = np.bitwise_and(self.buf_ts[p_idx, s_idx], self.ts_mask)
                 bin_sets = np.unique(self.pkt_bin_set[bix])
                 fw_ts = hw_ts // self.firmware_integ_period
                 print(
@@ -284,7 +429,7 @@ class UCorrPacketProcessor(PacketProcessorBase):
                     f"UCorrPacketProcessor: filter cookie={n_cookie} accepted=0/{n} "
                     f"last_emitted={int(self._last_emitted_ts)}"
                 )
-        return np.flatnonzero(bix_mask)
+        return np.flatnonzero(self.bix_mask[:m])
 
     def on_ts_overflow(self, dropped: int) -> None:
         """Warn when integration keys are dropped because the buffer is full."""
@@ -344,8 +489,20 @@ class UCorrPacketProcessor(PacketProcessorBase):
         # Per-row overrun (LSB of flags). Do not OR into a process-wide latch:
         # that poisoned later emits from carry packets / incomplete batches.
         t0 = time.perf_counter()
+        # bix is a flat frame index; decompose it into (datagram, sub-packet) to
+        # gather the product/flags views, which now carry an extra sub-packet axis
+        # (n_packets, nf, ...). buf_*[p_idx, s_idx] produces the same (n_valid, ...)
+        # transient the old buf_*[bix] did — not a new copy. The per-frame header
+        # scratch (pkt_*) stays indexed by the flat bix.
+        # Was (one record per datagram, bix = UDP row):
+        #     np.bitwise_or.at(self.overrun_row, tix, (self.buf_flags[bix] & 1)...)
+        #     np.left_shift(self.buf_data_h[bix], 4, out=temp32)
+        #     np.left_shift(self.buf_data_l[bix], 14, out=temp32)
+        #     sat_pkt = self.buf_data_sat[bix]
+        p_idx, s_idx = np.divmod(bix, self.FRAMES_PER_PACKET)
+
         np.bitwise_or.at(
-            self.overrun_row, tix, (self.buf_flags[bix] & np.uint8(1)).astype(np.uint8, copy=False)
+            self.overrun_row, tix, (self.buf_flags[p_idx, s_idx] & np.uint8(1)).astype(np.uint8, copy=False)
         )
 
         bin_set = self.pkt_bin_set[bix]
@@ -356,25 +513,27 @@ class UCorrPacketProcessor(PacketProcessorBase):
         # Sign-extend the 18-bit packed real/imag fields into preallocated int32 lanes.
         #   real: bits 27:10 of buf_data_h  -> shift<<4 then >>14 sign-extends from bit 31.
         #   imag: bits 17:0  of buf_data_l  -> shift<<14 then >>14 sign-extends from bit 31.
-        np.left_shift(self.buf_data_h[bix], 4, out=temp32)
+        np.left_shift(self.buf_data_h[p_idx, s_idx], 4, out=temp32)
         np.right_shift(temp32, 14, out=temp32)
         # Fancy-index += matches the original behavior; relies on (tix, bin_set, corr, bin) tuples
-        # being unique within a single batch (one packet per (corr,bin) per soft integration).
+        # being unique within a single batch (one frame per (corr,bin) per soft integration).
         self.acc_re[tix, bin_set, corr, bin_] += temp32
 
-        np.left_shift(self.buf_data_l[bix], 14, out=temp32)
+        np.left_shift(self.buf_data_l[p_idx, s_idx], 14, out=temp32)
         np.right_shift(temp32, 14, out=temp32)
         self.acc_im[tix, bin_set, corr, bin_] += temp32
 
-        # Sat counters: bit 0x20 = real saturation, bit 0x10 = imag saturation. Increment each cmac lane.
-        sat_pkt = self.buf_data_sat[bix]
-        temp32 = sat_pkt
-        temp32 &= 0x20
-        temp32 >>= 5
+        # Sat counters: bit 0x20 = real saturation, bit 0x10 = imag saturation.
+        # Copy into ``temp32`` first: ``temp32 = sat_pkt`` only aliases, so the
+        # in-place ``&=`` used to clobber ``sat_pkt`` and zero the imag flag.
+        sat_pkt = self.buf_data_sat[p_idx, s_idx]
+        temp32[:] = sat_pkt
+        np.bitwise_and(temp32, 0x20, out=temp32)
+        np.right_shift(temp32, 5, out=temp32)
         self.sat[tix, bin_set, corr, bin_, :, 0] += temp32
-        temp32 = sat_pkt
-        temp32 &= 0x10
-        temp32 >>= 4
+        temp32[:] = sat_pkt
+        np.bitwise_and(temp32, 0x10, out=temp32)
+        np.right_shift(temp32, 4, out=temp32)
         self.sat[tix, bin_set, corr, bin_, :, 1] += temp32
 
         np.add.at(self.raw_data_count, tix, 1)
@@ -418,14 +577,37 @@ class UCorrPacketProcessor(PacketProcessorBase):
             )
             self.overrun = 0
 
+    def _ensure_flat_scatter_idx(self):
+        """Return (and cache) the 1-D scatter index mapping acc lanes to (NBINS, NPROD).
+
+        ``bin_map``/``prod_map`` broadcast against the accumulator trailing shape
+        ``(NDECIM, NCORRS, NPROD_PER_CMAC, NCMAC)`` and select an output cell per lane.
+        Collapsing that into a single precomputed ``bin*NPROD + prod`` index lets
+        :meth:`get_formatted_data` do one flat complex scatter per array instead of
+        rebuilding a broadcast 4-D fancy index (real and imag) on every call — that
+        index construction, not the memory write, was the format-stage bottleneck.
+        Recomputed only when the maps, NPROD, or accumulator shape change.
+        """
+        trailing = self.acc_re.shape[1:]
+        key = (id(self.bin_map), id(self.prod_map), self.NPROD, trailing)
+        if getattr(self, "_fmt_idx_key", None) != key:
+            bm = np.broadcast_to(self.bin_map, trailing).ravel()
+            pm = np.broadcast_to(self.prod_map, trailing).ravel()
+            self._fmt_flat_idx = bm.astype(np.intp) * self.NPROD + pm.astype(np.intp)
+            self._fmt_idx_key = key
+        return self._fmt_flat_idx
+
     def get_formatted_data(self, rows=slice(None), **kwargs):
         """Return formatted integration rows assembled by the last ``process_udp_packets`` call.
 
         Remaps accumulator rows into ``(NBINS, NPROD)`` complex outputs. ``acc_re``/``acc_im``/``sat``
         are indexed by ``(integ, NDECIM, NCORRS, NPROD_PER_CMAC, NCMAC)``; ``bin_map`` (4D) and
-        ``prod_map`` (3D) broadcast together to scatter products into the dense ``(NBINS, NPROD)``
-        plane. Beware: the .real/.imag view must be taken *before* the fancy-index assignment,
-        otherwise the write hits a copy.
+        ``prod_map`` (3D) broadcast together to place each product into the dense ``(NBINS, NPROD)``
+        plane. The scatter uses a single precomputed flat index (see
+        :meth:`_ensure_flat_scatter_idx`): we build a compact ``(nrows, K)`` complex source
+        from the real/imag accumulators, then scatter it once per output array. The
+        output rows are cleared first so cells the maps do not cover stay zero
+        rather than leftover data from the previous integration.
 
         Parameters:
             rows (slice or int): Physical index rows in the internal assembly buffer.
@@ -450,11 +632,42 @@ class UCorrPacketProcessor(PacketProcessorBase):
         t0 = time.perf_counter()
         integ_ts = self.ts_array[rows]
         counts = self.raw_data_count[rows]
-        ix = (rows, self.bin_map, self.prod_map)
-        self.integ_data.real[ix] = self.acc_re[rows]
-        self.integ_data.imag[ix] = self.acc_im[rows]
-        self.integ_sats.real[ix] = self.sat[rows, ..., 0]
-        self.integ_sats.imag[ix] = self.sat[rows, ..., 1]
+
+        # Equivalent to the original broadcast fancy-index scatter:
+        #     ix = (rows, self.bin_map, self.prod_map)
+        #     self.integ_data.real[ix] = self.acc_re[rows]
+        #     self.integ_data.imag[ix] = self.acc_im[rows]
+        #     self.integ_sats.real[ix] = self.sat[rows, ..., 0]
+        #     self.integ_sats.imag[ix] = self.sat[rows, ..., 1]
+        # bin_map/prod_map broadcast against acc trailing dims and pick (bin, prod)
+        # in the dense output. Below is the same mapping with a cached 1-D index
+        # (flat = bin*NPROD + prod) so NumPy does not rebuild that 4-D index on
+        # every call. .real/.imag of integ_* must still be written via views that
+        # share memory with the dest (here: scatter into a reshape of integ_*).
+        flat = self._ensure_flat_scatter_idx()
+        nrows = rows.stop - rows.start
+        K = flat.size
+        # Flat (max_ts, NBINS*NPROD) views over the dense output buffers (zero-copy;
+        # both are C-contiguous). Scatter along the flattened bin/prod axis.
+        data_flat = self.integ_data.reshape(self.max_timestamps, -1)
+        sats_flat = self.integ_sats.reshape(self.max_timestamps, -1)
+        # Unmapped cells used to keep the previous integration. Clear the rows
+        # before scattering so only products present in the maps are nonzero.
+        data_flat[rows] = 0
+        sats_flat[rows] = 0
+
+        # Compact complex source built from the contiguous real/imag accumulators, then
+        # scattered once (one complex write instead of separate strided real/imag writes).
+        src = np.empty((nrows, K), self.integ_data.dtype)
+        src.real = self.acc_re[rows].reshape(nrows, K)
+        src.imag = self.acc_im[rows].reshape(nrows, K)
+        data_flat[rows][:, flat] = src  # was: integ_data.real/imag[ix] = acc_re/acc_im[rows]
+
+        ssrc = np.empty((nrows, K), self.integ_sats.dtype)
+        ssrc.real = self.sat[rows, ..., 0].reshape(nrows, K)
+        ssrc.imag = self.sat[rows, ..., 1].reshape(nrows, K)
+        sats_flat[rows][:, flat] = ssrc  # was: integ_sats.real/imag[ix] = sat[..., 0/1]
+
         data = self.integ_data[rows]
         sats = self.integ_sats[rows]
         self.profile["format_s"] += time.perf_counter() - t0

@@ -696,6 +696,45 @@ def test_full_resolution_complex_crs_interleave8_uses_msb_slot():
     np.testing.assert_array_equal(data, expected)
 
 
+def test_offset_encoding_4bit_in_16bit_slot():
+    """CRS scaler type 0: 4-bit offset-binary in 16-bit slots decodes with a 4-bit midpoint."""
+    cf1 = State(
+        fmt_bus_width=16,
+        fmt_data_width=4,
+        fmt_is_complex=True,
+        fmt_interleave_factor=1,
+        use_offset_encoding=True,
+    )
+    processor, _pr = make_processor(
+        n_packets=2,
+        frames_per_burst=1,
+        bytes_per_sample=2,
+        samples_per_frame=4,
+        bytes_per_frame=8,
+        bytes_per_subframe=8,
+        packets_per_channel_per_burst=1,
+        logical_frames_per_burst=1,
+        fft_bins_per_word=1,
+        capture_bits_per_word=16,
+        source=1,
+        stream_ids=(10,),
+        channels=(0,),
+        capture_format=[_unused_capture_format_slot(), cf1],
+    )
+    # Offset-binary codes 0, 8, 15, 7 → signed -8, 0, 7, -1
+    codes = np.array([0, 8, 15, 7], dtype=np.uint16)
+    packed = (codes << 12).astype(">u2")
+    processor.raw_data[0, 0, : packed.nbytes] = packed.view(np.uint8)
+    processor.ts_array[0] = 1
+    processor.raw_data_count[0, 0, :] = 1
+    processor.raw_source[0, 0, :] = 1
+    processor._set_out_rows(0, 1)
+
+    _ts, data, _counts = processor.get_formatted_data(slice(0, 1), source=1)
+    expected = np.asarray([[[-8 + 0j, 7 - 1j]]], dtype=np.complex64)
+    np.testing.assert_array_equal(data, expected)
+
+
 def test_split_format_core_and_modifiers_suffix():
     def split_format_core_and_modifiers(fmt: str):
         m = re.fullmatch(r"(\d+(?:\+\d+)?)(.*)", fmt)

@@ -129,13 +129,13 @@ class ChanArray(MMIRouter):
         for i in range(self.fpga.NUMBER_OF_CHANNELIZERS):
             self.chan.append(Chan(router=self, router_port=i, instance_number=i, config=self.config.add(i)))
 
-    def get_config(self):
+    def update_config(self):
         """Refresh per-channel FUNCGEN/SCALER/FFT/PROBER configs.
 
         Array raw/corr config assembly reads those submodule States directly.
         """
         has_prober = self.chan[0].PROBER is not None
-        ctx = ('ChanArray.get_config', self)
+        ctx = ('ChanArray.update_config', self)
         board = self.fpga.config
         board_attrs = (
             'platform_id', 'adc_bits_per_sample', 'adc_bytes_per_sample',
@@ -146,11 +146,11 @@ class ChanArray(MMIRouter):
             ch_ctx = (ctx, chan.chan_number)
             if not board_stale and not chan.config.has_changed(context=ch_ctx):
                 continue
-            chan.FUNCGEN.get_config()
-            chan.SCALER.get_config()
-            chan.FFT.get_config()
+            chan.FUNCGEN.update_config()
+            chan.SCALER.update_config()
+            chan.FFT.update_config()
             if has_prober:
-                chan.PROBER.get_config()
+                chan.PROBER.update_config()
             chan.config.ack(context=ch_ctx)
         if board_stale:
             board.ack(board_attrs, context=ctx)

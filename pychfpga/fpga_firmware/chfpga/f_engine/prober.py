@@ -235,7 +235,7 @@ class PROBER(MMI):
         self.set_stream_id(self.fpga.get_id(channel)) # get crate/slot/channel tuple, it will be converted into a numeric stream id
         self.RESET = 1  # Make sure no data is being transmitted at reset
 
-    def get_config(self):
+    def update_config(self):
         """Return ``self.config``."""
         return self.config
 

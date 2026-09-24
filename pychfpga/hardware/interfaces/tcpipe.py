@@ -1,4 +1,5 @@
 # Standard Python packages
+import asyncio
 import logging
 import socket
 import re
@@ -161,6 +162,7 @@ class TCPipe:
     RPC_ADC_GET_IMR_PASS_MODE = 0x3A
     RPC_ADC_SET_PWR_MODE = 0x3B
     RPC_ADC_GET_PWR_MODE = 0x3C
+    RPC_ADC_GET_SIGNAL_DETECTOR_STATUS = 0x3D
 
     ADC_TILE = 0
     DAC_TILE = 1
@@ -175,6 +177,7 @@ class TCPipe:
     _RFDC_CAL_FREEZE = '<III'
     _RFDC_CAL_COEFF = '<8I'
     _RFDC_SIGNAL_DETECTOR = '<BBBBHHHB'
+    _RFDC_SIGNAL_DETECTOR_STATUS = '<HHHHBBBB'
     _RFDC_THRESHOLD = '<9I'
     _RFDC_PWR_MODE = '<II'
     _RFDC_TILE_CLOCK = 'BBIddBBB'
@@ -231,6 +234,7 @@ class TCPipe:
         RPC_ADC_GET_CAL_COEFFICIENTS: 'adc_get_cal_coefficients',
         RPC_ADC_SET_SIGNAL_DETECTOR: 'adc_set_signal_detector',
         RPC_ADC_GET_SIGNAL_DETECTOR: 'adc_get_signal_detector',
+        RPC_ADC_GET_SIGNAL_DETECTOR_STATUS: 'adc_get_signal_detector_status',
         RPC_ADC_SET_CLK_DISTRIBUTION: 'adc_set_clk_distribution',
         RPC_ADC_GET_CLK_DISTRIBUTION: 'adc_get_clk_distribution',
         RPC_ADC_SET_THRESHOLD_SETTINGS: 'adc_set_threshold_settings',
@@ -252,6 +256,9 @@ class TCPipe:
     CORE_REG_UDP_DATA_PORT = 2
     #: Fixed board-side TCP data listen port (matches firmware ``DATA_TCP_DEFAULT_PORT``).
     DEFAULT_TCP_DATA_PORT = 41002
+    #: UDP discovery / REBOOT port (matches firmware ``TCPIPE_FWDISCOVER_PORT``).
+    FWDISCOVER_PORT = 9875
+    REBOOT_PAYLOAD = b'REBOOT'
     #: After an RPC timeout, wait this long with no RX before treating the stream as idle.
     RPC_DRAIN_QUIET_S = 0.2
     #: Cap on post-timeout drain time (late replies plus quiet period).
@@ -295,12 +302,14 @@ class TCPipe:
         self.log.debug(f'{self!r}: Opened TCPipe socket from local address{self.sock.getsockname()} to remote address {self.hostname}:{self.port}')
         self.bsb_sent_ctr = 0
         self.perf = _TCPipePerf(self, self.RPC_PERF_LOG_INTERVAL) if log_performance else None
-        # BSB write aggregation is off until :meth:`aggregate_commands` is entered.
         self._bsb_aggregate_ctx_depth = 0
         self._bsb_agg_pending = []
         self._bsb_agg_pending_tx = 0
         self._bsb_aggregate_max_cmds = 512
         self._bsb_aggregate_max_tx_bytes = 64 * 1024
+        # Serializes async socket use (bitstream send and async RPCs) so the
+        # socket is not left non-blocking for a concurrent sync RPC.
+        self._sock_lock = asyncio.Lock()
 
         self.check_tcpipe_version()
 
@@ -320,6 +329,41 @@ class TCPipe:
         if old_sock is self.sock:
             self.opened_sockets.pop((self.hostname, self.port), None)
         self.sock.close()
+        self.sock = None
+
+    @staticmethod
+    def send_reboot(hostname, port=None):
+        """Send a UDP ``REBOOT`` datagram to ``hostname``.
+
+        TCPipe listens on the discovery port for a payload whose first token is
+        ``REBOOT`` and then issues PSCI SYSTEM_RESET. There is no reply.
+        """
+        if port is None:
+            port = TCPipe.FWDISCOVER_PORT
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.sendto(TCPipe.REBOOT_PAYLOAD, (hostname, port))
+
+    def reboot(self, port=None):
+        """Reboot the board by sending the UDP ``REBOOT`` command.
+
+        Drops the TCP session without flushing pending RPCs; the peer is
+        resetting and will not complete them.
+        """
+        if port is None:
+            port = self.FWDISCOVER_PORT
+        self.log.info('%r: Sending UDP REBOOT to %s:%s', self, self.hostname, port)
+        self._bsb_agg_pending.clear()
+        self._bsb_agg_pending_tx = 0
+        self.send_reboot(self.hostname, port=port)
+        if self.sock is None:
+            return
+        old_sock = self.opened_sockets.get((self.hostname, self.port))
+        if old_sock is self.sock:
+            self.opened_sockets.pop((self.hostname, self.port), None)
+        try:
+            self.sock.close()
+        except OSError:
+            pass
         self.sock = None
 
     def _rpc_write_read(self, rpc_id, payload=b'', read_length=None, read_until=None, timeout=None):
@@ -345,26 +389,7 @@ class TCPipe:
         """
         if self._bsb_agg_pending:
             self._bsb_batch_write_flush()
-        if not isinstance(payload, (bytes, bytearray, memoryview)):
-            payload = bytes(payload)
-        if len(payload) >= 65536:
-            raise ValueError(f'{self!r}: RPC payload length must fit in 16 bits')
-
-        tx_len = 4 + len(payload)
-        if tx_len <= len(self.tx_buf):
-            self.tx_view[0] = self.RPC_PREFIX
-            self.tx_view[1] = rpc_id
-            self.tx_view[2] = len(payload) & 0xFF
-            self.tx_view[3] = len(payload) >> 8
-            self.tx_view[4:tx_len] = payload
-            tx_payload = self.tx_view[:tx_len]
-        else:
-            tx_payload = bytearray(tx_len)
-            tx_payload[0] = self.RPC_PREFIX
-            tx_payload[1] = rpc_id
-            tx_payload[2] = len(payload) & 0xFF
-            tx_payload[3] = len(payload) >> 8
-            tx_payload[4:tx_len] = payload
+        tx_payload, tx_len = self._build_rpc_tx_payload(rpc_id, payload)
 
         old_timeout = None
         if timeout:
@@ -417,6 +442,166 @@ class TCPipe:
         if read_length is not None and rx_len != read_length:
             raise IOError(f'{self!r}: RPC {rpc_id} received {rx_len} bytes instead of {read_length} bytes')
         return reply
+
+    def _build_rpc_tx_payload(self, rpc_id, payload=b''):
+        """Build the 4-byte RPC header plus ``payload`` for the command stream."""
+        if not isinstance(payload, (bytes, bytearray, memoryview)):
+            payload = bytes(payload)
+        if len(payload) >= 65536:
+            raise ValueError(f'{self!r}: RPC payload length must fit in 16 bits')
+        tx_len = 4 + len(payload)
+        if tx_len <= len(self.tx_buf):
+            self.tx_view[0] = self.RPC_PREFIX
+            self.tx_view[1] = rpc_id
+            self.tx_view[2] = len(payload) & 0xFF
+            self.tx_view[3] = len(payload) >> 8
+            self.tx_view[4:tx_len] = payload
+            return self.tx_view[:tx_len], tx_len
+        tx_payload = bytearray(tx_len)
+        tx_payload[0] = self.RPC_PREFIX
+        tx_payload[1] = rpc_id
+        tx_payload[2] = len(payload) & 0xFF
+        tx_payload[3] = len(payload) >> 8
+        tx_payload[4:tx_len] = payload
+        return tx_payload, tx_len
+
+    async def _recv_exact_locked_async(self, nbytes):
+        """Read exactly ``nbytes``. Caller holds ``_sock_lock``; socket non-blocking."""
+        if nbytes == 0:
+            return b''
+        loop = asyncio.get_running_loop()
+        buf = bytearray(nbytes)
+        view = memoryview(buf)
+        got = 0
+        while got < nbytes:
+            chunk = await loop.sock_recv(self.sock, nbytes - got)
+            if not chunk:
+                raise ConnectionResetError('TCPipe connection closed by peer')
+            view[got:got + len(chunk)] = chunk
+            got += len(chunk)
+        return bytes(buf)
+
+    async def _drain_socket_buffer_locked_async(self, quiet=0.0, max_time=None):
+        """Discard leftover command-stream bytes. Caller holds ``_sock_lock``."""
+        if self.sock is None:
+            return 0
+        discarded = 0
+        loop = asyncio.get_running_loop()
+        while True:
+            try:
+                data = self.sock.recv(4096)
+            except (BlockingIOError, InterruptedError, TimeoutError, socket.timeout):
+                break
+            except (ConnectionResetError, ConnectionAbortedError):
+                return discarded
+            if not data:
+                return discarded
+            discarded += len(data)
+        if not quiet:
+            return discarded
+        if max_time is None:
+            max_time = self.RPC_DRAIN_MAX_S
+        deadline = time.perf_counter() + max_time
+        while True:
+            remaining = deadline - time.perf_counter()
+            if remaining <= 0:
+                break
+            wait = quiet if remaining > quiet else remaining
+            try:
+                data = await asyncio.wait_for(
+                    loop.sock_recv(self.sock, 4096), timeout=wait)
+            except asyncio.TimeoutError:
+                break
+            except (ConnectionResetError, ConnectionAbortedError):
+                break
+            if not data:
+                break
+            discarded += len(data)
+        return discarded
+
+    async def _rpc_xfer_locked_async(
+            self, tx_payload, read_length=None, read_until=None):
+        """Send one RPC and read the reply. Lock held; socket non-blocking."""
+        loop = asyncio.get_running_loop()
+        start_time = time.perf_counter()
+        await loop.sock_sendall(self.sock, tx_payload)
+        send_done_time = time.perf_counter()
+        if read_until is not None:
+            reply = bytearray()
+            while True:
+                chunk = await loop.sock_recv(self.sock, 1024)
+                if not chunk:
+                    raise ConnectionResetError('TCPipe connection closed by peer')
+                reply += chunk
+                if reply.endswith(read_until):
+                    recv_done_time = time.perf_counter()
+                    return bytes(reply), len(reply), start_time, send_done_time, recv_done_time
+        if read_length is not None:
+            reply = await self._recv_exact_locked_async(read_length)
+            recv_done_time = time.perf_counter()
+            return reply, len(reply), start_time, send_done_time, recv_done_time
+        chunk = await loop.sock_recv(self.sock, len(self.rx_buf))
+        recv_done_time = time.perf_counter()
+        return chunk, len(chunk), start_time, send_done_time, recv_done_time
+
+    async def _rpc_write_read_locked_async(
+            self, rpc_id, payload=b'', read_length=None, read_until=None,
+            timeout=None):
+        """Async RPC body. Caller must hold ``_sock_lock``."""
+        if self._bsb_agg_pending:
+            await self._bsb_batch_write_flush_locked_async()
+        tx_payload, tx_len = self._build_rpc_tx_payload(rpc_id, payload)
+        old_timeout = self.sock.gettimeout()
+        self.sock.setblocking(False)
+        try:
+            try:
+                xfer = self._rpc_xfer_locked_async(
+                    tx_payload, read_length=read_length, read_until=read_until)
+                if timeout:
+                    reply, rx_len, start_time, send_done_time, recv_done_time = (
+                        await asyncio.wait_for(xfer, timeout=timeout))
+                else:
+                    reply, rx_len, start_time, send_done_time, recv_done_time = (
+                        await xfer)
+            except asyncio.TimeoutError:
+                discarded = await self._drain_socket_buffer_locked_async(
+                    quiet=self.RPC_DRAIN_QUIET_S,
+                    max_time=self.RPC_DRAIN_MAX_S)
+                self.log.warning(
+                    '%r: RPC %s timed out; discarded %d leftover command-stream bytes',
+                    self, rpc_id, discarded)
+                raise TimeoutError(
+                    f'{self!r}: RPC {rpc_id} timed out after {timeout} s')
+        finally:
+            self.sock.setblocking(True)
+            self.sock.settimeout(old_timeout)
+        if self.perf:
+            self.perf.record_rpc(
+                rpc_id=rpc_id,
+                tx_len=tx_len,
+                rx_len=rx_len,
+                send_s=send_done_time - start_time,
+                recv_s=recv_done_time - send_done_time,
+                total_s=recv_done_time - start_time)
+        if read_length is not None and rx_len != read_length:
+            raise IOError(
+                f'{self!r}: RPC {rpc_id} received {rx_len} bytes instead of '
+                f'{read_length} bytes')
+        return reply
+
+    async def _rpc_write_read_async(
+            self, rpc_id, payload=b'', read_length=None, read_until=None,
+            timeout=None):
+        """Async variant of :meth:`_rpc_write_read` using non-blocking sockets.
+
+        Serializes with other async socket users via ``_sock_lock``. Do not
+        interleave sync RPCs on the same TCPipe while an async RPC is in
+        flight.
+        """
+        async with self._sock_lock:
+            return await self._rpc_write_read_locked_async(
+                rpc_id, payload, read_length=read_length,
+                read_until=read_until, timeout=timeout)
 
     def bsb_write_read(self, data, read_length=None):
         """ Writes `data` to the FPGA firmware Byte-serial bus and return reply.
@@ -517,6 +702,101 @@ class TCPipe:
         self.bsb_sent_ctr += n
         return reply[1:]
 
+
+    async def bsb_write_read_async(self, data, read_length=None):
+        """Async variant of :meth:`bsb_write_read`."""
+        if self._bsb_agg_pending:
+            await self._bsb_batch_write_flush_async()
+        if read_length is None:
+            read_length = self._bsb_write_read_reply_len(data)
+        reply = await self._rpc_write_read_async(
+            self.RPC_BSB_WRITE_READ, data, read_length=read_length)
+        self.bsb_sent_ctr += 1
+        return reply
+
+    async def bsb_batch_write_async(self, commands):
+        """Async variant of :meth:`bsb_batch_write`."""
+        for cmd in commands:
+            await self._bsb_batch_write_enqueue_async(cmd)
+        if self._bsb_aggregate_active():
+            return b''
+        return await self._bsb_batch_write_flush_async()
+
+    async def _bsb_batch_write_now_locked_async(self, commands):
+        """Send write-only BSB commands. Caller holds ``_sock_lock``."""
+        n = len(commands)
+        parts = [n.to_bytes(2, 'little')]
+        for c in commands:
+            if isinstance(c, memoryview):
+                c = c.tobytes()
+            elif not isinstance(c, (bytes, bytearray)):
+                c = bytes(c)
+            lc = len(c)
+            if lc >= 65536:
+                raise ValueError(f'BSB batch pack: command length {lc} must fit in 16 bits')
+            parts.append(lc.to_bytes(2, 'little'))
+            parts.append(c)
+        payload = b''.join(parts)
+        reply = await self._rpc_write_read_locked_async(
+            self.RPC_BSB_BATCH_WRITE, payload, read_length=1 + n)
+        if len(reply) == 1:
+            if reply[0] == 0xFF:
+                raise IOError(f'{self!r}: BSB batch RPC failed (protocol/parse error on board)')
+            raise IOError(
+                f'{self!r}: BSB batch RPC failed at command index {reply[0] - 1} '
+                f'(1-based status code {reply[0]})')
+        if len(reply) != 1 + n:
+            raise IOError(
+                f'{self!r}: BSB batch RPC expected {1 + n} reply bytes, got {len(reply)}')
+        if reply[0] != 0:
+            if reply[0] == 0xFF:
+                raise IOError(f'{self!r}: BSB batch RPC failed (protocol/parse error on board)')
+            raise IOError(
+                f'{self!r}: BSB batch RPC failed at command index {reply[0] - 1} '
+                f'(1-based status code {reply[0]})')
+        self.bsb_sent_ctr += n
+        return reply[1:]
+
+    async def _bsb_batch_write_flush_locked_async(self):
+        """Flush queued BSB writes. Caller holds ``_sock_lock``."""
+        if not self._bsb_agg_pending:
+            return b''
+        cmds = list(self._bsb_agg_pending)
+        self._bsb_agg_pending.clear()
+        self._bsb_agg_pending_tx = 0
+        try:
+            t0 = time.perf_counter()
+            reply = await self._bsb_batch_write_now_locked_async(cmds)
+            if self.perf:
+                self.perf.record_aggregate_flush(len(cmds), time.perf_counter() - t0)
+            return reply
+        except Exception:
+            self._bsb_agg_pending = cmds + self._bsb_agg_pending
+            self._bsb_agg_pending_tx = sum(4 + len(x) for x in self._bsb_agg_pending)
+            raise
+
+    async def _bsb_batch_write_flush_async(self):
+        """Async variant of :meth:`_bsb_batch_write_flush`."""
+        async with self._sock_lock:
+            return await self._bsb_batch_write_flush_locked_async()
+
+    async def _bsb_batch_write_enqueue_async(self, cmd):
+        """Enqueue a write-only BSB command, flushing asynchronously if full."""
+        if isinstance(cmd, memoryview):
+            cmd = cmd.tobytes()
+        elif not isinstance(cmd, (bytes, bytearray)):
+            cmd = bytes(cmd)
+        fs = 4 + len(cmd)
+        if fs > self._bsb_aggregate_max_tx_bytes:
+            raise ValueError(
+                f'{self!r}: BSB command of {len(cmd)} bytes (+ framing) exceeds '
+                f'aggregate max tx {self._bsb_aggregate_max_tx_bytes}')
+        while self._bsb_agg_pending and (
+                len(self._bsb_agg_pending) >= self._bsb_aggregate_max_cmds
+                or self._bsb_agg_pending_tx + fs > self._bsb_aggregate_max_tx_bytes):
+            await self._bsb_batch_write_flush_async()
+        self._bsb_agg_pending.append(bytes(cmd))
+        self._bsb_agg_pending_tx += fs
 
     def _drain_socket_buffer(self, quiet=0.0, max_time=None):
         """Discard leftover bytes on the command TCP stream.
@@ -648,6 +928,9 @@ class TCPipe:
         Aggregation is off by default so a lone control write (for example
         ``UCAP.USER_RESET = 1``) is sent immediately. Nesting is counted;
         the queued writes flush when the outermost context exits.
+
+        Application code should use ``fpga.mmi.aggregate_commands()`` (see
+        :class:`TCPipe_BSB_MMI`) rather than calling this on TCPipe directly.
         """
         self._bsb_aggregate_ctx_depth += 1
         try:
@@ -787,6 +1070,52 @@ class TCPipe:
         """
         self.i2c_write_read(addr, data, read_length=0)
 
+    async def i2c_read_async(self, addr, read_length, no_error=False):
+        """Async variant of :meth:`i2c_read`."""
+        return await self.i2c_write_read_async(
+            addr, data=b'', read_length=read_length, no_error=no_error)
+
+    async def i2c_polled_read_async(self, addr, read_length, no_error=False):
+        """Async variant of :meth:`i2c_polled_read`."""
+        reply = await self._rpc_write_read_async(
+            self.RPC_IIC_READ, bytes((addr, read_length)))
+        if reply[0]:
+            if no_error:
+                return b''
+            raise IOError(
+                f'{self!r}: I2C Reply has {len(reply)} bytes but has error '
+                f'code {reply[0]}')
+        if len(reply) < 1 + read_length:
+            raise IOError(
+                f'{self!r}: I2C Did not receive enough bytes {len(reply)} '
+                f'instead of {1 + read_length}')
+        return reply[1:read_length + 1]
+
+    async def i2c_write_read_async(self, addr, data, read_length, no_error=False):
+        """Async variant of :meth:`i2c_write_read`."""
+        if not isinstance(data, (bytes, bytearray)):
+            data = bytes(data)
+        if 0 > read_length >= 256:
+            raise ValueError('{self!r}: Read length bust be between 0 and 255')
+        payload = bytes((addr, read_length)) + data
+        reply = await self._rpc_write_read_async(
+            self.RPC_IIC_WRITE_READ, payload, read_length=1 + read_length)
+        if reply[0]:
+            if no_error:
+                return b''
+            raise IOError(
+                f'{self!r}: TCPipe I2C: Reply has error code {reply[0]} '
+                f'({", ".join(e for v, e in self.I2C_ERROR_CODES.items() if reply[0] & v)})')
+        if len(reply) != 1 + read_length:
+            raise IOError(
+                f'{self!r}: TCPipe I2C: Receive {len(reply)} bytes instead of '
+                f'{1 + read_length} bytes (including status byte)')
+        return reply[1:read_length + 1]
+
+    async def i2c_write_async(self, addr, data):
+        """Async variant of :meth:`i2c_write`."""
+        await self.i2c_write_read_async(addr, data, read_length=0)
+
     #########################################################
     #  OLED interface
     #########################################################
@@ -835,6 +1164,32 @@ class TCPipe:
 
             reply = self._rpc_write_read(self.RPC_OLED_DRAW_TEXT, payload, read_length=1)
             self._check_oled_status('draw text', reply, self.OLED_DRAW_TEXT_STATUS)
+        except (IOError, OSError, UnicodeEncodeError) as e:
+            self.log.warning(f'{self!r}: Failed updating OLED display text: {e!r}')
+
+    async def oled_set_firmware_label_async(self, label):
+        """Async variant of :meth:`oled_set_firmware_label`."""
+        if label is None:
+            payload = b''
+        else:
+            payload = str(label).encode('ascii')
+        reply = await self._rpc_write_read_async(
+            self.RPC_OLED_SET_FIRMWARE_LABEL, payload, read_length=1)
+        self._check_oled_status(
+            'set firmware label', reply, self.OLED_SET_FIRMWARE_LABEL_STATUS)
+
+    async def oled_draw_text_async(self, x, y, text, rotation=0):
+        """Async variant of :meth:`oled_draw_text`."""
+        try:
+            payload = bytearray(5)
+            payload[0:2] = int(x).to_bytes(2, 'little')
+            payload[2:4] = int(y).to_bytes(2, 'little')
+            payload[4] = int(rotation)
+            payload.extend(str(text).encode('ascii'))
+            reply = await self._rpc_write_read_async(
+                self.RPC_OLED_DRAW_TEXT, payload, read_length=1)
+            self._check_oled_status(
+                'draw text', reply, self.OLED_DRAW_TEXT_STATUS)
         except (IOError, OSError, UnicodeEncodeError) as e:
             self.log.warning(f'{self!r}: Failed updating OLED display text: {e!r}')
 
@@ -923,34 +1278,94 @@ class TCPipe:
             f'{self!r}: spi_batch_write failed at segment index {reply[0] - 1} '
             f'(1-based status code {reply[0]})')
 
+    async def spi_write_read_async(self, spi_device, data, read_length, timeout=None):
+        """Async variant of :meth:`spi_write_read`."""
+        if not isinstance(data, (bytes, bytearray)):
+            data = bytes(data)
+        payload = bytes((spi_device, read_length)) + data + b'\x00' * read_length
+        reply = await self._rpc_write_read_async(
+            self.RPC_SPI_WRITE_READ,
+            payload,
+            read_length=1 + len(data) + read_length,
+            timeout=timeout)
+        if reply[0]:
+            raise IOError(f'{self!r}: SPI Reply has error code {reply[0]}')
+        if len(reply) != 1 + len(data) + read_length:
+            raise IOError(
+                f'{self!r}: SPI Received {len(reply)} bytes instead of '
+                f'{1 + len(data) + read_length} bytes')
+        return reply[len(reply) - read_length: len(reply)]
+
+    async def spi_batch_write_async(self, spi_device, writes, timeout=None):
+        """Async variant of :meth:`spi_batch_write`."""
+        if not writes:
+            raise ValueError(f'{self!r}: spi_batch_write requires at least one segment')
+        n = len(writes)
+        if n > 255:
+            raise ValueError(
+                f'{self!r}: spi_batch_write supports at most 255 segments, got {n}')
+        parts = [bytes((spi_device, n))]
+        for i, segment in enumerate(writes):
+            if isinstance(segment, memoryview):
+                segment = segment.tobytes()
+            elif not isinstance(segment, (bytes, bytearray)):
+                segment = bytes(segment)
+            seg_len = len(segment)
+            if seg_len > 255:
+                raise ValueError(
+                    f'{self!r}: spi_batch_write segment {i} length {seg_len} '
+                    f'exceeds 255 bytes')
+            parts.append(bytes([seg_len]))
+            parts.append(segment)
+        payload = b''.join(parts)
+        reply = await self._rpc_write_read_async(
+            self.RPC_SPI_BATCH_WRITE, payload, read_length=1, timeout=timeout)
+        if len(reply) != 1:
+            raise IOError(
+                f'{self!r}: spi_batch_write expected 1 reply byte, got {len(reply)}')
+        if reply[0] == 0:
+            return
+        if reply[0] == 0xFF:
+            raise IOError(
+                f'{self!r}: spi_batch_write failed (protocol/parse error on board)')
+        raise IOError(
+            f'{self!r}: spi_batch_write failed at segment index {reply[0] - 1} '
+            f'(1-based status code {reply[0]})')
+
     #########################################################
     #  FPGA bitstream programming
     #########################################################
 
-    def set_fpga_bitstream(self, data, crc=0, timeout=40):
-        """ Programs the FPGA with the provided bitstream.
+    async def set_fpga_bitstream_async(self, data, crc=0, timeout=40):
+        """Programs the FPGA with the provided bitstream.
+
+        Uses a non-blocking ``sock_sendall`` so other boards' bitstream
+        uploads can run concurrently on the same event loop. The socket is
+        restored to blocking mode before return so subsequent RPCs are
+        unchanged.
 
         Parameters:
 
-            data (bytes): bitstream, without header, uncompressed. Sould be 34437356 bytes long for the ZU28.
+            data (bytes): bitstream, without header, uncompressed. Should be 34437356 bytes long for the ZU28.
         """
 
         self.log.info('%r: programming FPGA with %d bytes', self, len(data))
 
         assert len(data) == 34437356, "ZU27/28/47/48 bitstream should be 34437356 bytes long"
 
+        loop = asyncio.get_running_loop()
         old_timeout = self.sock.gettimeout()
-        try:
-            if timeout:
-                self.sock.settimeout(timeout)  # Set a longer timeout since we are sending a lot of data
-            self.sock.sendall(data)  # sendall will block if there s back pressure on the socket
-            self.firmware_crc = crc
-        except:
-            self.firmware_crc = None
-            raise
-        finally:
-            self.sock.settimeout(old_timeout)
-        return
+        async with self._sock_lock:
+            self.sock.setblocking(False)
+            try:
+                await asyncio.wait_for(loop.sock_sendall(self.sock, data), timeout=timeout)
+                self.firmware_crc = crc
+            except Exception:
+                self.firmware_crc = None
+                raise
+            finally:
+                self.sock.setblocking(True)
+                self.sock.settimeout(old_timeout)
 
     def get_fpga_bitstream_crc(self):
         return self.firmware_crc
@@ -1455,6 +1870,31 @@ class TCPipe:
                               reply_fmt=self._RFDC_SIGNAL_DETECTOR)
         return self._unpack_signal_detector(data)
 
+    def adc_get_signal_detector_status(self, tile_id, block_id):
+        """Return live ADC signal detector magnitude and threshold compare (Gen3+).
+
+        On Dual/HS ADCs the PL ``signal_detect`` pin is the AND of both interleaved
+        slices. ``magnitude`` is this user block; ``pair_magnitude`` is the companion
+        slice. ``pl_signal_detect`` matches that AND (instant compare, not debounce).
+        """
+        data = self._rfdc_rpc(
+            self.RPC_ADC_GET_SIGNAL_DETECTOR_STATUS,
+            struct.pack('<BB', tile_id, block_id),
+            reply_fmt=self._RFDC_SIGNAL_DETECTOR_STATUS)
+        (magnitude, pair_magnitude, threshold, pair_threshold, above_threshold,
+         pair_above_threshold, pl_signal_detect, high_speed) = struct.unpack(
+            self._RFDC_SIGNAL_DETECTOR_STATUS, data)
+        return {
+            'magnitude': magnitude,
+            'pair_magnitude': pair_magnitude,
+            'threshold': threshold,
+            'pair_threshold': pair_threshold,
+            'above_threshold': above_threshold,
+            'pair_above_threshold': pair_above_threshold,
+            'pl_signal_detect': pl_signal_detect,
+            'high_speed': high_speed,
+        }
+
     def adc_set_clk_distribution(self, settings):
         """Set RFDC clock distribution (Gen3+). ``settings`` matches ``adc_get_clk_distribution`` entries."""
         packed = self._pack_clk_distribution(settings)
@@ -1853,6 +2293,12 @@ class TCPipe_BSB_MMI(BSB_MMI):
 
     def __repr__(self):
         return repr(self.tcpipe)
+
+    @contextmanager
+    def aggregate_commands(self):
+        """Coalesce write-only BSB MMI transactions via the TCPipe batch RPC."""
+        with self.tcpipe.aggregate_commands():
+            yield self
 
     def _send_command(self, cmd, expected_reply_length, retry=1, resync=False, **kwargs):
         """ Send a BSB command and return the reply.

@@ -766,15 +766,22 @@ class CRSBeacon:
         self.board_serial = serial
         self.backplane_part = self.get_any_field(("backplane-part", "backplane-model"))
         self.backplane_serial = self.get_any_field(("backplane-serial",))
+        self.backplane_revision = self.get_any_field(("backplane-revision",))
+        self.backplane_manufacturer = self.get_any_field(("backplane-manufacturer",))
         self.backplane_slot = _to_int(self.get_any_field(("backplane-slot",)))
+        self.chassis_part = self.get_any_field(("chassis-part", "chassis-model"))
+        self.chassis_serial = self.get_any_field(("chassis-serial",))
+        self.chassis_manufacturer = self.get_any_field(("chassis-manufacturer",))
+        self.chassis_revision = self.get_any_field(("chassis-revision",))
         self.crate_part = self.get_any_field(("crate-part", "crate-model"))
         self.crate_serial = self.get_any_field(("crate-serial",))
+        self.crate_manufacturer = self.get_any_field(("crate-manufacturer",))
+        self.crate_revision = self.get_any_field(("crate-revision",))
         self.crate_number = _to_int(self.get_any_field(("crate-number", "backplane-number")))
         self.crate_slot = _to_int(self.get_any_field(("crate-slot",)))
-        # EEPROM chassis custom ``slot=`` is published as Backplane Slot.
-        # There is no crate-slot field on current U-Boot/TCPIPE beacons.
-        # IceBoard.slot uses a leftover Crate Slot header if present, else
-        # Backplane Slot.
+        # v1.2 TCPIPE publishes chassis custom ``slot=`` as Crate Slot.
+        # Current U-Boot still publishes it as Backplane Slot. IceBoard.slot
+        # prefers Crate Slot when present.
         if isinstance(self.crate_slot, int) and self.crate_slot > 0:
             self.slot = self.crate_slot
         elif isinstance(self.backplane_slot, int) and self.backplane_slot > 0:
@@ -1222,12 +1229,33 @@ class CRSArmFirmwareUploader:
         return f"{self.__class__.__name__}()"
 
     def _boards_to_upload(self):
-        """Boards that need firmware and have a hostname (already in U-Boot)."""
+        """Boards that need firmware (U-Boot, or TCPipe that is not the required version)."""
         return [
             board for board in self.boards
             if board.hostname
             and board.tcpipe_version != self.required_tcpipe_version
         ]
+
+    def _tcpipe_version_mismatch(self, measured):
+        """True when ``measured`` is present and is not the required ELF version."""
+        required = self.required_tcpipe_version
+        return required is not None and measured is not None and measured != required
+
+    def _raise_tcpipe_version_mismatch(self, mismatches):
+        """Raise when boards are running TCPipe that cannot be replaced in-place.
+
+        ``mismatches`` is a sequence of ``(board, measured_version)``. Firmware
+        upload only works from U-Boot, so the boards must be rebooted first.
+        """
+        details = "; ".join(
+            f"SN{board.serial} @ {board.hostname}: measured {measured!r}, "
+            f"expected {self.required_tcpipe_version!r}"
+            for board, measured in mismatches
+        )
+        raise RuntimeError(
+            "TCPipe version mismatch: "
+            f"{details}. Reboot the boards so they return to U-Boot, then retry."
+        )
 
     async def run(self):
         firmware = Path(self.firmware_pathname)
@@ -1237,6 +1265,16 @@ class CRSArmFirmwareUploader:
         targets = self._boards_to_upload()
         if not targets:
             return
+
+        # Discovery already recorded a TCPIPE beacon version. Those boards are
+        # not in U-Boot, so waiting for FWREQ would hang until timeout.
+        running_wrong = [
+            (board, board.tcpipe_version)
+            for board in targets
+            if self._tcpipe_version_mismatch(board.tcpipe_version)
+        ]
+        if running_wrong:
+            self._raise_tcpipe_version_mismatch(running_wrong)
 
         http_site = None
         fwreq_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -1325,8 +1363,6 @@ class CRSArmFirmwareUploader:
                 data, addr = await _async_sock_recvfrom(sock, 4096, wait)
             except asyncio.TimeoutError:
                 continue
-            if not data.startswith(b"FWREQ/"):
-                continue
             board_ip, reply_port = addr[0], addr[1]
             board = pending.get(board_ip)
             if board is None:
@@ -1335,12 +1371,16 @@ class CRSArmFirmwareUploader:
                 beacon = CRSBeacon(data, address=board_ip)
             except (UnicodeDecodeError, ValueError):
                 continue
-            if beacon.kind != "FWREQ":
-                continue
             if not _match_token(str(board.serial), beacon.board_serial, match_integers=True):
                 self.logger.debug(
-                    "%r: ignoring FWREQ from %s serial %s (expected %s)",
-                    self, board_ip, beacon.board_serial, board.serial)
+                    "%r: ignoring %s from %s serial %s (expected %s)",
+                    self, beacon.kind, board_ip, beacon.board_serial, board.serial)
+                continue
+            if beacon.kind == "TCPIPE":
+                if self._tcpipe_version_mismatch(beacon.version):
+                    self._raise_tcpipe_version_mismatch([(board, beacon.version)])
+                continue
+            if beacon.kind != "FWREQ":
                 continue
             reply_ports[board_ip] = reply_port
             pending.pop(board_ip)
@@ -1393,6 +1433,8 @@ class CRSArmFirmwareUploader:
                 continue
             if not _match_token(str(board.serial), beacon.board_serial, match_integers=True):
                 continue
+            if self._tcpipe_version_mismatch(beacon.version):
+                self._raise_tcpipe_version_mismatch([(board, beacon.version)])
             elapsed = time.monotonic() - t0
             ready[board_ip] = elapsed
             pending.pop(board_ip)

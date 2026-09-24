@@ -1,0 +1,125 @@
+IPMI and BEACON Specification
+v1.4  JFC 2026-09-11
+v1.3  LBJ 2026-09-11
+v1.2  JFC 2026-09-11
+v1.1  LBJ 2026-09-09
+v1.0  JFC 2026-09-09
+Changelog
+---------
+V1.0
+    1. Initial proposal by JFC
+V1.1
+    1. Moved crate information into the Product Information Area
+    2. Removed the sub-backplane serial numbers. The rationale is that the
+       4SBP sub-backplane configuration is fixed and future backplanes will be
+       single-board and not have the concept of a sub-backplane. In the event of a
+       4SBP slot harware failure that needs to be tracked down, the backplane serial
+       number in combination with the 1-16 serial number modulo 4 is sufficient.
+    3. Shift in nomenclature: the "Crate" is the unit or "Product" that t0 sells.
+       The "Chassis" is just one component of the crate that acts as a container for
+       the other components. The principle components of the crate are the
+       backplane(s) and the chassis. Other parts include the power supply, network
+       switch, etc. Replacing any of these components may warrant incrementing the
+       "Crate Revision" number or assigning the crate a new "Crate Model" entirely.
+       Either situation has been accounted for.
+    4. The Model Number (Crate Model) and Product Name are TBD.
+v1.2
+    1. Remove Backplane info from beacon fields
+    2. Corrected manufacturer name to "t0.technology"
+v1.3
+    1. Added example Vector Part Number (custom chassis for t0).
+    2. Added "FWREQ/1" to description of the beacon
+    3. Added Bootloader Date to show when this bootloader was built. This value
+       is a timestamp that is built-in and we can simply add it to the beacon.
+    4. Changed Bootloader Version to use the t0/u-boot git hash rather than a
+       git tag since our git tags are tied to mkids firmware releases, which may
+       not be ideal if CHORD needs a divergent u-boot in the future. Git hashes
+       allow us to identify the particular source code that the u-boot instance
+       was build from in order to identify issues. A git hash does not indicate
+       how recent a bootloader is (since the hashes are not ordered) but this
+       information can be recovered by the Bootloader Date field.
+       Note: it is hard to version u-boot instances because two boards can use
+       the same build of u-boot from the same source code, while having
+       different build-time Kconfig or device tree configuration.
+v1.4
+    1. Changed Crate Model from CCR to CRC4 to match the new backplane model.
+
+Backplane EEPROM IPMI FRU layout
+---------------------------------
+Common header (8 bytes)
+  Offsets in the header point to areas in 8-byte units. Only the board,
+  chassis, and Product areas are decoded for CRS backplanes.
+Chassis Information Area  - identifies the *chassis*
+  Standard IPMI field order (after a 3-byte prologue: version, length,
+  chassis type):
+    Field       IPMI name        Beacon field       Example value
+    ---------   ---------------  -----------------  ----------------------------
+    (prologue)  Chassis Type                        23d/17h (Rack Mount Chassis)
+    1           Part Number                         72-1668 (Vector Part Number)
+    2           Serial Number                       71373 (Vector Serial Number)
+    3           Custom field 1   Crate slot         15
+                "slot=15"
+Board Information Area - identifies the *backplane segment*
+  Standard IPMI field order (type/length ASCII strings after a 6-byte prologue):
+    Field       IPMI name        Beacon field            Example value
+    ----------  ---------------  ----------------------  -----------------------
+    (prologue)  Mfg. Date/Time                           F64E4C
+    1           Manufacturer     Backplane Manufacturer  t0.technology
+    2           Product Name                             4-slot backplane
+    3           Serial Number    Backplane Serial        027
+    4           Part Number      Backplane Model         4SBP
+    5           FRU File ID                              (optional; often empty)
+    6           Custom field 1   Backplane Revision      2
+                "revision=2"
+Product Information Area - identifies the *crate*
+  Standard IPMI field order (after a 3-byte prologue: version, length,
+  language code):
+    Field      IPMI name        Beacon field        Example value
+    ---------  ---------------  ------------------  -------------------------
+    1          Manufacturer     Crate Manufacturer  t0.technology
+    2          Product Name                         CRS Crate
+    3          Model Number     Crate Model         CRC4
+    4          Product Version  Crate Revision      1
+    5          Serial Number    Crate Serial        123
+    6          Asset Tag                            (blank)
+    7          FRU File ID                          (optional; often empty)
+Discovery beacon fields
+----------------------
+Protocol identifier followed by ASCII string consisting of name=value fields
+each separated by a linefeed character (ASCII code 10 or 0x0A):
+FWREQ/1
+Manufacturer: t0.technology
+Product: crs
+Revision: 5
+Serial: 0216
+Bootloader: u-boot  *See Note 1
+Bootloader Version: 0.1   *See Note 2
+Bootloader Date: Aug 26 2026 - 17:00:40 +0000 *see Note 3
+Crate Manufacturer: t0.technology
+Crate Model: CRC4
+Crate Serial: 011
+Crate Revision: 1
+Crate Slot: 15
+Note 1: Corresponds to the firmware that is currently runnning on the ARM:
+        "u-boot" for stock bootloader.
+        "tcpipe" for chfpga ARM firmware
+Note 2: Use the git hash from t0/u-boot
+Note 3: Use the u-boot build timestamp
+t0 Hardware:
+------------
+Motherboards
+    Manufacturer: t0.technology
+    Model: CRS
+    Serial: 4 digits number
+    Revision: <number>[<letter>]
+Backplanes
+    Manufacturer: t0.technology
+    Model: 4SBP
+    Serial: 3 digits number
+    Revision: <number>[<letter>]
+Crates
+    Manufacturer: t0.technology
+    Model: CRC4
+    Serial: 3 digits number
+    Revision: <number>[<letter>]
+

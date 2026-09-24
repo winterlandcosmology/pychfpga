@@ -4,6 +4,7 @@ Is meant to be be inherited by an interface class that provides a _send_command(
 """
 
 import numpy as np
+from contextlib import contextmanager
 
 class FpgaMmiException(IOError):
     pass
@@ -62,6 +63,15 @@ class BSB_MMI:
         self.rx_command = bytearray(3); # for read commands
     
         self.error_counter = 0
+
+    @contextmanager
+    def aggregate_commands(self):
+        """Coalesce write-only BSB transactions until exit, then flush.
+
+        Default is a no-op (each write is sent immediately). Transports that
+        support batching, such as :class:`TCPipe_BSB_MMI`, override this.
+        """
+        yield self
 
     def _send_command(self, cmd, expected_reply_length, **kwargs):
         """ Send a read or write command to the FPGA and check the reply for the correct

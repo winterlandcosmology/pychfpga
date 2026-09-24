@@ -1,7 +1,9 @@
 connection_config:
     prog: 1                 # 0 - do not reprogram, 1 - reprogram if outdated, 2 - always reprogram
-    mode: 'shuffle8'          # Do not change for a single board
-    hwm: 'crs 77'           # For a different board change the serial number
+    mode: 'corr8'          # Bitstream loaded for this run. Tests outside supported_modes are skipped.
+    hwm: 'crs 55'           # For a different board change the serial number
+    ignore_missing_boards: true
+    sync_method: 'local'
 
 test_config:
     loglevelconn: "INFO"   # Log level during connection to the board
@@ -9,45 +11,88 @@ test_config:
     loglevelrecv: 0        # 0-3
     conn_scope: "class"     # Select "function" to re-establish connection for each test or
                             # "class" if you want to reuse connection.
-    only_plot: False              #Don't compare results, only plot them 
+    only_plot: False              #Don't compare results, only plot them
+    always_plot: True
 
-    #parameters for scaler tests 
-    platform: 'CRS'
+    # FPGA modes each test module may run in. connection_config.mode must be
+    # in the list or that module's tests are skipped.
+    supported_modes:
+        scaler_test: [shuffle8, corr8]
+        funcgen_test: [shuffle8, corr8]
+        fft_test: [shuffle8, corr8]
+        corr_test: [corr8]
+
+    # GPIO / firmware geometry for collection-time eval. Must match the live
+    # board (post-connect assert). CAPTURE_WIDTH is the test capture path.
+    constants:
+        PLATFORM: CRS
+        ADC_BITS_PER_SAMPLE: 14
+        NUM_CHANNELS: 8
+        SAMPLES_PER_FRAME: 16384
+        NUM_BINS: 8192
+        FFT_WIDTH: 32
+        BINS_PER_WORD: 4
+        CAPTURE_BUS_WIDTH: 128
+        CAPTURE_WIDTH: 4 
+
+    #parameters for scaler tests
     rtol: 0.015
-    global_postscaler: range(MAPPING_POSTSCALER - 1, MAPPING_POSTSCALER + 2) #range(SCALER_SHIFT - INPUT_WIDTH - IMPLICIT_SHIFT + 1, SCALED_WIDTH - IMPLICIT_SHIFT)
-    global_frame_cnt: [100, 30000]
+    postscaler: range(MAPPING_POSTSCALER - 1, MAPPING_POSTSCALER + 2) #range(SCALER_SHIFT - INPUT_WIDTH - IMPLICIT_SHIFT + 1, SCALED_WIDTH - IMPLICIT_SHIFT)
+    frame_cnt: [100, 30000]
     alternating_gain:
         period: [1, 2, 500] #range(1, 20, 2)
     constant_gain:
         gain: [3, 65535]
         #gain: [-3, 32767]
-    rounding:
+    rounding_modes:
         value: [-8, 7]
+        num_fractional_bits: [1, 2, 7]
     double_resolution_capture:
         postscaler: range(12, 22)
     averages:
-        num_frames: [120]
+        num_frames: [112]
         frames_per_burst: 2
         postscaler_range: ((MAPPING_POSTSCALER - CAPTURE_WIDTH, MAPPING_POSTSCALER + CAPTURE_WIDTH),)
 
     #parameters for funcgen tests
-    global_seeds: [-7680, 7744, -14296, -65, -32175, -29190, 30160, 5679, -2070, 24601, 29784, -18765, -25554, -10744, -27608, 3207, 5129, 5031, 22606, 11371, 2446, -28089, 29554, -24103, -26437, 18246, -6527] #, 10486, -25707, -5372, -16068, 25810, 14648, 23623, 4812, 4715, -2645, -28820, -15584, 13563, 32522, 31152, 17351, -22105, -2246, 25818, 17051, -2280, -25287, -20404, -15797, -12642, -15709, -31140, 7986, 22594, -6864, -32133, 11524, -4534, -11304, 16974, -14582, -19158, -30167, 18625, 24000, -12775, -2598, 10724, -17769, -6480, -21887, -20074, -20059, 14521, -5225, 4359, 6366, 30513, -25340, 4396, -224, -4468, 28533, -14307, 13536, -24931, 20594, -30438, -10245, -4246, 25084, -3154, 26509, -16821, -1224, 10499, -16869, -1795]
-    global_burst_period_in_frames: [10004, 10000]
-    global_number_of_bursts: [1, 10, 100]
+    seeds: [-7680, 7744, -14296, -65, -32175, -29190, 30160, 5679, -2070, 24601, 29784, -18765, -25554, -10744, -27608, 3207, 5129, 5031, 22606, 11371, 2446, -28089, 29554, -24103, -26437, 18246, -6527, 10486, -25707, -5372, -16068, 25810, 14648, 23623, 4812, 4715, -2645, -28820, -15584, 13563, 32522, 31152, 17351, -22105, -2246, 25818, 17051, -2280, -25287, -20404, -15797, -12642, -15709, -31140, 7986, 22594, -6864, -32133, 11524, -4534, -11304, 16974, -14582, -19158, -30167, 18625, 24000, -12775, -2598, 10724, -17769, -6480, -21887, -20074, -20059, 14521, -5225, 4359, 6366, 30513, -25340, 4396, -224, -4468, 28533, -14307, 13536, -24931, 20594, -30438, -10245, -4246, 25084, -3154, 26509, -16821, -1224, 10499, -16869, -1795]
+    burst_period_in_frames: [10000, 20000]
+    number_of_bursts: [1, 10, 100]
 
     #funcgen test functions with parameters
     funcgen_noise_fft_avg_squared:
         num_runs: [2]
+    # Frame-counter plots wrap at 4096 (12-bit frame8) and 16 (frame4).
+    # 10000/20000 make frame8 look like random plateaus (jump ~1800) and
+    # frame4 collapse to a 0/1 toggle (period % 16 == 0). These periods stay
+    # in the same ~0.2–0.4 s capture range but land on remainders 28 and 60
+    # (both ≡ 12 mod 16), so each burst is a short ramp with a visible gap.
     frame_counter_byte:
-        number_of_bursts: [10]
+        number_of_bursts: [16]
+        burst_period_in_frames: [8220, 16444]
     frame_counter_nibble:
         number_of_bursts: [10]
     right_shift: 
         shift: [0,1,2,3,4]
     shift_clip_width:
-        shift: [5]
-        clip_width: [5]
+        shift: range(ADC_BITS_PER_SAMPLE)
+        clip_width: range(ADC_BITS_PER_SAMPLE)
     overflow_ctr: 
         expected_overflows_per_frame: [0, 1, 1000, 2000]
         stats_frames: [10]
         mode: ['word_ctr_buffer_flags', 'frame8', 'frame4']
+
+    # 100G x-engine (UPACK/CGE) capture. Bind the host 100G NIC; dest_* is
+    # programmed into UPACK Ethernet/IP/UDP headers so packets reach this host.
+    gpu_bind_ip: "0.0.0.0"
+    gpu_bind_port: 41001
+    gpu_dest_ip: "10.88.0.1"
+    gpu_dest_mac: "FF:FF:FF:FF:FF:FF"
+    gpu_dest_port: 41001
+    gpu_rcvbuf: 33554432
+
+    #global parameters for the correlator tests
+    num_frames: [32768, 32767]
+    channel0: range(NUM_CHANNELS)
+    channel1: range(NUM_CHANNELS)
+    #correlator test functions with parameters

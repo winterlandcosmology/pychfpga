@@ -223,7 +223,7 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         # The superclasses define:
         #   logger
         #   hostname, serial, slot, subarray: initialized from the specified parameters
-        #   extra_args : assigned any extra arguments captured in `kwargs`
+        #   extra_hwm_args : assigned any extra arguments captured in `kwargs`
         #   crate: set to None
         #   mezzanine: set to an empty dict
         #   fpga: set to None. Will be set to a FPGAFirmware instance when the FPGA is programmed.

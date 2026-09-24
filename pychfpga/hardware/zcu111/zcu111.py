@@ -321,7 +321,7 @@ class ZCU111(Motherboard):
 
         if not is_fpga_programmed or force or (force is not None and not is_crc_valid):
             self.logger.debug(f'{self!r}: Configuring FPGA')
-            self.tcpipe.set_fpga_bitstream(bitstream, crc=crc32)
+            await self.tcpipe.set_fpga_bitstream_async(bitstream, crc=crc32)
         else:
             self.logger.debug(
                 f'{self!r}: FPGA is already configured. Skipping configuration.')

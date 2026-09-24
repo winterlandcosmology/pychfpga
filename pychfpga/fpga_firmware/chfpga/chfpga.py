@@ -122,12 +122,16 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
     - TCPipe: TCP-based BSB bridge on the on-board processor (ZCU111 / CRS today).
     """
 
-    # Array method provider class for this firmware
-    array_method_class = chFPGAArrayMethods
+    _array_method_classes = {'chFPGA': chFPGAArrayMethods}
 
     #: Values for ``self.BSB_TRANSPORT`` and ``PLATFORM_SUPPORT[''bsb_transport'']`` (same strings).
     BSB_TRANSPORT_UDP = 'udp'
     BSB_TRANSPORT_TCPIPE = 'tcpipe'
+
+    #: Requested kernel receive-buffer (SO_RCVBUF) for the UDP data socket. Sized to
+    #: absorb datagram bursts while the single-threaded receiver is busy in
+    #: process/format. Clamped by net.core.rmem_max (raise that if drops persist).
+    UDP_DATA_RCVBUF = 16 * 1024 * 1024
 
     # Define the motherboard models and operational modes supported by this class, and associate corresponding FPGA
     # configuration bitstreams and initialization parameters The 'clock_divider' is used to know when clock frequency
@@ -135,17 +139,51 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
     # procrssing clock. For the CRS, the processing clock is Fs/8 and the monitoring clock is Fs/16. For the
     # IceBoard, it's both fs/4. (fs=sampling frequency)
     PLATFORM_SUPPORT = ( # [ {"platform":<platform_model>, "modes":<supported_modes>, "firmware_url":<firmware filename_or_url>, <other platform key-value parameters>}, ...]
-        dict(platform="MGK7MB", modes=("shuffle16", "shuffle128",
-                                       "shuffle256", "shuffle512",
-                                       "chan8", "chan4"),    firmware_url='chfpga_ice_ct.bit',         bsb_transport=BSB_TRANSPORT_UDP,    sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4),
-        dict(platform="MGK7MB", modes=("corr16",),           firmware_url='chfpga_ice_corr16_pbg_jun16.bit', bsb_transport=BSB_TRANSPORT_UDP,    sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4),
-        dict(platform="MGK7MB", modes=("chord16",),          firmware_url='chordFPGA_MGK7MB_Rev2.bit', bsb_transport=BSB_TRANSPORT_UDP,    sampling_frequency=1200e6, processing_frequency=300e6),
-        dict(platform="ZCU111", modes=("corr4", "corr8"),    firmware_url='sifpga_zcu111_wrapper.bit', bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16),
-        dict(platform="ZCU111", modes=("chan8",),            firmware_url='chfpga_zcu111.bit',         bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16),
-        dict(platform="CRS",    modes=("corr4","corr8"),     firmware_url='chfpga_crs_corr8.bit',      bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
-        dict(platform="CRS",    modes=("corr32",),           firmware_url='chfpga_crs_corr32.bit',     bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
-        dict(platform="CRS",    modes=("corr64",),           firmware_url='chfpga_crs_corr64.bit',     bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
-        dict(platform="CRS",    modes=("chan8", "shuffle8"), firmware_url='chfpga_crs_ct.bit',         bsb_transport=BSB_TRANSPORT_TCPIPE, sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32),
+        dict(platform="MGK7MB", modes=("shuffle16", "shuffle128", "shuffle256", "shuffle512","chan8", "chan4"),    
+            firmware_url='chfpga_ice_ct.bit',         
+            bsb_transport=BSB_TRANSPORT_UDP,    
+            sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4,
+            corr_readout_bins=None),
+        dict(platform="MGK7MB", modes=("corr16",),           
+            firmware_url='chfpga_ice_corr16_pbg_jun16.bit', 
+            bsb_transport=BSB_TRANSPORT_UDP,   
+            sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4,
+            corr_readout_bins=(0,0)),
+        dict(platform="MGK7MB", modes=("chord16",),          
+            firmware_url='chordFPGA_MGK7MB_Rev2.bit', 
+            bsb_transport=BSB_TRANSPORT_UDP,   
+            sampling_frequency=1200e6, processing_frequency=300e6, adc_clock_divider=4,
+            corr_readout_bins=None),
+        dict(platform="ZCU111", modes=("corr4", "corr8"),    
+            firmware_url='sifpga_zcu111_wrapper.bit', 
+            bsb_transport=BSB_TRANSPORT_TCPIPE, 
+            sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16,
+            corr_readout_bins=(0,1,2,3)),
+        dict(platform="ZCU111", modes=("chan8",),            
+            firmware_url='chfpga_zcu111.bit',         
+            bsb_transport=BSB_TRANSPORT_TCPIPE, 
+            sampling_frequency=3000e6, processing_frequency=375e6, adc_clock_divider=16,
+            corr_readout_bins=None),
+        dict(platform="CRS",    modes=("corr8",),     
+            firmware_url='chfpga_crs_corr8.bit',     
+            bsb_transport=BSB_TRANSPORT_TCPIPE, 
+            sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32,
+            corr_readout_bins=(0,1,2,3)),
+        dict(platform="CRS",    modes=("corr32",),           
+            firmware_url='chfpga_crs_corr32.bit',     
+            bsb_transport=BSB_TRANSPORT_TCPIPE, 
+            sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32,
+            corr_readout_bins=(0,)),
+        dict(platform="CRS",    modes=("corr64",),           
+            firmware_url='chfpga_crs_corr64.bit',     
+            bsb_transport=BSB_TRANSPORT_TCPIPE, 
+            sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32,
+            corr_readout_bins=(0,)),
+        dict(platform="CRS",    modes=("chan8", "shuffle8"), 
+            firmware_url='chfpga_crs_ct.bit',        
+            bsb_transport=BSB_TRANSPORT_TCPIPE, 
+            sampling_frequency=3200e6, processing_frequency=3200e6/8, adc_clock_divider=32,
+            corr_readout_bins=None),
     )
 
     FFT_INFO = fft.FFT_INFO
@@ -435,7 +473,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
            fpga_control_port_number=None,
            local_control_port_number=None,
            interface_ip_addr=None,
-           udp_retries=10):
+           udp_retries=10,
+           irigb_source=None):
         """
         Opens communication with the FPGA, retrieves the firmware configuration information and
         create the Python objects needed to operate the firmware. If `init` =1, the :meth:`init`
@@ -479,29 +518,42 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 communicate with both the ARM and FPGA. If `None`, the interface
                 will be detected automatically by establishing a connection with
                 the ARM.
+
+            irigb_source (str): IRIG-B source name to select after MMI is up.
+                If ``None``, the decoder source is left unchanged. Specifying this parameter 
+                allows the IRIG-B decoder to be setup as soon as possible during the init sequence 
+                so it can decode its first valid second as soon as possible.
+
+
+        Notes:
+
+            Some networking  parameters can be overridden by matching
+            values are stored on ``self`` and used for the rest of open.
+            extra parameters provided during hwm construction.
         """
 
-        # await super().open()  # Open UDP communication link
+        # Store networking parameters, overriding them with the extra hardware map parameters if they were provided at construction time
+        hwm = self.mb.extra_hwm_args
+        self.fpga_ip_addr = hwm.get('fpga_ip_addr', fpga_ip_addr)
+        self.fpga_ip_addr_fn = hwm.get('fpga_ip_addr_fn', fpga_ip_addr_fn)
+        self.fpga_control_port_number = hwm.get('fpga_control_port_number', fpga_control_port_number)
+        self.local_control_port_number = hwm.get('local_control_port_number', local_control_port_number)
+        self.interface_ip_addr = hwm.get('interface_ip_addr', interface_ip_addr)
+        self.udp_retries = hwm.get('udp_retries', udp_retries)
 
-        self.fpga_ip_addr = fpga_ip_addr
-        self.fpga_ip_addr_fn = fpga_ip_addr_fn
-        # if fpga_ip_addr_fn is not None:
-        #     self.logger.warning('fpga_ip_addr_fn will be deprecated. Instead specify fpga_ip_addr in the hardware map')
-        self.udp_retries = udp_retries
-        self.fpga_control_port_number = fpga_control_port_number
-        self.local_control_port_number = local_control_port_number
-        self.interface_ip_addr = interface_ip_addr
-
-        self.logger.debug(f'{self!r}: Opening communication with the FPGA with parameters '
-                          f'fpga_ip_addr={fpga_ip_addr}, fpga_control_port_number={fpga_control_port_number}, '
-                          f'local_control_port_number={local_control_port_number}, interface_ip_addr={interface_ip_addr}, '
-                          f'init={init}'
-                         )
+        self.logger.debug(
+            f'{self!r}: Opening communication with the FPGA with parameters '
+            f'fpga_ip_addr={self.fpga_ip_addr}, '
+            f'fpga_control_port_number={self.fpga_control_port_number}, '
+            f'local_control_port_number={self.local_control_port_number}, '
+            f'interface_ip_addr={self.interface_ip_addr}, init={init}')
 
         # If init<0, we do not perform any communication with the FPGA, so we don't read the firmware configuration
         if init < 0:
-            self.logger.warning(f'{self!r}: Upon user request (init < 0), communication with the FPGA are inhibited. '
-                              'Initialization sequence stops here. Use this for debug only.')
+            self.logger.warning(
+                f'{self!r}: Upon user request (init < 0), communication with '
+                f'the FPGA are inhibited. Initialization sequence stops here. '
+                f'Use this for debug only.')
             return
 
         # Open a communicaition link with the FPGA to create the BSB MMI interface
@@ -547,294 +599,306 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
             self.GPIO.init()
 
-            # ---------------------------------------------------------------------
-            # -- Gather platform and FPGA firmware configuration information
-            # ---------------------------------------------------------------------
-            #  We use the information provided from GPIO registers to determine what
-            # firmware modules are present and what their geometry is.
-            #
-            # We try to have the FPGA auto-report its configuration in details and avoid using look-up tables.
-            # The exception to this are the platform-specific parameters which are pretty static.
-            #
-            # We don't want to instantiate
-            # modules that are not present in firmware, as their initialization will fail.
-            # ---------------------------------------------------------------------
+            with self.mmi.aggregate_commands():
+                # Start the IRIG-B decoder as soon as MMI works so it can lock a
+                # full second during the rest of open (e.g. CRS 0.5 s PLL settle)
+                # and firmware init. Later set_irigb_source_async calls skip if
+                # the mux is already this source, so they do not clear `recent`.
+                self._current_irigb_source_sel_pol = None
+                if irigb_source:
+                    await self.set_irigb_source_async(irigb_source)
 
-            self.GPIO.set_channelizer_reset(True)  # stop the channelizer from sending data while we initialize
+                # ---------------------------------------------------------------------
+                # -- Gather platform and FPGA firmware configuration information
+                # ---------------------------------------------------------------------
+                #  We use the information provided from GPIO registers to determine what
+                # firmware modules are present and what their geometry is.
+                #
+                # We try to have the FPGA auto-report its configuration in details and avoid using look-up tables.
+                # The exception to this are the platform-specific parameters which are pretty static.
+                #
+                # We don't want to instantiate
+                # modules that are not present in firmware, as their initialization will fail.
+                # ---------------------------------------------------------------------
 
-            # get system constants from the FPGA
-            self.logger.debug(f'{self!r}: === Getting board info information')
-            await asyncio.sleep(0)
-            self.PLATFORM_ID = self.GPIO.PLATFORM_ID
-            if self.PLATFORM_ID not in self._PLATFORM_ID_LIST:
-                raise RuntimeError(f'{self!r}: Platform ID 0x{self.PLATFORM_ID:02X} is not recognized')
+                self.GPIO.set_channelizer_reset(True)  # stop the channelizer from sending data while we initialize
 
-
-            self._NUMBER_OF_FMC_SLOTS = self.mb.NUMBER_OF_FMC_SLOTS
-
-            self.NUMBER_OF_ADCS = self.GPIO.NUMBER_OF_ADCS
-            self.FFT_TYPE = self.GPIO.FFT_TYPE
-            self.FFT_LATENCY = (self.FFT_INFO[self.FFT_TYPE])['latency']
-            self.CT_TYPE = ('NONE', 'BCT','UCT')[self.GPIO.CT_TYPE]
-            self.CT_LEVEL = self.GPIO.CT_LEVEL
-
-            # Set platform/implementation-specific features & constants based on a local table
-            if self.PLATFORM_ID in (self._PLATFORM_ID_ZCU111, self._PLATFORM_ID_CRS):
-                self.HAS_REFCLK = True
-                self.HAS_SPI = False
-                self.HAS_I2C = False
-                self.HAS_ADCDAQ = False
-                self.HAS_FMC = False
-                self.MAX_BSB_COMMAND_LENGTH = 512
-                self.HAS_UCORN = self.mode == 'shuffle8' # Hacky method until we can read it back.
-                self.CROSSBAR1_TYPE = "URAM"
-                self.GPU_LINK_TYPE = "100GE"
-                self.CAPTURE_TYPE = "UCAP"
-                self.CORR_TYPE = "UCORR44"
-                self.ADC_FREQS_TO_CHECK = range(self.NUMBER_OF_ADCS)
-                assert self.BSB_TRANSPORT == self.BSB_TRANSPORT_TCPIPE, f'{self!r}: Expected TCPipe BSB for PLATFORM_ID ZCU111/CRS'
-
-            elif self.PLATFORM_ID in (self._PLATFORM_ID_MGK7MB_REV0, self._PLATFORM_ID_MGK7MB_REV2):
-                assert self.mb.part_number == "MGK7MB", 'This version of the firmware is meant to operate on the MGK7MB (IceBoard) only'
-                self.HAS_REFCLK = True
-                self.HAS_SPI = True
-                self.HAS_I2C = True
-                self.HAS_ADCDAQ = True
-                self.HAS_FMC = True
-                self.MAX_BSB_COMMAND_LENGTH = 2048  # maybe more, depends on the UDP bufer
-                # self.CT_TYPE = "BCT" # Programmable BRAM- and GTX-based corner turn (16 inputs (2 bins/input/clk) x 8 outputs across 1,16 and 32 boards)
-                self.HAS_UCORN = False
-                self.CROSSBAR1_TYPE = "BRAM"
-                self.GPU_LINK_TYPE = "10GE"
-                self.CAPTURE_TYPE = "PROBER"
-                # self.CORR_TYPE = "CORR44"
-                self.CORR_TYPE = "UCORR44"
-                self.ADC_FREQS_TO_CHECK = (0,4,8,12)
-                assert self.BSB_TRANSPORT == self.BSB_TRANSPORT_UDP, f'{self!r}: Expected FPGA UDP BSB for PLATFORM_ID MGK7MB'
-
-            else:
-                raise RuntimeError(f'Unknown feature list for PLATFORM_ID = {self.PLATFORM_ID}')
+                # get system constants from the FPGA
+                self.logger.debug(f'{self!r}: === Getting board info information')
+                await asyncio.sleep(0)
+                self.PLATFORM_ID = self.GPIO.PLATFORM_ID
+                if self.PLATFORM_ID not in self._PLATFORM_ID_LIST:
+                    raise RuntimeError(f'{self!r}: Platform ID 0x{self.PLATFORM_ID:02X} is not recognized')
 
 
-            # Set platform/implementation-specific features & constants based on values reported by the FPGA GPIO module
-            #
-            # Get frame size info, i.e number of samples per frame
-            self._LOG2_FRAME_LENGTH = self.GPIO.LOG2_FRAME_LENGTH
-            self.FRAME_LENGTH = 2**self._LOG2_FRAME_LENGTH  # 2**11 = 2048 time samples per frame
-            self.ADC_SAMPLES_PER_FRAME = self.FRAME_LENGTH  # more explicit name
+                self._NUMBER_OF_FMC_SLOTS = self.mb.NUMBER_OF_FMC_SLOTS
 
-            self.NUMBER_OF_FREQUENCY_BINS = self.FRAME_LENGTH // 2  # 1024 frequency bins per frame
+                self.NUMBER_OF_ADCS = self.GPIO.NUMBER_OF_ADCS
+                self.FFT_TYPE = self.GPIO.FFT_TYPE
+                self.FFT_LATENCY = (self.FFT_INFO[self.FFT_TYPE])['latency']
+                self.CT_TYPE = ('NONE', 'BCT','UCT')[self.GPIO.CT_TYPE]
+                self.CT_LEVEL = self.GPIO.CT_LEVEL
 
-            # Number of samples per word (i.e number of samples processed per clock)
-            self._LOG2_SAMPLES_PER_WORD = self.GPIO.LOG2_SAMPLES_PER_WORD
-            self.SAMPLES_PER_WORD = 2**self._LOG2_SAMPLES_PER_WORD
+                # Set platform/implementation-specific features & constants based on a local table
+                if self.PLATFORM_ID in (self._PLATFORM_ID_ZCU111, self._PLATFORM_ID_CRS):
+                    self.HAS_REFCLK = True
+                    self.HAS_SPI = False
+                    self.HAS_I2C = False
+                    self.HAS_ADCDAQ = False
+                    self.HAS_FMC = False
+                    self.MAX_BSB_COMMAND_LENGTH = 512
+                    self.HAS_UCORN = self.mode == 'shuffle8' # Hacky method until we can read it back.
+                    self.CROSSBAR1_TYPE = "URAM"
+                    self.GPU_LINK_TYPE = "100GE"
+                    self.CAPTURE_TYPE = "UCAP"
+                    self.CORR_TYPE = "UCORR44"
+                    self.CAPTURE_BUS_WIDTH = 128  # width of the data capture bus from FUNCGEN/SCALER into the capture engine
+                    self.ADC_FREQS_TO_CHECK = range(self.NUMBER_OF_ADCS)
+                    assert self.BSB_TRANSPORT == self.BSB_TRANSPORT_TCPIPE, f'{self!r}: Expected TCPipe BSB for PLATFORM_ID ZCU111/CRS'
 
-            # Number of bits and bytes per ADC sample
-            self.ADC_BITS_PER_SAMPLE = self.GPIO.ADC_BITS_PER_SAMPLE
-            self.ADC_BYTES_PER_SAMPLE = (self.GPIO.ADC_BITS_PER_SAMPLE + 7) // 8  # round up to the nearest byte
-            self.FFT_BINS_PER_WORD = int(self.FFT_INFO.get(self.FFT_TYPE, {}).get("bins_per_word") or 1)
-            # Number of bytes in a frame
-            self.ADC_BYTES_PER_FRAME = self.FRAME_LENGTH * self.ADC_BYTES_PER_SAMPLE  # SAMPLES_PER_FRAME * BYTES_PER_SAMPLE
+                elif self.PLATFORM_ID in (self._PLATFORM_ID_MGK7MB_REV0, self._PLATFORM_ID_MGK7MB_REV2):
+                    assert self.mb.part_number == "MGK7MB", 'This version of the firmware is meant to operate on the MGK7MB (IceBoard) only'
+                    self.HAS_REFCLK = True
+                    self.HAS_SPI = True
+                    self.HAS_I2C = True
+                    self.HAS_ADCDAQ = True
+                    self.HAS_FMC = True
+                    self.MAX_BSB_COMMAND_LENGTH = 2048  # maybe more, depends on the UDP bufer
+                    # self.CT_TYPE = "BCT" # Programmable BRAM- and GTX-based corner turn (16 inputs (2 bins/input/clk) x 8 outputs across 1,16 and 32 boards)
+                    self.HAS_UCORN = False
+                    self.CROSSBAR1_TYPE = "BRAM"
+                    self.GPU_LINK_TYPE = "10GE"
+                    self.CAPTURE_TYPE = "PROBER"
+                    # self.CORR_TYPE = "CORR44"
+                    self.CORR_TYPE = "UCORR44"
+                    self.ADC_FREQS_TO_CHECK = (0,4,8,12)
+                    self.CAPTURE_BUS_WIDTH = 32 # width of the data capture bus from FUNCGEN/SCALER into the capture engine
+                    assert self.BSB_TRANSPORT == self.BSB_TRANSPORT_UDP, f'{self!r}: Expected FPGA UDP BSB for PLATFORM_ID MGK7MB'
 
-            # Identify the number of channelizers and their properties
-            self.CHANNELIZERS_CLOCK_SOURCE = self.GPIO.CHANNELIZERS_CLOCK_SOURCE
-            self.NUMBER_OF_CHANNELIZERS = self.GPIO.NUMBER_OF_CHANNELIZERS
-            self.NUMBER_OF_ANTENNAS_WITH_FFT = self.GPIO.NUMBER_OF_CHANNELIZERS_WITH_FFT
-            self.LIST_OF_ANTENNAS_WITH_FFT = list(range(self.NUMBER_OF_ANTENNAS_WITH_FFT))
-
-            # Get corner-turn engine configuration info
-            # CT-Engine type (CT_TYPE) is defined by lookup table based on the platform
-            self.NUMBER_OF_CROSSBAR_INPUTS = self.GPIO.NUMBER_OF_CROSSBAR_INPUTS
-            self.NUMBER_OF_CROSSBAR1_OUTPUTS = self.GPIO.NUMBER_OF_CROSSBAR1_OUTPUTS
-
-            # Get Real-time data offload link configuration info
-            # GPU_LINK_TYPE is defined by lookup table based on the platform
-            self.NUMBER_OF_GPU_LINKS = self.GPIO.NUMBER_OF_GPU_LINKS
-
-            # Get (optional) embedded firmware correlator configuration info and their properties
-            self.NUMBER_OF_CORRELATORS_MAX = self.GPIO.NUMBER_OF_CORRELATORS
-            self.NUMBER_OF_CORRELATORS = self.GPIO.NUMBER_OF_CORRELATORS
-            self.LIST_OF_IMPLEMENTED_CORRELATORS = list(range(self.NUMBER_OF_CORRELATORS))
-            self.NUMBER_OF_INPUTS_TO_CORRELATE = self.GPIO.NUMBER_OF_CHANNELIZERS_TO_CORRELATE
-            if not self.NUMBER_OF_CORRELATORS:
-                self.CORR_TYPE = None
-
-            self.default_channels = list(range(self.NUMBER_OF_CHANNELIZERS))
-
-            self.logger.debug(f'{self!r}:     Firmware timestamp: {self.get_version()}')
-            self.logger.debug(f'{self!r}:     Hardware platform: {self._PLATFORM_ID_LIST[self.PLATFORM_ID][0]}')
-            self.logger.debug(f'{self!r}:         Number of FMC slots: {self._NUMBER_OF_FMC_SLOTS}')
-            self.logger.debug(f'{self!r}:     ADC configuration')
-            self.logger.debug(f'{self!r}:         Number of ADCs: {self.NUMBER_OF_ADCS}')
-            self.logger.debug(f'{self!r}:         Number of bits per sample: {self.ADC_BITS_PER_SAMPLE}')
-
-
-            self.logger.debug(f'{self!r}:     F-Engine configuration')
-            self.logger.debug(f'{self!r}:         Number of channelizers: {self.NUMBER_OF_CHANNELIZERS}')
-            self.logger.debug(f'{self!r}:         Number of channelizers with FFT: {len(self.LIST_OF_ANTENNAS_WITH_FFT)} (input channel {str(self.LIST_OF_ANTENNAS_WITH_FFT)})')
-            self.logger.debug(f'{self!r}:     CT-Engine configuration')
-            self.logger.debug(f'{self!r}:         Crossbar configuration: {self.NUMBER_OF_CROSSBAR_INPUTS} inputs x {self.NUMBER_OF_CROSSBAR1_OUTPUTS} outputs')
-            self.logger.debug(f'{self!r}:     X-Engine configuration')
-            self.logger.debug(f'{self!r}:         Number of correlators: {len(self.LIST_OF_IMPLEMENTED_CORRELATORS)} (correlators {self.LIST_OF_IMPLEMENTED_CORRELATORS}')
-            self.logger.debug(f'{self!r}:         Number of channelizers supported by the correlators: {self.NUMBER_OF_INPUTS_TO_CORRELATE}')
-
-            await asyncio.sleep(0)
-
-
-            # ---------------------------------------------------------------------
-            # -- Create basic FPGA resource handlers objects
-            # ---------------------------------------------------------------------
-            #
-            #  NOTE: Does not initialize module objects yet because some modules are
-            #  interdependent - we need to wait until all of them are
-            #  instantiated before we initialize them.
-            #
-            #  NOTE: The instantiation does not initiate communicattion with
-            #  the hardware yet. This is done in the INIT phase.
-
-
-            self.logger.debug(f'{self!r}: === Instantiating SYSTEM objects')
-
-            self.logger.debug(f'{self!r}: ===     Instantiating SYSMON')
-            self.SYSMON = sysmon.SYSMON(router=self.system_router, router_port='SYSMON', config=self.config.add("sysmon"))
-
-            if self.HAS_SPI:
-                self.logger.debug(f'{self!r}: ===     Instantiating SPI')
-                self.SPI = spi.SPI(router=self.system_router, router_port='SPI', config=self.config.add("spi"))
-            else:
-                self.SPI = None
-
-            if self.HAS_I2C:
-                self.logger.debug(f'{self!r}: ===     Instantiating I2C')
-                self.I2C = i2c.I2C(router=self.system_router, router_port='I2C', config=self.config.add("i2c"))
-            else:
-                self.I2C = None
-
-
-            self.logger.debug(f'{self!r}: ===     Instantiating FreqCtr')
-            self.FreqCtr = freqctr.FreqCtr(router=self.system_router, router_port='FREQ_CTR', config=self.config.add("freqctr"))
-
-            if self.HAS_REFCLK:
-                self.logger.debug(f'{self!r}: ===     Instantiating REFCLK')
-                self.REFCLK = refclk.REFCLK(router=self.system_router, router_port='REFCLK', config=self.config.add("refclk"))
-            else:
-                self.REFCLK = None
-
-            # ---------------------
-            # Instantiate F-Engine
-            # ---------------------
-
-            self.logger.debug(f'{self!r}: === Instantiating F-Engine')
-            # Instantiate a channelizer for for each input
-            self.chan = chan.ChanArray(router = self.top_router, router_port = 'CHAN', config=self.config.add("chan"))
-            self.CHAN_FMC_NUMBER = [i // 8 for i in range(self.NUMBER_OF_CHANNELIZERS)]
-            # self._init_capture_state_tracking()
-
-            await asyncio.sleep(0)
-
-
-            # ----------------------
-            # Instantiate CT-Engine
-            # ----------------------
-
-            self.logger.debug(f'{self!r}: === Instantiating CT-Engine, type {self.CT_TYPE} level {self.CT_LEVEL}')
-
-
-            #  BCT corner-turn (CHIME-like)
-            if self.CT_TYPE == "BCT":
-
-                self.CT = bct_engine.BCTEngine(
-                    router=self.top_router,
-                    router_port = 'CT',
-                    config=self.config.add("ct")
-                    )
-            # UCT corner-turn
-            elif self.CT_TYPE == "UCT":
-                self.CT = uct_engine.UCTEngine(
-                    router=self.top_router,
-                    router_port = 'CT',
-                    config=self.config.add("ct")
-                    )
-            else:
-                raise RuntimeError(f'Unknown CT-Engine type {self.CT_TYPE}')
-
-            if self.HAS_UCORN:  # ***JFC temp hack to determine if we have UCORN. Not it capability reg yet.
-                self.UCORN = ucorn.UCorn(
-                    router=self.top_router,
-                    router_port = 'UCORN',
-                    config=self.config.add("ucorn")
-                    )
-            else:
-                self.UCORN = None
-
-
-
-            # ---------------------
-            # Instantiate X-Engine
-            # ---------------------
-
-            if self.NUMBER_OF_CORRELATORS:
-                self.logger.debug(f'{self!r}: === Instantiating X-Engine, type={self.CORR_TYPE}')
-                if self.CORR_TYPE == "CORR44":
-                    self.CORR = CORR.CORR(router=self.top_router, router_port = 'CORR', config=self.config.add("corr"))
-                elif self.CORR_TYPE == "UCORR44":
-                    self.CORR = UCORR.UCORR(router=self.top_router, router_port = 'CORR', config=self.config.add("corr"))
-            else:
-                self.CORR = None
-
-            # ---------------------
-            # Instantiate real-time data offload engine object (10G or 100G links)
-            # ---------------------
-
-            if self.NUMBER_OF_GPU_LINKS:
-                self.logger.debug(f'{self!r}: === Instantiating real-time data offload links, type={self.GPU_LINK_TYPE}')
-                if self.GPU_LINK_TYPE == '10GE':
-                    self.GPU = gpu.GPU(router=self.top_router, router_port = 'GPU', config=self.config.add("gpu"))
-                elif self.GPU_LINK_TYPE == '100GE':
-                    self.GPU = cge.CGE(router=self.top_router, router_port = 'GPU', config=self.config.add("gpu"))
                 else:
-                    raise RuntimeError(f'Unknown data link type {self.GPU_LINK_TYPE}')
-            else:
-                self.GPU = None
-
-            # -------------------------------
-            # Instantiate global data capture
-            # -------------------------------
-
-            if self.CAPTURE_TYPE == 'UCAP':
-                self.logger.debug(f'{self!r}: === Instantiating UCAP')
-                self.UCAP = ucap.UCAP(router=self.top_router, router_port = 'UCAP', config=self.config.add("ucap"))
-            elif self.CAPTURE_TYPE !='PROBER':
-                raise RuntimeError(f'Unknown Data capture type {self.CAPTURE_TYPE}')
+                    raise RuntimeError(f'Unknown feature list for PLATFORM_ID = {self.PLATFORM_ID}')
 
 
-            # ---------------------------------------------------------------------
-            # Instantiate ADC board hardware ressource handlers objects
-            # ---------------------------------------------------------------------
+                # Set platform/implementation-specific features & constants based on values reported by the FPGA GPIO module
+                #
+                # Get frame size info, i.e number of samples per frame
+                self._LOG2_FRAME_LENGTH = self.GPIO.LOG2_FRAME_LENGTH
+                self.FRAME_LENGTH = 2**self._LOG2_FRAME_LENGTH  # 2**11 = 2048 time samples per frame
+                self.ADC_SAMPLES_PER_FRAME = self.FRAME_LENGTH  # more explicit name
 
-            await asyncio.sleep(0)
-            self.logger.debug(f'{self!r}: === Analyzing available FMC Mezzanines')
-            # self._adc_board = [
-            #     self.mezzanine.get(1, None),
-            #     self.mezzanine.get(2, None)]
+                self.NUMBER_OF_FREQUENCY_BINS = self.FRAME_LENGTH // 2  # 1024 frequency bins per frame
 
-            self._FMC_present = [False] * self._NUMBER_OF_FMC_SLOTS
-            for fmc_number in range(self._NUMBER_OF_FMC_SLOTS):
-                if fmc_number+1 in self.mezzanine.keys():
-                    self._FMC_present[fmc_number] = True
-                    self.logger.debug(f'{self!r}:   An MGADC08 ADC Board is present on FMC slot {fmc_number}')
+                # Number of ADC samples per word (i.e number of samples processed per clock)
+                self._LOG2_SAMPLES_PER_WORD = self.GPIO.LOG2_SAMPLES_PER_WORD
+                self.SAMPLES_PER_WORD = 2**self._LOG2_SAMPLES_PER_WORD
+
+                # Number of bits and bytes per ADC sample
+                self.ADC_BITS_PER_SAMPLE = self.GPIO.ADC_BITS_PER_SAMPLE
+                self.ADC_BYTES_PER_SAMPLE = (self.GPIO.ADC_BITS_PER_SAMPLE + 7) // 8  # round up to the nearest byte
+                assert self.CAPTURE_BUS_WIDTH == 8 * self.ADC_BYTES_PER_SAMPLE * self.SAMPLES_PER_WORD, f'{self!r}: CAPTURE_BUS_WIDTH must be equal to 8 * ADC_BYTES_PER_SAMPLE * SAMPLES_PER_WORD (all samples must fit in the capture bus)'
+                self.FFT_BINS_PER_WORD = int(self.FFT_INFO.get(self.FFT_TYPE, {}).get("bins_per_word") or 1)
+                # Number of bytes in a frame
+                self.ADC_BYTES_PER_FRAME = self.FRAME_LENGTH * self.ADC_BYTES_PER_SAMPLE  # SAMPLES_PER_FRAME * BYTES_PER_SAMPLE
+
+                # Identify the number of channelizers and their properties
+                self.CHANNELIZERS_CLOCK_SOURCE = self.GPIO.CHANNELIZERS_CLOCK_SOURCE
+                self.NUMBER_OF_CHANNELIZERS = self.GPIO.NUMBER_OF_CHANNELIZERS
+                self.NUMBER_OF_ANTENNAS_WITH_FFT = self.GPIO.NUMBER_OF_CHANNELIZERS_WITH_FFT
+                self.LIST_OF_ANTENNAS_WITH_FFT = list(range(self.NUMBER_OF_ANTENNAS_WITH_FFT))
+
+                # Get corner-turn engine configuration info
+                # CT-Engine type (CT_TYPE) is defined by lookup table based on the platform
+                self.NUMBER_OF_CROSSBAR_INPUTS = self.GPIO.NUMBER_OF_CROSSBAR_INPUTS
+                self.NUMBER_OF_CROSSBAR1_OUTPUTS = self.GPIO.NUMBER_OF_CROSSBAR1_OUTPUTS
+
+                # Get Real-time data offload link configuration info
+                # GPU_LINK_TYPE is defined by lookup table based on the platform
+                self.NUMBER_OF_GPU_LINKS = self.GPIO.NUMBER_OF_GPU_LINKS
+
+                # Get (optional) embedded firmware correlator configuration info and their properties
+                self.NUMBER_OF_CORRELATORS_MAX = self.GPIO.NUMBER_OF_CORRELATORS
+                self.NUMBER_OF_CORRELATORS = self.GPIO.NUMBER_OF_CORRELATORS
+                self.LIST_OF_IMPLEMENTED_CORRELATORS = list(range(self.NUMBER_OF_CORRELATORS))
+                self.NUMBER_OF_INPUTS_TO_CORRELATE = self.GPIO.NUMBER_OF_CHANNELIZERS_TO_CORRELATE
+                if not self.NUMBER_OF_CORRELATORS:
+                    self.CORR_TYPE = None
+
+                self.default_channels = list(range(self.NUMBER_OF_CHANNELIZERS))
+
+                self.logger.debug(f'{self!r}:     Firmware timestamp: {self.get_version()}')
+                self.logger.debug(f'{self!r}:     Hardware platform: {self._PLATFORM_ID_LIST[self.PLATFORM_ID][0]}')
+                self.logger.debug(f'{self!r}:         Number of FMC slots: {self._NUMBER_OF_FMC_SLOTS}')
+                self.logger.debug(f'{self!r}:     ADC configuration')
+                self.logger.debug(f'{self!r}:         Number of ADCs: {self.NUMBER_OF_ADCS}')
+                self.logger.debug(f'{self!r}:         Number of bits per sample: {self.ADC_BITS_PER_SAMPLE}')
+
+
+                self.logger.debug(f'{self!r}:     F-Engine configuration')
+                self.logger.debug(f'{self!r}:         Number of channelizers: {self.NUMBER_OF_CHANNELIZERS}')
+                self.logger.debug(f'{self!r}:         Number of channelizers with FFT: {len(self.LIST_OF_ANTENNAS_WITH_FFT)} (input channel {str(self.LIST_OF_ANTENNAS_WITH_FFT)})')
+                self.logger.debug(f'{self!r}:     CT-Engine configuration')
+                self.logger.debug(f'{self!r}:         Crossbar configuration: {self.NUMBER_OF_CROSSBAR_INPUTS} inputs x {self.NUMBER_OF_CROSSBAR1_OUTPUTS} outputs')
+                self.logger.debug(f'{self!r}:     X-Engine configuration')
+                self.logger.debug(f'{self!r}:         Number of correlators: {len(self.LIST_OF_IMPLEMENTED_CORRELATORS)} (correlators {self.LIST_OF_IMPLEMENTED_CORRELATORS}')
+                self.logger.debug(f'{self!r}:         Number of channelizers supported by the correlators: {self.NUMBER_OF_INPUTS_TO_CORRELATE}')
+
+                await asyncio.sleep(0)
+
+
+                # ---------------------------------------------------------------------
+                # -- Create basic FPGA resource handlers objects
+                # ---------------------------------------------------------------------
+                #
+                #  NOTE: Does not initialize module objects yet because some modules are
+                #  interdependent - we need to wait until all of them are
+                #  instantiated before we initialize them.
+                #
+                #  NOTE: The instantiation does not initiate communicattion with
+                #  the hardware yet. This is done in the INIT phase.
+
+
+                self.logger.debug(f'{self!r}: === Instantiating SYSTEM objects')
+
+                self.logger.debug(f'{self!r}: ===     Instantiating SYSMON')
+                self.SYSMON = sysmon.SYSMON(router=self.system_router, router_port='SYSMON', config=self.config.add("sysmon"))
+
+                if self.HAS_SPI:
+                    self.logger.debug(f'{self!r}: ===     Instantiating SPI')
+                    self.SPI = spi.SPI(router=self.system_router, router_port='SPI', config=self.config.add("spi"))
                 else:
-                    self.logger.warning(f'{self!r}:   An MGADC08 ADC Board is *not* present on FMC slot {fmc_number}')
+                    self.SPI = None
 
-            # Determine if the FMC board corresponding to each channelizer is present
-            # self.ANT_FMC_IS_PRESENT = [self._adc_board[self.CHAN_FMC_NUMBER[i]].is_present() for i in range(self.NUMBER_OF_CHANNELIZERS)]
-            self.ANT_FMC_IS_PRESENT = [False] * self.NUMBER_OF_CHANNELIZERS
-            for (chan_number, fmc_number) in enumerate(self.CHAN_FMC_NUMBER):
-                if fmc_number + 1 in self.mezzanine.keys():
-                    self.ANT_FMC_IS_PRESENT[chan_number] = True
+                if self.HAS_I2C:
+                    self.logger.debug(f'{self!r}: ===     Instantiating I2C')
+                    self.I2C = i2c.I2C(router=self.system_router, router_port='I2C', config=self.config.add("i2c"))
+                else:
+                    self.I2C = None
 
-            self._data_socket = None
-            self._tcp_data_socket = None
+
+                self.logger.debug(f'{self!r}: ===     Instantiating FreqCtr')
+                self.FreqCtr = freqctr.FreqCtr(router=self.system_router, router_port='FREQ_CTR', config=self.config.add("freqctr"))
+
+                if self.HAS_REFCLK:
+                    self.logger.debug(f'{self!r}: ===     Instantiating REFCLK')
+                    self.REFCLK = refclk.REFCLK(router=self.system_router, router_port='REFCLK', config=self.config.add("refclk"))
+                else:
+                    self.REFCLK = None
+
+                # ---------------------
+                # Instantiate F-Engine
+                # ---------------------
+
+                self.logger.debug(f'{self!r}: === Instantiating F-Engine')
+                # Instantiate a channelizer for for each input
+                self.chan = chan.ChanArray(router = self.top_router, router_port = 'CHAN', config=self.config.add("chan"))
+                self.CHAN_FMC_NUMBER = [i // 8 for i in range(self.NUMBER_OF_CHANNELIZERS)]
+                # self._init_capture_state_tracking()
+
+                await asyncio.sleep(0)
+
+
+                # ----------------------
+                # Instantiate CT-Engine
+                # ----------------------
+
+                self.logger.debug(f'{self!r}: === Instantiating CT-Engine, type {self.CT_TYPE} level {self.CT_LEVEL}')
+
+
+                #  BCT corner-turn (CHIME-like)
+                if self.CT_TYPE == "BCT":
+
+                    self.CT = bct_engine.BCTEngine(
+                        router=self.top_router,
+                        router_port = 'CT',
+                        config=self.config.add("ct")
+                        )
+                # UCT corner-turn
+                elif self.CT_TYPE == "UCT":
+                    self.CT = uct_engine.UCTEngine(
+                        router=self.top_router,
+                        router_port = 'CT',
+                        config=self.config.add("ct")
+                        )
+                else:
+                    raise RuntimeError(f'Unknown CT-Engine type {self.CT_TYPE}')
+
+                if self.HAS_UCORN:  # ***JFC temp hack to determine if we have UCORN. Not it capability reg yet.
+                    self.UCORN = ucorn.UCorn(
+                        router=self.top_router,
+                        router_port = 'UCORN',
+                        config=self.config.add("ucorn")
+                        )
+                else:
+                    self.UCORN = None
+
+
+
+                # ---------------------
+                # Instantiate X-Engine
+                # ---------------------
+
+                if self.NUMBER_OF_CORRELATORS:
+                    self.logger.debug(f'{self!r}: === Instantiating X-Engine, type={self.CORR_TYPE}')
+                    if self.CORR_TYPE == "CORR44":
+                        self.CORR = CORR.CORR(router=self.top_router, router_port = 'CORR', config=self.config.add("corr"))
+                    elif self.CORR_TYPE == "UCORR44":
+                        self.CORR = UCORR.UCORR(router=self.top_router, router_port = 'CORR', config=self.config.add("corr"))
+                else:
+                    self.CORR = None
+
+                # ---------------------
+                # Instantiate real-time data offload engine object (10G or 100G links)
+                # ---------------------
+
+                if self.NUMBER_OF_GPU_LINKS:
+                    self.logger.debug(f'{self!r}: === Instantiating real-time data offload links, type={self.GPU_LINK_TYPE}')
+                    if self.GPU_LINK_TYPE == '10GE':
+                        self.GPU = gpu.GPU(router=self.top_router, router_port = 'GPU', config=self.config.add("gpu"))
+                    elif self.GPU_LINK_TYPE == '100GE':
+                        self.GPU = cge.CGE(router=self.top_router, router_port = 'GPU', config=self.config.add("gpu"))
+                    else:
+                        raise RuntimeError(f'Unknown data link type {self.GPU_LINK_TYPE}')
+                else:
+                    self.GPU = None
+
+                # -------------------------------
+                # Instantiate global data capture
+                # -------------------------------
+
+                if self.CAPTURE_TYPE == 'UCAP':
+                    self.logger.debug(f'{self!r}: === Instantiating UCAP')
+                    self.UCAP = ucap.UCAP(router=self.top_router, router_port = 'UCAP', config=self.config.add("ucap"))
+                elif self.CAPTURE_TYPE !='PROBER':
+                    raise RuntimeError(f'Unknown Data capture type {self.CAPTURE_TYPE}')
+
+
+                # ---------------------------------------------------------------------
+                # Instantiate ADC board hardware ressource handlers objects
+                # ---------------------------------------------------------------------
+
+                await asyncio.sleep(0)
+                self.logger.debug(f'{self!r}: === Analyzing available FMC Mezzanines')
+                # self._adc_board = [
+                #     self.mezzanine.get(1, None),
+                #     self.mezzanine.get(2, None)]
+
+                self._FMC_present = [False] * self._NUMBER_OF_FMC_SLOTS
+                for fmc_number in range(self._NUMBER_OF_FMC_SLOTS):
+                    if fmc_number+1 in self.mezzanine.keys():
+                        self._FMC_present[fmc_number] = True
+                        self.logger.debug(f'{self!r}:   An MGADC08 ADC Board is present on FMC slot {fmc_number}')
+                    else:
+                        self.logger.warning(f'{self!r}:   An MGADC08 ADC Board is *not* present on FMC slot {fmc_number}')
+
+                # Determine if the FMC board corresponding to each channelizer is present
+                # self.ANT_FMC_IS_PRESENT = [self._adc_board[self.CHAN_FMC_NUMBER[i]].is_present() for i in range(self.NUMBER_OF_CHANNELIZERS)]
+                self.ANT_FMC_IS_PRESENT = [False] * self.NUMBER_OF_CHANNELIZERS
+                for (chan_number, fmc_number) in enumerate(self.CHAN_FMC_NUMBER):
+                    if fmc_number + 1 in self.mezzanine.keys():
+                        self.ANT_FMC_IS_PRESENT[chan_number] = True
+
+                self._data_socket = None
+                self._tcp_data_socket = None
 
         except Exception as e:
             self.logger.error(f'****Exception during open!****** =  {e!r}')
@@ -925,7 +989,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self._reference_frequency = reference_frequency  or self.fw_params.get('reference_frequency') or 10e6;
         self.adc_clock_divider = adc_clock_divider  or self.fw_params.get('adc_clock_divider');
         self._processing_frequency = processing_frequency  or self.fw_params.get('processing_frequency') or self._sampling_frequency / 4;
-
+        self.CORR_READOUT_BINS = self.fw_params.get('corr_readout_bins')
         self.FRAME_PERIOD = float(self.FRAME_LENGTH) / self._sampling_frequency
         self.FRAME_RATE = 1 / self.FRAME_PERIOD
 
@@ -935,6 +999,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             capture_engine=self.CAPTURE_TYPE,
             adc_bits_per_sample=int(self.ADC_BITS_PER_SAMPLE),
             adc_bytes_per_sample=int(self.ADC_BYTES_PER_SAMPLE),
+            capture_bus_width=int(self.CAPTURE_BUS_WIDTH), # width of the data capture bus from FUNCGEN/SCALER into the capture engine
             samples_per_frame=int(self.ADC_SAMPLES_PER_FRAME),
             bytes_per_frame=bytes_per_frame,
             fft_bins_per_word=int(self.FFT_BINS_PER_WORD),
@@ -952,170 +1017,172 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         self.logger.debug(f'{self!r}: --- Initializing GPIO')
 
-        # Initialize GPIO.
-        #
-        # This stops the channelizers from sending data. Needed if the FPGA
-        # is flooding the buffers which prevent subsequent reads to come
-        # through
-        # GPIO module is already initialized
-        self.logger.debug(f'{self!r}: --- Setting buck phases')
-        # await asyncio.sleep(1.3)  # JFC debug.
-        self.GPIO.BUCK_PHASE = 0xfedcba9876543210  # debug
-        self.logger.debug(f'{self!r}: --- Done setting buck phases. We survived this!')
-        if verbose >= 2:
-            self.logger.debug(f'{self!r}: --- Checking GPIO status')
-            self.GPIO.status()
+        with self.mmi.aggregate_commands():
+
+            # Initialize GPIO.
+            #
+            # This stops the channelizers from sending data. Needed if the FPGA
+            # is flooding the buffers which prevent subsequent reads to come
+            # through
+            # GPIO module is already initialized
+            self.logger.debug(f'{self!r}: --- Setting buck phases')
+            # await asyncio.sleep(1.3)  # JFC debug.
+            self.GPIO.BUCK_PHASE = 0xfedcba9876543210  # debug
+            self.logger.debug(f'{self!r}: --- Done setting buck phases. We survived this!')
+            if verbose >= 2:
+                self.logger.debug(f'{self!r}: --- Checking GPIO status')
+                self.GPIO.status()
 
 
-        # Module depend on the FMC_present flag after this point
-        if self.REFCLK:
-            self.logger.debug(f'{self!r}: --- Initializing REFCLK')
+            # Module depend on the FMC_present flag after this point
+            if self.REFCLK:
+                self.logger.debug(f'{self!r}: --- Initializing REFCLK')
+                await asyncio.sleep(0)
+                self.REFCLK.init()
+                # self.REFCLK.status()
+
+            # Only do for ML605, not KC705 board
+            self.logger.debug(f'{self!r}: --- Initializing SYSMON')
             await asyncio.sleep(0)
-            self.REFCLK.init()
-            # self.REFCLK.status()
+            self.SYSMON.init()
+            # self.SYSMON.status()
 
-        # Only do for ML605, not KC705 board
-        self.logger.debug(f'{self!r}: --- Initializing SYSMON')
-        await asyncio.sleep(0)
-        self.SYSMON.init()
-        # self.SYSMON.status()
+            if self.SPI:
+                self.logger.debug(f'{self!r}: --- Initializing SPI')
+                await asyncio.sleep(0)
+                self.SPI.init()
+                # self.SPI.status()
 
-        if self.SPI:
-            self.logger.debug(f'{self!r}: --- Initializing SPI')
+            self.logger.debug(f'{self!r}: --- Initializing FMC slots')
+
+            # Reduce the power load before we turn on the mezzanines
             await asyncio.sleep(0)
-            self.SPI.init()
-            # self.SPI.status()
+            if self.HAS_ADCDAQ:
+                self.set_adc_mask(0)  # null the ADC data before it gets to the channelizers to reduce power consumption
+            self.set_chan_reset(1)
+            self.set_corr_reset(1)
+            for mezz in self.mezzanine.values():
+                await mezz.set_mezzanine_power_async(False)
+            if self.mezzanine:
+                await asyncio.sleep(0.2)  # let mezzanine supplies collapse before power-up
 
-        self.logger.debug(f'{self!r}: --- Initializing FMC slots')
+            for mezz_number in self.mb.FMC_MEZZ_NUMBERS: # process every mezzanine, present or not
+                if mezz_number in self.mezzanine: # if mezzanine pressent
+                    mezz = self.mezzanine[mezz_number]
+                    self.logger.debug(f'{self!r}:   Powering down FMC{mezz_number - 1}')
+                    await mezz.set_mezzanine_power_async(False)   # this method uses power-sequencing
+                    await mezz.set_mezzanine_reset_async(True)   # Puts the ADCs in reset
 
-        # Reduce the power load before we turn on the mezzanines
-        await asyncio.sleep(0)
-        if self.HAS_ADCDAQ:
-            self.set_adc_mask(0)  # null the ADC data before it gets to the channelizers to reduce power consumption
-        self.set_chan_reset(1)
-        self.set_corr_reset(1)
-        for mezz in self.mezzanine.values():
-            await mezz.set_mezzanine_power_async(False)
-        if self.mezzanine:
-            await asyncio.sleep(0.2)  # let mezzanine supplies collapse before power-up
+                    await asyncio.sleep(0.2)  # *** make async
+                    self.logger.debug(f'{self!r}:   Powering up FMC{mezz_number}')
+                    await mezz.set_mezzanine_power_async(True)
+                    # mezz.set_power(True)
+                    await asyncio.sleep(0.2)  # Give it some time for the power to stabilize
+                    # We need to initialize the ADC board before we initialize the channelizer
+                    # (and its data acquisition) because the delay blocks need a
+                    # clock
+                    self.logger.debug(f'{self!r}:   Initializing FMC{mezz_number}')
+                    # Initializes the mezzanine
+                    # will disable the reset line
+                    await mezz.init(
+                        sampling_frequency=self._sampling_frequency,
+                        reference_frequency=self._reference_frequency,
+                        processing_frequency=self._processing_frequency,
+                        adc_mode=adc_mode,
+                        adc_bandwidth=adc_bandwidth)
+                    # mezz.status()
+                else:
+                    self.logger.debug(f'{self!r}:    Skipping FMC{mezz_number - 1} initialization since no board is present in that slot')
+            # self.set_sync_delays((0,0))  # debug
+            await self.sync_async()  # pulse the sync lines of the mezzanines to activate the ADC configurations
+            #self.set_sync_delays((4,4))  # debug
+            #self.sync()  # debug
+            await self.check_adc_frequencies_async('after 1st post-mezz-init SYNC (chan reset active) ')
 
-        for mezz_number in self.mb.FMC_MEZZ_NUMBERS: # process every mezzanine, present or not
-            if mezz_number in self.mezzanine: # if mezzanine pressent
-                mezz = self.mezzanine[mezz_number]
-                self.logger.debug(f'{self!r}:   Powering down FMC{mezz_number - 1}')
-                await mezz.set_mezzanine_power_async(False)   # this method uses power-sequencing
-                await mezz.set_mezzanine_reset_async(True)   # Puts the ADCs in reset
 
-                await asyncio.sleep(0.2)  # *** make async
-                self.logger.debug(f'{self!r}:   Powering up FMC{mezz_number}')
-                await mezz.set_mezzanine_power_async(True)
-                # mezz.set_power(True)
-                await asyncio.sleep(0.2)  # Give it some time for the power to stabilize
-                # We need to initialize the ADC board before we initialize the channelizer
-                # (and its data acquisition) because the delay blocks need a
-                # clock
-                self.logger.debug(f'{self!r}:   Initializing FMC{mezz_number}')
-                # Initializes the mezzanine
-                # will disable the reset line
-                await mezz.init(
-                    sampling_frequency=self._sampling_frequency,
-                    reference_frequency=self._reference_frequency,
-                    processing_frequency=self._processing_frequency,
-                    adc_mode=adc_mode,
-                    adc_bandwidth=adc_bandwidth)
-                # mezz.status()
+            # self.logger.debug('%r:   Taking channelizers out of reset after FMC enabling' % (self))
+
+            self.set_chan_reset(1)
+
+            self.logger.debug(f'{self!r}:   Sending sync()')
+            await asyncio.sleep(0)
+            await self.sync_async()  # might be needed  to make sure that the clock is running to set delays
+            await self.check_adc_frequencies_async('after 1st channelizer reset SYNC')
+
+            # self.logger.info(f'{self!r}: --- Initializing FPGA subsystems' % self)
+            self.logger.debug(f'{self!r}: === Initializing Channelizers')
+            self.chan.init(delay_table=adc_delay_table, fmc_present=self.ANT_FMC_IS_PRESENT)
+            # self.chan.status()
+
+            await self.check_adc_frequencies_async('after channelizer init')
+
+
+            self.logger.debug(f'{self!r}: === Initializing Corner-Turn engine, Type {self.CT_TYPE} Level {self.CT_LEVEL}')
+
+            if not self.CT:
+                raise RuntimeError('    The firmware does not have a corner-turn engine')
             else:
-                self.logger.debug(f'{self!r}:    Skipping FMC{mezz_number - 1} initialization since no board is present in that slot')
-        # self.set_sync_delays((0,0))  # debug
-        await self.sync_async()  # pulse the sync lines of the mezzanines to activate the ADC configurations
-        #self.set_sync_delays((4,4))  # debug
-        #self.sync()  # debug
-        await self.check_adc_frequencies_async('after 1st post-mezz-init SYNC (chan reset active) ')
+                self.CT.init()
 
 
-        # self.logger.debug('%r:   Taking channelizers out of reset after FMC enabling' % (self))
-
-        self.set_chan_reset(1)
-
-        self.logger.debug(f'{self!r}:   Sending sync()')
-        await asyncio.sleep(0)
-        await self.sync_async()  # might be needed  to make sure that the clock is running to set delays
-        await self.check_adc_frequencies_async('after 1st channelizer reset SYNC')
-
-        # self.logger.info(f'{self!r}: --- Initializing FPGA subsystems' % self)
-        self.logger.debug(f'{self!r}: === Initializing Channelizers')
-        self.chan.init(delay_table=adc_delay_table, fmc_present=self.ANT_FMC_IS_PRESENT)
-        # self.chan.status()
-
-        await self.check_adc_frequencies_async('after channelizer init')
-
-
-        self.logger.debug(f'{self!r}: === Initializing Corner-Turn engine, Type {self.CT_TYPE} Level {self.CT_LEVEL}')
-
-        if not self.CT:
-            raise RuntimeError('    The firmware does not have a corner-turn engine')
-        else:
-            self.CT.init()
-
-
-        if self.UCORN:
-            self.logger.debug(f'{self!r}: === Initializing Frame aggregator (UCORN)')
-            self.UCORN.init()
+            if self.UCORN:
+                self.logger.debug(f'{self!r}: === Initializing UPACK frame packetizer')
+                self.UCORN.init()
 
 
 
-        await self.check_adc_frequencies_async('after corner-turn init')
+            await self.check_adc_frequencies_async('after corner-turn init')
 
-        # -------------------
-        # Initialize X-Engine
-        # -------------------
+            # -------------------
+            # Initialize X-Engine
+            # -------------------
 
-        if self.CORR:
-            self.logger.debug(f'{self!r}: === Initializing FPGA-based correlator (X-Engine)')
+            if self.CORR:
+                self.logger.debug(f'{self!r}: === Initializing FPGA-based correlator (X-Engine)')
+                await asyncio.sleep(0)
+                self.logger.debug(f'{self!r}:  - CORR')
+                self.CORR.init()
+                self.set_offset_binary_encoding(self.CORR.REQUIRES_OFFSET_BINARY_ENCODING)
+            else:
+                self.logger.debug(f'{self!r}: There are no FPGA correlators in this firmware build')
+
+
+
+            self.set_data_width(data_width)  # Sets the data width of both the Channelizer(SCALER) output and Corner-turn engine
+            self.logger.debug(f'{self!r}: Data width set to (Re+Im) = ({self.get_data_width()}+{self.get_data_width()}) bits')
+
+            if not self.CT:
+                self.logger.debug(f'{self!r}: There is no Corner-turn engine in this firmware build')
+
             await asyncio.sleep(0)
-            self.logger.debug(f'{self!r}:  - CORR')
-            self.CORR.init()
-            self.set_offset_binary_encoding(self.CORR.REQUIRES_OFFSET_BINARY_ENCODING)
-        else:
-            self.logger.debug(f'{self!r}: There are no FPGA correlators in this firmware build')
+
+            # Initialize real-time data offload engine (10G or 100G links)
+            if self.GPU:
+                self.logger.debug(f'{self!r}: === Initializing data offload links')
+                self.GPU.init()
+                self.GPU.set_enable(enable_gpu_link)
+                self.logger.debug(f"{self!r}: Data offload links are currently {('Disabled', 'Enabled')[bool(enable_gpu_link)]}")
+
+                if hasattr(self.mb, 'i2c1_qsfp'):
+                    self.mb.enable_qsfp_high_power_mode()
+
+            if self.CAPTURE_TYPE == 'UCAP':
+                self.logger.debug(f'{self!r}: === Initializing UCAP')
+                self.UCAP.init()
 
 
+            self.logger.debug(f"{self!r}: Done with initializations.")
 
-        self.set_data_width(data_width)  # Sets the data width of both the Channelizer(SCALER) output and Corner-turn engine
-        self.logger.debug(f'{self!r}: Data width set to (Re+Im) = ({self.get_data_width()}+{self.get_data_width()}) bits')
+            await asyncio.sleep(0)
+            self.set_chan_reset(0)  # Disable channelizer reset
 
-        if not self.CT:
-            self.logger.debug(f'{self!r}: There is no Corner-turn engine in this firmware build')
-
-        await asyncio.sleep(0)
-
-        # Initialize real-time data offload engine (10G or 100G links)
-        if self.GPU:
-            self.logger.debug(f'{self!r}: === Initializing data offload links')
-            self.GPU.init()
-            self.GPU.set_enable(enable_gpu_link)
-            self.logger.debug(f"{self!r}: Data offload links are currently {('Disabled', 'Enabled')[bool(enable_gpu_link)]}")
-
-            if hasattr(self.mb, 'i2c1_qsfp'):
-                self.mb.enable_qsfp_high_power_mode()
-
-        if self.CAPTURE_TYPE == 'UCAP':
-            self.logger.debug(f'{self!r}: === Initializing UCAP')
-            self.UCAP.init()
+            await self.check_adc_frequencies_async('after final channelizer reset release')
 
 
-        self.logger.debug(f"{self!r}: Done with initializations.")
+            self._last_init_time = time.time()
 
-        await asyncio.sleep(0)
-        self.set_chan_reset(0)  # Disable channelizer reset
-
-        await self.check_adc_frequencies_async('after final channelizer reset release')
-
-
-        self._last_init_time = time.time()
-
-        # Create a data socket. The socket will be cached for future use. This also sets the destination address/port for data streams in the FPGA.
-        # self.get_data_socket()
+            # Create a data socket. The socket will be cached for future use. This also sets the destination address/port for data streams in the FPGA.
+            # self.get_data_socket()
 
     def _report_adc_frequencies(self, freqs, stage, trial):
         """Log one ADC-clock check trial. Returns True if any clock is out of spec."""
@@ -1192,10 +1259,12 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
     SPI from the on-board processor may be required to configure networking before the UDP MMI link works.
     """
 
-    async def fpga_core_reg_read_async(self, addr):
-        """ Reads the contents of a 32-bit core regster at the specified address
+    def fpga_core_reg_read(self, addr):
+        """Reads the contents of a 32-bit core register at the specified address.
 
-        The core registers are read using the MMI interface.
+        Blocking MMI access. Use this from other blocking helpers (e.g. IRIG
+        sequences run under ``asyncio.to_thread``). Async callers should use
+        :meth:`fpga_core_reg_read_async`.
 
         Parameters:
 
@@ -1205,16 +1274,14 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
            int: 32-bit unsigned value of the register
         """
-        if self.mmi:
-            return int(self.mmi.read(self.mmi._RAM_BASE_ADDR + addr, type='<u4', length=1)[0]) & 0xFFFFFFFF
-        else:
+        if not self.mmi:
             raise IOError('Attempted to read FPGA core registers before MMI is initialized')
+        return int(self.mmi.read(self.mmi._RAM_BASE_ADDR + addr, type='<u4', length=1)[0]) & 0xFFFFFFFF
 
+    def fpga_core_reg_write(self, addr, value):
+        """Writes a 32-bit value to the core register at the specified address.
 
-    async def fpga_core_reg_write_async(self, addr, value):
-        """ Reads the contents of a 32-bit core regster at the specified address
-
-        The core registers are read using the MMI interface.
+        Blocking MMI access. See :meth:`fpga_core_reg_read`.
 
         Parameters:
 
@@ -1222,10 +1289,40 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
             value (int): 32-bit value to write in the register
         """
-        if self.mmi:
-            self.mmi.write(self.mmi._RAM_BASE_ADDR + addr, value.to_bytes(4, 'little'))
-        else:
+        if not self.mmi:
             raise IOError('Attempted to write FPGA core registers before MMI is initialized')
+        self.mmi.write(self.mmi._RAM_BASE_ADDR + addr, value.to_bytes(4, 'little'))
+
+    async def fpga_core_reg_read_async(self, addr):
+        """Reads the contents of a 32-bit core register at the specified address.
+
+        Async wrapper around :meth:`fpga_core_reg_read`. The body is blocking
+        MMI; ``async`` exists so other async firmware methods can ``await`` it.
+        Tuber does not override this — IceBoard SPI access before UDP MMI is up
+        is :meth:`~pychfpga.hardware.ice.iceboard.IceBoard.fpga_core_reg_spi_read_async`.
+
+        Parameters:
+
+           addr (int): address of the 32-bit core register. Must be a multiple of 4.
+
+        Returns:
+
+           int: 32-bit unsigned value of the register
+        """
+        return self.fpga_core_reg_read(addr)
+
+    async def fpga_core_reg_write_async(self, addr, value):
+        """Writes a 32-bit value to the core register at the specified address.
+
+        Async wrapper around :meth:`fpga_core_reg_write`. See :meth:`fpga_core_reg_read_async`.
+
+        Parameters:
+
+            addr (int): address of the 32-bit core register. Must be a multiple of 4.
+
+            value (int): 32-bit value to write in the register
+        """
+        self.fpga_core_reg_write(addr, value)
 
     ###################################
     # Bitstream management methods
@@ -1664,23 +1761,32 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             source_list = ', '.join(self._IRIGB_SOURCE_TABLE.keys())
             raise ValueError(f'Invalid IRIG-B source name. Valid names are {source_list}')
 
+        sel = (source, bool(inv_pol))
+        if getattr(self, '_current_irigb_source_sel_pol', None) == sel:
+            return
+
         self.logger.debug(f'{self!r}: Setting IRIG-B source to "{source}", invert={inv_pol}')
 
         src = self._IRIGB_SOURCE_TABLE[source]
 
-        # set inversion bit
-        w2 = await self.fpga_core_reg_read_async(self._IRIGB_TARGET2_ADDR)
-        await self.fpga_core_reg_write_async(self._IRIGB_TARGET2_ADDR, (w2 & ~(1<<29)) | (int(inv_pol) << 29))
+        def _mmi(src=src, inv_pol=inv_pol):
+            w2 = self.fpga_core_reg_read(self._IRIGB_TARGET2_ADDR)
+            self.fpga_core_reg_write(
+                self._IRIGB_TARGET2_ADDR, (w2 & ~(1 << 29)) | (int(inv_pol) << 29))
 
-        w2 = await self.fpga_core_reg_read_async(self._IRIGB_SAMPLE2_ADDR)
-        await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, (w2 & 0x3FFFFFFF) | ((src & 0b011) << 30))
-        w2 = await self.fpga_core_reg_read_async(self._IRIGB_TARGET0_ADDR)
-        await self.fpga_core_reg_write_async(self._IRIGB_TARGET0_ADDR, (w2 & 0x7FFFFFFF) | ((src >> 2) << 31))
+            w2 = self.fpga_core_reg_read(self._IRIGB_SAMPLE2_ADDR)
+            self.fpga_core_reg_write(
+                self._IRIGB_SAMPLE2_ADDR, (w2 & 0x3FFFFFFF) | ((src & 0b011) << 30))
+            w2 = self.fpga_core_reg_read(self._IRIGB_TARGET0_ADDR)
+            self.fpga_core_reg_write(
+                self._IRIGB_TARGET0_ADDR, (w2 & 0x7FFFFFFF) | ((src >> 2) << 31))
 
-        # trigger capture of a new time
-        w2 = await self.fpga_core_reg_read_async(self._IRIGB_SAMPLE2_ADDR)
-        await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, w2 & ~(1 << 29))
-        await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, w2 | (1 << 29))
+            w2 = self.fpga_core_reg_read(self._IRIGB_SAMPLE2_ADDR)
+            self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 & ~(1 << 29))
+            self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 | (1 << 29))
+
+        await asyncio.to_thread(_mmi)
+        self._current_irigb_source_sel_pol = sel
 
         # If an user SMA is used, configure it as an input
         if source in self.GPIO.USER_OUTPUTS:
@@ -1689,8 +1795,12 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
     async def get_irigb_source_async(self):
         """ Get the name of the current source of the IRIG-B signal."""
-        w1 = await self.fpga_core_reg_read_async(self._IRIGB_SAMPLE2_ADDR)
-        w2 = await self.fpga_core_reg_read_async(self._IRIGB_TARGET0_ADDR)
+        def _mmi():
+            w1 = self.fpga_core_reg_read(self._IRIGB_SAMPLE2_ADDR)
+            w2 = self.fpga_core_reg_read(self._IRIGB_TARGET0_ADDR)
+            return w1, w2
+
+        w1, w2 = await asyncio.to_thread(_mmi)
 
         source = ((w1 >> 30) & 0b011) | (((w2 >> 31) & 0b001) << 2)
 
@@ -1711,7 +1821,54 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         await self.set_irigb_source_async(valid_source if set_source else old_source)
         return valid_source
 
+    def _program_irigb_trigger_sync(self, y, d, h, m, s, ss):
+        """Program the IRIG compare target in one blocking burst."""
+        # disable time comparison to prevent false triggers during setup
+        t2 = self.fpga_core_reg_read(self._IRIGB_TARGET2_ADDR)
+        t2 |= (1 << 31) | (1 << 30)  # Enable compare enable bit, but force output to be 1 (i.e. we are before trig time) to prevent false trigger. We change noting else to prevent a false trigegr.
+        self.fpga_core_reg_write(self._IRIGB_TARGET2_ADDR, t2)
+
+        t0 = self.fpga_core_reg_read(self._IRIGB_TARGET0_ADDR) & 0xFFFFFF00
+        t0 |= (y << 0)
+        t1 = (d << 20) | (h << 14) | (m << 7) | (s << 0)
+        t2 = (t2 & ~((1 << 28) - 1)) | (ss << 0)  # Set subsecond target. comparator is enabled, but still forcing output to 1
+
+        self.fpga_core_reg_write(self._IRIGB_TARGET0_ADDR, t0)
+        self.fpga_core_reg_write(self._IRIGB_TARGET1_ADDR, t1)
+        self.fpga_core_reg_write(self._IRIGB_TARGET2_ADDR, t2)
+
+        # now re-enable time comparator
+        t2 ^= (1 << 30)  # Toggle force bit back to zero.
+        self.fpga_core_reg_write(self._IRIGB_TARGET2_ADDR, t2)
+
     async def _get_irigb_time_async(self, trig=True, noerror=False):
+        """Read IRIG time; retry sleeps on the event loop, not in a worker."""
+        t0 = time.time()
+        while True:
+            ts = await asyncio.to_thread(
+                self._decode_irigb_time, trig, True, False)
+            if ts is not None:
+                hms_valid = not (ts.h > 23 or ts.m > 59 or ts.s > 60)
+                day_valid = not (ts.d < 1 or ts.d > 366)
+                if ts.recent and hms_valid and day_valid:
+                    return ts
+                self.logger.debug(
+                    f'{self!r}: Waiting for valid IRIG-B time. '
+                    f'(recent={ts.recent}, HMS valid={hms_valid}, '
+                    f'day valid={day_valid})')
+            elif trig:
+                self.logger.debug(
+                    f'{self!r}: Waiting for valid IRIG-B time. (recent=0)')
+            if not trig or time.time() - t0 > 2.5:
+                if noerror:
+                    return None
+                raise RuntimeError(
+                    f'{self!r}: Could not get a recently updated and valid '
+                    f'IRIG-B time. Check your cabling and the IRIG-B source '
+                    f'selection.')
+            await asyncio.sleep(0.1)
+
+    def _decode_irigb_time(self, trig=True, noerror=False, wait=True):
         """ Reads the Reference clock and IRIG-B time and returns an object
         that contains all the time information gathered from it. Optionally
         trigger the capture of a new reference clock & IRIG-B time if `trig`
@@ -1728,6 +1885,11 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             noerror (bool): Suppress the raising of error in the case the
                 IRIG-B time is not valid (i.e not updated or has invalid
                 values)
+
+            wait (bool): If True (default) and ``trig`` is True, retry for up
+                to 2.5 s until ``recent`` and the HMS/day fields are valid.
+                If False, make a single capture. Async callers should pass
+                False and sleep on the event loop between attempts.
 
 
         Returns:
@@ -1754,42 +1916,36 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         t0 = time.time()
         while True:
 
-            # Trigger the capture of the reference counter and IRIG-B time
-            if trig:
-                w2 = await self.fpga_core_reg_read_async(self._IRIGB_SAMPLE2_ADDR)
-                # trigger time capture by creating a rising edge on `refclk_sample_trig`
-                await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, w2 & ~(1 << 29))
-                await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, w2 | (1 << 29))
-                await asyncio.sleep(0)
-
-            # Wait for the time capture to complete by monitoring
-            # `refclk_sample_done`. Time is captured on the next 10 MHz
-            # reference clock edge, so that should be quick, but we need
-            # to make sure we have stable values. Timeout if it takes too long.
-
-            # JFC: Commented out  until I fix the firmware
-            # t1 = time.time()
-            # while not (await self.fpga_core_reg_read_async(self._IRIGB_TARGET1_ADDR)) & (1 << 29):
-            #                     # check refclk_sample_done
-            #     self.logger.warning('%r: Time capture was not immediately ready - this is unexpected' % self)
-            #            # Debug. should not happen since capture should be much faster
-            #            # than the time it takes to read the done flag
-            #     # TImeout if it takes too long. The time should be ready within a few 10 MHz cycles.
-            #     if time.time() - t1 > 0.1: # 0.1s = 1,000,000 clock cycles of the 10 MHz clock. That is way enough
-            #         raise RuntimeError(
-            #            'Timeout while waiting for the reference clock counter '
-            #            'and IRIG-B time capture to complete. Was the capture triggered?')
-
-            # # At this point we have a stable IRIG-B timestamp ready to be read,
-            # but we still don't know if the time within it is valid.
-
             ts.system_time_before = time.time()
-            # Read the IRIG-B capture registers. We assume nobody is calling
-            # concurrent instances at the same same time, so we do this
-            # asynchronously because each read is slow.
-            w0 = await self.fpga_core_reg_read_async(self._IRIGB_SAMPLE0_ADDR)
-            w1 = await self.fpga_core_reg_read_async(self._IRIGB_SAMPLE1_ADDR)  # this will also be used later
-            w2 = await self.fpga_core_reg_read_async(self._IRIGB_SAMPLE2_ADDR)
+            if trig:
+                w2 = self.fpga_core_reg_read(self._IRIGB_SAMPLE2_ADDR)
+                # trigger time capture by creating a rising edge on `refclk_sample_trig`
+                self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 & ~(1 << 29))
+                self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 | (1 << 29))
+                # Wait for the time capture to complete by monitoring
+                # `refclk_sample_done`. Time is captured on the next 10 MHz
+                # reference clock edge, so that should be quick, but we need
+                # to make sure we have stable values. Timeout if it takes too long.
+                #
+                # JFC: Commented out  until I fix the firmware
+                # t1 = time.time()
+                # while not (self.fpga_core_reg_read(self._IRIGB_TARGET1_ADDR) & (1 << 29)):
+                #     self.logger.warning('%r: Time capture was not immediately ready - this is unexpected' % self)
+                #     if time.time() - t1 > 0.1:
+                #         raise RuntimeError(
+                #            'Timeout while waiting for the reference clock counter '
+                #            'and IRIG-B time capture to complete. Was the capture triggered?')
+            # Capture is on the next 10 MHz edge after CDC (plus ~2 clk200 for
+            # the IRIG snapshot). That is microseconds. The first SAMPLE0 read
+            # below is a full TCPipe round trip later, so the registers are
+            # stable by then. ``refclk_sample_done`` (TARGET1 bit 29) is the
+            # proper handshake, but it is not polled (JFC: commented out until
+            # the firmware bit is fixed). ``recent`` is separate: it means the
+            # decoder has a valid frame, not that the capture latch has settled.
+            w0 = self.fpga_core_reg_read(self._IRIGB_SAMPLE0_ADDR)
+            w1 = self.fpga_core_reg_read(self._IRIGB_SAMPLE1_ADDR)
+            w2 = self.fpga_core_reg_read(self._IRIGB_SAMPLE2_ADDR)
+            ts.refclk_counter = self.fpga_core_reg_read(self._IRIGB_REFCLK_SAMPLE)
 
             # Extract time from IRIG-B capture registers Get year and day of year.
             # Override for debugging or misbehaviored IRIG-B source (like our
@@ -1811,7 +1967,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             ts.source = (w1 >> 30) & ((1 << 2) - 1)
             ts.recent = (w1 >> 29) & 1
             ts.system_time = time.time()
-            ts.refclk_counter = await self.fpga_core_reg_read_async(self._IRIGB_REFCLK_SAMPLE)
             hms_valid = not (ts.h > 23 or ts.m > 59 or ts.s > 60)
             day_valid = not (ts.d < 1 or ts.d > 366)
             # If we get a updated and valid time, we're good: exit the loop
@@ -1821,7 +1976,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             # Consider we failed if we wither 1) don't expect the time to be updated (i.e no trig)
             # or 2) a timeout has elapsed. Teh timeout  is set a little bit more than one second
             # in case the IRIG-B signal just became valid (e.g. we just set the source or polarity)
-            if not trig or time.time() - t0 > 2.5:
+            if not wait or not trig or time.time() - t0 > 2.5:
                 if noerror:
                     return None
                 else:
@@ -1830,7 +1985,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                         f'Check your cabling and the IRIG-B source selection.')
             else:
                 self.logger.debug(f'{self!r}: Waiting for valid IRIG-B time. (recent={ts.recent}, HMS valid={hms_valid}, day valid={day_valid})')
-                await asyncio.sleep(0.1)  # wait a bit before rechecking time
+                time.sleep(0.1)  # wait a bit before rechecking time
 
         # check if the time is valid
         if not noerror:
@@ -1950,23 +2105,73 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             
         return ts
 
+    def _set_irigb_trigger_time_sync(self, datetime_=None, delay=None):
+        """Blocking IRIG trigger arm. Safe to run in a worker thread per board."""
+        if datetime_ is None:
+            ts = self._decode_irigb_time(trig=True)
+            dt = ts.astype('datetime')
+            self.logger.debug(f'{self!r}: Current IRIGB time is {ts.isoformat()}')
+            if delay is None:
+                delay = 3
+        else:
+            dt = datetime_
+            if delay is None:
+                delay = 0
+
+        nano_delay = round(delay * 1e9) % 1000  # Get submicrosecond delay in nanosecond units
+        delay = int(delay * 1e6) / 1e6  # Round delay to the microsecond
+        # add delay in integer microseconds (datetime does not support more
+        # than the microsecond accuracy)
+        dt += timedelta(0, delay)
+        self.logger.debug(
+            f'{self!r}: Setting IRIGB target time to '
+            f'{dt.isoformat()} + {nano_delay:3d} ns')
+        # get_irigb_time is 1 s ahead of the decoder latch; the comparator
+        # uses the raw fields, so program 1 s earlier.
+        hw_dt = dt - timedelta(seconds=1)
+        if self.zero_target_irigb_year_and_day:
+            y = 0
+            d = 0
+        else:
+            y = hw_dt.year % 100
+            d = (hw_dt - datetime(hw_dt.year, 1, 1)).days + 1
+        h = hw_dt.hour
+        m = hw_dt.minute
+        s = hw_dt.second
+        ss = hw_dt.microsecond * 100 + int(nano_delay / 10)
+
+        self.logger.debug(
+            f'{self!r}: Setting IRIGB target time with y={y}, d={d}, h={h}, '
+            f'm={m}, s={s}, ss={ss}')
+
+        self._program_irigb_trigger_sync(y, d, h, m, s, ss)
+
+        ts = self._IrigTimestamp()
+        ts.datetime = dt
+        ts.nano = (
+            int(timegm((dt.year, dt.month, dt.day,
+                        dt.hour, dt.minute, dt.second)) * 1e9)
+            + dt.microsecond * 1000 + nano_delay)
+        return ts
+
     async def set_irigb_trigger_time_async(self, datetime_=None, delay=None):
         """ Sets the time at which the IRIG-B module will generate a trigger
         that can be used to synchronize boards.
 
         Parameters:
 
-            datetime_ (datetime): the base target time in the Python as a :class:`datetime` object,
-                which has a microsecond resolution (the nanosecond digits are all zeros). If `None`,
-                the current date and time is fetched from the FPGA as a datetime object, meaning it
-                also mas a microsecond resolution even if a higher resolution is available.
+            datetime_ (datetime): Target time in the same convention as
+                :meth:`get_irigb_time_async` (decoder latch plus one second).
+                Microsecond resolution; nanosecond digits are zero. If
+                `None`, the current FPGA IRIG time is used.
 
             delay (float): is a time offset in seconds that is added to `datetime_` to set the
                 target time. This delay can be specified with an accuracy of up to 10 ns (lower digits are
                 ignored and assumed to be zero). If `datetime` is specified, it defaults to zero
                 (i.e the specified `datetime` is the target time, so it is assumed to be in the
                 future). If `datetime` is not specified, (i.e. it will be the currnt FPGA time),
-                `delay` defaults to 3 seconds.
+                `delay` defaults to 3 seconds. The FPGA comparator is programmed one second
+                earlier than this sum so it matches the decoder fields.
 
 
         Be aware of the limited resolution of floating points. With a float in python (a double), it is not possible to
@@ -1987,71 +2192,17 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         If `datetime_` and 'delay' are None, the trigger time is set 3 seconds
         after the current time (as returned by the board).
         """
-        if datetime_ is None:
-            ts = await self._get_irigb_time_async(trig=True)  # do this synchronously to we get an accurate time
-            dt = ts.astype('datetime')
-            self.logger.debug(f'{self!r}: Current IRIGB time is {ts.isoformat()}')
-            if delay is None:
-                delay = 3
-        else:
-            dt = datetime_
-            if delay is None:
-                delay = 0
+        return await asyncio.to_thread(
+            self._set_irigb_trigger_time_sync, datetime_, delay)
 
-        nano_delay = round(delay * 1e9) % 1000  # Get submicrosecond delay in nanosecond units
-        delay = int(delay * 1e6) / 1e6  # Round delay to the microsecond
-        # add delay in integer microseconds (datetime does not support more
-        # than the microsecond accuracy)
-        dt += timedelta(0, delay)
-        self.logger.debug(
-            f'{self!r}: Setting IRIGB target time to '
-            f'{dt.isoformat()} + {nano_delay:3d} ns')
-        if self.zero_target_irigb_year_and_day:
-            y = 0
-            d = 0
-        else:
-            y = dt.year % 100
-            d = (dt - datetime(dt.year, 1, 1)).days + 1
-        h = dt.hour
-        m = dt.minute
-        s = dt.second
-        ss = dt.microsecond * 100 + int(nano_delay / 10)
-
-        self.logger.debug(
-            f'{self!r}: Setting IRIGB target time with y={y}, d={d}, h={h}, '
-            f'm={m}, s={s}, ss={ss}')
-
-
-        # disable time comparison to prevent false triggers during setup
-        t2 = await self.fpga_core_reg_read_async(self._IRIGB_TARGET2_ADDR)
-        t2 |= (1 << 31) | (1 << 30)  # Enable compare enable bit, but force output to be 1 (i.e. we are before trig time) to prevent false trigger. We change noting else to prevent a false trigegr.
-        await self.fpga_core_reg_write_async(self._IRIGB_TARGET2_ADDR, t2)
-
-        t0 = await self.fpga_core_reg_read_async(self._IRIGB_TARGET0_ADDR) & 0xFFFFFF00
-        t0 |= (y << 0)
-        t1 = (d << 20) | (h << 14) | (m << 7) | (s << 0)
-        t2 = (t2 & ~((1<<28)-1)) | (ss << 0) #  Set subsecond target. comparator is enabled, but still forcing output to 1
-
-        await self.fpga_core_reg_write_async(self._IRIGB_TARGET0_ADDR, t0)
-        await self.fpga_core_reg_write_async(self._IRIGB_TARGET1_ADDR, t1)
-        await self.fpga_core_reg_write_async(self._IRIGB_TARGET2_ADDR, t2)
-
-        # now re-enable time comparator
-        t2 ^= (1 << 30) # Toggle force bit back to zero.
-        await self.fpga_core_reg_write_async(self._IRIGB_TARGET2_ADDR, t2)
-
-
-        # return the time at which the sync event is scheduled for
-        ts = self._IrigTimestamp()
-        ts.datetime = dt
-        ts.nano = int(timegm((2000 + y, 1, d, h, m, s + 1)) * 1e9) + ss*10
-        return ts
+    def _is_irigb_before_trigger_time_sync(self):
+        t1 = self.fpga_core_reg_read(self._IRIGB_TARGET1_ADDR)
+        return bool(t1 & (1 << 31))
 
     async def is_irigb_before_trigger_time_async(self):
         """ Is true if the current IRIGB is before the target trigger time that was previously set-up.
         """
-        t1 = await self.fpga_core_reg_read_async(self._IRIGB_TARGET1_ADDR)
-        return bool(t1 & (1 << 31))
+        return await asyncio.to_thread(self._is_irigb_before_trigger_time_sync)
 
     async def capture_frame_time_async(self, trig=True, format='nano', timeout=5):
         """ Captures the IRIG-B of the first sample of the next frame coming
@@ -2074,18 +2225,22 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         module (due to initial dropping of a few frames and the FIFO filling-
         delay).
         """
-        if trig:
-            w2 = await self.fpga_core_reg_read_async(self._IRIGB_SAMPLE2_ADDR)
-            await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, w2 & ~(1 << 28))
-            await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, w2 | (1 << 28))
-            t0 = time.time()
-            while not (await self.fpga_core_reg_read_async(self._IRIGB_TARGET1_ADDR)) & (1 << 30):
-                if time.time() - t0 > timeout:
-                    raise RuntimeError(
-                        'Timeout while waiting for a Frame. Is data flowing '
-                        'out of the ADC data acquisition module?')
-        event_number = await self.fpga_core_reg_read_async(self._IRIGB_EVENT_CTR_ADDR)
-        event_number += (await self.fpga_core_reg_read_async(self._IRIGB_EVENT_CTR_ADDR2)) << 32
+        def _mmi(trig=trig, timeout=timeout):
+            if trig:
+                w2 = self.fpga_core_reg_read(self._IRIGB_SAMPLE2_ADDR)
+                self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 & ~(1 << 28))
+                self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 | (1 << 28))
+                t0 = time.time()
+                while not self.fpga_core_reg_read(self._IRIGB_TARGET1_ADDR) & (1 << 30):
+                    if time.time() - t0 > timeout:
+                        raise RuntimeError(
+                            'Timeout while waiting for a Frame. Is data flowing '
+                            'out of the ADC data acquisition module?')
+            event_number = self.fpga_core_reg_read(self._IRIGB_EVENT_CTR_ADDR)
+            event_number += self.fpga_core_reg_read(self._IRIGB_EVENT_CTR_ADDR2) << 32
+            return event_number
+
+        event_number = await asyncio.to_thread(_mmi)
 
         ts = await self._get_irigb_time_async(trig=0)  # The event trigger will automatically trig IRIGB
         captured_time = ts.astype(format)
@@ -2095,17 +2250,19 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         """
         Return the number of the next frame passing through the system.
         """
-        w2 = await self.fpga_core_reg_read_async(self._IRIGB_SAMPLE2_ADDR)
-        await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, w2 & ~(1 << 28))
-        await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, w2 | (1 << 28))
-        t0 = time.time()
-        while not (await self.fpga_core_reg_read_async(self._IRIGB_TARGET1_ADDR)) & (1 << 30):
-            if time.time() - t0 > 1:
-                raise RuntimeError(
-                    'Timeout while waiting for a Frame. Is data flowing out '
-                    'of the ADC data acquisition module?')
-        event_number = await self.fpga_core_reg_read_async(self._IRIGB_EVENT_CTR_ADDR)
-        return event_number
+        def _mmi():
+            w2 = self.fpga_core_reg_read(self._IRIGB_SAMPLE2_ADDR)
+            self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 & ~(1 << 28))
+            self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 | (1 << 28))
+            t0 = time.time()
+            while not self.fpga_core_reg_read(self._IRIGB_TARGET1_ADDR) & (1 << 30):
+                if time.time() - t0 > 1:
+                    raise RuntimeError(
+                        'Timeout while waiting for a Frame. Is data flowing out '
+                        'of the ADC data acquisition module?')
+            return self.fpga_core_reg_read(self._IRIGB_EVENT_CTR_ADDR)
+
+        return await asyncio.to_thread(_mmi)
 
     async def capture_refclk_time_async(self, trig=True, format='nano'):
         """ Measures the time at which the next 10MHz reference clock rising
@@ -2185,13 +2342,13 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             return [channels]
         return list(channels)
 
-    def get_config(self):
+    def update_config(self):
         """Refresh subsystem configs onto ``self.config``."""
-        self.chan.get_config()
+        self.chan.update_config()
         if self.CT is not None:
-            self.CT.get_config()
+            self.CT.update_config()
         if self.CORR is not None:
-            self.CORR.get_config()
+            self.CORR.update_config()
         return self.config
 
     def get_string_id(self):
@@ -2287,7 +2444,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         """
         Return a system monitoring snapshot for this FPGA.
 
-        Prefer :meth:`get_config` for the hierarchical tracked firmware config.
+        Prefer :meth:`update_config` for the hierarchical tracked firmware config.
 
         Parameters:
 
@@ -2362,9 +2519,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             # Add FFT shift, scaler gain, corr integration/capture period etc.
             # config.freq_flags = self.freq_flags  # JFC: what is that?
         return config
-
-    def update_config(self):
-        pass
 
     # def read_bit(self, addr, bit):
     #     return (self.read(addr) & (1 << bit)) != 0
@@ -2879,6 +3033,21 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             self.logger.debug(f'{self!r}: Reusing already allocated socket {sock} for port {port_number}')
         else:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            # Enlarge the kernel UDP receive buffer so datagrams that arrive while
+            # the (single-threaded) receiver is busy in process/format instead of
+            # recvfrom() are absorbed rather than dropped. The default (~208 kB) is
+            # only ~40 aggregated 5280 B datagrams of headroom. The kernel clamps to
+            # net.core.rmem_max, so the effective value may be smaller — raise it with
+            # `sudo sysctl -w net.core.rmem_max=67108864` if drops persist.
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, self.UDP_DATA_RCVBUF)
+                got = sock.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
+                self.logger.debug(
+                    f'{self!r}: UDP data socket SO_RCVBUF requested {self.UDP_DATA_RCVBUF} B, '
+                    f'kernel granted {got} B (halved value includes bookkeeping)'
+                )
+            except OSError as e:
+                self.logger.warning(f'{self!r}: could not set UDP SO_RCVBUF: {e}')
             port_number = port_number or 0
             self.logger.debug(f'{self!r}: Binding data socket at port {port_number} to interface IP {self.interface_ip_addr}')
             try:
@@ -3318,6 +3487,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 - 3: Output 4+4 bit scaled FFT data (e.g. normal scaler output, even if the science output is set to another mode)
                 - 4: Output the input FFT data of the even bins and then the odd bins in an alternating fashion, at double the bitwidth.
                 - 5: Output the input FFT data of each Re and Im component one at a time, at the full bitwidth.
+                - 6: Output post-gain saturation flags per bin (Re/Im as 0, +1, or -1 in each capture field).
             For modes 4 and 5, one host logical frame is reconstructed from packets produced by consecutive
             physical frames (not from a single fully buffered physical frame).
         '''
@@ -4044,9 +4214,12 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             channels (list of int): List of channels to which the command is applied
 
         """
-        if self.CORR and offset != self.CORR.REQUIRES_OFFSET_BINARY_ENCODING:
+        if self.CORR and self.CORR.REQUIRES_OFFSET_BINARY_ENCODING and not offset:
             self.logger.warning(f'Offset binary encoding is set to {bool(offset)}. The correlator required it to be {self.CORR.REQUIRES_OFFSET_BINARY_ENCODING}. Correlator output will not make sense.')
             raise RuntimeError()
+
+        if self.CORR is not None and hasattr(self.CORR, "set_offset_binary_encoding"):
+            self.CORR.set_offset_binary_encoding(offset)
 
         if channels is None:
             channels = self.default_channels
@@ -4505,7 +4678,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 glog = -1
 
             else:
-                glog = chan.SCALER.SHIFT_LEFT
+                glog = chan.SCALER.get_shift_left(bank)
 
             gain_list.append([chan.chan_number, [glin, glog]])
 
@@ -4680,6 +4853,17 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             return None
         else:
             return self.REFCLK.get_sync_source()
+
+    def get_sync_counter(self):
+        """Return the REFCLK SYNC event counter.
+
+        Returns:
+            int: 4-bit SYNC counter. ``None`` if this firmware has no REFCLK.
+        """
+        if not self.REFCLK:
+            self.logger.warning('The platform does not have a REFCLK module')
+            return None
+        return int(self.REFCLK.SYNC_CTR)
 
     def set_pwm(self, enable, offset, high_time, period, local_sync=False):
         """ Sets the frame-based PWM generator. All times are stated as the number of frames.
@@ -4938,8 +5122,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             integration_period=16384,
             autocorr_only=False,
             no_accum=False,
-            correlators=None,
-            bandwidth_limit=0.5e9,
             verbose=1):
         """
         (Re)starts the correlator with the specified integration time.
@@ -4962,17 +5144,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             no_accum (bool): When 'True', the correlator does not accumulate products from multiple
                 frames. It just returns the product from the last frame on the integration period.
 
-            correlators (list of int): List of correlator cores to enable. All other cores will be
-               disabled. Default is None, which means all correlators will be enabled. Each
-               correlator core process the frequency bins selected with its corresponding bin
-               selector. Using a smaller number of cores will process less frequency bins but will
-               proportionnally usee less data bandwidth.
-
-            bandwidth_limit (float): Maximum acceptable data bandwidth that the correlator can
-               produce, in bits/s. Default is 0.5 Gbps. If the correlator parameters are to make the
-               data exceed this bandwidth, an exception will be raised, with a message that describe
-               alternate settings. In this case, no changes are made to the correlator operation.
-
         Returns:
             None
 
@@ -4988,8 +5159,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self.CORR.start_correlator(integration_period=integration_period,
                                    autocorr_only=autocorr_only,
                                    no_accum=no_accum,
-                                   correlators=correlators,
-                                   bandwidth_limit=bandwidth_limit,
                                    verbose=verbose)
 
     def stop_correlator(self):

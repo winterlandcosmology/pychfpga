@@ -20,6 +20,7 @@ from pychfpga.common import run_async, async_to_sync, Ccoll
 from pychfpga.hardware.interfaces import TCPipe, TCPipe_I2C, TCPipe_SPI, ipmi_fru
 from pychfpga.fpga_firmware import FPGAFirmware
 from . import crs_discovery
+from .crs_bp import CRSBackplane
 
 from ..i2c_devices.pca9575 import pca9575 # I2C 16-bit IO Expander
 from ..i2c_devices.pca6524 import pca6524 # I2C 24-bit IO Expander
@@ -71,7 +72,6 @@ class CRS(Motherboard):
     _ipmi_part_numbers = ['CRS']
     SERIAL_NUMBER_LENGTH = 4  # number of digits in the serial number. Used to convert integers to a valid serial number.
 
-    NUMBER_OF_CHANNELIZERS = 4
     # List serial numbers of Rev 0 boards. This is a temporary hack that is used to properly select the SPI port of the PLL.
     # One day we'll be able to query the board directly.
     REV0_SERIALS = ('429', '0429', # returned by SN003 with old TCPipe firmware that didn't read the EEPROM and used the FPGA DNA
@@ -81,7 +81,7 @@ class CRS(Motherboard):
     port = 7  # port number on which to access the platform `hostname`
 
     REQUIRED_TCPIPE_VERSION = "1.0"  # Fallback when the ELF has no TCPIPE_GIT= marker.
-    DEFAULT_ARM_FIRMWARE_NAME = "tcpipe_rtos.elf"
+    DEFAULT_ARM_FIRMWARE_NAME = "tcpipe_crs.elf"
     DEFAULT_ARM_FIRMWARE_PATHNAME = path.join(path.dirname(__file__), 'arm_firmware', DEFAULT_ARM_FIRMWARE_NAME)
 
 
@@ -111,7 +111,6 @@ class CRS(Motherboard):
 
         self.iic = None
         self.spi = None
-        # self.mmi = None
         self.tcpipe = None
         self.tcpipe_version = None
         self._is_open = None
@@ -247,7 +246,8 @@ class CRS(Motherboard):
         # Switch port 1-6: SFPs
 
         # I2C0: Backplane
-        self.i2c0_bp_eeprom_data = eeprom(self.iic, address=0x51, bus_name=0, address_width=7, max_read_length=255, max_write_length=8, write_page_size=8)
+        # 24C02, 256 bytes, 8-bit word address (I2C0 @ 0x51, no mux)
+        self.i2c0_bp_eeprom_data = eeprom(self.iic, address=0x51, bus_name=0, address_width=8, max_read_length=255, max_write_length=8, write_page_size=8)
         self.i2c0_bp_tmp421 = tmp421(self.iic, address=0x4E, port=0) # only on slot 0
         self.i2c0_bp_gpio = pca6524(self.iic, address=0x44, port=0) # only on slot 0
         self.i2c0_qsfp = qsfp(self.iic, bus_name=0, gpio_prefix='QSFP_', gpio=self.i2c0_bp_gpio, address=0x50) # only on slot 0
@@ -351,6 +351,24 @@ class CRS(Motherboard):
             self.tcpipe = None
         self._is_open = False
 
+    def reboot(self):
+        """Reboot the CRS processor via the TCPipe UDP ``REBOOT`` command.
+
+        The board issues PSCI SYSTEM_RESET. Local TCP/MMI state is dropped
+        because it cannot survive the reset. Works with or without an open
+        TCPipe session; a hostname is required.
+        """
+        if not self.hostname:
+            raise RuntimeError(f'{self!r}: Cannot reboot without a hostname')
+        self.logger.info(f'{self!r}: Sending UDP REBOOT to {self.hostname}')
+        if self.tcpipe is not None:
+            self.tcpipe.reboot()
+            self.tcpipe = None
+        else:
+            TCPipe.send_reboot(self.hostname)
+        self.fpga = None
+        self._is_open = False
+
 
     # Name of each PLL reference input
     PLL_INPUT_ETH_REG_125MHZ = 0
@@ -422,6 +440,7 @@ class CRS(Motherboard):
             int: Number of the reference input currently being used
 
         """
+        t0 = time.perf_counter()
         self.logger.info(f'{self!r}: Initializing programmable PLL at fvco=frf={fvco/1e6} MHz')
         frfdc = fvco # divider: 1
         fpl = frfdc / 8 # signal processing clock, typ. 375 MHz
@@ -460,6 +479,8 @@ class CRS(Motherboard):
         active_input = self.pll.get_active_clkin()
         active_input_name = 'None' if active_input is None else self.PLL_INPUT_NAMES[active_input]
         self.logger.info(f'{self!r} PLL1 current active input is {active_input} ({active_input_name})')
+        self.logger.info(
+            f'{self!r}: Init phase pll_init: {time.perf_counter() - t0:.3f} s')
 
         return active_input
 
@@ -486,11 +507,11 @@ class CRS(Motherboard):
         # self._is_open = True
 
         # self.fpga = self.firmware(self)
-        with self.tcpipe.aggregate_commands():
-            await self.fpga.open_async()
+        t0 = time.perf_counter()
+        await self.fpga.open_async(**kwargs)
+        t_mmi = time.perf_counter() - t0
 
-
-
+        t_sync = time.perf_counter()
         self.fpga.GPIO.PLL_SYNC=0
         await asyncio.sleep(0.5)  # test: wait for the PLL1 to stabilize before we sync. SYNC Won't work if OSCOUT is not stable vs REFCLK.
         if self.input_reference is None:
@@ -510,10 +531,10 @@ class CRS(Motherboard):
             self.input_reference = None
 
         self.fpga.GPIO.PLL_SYNC=0
-
-
-
-
+        t_pll_sync = time.perf_counter() - t_sync
+        self.logger.info(
+            f'{self!r}: Init phase open_fpga: MMI={t_mmi:.3f} s, '
+            f'PLL_SYNC={t_pll_sync:.3f} s, total={time.perf_counter() - t0:.3f} s')
 
         # await self.open_hw()
         # await self.hw.init()
@@ -634,28 +655,27 @@ class CRS(Motherboard):
         """
 
 
-        t0 = time.time()
         self.logger.debug(f'{self!r}: Called set_fpga_bitstream')
+        t0 = time.perf_counter()
 
         if self.fpga is not None:
             await self.close_fpga_async()
             self.fpga = None
 
-        fw_cls, buf, fw_params = FPGAFirmware.get_firmware(self.part_number, firmware_mode, bitfile_override=bitfile_override)
+        fw_cls, buf, fw_params = FPGAFirmware.get_firmware(
+            self.part_number, firmware_mode, bitfile_override=bitfile_override)
         crc32 = buf.crc32
         bitstream = buf.raw_bitstream
 
-
+        # PLL: program the HMC7044 before the bitstream so the FPGA comes up
+        # on the clocks for this firmware mode.
         self.logger.info(f'{self!r}: Programming PLL before configuring the FPGA. {fw_params=}')
-        with self.tcpipe.aggregate_commands():
-            self.input_reference = await self.pll_init_async(fvco=fw_params['sampling_frequency'])  # add fw params here if we want to have mode/application-specific frequencies sent to the FPGA
+        t_pll = time.perf_counter()
+        self.input_reference = await self.pll_init_async(fvco=fw_params['sampling_frequency'])
+        self.logger.info(
+            f'{self!r}: Init phase PLL: {time.perf_counter() - t_pll:.3f} s')
 
-        # self.logger.warn(f'{self!r}: Using backplane clock to synchronize PLL outputs to REFCLK. This mignt not be right')
-        # self.GPIO.CLK10_SEL=1 # Select clock source to re-sync the PLL: 0: MB SMA, 1: BP
-        # self.GPIO.PLL_SYNC=0
-        # self.GPIO.PLL_SYNC=1
-        # self.GPIO.PLL_SYNC=0
-
+        # Bitstream: send if unprogrammed, forced, or CRC mismatch, then attach the firmware object.
         is_fpga_programmed = await self.is_fpga_programmed_async()
         self.logger.debug(f'{self!r}: Is the FPGA already programmed: {is_fpga_programmed}')
         is_crc_valid = False
@@ -667,21 +687,39 @@ class CRS(Motherboard):
                 f'fpga_crc={fpga_bitstream_crc or 0:08X}, bitstream_crc={crc32 or 0:08X}')
             is_crc_valid = fpga_bitstream_crc == crc32
 
+        t_bit = time.perf_counter()
         if not is_fpga_programmed or force or (force is not None and not is_crc_valid):
             self.logger.debug(f'{self!r}: Configuring FPGA')
-            self.tcpipe.set_fpga_bitstream(bitstream, crc=crc32)
+            await self.tcpipe.set_fpga_bitstream_async(bitstream, crc=crc32)
+            self.logger.info(
+                f'{self!r}: Init phase bitstream send: {time.perf_counter() - t_bit:.3f} s')
         else:
             self.logger.debug(
                 f'{self!r}: FPGA is already configured. Skipping configuration.')
+            self.logger.info(
+                f'{self!r}: Init phase bitstream send skipped: '
+                f'{time.perf_counter() - t_bit:.3f} s')
 
+        # Create the firmware object and register it
         fpga_fw = fw_cls(self, mode=firmware_mode, **fw_params)
         self.set_fpga_firmware(fpga_fw)
-        self.tcpipe.oled_set_firmware_label('chFPGA')
-        self.tcpipe.oled_draw_text(
-            self.OLED_CONFIG_NAME_X,
-            self.OLED_CONFIG_NAME_Y,
-            firmware_mode,
-            rotation=self.OLED_ROTATED_CLOCKWISE_TEXT_ROTATION)
+
+        # OLED: these RPCs wait until the board finishes PM_FPGA_LOAD.
+        t_oled = time.perf_counter()
+        # Note: although we finished uploading the firmware, TCPIPE is still busy
+        # programming the FPGA and initializing DMAs. Next command will block
+        # until this is done (~200 ms).
+        await self.tcpipe.oled_set_firmware_label_async('chFPGA')
+        # await self.tcpipe.oled_draw_text_async(
+        #     self.OLED_CONFIG_NAME_X,
+        #     self.OLED_CONFIG_NAME_Y,
+        #     firmware_mode,
+        #     rotation=self.OLED_ROTATED_CLOCKWISE_TEXT_ROTATION)
+        self.logger.info(
+            f'{self!r}: Init phase OLED: {time.perf_counter() - t_oled:.3f} s')
+        self.logger.info(
+            f'{self!r}: Init phase set_fpga_bitstream total: '
+            f'{time.perf_counter() - t0:.3f} s')
 
 
     async def get_fpga_bitstream_crc_async(self):
@@ -766,6 +804,187 @@ class CRS(Motherboard):
     ###################################
     # Backplane info methods
     ###################################
+
+    @staticmethod
+    def _format_hw_serial(value, width):
+        """Format a hardware serial number to the documented digit width."""
+        if isinstance(value, int):
+            return f'{value:0{width}d}'
+        serial = str(value).strip()
+        if serial.isdigit() and len(serial) < width:
+            return serial.zfill(width)
+        return serial
+
+    def _backplane_identity(self):
+        """Return the CRSBackplane object used for EEPROM identity defaults."""
+        if isinstance(self.crate, CRSBackplane):
+            return self.crate
+        return CRSBackplane
+
+    def set_backplane_eeprom(
+            self,
+            backplane_serial,
+            crate_serial,
+            chassis_serial=None,
+            chassis_part_number=None,
+            crate_in_chassis=True,
+            backplane_revision=None,
+            crate_revision=None,
+            backplane_model=None,
+            backplane_product_name=None,
+            crate_model=None,
+            crate_product_name=None,
+            backplane_manufacturer=None,
+            crate_manufacturer=None,
+            mfg_date=None,
+            verify=True):
+        """Initialize the backplane FRU EEPROM (IPMI v1.2 layout).
+
+        Manufacturer, model, and revision defaults come from
+        :class:`CRSBackplane`. The crate slot is ``self.slot``. If those
+        defaults are acceptable, only the backplane and crate serials are
+        required::
+
+            m.set_backplane_eeprom(
+                backplane_serial='027',
+                crate_serial='123',
+            )
+
+        With ``crate_in_chassis=True`` (default), chassis Part/Serial hold
+        crate model/serial so current U-Boot beacons the crate. With
+        ``crate_in_chassis=False``, chassis Part/Serial are the Vector
+        chassis identity (v1.2). Chassis custom fields are only ``slot=N``.
+
+        EEPROM areas:
+
+        - Chassis: crate or Vector part/serial (see ``crate_in_chassis``)
+          plus custom ``slot=N`` crate slot (1-16).
+        - Board: this 4-slot backplane segment, plus custom ``revision=N``.
+        - Product: the crate (CCR) sold as the product (v1.2).
+
+        Parameters:
+            backplane_serial: 3-digit backplane serial (Board Serial Number).
+            crate_serial: 3-digit crate serial (Product Serial Number).
+            chassis_serial: Vector chassis serial. Used only when
+                ``crate_in_chassis`` is False.
+            chassis_part_number: Vector chassis part number. Used only when
+                ``crate_in_chassis`` is False. Default
+                ``CRSBackplane.CHASSIS_PART_NUMBER``.
+            crate_in_chassis: If True, write crate model/serial in the
+                chassis area for current U-Boot. If False, write Vector
+                chassis part/serial there.
+            backplane_revision: Backplane revision, stored as ``revision=N``.
+            crate_revision: Crate revision (Product Version).
+            backplane_model: Board Part Number.
+            backplane_product_name: Board Product Name.
+            crate_model: Product Model Number.
+            crate_product_name: Product Name.
+            backplane_manufacturer: Board Manufacturer.
+            crate_manufacturer: Product Manufacturer.
+            mfg_date: Board manufacturing date. Default now.
+            verify: If True, read the EEPROM back and check the image.
+
+        Returns:
+            The encoded FRU object.
+        """
+        eeprom_dev = getattr(self, 'i2c0_bp_eeprom_data', None)
+        if eeprom_dev is None:
+            raise RuntimeError(f'{self!r}: Backplane EEPROM is not initialized; open the board first')
+        if not eeprom_dev.is_present():
+            raise RuntimeError(f'{self!r}: Backplane EEPROM is not present on I2C0')
+        if not self.slot:
+            raise RuntimeError(f'{self!r}: Cannot program the backplane EEPROM without a crate slot')
+
+        crate_slot = int(self.slot)
+        bp = self._backplane_identity()
+        if not 1 <= crate_slot <= bp.NUMBER_OF_SLOTS:
+            raise ValueError(
+                f'crate slot must be in 1-{bp.NUMBER_OF_SLOTS}, got {crate_slot}')
+
+        backplane_manufacturer = (
+            backplane_manufacturer if backplane_manufacturer is not None
+            else bp.BACKPLANE_MANUFACTURER)
+        crate_manufacturer = (
+            crate_manufacturer if crate_manufacturer is not None
+            else bp.CRATE_MANUFACTURER)
+        backplane_model = backplane_model if backplane_model is not None else bp.BACKPLANE_MODEL
+        backplane_product_name = (
+            backplane_product_name if backplane_product_name is not None
+            else bp.BACKPLANE_PRODUCT_NAME)
+        backplane_revision = (
+            str(backplane_revision).strip() if backplane_revision is not None
+            else bp.BACKPLANE_REVISION)
+        crate_model = crate_model if crate_model is not None else bp.CRATE_MODEL
+        crate_product_name = (
+            crate_product_name if crate_product_name is not None
+            else bp.CRATE_PRODUCT_NAME)
+        crate_revision = (
+            str(crate_revision).strip() if crate_revision is not None
+            else bp.CRATE_REVISION)
+        mfg_date = mfg_date if mfg_date is not None else datetime.datetime.now()
+
+        backplane_serial = self._format_hw_serial(
+            backplane_serial, bp.BACKPLANE_SERIAL_NUMBER_LENGTH)
+        crate_serial = self._format_hw_serial(
+            crate_serial, bp.CRATE_SERIAL_NUMBER_LENGTH)
+        chassis_serial = '' if chassis_serial is None else str(chassis_serial)
+
+        chassis_custom = [f'slot={crate_slot}']
+        if crate_in_chassis:
+            chassis_part = crate_model
+            chassis_ser = crate_serial
+        else:
+            if chassis_part_number is None:
+                chassis_part_number = bp.CHASSIS_PART_NUMBER
+            chassis_part = '' if chassis_part_number is None else str(chassis_part_number)
+            chassis_ser = chassis_serial
+
+        fru = ipmi_fru.FRU(
+            chassis=ipmi_fru.Chassis(
+                type_code=ipmi_fru.CHASSIS_RACK_MOUNT,
+                part_number=chassis_part,
+                serial_number=chassis_ser,
+                custom=chassis_custom,
+            ),
+            board=ipmi_fru.Board(
+                mfg_date=mfg_date,
+                manufacturer=backplane_manufacturer,
+                product_name=backplane_product_name,
+                serial_number=backplane_serial,
+                part_number=backplane_model,
+                fru_file='',
+                custom=[f'revision={backplane_revision}'],
+            ),
+            product=ipmi_fru.Product(
+                manufacturer=crate_manufacturer,
+                product_name=crate_product_name,
+                part_number=crate_model,
+                product_version=crate_revision,
+                serial_number=crate_serial,
+                asset_tag='',
+                fru_file='',
+            ),
+        )
+        ipmi_bytes = fru.encode()
+        eeprom_size = 1 << eeprom_dev.address_width
+        if len(ipmi_bytes) > eeprom_size:
+            raise ValueError(
+                f'FRU image is {len(ipmi_bytes)} bytes, which exceeds the '
+                f'{eeprom_size}-byte backplane EEPROM')
+
+        self.logger.info(
+            f'{self!r}: Writing backplane EEPROM: backplane {backplane_model} '
+            f'SN{backplane_serial} rev {backplane_revision}, crate {crate_model} '
+            f'SN{crate_serial} rev {crate_revision}, slot {crate_slot}')
+        eeprom_dev.write(0, ipmi_bytes)
+
+        if verify:
+            readback = eeprom_dev.read(0, len(ipmi_bytes))
+            if bytes(readback) != ipmi_bytes:
+                raise RuntimeError(f'{self!r}: Backplane EEPROM readback does not match the written FRU image')
+
+        self.logger.info(f'{self!r}: Backplane EEPROM written ({len(ipmi_bytes)} bytes)\n{fru}')
+        return fru
 
 
     async def is_backplane_present_async(self):

@@ -1,0 +1,32 @@
+# Documentation build environment (Sphinx only — not the full pychfpga runtime).
+# Private wtl.* packages are mocked in source/conf.py for autodoc.
+#
+# Not installed as a Python package (see tool.uv.package); only dependencies are synced.
+
+[project]
+    name = "pychfpga_docs"
+    version = "0.0.0"
+    description = "Documentation builder for pychfpga"
+    requires-python = "==3.12.*"
+    dependencies = [
+        "setuptools-scm>=8.0",
+        "sphinx",
+        "sphinx_rtd_theme",
+        "sphinxcontrib.restbuilder",
+        "gitpython",
+        # Imported by pychfpga modules during autodoc (PyPI only)
+        "numpy",
+        "matplotlib",
+        "h5py",
+        "PyYAML",
+        "aiohttp",
+        "psutil",
+        "zeroconf==0.34.3",
+        "ujson",
+        "nest_asyncio",
+        "freetype-py",
+        "xmodem",
+        ]
+
+[tool.uv]
+    package = false

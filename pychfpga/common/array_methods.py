@@ -1,9 +1,11 @@
 """Shared support for :class:`pychfpga.fpga_array.FPGAArray`-wide methods.
 
 Array-wide methods live on explicit :class:`ArrayMethods` provider classes.
-Motherboard and firmware classes opt in by assigning ``array_method_class`` to
-one provider class. ``FPGAArray`` instantiates the providers shared by every
-motherboard and exposes their public methods as array methods.
+Motherboard classes may assign ``array_method_class``. Firmware subclasses
+register providers in ``_array_method_classes`` (see
+:meth:`pychfpga.fpga_firmware.fpga_firmware.FPGAFirmware.register_array_methods`).
+``FPGAArray`` instantiates the providers shared by every motherboard and
+exposes their public methods as array methods.
 """
 
 import logging
@@ -16,7 +18,6 @@ class ArrayMethods:
     ``ic`` attributes so methods can keep the old array-method shape.
     """
 
-    _local_attrs = frozenset(('fpga_array', 'ib', 'ic', 'logger'))
     array_method_names = None
 
     def __init__(self, fpga_array):
@@ -34,22 +35,23 @@ class ArrayMethods:
 
     # def __setattr__(self, name, value):
     #     """Keep provider-local state local and delegate array state writes."""
-    #     if name.startswith('_') or name in self._local_attrs or 'fpga_array' not in self.__dict__:
+    #     if name.startswith('_') or 'fpga_array' not in self.__dict__:
     #         object.__setattr__(self, name, value)
     #     else:
     #         setattr(self.fpga_array, name, value)
 
     def get_array_methods(self):
-        """Return public callable methods exposed by this provider."""
+        """Return public callables defined on this provider class."""
         if self.array_method_names is not None:
             return {
                 name: method for name in self.array_method_names
                 if callable(method := getattr(self, name))
             }
+        skip = dir(ArrayMethods)
         return {
-            name: method for name in dir(self)
+            name: method for name in dir(type(self))
             if not name.startswith('_')
-            and name not in dir(ArrayMethods)
+            and name not in skip
             and callable(method := getattr(self, name))
         }
 

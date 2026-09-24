@@ -1600,7 +1600,9 @@ class UDPReceiver(threading.Thread):
 
     def run(self) -> None:
         """Continuously listen for UDP packets and process them."""
-        packet_buffer = bytearray(4096)
+        # Aggregated datagrams pack several records (up to 8*660 = 5280 B); size the
+        # receive buffer for a full jumbo frame so nothing is truncated.
+        packet_buffer = bytearray(9000)
         
         while self.running:
             try:
@@ -1622,21 +1624,32 @@ class UDPReceiver(threading.Thread):
                 break
 
     def _process_packet(self, packet_data: bytes):
-        """Process a single raw UDP packet."""
-        packet_array = np.frombuffer(packet_data, dtype=self.packet_dtype, count=1)
-        header = packet_array['header'][0]
-        if header['cookie'] != 0xcf: 
-            return
-        
-        bin_idx = header['stream_id']
-        if bin_idx >= NBINS_TOTAL: 
-            return
-        
-        data = packet_array['data'][0]
-        self._decode_frame_data(bin_idx, data)
+        """Process a raw UDP datagram, which may pack several aggregated records.
 
-        if bin_idx == NBINS_TOTAL - 1:
-            self._process_complete_frame()
+        Firmware now aggregates multiple UCORR bins (each a full header+products
+        record) into one datagram by gating TLAST, so parse every record present
+        (``nbytes // itemsize``) instead of only the first. A short final group is
+        handled naturally by the integer division.
+        """
+        itemsize = self.packet_dtype.itemsize
+        count = len(packet_data) // itemsize
+        if count == 0:
+            return
+        packet_array = np.frombuffer(packet_data, dtype=self.packet_dtype, count=count)
+        for rec in range(count):
+            header = packet_array['header'][rec]
+            if header['cookie'] != 0xcf:
+                continue
+
+            bin_idx = header['stream_id']
+            if bin_idx >= NBINS_TOTAL:
+                continue
+
+            data = packet_array['data'][rec]
+            self._decode_frame_data(bin_idx, data)
+
+            if bin_idx == NBINS_TOTAL - 1:
+                self._process_complete_frame()
 
     def _decode_frame_data(self, bin_idx: int, data: np.ndarray):
         """Decode the complex data from the raw packet format."""
