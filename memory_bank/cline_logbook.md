@@ -419,3 +419,67 @@ metrics = await fpga_master.get_metrics_async()
 **Validation**: `python -m py_compile` clean; YAML parses. `git diff -w` confirms the only removed lines are a reflowed comment and the old assert (the large diff is re-indentation from the new `with` block). Verified off-hardware with two scripts: a unit-level check that the watchdog interrupts a frozen `asyncio.run`, restores the handler, leaks no alarm, and is disabled at `timeout=0`; and an end-to-end simulation of the real `test_power_cycle` with mocked hardware where iteration 2 of 4 freezes — it was aborted after ~2 s, counted once, and all 4 iterations ran.
 
 **Limitations**: SIGALRM is Unix-only and main-thread-only (fine for this CLI/pytest harness; it no-ops with a warning otherwise). Resolution is 1 second (`signal.alarm` takes an int). The 300 s default should be re-tuned against observed healthy iteration times on the bench. The underlying hardware freeze remains undiagnosed by design.
+
+---
+
+## September 22, 2026 - Oversized QC Report Recovery and XML_PARSE_HUGE Fix
+
+### Task: Make the SN011 summary reflect the 1000-cycle power-cycle test, and fix the underlying report-size limit
+
+**Objective**: The 1000-cycle `test_power_cycle` run (43 h, 2026-09-18) PASSED, but the `.pdf`/`.rst`/`.xml` summaries at `~/qc_test_results/CRS_crate/CRS_crate_SN011/` still showed the earlier 2026-09-11 run, which had FAILED. Bring the summaries up to date without reading the 79 MB XML / 85 MB HTML in full, then fix the root cause in the reporting plugin.
+
+#### Root Cause
+
+The run produced a 79,195,600-byte JUnit XML whose captured log lives in just two text nodes: `<system-out>` ≈ 54.8 MB and `<system-err>` ≈ 24.4 MB (759,033 lines, 314,043 of them `INFO`). libxml2 caps a single text node at 10 MB, so `TestCases.load_test_cases()` raised:
+
+```
+XMLSyntaxError: Resource limit exceeded: Text node too long, try XML_PARSE_HUGE
+```
+
+Critically, that method globs `data/*.xml` and parses **every** file in one loop with no error handling, so the single oversized file aborted collection of *all* of the unit's results — hence the silently stale summaries. Note the `.html` report is not consumed by the summary generator at all, which is why it stayed valid.
+
+#### Part 1 - Recovery: `qc/tools/condense_xreport_xml.py` (new)
+
+A standalone, stdlib-only CLI that rewrites an oversized report into a small but still valid JUnit XML:
+
+- Streams the input line by line, so memory use is independent of file size; only retained lines are accumulated.
+- Copies the markup-bearing lines byte-for-byte (only 3 in this file: lines 1, 445015, 759033), so every `<testsuites>`/`<testsuite>`/`<testcase>` attribute — pass/fail state, timestamps, durations — is preserved exactly.
+- Keeps: a banner stating how many lines were dropped and where the full log lives, the head of the set-up log, the first iteration verbatim, the per-iteration error tallies of **every** iteration, every ERROR/CRITICAL/traceback/timeout line, and the final results. Tunable via `--log-head`, `--err-tail`, `--keep-first-iterations`.
+- `verify()` re-parses the output with ElementTree before returning, so the tool cannot leave behind a file that breaks the loader.
+
+Result: **79,195,600 → 322,129 bytes (0.41 %) in 1.3 s**, 759,033 → 10,330 lines, retaining all 1000 iteration banners, all 1000 tally blocks, the 11 `{'Cycle': ...}` error tags, the 9 `IterationTimeout` records and the final duration stats.
+
+Because the loader globs `*.xml`, the original was renamed `...test_power_cycle.raw_xml` (not deleted, byte count re-verified) and the digest written to the original `.xml` path. Summaries were then regenerated through the production path — `TestMenu(...).update_summary_report()`, since menu key `R` is dead in xreport 1.2 (`Unsupported action in this version of Xreport`).
+
+**Outcome**: all five required tests now show PASS, with `test_power_cycle` at `2026-09-18 17:55:16`. Summaries went from stale 9.06 MB/1800 pp to 1.86 MB/418 pp (PDF), 6.64 → 1.32 MB (RST), 6.82 → 1.32 MB (XML), generated in under 60 s. The previous summaries were kept as `*.bak`.
+
+#### Part 2 - Root-cause fix in `wtl.pytest-xreport` (separate repo: `~/wtl.pytest-xreport`, branch `jfc/dev`, tag 1.2)
+
+Applied to `wtl/pytest_xreport/xreport.py` (+26/-2):
+
+- **`XML_PARSER = lxml.objectify.makeparser(huge_tree=True)`** at module level, and `lxml.objectify.parse(file_, parser=XML_PARSER)` at the single parse site in `TestCases.load_test_cases()`. `huge_tree=True` **is** lxml's binding for libxml2's `XML_PARSE_HUGE`; there is no separate flag or constant to set, so setting both would be redundant — this is documented in the code comment. The parser is built once, not per file, since it is reusable and sits in a loop.
+- **Per-file `except lxml.etree.XMLSyntaxError`** around the parse, which logs a warning and `continue`s. This is the other half of the bug: without it, one unreadable file discards the results of every other test for that unit and the summary silently shows stale data. The catch is deliberately narrow so real bugs still surface.
+
+Confirmed this is the only parse site in the package; the sole other lxml use is `lxml.etree.tostring()` in `save_xml()`, which is serialization and unaffected by parser limits.
+
+**Validation** (against the real 79 MB file, lxml 6.0.2 / libxml2 2.14.6):
+
+| Check | Result |
+|---|---|
+| Shipped parser on the 79 MB file | reproduces the exact reported error, `line 66704, column 181` |
+| Patched parser, same file | parses in **0.1 s**, 79,002,107 chars, `failures=0`, PASS |
+| `TestCases` on a folder mixing the oversized file, normal files and a deliberately corrupt file | oversized file loads; corrupt file only warns; all other results still collected |
+| Full 5-file data folder, unabridged | 0.1 s, all 5 PASS |
+| `save_xml()` / `generate_test_summary()` → RST | 0.5 s / **7.2 s** (76 MB RST) |
+
+The package's own `tests/` suite fails with `ModuleNotFoundError: No module named 'wtl.namespace'`, but `git stash` confirmed it fails identically on the unmodified clone — pre-existing namespace-package shadowing, not a regression (those tests are also cookiecutter leftovers for a `--foo`/`bar` fixture this plugin does not have).
+
+**Known remaining limitation — `rst2pdf`, not parsing**: PDF rendering time is superlinear, roughly 3× per doubling (0.5 MB → 0.5 s; 1 MB → 1.1 s; 2 MB → 2.9 s; 4 MB → 9.0 s). A full 76 MB summary was killed at **9 minutes / 20.7 GB RSS and still climbing**. RST assembly itself is fine (80 MB in 6.9 s at 0.4 GB), so the bottleneck is purely rst2pdf. Also note `rST.write()` always appends the format implied by the output filename extension, so a `.pdf` target renders a PDF regardless of `output_formats`. Until this is addressed, oversized runs still need the condenser to produce a PDF.
+
+**Deliberately not done**: lowering the pychfpga log level during the cycle loop was considered and rejected — the INFO output is wanted, as it carries the detail needed when parsing errors after a long run. `f_engine_tests.py` was therefore left untouched and the report-size problem is handled at the reporting layer instead.
+
+**Files Modified**:
+- `qc/tools/condense_xreport_xml.py` (new), `qc/tools/README.txt` (new)
+- `~/wtl.pytest-xreport/wtl/pytest_xreport/xreport.py` (separate repo, uncommitted)
+
+**Status**: ✅ Summaries up to date and verified; `huge_tree` fix verified end to end against real data. Open follow-ups: commit/push the xreport change, and decide how to bound PDF generation (literal-block size cap in `generate_test_summary()`, a size threshold that skips the PDF, or continued use of the condenser).
