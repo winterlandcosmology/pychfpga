@@ -889,8 +889,17 @@ class BCTEngine(MMIRouter):
             #    CB3 Output Lane 7: BS1.3: 8 bins (7,15...) from sublanes 0-7 (Input lanes 0-7 =CH0-511)
 
             # CB2 ALIGN (JM changed cb2_sof_window_stop from 70 to 50 which the default value of CROSSBAR.SOF_WINDOW_STOP in shuffle_crossbar module. When 70, get errors when establishing connection with gpu nodes, reporting wrong packet size). JFC: CHanged to 55 during backplane shuffle debugging
+            # 2026-09-22: raised 55 -> 100 (the RTL default) after an on-crate
+            # window sweep. At 55 the aligner drops ~0.8% of backplane frames:
+            # the measured lane arrival-skew tails reach 44-57 ct_clk cycles,
+            # exactly at the 55+2-L acceptance edge, and the error rate falls
+            # to zero for every window value >= 60 (two sweep passes, 16
+            # boards). 100 puts the worst measured skew ~45 cycles inside the
+            # window; packet geometry at 100 verified intact (1189-word
+            # packets) and the aligner FIFOs stay far from full. The historic
+            # "wrong packet size at 70" GPU issue did not reproduce.
             cb2_timeout_period = 0
-            cb2_sof_window_stop = 55
+            cb2_sof_window_stop = 100
             # CB2 REMAP
             cb2_lane_map = self.CROSSBAR2.compute_bp_shuffle_lane_map()
             cb2_bypass = False
