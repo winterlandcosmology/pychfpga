@@ -483,3 +483,111 @@ The package's own `tests/` suite fails with `ModuleNotFoundError: No module name
 - `~/wtl.pytest-xreport/wtl/pytest_xreport/xreport.py` (separate repo, uncommitted)
 
 **Status**: ✅ Summaries up to date and verified; `huge_tree` fix verified end to end against real data. Open follow-ups: commit/push the xreport change, and decide how to bound PDF generation (literal-block size cap in `generate_test_summary()`, a size threshold that skips the PDF, or continued use of the condenser).
+
+---
+
+## September 24, 2026 - ADC quick-check packet-loss investigation
+
+### Task: Diagnose "dropped packets" in `f-engine-tools` `quick_check_adc.ipynb`
+
+**Objective**: User reported heavy packet loss running
+`f-engine-tools/notebooks/general_notebooks/quick_check_adc.ipynb` despite correct UDP sysctls and
+jumbo frames. Investigate root cause and fix.
+
+**Setup**: Host `twiddlebug`; crate under test = CRC4 SN011 (McGill), 16 boards on `192.168.88.x`,
+received on **`ens1f0`** (Intel `ixgbe`, 10G, `192.168.88.17/24`). A *separate* crate lives on
+`enp6s0` (Realtek r8169, 2.5G, `10.10.10.x`) and was excluded per the user. Capture engine is
+**UCAP** (mode 0 = 2 frames/burst, all 8 ADC channels). Data path: notebook
+`get_data_receiver_async()` -> threaded `UDPPacketReceiver` -> `RawFrameReceiver.read_raw_frames()` ->
+`RawDataPacketProcessor` assembly.
+
+#### Findings
+
+1. **`ignore_missing_boards` vs `ignore_missing_slots` (notebook fix).** `FPGAArray(...)` parameter
+   is `ignore_missing_boards`; the notebook passed `ignore_missing_slots`, which is swallowed by
+   `**kwargs` and silently no-ops, so the "missing slots" `RuntimeError` still fired for <16 boards.
+   Fixed notebook to compute `ignore_missing_boards = n_boards != 16` and pass the correct kwarg.
+
+2. **"50% loss" at 8 boards was a reporting bug, not real loss (notebook fix).**
+   `read_raw_frames(split=True)` returns **per-frame** counts (each row = one frame,
+   max = `NUMBER_OF_SUBFRAMES` = 4), and rows are already doubled (`ncap * FRAMES_PER_BURST`). The
+   old formula divided by `4*2 = 8`, so a perfect capture read as exactly 50%. Fixed to
+   `percent_packets_captured_adc = 100 * c_adc / r.NUMBER_OF_SUBFRAMES`. With `flush=True` + the fixed
+   formula, **8 boards capture at a consistent 100%**. Denominator rule: `split=True` -> divide by
+   `NUMBER_OF_SUBFRAMES` (4); `split=False` -> divide by `FRAMES_PER_BURST * NUMBER_OF_SUBFRAMES` (8).
+
+3. **16-board loss is real and upstream of the host (~16.6%/burst).** Live run: every UDP batch =
+   854 packets, all passing filters (`match=854 after_ts_filter=854`); a full 16-board burst =
+   `packets_per_timestamp` = 128 streams x 2 frames x 4 subframes = **1024**, so 854/1024 = 83.4%
+   (~16.6% lost/burst). Assembler carryover pins at `receive_window`=3 (rows held open for packets
+   that never arrive) - the fingerprint of genuine on-wire loss. **NIC ring counters did not move**
+   during capture (`rx_missed_errors` stayed 3460; `rx_no_buffer_count`/`rx_dropped`/
+   `rx_no_dma_resources` = 0) -> host NIC is not dropping; loss is at the switch/wire.
+
+
+4. **Burst structure (pcap `/home/ih/ens1f0_dump0.pcap`).** 19 bursts spaced **exactly 100.0 ms**
+   (= `burst_rate=0.1`); all 16 boards start each burst within **~100-160 us** (effectively
+   simultaneous). Per burst ~ **8.4 MB delivered in ~150 us**, then idle ~99.85 ms. Average rate
+   ~ **590 Mbit/s** (fits in 1G). Frames are all 8244 B - **no frames >9000, no IP fragmentation**
+   (jumbo path clean).
+
+5. **Corrected "1G vs 10G" understanding.** Not an average-bandwidth problem (avg ~590 Mbit/s fits
+   1G). Loss occurs when the **switch egress buffer toward the host** overflows during the ~150 us
+   simultaneous 16-board microburst. Limiting resource = **switch egress buffer depth**, not host
+   link headline speed; 10G *helps* (drains the switch queue ~10x faster). Old 1G success was almost
+   certainly because fewer boards (e.g. 4-8) and/or non-aligned bursts meant the switch never had to
+   buffer 16 simultaneous streams (4 boards ~ 2 MB/burst fits; 16 boards ~ 8.4 MB does not). The
+   earlier phrasing "16 boards saturate the 10G link" was imprecise.
+
+6. **Concurrent second receiver (contention).** `ss -p` showed our capture socket
+   `192.168.88.17:48746` (pid 234956, user `ih`) plus two full sockets `:50018`/`:52980`
+   (pid 1386495, user **`jfcliche`**) - another user's kernel capturing the SAME crate concurrently,
+   compounding the microburst loss. No processes were killed (they belong to another user).
+
+#### Changes applied
+- **Notebook** `quick_check_adc.ipynb`: board-count cell now sets `ignore_missing_boards = n_boards
+  != 16` and passes the correct kwarg; percentage cell now `100*c_adc/(r.NUMBER_OF_SUBFRAMES)`; using
+  `read_raw_frames(..., split=True, flush=True)`.
+- **Host NIC tuning on `ens1f0`** (absorbs what reaches the host; does NOT fix upstream loss):
+  RX ring 512 -> **4096** (`ethtool -G ens1f0 rx 4096`); coalescing `rx-usecs` 1 -> **50**
+  (`ethtool -C ens1f0 rx-usecs 50`); flow control (802.3x PAUSE) confirmed RX on / TX on. Persisted
+  via systemd oneshot **`/etc/systemd/system/nic-tuning-ens1f0.service`** (enabled); re-apply with
+  `sudo systemctl restart nic-tuning-ens1f0.service`. Result: NIC-ring drops eliminated; 16-board
+  loss unchanged (upstream/switch). UDP sysctls (rmem_max/default = 100 MB) and MTU 9000 were already
+  correct.
+
+#### Recommended remedies for 16-board capture (in order)
+1. Ensure no other user (e.g. `jfcliche`) is capturing the same crate concurrently while testing.
+2. **Capture in two groups of 8 boards** (8 proven lossless), then stitch - reliable software fix now.
+3. Switch-side: verify PAUSE is honored toward `192.168.88.17` and/or deeper egress buffers.
+4. **Per-slot transmit stagger/delays** so 16 boards don't burst simultaneously - proper long-term
+   fix, needs UCAP firmware support (`offset`/`send_delay` are PROBER-only today).
+5. Faster/bonded host link (25G, or 2x10G LACP) - definitive hardware fix.
+
+#### Open questions / TODO
+- **[OPEN] Why `c_adc` showed max 8 in some earlier runs despite always `split=True`.** The
+  "split=False sums to 8" theory is wrong (user never changed split/mode). Likely
+  `r.NUMBER_OF_SUBFRAMES` was **8** (not 4) in a prior firmware/config state
+  (`subframes_per_frame` comes from the capture `State`). ACTION: log `r.NUMBER_OF_SUBFRAMES` and
+  `r.FRAMES_PER_BURST` live per configuration to confirm 4/2 for UCAP mode 0.
+- **[OPEN] Per-slot transmit delays for UCAP** - investigate a firmware-exposed per-board start-frame
+  offset (equivalent to PROBER `offset`/`send_delay`) to stagger the 16-board microburst at source.
+- **[OPEN] Library hardening for unknown kwargs** - decide whether `FPGAArray` should raise on
+  unrecognized kwargs (e.g. `ignore_missing_slots`) instead of silently swallowing them; complicated
+  by legitimate `**kwargs` pass-through to `array_init_async` -> firmware `init_async`
+  (`processing_frequency`, `reference_frequency`, `data_width`, legacy `open`). Not applied.
+- **[OPEN] Quantify switch buffer / confirm PAUSE honored** on the switch port toward the host.
+- **[OPEN] Orphaned capture sockets** across kernel restarts (multiple full UDP sockets bound to
+  `192.168.88.17`). Consider closing sockets on receiver teardown.
+
+#### Useful diagnostics
+- Per-burst completeness: compare `match=`/`after_ts_filter=` vs full burst = 1024 (16 boards).
+- NIC drops: `ethtool -S ens1f0 | grep -E 'rx_missed|rx_no_buffer|rx_dropped|rx_no_dma'`.
+- Kernel UDP drops: `nstat | grep -i UdpRcvbufErrors`; `ss -u -a -n` (Recv-Q).
+- Socket owners: `sudo ss -u -a -n -p | grep 192.168.88.17`.
+- pcap: `tshark -r ens1f0_dump0.pcap -q -z conv,udp` / frame-length / timing analysis.
+
+**Status**: 8-board capture verified lossless (reporting bug + `ignore_missing_boards` fixed);
+host NIC tuning applied and persisted. 16-board residual loss confirmed as upstream switch-egress
+tail-drop from simultaneous microbursts (not host-side) - remedies above pending.
+
