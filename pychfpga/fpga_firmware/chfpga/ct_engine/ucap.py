@@ -32,8 +32,7 @@ class UCAP(MMI):
     SUB_PERIOD       = BitField(CONTROL, 8, 0, width=5, doc='Dynamic capture rate, 2**(N+1) frames')
     SOURCE_SEL       = BitField(CONTROL, 9, 0, width=8, doc='0 = source selector output (timestream), 255 = scaler output (spectrum)')
     USER_STREAM_ID   = BitField(CONTROL, 10, 0, width=8, doc='Bits 11:4 of the Stream ID found in the raw packet header')
-    # READOUT_DELAY    = BitField(CONTROL, 12, 0, width=16, doc='Pre-transmit delay in ADC input frames before streaming a burst (0 = no delay).')
-    READOUT_DELAY    = BitField(CONTROL, 11, 0, width=8, doc='Pre-transmit delay in ADC input frames before streaming a burst (0 = no delay).')
+    READOUT_DELAY    = BitField(CONTROL, 12, 0, width=16, doc='Pre-transmit delay in ADC input frames before streaming a burst (0 = no delay).')
 
     FIFO_OVERFLOW    = BitField(STATUS, 0, 0, doc='1 when dat FIFO has overflowed. Sticky flag.')
     OVERRUN          = BitField(STATUS, 0, 1, doc='1 when data transmission request was performed before the previous transmission was completed. Sticky flag.')
@@ -68,8 +67,8 @@ class UCAP(MMI):
     FRAMES_PER_BURST = (2, 4, 8, 16)
     _DEFAULT_CHANNEL_COUNTS = (8, 4, 2, 1)
     # Default stagger step in ADC frames between crate slots (~1024 frames; was 4 register units x256).
-    DEFAULT_DELAY_PER_SLOT = 1
-    MAX_READOUT_DELAY = 255
+    DEFAULT_DELAY_PER_SLOT = 80  # Seems to be sufficient for the TP-Link switch. Starting to lose packets below 75.
+    MAX_READOUT_DELAY = 65536
 
     @classmethod
     def get_default_channels(cls, mode):
