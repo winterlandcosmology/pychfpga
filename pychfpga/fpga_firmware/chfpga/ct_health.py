@@ -17,11 +17,12 @@ these crossbars look meaningful and are not:
   the firmware and are not read here.
 - ``PACKET_ERROR_CTR`` is indexed by ``LANE_MONITOR_SEL`` and only selections
   0..7 are valid; higher selections read out of range.
-- CROSSBAR3's packet-error counter saturates unconditionally on current
-  bitstreams (the packet-flags trailer asserts the missing/CRC bits on every
-  packet regardless of datapath health, and CB3's compile-time
-  ``SHUFFLE_FLAGS_MASK`` counts them), so it is deliberately not asserted on.
-  CB3 remains covered by its per-lane stickies and the frame-counter advance.
+- Both crossbars' packet-error counters are asserted on. (On bitstreams
+  before chfpga_ice_ct_pbg_sep24 the CROSSBAR3 counter saturated
+  unconditionally - unread sublane FIFOs overflowed into the packet-flags
+  trailer, asserting a spurious CRC bit that CB3's compile-time
+  ``SHUFFLE_FLAGS_MASK`` counted on every packet - and had to be skipped
+  here. The sep24 trailer fix made it a real error indicator again.)
 
 Only the boards' monitor plane is written (counter/sticky resets); no datapath
 or configuration register is touched, so this is safe to run against a live
@@ -157,16 +158,13 @@ def measure_crate_health(boards, populated=None, logger=None):
                                         f"{mon_name}={v} - {LANE_MONITOR_HINTS[mon_name]}")
             # PACKET_ERROR_CTR is indexed by LANE_MONITOR_SEL and only
             # lanes 0..7 are valid (higher selects read out of range).
-            # CROSSBAR3 is skipped: its counter saturates unconditionally on
-            # this bitstream (see the module docstring).
-            if name != 'CROSSBAR3':
-                for sel in range(n_outputs):
-                    cb.LANE_MONITOR_SEL = sel
-                    v = int(cb.PACKET_ERROR_CTR)
-                    if v:
-                        failures.append(f"[slot {mb.slot}] {name} lane {sel}: "
-                                        f"PACKET_ERROR_CTR={v} (CRC/length/alignment errors)")
-                cb.LANE_MONITOR_SEL = 0
+            for sel in range(n_outputs):
+                cb.LANE_MONITOR_SEL = sel
+                v = int(cb.PACKET_ERROR_CTR)
+                if v:
+                    failures.append(f"[slot {mb.slot}] {name} lane {sel}: "
+                                    f"PACKET_ERROR_CTR={v} (CRC/length/alignment errors)")
+            cb.LANE_MONITOR_SEL = 0
             ctrs_before[(mb.slot, name)] = (int(cb.INPUT_FRAME_CTR),
                                             int(cb.ALIGN_FRAME_CTR),
                                             int(cb.OUTPUT_FRAME_CTR))
@@ -202,13 +200,9 @@ def stickies_quiet(boards, window=5.0):
             mons = run_async(cb.get_lane_monitor(LANE_MONITOR_NAMES))
             if any(int(v) for row in mons for v in row):
                 return False
-            # CB3's packet counter saturates unconditionally on this
-            # bitstream (trailer artifact - see the module docstring),
-            # so only CB2's counter is a meaningful quiet criterion.
-            if cb is mb.CROSSBAR2:
-                for sel in range(8):
-                    cb.LANE_MONITOR_SEL = sel
-                    if int(cb.PACKET_ERROR_CTR):
-                        return False
-                cb.LANE_MONITOR_SEL = 0
+            for sel in range(8):
+                cb.LANE_MONITOR_SEL = sel
+                if int(cb.PACKET_ERROR_CTR):
+                    return False
+            cb.LANE_MONITOR_SEL = 0
     return True
