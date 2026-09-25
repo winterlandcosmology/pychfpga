@@ -15,7 +15,7 @@ from wtl.metrics import Metrics
 
 # Local packages
 
-from pychfpga.hardware import Motherboard
+from pychfpga.hardware import Crate, Motherboard
 from pychfpga.common import run_async, async_to_sync, Ccoll
 from pychfpga.hardware.interfaces import TCPipe, TCPipe_I2C, TCPipe_SPI, ipmi_fru
 from pychfpga.fpga_firmware import FPGAFirmware
@@ -76,7 +76,7 @@ class CRS(Motherboard):
     # One day we'll be able to query the board directly.
     REV0_SERIALS = ('429', '0429', # returned by SN003 with old TCPipe firmware that didn't read the EEPROM and used the FPGA DNA
                     '003',)
-    NO_I2C = ('000') # Serials of boards that could not read eeprom, so assuming I2C is bad
+    NO_I2C = ('000',)  # Serials of boards that could not read eeprom, so assuming I2C is bad
 
     port = 7  # port number on which to access the platform `hostname`
 
@@ -148,18 +148,15 @@ class CRS(Motherboard):
 
         self.logger.debug(f'{self!r}: open() is called')
 
-        # if not self.serial:
-        #     raise RuntimeError('Cannot determine revision number: there is no serial number')
-        self.revision = 0 if self.serial in self.REV0_SERIALS else 1
-        self.pll_spi_port = 1 if self.revision >0 else 0  # PS SPI peripheral port on which the PLL is connected. This changed from Rev0 to Rev 1
-        self.logger.debug(f'{self!r}: Board revision is {self.revision}. PLL will be on SPI port {self.pll_spi_port}')
-
-
-
         # Open tcp communication with the board
         self.logger.debug(f'{self!r}: Opening TCP connection to the board')
         self.tcpipe = TCPipe(self.hostname, self.port)
 
+        # Get the board revision so we can instantiate the right peripherals
+        self.revision = int(self.tcpipe.get_motherboard_ipmi_info().get('revision') or 1)
+
+        self.pll_spi_port = 1 if self.revision > 0 else 0  # PS SPI peripheral port on which the PLL is connected. This changed from Rev0 to Rev 1
+        self.logger.debug(f'{self!r}: Board revision is {self.revision}. PLL will be on SPI port {self.pll_spi_port}')
         # create I2C interface
         self.iic = TCPipe_I2C(self.tcpipe)
 
@@ -221,8 +218,8 @@ class CRS(Motherboard):
         # I2C1 Switch 0 port 3 devices:
         #   External I2C header
 
-        if self.serial in self.NO_I2C:
-            self.logger.warning(f'{self!r}: Board is assumed to have no I2C. Skipping I2C device initialization')
+        if self.revision == 0:
+            self.logger.warning(f'{self!r}: Board is Rev 0 and is assumed to have no I2C. Skipping I2C device initialization')
             return
 
 
@@ -569,20 +566,25 @@ class CRS(Motherboard):
         """
         Returns a boolean indicating whether the board is responding to network queries.
         """
-        # print(f'{self!r} Ping_async()')
+        target = (self.hostname, self.port)
+        self.logger.info(
+            f'{self!r}: Pinging TCP {target[0]}:{target[1]} (timeout={timeout}s)')
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.logger.info(f'{self!r}: Pinging {self.hostname} at {s.getsockname()}')
-        s.settimeout(timeout)
-        s.setblocking(0)
+        s.setblocking(False)
         loop = asyncio.get_event_loop()
         try:
-            await loop.sock_connect(s, (self.hostname, self.port))
-            if_addr = s.getsockname()
-            s.close()
-        except (socket.timeout, Exception) as e:
-            self.logger.warning(f'Could not establish a TCP connection with {self.hostname}.{self.port}. Error is:\n {e}')
+            await asyncio.wait_for(loop.sock_connect(s, target), timeout=timeout)
+            return True
+        except (asyncio.TimeoutError, OSError, socket.error) as exc:
+            self.logger.warning(
+                f'{self!r}: Could not establish a TCP connection with '
+                f'{target[0]}:{target[1]}: {exc}')
             return False
-        return True
+        finally:
+            try:
+                s.close()
+            except OSError:
+                pass
 
 
 
@@ -595,15 +597,35 @@ class CRS(Motherboard):
 
 
     async def discover_serial_async(self, update=True):
-        """
-        Discover the serial number of this IceBoard from its IPMI data, and update the hardware map accordingly if `update=True`
-        """
+        """Discover the board serial from TCPipe init-time motherboard IPMI."""
         self.logger.debug(f'{self!r}: discovering the serial number of board at {self.hostname}')
-        return "003"
+        if self.tcpipe is None:
+            return self.serial
+        info = await self.tcpipe.get_motherboard_ipmi_info_async()
+        actual_serial = info.get('serial') or None
+        if update and actual_serial:
+            if self.serial and str(actual_serial) != str(self.serial):
+                self.logger.warning(
+                    f'{self!r}: Discovered serial {actual_serial} differs from hardware-map '
+                    f'serial {self.serial}; updating to the discovered value')
+            self.update_instance(serial=actual_serial)
+        return self.serial
 
     async def discover_slot_async(self, update=True):
-        """ Discover the slot number of this IceBoard, and update the hardware map accordingly if `update=True`"""
-        return None
+        """Discover the crate slot from TCPipe init-time backplane IPMI."""
+        self.logger.debug(f'{self!r}: discovering slot from TCPipe backplane IPMI at {self.hostname}')
+        if self.tcpipe is None:
+            return self.slot
+        info = await self.tcpipe.get_backplane_ipmi_info_async()
+        crate_slot = info.get('crate_slot', -1)
+        actual_slot = crate_slot if crate_slot > 0 else None
+        if update and actual_slot:
+            if self.slot and actual_slot != self.slot:
+                self.logger.warning(
+                    f'{self!r}: Discovered slot {actual_slot} differs from hardware-map '
+                    f'slot {self.slot}; updating to the TCPipe value')
+            self.update_instance(slot=actual_slot)
+        return self.slot
 
     async def discover_mezzanines_async(self, update=True):
         """Detect mezzanines attached to the motherboard and update the hardware map accordingly if
@@ -614,9 +636,20 @@ class CRS(Motherboard):
 
 
     async def discover_crate_async(self, update=True):
-        """ Detect the crate in which the board is installed and update the hardware map accordingly.
-        """
-        return None
+        """Discover crate model/serial from TCPipe init-time backplane IPMI."""
+        self.logger.debug(f'{self!r}: discovering crate from TCPipe backplane IPMI at {self.hostname}')
+        if self.tcpipe is None:
+            return self.crate
+        info = await self.tcpipe.get_backplane_ipmi_info_async()
+        crate_part = info.get('crate_model') or info.get('chassis_part')
+        crate_serial = info.get('crate_serial') or info.get('chassis_serial')
+        if not crate_part or not crate_serial:
+            return self.crate
+        crate_cls = Crate.get_class_by_ipmi_part_number(crate_part) or CRSBackplane
+        crate = Crate.get_unique_instance(new_class=crate_cls, serial=crate_serial)
+        if update:
+            self.update_instance(crate=crate)
+        return crate
 
 
 
@@ -816,18 +849,49 @@ class CRS(Motherboard):
         return serial
 
     def _backplane_identity(self):
-        """Return the CRSBackplane object used for EEPROM identity defaults."""
-        if isinstance(self.crate, CRSBackplane):
-            return self.crate
+        """Return :class:`CRSBackplane` for backplane FRU EEPROM layout defaults."""
         return CRSBackplane
+
+    @staticmethod
+    def _slot_from_chassis_custom(custom):
+        """Parse ``slot=N`` from IPMI chassis custom fields (1-based crate slot)."""
+        prefix = 'slot='
+        for item in custom or []:
+            text = str(item).strip()
+            if text.lower().startswith(prefix):
+                slot = int(text[len(prefix):])
+                if slot > 0:
+                    return slot
+        return None
+
+    def _read_backplane_fru(self):
+        """Read and decode the segment backplane FRU, or None if unavailable."""
+        eeprom_dev = getattr(self, 'i2c0_bp_eeprom_data', None)
+        if eeprom_dev is None or not eeprom_dev.is_present():
+            return None
+        eeprom_size = 1 << eeprom_dev.address_width
+
+        def read_fn(addr, length):
+            if length < 0:
+                length = eeprom_size - addr
+            return bytes(eeprom_dev.read(addr, length))
+
+        try:
+            return ipmi_fru.FRU.decode(read_fn)
+        except ValueError as exc:
+            self.logger.debug(f'{self!r}: Backplane FRU decode failed: {exc}')
+            return None
+
+    def _slot_from_backplane_fru(self):
+        fru = self._read_backplane_fru()
+        if fru is None or fru.chassis is None:
+            return None
+        return self._slot_from_chassis_custom(fru.chassis.custom)
 
     def set_backplane_eeprom(
             self,
             backplane_serial,
             crate_serial,
-            chassis_serial=None,
-            chassis_part_number=None,
-            crate_in_chassis=True,
             backplane_revision=None,
             crate_revision=None,
             backplane_model=None,
@@ -838,7 +902,7 @@ class CRS(Motherboard):
             crate_manufacturer=None,
             mfg_date=None,
             verify=True):
-        """Initialize the backplane FRU EEPROM (IPMI v1.2 layout).
+        """Initialize the backplane FRU EEPROM (IPMI v1.2, CRS spec v1.6).
 
         Manufacturer, model, and revision defaults come from
         :class:`CRSBackplane`. The crate slot is ``self.slot``. If those
@@ -850,34 +914,22 @@ class CRS(Motherboard):
                 crate_serial='123',
             )
 
-        With ``crate_in_chassis=True`` (default), chassis Part/Serial hold
-        crate model/serial so current U-Boot beacons the crate. With
-        ``crate_in_chassis=False``, chassis Part/Serial are the Vector
-        chassis identity (v1.2). Chassis custom fields are only ``slot=N``.
+        EEPROM areas (see ``Backplane IPMI and BEACON Specifications v1.6``):
 
-        EEPROM areas:
-
-        - Chassis: crate or Vector part/serial (see ``crate_in_chassis``)
-          plus custom ``slot=N`` crate slot (1-16).
-        - Board: this 4-slot backplane segment, plus custom ``revision=N``.
-        - Product: the crate (CCR) sold as the product (v1.2).
+        - Chassis: crate model (CRC4) and serial, plus custom ``slot=N`` (1-16).
+        - Board: 4SBP segment (manufacturer, product name, serial, model),
+          plus custom ``revision=N``.
+        - Product: CRC4 crate (manufacturer, ``CRS Crate``, model, revision,
+          serial).
 
         Parameters:
             backplane_serial: 3-digit backplane serial (Board Serial Number).
             crate_serial: 3-digit crate serial (Product Serial Number).
-            chassis_serial: Vector chassis serial. Used only when
-                ``crate_in_chassis`` is False.
-            chassis_part_number: Vector chassis part number. Used only when
-                ``crate_in_chassis`` is False. Default
-                ``CRSBackplane.CHASSIS_PART_NUMBER``.
-            crate_in_chassis: If True, write crate model/serial in the
-                chassis area for current U-Boot. If False, write Vector
-                chassis part/serial there.
             backplane_revision: Backplane revision, stored as ``revision=N``.
             crate_revision: Crate revision (Product Version).
-            backplane_model: Board Part Number.
+            backplane_model: Board Part Number (default ``4SBP``).
             backplane_product_name: Board Product Name.
-            crate_model: Product Model Number.
+            crate_model: Product Model Number (default ``CRC4``).
             crate_product_name: Product Name.
             backplane_manufacturer: Board Manufacturer.
             crate_manufacturer: Product Manufacturer.
@@ -927,23 +979,14 @@ class CRS(Motherboard):
             backplane_serial, bp.BACKPLANE_SERIAL_NUMBER_LENGTH)
         crate_serial = self._format_hw_serial(
             crate_serial, bp.CRATE_SERIAL_NUMBER_LENGTH)
-        chassis_serial = '' if chassis_serial is None else str(chassis_serial)
 
         chassis_custom = [f'slot={crate_slot}']
-        if crate_in_chassis:
-            chassis_part = crate_model
-            chassis_ser = crate_serial
-        else:
-            if chassis_part_number is None:
-                chassis_part_number = bp.CHASSIS_PART_NUMBER
-            chassis_part = '' if chassis_part_number is None else str(chassis_part_number)
-            chassis_ser = chassis_serial
 
         fru = ipmi_fru.FRU(
             chassis=ipmi_fru.Chassis(
                 type_code=ipmi_fru.CHASSIS_RACK_MOUNT,
-                part_number=chassis_part,
-                serial_number=chassis_ser,
+                part_number=crate_model,
+                serial_number=crate_serial,
                 custom=chassis_custom,
             ),
             board=ipmi_fru.Board(

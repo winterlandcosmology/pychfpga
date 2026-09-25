@@ -1,4 +1,6 @@
 IPMI and BEACON Specification
+v1.6  LBJ 2026-09-16
+v1.5  LBJ 2026-09-14
 v1.4  JFC 2026-09-11
 v1.3  LBJ 2026-09-11
 v1.2  JFC 2026-09-11
@@ -6,9 +8,9 @@ v1.1  LBJ 2026-09-09
 v1.0  JFC 2026-09-09
 Changelog
 ---------
-V1.0
+v1.0
     1. Initial proposal by JFC
-V1.1
+v1.1
     1. Moved crate information into the Product Information Area
     2. Removed the sub-backplane serial numbers. The rationale is that the
        4SBP sub-backplane configuration is fixed and future backplanes will be
@@ -43,20 +45,26 @@ v1.3
        different build-time Kconfig or device tree configuration.
 v1.4
     1. Changed Crate Model from CCR to CRC4 to match the new backplane model.
-
+v1.5
+    1. Replace Vector Part Number and Serial Number with the Crate Model and
+       Crate Serial respectively. This adds redundancy and treats the chassis
+       as our crate (i.e. chassis == crate), reverting change 3 in v1.1.
+    2. Specify full 40 char git hash
+v1.6
+    1. Add backplane info to the Beacon.
 Backplane EEPROM IPMI FRU layout
 ---------------------------------
 Common header (8 bytes)
   Offsets in the header point to areas in 8-byte units. Only the board,
   chassis, and Product areas are decoded for CRS backplanes.
-Chassis Information Area  - identifies the *chassis*
+Chassis Information Area  - identifies the *crate*
   Standard IPMI field order (after a 3-byte prologue: version, length,
   chassis type):
     Field       IPMI name        Beacon field       Example value
     ---------   ---------------  -----------------  ----------------------------
     (prologue)  Chassis Type                        23d/17h (Rack Mount Chassis)
-    1           Part Number                         72-1668 (Vector Part Number)
-    2           Serial Number                       71373 (Vector Serial Number)
+    1           Part Number      Crate Model        CRC4
+    2           Serial Number    Crate Serial       123
     3           Custom field 1   Crate slot         15
                 "slot=15"
 Board Information Area - identifies the *backplane segment*
@@ -95,6 +103,10 @@ Serial: 0216
 Bootloader: u-boot  *See Note 1
 Bootloader Version: 0.1   *See Note 2
 Bootloader Date: Aug 26 2026 - 17:00:40 +0000 *see Note 3
+Backplane Manufacturer: t0.technology
+Backplane Model: 4sbp
+Backplane Serial: 027
+Backplane Revision: 1
 Crate Manufacturer: t0.technology
 Crate Model: CRC4
 Crate Serial: 011
@@ -103,7 +115,7 @@ Crate Slot: 15
 Note 1: Corresponds to the firmware that is currently runnning on the ARM:
         "u-boot" for stock bootloader.
         "tcpipe" for chfpga ARM firmware
-Note 2: Use the git hash from t0/u-boot
+Note 2: Use the 40 character git hash from t0/u-boot
 Note 3: Use the u-boot build timestamp
 t0 Hardware:
 ------------
