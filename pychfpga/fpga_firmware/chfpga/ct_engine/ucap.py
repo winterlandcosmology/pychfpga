@@ -32,6 +32,8 @@ class UCAP(MMI):
     SUB_PERIOD       = BitField(CONTROL, 8, 0, width=5, doc='Dynamic capture rate, 2**(N+1) frames')
     SOURCE_SEL       = BitField(CONTROL, 9, 0, width=8, doc='0 = source selector output (timestream), 255 = scaler output (spectrum)')
     USER_STREAM_ID   = BitField(CONTROL, 10, 0, width=8, doc='Bits 11:4 of the Stream ID found in the raw packet header')
+    # READOUT_DELAY    = BitField(CONTROL, 12, 0, width=16, doc='Pre-transmit delay in ADC input frames before streaming a burst (0 = no delay).')
+    READOUT_DELAY    = BitField(CONTROL, 11, 0, width=8, doc='Pre-transmit delay in ADC input frames before streaming a burst (0 = no delay).')
 
     FIFO_OVERFLOW    = BitField(STATUS, 0, 0, doc='1 when dat FIFO has overflowed. Sticky flag.')
     OVERRUN          = BitField(STATUS, 0, 1, doc='1 when data transmission request was performed before the previous transmission was completed. Sticky flag.')
@@ -65,6 +67,9 @@ class UCAP(MMI):
     }
     FRAMES_PER_BURST = (2, 4, 8, 16)
     _DEFAULT_CHANNEL_COUNTS = (8, 4, 2, 1)
+    # Default stagger step in ADC frames between crate slots (~1024 frames; was 4 register units x256).
+    DEFAULT_DELAY_PER_SLOT = 1
+    MAX_READOUT_DELAY = 255
 
     @classmethod
     def get_default_channels(cls, mode):
@@ -94,11 +99,21 @@ class UCAP(MMI):
             )
         return source_index, cls.SOURCE_NAMES[source_index]
 
+    def set_readout_delay(self, reg):
+        """Write ``READOUT_DELAY`` (0–65535). Value is ADC input frames before transmit."""
+        reg = int(reg)
+        if reg < 0 or reg > self.MAX_READOUT_DELAY:
+            raise ValueError(f'READOUT_DELAY must be 0–{self.MAX_READOUT_DELAY}, got {reg}')
+        self.READOUT_DELAY = reg
+        self.config.update(readout_delay=reg)
+
     def init(self):
         """ Initializes UCAP module"""
-        slot = self.fpga.slot
+        
+        slot = self.fpga.slot-1 if self.fpga.slot else 0
         crate = self.fpga.mb.get_crate_number(default=0)
-        self.USER_STREAM_ID = (crate << 4) | (slot-1 if slot else 0)
+        self.USER_STREAM_ID = (crate << 4) | slot
+        self.set_readout_delay(int(slot * self.DEFAULT_DELAY_PER_SLOT))
         mode = int(self.MODE)
         source_code = int(self.SOURCE_SEL)
         source_name = 'funcgen' if source_code == 0 else 'scaler'
@@ -110,6 +125,7 @@ class UCAP(MMI):
             active_channels=self._get_active_channels(mode),
             frames_per_burst=self.FRAMES_PER_BURST[mode],
             subframes_per_frame=4,  # hardwired in UCAP
+            readout_delay=int(self.READOUT_DELAY),
         )
 
     def _get_active_channels(self, mode):
@@ -131,6 +147,31 @@ class UCAP(MMI):
         """ Return the stream_ids of all channels.
         """
         return [(self.USER_STREAM_ID << 4) + ch for ch in range(8)]
+
+    def start_data_capture(
+            self,
+            source,
+            mode=0,
+            channels=None,
+            periods=(195312, 195312),
+            send_delay=0,
+    ):
+        """Configure UCAP capture timing and optional readout stagger before UDP transmit.
+
+        Parameters:
+
+            source, mode, channels, periods: Same as :meth:`set_data_capture`.
+
+            send_delay (int): ``READOUT_DELAY`` in ADC input frames (0–65535).
+        """
+        if send_delay is not None:
+            self.set_readout_delay(send_delay)
+        self.set_data_capture(
+            source=source,
+            mode=mode,
+            channels=channels,
+            periods=list(periods),
+        )
 
     def set_data_capture(self, source, mode=0, channels=None, periods=[195312,195312]):
         """ Selects the source of the data to be captured (FUNCGEN or SCALER). Optionally enables streaming the captured data instead of the correlator data.
@@ -193,6 +234,7 @@ class UCAP(MMI):
             mode=mode,
             active_channels=tuple(channels),
             frames_per_burst=self.FRAMES_PER_BURST[mode],
+            readout_delay=int(self.READOUT_DELAY),
         )
 
 
