@@ -118,6 +118,20 @@ three-way `if CAPTURE_TYPE == 'PROBER' ... elif 'UCAP' ... else raise` idiom.
   The array-wide sync is `ca.sync(max_sync_time_difference=...)`; pass the
   limit explicitly (the provider-attribute fallback in
   chfpga_array_methods.sync is fixed but don't rely on it).
+- sep24 bitstream (`chfpga_ice_ct_pbg_sep24.bit`, the ICE default): the 8
+  corner-turn output lanes emit on per-lane strobes and legitimately leave up
+  to ~230 ns apart - associate packets across lanes by header timestamp,
+  never by simultaneous arrival. The packet-flags trailer is a real error
+  register (zero when clean; bits 0-7 CB3 per-lane, 8-11 CB3 summary
+  missing/long/CRC/overflow, 12-27 CB2 per-input-lane, 28-30 CB2 summary).
+  The ct_prober arms on packet boundaries. Pre-sep24 builds had all three
+  broken (8*lane+1 duplicated headers on lanes 1-7, data-polluted trailers
+  that saturated CROSSBAR3's PACKET_ERROR_CTR unconditionally, ~1-in-30
+  one-word-shifted captures) - do not chase those symptoms on sep24+.
+- CROSSBAR2's SOF window is 100 (the RTL default). The 55 that software
+  forced until 2026-09 sat on the measured lane arrival-skew tail (44-57
+  ct_clk cycles) and silently dropped ~1% of frames;
+  test_alignment_window_margin now guards the margin every run.
 - Remote-crate workflow: `firmware_tests/config_ice_crate.yaml` is the
   single user-edited file (crate hwm placeholder). Run only
   ct_shuffle256_test.py against it, stage by stage in file order (health →
