@@ -3256,10 +3256,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 counters starts after a sync(). This is used to stagger capture frame transmission
                 between boards in a crate to prevent UDP packets from being dropped by a switch.
 
-            send_delay (int): (PROBER only) Number that sets the amount of time to wait
-                before sending a group of packets that are captured in the local
-                buffer. This is a 16-bit number, where each unit corresponds to
-                524.288 us.
+            send_delay (int): (PROBER) Time delay in PROBER ``SEND_DELAY`` units. (UCAP)
+                ``READOUT_DELAY`` in ADC input frames (0–65535). Per-board staggering is applied by
+                :meth:`~pychfpga.fpga_firmware.chfpga.chfpga_array_methods.start_data_capture_async`.
 
             mode (int): (UCAP only). Sets the UCAP cature mode:
 
@@ -3307,7 +3306,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 f'{self!r}: Configuring channelizer {channels} to capture '
                 f'{frames_per_burst} frame every {burst_period_in_frames} frames (i.e .every {burst_period_in_frames * self.FRAME_PERIOD * 1000:.3f} ms) '
                 f'with first frame offset of {offset} frames ({offset * self.FRAME_PERIOD * 1000:.3f} ms)'
-                f'and a send delay factor of {send_delay} ({send_delay * 65536 / 125e6 * 1000:.3f} ms).')
+                f'and a send delay of {send_delay}')
 
         if data_type is not None:
             if source_index != 1:
@@ -3328,11 +3327,12 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
 
         if self.CAPTURE_TYPE == 'UCAP':
-            self.UCAP.set_data_capture(
+            self.UCAP.start_data_capture(
                 source=source,
                 mode=mode,
                 channels=channels,
                 periods=[burst_period_in_frames - 1, burst_period_in_frames - 1],
+                send_delay=send_delay,
             )
             self.config.channels = tuple(self._normalize_channels(channels))
             self.UCAP.USER_RESET = 0

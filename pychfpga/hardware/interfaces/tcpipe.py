@@ -163,6 +163,14 @@ class TCPipe:
     RPC_ADC_SET_PWR_MODE = 0x3B
     RPC_ADC_GET_PWR_MODE = 0x3C
     RPC_ADC_GET_SIGNAL_DETECTOR_STATUS = 0x3D
+    RPC_GET_MOTHERBOARD_IPMI_INFO = 0x3E
+    RPC_GET_BACKPLANE_IPMI_INFO = 0x3F
+
+    IPMI_FIELD_WIRE_LEN = 32
+    IPMI_RPC_VERSION = 1
+    MOTHERBOARD_IPMI_REPLY_LEN = 1 + 5 * IPMI_FIELD_WIRE_LEN
+    BACKPLANE_IPMI_REPLY_LEN = 1 + 2 + 1 + 10 * IPMI_FIELD_WIRE_LEN
+    BACKPLANE_IPMI_FLAG_PRESENT = 0x01
 
     ADC_TILE = 0
     DAC_TILE = 1
@@ -247,6 +255,8 @@ class TCPipe:
         RPC_ADC_GET_IMR_PASS_MODE: 'adc_get_imr_pass_mode',
         RPC_ADC_SET_PWR_MODE: 'adc_set_pwr_mode',
         RPC_ADC_GET_PWR_MODE: 'adc_get_pwr_mode',
+        RPC_GET_MOTHERBOARD_IPMI_INFO: 'get_motherboard_ipmi_info',
+        RPC_GET_BACKPLANE_IPMI_INFO: 'get_backplane_ipmi_info',
     }
     RPC_PERF_LOG_INTERVAL = 500
 
@@ -1115,6 +1125,85 @@ class TCPipe:
     async def i2c_write_async(self, addr, data):
         """Async variant of :meth:`i2c_write`."""
         await self.i2c_write_read_async(addr, data, read_length=0)
+
+    @classmethod
+    def _decode_ipmi_wire_fields(cls, blob, n_fields):
+        fields = []
+        for index in range(n_fields):
+            start = index * cls.IPMI_FIELD_WIRE_LEN
+            chunk = blob[start:start + cls.IPMI_FIELD_WIRE_LEN]
+            fields.append(chunk.split(b'\x00', 1)[0].decode('utf-8', errors='replace'))
+        return fields
+
+    def _parse_motherboard_ipmi_reply(self, reply):
+        if reply[0]:
+            raise IOError(f'{self!r}: get_motherboard_ipmi_info failed with status {reply[0]}')
+        body = reply[1:]
+        if len(body) < self.MOTHERBOARD_IPMI_REPLY_LEN:
+            raise IOError(
+                f'{self!r}: get_motherboard_ipmi_info reply too short '
+                f'({len(body)} < {self.MOTHERBOARD_IPMI_REPLY_LEN})')
+        version = body[0]
+        names = ('manufacturer', 'product', 'revision', 'serial', 'manufacturing_date')
+        values = self._decode_ipmi_wire_fields(body[1:], len(names))
+        return dict(version=version, **dict(zip(names, values)))
+
+    def _parse_backplane_ipmi_reply(self, reply):
+        if reply[0]:
+            raise IOError(f'{self!r}: get_backplane_ipmi_info failed with status {reply[0]}')
+        body = reply[1:]
+        if len(body) < self.BACKPLANE_IPMI_REPLY_LEN:
+            raise IOError(
+                f'{self!r}: get_backplane_ipmi_info reply too short '
+                f'({len(body)} < {self.BACKPLANE_IPMI_REPLY_LEN})')
+        version = body[0]
+        crate_slot = struct.unpack_from('<h', body, 1)[0]
+        flags = body[3]
+        field_names = (
+            'bp_manufacturer', 'bp_part', 'bp_serial', 'bp_revision',
+            'crate_manufacturer', 'crate_model', 'crate_revision', 'crate_serial',
+            'chassis_part', 'chassis_serial',
+        )
+        values = self._decode_ipmi_wire_fields(body[4:], len(field_names))
+        return dict(
+            version=version,
+            crate_slot=crate_slot,
+            flags=flags,
+            backplane_present=bool(flags & self.BACKPLANE_IPMI_FLAG_PRESENT),
+            **dict(zip(field_names, values)),
+        )
+
+    def get_motherboard_ipmi_info(self):
+        """Return motherboard IPMI fields cached by TCPipe at boot (no EEPROM re-read)."""
+        reply = self._rpc_write_read(
+            self.RPC_GET_MOTHERBOARD_IPMI_INFO,
+            b'',
+            read_length=1 + self.MOTHERBOARD_IPMI_REPLY_LEN)
+        return self._parse_motherboard_ipmi_reply(reply)
+
+    async def get_motherboard_ipmi_info_async(self):
+        """Async variant of :meth:`get_motherboard_ipmi_info`."""
+        reply = await self._rpc_write_read_async(
+            self.RPC_GET_MOTHERBOARD_IPMI_INFO,
+            b'',
+            read_length=1 + self.MOTHERBOARD_IPMI_REPLY_LEN)
+        return self._parse_motherboard_ipmi_reply(reply)
+
+    def get_backplane_ipmi_info(self):
+        """Return segment backplane / crate IPMI cached by TCPipe at boot."""
+        reply = self._rpc_write_read(
+            self.RPC_GET_BACKPLANE_IPMI_INFO,
+            b'',
+            read_length=1 + self.BACKPLANE_IPMI_REPLY_LEN)
+        return self._parse_backplane_ipmi_reply(reply)
+
+    async def get_backplane_ipmi_info_async(self):
+        """Async variant of :meth:`get_backplane_ipmi_info`."""
+        reply = await self._rpc_write_read_async(
+            self.RPC_GET_BACKPLANE_IPMI_INFO,
+            b'',
+            read_length=1 + self.BACKPLANE_IPMI_REPLY_LEN)
+        return self._parse_backplane_ipmi_reply(reply)
 
     #########################################################
     #  OLED interface

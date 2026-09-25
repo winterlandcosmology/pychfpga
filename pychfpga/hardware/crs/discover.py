@@ -444,7 +444,13 @@ def board_columns(beacon):
         beacon.address or "-",
         _motherboard_text(beacon),
         _identity_text(
-            beacon.crate_part, beacon.crate_serial, beacon.crate_revision),
+            beacon.crate_part,
+            beacon.crate_serial,
+            beacon.crate_revision,
+            manufacturer=beacon.crate_manufacturer,
+            expected=("manufacturer", "part", "serial", "revision"),
+            missing="?",
+        ),
         _crate_slot_text(beacon),
         _other_text(beacon),
     )

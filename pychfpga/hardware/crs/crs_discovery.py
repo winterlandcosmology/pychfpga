@@ -946,6 +946,34 @@ def _match_token(target, value, match_integers=False):
     return False
 
 
+def _board_matches_discovery_beacon(board, beacon_ip, beacon_serial):
+    """Return True if a UDP beacon belongs to ``board`` (serial and/or hostname/IP).
+
+    ``board.hostname`` is expected to already be a dotted-quad when
+    ``FPGAArray`` used ``ping=True`` (see ``gethostbyname`` after a successful
+    ping). For ``hwm`` with a literal IP or matching serial, compare to
+    ``beacon_ip`` directly.
+    """
+    if board.hostname and beacon_ip == str(board.hostname):
+        return True
+    serial = board.serial
+    if serial is not None and str(serial) not in ("", "*"):
+        return _match_token(str(serial), beacon_serial, match_integers=True)
+    return False
+
+
+def _board_for_beacon(pending, beacon_ip, beacon_serial):
+    """Map a beacon source to a pending upload target, if any."""
+    board = pending.get(beacon_ip)
+    if board is not None and _board_matches_discovery_beacon(
+            board, beacon_ip, beacon_serial):
+        return board
+    for board in pending.values():
+        if _board_matches_discovery_beacon(board, beacon_ip, beacon_serial):
+            return board
+    return None
+
+
 class CRSDiscovery:
     discovery_port = DEFAULT_DISCOVERY_PORT
     bind = DEFAULT_BIND
@@ -1224,9 +1252,26 @@ class CRSArmFirmwareUploader:
         self.firmware_pathname = firmware_pathname
         self.upload_method = upload_method
         self.verify_md5 = verify_md5
+        self._progress_line_open = False
+        self._last_progress_dot = 0.0
 
     def __repr__(self):
         return f"{self.__class__.__name__}()"
+
+    def _progress_dot(self):
+        now = time.monotonic()
+        if now - self._last_progress_dot < 1.0:
+            return
+        sys.stdout.write(".")
+        sys.stdout.flush()
+        self._progress_line_open = True
+        self._last_progress_dot = now
+
+    def _end_progress_line(self):
+        if self._progress_line_open:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            self._progress_line_open = False
 
     def _boards_to_upload(self):
         """Boards that need firmware (U-Boot, or TCPipe that is not the required version)."""
@@ -1281,11 +1326,20 @@ class CRSArmFirmwareUploader:
         try:
             self._bind_fwreq_socket(fwreq_sock)
             reply_ports = await self._collect_fwreq_ports(fwreq_sock, targets)
+            upload_targets = [
+                board for board in targets
+                if board.tcpipe_version != self.required_tcpipe_version
+            ]
+            if not upload_targets:
+                self.logger.debug(
+                    "%r: all targets already running TCPipe %s",
+                    self, self.required_tcpipe_version)
+                return
 
             if self.upload_method == "wget":
                 bind_host = (
-                    self._iface_address_for(targets[0].hostname)
-                    if targets else self.bind)
+                    self._iface_address_for(upload_targets[0].hostname)
+                    if upload_targets else self.bind)
                 http_site = HTTPFirmwareServer(firmware, bind=bind_host)
                 await http_site.start()
                 self.logger.debug(
@@ -1301,12 +1355,12 @@ class CRSArmFirmwareUploader:
                 *[
                     self._upload_board(
                         board, firmware, http_site, reply_ports.get(board.hostname))
-                    for board in targets
+                    for board in upload_targets
                 ],
                 return_exceptions=True,
             )
             booted = []
-            for board, result in zip(targets, results):
+            for board, result in zip(upload_targets, results):
                 if isinstance(result, Exception):
                     self.logger.error(
                         "%r: upload failed for %s @ %s: %s",
@@ -1352,9 +1406,16 @@ class CRSArmFirmwareUploader:
         U-Boot binds a random port, broadcasts FWREQ to port 9875, and expects
         FWRESP unicast back to that ephemeral port (``addr[1]`` of the FWREQ).
         """
-        pending = {board.hostname: board for board in targets}
+        pending = {board.hostname: board for board in targets if board.hostname}
         reply_ports = {}
         deadline = time.monotonic() + timeout
+        self._last_progress_dot = time.monotonic()
+        waiting_for = ", ".join(sorted(pending))
+        self.logger.info(
+            "%r: waiting up to %.0fs for FWREQ/TCPIPE from %s",
+            self, timeout, waiting_for)
+        for board in pending.values():
+            request_beacon(board.hostname)
         while pending and time.monotonic() < deadline:
             wait = min(1.0, deadline - time.monotonic())
             if wait <= 0:
@@ -1362,36 +1423,46 @@ class CRSArmFirmwareUploader:
             try:
                 data, addr = await _async_sock_recvfrom(sock, 4096, wait)
             except asyncio.TimeoutError:
+                self._progress_dot()
                 continue
             board_ip, reply_port = addr[0], addr[1]
-            board = pending.get(board_ip)
-            if board is None:
-                continue
             try:
                 beacon = CRSBeacon(data, address=board_ip)
             except (UnicodeDecodeError, ValueError):
                 continue
-            if not _match_token(str(board.serial), beacon.board_serial, match_integers=True):
-                self.logger.debug(
-                    "%r: ignoring %s from %s serial %s (expected %s)",
-                    self, beacon.kind, board_ip, beacon.board_serial, board.serial)
+            board = _board_for_beacon(pending, board_ip, beacon.board_serial)
+            if board is None:
                 continue
+            pending_key = board.hostname
             if beacon.kind == "TCPIPE":
                 if self._tcpipe_version_mismatch(beacon.version):
                     self._raise_tcpipe_version_mismatch([(board, beacon.version)])
+                board.tcpipe_version = self.required_tcpipe_version
+                pending.pop(pending_key, None)
+                self._end_progress_line()
+                self.logger.debug(
+                    "%r: TCPipe %s already running on SN%s @ %s",
+                    self, beacon.version, beacon.board_serial, board_ip)
                 continue
             if beacon.kind != "FWREQ":
                 continue
-            reply_ports[board_ip] = reply_port
-            pending.pop(board_ip)
+            reply_ports[board.hostname] = reply_port
+            pending.pop(pending_key, None)
+            self._end_progress_line()
             self.logger.debug(
                 "%r: FWREQ from SN%s @ %s:%d",
                 self, beacon.board_serial, board_ip, reply_port)
 
+        self._end_progress_line()
         if pending:
-            self.logger.error(
-                "%r: timed out waiting for FWREQ from %s",
-                self, ", ".join(sorted(pending)))
+            still_need = [
+                b for b in pending.values()
+                if b.tcpipe_version != self.required_tcpipe_version
+            ]
+            if still_need:
+                self.logger.error(
+                    "%r: timed out waiting for FWREQ from %s",
+                    self, ", ".join(sorted(b.hostname for b in still_need)))
         return reply_ports
 
     async def _wait_for_tcpipe_beacons(
@@ -1405,7 +1476,8 @@ class CRSArmFirmwareUploader:
         t0 = time.monotonic()
         deadline = t0 + timeout
         next_request_at = t0
-        self.logger.debug(
+        self._last_progress_dot = t0
+        self.logger.info(
             "%r: waiting up to %.0fs for TCPIPE beacons from %s",
             self, timeout, ", ".join(sorted(pending)),
         )
@@ -1420,29 +1492,31 @@ class CRSArmFirmwareUploader:
             try:
                 data, addr = await _async_sock_recvfrom(sock, 4096, wait)
             except asyncio.TimeoutError:
+                self._progress_dot()
                 continue
             board_ip = addr[0]
-            board = pending.get(board_ip)
-            if board is None:
-                continue
             try:
                 beacon = CRSBeacon(data, address=board_ip)
             except (UnicodeDecodeError, ValueError):
                 continue
             if beacon.kind != "TCPIPE":
                 continue
-            if not _match_token(str(board.serial), beacon.board_serial, match_integers=True):
+            board = _board_for_beacon(pending, board_ip, beacon.board_serial)
+            if board is None:
                 continue
+            pending_key = board.hostname
             if self._tcpipe_version_mismatch(beacon.version):
                 self._raise_tcpipe_version_mismatch([(board, beacon.version)])
             elapsed = time.monotonic() - t0
-            ready[board_ip] = elapsed
-            pending.pop(board_ip)
+            ready[board.hostname] = elapsed
+            pending.pop(pending_key, None)
+            self._end_progress_line()
             self.logger.debug(
                 "%r: TCPIPE %s beacon from SN%s @ %s after %.2fs",
                 self, beacon.version, beacon.board_serial, board_ip, elapsed,
             )
 
+        self._end_progress_line()
         if pending:
             self.logger.error(
                 "%r: timed out waiting for TCPIPE beacon from %s",

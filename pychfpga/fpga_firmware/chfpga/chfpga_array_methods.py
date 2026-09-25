@@ -788,7 +788,14 @@ class chFPGAArrayMethods(ArrayMethods):
     # Raw capture and Correlator engine configuration methods
     #####################################################
 
-    async def start_data_capture_async(self, *args, sync=None, **kwargs):
+    async def start_data_capture_async(
+            self,
+            *args,
+            sync=None,
+            send_delay=None,
+            send_delay_per_slot=None,
+            **kwargs,
+    ):
         """Start data capture on all channelizers of all boards in the array.
 
         Forwards arguments to each board's
@@ -804,6 +811,9 @@ class chFPGAArrayMethods(ArrayMethods):
                 (period, frames_per_burst, channels, source, mode, offset, …).
             **kwargs: Same as ``*args``. Do not pass ``sync`` if you intend
                 to control the board-local sync; this wrapper steals that name.
+            send_delay_per_slot (int or float): When set, each board's ``send_delay`` is
+                ``send_delay + int(slot * send_delay_per_slot)`` in ADC frames (UCAP clamped to
+                65535). When omitted, the same ``send_delay`` is used on every board.
             sync (bool): If true, run a full array :meth:`sync_async` after
                 every board has started capture.
 
@@ -811,7 +821,12 @@ class chFPGAArrayMethods(ArrayMethods):
             None
         """
         for b in self.ib:
-            b.start_data_capture(*args, **kwargs)
+            if send_delay is not None or send_delay_per_slot is not None:
+                crate,slot = b.get_id()
+                dly = (send_delay or 0) + int((slot or 0) * (send_delay_per_slot or 0))
+            else:
+                dly = send_delay
+            b.start_data_capture(*args, send_delay=dly, **kwargs)
         if sync:
             await self.sync_async()
 
