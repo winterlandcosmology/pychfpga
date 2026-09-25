@@ -1,7 +1,7 @@
 # Crate commissioning tests
 # 
 # Define the following to the setup being tested
-#    power supply: instruments.ps.adapter
+#    power supply: instruments.ps.hostname
 #    hardware map: f_engine_tests.global_settings.fpga_array_params.hwm
 #
 #
@@ -9,12 +9,13 @@
 # to use for the F-Engine tests, but using it for now.
 model_number: 'MGK7BP16'
 
-fpga_bit_file: '../../pychfpga/fpga_firmware/bitstreams/chFPGA_MGK7MB_Rev2.bit'
 
+# Driven by pychfpga/hardware/Agilent_N5764A (see CratePowerSupply in
+# f_engine_tests.py). Keys are the CratePowerSupply constructor arguments.
 instruments:
-  # ps:     {labpy_object: 'agilent_N5700', adapter: 'TCPIP::10.10.10.115'}  # Agilent N5764A power supply, McGill kitchen rack top
-  ps:     {labpy_object: 'agilent_N5700', adapter: 'TCPIP::10.10.10.234'}  # Agilent N5764A power supply, McGill kitchen rack bottom
-  # ps:     {labpy_object: 'agilent_N5700', adapter: 'TCPIP::10.42.200.54'} # Agilent power supply, GBO-F-Engine in McGill FRB testbed
+  ps:     {hostname: '10.10.1.38'}   # Agilent N5764A supply feeding crate 030
+  # ps:   {hostname: '10.10.10.234'} # Agilent N5764A, McGill kitchen rack bottom
+  # ps:   {hostname: '10.10.10.115'} # Agilent N5764A, McGill kitchen rack top
 ?: &default_fpga_array # Shouldn't really be used
     iceboards: 0047
     mdns_delay: 1
@@ -72,13 +73,15 @@ menu:
 ##################################
 f_engine_tests:
   global_settings:
-    eth_interface: 'eno1' # Check if correct. Name of ethernet interface on which the crate is connected. Used to check jumbo frames.
     ps_voltage: 20  # Volts. Voltage to set on the F-Engine power supply
-    ps_current: 76   # Amps. Maximum current limit to set on the F-Engine power supply
-    ps_t_sleep: 60 # Time in seconds to let the power supply sleep upon power cycle to allow crate to boot
+    ps_current: 76   # Amps. Maximum current limit to set on the F-Engine power supply (the N5764A rating)
+    ps_off_dwell: 8 # Seconds to keep the output OFF before turning it back on. Must stay >= 5 s.
+    ps_t_sleep: 190 # Seconds to wait after power-on for the crate to boot. The ARM boot takes 2-3 min;
+                    # a shorter wait races the boot and manufactures spurious init failures.
     fpga_array_params:
+      hwm: 'bp16 30:0' # crate backplane serial 30, crate number 0
+      # hwm: 'bp16 29:0' # McGill kitchen test rack bottom
       # hwm: 'bp16 25:0' # McGill kitchen test rack top
-      hwm: 'bp16 29:0' # McGill kitchen test rack bottom
       # hwm: 'bp16 33:0' # GBO-F-Engine in McGill FRB testbed
       # hwm: 'bp16 32:0' # HCO-F-Engine
       # hwm:
@@ -121,12 +124,13 @@ f_engine_tests:
 
   sync_test:
     n_syncs: 100
+    max_sync_time_difference: 100  # ns; array-wide frame-0 alignment limit, passed to ca.sync()
 
   network_test:
     n_cycles: 10
     t_cycle: 5
     fpga_array_params:
-      hwm: 'bp16 29:0' # McGill kitchen test rack
+      hwm: 'bp16 30:0' # crate backplane serial 30, crate number 0
 
       stderr_log_level: 'info'
       prog: 0
@@ -144,12 +148,16 @@ f_engine_tests:
     powerup_delay: 5
 
   sync_delay_test:
+    trials: 10   # check_sync_delays() sweeps; 0 detected phase jumps is a pass
+    verbose: 1   # 1 prints the per-board ADC clock waveform table into the log
 
   adc_eye_test:
-    n_checks: 50
+    n_checks: 50      # eye captures OR-ed together per board
+    max_spread: 16    # max bits set per (channel, IDELAY tap) across those captures
+    # n_refs / n_fails_accept belong to the superseded per-channel reference-set
+    # algorithm, kept commented at the end of test_adc_eye. Unused by the live path.
     n_refs: 25
     n_fails_accept: 5
-    max_spread: 16
 
   p_cycle_test:
     # n_cycles: 20 

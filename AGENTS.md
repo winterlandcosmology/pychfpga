@@ -68,6 +68,25 @@ three-way `if CAPTURE_TYPE == 'PROBER' ... elif 'UCAP' ... else raise` idiom.
   dataflow indicator first (see ct_common.require_ct_dataflow).
 - The corner-turn capture probe's design decisions and register map live in
   chfpgalite's AGENTS.md.
+- Crate pre-deployment QC: `python f_engine_tests.py` from `qc/ICE_crate/`
+  opens the xreport menu (it must be run from that folder — the menu resolves
+  test paths relative to the config). Crate health there is measured by
+  `pychfpga.fpga_firmware.chfpga.ct_health.measure_crate_health`, the same
+  pass the firmware suite's `test_crate_health` uses, so both judge a crate by
+  identical criteria; change it in one place only.
+- The ICE QC suite drives the bench supply through the in-repo
+  `pychfpga/hardware/Agilent_N5764A` driver, not McGill's `labpy`. labpy was
+  dropped in 2026-09 because it imports `pymeasure` 0.10.0, which needs
+  `pkg_resources`, removed in setuptools >= 81 — the whole suite stopped
+  importing. labpy is not a declared pychfpga dependency, so nothing pinned
+  it. The old code path and its config keys are kept as a commented reference
+  block in `qc/ICE_crate/f_engine_tests.py`; restoring it needs a
+  `setuptools<81` pin. Note the two drivers report supply state differently:
+  the in-repo one never returns `'ON'`, only `'OK'`/`'OFF'`/`'ILIMIT'`/`'FAULT'`.
+- Crate power cycling in QC goes through `TestUtils.power_cycle()`, which
+  honours `ps_off_dwell` (>= 5 s with the output off) and `ps_t_sleep` (the
+  crate's ARM boot takes 2-3 minutes). A boot wait shorter than that races the
+  boot and manufactures init failures; do not shorten it to speed a run up.
 
 ## Corner-turn crate (shuffle256) notes
 
