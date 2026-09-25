@@ -5,7 +5,7 @@ from pychfpga.common.async_utils import run_async
 from pychfpga.fpga_firmware.chfpga.ct_engine.chan_bin_sel import pack_frame_flags_word
 from pychfpga.fpga_firmware.chfpga import ct_health
 import pytest
-from time import sleep, time
+from time import sleep
 from wtl.pytest_xreport import xr, get_xr_from
 from wtl.namespace import NameSpace
 from .module_test import TestModule
@@ -320,14 +320,6 @@ class TestCTShuffle256(TestModule):
         '''
         return ct_health.measure_crate_health(boards, populated, logger)
 
-    def _stickies_quiet(self, boards, window=5.0):
-        '''Clear both crossbars' monitors on all boards, wait `window` seconds
-        of live traffic, and return True if no aligner sticky re-asserted and
-        no packet error was counted anywhere. A cheap settle probe - the full
-        health measurement is run separately once a quiet window is seen.
-        '''
-        return ct_health.stickies_quiet(boards, window)
-
     @pytest.mark.ct_shuffle256
     def test_crate_health(self, crate_setup, xr):
         '''
@@ -342,46 +334,20 @@ class TestCTShuffle256(TestModule):
         not driven by the firmware and are not consulted); zero packet
         error counters; and INPUT/ALIGN/OUTPUT frame counters advancing.
 
-        Known persistent failure mode (2026-09-21): after every shuffle256
-        bring-up the CROSSBAR2 aligners drop ~1% of frames on scattered
-        GTX-fed lanes indefinitely (measured stationary over 12 minutes:
-        ~126/240 lanes latch stickies per 5 s window, ~900k errored packets
-        per 5 s crate-wide) while the links themselves stay CRC-clean.
-        Earlier "it settles after a few minutes" observations were artifacts:
-        the diagnostic attaches used to observe quiet ran open_fpga(), which
-        asserts ANT_RESET/CORR_RESET and halts the datapath - a stopped
-        datapath reads as clean. The settle poll below (budget
-        `health_settle_budget`, default 300 s) is retained in case a future
-        firmware/bring-up fix makes the state recoverable, but until the root
-        cause is fixed it will exhaust its budget and the final pass fails
-        honestly.
+        History: through 2026-09 this test failed on every bring-up with
+        hundreds of live CROSSBAR2 aligner errors. Root causes, both fixed:
+        the software-forced SOF window of 55 sat on the measured lane-skew
+        tail (raised to 100, see test_alignment_window_margin), and the
+        pre-sep24 firmware polluted the packet-flags trailer, saturating
+        CROSSBAR3's packet-error counter unconditionally. A settle-and-retry
+        poll that lived here during the investigation was removed once the
+        first pass became genuinely clean.
         '''
         logger = self.get_logger()
         boards = sorted(self.array.ib, key=lambda m: m.slot)
         populated = self._populated_slots()
 
         failures = self._measure_crate_health(logger, boards, populated)
-        if failures:
-            # TODO: remove the settle poll below once the aligner frame-loss
-            # root cause is fixed in firmware - while the defect persists it
-            # never finds a quiet window and only delays the (correct) failure
-            # by health_settle_budget seconds.
-            budget = float(self.test_config.get('health_settle_budget', 300))
-            logger.warning(
-                f'crate health: {len(failures)} problem(s) on the first pass - '
-                f'likely the post-bring-up aligner transient; polling for a '
-                f'quiet window (budget {budget:.0f} s) before the final pass')
-            t0 = time()
-            while time() - t0 < budget:
-                if self._stickies_quiet(boards, window=5.0):
-                    logger.info(f'crate health: quiet window observed '
-                                f'{time() - t0:.0f} s into the settle poll')
-                    break
-            else:
-                logger.warning(f'crate health: no quiet window within '
-                               f'{budget:.0f} s - the errors are persistent')
-            failures = self._measure_crate_health(logger, boards, populated)
-
         if failures:
             try:
                 self.array.print_crossbar2_frame_info()
@@ -558,17 +524,12 @@ class TestCTShuffle256(TestModule):
         assert (w1 >> 30) & 1 == int(send_flags), "send_flags header bit"
         # CB2/CB3 never program the header bins/channels/four_bits fields;
         # they read zero by design and are not asserted here.
-        # TODO(firmware): restore the strict all-zero trailer check once the
-        # trailer generation is fixed. This bitstream constantly asserts
-        # trailer bits 0-7, 8 and 10 (= 0x4FF) on every packet regardless of
-        # datapath health (verified 2026-09-22 on byte-perfect captures), so
-        # only the remaining bits still carry signal: CB2-propagated per-lane
-        # errors (12-27), CB2 missing/long/CRC (28-30), overlong (9) and
-        # bin-sel FIFO overflow (11).
-        _TRAILER_ARTIFACT_MASK = 0x4FF
+        # The trailer is a real error register on sep24+ firmware (earlier
+        # builds polluted it with stale sublane-FIFO data) and must be zero
+        # on a clean datapath.
         for row in range(2):
             trailer = int(words[row, -1])
-            assert trailer & ~_TRAILER_ARTIFACT_MASK == 0, \
+            assert trailer == 0, \
                 (f"[slot {s256_slot} lane {s256_lane}] packet-flags trailer "
                  f"{trailer:#010x}: {self._decode_packet_flags(trailer)}")
         ts_delta = int(ts[1]) - int(ts[0])
