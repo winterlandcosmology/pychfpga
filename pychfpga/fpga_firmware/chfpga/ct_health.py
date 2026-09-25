@@ -169,15 +169,26 @@ def measure_crate_health(boards, populated=None, logger=None):
                                             int(cb.ALIGN_FRAME_CTR),
                                             int(cb.OUTPUT_FRAME_CTR))
     sleep(0.3)
+    ctr_regs = {'INPUT': 'INPUT_FRAME_CTR', 'ALIGN': 'ALIGN_FRAME_CTR',
+                'OUTPUT': 'OUTPUT_FRAME_CTR'}
     for mb in boards:
         for name, cb in (('CROSSBAR2', mb.CROSSBAR2), ('CROSSBAR3', mb.CROSSBAR3)):
-            after = (int(cb.INPUT_FRAME_CTR), int(cb.ALIGN_FRAME_CTR),
-                     int(cb.OUTPUT_FRAME_CTR))
-            for ctr_name, a, b in zip(('INPUT', 'ALIGN', 'OUTPUT'),
-                                      ctrs_before[(mb.slot, name)], after):
-                if a == b:
+            for ctr_name, before in zip(('INPUT', 'ALIGN', 'OUTPUT'),
+                                        ctrs_before[(mb.slot, name)]):
+                # These counters are 8-bit and free-running at ~200k counts/s,
+                # so a healthy counter matches its earlier reading by
+                # wraparound coincidence with probability 1/256 - across the
+                # 96 counters read here, roughly every third pass would flag
+                # one spuriously. A genuinely stalled counter stays equal on
+                # every re-read, so require the match to survive a retry
+                # (two coincidences compound to ~1.5e-5 per counter).
+                value = int(getattr(cb, ctr_regs[ctr_name]))
+                if value == before:
+                    sleep(0.05)
+                    value = int(getattr(cb, ctr_regs[ctr_name]))
+                if value == before:
                     failures.append(f"[slot {mb.slot}] {name} {ctr_name}_FRAME_CTR static "
-                                    f"at {a} - no dataflow through this stage")
+                                    f"at {before} - no dataflow through this stage")
 
     return failures
 
