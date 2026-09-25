@@ -541,6 +541,154 @@ class TestCTShuffle256(TestModule):
         assert int(mb.CT_PROBER._DATA_FIFO_OVERFLOW_STICKY) == 0
 
     @pytest.mark.ct_shuffle256
+    def test_output_lane_framing(self, crate_setup, xr):
+        '''
+        Every corner-turn output lane emits exactly one well-formed header.
+
+        Regression for the pre-sep24 shared-strobe defect: all 8 GPU lanes
+        (and the prober tap) were sampled with lane 0's TVALID/TLAST, so
+        lane k's packets carried 8k+1 copies of header word 0 up front and
+        lost their last 8k words (flags region + trailer). The parametrized
+        geometry stage covers lanes 0 and 7 on every slot; this test sweeps
+        all 8 lanes on representative slots, capturing lanes 0 and 7
+        back-to-back first (lanes legitimately emit up to ~230 ns apart on
+        per-lane strobes - packets associate by header timestamp, never by
+        simultaneous arrival).
+        '''
+        logger = self.get_logger()
+        failures = []
+        for slot in (1, 8, 12):
+            mb = self._slot_board(slot)
+            for lane in (0, 7, 1, 2, 3, 4, 5, 6):
+                ts, raw, counts, geometry = self._capture(mb, lane, ncap=2, format='32')
+                words = raw[:, 0, :].astype(np.int64) & 0xFFFFFFFF
+                for p in range(words.shape[0]):
+                    row = words[p]
+                    w0 = int(row[0])
+                    dups = 1
+                    while dups < row.shape[0] and int(row[dups]) == w0:
+                        dups += 1
+                    if w0 & 0xFFFF != 0x14CF or dups != 1:
+                        failures.append(
+                            f"[slot {slot} lane {lane}] packet {p}: header word "
+                            f"{w0:#010x} repeated {dups}x - per-lane output "
+                            f"strobes broken (pre-sep24 shared-strobe defect)")
+                        continue
+                    if int(row[1]) != 0x42000000:
+                        failures.append(f"[slot {slot} lane {lane}] packet {p}: "
+                                        f"w1={int(row[1]):#010x}, expected 0x42000000")
+                    if int(row[-1]) != 0:
+                        failures.append(f"[slot {slot} lane {lane}] packet {p}: "
+                                        f"trailer {int(row[-1]):#010x}: "
+                                        f"{self._decode_packet_flags(int(row[-1]))}")
+        assert not failures, \
+            f"{len(failures)} lane-framing problem(s):\n" + '\n'.join(failures)
+
+    @pytest.mark.ct_shuffle256
+    def test_trailer_error_propagation(self, crate_setup, xr):
+        '''
+        Force aligner drops and verify the error plumbing reports them.
+
+        Shrinks the CROSSBAR2 SOF window to 50 (measured to drop frames on
+        most lanes: the crate's lane arrival skews are 44-57 ct_clk cycles),
+        then requires: CB2's PACKET_ERROR_CTR counts, CB3's tracks it (its
+        SHUFFLE_FLAGS_MASK includes CB2's summary bits), and the GPU-visible
+        packet trailer carries bit 28 (CB2 missing/short summary) plus
+        per-CB2-input-lane bits (12-27) naming the dropped lanes. The window
+        is restored in a finally and both counters must then stay zero -
+        proving the deliberate errors leave no residue.
+        '''
+        logger = self.get_logger()
+        boards = sorted(self.array.ib, key=lambda m: m.slot)
+        mb = self._slot_board(1)
+        w_ok = int(mb.CROSSBAR2.SOF_WINDOW_STOP)
+
+        def perr_sum(cb):
+            s = 0
+            for sel in range(8):
+                cb.LANE_MONITOR_SEL = sel
+                s += int(cb.PACKET_ERROR_CTR)
+            cb.LANE_MONITOR_SEL = 0
+            return s
+
+        def clear_all():
+            for b in boards:
+                for cb in (b.CROSSBAR2, b.CROSSBAR3):
+                    cb.LANE_MONITOR_RESET = 1
+                    cb.LANE_MONITOR_RESET = 0
+
+        try:
+            for b in boards:
+                b.CROSSBAR2.SOF_WINDOW_STOP = 50
+            clear_all()
+            sleep(2)
+            cb2, cb3 = perr_sum(mb.CROSSBAR2), perr_sum(mb.CROSSBAR3)
+            logger.info(f"[slot {mb.slot}] deliberate-drop counters: CB2={cb2} CB3={cb3}")
+            assert cb2 > 0, \
+                "shrinking the SOF window to 50 produced no CB2 packet errors - " \
+                "the deliberate-drop stimulus did not work (did the skew shrink?)"
+            assert cb3 > 0, \
+                f"CB3 PACKET_ERROR_CTR did not track CB2's ({cb3} vs {cb2}): " \
+                f"CB2 summary bits are not propagating through the trailer"
+            ts, raw, counts, geometry = self._capture(mb, 0, ncap=2, format='32')
+            words = raw[:, 0, :].astype(np.int64) & 0xFFFFFFFF
+            trailers = [int(words[p, -1]) for p in range(words.shape[0])]
+            logger.info(f"[slot {mb.slot}] trailers under deliberate drops: "
+                        f"{[hex(t) for t in trailers]}")
+            flagged = [t for t in trailers if t]
+            assert flagged, \
+                f"counters count but no captured trailer carries error bits: " \
+                f"{[hex(t) for t in trailers]}"
+            for t in flagged:
+                assert t & (1 << 28), \
+                    (f"trailer {t:#010x} lacks bit 28 (CB2 missing/short): "
+                     f"{self._decode_packet_flags(t)}")
+                assert t & 0x0FFFF000, \
+                    (f"trailer {t:#010x} names no CB2 input lane (bits 12-27): "
+                     f"{self._decode_packet_flags(t)}")
+        finally:
+            for b in boards:
+                b.CROSSBAR2.SOF_WINDOW_STOP = w_ok
+            sleep(0.5)
+            clear_all()
+        sleep(5)
+        resid2 = sum(perr_sum(b.CROSSBAR2) for b in boards)
+        resid3 = sum(perr_sum(b.CROSSBAR3) for b in boards)
+        assert resid2 == 0 and resid3 == 0, \
+            (f"packet errors persist after restoring SOF_WINDOW_STOP={w_ok} "
+             f"(CB2={resid2}, CB3={resid3})")
+
+    @pytest.mark.ct_shuffle256
+    def test_prober_arming(self, crate_setup, xr):
+        '''
+        Every captured packet must begin at a packet boundary.
+
+        Regression for the pre-sep24 ct_prober arming race: the capture
+        window could open on the TLAST cycle of an in-flight packet, so
+        ~1 capture in 30 came back shifted by one word (word 0 held the
+        previous packet's trailer instead of the header). sep24 arms bursts
+        only on the first word after a TLAST. 200 packets across lanes 0
+        and 7 put the old failure rate at ~7 expected hits.
+        '''
+        logger = self.get_logger()
+        mb = self._slot_board(1)
+        bad, total = [], 0
+        for i in range(20):
+            lane = (0, 7)[i % 2]
+            ts, raw, counts, geometry = self._capture(mb, lane, ncap=10, format='32')
+            words = raw[:, 0, :].astype(np.int64) & 0xFFFFFFFF
+            for p in range(words.shape[0]):
+                total += 1
+                w0 = int(words[p, 0])
+                if w0 & 0xFFFF != 0x14CF:
+                    bad.append(f"iter {i} lane {lane} packet {p}: w0={w0:#010x}")
+        logger.info(f"[slot {mb.slot}] prober arming: {total} packets, "
+                    f"{len(bad)} not on a packet boundary")
+        assert total >= 200, f"only {total} packets captured; need >= 200"
+        assert not bad, (f"{len(bad)}/{total} captured packets do not start at a "
+                         f"packet boundary (arming race):\n" + '\n'.join(bad[:10]))
+
+    @pytest.mark.ct_shuffle256
     def test_corner_turn_shuffle256(self, s256_slot, s256_lane, waveform, crate_setup, xr):
         '''
         Verify the three-level shuffle256 corner turn byte-exactly against a host reference.
