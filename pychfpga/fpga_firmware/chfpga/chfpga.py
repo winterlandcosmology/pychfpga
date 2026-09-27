@@ -4675,7 +4675,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 necessary to use glog).
                 '''
                 self.logger.debug(f'Floating point gains enabled on slot {self.slot}, channel {chan.chan_number}')
-                glog = -1
+                glog = 0
 
             else:
                 glog = chan.SCALER.get_shift_left(bank)
