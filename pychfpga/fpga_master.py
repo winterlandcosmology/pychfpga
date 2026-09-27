@@ -1714,10 +1714,19 @@ class FPGAMaster(object):
             inputs = np.array([(chan_id, input_sn) for reorder, chan_id, input_sn in self.config.input_reorder],
                               dtype=axis_dtypes['input'])
         else:
-            sid_to_cid_map = {sid:cid for cid,sid in self.fpgas.get_stream_id_map().items()}  # {stream_id, chan_id}
-            max_sid = max([sid for sid, cid in sid_to_cid_map.items()])
-            sid_to_sn_map = [(sid, self._chan_id_to_serial_number(sid_to_cid_map.get(sid,(0,0,0)))) for sid in range(max_sid+1)]
-            inputs = np.array(sid_to_sn_map, dtype=axis_dtypes['input'])
+            # Build one axis entry per populated channel, ordered by stream ID (so the axis order
+            # matches the raw-capture stream order). The stored ``chan_id`` field is the positional
+            # index into this axis, which is what DigitalGainArchive.set_gain()/read_gain() use to
+            # address gain columns. It is deliberately NOT the stream ID: on CRS the stream ID is
+            # sparse (stream_id = crate*256 + slot*16 + channel, with only 8 of every 16 populated),
+            # so a dense stream-ID range would pad the axis with placeholder (0, 0, 0) entries whose
+            # serial numbers collide with real input 0. Indexing by populated channel instead yields
+            # a dense axis (128 inputs for a full 16-board CRS crate) with unique serial numbers.
+            cid_by_sid = sorted(self.fpgas.get_stream_id_map().items(), key=lambda kv: kv[1])
+            inputs = np.array(
+                [(index, self._chan_id_to_serial_number(chan_id))
+                 for index, (chan_id, stream_id) in enumerate(cid_by_sid)],
+                dtype=axis_dtypes['input'])
 
         self.log.info(f"{self!r}: inputs {inputs}")
 
