@@ -1,108 +1,28 @@
 .. Use UTF-8 encoding
 
-.. Online documentation can be found at: https://winterlandcosmology.bitbucket.io/pychfpga
+Source code: https://bitbucket.org/winterlandcosmology/pychfpga
+
+Documentation: https://winterlandcosmology.bitbucket.io/pychfpga (build locally with ``make docs`` from the repository root)
+
 
 Introduction
 ============
 
-The ``pychfpga`` package is a Python framework for operating arrays of FPGA boards used in implementing radiotelescope arrays of various sizes, from a single-board desktop correlator up to arrays of hundreds of crate-mounted boards forming a multi-thousand element interferometer.
+The ``pychfpga`` package is a Python framework for operating arrays of FPGA boards that run the `chFPGA` firmware (https://winterlandcosmology.bitbucket.io/chfpga/). It supports interactive control (Jupyter, ``fpga_array``) and automated site operation (``fpga_master``, REST, metrics).
 
-``pychfpga`` can operate platforms that run the chFPGA firmware (https://winterlandcosmology.bitbucket.io/chfpga/). Currently supported platforms are:
-
-- Xilinx KC705: (FPGA: Kintex 7). Off-the-shelf evaluation board. Needs one or two McGill MGADC08 8-channel ADC boards.
-- Xilinx ZCU111 (FPGA: Ultrascale+ RFSoC). Off-the-shelf evaluation board. Needs ADC breakout board.
-- McGill IceBoard: (FPGA Xilinx Kintex 7). Custom board designed by McGill University for large synchronized arrays. Needs one or two McGill MGADC08 8-channel ADC boards.
-- t0 CRS (Ultrascale+ RFSoC). Custom board designed by ``t0 technology`` (https://www.t0.technology) for large synchronized arrays.
-
-``pychfpga`` uploads the chFPGA firmware to the FPGA and initializes all of its subsystems, including:
-
-- ADC data acquisition (including calibration)
-- F-Engine (channelizer) including a function generator, PFB/FFT, Scaler and raw data capture
-- Corner-turn engine for transposing data between 1 board, 1 crate (16 boards) or 2 crates (32 boards)
-- Optional on-board X-Engine (N^2 correlator): (4 + 4j) bit data width
-- Optional 40- or 100 Gbps Ethernet real-time data offload to an external X-Engine farm.
-
-``pychfpga`` is currently used to operate telescopes such as CHIME, CHORD, HIRAX, various outriggers of the previous telescopes, and a number of small portable interferometer-based experiments.
-
-
-Features
-========
-
-- Multi-platform: Supports multiple hardware platforms
-
-- Hardware map manager: Keeps track of all the boards, crates and mezzanine boards in an array and
-  how they connect together.
-
-- Auto-discovery: FPGA boards can be added to the hardware map explicitly by specifying their IP
-  address, or can be automatically found on the local network using mDNS based on the board or crate
-  serial numbers. The boards can query the hardware to find the model and serial number of the
-  motherboard, crate and mezzanines.
-
-- Concurrent operation: The array manager can perform operations on multiple boards at the same time
-  using asynchronous coroutines to maximize performance.
-
-- Array-wide synchronization: Provides methods to perform array-wide data acquisition synchronization
-  based on GPS-provided timestamps
-
-- Multiple operational modes: The FPGA can be configured in various ways (correlator, baseband streaming etc.).
-  The proper FPGA firmware for the desired operational mode and platform is automatically selected,
-  uploaded to the FPGA, and initialized.
-
-``pychfpga`` can be used both in interactive or automated modes:
-
-- Interactive mode: the user instantiates :class:`pychfpga.fpga_array.FPGAArray`
-  with a hardware map, operational mode, etc., then talks to the array or
-  individual boards from ``ipython`` or a Jupyter notebook. See
-  :doc:`howto/fpga_array`.
-
-- Automated mode: :mod:`pychfpga.fpga_master` identifies and initializes the
-  array from a YAML file and serves REST commands plus Prometheus metrics.
-  See :doc:`howto/server_operation`.
-
-
-Documentation
-=============
-
-This README is the package overview. Operational how-tos live in the Sphinx
-manual (build with ``make docs`` from the repository root):
-
-- :doc:`howto/ssh_keys` — Bitbucket SSH keys
-- :doc:`howto/installation` — Python environment and ``pip install``
-- :doc:`howto/hardware_setup` — IceBoard wiring, clock, and Ethernet
-- :doc:`howto/fpga_array` — interactive ``fpga_array``
-- :doc:`howto/server_operation` — ``fpga_master`` / ``raw_acq`` / Docker
-- :doc:`howto/testing` — ice-qc hardware QC and firmware tests
-
+Supported platforms: Xilinx KC705, Xilinx ZCU111, McGill IceBoard, and t0 CRS (Ultrascale+ RFSoC).
 
 Requirements
 ============
 
-``pychfpga`` and many of its dependencies are hosted in a private git
-repository on Bitbucket. You need an account, an SSH key attached to that
-account, and permission to the repositories. See :doc:`howto/ssh_keys`.
-
-System packages: Git (with LFS), Python 3.8+ (QC tests have issues with 3.9;
-3.10 has known issues), ``pip`` >= 18.1, and the matching ``pythonX.X-dev``
-package (needed to compile ``netifaces``).
-
-Install Prometheus and Grafana if you want the graphs published by
-``fpga_master``.
-
-If you will receive raw ADC, FFT, or correlator packets, enable jumbo frames
-and enlarge UDP buffers (session example; make this permanent if needed)::
-
-    sudo ifconfig eth0 mtu 9000
-    sudo sysctl -w net.core.rmem_max=26214400
-    sudo sysctl -w net.core.rmem_default=26214400
-
-FPGA hardware, clock, and Ethernet requirements are in
-:doc:`howto/hardware_setup`.
+Python 3.12
+make & uv (for building docs)
 
 
 Installation
 ============
 
-See :doc:`howto/installation` for platform-specific notes. The short path::
+Clone the repository, create a virtual environment, and install the package::
 
     git clone git@bitbucket.org:winterlandcosmology/pychfpga.git
     python3 -m venv my_env
@@ -110,6 +30,4 @@ See :doc:`howto/installation` for platform-specific notes. The short path::
     pip install -e ./pychfpga
     pip install ipython
 
-Quality-control extras::
 
-    pip install -e ./pychfpga[qc]

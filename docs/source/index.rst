@@ -5,15 +5,15 @@
 
 .. raw:: html
 
-    <meta http-equiv="refresh" content="0;URL=home.html"/>
+    <meta http-equiv="refresh" content="0;URL=introduction.html"/>
 
 
 .. toctree::
    :hidden:
    :maxdepth: 4
-   :caption: Home
+   :caption: Getting Started
 
-   home
+   introduction
 
 .. toctree::
    :hidden:
