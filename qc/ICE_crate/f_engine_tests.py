@@ -269,23 +269,49 @@ class TestPreDeploymentCrate(TestUtils):
 
     def test_ps_connection(self, xr):
         """
-        QC000: Power supply connection test: ensure power supply responds to commands consistently.
+        QC000: Power supply connection test: the supply must respond to every
+        on/off command, and the crate must draw boot current every time it is
+        turned on.
 
         Procedure:
-            
-            - Start the power supply connection test on the computer
-            - Open connection to power supply
-            - If test fails, then power supply stops turning on/off
+
+            - Open one connection to the supply and program the setpoints
+            - `n_ps_cycles` times: output ON, wait `on_time`, check the supply
+              reports 'OK' and that its output current is at least
+              `min_boot_current`; output OFF, wait `off_time`, check it reports
+              'OFF'
+
+        `on_time` must be longer than the crate boot wait (`ps_t_sleep`): every
+        ON then completes a full cold boot of all 16 SD-card Linux boards
+        before the power is cut, so the test doubles as `n_ps_cycles` clean
+        cold boots. A shorter `on_time` would instead interrupt every boot
+        mid-way, which is a corruption risk for the boards' SD cards and tests
+        nothing about the crate, so it is rejected up front. The current check
+        turns "the supply says OK" into "the crate actually came up": an
+        on-but-dead crate draws far less than a booted one.
         """
         xr.header('Power Supply Connection Test')
         cfg = self.cfg.f_engine_tests.ps_connection_test
         n_ps_cycles = cfg.n_ps_cycles
         on_time = cfg.on_time
         off_time = cfg.off_time
+        min_boot_current = cfg.min_boot_current
+        settings = self.cfg.f_engine_tests.global_settings
+
+        # Validate the cycle timing before touching the supply.
+        assert on_time >= settings.ps_t_sleep, (
+            f'ps_connection_test.on_time ({on_time} s) is shorter than the crate boot wait '
+            f'global_settings.ps_t_sleep ({settings.ps_t_sleep} s): every cycle would cut the '
+            f'power to 16 booting boards mid-boot. Set on_time >= ps_t_sleep.')
+        assert off_time >= settings.ps_off_dwell, (
+            f'ps_connection_test.off_time ({off_time} s) is shorter than the required off-dwell '
+            f'global_settings.ps_off_dwell ({settings.ps_off_dwell} s). Set off_time >= ps_off_dwell.')
 
         test_results = NameSpace()
+        test_results.on_readings = []   # per-cycle supply status/voltage/current after the boot wait
 
         turn_ON_errs = []
+        low_current_errs = []
         turn_OFF_errs = []
 
         passed = False
@@ -296,27 +322,36 @@ class TestPreDeploymentCrate(TestUtils):
             # setpoints 50 times; the loop exercises the output control, not the
             # connection setup.
             self.ps = self.open_ps()
+            # open_ps() forces the output off. If the crate was powered when this
+            # test started (e.g. a previous run was killed mid-cycle), the first ON
+            # below would otherwise follow that OFF with no dwell at all.
+            print(f'Output is off; waiting {off_time} seconds before the first cycle')
+            time.sleep(off_time)
 
             for n in range(n_ps_cycles):
 
                 print('\n*******************************')
-                print(f'Cycle {n+1}/{n_ps_cycles}')
+                print(f'Cycle {n+1}/{n_ps_cycles}', flush=True)
                 print('*******************************')
 
-                          
                 print('--------------------------------------------')
                 print(f'Turning ON power supply')
-                print(f'Wait {on_time} seconds')
+                print(f'Wait {on_time} seconds for the crate to boot')
                 # turn on power supply
                 self.ps.set_output(state=True)
                 time.sleep(on_time)
-                ps_status = self.ps.status()['status']
-                print(f'Power supply is {ps_status}')
+                status = self.ps.status()
+                test_results.on_readings.append(dict(cycle=n + 1, **status))
+                print(f"Power supply is {status['status']}: {status['voltage']} V, {status['current']} A")
                 # 'OK' is the only healthy powered state reported by the driver
                 # ('ILIMIT' means the output is up but stuck in current limit).
-                if ps_status != 'OK':
-                    turn_ON_errs.append(f'cycle {n+1}: {ps_status}')
-                
+                if status['status'] != 'OK':
+                    turn_ON_errs.append(f"cycle {n+1}: {status['status']}")
+                elif status['current'] < min_boot_current:
+                    low_current_errs.append(
+                        f"cycle {n+1}: {status['current']} A after {on_time} s "
+                        f"(expected >= {min_boot_current} A from a booted crate)")
+
                 print('--------------------------------------------')
                 print(f'Turning OFF power supply')
                 print(f'Wait {off_time} seconds')
@@ -329,15 +364,18 @@ class TestPreDeploymentCrate(TestUtils):
                     turn_OFF_errs.append(f'cycle {n+1}: {ps_status}')
                 print('--------------------------------------------')
 
-            assert (not turn_ON_errs and not turn_OFF_errs), f'Power supply connection errors: turning ON errors: {turn_ON_errs}, turning OFF errors: {turn_OFF_errs}'
+            assert not (turn_ON_errs or low_current_errs or turn_OFF_errs), (
+                f'Power supply / crate power-up problems over {n_ps_cycles} cycles:\n'
+                f'  supply not OK after turn-on ({len(turn_ON_errs)}): {turn_ON_errs or "none"}\n'
+                f'  crate drew too little current after boot ({len(low_current_errs)}): '
+                f'{low_current_errs or "none"}\n'
+                f'  supply not OFF after turn-off ({len(turn_OFF_errs)}): {turn_OFF_errs or "none"}')
             passed = True
-           
 
         finally:
             test_results.passed = passed
             xr.save_data(test_results)
             # if this test passed, the ps should already be off; if it didn't, it can't be turned off remotely and has to be turned off manually
-            # self.ps.set_output(state=False)    
 
     def test_init(self, xr):
         """

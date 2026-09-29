@@ -112,9 +112,10 @@ f_engine_tests:
 
 
   ps_connection_test:
-    n_ps_cycles: 50  
-    on_time: 120 #seconds
-    off_time: 10
+    n_ps_cycles: 50
+    on_time: 200         # s; must be >= global_settings.ps_t_sleep so every cycle completes a full crate boot
+    off_time: 10         # s; must be >= global_settings.ps_off_dwell
+    min_boot_current: 8  # A; supply current expected once the crate has booted (a healthy 16-board crate idles ~14 A at 20 V)
         
   crate_init:
 
