@@ -305,78 +305,45 @@ class RawDataPacketProcessor(PacketProcessorBase):
             if not isinstance(cf, State):
                 cf = State(cf)
                 state.capture_format[source] = cf
-            # Pre-allocate the complex output buffers when the format changes. This is an
-            # optimization only: get_formatted_data also ensures the buffers on demand (via
-            # _ensure_complex_buffers) so decoding is correct even when this change-tracking is
-            # out of sync with an explicit format= argument or with a geometry change.
             if cf.has_changed(context=dynamic_state_attrs[source]):
                 if cf.fmt_is_complex:
-                    self._ensure_complex_buffers(source, cf)
+                    fmt_bus_width = int(cf.fmt_bus_width)
+                    fmt_data_width = int(cf.fmt_data_width)
+                    bytes_per_integer = math.ceil(fmt_bus_width / 8)
+                    # Use the meaningful Re/Im width for output precision. The bus width
+                    # may include padding, while float32 cannot exactly hold >24-bit ints.
+                    out_dtype = np.dtype(np.complex128 if fmt_data_width > 24 else np.complex64)
+                    complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // 2
+                    interleave_factor = int(cf.fmt_interleave_factor or 1)
+                    if interleave_factor > 2:
+                        if interleave_factor % 2:
+                            raise ValueError(
+                                f"Full-resolution complex interleave factor must be even, "
+                                f"got {interleave_factor}."
+                            )
+                        if self.CAPTURE_BITS_PER_WORD % fmt_bus_width:
+                            raise ValueError(
+                                f"capture_bits_per_word={self.CAPTURE_BITS_PER_WORD} must be a "
+                                f"multiple of fmt_bus_width={fmt_bus_width}."
+                            )
+                        words_per_capture_word = max(1, self.CAPTURE_BITS_PER_WORD // fmt_bus_width)
+                        complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // words_per_capture_word
+                        cdata2_dims = (
+                            self.max_timestamps * self.FRAMES_PER_BURST // interleave_factor,
+                            self.NCHAN,
+                            complex_values_per_frame * (interleave_factor // 2),
+                        )
+                    else:
+                        cdata2_dims = (self.max_timestamps * self.FRAMES_PER_BURST // interleave_factor, self.NCHAN, complex_values_per_frame * interleave_factor) # deinterleaved complex value storage buffer
+                    cdata1_dims = (self.max_timestamps * self.FRAMES_PER_BURST, self.NCHAN, complex_values_per_frame) # complex value storage buffer
+                    self.fmt_cdata1[source] = self.resize_buffer(f"fmt_cdata_buf1_{source}", cdata1_dims, element_dtype=out_dtype)
+                    self.fmt_cdata2[source] = self.resize_buffer(f"fmt_cdata_buf2_{source}", cdata2_dims, element_dtype=out_dtype)
             cf.ack(context=dynamic_state_attrs[source])
 
     def process_udp_packets(self, verbose=None, update_config=True):
         if update_config:
             self.update_config()
         super().process_udp_packets(verbose=verbose)
-
-    def _ensure_complex_buffers(self, source, cf):
-        """Allocate (or resize) the complex output buffers for ``source``.
-
-        The deinterleave/decode paths in :meth:`get_formatted_data` write into
-        ``self.fmt_cdata1[source]`` / ``self.fmt_cdata2[source]``. Those buffers are
-        normally pre-allocated by :meth:`update_config` when ``config.capture_format[source]``
-        changes, but that change-tracking is decoupled from (a) an explicit ``format=``
-        argument passed to :meth:`get_formatted_data` / ``read_raw_frames`` and (b) the
-        capture geometry (``max_timestamps`` / ``NCHAN``), which is tracked separately.
-        When they get out of sync (e.g. after an ADC capture that leaves the scaler
-        ``capture_format`` acked, or when the geometry changes between captures) the buffer
-        for a source can be ``None`` or stale-sized, producing a ``TypeError`` such as
-        ``'NoneType' object is not subscriptable``.
-
-        Allocating on demand here — keyed on the format actually being decoded and the
-        current geometry — makes the decode paths robust regardless of the change-tracking
-        state. ``resize_buffer`` is idempotent: it reuses the existing allocation when it is
-        already large enough, so repeated calls are cheap.
-
-        Parameters:
-            source (int): The capture source index (0=funcgen/ADC, 1=scaler/FFT).
-            cf (State): The capture format actually being decoded (from an explicit
-                ``format=`` argument or ``config.capture_format[source]``).
-
-        Returns:
-            None
-        """
-        fmt_bus_width = int(cf.fmt_bus_width)
-        fmt_data_width = int(cf.fmt_data_width)
-        bytes_per_integer = math.ceil(fmt_bus_width / 8)
-        # Use the meaningful Re/Im width for output precision. The bus width
-        # may include padding, while float32 cannot exactly hold >24-bit ints.
-        out_dtype = np.dtype(np.complex128 if fmt_data_width > 24 else np.complex64)
-        complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // 2
-        interleave_factor = int(cf.fmt_interleave_factor or 1)
-        if interleave_factor > 2:
-            if interleave_factor % 2:
-                raise ValueError(
-                    f"Full-resolution complex interleave factor must be even, "
-                    f"got {interleave_factor}."
-                )
-            if self.CAPTURE_BITS_PER_WORD % fmt_bus_width:
-                raise ValueError(
-                    f"capture_bits_per_word={self.CAPTURE_BITS_PER_WORD} must be a "
-                    f"multiple of fmt_bus_width={fmt_bus_width}."
-                )
-            words_per_capture_word = max(1, self.CAPTURE_BITS_PER_WORD // fmt_bus_width)
-            complex_values_per_frame = self.BYTES_PER_FRAME // bytes_per_integer // words_per_capture_word
-            cdata2_dims = (
-                self.max_timestamps * self.FRAMES_PER_BURST // interleave_factor,
-                self.NCHAN,
-                complex_values_per_frame * (interleave_factor // 2),
-            )
-        else:
-            cdata2_dims = (self.max_timestamps * self.FRAMES_PER_BURST // interleave_factor, self.NCHAN, complex_values_per_frame * interleave_factor)  # deinterleaved complex value storage buffer
-        cdata1_dims = (self.max_timestamps * self.FRAMES_PER_BURST, self.NCHAN, complex_values_per_frame)  # complex value storage buffer
-        self.fmt_cdata1[source] = self.resize_buffer(f"fmt_cdata_buf1_{source}", cdata1_dims, element_dtype=out_dtype)
-        self.fmt_cdata2[source] = self.resize_buffer(f"fmt_cdata_buf2_{source}", cdata2_dims, element_dtype=out_dtype)
 
     def get_formatted_data(self, rows=slice(None), source=0, split=False, format=None, complex_override=None):
         """Transform assembled raw rows into ``(ts, data, counts)`` for source ``source``.
@@ -453,13 +420,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         if not is_complex:
             return ts, data, counts
 
-        # From here we have complex data, possibly with modifiers. Ensure the complex output
-        # buffers for this source exist and are sized for the current geometry and the format
-        # actually being decoded. update_config() pre-allocates these, but its change-tracking
-        # is decoupled from an explicit format= argument and from geometry changes, so a buffer
-        # can otherwise be None/stale here (see _ensure_complex_buffers).
-        self._ensure_complex_buffers(source, cf)
-
+        # From here we have complex data, possibly with modifiers.
         interleave_factor = int(cf.fmt_interleave_factor or 1)
         if interleave_factor > 2:
             # Full resolution is dependent on the capture bus width (W) and number of bins per word (B).
