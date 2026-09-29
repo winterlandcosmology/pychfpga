@@ -452,6 +452,22 @@ def test_explicit_targets_wait_without_deadline_even_when_timeout_is_set():
     assert discovery._initial_deadline() is None
 
 
+def test_crate_only_discovery_uses_timeout_and_does_not_stop_after_first_beacon():
+    discovery = CRSDiscovery(
+        board_targets=[],
+        crate_targets=[("CRC4", "1")],
+        timeout=5.0,
+    )
+    assert discovery._initial_deadline() is not None
+    discovery._record_discovered_crate(
+        CRSBeacon(
+            b"FWREQ/1\nProduct: crs\nSerial: 0048\n"
+            b"Crate Model: CRC4\nCrate Serial: 001\n\n",
+        ),
+    )
+    assert not discovery._complete()
+
+
 def test_crs_discovery_reports_missing_explicit_targets():
     discovery = CRSDiscovery(
         board_targets=[("CRS", "0037")],
@@ -1276,6 +1292,106 @@ def test_collect_fwreq_ports_maps_ephemeral_reply_port():
 
     ports = asyncio.run(exercise())
     assert ports == {"127.0.0.1": 10132}
+
+
+def test_collect_fwreq_ports_matches_hostname_without_serial():
+    fwreq = FWREQ_BEACON
+    board = CRS(serial=None, hostname="127.0.0.1")
+    board.tcpipe_version = None
+    runner = CRSArmFirmwareUploader(
+        boards=[board],
+        required_version=CRS.REQUIRED_TCPIPE_VERSION,
+        firmware_pathname=CRS.DEFAULT_ARM_FIRMWARE_PATHNAME,
+    )
+
+    async def exercise():
+        recv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        send_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            CRSArmFirmwareUploader._bind_fwreq_socket(recv_sock)
+            send_sock.bind(("127.0.0.1", 10135))
+
+            async def send_fwreq():
+                await asyncio.sleep(0.05)
+                send_sock.sendto(fwreq, ("127.0.0.1", DEFAULT_DISCOVERY_PORT))
+
+            sender = asyncio.create_task(send_fwreq())
+            ports = await runner._collect_fwreq_ports(recv_sock, [board], timeout=2)
+            await sender
+            return ports
+        finally:
+            recv_sock.close()
+            send_sock.close()
+
+    ports = asyncio.run(exercise())
+    assert ports == {"127.0.0.1": 10135}
+
+
+def test_collect_fwreq_ports_matches_serial_when_ip_differs():
+    fwreq = FWREQ_BEACON
+    board = CRS(serial="0037", hostname="10.0.0.99")
+    board.tcpipe_version = None
+    runner = CRSArmFirmwareUploader(
+        boards=[board],
+        required_version=CRS.REQUIRED_TCPIPE_VERSION,
+        firmware_pathname=CRS.DEFAULT_ARM_FIRMWARE_PATHNAME,
+    )
+
+    async def exercise():
+        recv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        send_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            CRSArmFirmwareUploader._bind_fwreq_socket(recv_sock)
+            send_sock.bind(("127.0.0.1", 10136))
+
+            async def send_fwreq():
+                await asyncio.sleep(0.05)
+                send_sock.sendto(fwreq, ("127.0.0.1", DEFAULT_DISCOVERY_PORT))
+
+            sender = asyncio.create_task(send_fwreq())
+            ports = await runner._collect_fwreq_ports(recv_sock, [board], timeout=2)
+            await sender
+            return ports
+        finally:
+            recv_sock.close()
+            send_sock.close()
+
+    ports = asyncio.run(exercise())
+    assert ports == {"10.0.0.99": 10136}
+
+
+def test_collect_fwreq_ports_marks_tcpipe_already_running():
+    board = CRS(serial=None, hostname="127.0.0.1")
+    board.tcpipe_version = None
+    runner = CRSArmFirmwareUploader(
+        boards=[board],
+        required_version=CRS.REQUIRED_TCPIPE_VERSION,
+        firmware_pathname=CRS.DEFAULT_ARM_FIRMWARE_PATHNAME,
+    )
+
+    async def exercise():
+        recv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        send_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            CRSArmFirmwareUploader._bind_fwreq_socket(recv_sock)
+            send_sock.bind(("127.0.0.1", 10137))
+
+            async def send_tcpipe():
+                await asyncio.sleep(0.05)
+                send_sock.sendto(
+                    TCPIPE_BEACON, ("127.0.0.1", DEFAULT_DISCOVERY_PORT))
+
+            sender = asyncio.create_task(send_tcpipe())
+            ports = await runner._collect_fwreq_ports(recv_sock, [board], timeout=2)
+            await sender
+            return ports
+        finally:
+            recv_sock.close()
+            send_sock.close()
+
+    ports = asyncio.run(exercise())
+    assert ports == {}
+    assert board.tcpipe_version == CRS.REQUIRED_TCPIPE_VERSION
 
 
 def test_collect_fwreq_ports_raises_on_wrong_tcpipe_version():
