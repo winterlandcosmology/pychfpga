@@ -2,14 +2,28 @@
 
 set -e # stop this script on errors
 
-# Get current git version
-GIT_VERSION=`git describe --tags --dirty --always`
+# Release images are built only from a clean commit that is itself a tag.
+if [ -n "$(git status --porcelain)" ]; then
+    echo "Working tree is not clean. Commit or stash changes before building a release image."
+    exit 1
+fi
+if ! GIT_VERSION=$(git describe --tags --exact-match 2>/dev/null); then
+    echo "HEAD is not a tagged commit ($(git describe --tags --dirty --always))."
+    echo "Tag this commit, then run this script again."
+    exit 1
+fi
 echo Version is $GIT_VERSION
 
 IMAGE_NAME_TAG="wtlpychfpga/pychfpga:$GIT_VERSION"
 echo Image name is $IMAGE_NAME_TAG
-# login to the pychfpga private repo using the read/write key
-echo "dckr_pat_p7sHnPQgAgu0JTl5Cn6vmZQKEwU" | docker login -u wtlpychfpga --password-stdin
+
+# Push requires an existing Docker Hub login for this account. Do not store the token here.
+DOCKER_CONFIG_JSON="${DOCKER_CONFIG:-$HOME/.docker}/config.json"
+if ! grep -q 'index.docker.io' "$DOCKER_CONFIG_JSON" 2>/dev/null; then
+    echo "Not logged in to Docker Hub. Run:"
+    echo "  docker login -u wtlpychfpga"
+    exit 1
+fi
 
 export BUILDKIT_PROGRESS=plain # optional, for more verbose output
 export DOCKER_BUILDKIT=1
