@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
 """
-untract.py module
-Interface for the FPGA UltraRAM-based crossbar/packet generator.
+upack.py module
+Interface for the FPGA UltraRAM-based packetizer and corner-turn engine (UPACK).
 """
 
 import logging
@@ -14,8 +14,8 @@ from ..mmi import MMI, BitField, CONTROL, STATUS
 import numpy as np
 
 
-class UCorn(MMI):
-    """ Class to operate the UltraRAM-based corner-turn module"""
+class UPACK(MMI):
+    """Class to operate the UltraRAM-based packetizer and corner-turn module."""
 
     ADDRESS_WIDTH = 16
 
@@ -42,7 +42,7 @@ class UCorn(MMI):
     OUT_FRAME_CTR       = BitField(STATUS, 2, 0, width=8, doc='Counts the number of frames coming out.')
 
     def __init__(self, *, router, router_port, config, verbose=0):
-        """ Creates a UCorn corner-turn engine instance.
+        """ Creates a UPACK corner-turn engine instance.
 
         ``__init__`` initializes the instnce but does not yet start communicating with. This allows
         the communication link to be set-up before further initializations. Actual communications
@@ -51,12 +51,12 @@ class UCorn(MMI):
         Parameters:
 
             fpga_instance (FPGAFirmware): instance of the FPGAFirmware that represents the firmware
-                running on the board. Used to access memory-mapped registers of the UCorn module.
+                running on the board. Used to access memory-mapped registers of the UPACK module.
 
             base_address (int): Base address of the registers for this module instance
 
-            address_increment (int): Address offset between multiple UCorn instances. Is not used
-                since there is usually only one UCorn instance per design.
+            address_increment (int): Address offset between multiple UPACK instances. Is not used
+                since there is usually only one UPACK instance per design.
 
             verbose (int): When non-zero, debugging messages will be printed.
 
@@ -80,7 +80,7 @@ class UCorn(MMI):
         self.sacrificial_bins = list(range(128))  # bins locations used to store packet headers
 
     def init(self):
-        """ Initializes the UCorn module
+        """ Initializes the UPACK module
 
         """
 
@@ -422,7 +422,7 @@ class UCorn(MMI):
     #         width=4: data is 4 bits Real + 4 bits Imaginary
     #         width=8: data is 8 bits Real + 8 bits Imaginary
     #     """
-        self.logger.warn('{self!r}: Cannot set data width on UCorn. Width is hardware fixed at 4+4i bits.Command is ignored. ')
+        self.logger.warning('{self!r}: Cannot set data width on UPACK. Width is hardware fixed at 4+4i bits.Command is ignored. ')
 
     def get_data_width(self):
         """

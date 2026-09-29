@@ -60,10 +60,10 @@ from .f_engine import prober
 
 from .ct_engine import uct_engine
 from .ct_engine import bct_engine
-from .ct_engine import ucorn
+from .ct_engine import upack
 from .ct_engine import gpu
 from .ct_engine import cge
-from .ct_engine import ucap
+from .f_engine import ucap
 
 # FPGA Correlator (X-Engine)
 from .x_engine import CORR, UCORR  # Correlators (if implemented in firmware)
@@ -200,7 +200,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             'CT': 2,
             'GPU': 3,
             'CORR': 4,
-            'UCORN': 5,
+            'UPACK': 5,
             'UCAP': 7
         }
 
@@ -647,7 +647,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                     self.HAS_ADCDAQ = False
                     self.HAS_FMC = False
                     self.MAX_BSB_COMMAND_LENGTH = 512
-                    self.HAS_UCORN = self.mode == 'shuffle8' # Hacky method until we can read it back.
+                    self.HAS_UPACK = self.mode == 'shuffle8' # Hacky method until we can read it back.
                     self.CROSSBAR1_TYPE = "URAM"
                     self.GPU_LINK_TYPE = "100GE"
                     self.CAPTURE_TYPE = "UCAP"
@@ -665,7 +665,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                     self.HAS_FMC = True
                     self.MAX_BSB_COMMAND_LENGTH = 2048  # maybe more, depends on the UDP bufer
                     # self.CT_TYPE = "BCT" # Programmable BRAM- and GTX-based corner turn (16 inputs (2 bins/input/clk) x 8 outputs across 1,16 and 32 boards)
-                    self.HAS_UCORN = False
+                    self.HAS_UPACK = False
                     self.CROSSBAR1_TYPE = "BRAM"
                     self.GPU_LINK_TYPE = "10GE"
                     self.CAPTURE_TYPE = "PROBER"
@@ -822,14 +822,14 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 else:
                     raise RuntimeError(f'Unknown CT-Engine type {self.CT_TYPE}')
 
-                if self.HAS_UCORN:  # ***JFC temp hack to determine if we have UCORN. Not it capability reg yet.
-                    self.UCORN = ucorn.UCorn(
+                if self.HAS_UPACK:  # ***JFC temp hack to determine if we have UPACK. Not in capability reg yet.
+                    self.UPACK = upack.UPACK(
                         router=self.top_router,
-                        router_port = 'UCORN',
-                        config=self.config.add("ucorn")
+                        router_port = 'UPACK',
+                        config=self.config.add("upack")
                         )
                 else:
-                    self.UCORN = None
+                    self.UPACK = None
 
 
 
@@ -1125,9 +1125,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 self.CT.init()
 
 
-            if self.UCORN:
+            if self.UPACK:
                 self.logger.debug(f'{self!r}: === Initializing UPACK frame packetizer')
-                self.UCORN.init()
+                self.UPACK.init()
 
 
 

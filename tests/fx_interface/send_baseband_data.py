@@ -300,17 +300,17 @@ print(f'Gains have been saved to {digital_gain_file_name}')
 # =============================
 # Configure CRS board to begin transmitting over 100G link
 
-# Instantiate UCORN
-ucorn = i.UCORN
+# Instantiate UPACK
+upack = i.UPACK
 
-# Put UCORN module into reset mode first
-ucorn.TX_RESET = 1
+# Put UPACK module into reset mode first
+upack.TX_RESET = 1
 
-ucorn.RX_WRITE_EN = 1 # allow the buffer to be written with real data from the channelizers
-ucorn.TX_TRIG_SEL = 0 # do not do trigger-based sending. send data at the native clock rate instead.
-ucorn.TX_TOGGLE_BANK = 1 # bank toggling must be enabled with 1 since we'll be reading and writing at the same time
-ucorn.TX_INSERT_TIMESTAMP = 1  # insert the timestamp at the appropriate place in the payload header
-ucorn.RX_MASK_LOW_BINS = 1 # prevent F-Engine data to be written in the first bins, as these are used for storing packet headers
+upack.RX_WRITE_EN = 1 # allow the buffer to be written with real data from the channelizers
+upack.TX_TRIG_SEL = 0 # do not do trigger-based sending. send data at the native clock rate instead.
+upack.TX_TOGGLE_BANK = 1 # bank toggling must be enabled with 1 since we'll be reading and writing at the same time
+upack.TX_INSERT_TIMESTAMP = 1  # insert the timestamp at the appropriate place in the payload header
+upack.RX_MASK_LOW_BINS = 1 # prevent F-Engine data to be written in the first bins, as these are used for storing packet headers
 
 real_bins = [first_bin + n + number_of_packets * np.arange(bins_per_packet) for n in range(number_of_packets)]
 
@@ -322,6 +322,6 @@ playlist = [(dict(dest_mac_addr=f"01:23:34:67:89:{n + 1:02X}",
              for n in range(number_of_packets)]
 
 # Set the playlist to send data from that bin
-ucorn.set_playlist(playlist = playlist, sacrificial_bins = bin_map[np.arange(128)])
+upack.set_playlist(playlist = playlist, sacrificial_bins = bin_map[np.arange(128)])
 
-ucorn.TX_RESET = 0
+upack.TX_RESET = 0

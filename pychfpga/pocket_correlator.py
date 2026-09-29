@@ -9,7 +9,7 @@ You can connect to a board with serial number 0016 in ipython by running
 
     run sifpga_crs_corr_capture.py --serial 0016 --stderr_log_level info --prog 2
 
-The following is directly copied from pychfpga/pychfpga/fpga_firmware/chfpga/ct_engine/ucap.py:
+The following is directly copied from pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/ucap.py:
 
     System Requirements:
 
@@ -33,7 +33,7 @@ The following is directly copied from pychfpga/pychfpga/fpga_firmware/chfpga/ct_
         watch -cd -n .5 "cat /proc/net/udp"
 
 Some of the function descriptions have been borrowed from the following scripts:
-    pychfpga/pychfpga/fpga_firmware/chfpga/ct_engine/ucap.py
+    pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/ucap.py
     pychfpga/pychfpga/fpga_firmware/chfpga/chfpga.py
 
 """
