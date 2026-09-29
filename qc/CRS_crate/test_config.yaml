@@ -6,14 +6,14 @@ model_number: 'CRS_crate'
 fpga_bit_file: '../../pychfpga/fpga_firmware/bitstreams/chfpga_crs_ct.bit'
 
 instruments:
-  psu: {'ip': '192.168.88.218', 'timeout': 1}
+  psu: {'ip': '10.10.10.240', 'timeout': 5}  # HTTP read timeout (s); >1s avoids spurious ReadTimeouts from the embedded PSU server
 ?: &default_fpga_array # Shouldn't really be used
     iceboards: 0047
     mdns_delay: 1
 
 ##################################################
-test_results_folder: '~/test_results'  # relative to this config file's folder. "~" is allowed.
-#test_results_folder_uses_git: false
+test_results_folder: '~/qc_test_results'  # relative to this config file's folder. "~" is allowed.
+# test_results_folder_uses_git: false 
 #xml_test_results_pathname: "~/test_results"  # not needed for a pure menu
 ##################################################
 
@@ -27,8 +27,6 @@ test_list:
     sync:    {description: 'Sync test',                     path: 'f_engine_tests.py::TestPreDeploymentCrate::test_sync',           required: yes, require_serial_number: yes, dependencies: null}
     clock:   {description: 'ADC clock test',                path: 'f_engine_tests.py::TestPreDeploymentCrate::test_adc_clocks',     required: yes, require_serial_number: yes, dependencies: null}
     cycle:   {description: 'Power cycle test',              path: 'f_engine_tests.py::TestPreDeploymentCrate::test_power_cycle',    required: yes, require_serial_number: yes, dependencies: null}
-    # network: {description: 'Network connection test',       path: 'f_engine_tests.py::TestPreDeploymentCrate::test_network',        required: yes, require_serial_number: yes, dependencies: null}
-    # ramp:    {description: 'Crate level ramp test',         path: 'f_engine_tests.py::TestPreDeploymentCrate::test_crate_ramp',     required: yes, require_serial_number: yes, dependencies: null}
 
 menu:
     # The menu item will match the user input to either the 'key' field or to the regular expression 'regex'. The matching dictionary is returned.
@@ -45,13 +43,11 @@ menu:
     - { key: '2',                    action: run_test, test_tag: sync}
     - { key: '3',                    action: run_test, test_tag: clock}
     - { key: '4',                    action: run_test, test_tag: cycle}
-    # - { key: '6',                    action: run_test, test_tag: network}
-    # - { key: '7',                    action: run_test, test_tag: ramp}
     - { key: 'S',                    action: push,    description: 'Send all new test results data to McGill'}
     - { key: 'R',                    action: summary, description: 'Generate summary of all tests'           }
     - { key: 'Q',                    action: exit,    description: 'Exit'                                    }
     - { regex: '(0\d{2})', model: 'CRS_crate', serial: '{0}', next_key: '0'}  
-    - { regex: '\d+\-\d+', action: run_range, input: '{0}'} # regex to select a range of options
+    - { regex: '(\d+\-\d+)', action: run_range, input: '{0}'} # regex to select a range of options
 
 ##################################
 # Test-specific parameters
@@ -61,7 +57,7 @@ f_engine_tests:
     eth_interface: 'enp6s0' # Name of ethernet interface on which the crate is connected. Used to check jumbo frames.
     ps_t_sleep: 10 # Time in seconds to let the power supply sleep upon power cycle to allow crate to boot
     fpga_array_params:
-      hwm: 'crs 80:1 79:2 104:3 88:4 83:5 78:6 81:7 74:8 71:9 89:10 75:11 94:12 96:13 92:14 77:15 72:16'
+      hwm: 'crs 167:1 146:2 142:3 171:4 139:5 159:6 211:7 245:8 216:9 152:10 165:11 242:12 214:13 244:14 221:15 228:16'
       stderr_log_level: 'info'
       prog: 2
       mode: 'shuffle8'
@@ -70,7 +66,7 @@ f_engine_tests:
       mdns_timeout: 10
 
   ps_connection_test:
-    n_ps_cycles: 50  
+    n_ps_cycles: 100  
     on_time: 10 # s
     off_time: 10 # s
         
@@ -79,21 +75,6 @@ f_engine_tests:
   sync_test:
     n_syncs: 100
 
-  # network_test: # UPDATE
-  #   n_cycles: 10
-  #   t_cycle: 5
-  #   fpga_array_params:
-  #     hwm: 'bp16 29:0' # McGill kitchen test rack
-
-  #     stderr_log_level: 'info'
-  #     prog: 0
-  #     open: 0
-  #     #mode: 'shuffle128' # only for KKO F-Engine
-  #     ignore_missing_boards: False # only for KKO F-Engine
-  #     mode: 'shuffle256' # All else
-  #     sync_method: 'local'
-  #     mdns_timeout: 20
-
   clock_test:
     # integration_period: 0.001
     n_clock_checks: 100 
@@ -101,9 +82,12 @@ f_engine_tests:
     check_delay: 5 # seconds
 
   p_cycle_test:
-    n_cycles: 100
+    n_cycles: 1000
     percent_accept: 0.05 #0.01
-    t_cycle: 60  #time in seconds
-
-  # ramp_test: # UPDATE
-  #   n_checks: 1
+    t_cycle: 120  #time in seconds
+    # Watchdog for a single iteration (crate init + sync + per-board checks),
+    # in seconds. An iteration that exceeds this is assumed to be frozen by a
+    # hardware problem: it is aborted, counted as a failure, and the test moves
+    # on to the next iteration. Excludes the t_cycle cool-down. 0 disables it.
+    iter_timeout: 300
+    

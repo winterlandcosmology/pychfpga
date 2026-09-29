@@ -8,7 +8,7 @@ comment: |
     That extends many lines
         this is indented more
 
-test_results_folder: './test_results'
+test_results_folder: '~/qc_test_results' # './test_results'
 # test_results_folder: '../../iceqc'  # relative to this config file's folder. "~" is allowed.
 #test_results_folder: '../../qc_results'  # relative to this config file's folder. "~" is allowed.
 test_results_folder_uses_git: false

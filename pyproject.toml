@@ -36,7 +36,7 @@
         "wtl.h5-archive @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.h5-archive.git",   # was @v1.0.3, testing 1.1.0
 
         # t0.technology packages
-        "psucontrol @ git+https://github.com/t0/psucontrol.git",
+        "psucontrol @ git+https://github.com/t0/psucontrol.git@main",
 
         # PyPi packages
         "aiohttp",  # new, using 3.7.2
@@ -130,6 +130,8 @@ errors-only = true
         "pyserial", # (tested with 0.0.97 on Ubuntu) for memtest
         "pyftdi", # (tested with 0.53.3 on Ubuntu) tested with for PLL programming. Newer versions have another interface
         "pytest-asyncio", # Needed for MTU test in firmware tests
+        "pytest>=8,<9", # pytest 9 not yet validated with wtl.pytest-xreport; 8.x is known-good
+        "pytest-html>=4.0", # xreport requires 4.x; do not downgrade to 3.x (incompatible data format)
         ]
 
 [project.scripts]

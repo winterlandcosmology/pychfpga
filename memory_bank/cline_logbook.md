@@ -364,3 +364,230 @@ python3 tests/crs_fpga_master_tests/test_crs_metrics.py --serial 0080
 metrics = await fpga_master.get_metrics_async()
 # Returns comprehensive hardware and firmware monitoring data
 ```
+
+---
+
+## October 9, 2026 - QC f_engine_tests Fixes After Branch Merge
+
+### Task: Verify `qc/CRS_crate/f_engine_tests.py` against merged API and fix breakages
+
+**Objective**: After merging another developer's long-running branch, confirm the QC tests still work (correct API calls) and fix anything that would prevent them from running.
+
+**Fixes Applied**:
+- **psucontrol dependency**: pinned `pyproject.toml` to `git+https://github.com/t0/psucontrol.git@main` and reinstalled into `conda_venv312` (stale cached wheel had no `api.py`). Note: `@main` is mutable; an exact-SHA pin would be more reproducible.
+- **PSU API rename** (main blocker): `status()` → `get_status()`, `control_power(state=X)` → `set_power(X)` across all live call sites; passed configured `timeout` into `PSUController(...)`.
+- **connect_psu**: raises a clear `RuntimeError` on failure instead of returning `None` (avoids later `NoneType` AttributeError).
+- **test_power_cycle**: removed undefined `'ib': i` in the sync-exception tag; added missing `sync_fails += 1` so the pass/fail assertion counts sync failures.
+- **Crate API**: `Crate.get_all_instances()` → `get_all_registered_instances()` (test_network).
+- **test_network cleanup**: `open_ps()` → `connect_psu()`; use boolean `['output_on']` key (no `['status']`); removed dead `ic = self.ca.ic`; fixed `tuple(n, s)` → `(n, s)`.
+
+**Files Modified**:
+- `qc/CRS_crate/f_engine_tests.py`
+- `pyproject.toml` (psucontrol pin)
+
+**Status**: ✅ Verified with `python -m py_compile`. Full end-to-end run still requires live crate + PSU hardware.
+
+---
+
+## September 18, 2026 - Power-Cycle Test Iteration Watchdog
+
+### Task: Stop a hardware freeze from stalling `test_power_cycle`
+
+**Objective**: A (currently undiagnosed) hardware problem intermittently freezes an iteration of the power cycle test, hanging the whole run. Rather than diagnosing it now, bound each iteration in time: if it takes too long, assume a hardware issue, kill the current cycle and move on to the next iteration.
+
+**Why a signal-based watchdog**: The freeze occurs *inside* a blocking call (e.g. `asyncio.run(...)` on an FPGA transaction), so control never returns and simply measuring elapsed time afterwards cannot help. A `SIGALRM` timer fires *while* the call is blocked and raises an exception that unwinds it. `asyncio.wait_for` was rejected as it would require rewriting every `asyncio.run` call site and would not cover synchronous code; threads were rejected since Python cannot force-kill one.
+
+#### Changes to `qc/CRS_crate/f_engine_tests.py`
+
+- **`IterationTimeout(RuntimeError)`**: new exception raised when an iteration exceeds its time limit.
+- **`TestUtils.iteration_watchdog(timeout, label)`**: a `@contextmanager` that arms `signal.alarm(timeout)`, raises `IterationTimeout` from the SIGALRM handler, and always disarms the timer and restores the previous handler on exit (so an alarm can never leak into the next iteration or into teardown). `timeout <= 0` disables it, and it degrades to a no-op with a warning if SIGALRM cannot be armed (non-main thread / non-Unix).
+- **`test_power_cycle`**: the hardware-facing part of each iteration (crate init + sync + per-board ADC/UDP checks) is wrapped in the watchdog. A new `except IterationTimeout` handler logs the event, increments `timeout_fails`, records `timeout_err_tags` (cycle + elapsed seconds), and lets the loop continue to the next iteration.
+- **`except IterationTimeout: raise` guards** added ahead of the pre-existing broad `except Exception` handlers (init, sync, checks, board close) and inside `_psu_call`, so the watchdog exception is never swallowed or retried past its deadline.
+- **Duration tracking**: `iter_durations` records every iteration; the per-cycle summary prints the current/mean/max duration and a `Timed-out (frozen) iterations` counter, and the end-of-test report prints mean/min/max.
+- **Pass/fail**: `timeout_fails` is included in the final `max(...) <= n_fails_accept` assertion, and `timeout_fails` / `timeout_err_tags` / `iter_durations` are saved to `test_results`.
+
+**Deliberately not done**: no board-close cleanup after a timeout. The board is presumed wedged (closing it could hang again), and the PSU power-off at the end of the iteration — which runs *outside* the watchdog, so it is never interrupted — tears down the crate and those connections anyway.
+
+#### Changes to `qc/CRS_crate/test_config.yaml`
+
+- New `f_engine_tests.p_cycle_test.iter_timeout: 300` (seconds). Covers crate init + sync + checks, excludes the `t_cycle` cool-down. `0` disables the watchdog.
+
+**Files Modified**:
+- `qc/CRS_crate/f_engine_tests.py`
+- `qc/CRS_crate/test_config.yaml`
+
+**Validation**: `python -m py_compile` clean; YAML parses. `git diff -w` confirms the only removed lines are a reflowed comment and the old assert (the large diff is re-indentation from the new `with` block). Verified off-hardware with two scripts: a unit-level check that the watchdog interrupts a frozen `asyncio.run`, restores the handler, leaks no alarm, and is disabled at `timeout=0`; and an end-to-end simulation of the real `test_power_cycle` with mocked hardware where iteration 2 of 4 freezes — it was aborted after ~2 s, counted once, and all 4 iterations ran.
+
+**Limitations**: SIGALRM is Unix-only and main-thread-only (fine for this CLI/pytest harness; it no-ops with a warning otherwise). Resolution is 1 second (`signal.alarm` takes an int). The 300 s default should be re-tuned against observed healthy iteration times on the bench. The underlying hardware freeze remains undiagnosed by design.
+
+---
+
+## September 22, 2026 - Oversized QC Report Recovery and XML_PARSE_HUGE Fix
+
+### Task: Make the SN011 summary reflect the 1000-cycle power-cycle test, and fix the underlying report-size limit
+
+**Objective**: The 1000-cycle `test_power_cycle` run (43 h, 2026-09-18) PASSED, but the `.pdf`/`.rst`/`.xml` summaries at `~/qc_test_results/CRS_crate/CRS_crate_SN011/` still showed the earlier 2026-09-11 run, which had FAILED. Bring the summaries up to date without reading the 79 MB XML / 85 MB HTML in full, then fix the root cause in the reporting plugin.
+
+#### Root Cause
+
+The run produced a 79,195,600-byte JUnit XML whose captured log lives in just two text nodes: `<system-out>` ≈ 54.8 MB and `<system-err>` ≈ 24.4 MB (759,033 lines, 314,043 of them `INFO`). libxml2 caps a single text node at 10 MB, so `TestCases.load_test_cases()` raised:
+
+```
+XMLSyntaxError: Resource limit exceeded: Text node too long, try XML_PARSE_HUGE
+```
+
+Critically, that method globs `data/*.xml` and parses **every** file in one loop with no error handling, so the single oversized file aborted collection of *all* of the unit's results — hence the silently stale summaries. Note the `.html` report is not consumed by the summary generator at all, which is why it stayed valid.
+
+#### Part 1 - Recovery: `qc/tools/condense_xreport_xml.py` (new)
+
+A standalone, stdlib-only CLI that rewrites an oversized report into a small but still valid JUnit XML:
+
+- Streams the input line by line, so memory use is independent of file size; only retained lines are accumulated.
+- Copies the markup-bearing lines byte-for-byte (only 3 in this file: lines 1, 445015, 759033), so every `<testsuites>`/`<testsuite>`/`<testcase>` attribute — pass/fail state, timestamps, durations — is preserved exactly.
+- Keeps: a banner stating how many lines were dropped and where the full log lives, the head of the set-up log, the first iteration verbatim, the per-iteration error tallies of **every** iteration, every ERROR/CRITICAL/traceback/timeout line, and the final results. Tunable via `--log-head`, `--err-tail`, `--keep-first-iterations`.
+- `verify()` re-parses the output with ElementTree before returning, so the tool cannot leave behind a file that breaks the loader.
+
+Result: **79,195,600 → 322,129 bytes (0.41 %) in 1.3 s**, 759,033 → 10,330 lines, retaining all 1000 iteration banners, all 1000 tally blocks, the 11 `{'Cycle': ...}` error tags, the 9 `IterationTimeout` records and the final duration stats.
+
+Because the loader globs `*.xml`, the original was renamed `...test_power_cycle.raw_xml` (not deleted, byte count re-verified) and the digest written to the original `.xml` path. Summaries were then regenerated through the production path — `TestMenu(...).update_summary_report()`, since menu key `R` is dead in xreport 1.2 (`Unsupported action in this version of Xreport`).
+
+**Outcome**: all five required tests now show PASS, with `test_power_cycle` at `2026-09-18 17:55:16`. Summaries went from stale 9.06 MB/1800 pp to 1.86 MB/418 pp (PDF), 6.64 → 1.32 MB (RST), 6.82 → 1.32 MB (XML), generated in under 60 s. The previous summaries were kept as `*.bak`.
+
+#### Part 2 - Root-cause fix in `wtl.pytest-xreport` (separate repo: `~/wtl.pytest-xreport`, branch `jfc/dev`, tag 1.2)
+
+Applied to `wtl/pytest_xreport/xreport.py` (+26/-2):
+
+- **`XML_PARSER = lxml.objectify.makeparser(huge_tree=True)`** at module level, and `lxml.objectify.parse(file_, parser=XML_PARSER)` at the single parse site in `TestCases.load_test_cases()`. `huge_tree=True` **is** lxml's binding for libxml2's `XML_PARSE_HUGE`; there is no separate flag or constant to set, so setting both would be redundant — this is documented in the code comment. The parser is built once, not per file, since it is reusable and sits in a loop.
+- **Per-file `except lxml.etree.XMLSyntaxError`** around the parse, which logs a warning and `continue`s. This is the other half of the bug: without it, one unreadable file discards the results of every other test for that unit and the summary silently shows stale data. The catch is deliberately narrow so real bugs still surface.
+
+Confirmed this is the only parse site in the package; the sole other lxml use is `lxml.etree.tostring()` in `save_xml()`, which is serialization and unaffected by parser limits.
+
+**Validation** (against the real 79 MB file, lxml 6.0.2 / libxml2 2.14.6):
+
+| Check | Result |
+|---|---|
+| Shipped parser on the 79 MB file | reproduces the exact reported error, `line 66704, column 181` |
+| Patched parser, same file | parses in **0.1 s**, 79,002,107 chars, `failures=0`, PASS |
+| `TestCases` on a folder mixing the oversized file, normal files and a deliberately corrupt file | oversized file loads; corrupt file only warns; all other results still collected |
+| Full 5-file data folder, unabridged | 0.1 s, all 5 PASS |
+| `save_xml()` / `generate_test_summary()` → RST | 0.5 s / **7.2 s** (76 MB RST) |
+
+The package's own `tests/` suite fails with `ModuleNotFoundError: No module named 'wtl.namespace'`, but `git stash` confirmed it fails identically on the unmodified clone — pre-existing namespace-package shadowing, not a regression (those tests are also cookiecutter leftovers for a `--foo`/`bar` fixture this plugin does not have).
+
+**Known remaining limitation — `rst2pdf`, not parsing**: PDF rendering time is superlinear, roughly 3× per doubling (0.5 MB → 0.5 s; 1 MB → 1.1 s; 2 MB → 2.9 s; 4 MB → 9.0 s). A full 76 MB summary was killed at **9 minutes / 20.7 GB RSS and still climbing**. RST assembly itself is fine (80 MB in 6.9 s at 0.4 GB), so the bottleneck is purely rst2pdf. Also note `rST.write()` always appends the format implied by the output filename extension, so a `.pdf` target renders a PDF regardless of `output_formats`. Until this is addressed, oversized runs still need the condenser to produce a PDF.
+
+**Deliberately not done**: lowering the pychfpga log level during the cycle loop was considered and rejected — the INFO output is wanted, as it carries the detail needed when parsing errors after a long run. `f_engine_tests.py` was therefore left untouched and the report-size problem is handled at the reporting layer instead.
+
+**Files Modified**:
+- `qc/tools/condense_xreport_xml.py` (new), `qc/tools/README.txt` (new)
+- `~/wtl.pytest-xreport/wtl/pytest_xreport/xreport.py` (separate repo, uncommitted)
+
+**Status**: ✅ Summaries up to date and verified; `huge_tree` fix verified end to end against real data. Open follow-ups: commit/push the xreport change, and decide how to bound PDF generation (literal-block size cap in `generate_test_summary()`, a size threshold that skips the PDF, or continued use of the condenser).
+
+---
+
+## September 24, 2026 - ADC quick-check packet-loss investigation
+
+### Task: Diagnose "dropped packets" in `f-engine-tools` `quick_check_adc.ipynb`
+
+**Objective**: User reported heavy packet loss running
+`f-engine-tools/notebooks/general_notebooks/quick_check_adc.ipynb` despite correct UDP sysctls and
+jumbo frames. Investigate root cause and fix.
+
+**Setup**: Host `twiddlebug`; crate under test = CRC4 SN011 (McGill), 16 boards on `192.168.88.x`,
+received on **`ens1f0`** (Intel `ixgbe`, 10G, `192.168.88.17/24`). A *separate* crate lives on
+`enp6s0` (Realtek r8169, 2.5G, `10.10.10.x`) and was excluded per the user. Capture engine is
+**UCAP** (mode 0 = 2 frames/burst, all 8 ADC channels). Data path: notebook
+`get_data_receiver_async()` -> threaded `UDPPacketReceiver` -> `RawFrameReceiver.read_raw_frames()` ->
+`RawDataPacketProcessor` assembly.
+
+#### Findings
+
+1. **`ignore_missing_boards` vs `ignore_missing_slots` (notebook fix).** `FPGAArray(...)` parameter
+   is `ignore_missing_boards`; the notebook passed `ignore_missing_slots`, which is swallowed by
+   `**kwargs` and silently no-ops, so the "missing slots" `RuntimeError` still fired for <16 boards.
+   Fixed notebook to compute `ignore_missing_boards = n_boards != 16` and pass the correct kwarg.
+
+2. **"50% loss" at 8 boards was a reporting bug, not real loss (notebook fix).**
+   `read_raw_frames(split=True)` returns **per-frame** counts (each row = one frame,
+   max = `NUMBER_OF_SUBFRAMES` = 4), and rows are already doubled (`ncap * FRAMES_PER_BURST`). The
+   old formula divided by `4*2 = 8`, so a perfect capture read as exactly 50%. Fixed to
+   `percent_packets_captured_adc = 100 * c_adc / r.NUMBER_OF_SUBFRAMES`. With `flush=True` + the fixed
+   formula, **8 boards capture at a consistent 100%**. Denominator rule: `split=True` -> divide by
+   `NUMBER_OF_SUBFRAMES` (4); `split=False` -> divide by `FRAMES_PER_BURST * NUMBER_OF_SUBFRAMES` (8).
+
+3. **16-board loss is real and upstream of the host (~16.6%/burst).** Live run: every UDP batch =
+   854 packets, all passing filters (`match=854 after_ts_filter=854`); a full 16-board burst =
+   `packets_per_timestamp` = 128 streams x 2 frames x 4 subframes = **1024**, so 854/1024 = 83.4%
+   (~16.6% lost/burst). Assembler carryover pins at `receive_window`=3 (rows held open for packets
+   that never arrive) - the fingerprint of genuine on-wire loss. **NIC ring counters did not move**
+   during capture (`rx_missed_errors` stayed 3460; `rx_no_buffer_count`/`rx_dropped`/
+   `rx_no_dma_resources` = 0) -> host NIC is not dropping; loss is at the switch/wire.
+
+
+4. **Burst structure (pcap `/home/ih/ens1f0_dump0.pcap`).** 19 bursts spaced **exactly 100.0 ms**
+   (= `burst_rate=0.1`); all 16 boards start each burst within **~100-160 us** (effectively
+   simultaneous). Per burst ~ **8.4 MB delivered in ~150 us**, then idle ~99.85 ms. Average rate
+   ~ **590 Mbit/s** (fits in 1G). Frames are all 8244 B - **no frames >9000, no IP fragmentation**
+   (jumbo path clean).
+
+5. **Corrected "1G vs 10G" understanding.** Not an average-bandwidth problem (avg ~590 Mbit/s fits
+   1G). Loss occurs when the **switch egress buffer toward the host** overflows during the ~150 us
+   simultaneous 16-board microburst. Limiting resource = **switch egress buffer depth**, not host
+   link headline speed; 10G *helps* (drains the switch queue ~10x faster). Old 1G success was almost
+   certainly because fewer boards (e.g. 4-8) and/or non-aligned bursts meant the switch never had to
+   buffer 16 simultaneous streams (4 boards ~ 2 MB/burst fits; 16 boards ~ 8.4 MB does not). The
+   earlier phrasing "16 boards saturate the 10G link" was imprecise.
+
+6. **Concurrent second receiver (contention).** `ss -p` showed our capture socket
+   `192.168.88.17:48746` (pid 234956, user `ih`) plus two full sockets `:50018`/`:52980`
+   (pid 1386495, user **`jfcliche`**) - another user's kernel capturing the SAME crate concurrently,
+   compounding the microburst loss. No processes were killed (they belong to another user).
+
+#### Changes applied
+- **Notebook** `quick_check_adc.ipynb`: board-count cell now sets `ignore_missing_boards = n_boards
+  != 16` and passes the correct kwarg; percentage cell now `100*c_adc/(r.NUMBER_OF_SUBFRAMES)`; using
+  `read_raw_frames(..., split=True, flush=True)`.
+- **Host NIC tuning on `ens1f0`** (absorbs what reaches the host; does NOT fix upstream loss):
+  RX ring 512 -> **4096** (`ethtool -G ens1f0 rx 4096`); coalescing `rx-usecs` 1 -> **50**
+  (`ethtool -C ens1f0 rx-usecs 50`); flow control (802.3x PAUSE) confirmed RX on / TX on. Persisted
+  via systemd oneshot **`/etc/systemd/system/nic-tuning-ens1f0.service`** (enabled); re-apply with
+  `sudo systemctl restart nic-tuning-ens1f0.service`. Result: NIC-ring drops eliminated; 16-board
+  loss unchanged (upstream/switch). UDP sysctls (rmem_max/default = 100 MB) and MTU 9000 were already
+  correct.
+
+#### Recommended remedies for 16-board capture (in order)
+1. Ensure no other user (e.g. `jfcliche`) is capturing the same crate concurrently while testing.
+2. **Capture in two groups of 8 boards** (8 proven lossless), then stitch - reliable software fix now.
+3. Switch-side: verify PAUSE is honored toward `192.168.88.17` and/or deeper egress buffers.
+4. **Per-slot transmit stagger/delays** so 16 boards don't burst simultaneously - proper long-term
+   fix, needs UCAP firmware support (`offset`/`send_delay` are PROBER-only today).
+5. Faster/bonded host link (25G, or 2x10G LACP) - definitive hardware fix.
+
+#### Open questions / TODO
+- **[OPEN] Why `c_adc` showed max 8 in some earlier runs despite always `split=True`.** The
+  "split=False sums to 8" theory is wrong (user never changed split/mode). Likely
+  `r.NUMBER_OF_SUBFRAMES` was **8** (not 4) in a prior firmware/config state
+  (`subframes_per_frame` comes from the capture `State`). ACTION: log `r.NUMBER_OF_SUBFRAMES` and
+  `r.FRAMES_PER_BURST` live per configuration to confirm 4/2 for UCAP mode 0.
+- **[OPEN] Per-slot transmit delays for UCAP** - investigate a firmware-exposed per-board start-frame
+  offset (equivalent to PROBER `offset`/`send_delay`) to stagger the 16-board microburst at source.
+- **[OPEN] Library hardening for unknown kwargs** - decide whether `FPGAArray` should raise on
+  unrecognized kwargs (e.g. `ignore_missing_slots`) instead of silently swallowing them; complicated
+  by legitimate `**kwargs` pass-through to `array_init_async` -> firmware `init_async`
+  (`processing_frequency`, `reference_frequency`, `data_width`, legacy `open`). Not applied.
+- **[OPEN] Quantify switch buffer / confirm PAUSE honored** on the switch port toward the host.
+- **[OPEN] Orphaned capture sockets** across kernel restarts (multiple full UDP sockets bound to
+  `192.168.88.17`). Consider closing sockets on receiver teardown.
+
+#### Useful diagnostics
+- Per-burst completeness: compare `match=`/`after_ts_filter=` vs full burst = 1024 (16 boards).
+- NIC drops: `ethtool -S ens1f0 | grep -E 'rx_missed|rx_no_buffer|rx_dropped|rx_no_dma'`.
+- Kernel UDP drops: `nstat | grep -i UdpRcvbufErrors`; `ss -u -a -n` (Recv-Q).
+- Socket owners: `sudo ss -u -a -n -p | grep 192.168.88.17`.
+- pcap: `tshark -r ens1f0_dump0.pcap -q -z conv,udp` / frame-length / timing analysis.
+
+**Status**: 8-board capture verified lossless (reporting bug + `ignore_missing_boards` fixed);
+host NIC tuning applied and persisted. 16-board residual loss confirmed as upstream switch-egress
+tail-drop from simultaneous microbursts (not host-side) - remedies above pending.
+

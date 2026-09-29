@@ -4609,8 +4609,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                     # If the gain is purely real, recover only the real part and convert to float
                     Glin = np.array(Glin).real.astype(float)
 
-            if Glog == -1:
-                # A Glog of -1 indicates that floating point gains were used,
+            if Glog == 0:
+                # A Glog of 0 indicates that floating point gains were saved to the digital gains archive,
                 # and we can therefore set Glog to None so that the gains are set 
                 # in floating point mode.
                 Glog = None
@@ -4675,7 +4675,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 necessary to use glog).
                 '''
                 self.logger.debug(f'Floating point gains enabled on slot {self.slot}, channel {chan.chan_number}')
-                glog = -1
+                glog = 0
 
             else:
                 glog = chan.SCALER.get_shift_left(bank)
