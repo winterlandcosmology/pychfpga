@@ -120,7 +120,7 @@ f_engine_tests:
   crate_init:
 
   backplane_err:
-    n_checks: 10
+    n_checks: 60   # ~2.5 min of live observation; 10 passes missed an intermittent single-link CRC fault that 60 exposed
     t_sleep: 1
 
   sync_test:
@@ -140,7 +140,7 @@ f_engine_tests:
       ignore_missing_boards: False # only for KKO F-Engine
       mode: 'shuffle256' # All else
       sync_method: 'local'
-      mdns_timeout: 20
+      mdns_timeout: 40  # same window as the main bring-up: crate discovery takes longer than a single board
 
   clock_test:
     integration_period: 0.001
@@ -161,8 +161,7 @@ f_engine_tests:
     n_fails_accept: 5
 
   p_cycle_test:
-    # n_cycles: 20 
-    n_cycles: 100 
+    n_cycles: 100  # full burn-in (~6 min per cycle, ~10 h). A 10-cycle shakedown passed clean on 2026-09-26.
     percent_accept: 0.05 #0.01
     t_cycle: 10  #time in seconds
 
