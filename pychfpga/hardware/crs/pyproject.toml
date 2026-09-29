@@ -1,0 +1,17 @@
+# Minimal environment for discover.py and arm_firmware/fwupgrade.py.
+# Run from this directory (uses repo source on PYTHONPATH via script bootstrap):
+#   uv run ./discover.py
+#   uv run ./arm_firmware/fwupgrade.py --help
+
+[project]
+name = "crs-fwdiscover"
+version = "0.1.0"
+description = "CRS UDP discovery and U-Boot fwupgrade utilities"
+requires-python = ">=3.12"
+dependencies = [
+    "ifaddr",
+    "xmodem",
+]
+
+[tool.uv]
+package = false

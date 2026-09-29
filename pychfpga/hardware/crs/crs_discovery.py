@@ -8,7 +8,6 @@ import re
 import socket
 import sys
 import time
-import netifaces
 from pathlib import Path
 
 from aiohttp import web
@@ -16,13 +15,22 @@ from aiohttp import web
 from pychfpga.hardware import Crate, Motherboard
 from pychfpga.hardware.crs.netconsole_loads import Loads
 from pychfpga.hardware.crs.netconsole_xmodem import xmodem1k_pipe_send, xmodem1k_send
+from pychfpga.hardware.crs.crs_beacon import (
+    BEACON_REQUEST_PAYLOAD,
+    CRSBeacon,
+    DEFAULT_BIND,
+    DEFAULT_DISCOVERY_PORT,
+    _normalize_header_key,
+    _to_int,
+    _usable_field,
+    parse_fwreq_datagram,
+    request_beacon,
+)
 
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DISCOVERY_PORT = 9875
-DEFAULT_BIND = "0.0.0.0"
-BEACON_REQUEST_PAYLOAD = b"BEACONREQ"
+_parse_fwreq = parse_fwreq_datagram
 
 # Wget upload: ``wget ${loadaddr} <url>``, wait for the U-Boot prompt (progress
 # and ``Bytes transferred`` arrive on netconsole with current lwIP netconsole),
@@ -44,87 +52,6 @@ FWREQ_COLLECT_TIMEOUT = 60.0
 XMODEM_PIPE_DEPTH = 2
 # 128 (SOH) for pipe smoke tests against ~2 KiB netconsole buffers; 1024 (STX) for 1K.
 XMODEM_BLOCK_SIZE = 128
-
-broadcast_addresses = []
-
-
-def _get_broadcast_addresses():
-    """Get the broadcast addresses for all interfaces and cache the results for future calls."""
-    if broadcast_addresses:
-        return broadcast_addresses
-
-    interfaces = netifaces.interfaces()
-    for interface in interfaces:
-        afs = netifaces.ifaddresses(interface)
-        for addr in afs.get(netifaces.AF_INET, []):
-            baddr = addr.get('broadcast')
-            if baddr:
-                broadcast_addresses.append(baddr)
-    return broadcast_addresses
-
-
-def request_beacon(ip_addr=None, port=DEFAULT_DISCOVERY_PORT):
-    """Send a beacon request to force CRS boards to emit a discovery beacon immediately.
-
-    TCPipe listens on ``port`` for ``BEACONREQ`` and responds with an immediate
-    TCPIPE UDP beacon (same format as the periodic advertisement).
-    """
-    if ip_addr is not None:
-        addrs = [ip_addr]
-    else:
-        addrs = _get_broadcast_addresses()
-
-    for addr in addrs:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            sock.sendto(BEACON_REQUEST_PAYLOAD, (addr, port))
-            logger.debug(f"Broadcasted a CRS beacon request on UDP port {port} via {addr}")
-
-
-def _normalize_header_key(key):
-    return key.strip().lower().replace("_", "-").replace(" ", "-")
-
-
-# Uninitialized EEPROMs (and U-Boot env fallbacks) advertise these instead of
-# a real part/serial. Treat them as missing crate identity.
-_PLACEHOLDER_FIELD_VALUES = frozenset({
-    "", "unknown", "?", "none", "n/a", "null", "uninitialized",
-})
-
-
-def _usable_field(value):
-    """Return a stripped field value, or None if it is empty or a placeholder."""
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text or text.lower() in _PLACEHOLDER_FIELD_VALUES:
-        return None
-    # Erased FRU bytes often show up as a run of 0xFF / non-ASCII.
-    if all(ord(c) >= 0x7F for c in text):
-        return None
-    return text
-
-
-def _parse_fwreq(data, kind="FWREQ"):
-    """Parse a structured discovery datagram into version, headers, and body."""
-    text = data.decode("utf-8")
-    head, _, body = text.partition("\n\n")
-    lines = head.split("\n")
-
-    status = lines[0]
-    if not status.startswith(f"{kind}/"):
-        raise ValueError(f"not a {kind} message: {status!r}")
-    version = int(status.split("/", 1)[1])
-
-    headers = {}
-    for line in lines[1:]:
-        if not line.strip():
-            continue
-        key, _, value = line.partition(":")
-        headers[key.strip()] = value.strip()
-
-    return version, headers, body
-
 
 def _file_md5(path):
     """Return the MD5 hex digest of a file."""
@@ -731,72 +658,6 @@ class NetConsole:
         raise ValueError(f"upload_method must be one of {sorted(UPLOAD_METHODS)}")
 
 
-class CRSBeacon:
-    def __init__(self, data, address=None):
-        """Parse a structured FWREQ/1 or TCPIPE/1 beacon."""
-        text = data.decode("utf-8")
-        if text.startswith("FWREQ/"):
-            self._parse_header_beacon(data, address, "FWREQ")
-        elif text.startswith("TCPIPE/"):
-            self._parse_header_beacon(data, address, "TCPIPE")
-        else:
-            raise ValueError("not a CRS discovery beacon")
-
-    def _parse_header_beacon(self, data, address, kind):
-        version, headers, _body = _parse_fwreq(data, kind=kind)
-        fields = {_normalize_header_key(k): v for k, v in headers.items()}
-
-        manufacturer = headers.get("Manufacturer", "unknown")
-        product = headers.get("Product", "unknown")
-        revision = headers.get("Revision", "?")
-        serial = headers.get("Serial", "unknown")
-        bootloader_version = fields.get("bootloader-version")
-
-        self.kind = kind
-        self.version = (
-            bootloader_version
-            if kind == "TCPIPE" and bootloader_version
-            else str(version)
-        )
-        self.identifier = f"{manufacturer}-{product}-rev{revision}"
-        self.serial = serial
-        self.fields = fields
-        self.address = address
-        self.board_part = product.upper()
-        self.board_serial = serial
-        self.backplane_part = self.get_any_field(("backplane-part", "backplane-model"))
-        self.backplane_serial = self.get_any_field(("backplane-serial",))
-        self.backplane_revision = self.get_any_field(("backplane-revision",))
-        self.backplane_manufacturer = self.get_any_field(("backplane-manufacturer",))
-        self.backplane_slot = _to_int(self.get_any_field(("backplane-slot",)))
-        self.chassis_part = self.get_any_field(("chassis-part", "chassis-model"))
-        self.chassis_serial = self.get_any_field(("chassis-serial",))
-        self.chassis_manufacturer = self.get_any_field(("chassis-manufacturer",))
-        self.chassis_revision = self.get_any_field(("chassis-revision",))
-        self.crate_part = self.get_any_field(("crate-part", "crate-model"))
-        self.crate_serial = self.get_any_field(("crate-serial",))
-        self.crate_manufacturer = self.get_any_field(("crate-manufacturer",))
-        self.crate_revision = self.get_any_field(("crate-revision",))
-        self.crate_number = _to_int(self.get_any_field(("crate-number", "backplane-number")))
-        self.crate_slot = _to_int(self.get_any_field(("crate-slot",)))
-        # v1.2 TCPIPE publishes chassis custom ``slot=`` as Crate Slot.
-        # Current U-Boot still publishes it as Backplane Slot. IceBoard.slot
-        # prefers Crate Slot when present.
-        if isinstance(self.crate_slot, int) and self.crate_slot > 0:
-            self.slot = self.crate_slot
-        elif isinstance(self.backplane_slot, int) and self.backplane_slot > 0:
-            self.slot = self.backplane_slot
-        else:
-            self.slot = None
-
-    def get_any_field(self, names):
-        for name in names:
-            value = _usable_field(self.fields.get(name))
-            if value is not None:
-                return value
-        return None
-
-
 def _format_discovery_serial(serial):
     """Format a board/crate/backplane serial for discovery log lines."""
     if serial is None:
@@ -897,20 +758,6 @@ async def set_platform_firmware(
         upload_method=upload_method,
         verify_md5=verify_md5,
     ).run()
-
-
-def _to_int(value):
-    """Tries to convert a value to an integer if possible.
-
-    Parameters:
-        value (str): The value to convert.
-    Returns:
-        int: The integer value, or the original value if it is not a valid integer.
-    """
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return value
 
 
 def serials_equal(a, b) -> bool:
@@ -1123,7 +970,11 @@ class CRSDiscovery:
         return any(_target_matches(target, board_id) for target in self.board_targets)
 
     def _initial_deadline(self):
-        if self._has_explicit_targets() or self.timeout is None:
+        if self.timeout is None:
+            return None
+        if self.crate_targets and not self.board_targets:
+            return time.monotonic() + self.timeout
+        if self._has_explicit_targets():
             return None
         return time.monotonic() + self.timeout
 
@@ -1140,7 +991,13 @@ class CRSDiscovery:
     def _complete(self):
         if not self._has_explicit_targets():
             return False
-        return not self._missing_explicit_board_targets() and not self._missing_explicit_crate_targets()
+        if self._missing_explicit_board_targets():
+            return False
+        # Crate-only HWM (e.g. ``CRC4 1``): keep listening until the discovery
+        # timeout, not after the first matching beacon.
+        if self.crate_targets and not self.board_targets:
+            return False
+        return not self._missing_explicit_crate_targets()
 
     def _has_explicit_targets(self):
         return any(target[0] != "*" and target[1] != "*" for target in self.board_targets + self.crate_targets)

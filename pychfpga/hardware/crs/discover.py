@@ -21,11 +21,12 @@ import sys
 import time
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+# Add parent folder so we can import crs_beacon.py
+_CRS_DIR = str(Path(__file__).resolve().parent) 
+if _CRS_DIR not in sys.path:
+    sys.path.insert(0, _CRS_DIR)
 
-from pychfpga.hardware.crs.crs_discovery import (  # noqa: E402
+from crs_beacon import (  # noqa: E402
     CRSBeacon,
     DEFAULT_BIND,
     DEFAULT_DISCOVERY_PORT,

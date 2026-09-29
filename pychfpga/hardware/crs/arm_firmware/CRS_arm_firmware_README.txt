@@ -6,12 +6,26 @@ Here are the instructions if uboot needs to be updated:
 
 Case 1 - Upgrading a board with an existing uboot
 
-Modern uboot builds allow over-the-wire reflashing. The utility ``fwupgrade`` uploads the uboot image to ALL THE ACTIVE CRS BOARDS ON THE NETWORK.
-so Turn off or disconnect the boards you don't want to upgrade. The procedure is:
+Modern uboot builds allow over-the-wire reflashing. The utility ``fwupgrade`` uploads the uboot image to selected CRS boards on the network (you must list target boards on the command line; see ``fwupgrade.py --help``). Use ``--dry-run`` to verify target matching without programming flash.
+Turn off or disconnect boards you do not want to upgrade, or omit them from the target list. Example::
 
-   - Activate the pychfpga Pychfpga environemnt
-   - cd pychfpga/pychfpga/hardware/crs/arm_firmware
-   - ./fwupgrade.py uboot.bin  ( or python fwupgrade.py uboot.bin)
+   cd pychfpga/pychfpga/hardware/crs/arm_firmware  # go to the firmware folder
+
+   uv run fwupgrade.py --help # show all options
+
+
+   uv run fwupgrade.py 37 55  # upgrades CRS 0037 and 0055. Same as CRS 37 55
+   uv run fwupgrade.py "*" --dry-run # Update ALL the CRS boards on the local network. Use --dry-run first to check if you select the right boards before upgrading, then omit for actual upgrade.
+   uv run fwupgrade.py "CRC4 11"  # upgrades all boards on crate SN011
+   uv run fwupgrade.py "CRC? *"  # upgrades all boards on any type of crate on the network
+   uv run fwupgrade.py "* 1"  # upgrades all boards that have the board, crate or backplane serial number 1. Useful to get out of pickle a crate part number is not programmed
+   uv run fwupgrade.py 37 55 --firmware uboot.bin  # specify a different firmware image
+
+
+If you don't have "uv", you can manually activate a pychfpga virtual environment and run the command::
+      
+    source /path/to/pychfpga/venv/bin/activate
+    ./fwupgrade.py 37 55
 
 
 Case 2 - JTAG flashing
