@@ -34,8 +34,7 @@ import logging
 from pychfpga.common.async_utils import run_async
 from time import sleep
 
-__all__ = ['measure_crate_health', 'stickies_quiet', 'populated_slots',
-           'require_bct_corner_turn']
+__all__ = ['measure_crate_health', 'populated_slots', 'require_bct_corner_turn']
 
 _logger = logging.getLogger(__name__)
 
@@ -191,29 +190,3 @@ def measure_crate_health(boards, populated=None, logger=None):
                                     f"at {before} - no dataflow through this stage")
 
     return failures
-
-
-def stickies_quiet(boards, window=5.0):
-    """Cheap settle probe: True if nothing re-asserted over `window` seconds.
-
-    Clears both crossbars' monitors on all boards, waits `window` seconds of
-    live traffic, and returns True if no aligner sticky re-asserted and no
-    packet error was counted anywhere. The full health measurement is run
-    separately once a quiet window is seen.
-    """
-    for mb in boards:
-        for cb in (mb.CROSSBAR2, mb.CROSSBAR3):
-            cb.LANE_MONITOR_RESET = 1
-            cb.LANE_MONITOR_RESET = 0
-    sleep(window)
-    for mb in boards:
-        for cb in (mb.CROSSBAR2, mb.CROSSBAR3):
-            mons = run_async(cb.get_lane_monitor(LANE_MONITOR_NAMES))
-            if any(int(v) for row in mons for v in row):
-                return False
-            for sel in range(8):
-                cb.LANE_MONITOR_SEL = sel
-                if int(cb.PACKET_ERROR_CTR):
-                    return False
-            cb.LANE_MONITOR_SEL = 0
-    return True
