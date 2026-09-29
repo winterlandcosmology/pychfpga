@@ -424,18 +424,20 @@ class TestPreDeploymentCrate(TestUtils):
             - Run `n_checks` independent health passes, `t_sleep` apart. Each
               pass clears every monitor, lets them re-accumulate on live
               traffic, then reads the backplane GTX lock and frame monitors,
-              both crossbars' per-lane aligner stickies, the CROSSBAR2 packet
-              error counters, and confirms the frame counters are advancing.
+              both crossbars' per-lane aligner stickies and packet error
+              counters, and confirms the frame counters are advancing.
 
-        Known persistent failure mode: on current shuffle256 bitstreams the
-        CROSSBAR2 aligners drop a small fraction of frames indefinitely after
-        every bring-up, on scattered GTX-fed lanes, while the links themselves
-        stay CRC-clean. That defect makes this test fail on an otherwise
-        healthy crate. It is deliberately NOT masked - read the failure list:
-        a BLOCK_LOCK=0, a CRC/frame error count, a frame-length variance or a
-        static frame counter is a NEW fault and means a real backplane,
-        cable or board problem, whereas MISSING_FRAME/BAD_* stickies spread
-        thinly across many CROSSBAR2 lanes are the known aligner defect.
+        A healthy crate on the current firmware is expected to pass every pass
+        cleanly, so any entry in the failure list is a real fault. Reading it:
+        BLOCK_LOCK=0 or CRC/frame errors point at a backplane link, cable or
+        transmitter; a frame-length variance at a corrupted source stream;
+        MISSING_FRAME/BAD_* aligner stickies at a lane arriving outside the
+        CROSSBAR2 SOF window; a static frame counter at a stage with no
+        dataflow. (Through 2026-09 this test failed on every bring-up with
+        thinly spread CROSSBAR2 stickies; the causes - a software-forced SOF
+        window of 55 sitting on the lane-skew tail, and pre-sep24 firmware
+        polluting the packet-flags trailer - are both fixed, and those
+        symptoms must not be dismissed as "known" any more.)
         """
 
         xr.header('Backplane Error Test')
@@ -1194,9 +1196,9 @@ class TestPreDeploymentCrate(TestUtils):
     def _format_bp_errs(bp_errs, n_checks, max_shown=25):
         """ Render the accumulated health failures into an actionable message.
 
-        The known CROSSBAR2 aligner defect can produce hundreds of entries, so
-        the full list is truncated; the counts and the first entries are what
-        distinguish a new fault from the known one.
+        A systemic fault (e.g. a mis-set SOF window) flags hundreds of lanes at
+        once, so the list is truncated per pass; the counts and the first
+        entries are enough to tell a systemic fault from a single bad link.
         """
         total = sum(len(errs) for _, errs in bp_errs)
         lines = [f'Backplane/corner-turn errors in {len(bp_errs)} of {n_checks} health '
