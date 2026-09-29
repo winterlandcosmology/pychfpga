@@ -1,2 +1,4 @@
 # Test results are not meant to be stored in this repository folder, so we ignore xml files.
 *.xml
+# pytest-html scratch output left in the test directory by wtl.pytest_xreport runs.
+.xreport/
