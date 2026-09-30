@@ -165,6 +165,7 @@ class TCPipe:
     RPC_ADC_GET_SIGNAL_DETECTOR_STATUS = 0x3D
     RPC_GET_MOTHERBOARD_IPMI_INFO = 0x3E
     RPC_GET_BACKPLANE_IPMI_INFO = 0x3F
+    RPC_ADC_RERUN_FG_CAL = 0x40
 
     IPMI_FIELD_WIRE_LEN = 32
     IPMI_RPC_VERSION = 1
@@ -174,6 +175,14 @@ class TCPipe:
 
     ADC_TILE = 0
     DAC_TILE = 1
+
+    # Xilinx XRFdc tile states (xrfdc.h)
+    RFDC_STATE_OFF = 0x0
+    RFDC_STATE_SHUTDOWN = 0x1
+    RFDC_STATE_PWRUP = 0x3
+    RFDC_STATE_CLK_DET = 0x6
+    RFDC_STATE_CAL = 0xB
+    RFDC_STATE_FULL = 0xF
 
     _RFDC_TILE_STATUS = '<IIBII'
     _RFDC_BLOCK_STATUS = '<dIIBBB'
@@ -207,6 +216,7 @@ class TCPipe:
         RPC_BSB_BATCH_WRITE: 'bsb_batch_write',
         RPC_SPI_BATCH_WRITE: 'spi_batch_write',
         RPC_ADC_STARTUP: 'adc_startup',
+        RPC_ADC_RERUN_FG_CAL: 'adc_rerun_fg_cal',
         RPC_ADC_SHUTDOWN: 'adc_shutdown',
         RPC_ADC_RESET: 'adc_reset',
         RPC_ADC_WAIT_FOR_STATE: 'adc_wait_for_state',
@@ -1743,6 +1753,20 @@ class TCPipe:
     def adc_startup(self, type=ADC_TILE, tile_id=-1):
         """Start up an RFDC tile. ``tile_id=-1`` selects all tiles."""
         self._rfdc_rpc(self.RPC_ADC_STARTUP, struct.pack('<Bb', type, tile_id))
+
+    def adc_rerun_fg_cal(self, tile_id=-1, start_state=None, end_state=None):
+        """Rerun ADC foreground calibration (``XRFdc_CustomStartUp`` CAL → FULL).
+
+        ``tile_id=-1`` runs all ADC tiles 0–3. Default states match Xilinx FG cal rerun.
+        """
+        if start_state is None:
+            start_state = self.RFDC_STATE_CAL
+        if end_state is None:
+            end_state = self.RFDC_STATE_FULL
+        self._rfdc_rpc(
+            self.RPC_ADC_RERUN_FG_CAL,
+            struct.pack('<bII', tile_id, start_state, end_state),
+        )
 
     def adc_shutdown(self, type=ADC_TILE, tile_id=-1):
         """Shut down an RFDC tile. ``tile_id=-1`` selects all tiles."""
