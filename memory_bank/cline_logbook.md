@@ -591,3 +591,109 @@ received on **`ens1f0`** (Intel `ixgbe`, 10G, `192.168.88.17/24`). A *separate* 
 host NIC tuning applied and persisted. 16-board residual loss confirmed as upstream switch-egress
 tail-drop from simultaneous microbursts (not host-side) - remedies above pending.
 
+
+---
+
+## October 1, 2026 - Pocket Correlator async rewrite (new firmware + receivers)
+
+### Task: Make `pychfpga/pocket_correlator.py` fully asynchronous and align it with the new firmware, channelizer-config API, and `common/` receiver classes
+
+**Objective**: Upgrade `POCKET_CORRELATOR` to use the new async array/channelizer/correlator APIs,
+delete obsolete `bin_map` / `OUTPUT_SOURCE_SEL` logic, modernize raw and correlated data capture via
+the `common/` receivers, and surface per-capture health info (ADC flags, UCAP overrun, packet loss).
+
+#### Construction (now fully async)
+- Construct with `pc = await POCKET_CORRELATOR('crs 0016', prog=1)` (IPython/Jupyter) or
+  `asyncio.run(POCKET_CORRELATOR(...).init())` in scripts. `__init__` only stashes kwargs;
+  `init_async` + `__await__` + `init` do the real work.
+- Builds the array via `await FPGAArray(..., mode='corr8')`; gets `self.r` (raw) and `self.cr`
+  (correlator) receivers from `get_data_receiver_async()` / `get_corr_receiver_async()` (shared
+  packet receiver; raw vs. correlator packets distinguished by header).
+- Added **invariant channelizer class constants** applied in every capture: `FFT_SHIFT`,
+  `SCALER_ROUNDING_MODE`, `SCALER_EIGHT_BIT`, `SCALER_SYMMETRIC_SATURATION`,
+  `OFFSET_BINARY_ENCODING`. Only `data_source` / `fft_bypass` / `scaler_bypass` / `data_type` vary
+  per capture. `set_default_channelizers()` restores the correlator-ready state.
+- UCAP mode 0 by default, but robust to other modes via `npols_for_mode()` and
+  `n_frames_per_burst(mode)` (no hardcoded frames-per-burst / NPOLS).
+
+#### Removed obsolete logic
+- All `UCAP.OUTPUT_SOURCE_SEL` usage, `make_bin_map` / `make_inv_bin_map`, `set_ucap_mode`,
+  `n_frames_per_capture`, `run_async`, the old `u_receiver` / `corr_receiver`, manual even/odd FFT
+  stitching, and `NCORR_PROD`. Bin ordering (ascending frequency) and fft_2x deinterleaving are now
+  done by the receivers.
+
+#### Raw capture methods (async, with health checks)
+- New shared private helper `_configure_and_capture()` implements the
+  `f-engine-tools/useful_scripts/capture_data.py` recipe (set_channelizers_async(sync=False) ->
+  start_data_capture_async -> sync_async -> UCAP overrun check -> reset/read ADC flags ->
+  read_raw_frames -> dropped-packet check).
+- `read_adc_frames`, `read_fft_frames`, `read_post_gain_frames`, `read_scaler_frames` are now async,
+  return `(data, info)`, and accept `check_adc_flags` / `check_ucap_overrun` / `check_packets` /
+  `raise_on_issue` (opt-in raise so the user can still inspect imperfect data). Ported check helpers:
+  `check_ucap_overrun`, `reset_adc_flags`, `read_adc_flags`, `check_dropped_packets`. Added
+  `adc_rms_power_dBm()` (uses `np.std`, matching `snapshot_signal_quality.py`).
+
+#### Gains
+- `compute_gains` (async) retries on ADC flags using the returned `info`, sets gains in natural
+  order, reads back a **single floating-point gain value per bin**, returns
+  `(d_fft, d_fft_mean_mag, gain, d_sclr)`. `save_gains` writes one `gain` dataset (float64).
+
+#### Correlated data
+- `configure_corr` (async) uses `start_correlators_async`, caches `NPROD` / `NDECIM` /
+  `firmware_integ_period` / `expected_packets`, builds `self.prod` from `cr.get_ij_to_prod_map()`
+  (upper-triangle; verified 36/36 unique products for corr8), and `self.good_bin_mask`.
+- `read_corr_frames` (async) restores correlator-ready channelizers only when a prior raw capture
+  changed them, pulses `UCORR.OVERRUN_RESET`, and returns
+  `(integ_ts, d_corr, count, sat, info)` - the **real hardware timestamp** (`integ_ts`), not a host
+  `time.time()` stamp. Packet loss checked against `cr.expected_packets`.
+
+#### observe()
+- Async; awaits all captures. New-format gain load with back-compat for old `gain_lin`/`gain_log`.
+  Uses `firmware_integ_period` for integration-time math. HDF5 now includes
+  `index_map/good_bin_mask`, `stats/ucap_overrun`, and `vis.attrs['expected_packets']`; the `time`
+  dataset now stores `integ_ts`. Fixed pre-existing bugs: ADC overrange read from `ADC_OV` (now
+  `ADC_OR`), inconsistent bit ordering (now via shared `read_adc_flags`), `sat_buf[n] = sat` (now
+  `sat[0]`), and removed the unused `early_timestamp_error`.
+
+#### CLI
+- Replaced `create_pc()` with `parse_args()` + `async def main()` run under `asyncio.run`, adding an
+  `--observe` path (`--data_path`, `--obs_tag`, `--digital_gains_path`). An object created inside
+  `asyncio.run` can't be reused after the loop closes, so interactive use is documented as awaiting
+  the class directly.
+
+#### Call sites
+- Updated `tests/crs_corr_tests/pocket_correlator/test_pocket_correlator_observe.py` to
+  `asyncio.run(main())` with `await POCKET_CORRELATOR(...)` / `await pc.observe(...)`.
+
+#### Verification (offline only)
+- `python -m py_compile` passes for the module and the test script; module imports cleanly;
+  `observe` and `read_corr_frames` confirmed to be coroutines; product-map inversion verified
+  (36 unique upper-triangle products) against `UCORR.get_ij_to_prod_map(8)` in the
+  `pychfpga_venv312` env. **Not run on hardware** - board-level capture/visibility behavior still
+  needs a run on a CRS board. (`pytest` is not installed in `pychfpga_venv312`.)
+
+### Follow-up TODOs (deferred)
+
+- **`save_gains()` should read the active gains itself.** It currently requires the caller to pass
+  the `gain` array. A cleaner design would have `save_gains()` read the currently-active gains
+  directly via `SCALER.get_gain_table(bank)` (looping over channels) rather than relying on the
+  caller to pass them, removing a chance for the saved gains to disagree with what is on the FPGA.
+- **Digital gains are now stored as a single floating-point value per bin** (dataset `gain`, shape
+  `(NPOLS, NBINS)`, natural/ascending frequency order), replacing the old split `gain_lin` /
+  `gain_log` datasets. Offline loaders must be updated accordingly.
+- **Add helpers to process the correlator `integ_ts`.** `read_corr_frames()` now returns the real
+  hardware integration timestamp (`integ_ts`) instead of a host `time.time()` stamp. It would be
+  useful to add methods to convert `integ_ts` (frame counts) into wall-clock / UTC time, and to
+  compute per-result integration midpoints.
+- **IMPORTANT / REQUIRED: `integ_ts` is only a frame count and is NOT yet an absolute time.** To make
+  it physically meaningful we must capture an absolute reference for frame 0 (``frame0_time``),
+  ideally derived from a GNSS receiver / PPS disciplining the crate sync, and combine it with the
+  frame period to turn `integ_ts` into true UTC. This is essential for science-ready data (correct
+  fringe/phase vs. time). Plan to add a `frame0_time` acquisition path and store it in the HDF5 files
+  alongside `integ_ts`. For users without a GNSS receiver, offer an *optional, clearly-labelled
+  less-accurate fallback* that reads frame-0 time from the control machine's clock at sync time.
+  Not implemented yet — do this before trusting observe() timestamps.
+- **`apps/periscope_correlator/app.py` still uses the old synchronous POCKET_CORRELATOR API**
+  (sync construction, `pc.ucap.OUTPUT_SOURCE_SEL`, `pc.corr_receiver.socket`, old gain/return
+  signatures). It needs its own independent async overhaul (deferred, out of scope for this pass).
+
