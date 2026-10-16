@@ -1183,8 +1183,8 @@ class FPGAArray(object):
         n_mezz = max(mb.NUMBER_OF_FMC_SLOTS for mb in self.ib)
         if n_mezz:
             self.print_iceboard_table(
-                func = lambda mb: '\n'.join(get_mezz_name(mb, mezz_number+1)  for mb in self.ib for mezz_number in range(n_mezz) if mezz_number < mb.NUMBER_OF_FMC_SLOTS),
-                row_labels= '\n'.join(f'Mezz{mezz_number}' for mezz_number in range(n_mezz)),
+                func = lambda mb: '\n'.join(get_mezz_name(mb, mezz_number+1) for mezz_number in range(n_mezz) if mezz_number < mb.NUMBER_OF_FMC_SLOTS),
+                row_labels= '\n'.join(f'Mezz{mezz_number+1}' for mezz_number in range(n_mezz)),
                 add_serial=True)
         else:
             self.print_iceboard_table(add_serial=True)
