@@ -307,6 +307,23 @@ class SpectrumInstrumentsTM4D(SocketContext):
         """
         self.command('23', int(bool(enable)))
 
+    def set_outputs_on_powerup(self, mode: int):
+        """ Enables or disables signal multiplexers on power-up.
+
+        Parameters:
+            mode (int) 
+                X = 0: Signal Multiplexers (Mux1/Mux2), serial Time Port messages, 
+                       and optional IRIG-B serial time code outputs begin when Time Valid 
+                       is first achieved.
+                X = 1: Signal Multiplexer (Mux1/Mux2) outputs only appear (begin) 
+                       immediately upon power-up.
+                X = 2: Mux1/Mux2 and serial Time Port messages appear immediately 
+                       upon power-up.
+                X = 3: Mux1/2, Time Port messages, and optional IRIG-B output appear 
+                       immediately upon power-up.
+        """
+        self.command('30', int(mode))
+
     def set_pps_output_source(self, source):
         """ Sets the source of the Pulse-Per-Second (PPS) signal.
 
