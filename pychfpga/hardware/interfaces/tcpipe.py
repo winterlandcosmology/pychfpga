@@ -1758,6 +1758,9 @@ class TCPipe:
         """Rerun ADC foreground calibration (``XRFdc_CustomStartUp`` CAL → FULL).
 
         ``tile_id=-1`` runs all ADC tiles 0–3. Default states match Xilinx FG cal rerun.
+
+        Call only after RFDC tiles are running (e.g. after ``adc_sync()``), not at
+        bitstream load.
         """
         if start_state is None:
             start_state = self.RFDC_STATE_CAL
