@@ -134,8 +134,8 @@ class SweepPage(QWidget):
         self.worker = SweepWorker(
             self.state.ca,
             self.state.tx_rx_map,
+            parse_range(self.PRErange_input.text(), step=int(self.PREstep.text())),     # SweepWorker(pre_range, post_range)
             parse_range(self.POSTrange_input.text(), step=int(self.POSTstep.text())),
-            parse_range(self.PRErange_input.text(), step=int(self.PREstep.text())),
             float(self.dwell_input.text()),
             int(self.power_input.text())
         )
