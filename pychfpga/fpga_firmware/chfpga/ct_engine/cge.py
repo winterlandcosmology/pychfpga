@@ -15,6 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ..mmi import MMI, BitField, CONTROL, STATUS, DRP
+from .cge_array_methods import CGEArrayMethods
 
 
 class _CGEDrpPort:
@@ -393,6 +394,7 @@ class CGE(MMI):
         self.verbose = verbose
         super().__init__(router=router, router_port=router_port)
         self.config = config
+        self.fpga.register_array_methods(CGEArrayMethods, key='CGE')   # ca.set_fpga_tx(), ca.read_optical(), ...
         self.core = CGECore(self, self.PORT_CORE_DRP)
         self.gt_common = CGECommon(self, self.PORT_GT_CMN_DRP)
         # Per-lane GT access (same API as xxvglink array GTX instances)

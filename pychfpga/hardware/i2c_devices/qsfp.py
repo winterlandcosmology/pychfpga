@@ -2,6 +2,7 @@
 """
 
 import logging
+import time
 import numpy as np
 from .eeprom import eeprom as EEPROM
 
@@ -327,21 +328,15 @@ class QSFP(object):
         Returns:
             None: No value is returned.
         """
-        if enable:
-            self.enable_i2c(True)
-
         if addr in self.QSFP_EEPROM_MAP:
             (__, addr, __, page) = self.QSFP_EEPROM_MAP[addr]
+        n = 1 if isinstance(data, int) else len(data)
 
-        try:
-            if page:
-                self._qsfp_eeprom.write(addr=127, data=page)  # Writing to page select register
+        def op():
             self._qsfp_eeprom.write(addr, data)  # Writing at specified address
-        finally:
-            if page:
-                self._qsfp_eeprom.write(addr=127, data=0)  # Putting page back to 0
-            if enable:
-                self.enable_i2c(False)
+            time.sleep(self.I2C_WRITE_SETTLE)    # the module can NACK while it completes the write
+
+        self._io(op, page, enable, upper=addr + n > 128)
 
     def read(self, addr, length=1, page=0, enable=True):
         """
@@ -363,23 +358,62 @@ class QSFP(object):
 
         """
 
-        if enable:
-            self.enable_i2c(True)
-
         if addr in self.QSFP_EEPROM_MAP:
             (__, addr, length, page) = self.QSFP_EEPROM_MAP[addr]
 
-        try:
-            if page:
-                self._qsfp_eeprom.write(addr=127, data=page)  # Writing to page select register
-            data = self._qsfp_eeprom.read(addr=addr, length=length)  # Reading at specified address
-        finally:
-            if page:
-                self._qsfp_eeprom.write(addr=127, data=0)  # Putting page back to 0
-            if enable:
-                self.enable_i2c(False)
+        return self._io(lambda: self._qsfp_eeprom.read(addr=addr, length=length), page, enable, upper=addr + length > 128)
 
-        return data
+    # I2C robustness. Every EEPROM transaction (<= 4 bytes) is a TCPipe RPC that can time out, and the module can
+    # NACK while it completes a write (SFF-8636 t_wr). So: retry with backoff on OSError (includes TimeoutError and
+    # NACK IOError), wait after writes, and restore page 0 even after a failure.
+    I2C_TRIES = 5              # attempts per access
+    I2C_RETRY_DELAY = 0.05     # s before the first retry; doubles on each retry
+    I2C_SELECT_DELAY = 0.002   # s after ModSelL is asserted
+    I2C_WRITE_SETTLE = 0.04    # s after each write
+    _page_dirty = False        # True if a page-0 restore failed: re-select page 0 before the next upper-memory access
+
+    def _io(self, op, page, enable, upper):
+        """Run op() with ModSelL asserted (if `enable`) and upper page `page` selected (if `upper`); retry on OSError."""
+        delay = self.I2C_RETRY_DELAY
+        for attempt in range(self.I2C_TRIES):
+            try:
+                if enable:
+                    self.enable_i2c(True)
+                    time.sleep(self.I2C_SELECT_DELAY)
+                if upper and (page or self._page_dirty):
+                    if page:
+                        self._page_dirty = True               # the page register may change even if the write fails
+                    self._qsfp_eeprom.write(addr=127, data=page)  # Writing to page select register
+                    time.sleep(self.I2C_WRITE_SETTLE)
+                    if not page:
+                        self._page_dirty = False
+                return op()
+            except OSError as e:
+                if attempt == self.I2C_TRIES - 1:
+                    raise
+                self._logger.warning(f'{self!r}: I2C error ({e}); retry {attempt + 1} of {self.I2C_TRIES - 1} in {delay:.2f} s')
+                time.sleep(delay)
+                delay *= 2
+            finally:
+                if upper and self._page_dirty:
+                    self._restore_page0()
+                if enable:
+                    try:
+                        self.enable_i2c(False)
+                    except OSError as e:
+                        self._logger.warning(f'{self!r}: could not release ModSelL ({e})')
+
+    def _restore_page0(self):
+        """Put the page register back to 0. Never raises: a failure is logged and retried on the next upper access."""
+        for _ in range(self.I2C_TRIES):
+            try:
+                self._qsfp_eeprom.write(addr=127, data=0)  # Putting page back to 0
+                time.sleep(self.I2C_WRITE_SETTLE)
+                self._page_dirty = False
+                return
+            except OSError:
+                time.sleep(self.I2C_RETRY_DELAY)
+        self._logger.error(f'{self!r}: could not restore page 0; it will be selected again before the next upper-memory access')
 
     # SFF-8636 page 03h signal-integrity controls, one 4-bit value per channel 1-4. Volatile: lost at module power-down.
     def _get_nibbles(self, addr):
@@ -390,7 +424,57 @@ class QSFP(object):
         ch = [values] * 4 if isinstance(values, int) else list(values)
         if len(ch) != 4 or not all(c in allowed for c in ch):
             raise ValueError(f'{self!r}: values {ch} not in {list(allowed)} (one value, or one per channel 1-4)')
-        self.write(addr, [ch[0] << 4 | ch[1], ch[2] << 4 | ch[3]], page=3)
+        data = [ch[0] << 4 | ch[1], ch[2] << 4 | ch[3]]
+        self._write_verified(addr, data, page=3)
+
+    def _write_verified(self, addr, data, page):
+        """Write, read back, and write once more if the read-back differs (a write can be lost to a NACK)."""
+        for _ in range(2):
+            self.write(addr, data, page=page)
+            if list(self.read(addr, len(data), page=page)) == list(data):
+                return
+        raise IOError(f'{self!r}: page {page} byte {addr}: wrote {list(data)}, read back {list(self.read(addr, len(data), page=page))}')
+
+    def get_si_capabilities(self):
+        """Signal-integrity capabilities: page 00h byte 193 and page 03h bytes 224-225 (flat-memory modules: byte 193 only)."""
+        b193 = self.read(193)[0]
+        caps = dict(tx_adaptive_eq=bool(b193 & 8), tx_eq_programmable=bool(b193 & 4),
+                    rx_emphasis_programmable=bool(b193 & 2), rx_amplitude_programmable=bool(b193 & 1),
+                    paged=not (self.read(2)[0] >> 2 & 1))
+        if caps['paged']:
+            m = self.read(224, 2, page=3)
+            caps.update(max_tx_eq_db=m[0] >> 4, max_rx_emphasis_db=m[0] & 15, rx_amplitude_codes=[c for c in range(4) if m[1] >> c & 1])
+        return caps
+
+    def get_tx_adaptive_eq(self):
+        """TX input adaptive equalization enable per channel 1-4 (page 03h byte 241 bits 3-0)."""
+        b = self.read(241, page=3)[0]
+        return [bool(b >> c & 1) for c in range(4)]
+
+    def set_tx_adaptive_eq(self, enable):
+        """Enable or disable TX input adaptive equalization: one bool, or a list for channels 1-4. Keeps byte 241 bits 7-4."""
+        en = [enable] * 4 if isinstance(enable, bool) else list(enable)
+        b = self.read(241, page=3)[0]
+        self._write_verified(241, [b & 0xF0 | sum(1 << c for c in range(4) if en[c])], page=3)
+
+    def retrain_tx_adaptive_eq(self):
+        """Make the TX input adaptive equalizer adapt again to the current host signal: enables off, then back on.
+        Channels with adaptive equalization off are not changed. Returns False if no channel has it on."""
+        b = self.read(241, page=3)[0]
+        if not b & 0x0F:
+            return False
+        try:
+            self.write(241, [b & 0xF0], page=3)
+            time.sleep(0.1)
+        finally:
+            self._write_verified(241, [b], page=3)  # always put the enables back
+        return True
+
+    def get_signal_flags(self):
+        """Latched TX/RX flags (page 00h bytes 3-5), one bit per channel (bit 0 = channel 1). Reading clears them."""
+        los, fault, lol = self.read(3, 3)
+        return dict(tx_los=los >> 4, rx_los=los & 15, tx_adaptive_eq_fault=fault >> 4, tx_fault=fault & 15,
+                    tx_cdr_lol=lol >> 4, rx_cdr_lol=lol & 15)
 
     def get_tx_input_eq(self):
         """TX input equalization per channel 1-4, in dB (page 03h bytes 234-235)."""
