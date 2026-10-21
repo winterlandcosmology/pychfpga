@@ -438,7 +438,7 @@ class QSFP(object):
     def get_si_capabilities(self):
         """Signal-integrity capabilities: page 00h byte 193 and page 03h bytes 224-225 (flat-memory modules: byte 193 only)."""
         b193 = self.read(193)[0]
-        caps = dict(tx_adaptive_eq=bool(b193 & 8), tx_eq_programmable=bool(b193 & 4),
+        caps = dict(tx_adaptive_eq_capable=bool(b193 & 8), tx_eq_programmable=bool(b193 & 4),
                     rx_emphasis_programmable=bool(b193 & 2), rx_amplitude_programmable=bool(b193 & 1),
                     paged=not (self.read(2)[0] >> 2 & 1))
         if caps['paged']:

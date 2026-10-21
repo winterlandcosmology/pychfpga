@@ -107,6 +107,16 @@ def test_retrain_restores_enables_after_failure():
     assert q._qsfp_eeprom.mem[3][241] == 0x0F
 
 
+def test_read_optical_keeps_capability_and_enables_apart():
+    q = make_qsfp()
+    m0, m3 = q._qsfp_eeprom.mem[0], q._qsfp_eeprom.mem[3]
+    m0[193], m3[224], m3[225], m3[241] = 0x0F, 0xA7, 0x03, 0x00      # adaptive-capable module, adaptive EQ off
+    ib = type('IB', (), dict(serial='0001', GPU=object(), i2c1_qsfp=q))()
+    arr = type('Arr', (), dict(ib=[ib]))()
+    s = CGEArrayMethods(arr).read_optical(verbose=False)['0001']
+    assert s['tx_adaptive_eq_capable'] is True and s['tx_adaptive_eq'] == [False] * 4
+
+
 def test_nearest_tx_codes():
     n = CGEArrayMethods.nearest_tx_codes
     assert n(950, 0.01, 0) == (24, 0, 0)

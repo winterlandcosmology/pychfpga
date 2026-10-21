@@ -87,7 +87,7 @@ class CGEArrayMethods(ArrayMethods):
             out[ib.serial] = s
             if verbose:
                 f = s['flags']
-                print(f'  SN{ib.serial} {s["vendor"]} {s["part"]}: adaptive TX EQ capable {s["tx_adaptive_eq"]}')
+                print(f'  SN{ib.serial} {s["vendor"]} {s["part"]}: adaptive TX EQ capable {s["tx_adaptive_eq_capable"]}')
                 if s['paged']:
                     print(f'    TX input EQ {s["tx_eq_db"]} dB (max {s["max_tx_eq_db"]}), adaptive ch1-4 {[int(a) for a in s["tx_adaptive_eq"]]}'
                           f' | RX emphasis {s["rx_emphasis_db"]} dB (max {s["max_rx_emphasis_db"]})'
