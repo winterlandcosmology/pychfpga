@@ -7,7 +7,6 @@ import os
 import time
 
 import numpy as np
-import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from PyQt6.QtCore import Qt, QTimer
