@@ -333,16 +333,15 @@ class QSFP(object):
         if addr in self.QSFP_EEPROM_MAP:
             (__, addr, __, page) = self.QSFP_EEPROM_MAP[addr]
 
-        if page:
-            self._qsfp_eeprom.write(addr=127, data=page, length=1)  # Writing to page select register
-
-        self._qsfp_eeprom.write(addr, data)  # Writing at specified address
-
-        if page:
-            self._qsfp_eeprom.write(addr=127, data=0, length=1)  # Putting page back to 0
-
-        if enable:
-            self.enable_i2c(False)
+        try:
+            if page:
+                self._qsfp_eeprom.write(addr=127, data=page)  # Writing to page select register
+            self._qsfp_eeprom.write(addr, data)  # Writing at specified address
+        finally:
+            if page:
+                self._qsfp_eeprom.write(addr=127, data=0)  # Putting page back to 0
+            if enable:
+                self.enable_i2c(False)
 
     def read(self, addr, length=1, page=0, enable=True):
         """
@@ -370,18 +369,53 @@ class QSFP(object):
         if addr in self.QSFP_EEPROM_MAP:
             (__, addr, length, page) = self.QSFP_EEPROM_MAP[addr]
 
-        if page:
-            self._qsfp_eeprom.write(addr=127, data=page, length=1)  # Writing to page select register
-
-        data = self._qsfp_eeprom.read(addr=addr, length=length)  # Reading at specified address
-
-        if page:
-            self._qsfp_eeprom.write(addr=127, data=0, length=1)  # Putting page back to 0
-
-        if enable:
-            self.enable_i2c(False)
+        try:
+            if page:
+                self._qsfp_eeprom.write(addr=127, data=page)  # Writing to page select register
+            data = self._qsfp_eeprom.read(addr=addr, length=length)  # Reading at specified address
+        finally:
+            if page:
+                self._qsfp_eeprom.write(addr=127, data=0)  # Putting page back to 0
+            if enable:
+                self.enable_i2c(False)
 
         return data
+
+    # SFF-8636 page 03h signal-integrity controls, one 4-bit value per channel 1-4. Volatile: lost at module power-down.
+    def _get_nibbles(self, addr):
+        b = self.read(addr, 2, page=3)
+        return [b[0] >> 4, b[0] & 15, b[1] >> 4, b[1] & 15]
+
+    def _set_nibbles(self, addr, values, allowed):
+        ch = [values] * 4 if isinstance(values, int) else list(values)
+        if len(ch) != 4 or not all(c in allowed for c in ch):
+            raise ValueError(f'{self!r}: values {ch} not in {list(allowed)} (one value, or one per channel 1-4)')
+        self.write(addr, [ch[0] << 4 | ch[1], ch[2] << 4 | ch[3]], page=3)
+
+    def get_tx_input_eq(self):
+        """TX input equalization per channel 1-4, in dB (page 03h bytes 234-235)."""
+        return self._get_nibbles(234)
+
+    def set_tx_input_eq(self, db):
+        """Set TX input equalization: one value for all channels, or a list for channels 1-4. 0..max dB (page 03h byte 224[7:4])."""
+        self._set_nibbles(234, db, range((self.read(224, page=3)[0] >> 4) + 1))
+
+    def get_rx_output_emphasis(self):
+        """RX output emphasis per channel 1-4, in dB (page 03h bytes 236-237)."""
+        return self._get_nibbles(236)
+
+    def set_rx_output_emphasis(self, db):
+        """Set RX output emphasis: one value for all channels, or a list for channels 1-4. 0..max dB (page 03h byte 224[3:0])."""
+        self._set_nibbles(236, db, range((self.read(224, page=3)[0] & 15) + 1))
+
+    def get_rx_output_amplitude(self):
+        """RX output amplitude code per channel 1-4 (page 03h bytes 238-239; 0 = 100-400 mV, 1 = 300-600 mV, ...)."""
+        return self._get_nibbles(238)
+
+    def set_rx_output_amplitude(self, code):
+        """Set RX output amplitude code: one value for all channels, or a list for channels 1-4. Supported codes: page 03h byte 225[3:0]."""
+        sup = self.read(225, page=3)[0]
+        self._set_nibbles(238, code, [c for c in range(4) if sup >> c & 1])
 
     def read_str(self, addr=148, length=16, page=0):
         """Read and decode a fixed-length text field.
