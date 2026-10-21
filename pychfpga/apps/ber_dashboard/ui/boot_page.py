@@ -84,7 +84,14 @@ class BootPage(QWidget):
         self.load_available_crates()
         craterow.addWidget(QLabel("Load Crate:"), 1)
         craterow.addWidget(self.crate_dropdown, 3)
-        layout.addLayout(craterow)  
+        layout.addLayout(craterow)
+
+        moderow = QHBoxLayout()
+        moderow.addWidget(QLabel("Test mode:"), 1)
+        self.mode = QComboBox()
+        self.mode.addItems(list(BootWorker.MODES))
+        moderow.addWidget(self.mode, 4)
+        layout.addLayout(moderow)
 
 
         # boot button and log
@@ -147,7 +154,7 @@ class BootPage(QWidget):
             self.state.crate = crate
             logging.info(f"Booting crate {crate} with HWM: {hwm}")
         
-        self.worker = BootWorker(hwm, self.state)
+        self.worker = BootWorker(hwm, self.state, BootWorker.MODES[self.mode.currentText()])
         self.worker.log.connect(self.log.append)
         self.worker.start()
 

@@ -9,6 +9,7 @@ from ..state import AppState
 from .boot_page import BootPage
 from .map_page import MapPage
 from .sweep_page import SweepPage
+from .qsfp_page import QsfpPage
 
 class Dashboard(QWidget):
     def __init__(self):
@@ -24,14 +25,15 @@ class Dashboard(QWidget):
         self.pages = [
             BootPage(self.state),
             MapPage(self.state),
-            SweepPage(self.state)
+            SweepPage(self.state),
+            QsfpPage(self.state),
             # TemperaturePage(self.state)
         ]
 
         for p in self.pages:
             self.stack.addWidget(p)
 
-        for i, name in enumerate(["1. Boot", "2. Map", "3. Sweep"]): 
+        for i, name in enumerate(["1. Boot", "2. Map", "3. Sweep", "4. QSFP loopback"]): 
             btn = QPushButton(name)
             btn.clicked.connect(lambda _, x=i: self.stack.setCurrentIndex(x))
             nav.addWidget(btn)
