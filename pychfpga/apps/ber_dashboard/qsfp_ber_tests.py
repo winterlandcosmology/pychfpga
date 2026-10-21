@@ -101,6 +101,16 @@ def _counts(boards):
     return out
 
 
+def rearm(boards):
+    """Reset the PRBS error counters. A checker that lost the pattern (lock proof, stopped lane) only locks again
+    after this reset."""
+    def clear(ib, lane):
+        ib.GPU.select_gt_lane(lane)
+        ib.GPU.RXPRBSCNTRESET = 1
+        ib.GPU.RXPRBSCNTRESET = 0
+    _each_lane(boards, clear)
+
+
 def measure(boards, dwell=1.0, train=2.0, lock_proof=True):
     """Retrain the RX equalizers, wait `train` s, clear the counters, count PRBS-31 errors for `dwell` s.
     Lock proof: stop the transmitted pattern for 0.3 s; a locked checker must count errors.
@@ -112,11 +122,7 @@ def measure(boards, dwell=1.0, train=2.0, lock_proof=True):
     _each_lane(boards, retrain)
     time.sleep(train)
 
-    def clear(ib, lane):
-        ib.GPU.select_gt_lane(lane)
-        ib.GPU.RXPRBSCNTRESET = 1
-        ib.GPU.RXPRBSCNTRESET = 0
-    _each_lane(boards, clear)
+    rearm(boards)
     c0 = _counts(boards)
     t0 = time.time()
     time.sleep(dwell)
@@ -140,12 +146,15 @@ def measure(boards, dwell=1.0, train=2.0, lock_proof=True):
 def check_loopback(boards, swing=0, pre=0, post=21, lpm=False, log=_noop):
     """Check that TX lane n reaches RX lane n of the same board. The pattern of one TX lane at a time is stopped
     (on every board at once); an RX lane is hit if its BER during the stop is above 0.1 (a stopped pattern gives
-    about 0.5). Lanes that already have a BER above 0.05 are reported, not judged.
+    about 0.5). Lanes without lock or with a BER above 0.05 at this setting are reported, not judged.
     Returns {(slot, lane): dict(rx_lanes_hit, background_ber, ok)}."""
     set_prbs(boards)
     set_rx_lpm(boards, lpm)
     set_tx(boards, swing, pre, post)
-    measure(boards, dwell=0.2, lock_proof=False)
+    # An unlocked checker counts nothing, so its lane cannot be judged: find those first with the lock proof.
+    nolock = {k for k, v in measure(boards, dwell=0.2).items() if not v['locked']}
+    rearm(boards)
+    time.sleep(0.2)
     out = {}
     for lane in LANES:
         t0 = time.time(); c0 = _counts(boards); time.sleep(0.3); c1 = _counts(boards)
@@ -178,13 +187,14 @@ def check_loopback(boards, swing=0, pre=0, post=21, lpm=False, log=_noop):
         for ib in boards:
             ber = [((c1[(ib.slot, l)] - c0[(ib.slot, l)]) & 0xFFFFFFFF) / bits[(ib.slot, l)] for l in LANES]
             hit = [l for l in LANES if ber[l] > 0.1 and bg[(ib.slot, l)] < 0.05]
-            bad = [l for l in LANES if bg[(ib.slot, l)] >= 0.05]
+            bad = [l for l in LANES if bg[(ib.slot, l)] >= 0.05 or (ib.slot, l) in nolock]
             ok = hit == [lane]
             out[(ib.slot, lane)] = dict(rx_lanes_hit=hit, background_ber=[bg[(ib.slot, l)] for l in LANES],
                                         not_judged=bad, ok=ok)
             log(f"slot {ib.slot} SN{ib.serial} TX lane {lane} stopped -> RX lanes hit {hit}"
-                + ('' if ok else '  CHECK') + (f' (no lock / BER > 0.05 already on RX lanes {bad})' if bad else ''))
+                + ('' if ok or lane in bad else '  CHECK') + (f' (no lock or BER > 0.05 at this setting on RX lanes {bad}: not judged)' if bad else ''))
         set_prbs(boards)
+        rearm(boards)
         time.sleep(0.2)
     return out
 
@@ -201,13 +211,14 @@ def sweep_tx(boards, swings, pres, posts, dwell=1.0, lpm=True, train=2.0,
     res = dict(swings=list(swings), pres=list(pres), posts=list(posts), lpm=lpm, dwell=dwell,
                serials={ib.slot: ib.serial for ib in boards},
                ber={k: np.full(shape, np.nan) for k in keys}, zero={k: np.zeros(shape, bool) for k in keys},
-               errors={k: np.full(shape, -1, np.int64) for k in keys}, temps=[], t_start=time.time())
+               errors={k: np.full(shape, -1, np.int64) for k in keys}, temps=[], t_start=time.time(), stopped=False)
     total, done = int(np.prod(shape)), 0
     for a, s in enumerate(swings):
         for b, pr in enumerate(pres):
             for c, po in enumerate(posts):
                 if stop():
                     log('sweep stopped')
+                    res['stopped'] = True
                     return res
                 set_tx(boards, s, pr, po)
                 m = measure(boards, dwell=dwell, train=train)
@@ -249,14 +260,21 @@ def scan_eyes(boards, h=range(-32, 33, 4), v=range(-50, 51, 5), max_prescale=5, 
 
 
 def best_index(zero, ber):
-    """Index of the best grid point: among 0-error points, the one with the most 0-error neighbours (same swing,
-    adjacent pre/post); without any, the lowest BER."""
+    """Index of the best grid point. Among 0-error points: the one farthest (in grid steps, same swing) from any
+    point with errors; ties go to the point nearest the centre of the pre/post grid. Without any 0-error point:
+    the lowest BER."""
     if not zero.any():
         return np.unravel_index(np.nanargmin(np.where(np.isnan(ber), 1.0, ber)), ber.shape)
-    z = np.pad(zero.astype(int), ((0, 0), (1, 1), (1, 1)))
-    nb = sum(z[:, 1 + di:z.shape[1] - 1 + di, 1 + dj:z.shape[2] - 1 + dj]
-             for di in (-1, 0, 1) for dj in (-1, 0, 1))
-    return np.unravel_index(np.argmax(np.where(zero, nb, -1)), zero.shape)
+    n_pre, n_post = zero.shape[1:]
+    best, key = None, None
+    for a in range(zero.shape[0]):
+        bad = np.argwhere(~zero[a])
+        for b, c in np.argwhere(zero[a]):
+            d = np.hypot(bad[:, 0] - b, bad[:, 1] - c).min() if len(bad) else np.inf
+            k = (d, -np.hypot(b - (n_pre - 1) / 2, c - (n_post - 1) / 2))
+            if key is None or k > key:
+                best, key = (a, b, c), k
+    return best
 
 
 def summarize(res):
@@ -274,6 +292,10 @@ if __name__ == '__main__':                               # offline check of best
     zero[0, 1:4, 1:4] = True
     zero[0, 0, 4] = True                                 # isolated 0-error point must not win
     assert best_index(zero, np.ones(zero.shape)) == (0, 2, 2)
+    zero = np.ones((1, 5, 7), bool)
+    zero[0, 4, 6] = False                                # one failing corner: best is far from it
+    assert best_index(zero, np.ones(zero.shape)) == (0, 0, 0)
+    assert best_index(np.ones((1, 5, 5), bool), np.ones((1, 5, 5))) == (0, 2, 2)   # all good: centre
     ber = np.full((2, 2, 2), 1e-3); ber[1, 0, 1] = 1e-9
     assert best_index(np.zeros(ber.shape, bool), ber) == (1, 0, 1)
     print('qsfp_ber_tests self-check pass')
