@@ -1,8 +1,10 @@
 # ui/boot_page.py
 import os
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QTextEdit, QLineEdit, QLabel, QHBoxLayout ,QComboBox
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QTextEdit, QLineEdit, QLabel, QHBoxLayout ,QComboBox, QCheckBox
+from pychfpga.hardware.crs.discover import collect_beacons
 from ..workers.boot_worker import BootWorker
+from ..workers.task_worker import TaskWorker
 import numpy as np
 import logging
 from ..utils import QtLogHandler
@@ -92,6 +94,22 @@ class BootPage(QWidget):
         self.mode.addItems(list(BootWorker.MODES))
         moderow.addWidget(self.mode, 4)
         layout.addLayout(moderow)
+
+        # auto-discovery: every board broadcasts a beacon with its serial, crate and slot (TCPipe and U-Boot)
+        discrow = QHBoxLayout()
+        self.discover_btn = QPushButton("Discover boards")
+        self.discover_btn.clicked.connect(self.discover)
+        discrow.addWidget(self.discover_btn, 2)
+        self.found_crates = QComboBox()
+        self.found_crates.setPlaceholderText("Discovered crates")
+        self.found_crates.currentIndexChanged.connect(self.fill_from_discovery)
+        discrow.addWidget(self.found_crates, 4)
+        self.include_uboot = QCheckBox("Include boards in U-Boot")
+        self.include_uboot.setToolTip("Boards in U-Boot are idle; booting starts their firmware and loads a bitstream.")
+        self.include_uboot.toggled.connect(self.fill_from_discovery)
+        discrow.addWidget(self.include_uboot, 2)
+        layout.addLayout(discrow)
+        self.beacons = []
 
 
         # boot button and log
@@ -207,3 +225,66 @@ class BootPage(QWidget):
         for hwm_input in self.hwm_inputs:
             hwm_input.clear()
         self.crate.clear()
+
+    # ------------------------------------------------------------------ auto-discovery
+
+    def discover(self):
+        """Listen 3 s for board beacons in a worker thread, then list the crates found."""
+        self.discover_btn.setEnabled(False)
+        self.log.append("Listening for board beacons (3 s)...")
+
+        def job(log, **_):
+            return collect_beacons(3, on_new=lambda b: log(
+                f"  SN{b.board_serial} {b.address}  crate {b.crate_part or '?'} SN{b.crate_serial or '?'}  "
+                f"slot {b.slot if isinstance(b.slot, int) else '?'}  ({'running' if _running(b) else 'U-Boot'})"))
+
+        self._discovery = TaskWorker(job)
+        self._discovery.log.connect(self.log.append)
+        self._discovery.done.connect(self._discovered)
+        self._discovery.failed.connect(lambda tb: self.log.append("Discovery failed:\n" + tb))
+        self._discovery.finished.connect(lambda: self.discover_btn.setEnabled(True))
+        self._discovery.start()
+
+    def _discovered(self, beacons):
+        self.beacons = beacons
+        crates = {}
+        for b in beacons:
+            crates.setdefault(b.crate_serial or "?", []).append(b)
+        self.found_crates.blockSignals(True)
+        self.found_crates.clear()
+        for serial, bs in sorted(crates.items(), key=lambda kv: -len(kv[1])):
+            part = next((b.crate_part for b in bs if b.crate_part), "crate")
+            n_run = sum(_running(b) for b in bs)
+            self.found_crates.addItem(f"{part} SN{serial}: {len(bs)} boards ({n_run} running, {len(bs) - n_run} in U-Boot)",
+                                      userData=serial)
+        self.found_crates.setCurrentIndex(0)          # the crate with the most boards; the placeholder selects nothing
+        self.found_crates.blockSignals(False)
+        self.log.append(f"Found {len(beacons)} boards in {len(crates)} crate(s).")
+        self.fill_from_discovery()
+
+    def fill_from_discovery(self, *_):
+        """Put the discovered boards of the selected crate in their slot fields."""
+        serial = self.found_crates.currentData()
+        if serial is None:
+            return
+        use = [b for b in self.beacons if (b.crate_serial or "?") == serial
+               and (self.include_uboot.isChecked() or _running(b))]
+        self.clear_hwm_fields()
+        placed, skipped = [], []
+        for b in sorted(use, key=lambda b: b.slot if isinstance(b.slot, int) else 99):
+            if isinstance(b.slot, int) and 1 <= b.slot <= len(self.hwm_inputs) and b.board_serial:
+                self.hwm_inputs[b.slot - 1].setText(b.board_serial.lstrip("0") or "0")
+                placed.append(f"{b.slot}:{b.board_serial}")
+            else:
+                skipped.append(str(b.board_serial))
+        self.crate.setText(serial)
+        self.state.crate = serial
+        n_off = sum(1 for b in self.beacons if (b.crate_serial or "?") == serial) - len(use)
+        self.log.append(f"Crate SN{serial}: slots filled {', '.join(placed) or '(none)'}"
+                        + (f"; {n_off} board(s) in U-Boot not included" if n_off else "")
+                        + (f"; no slot for {', '.join(skipped)}" if skipped else ""))
+
+
+def _running(beacon):
+    """True for a board running TCPipe (FPGA platform firmware); False for a board in U-Boot."""
+    return (beacon.kind or "").upper() == "TCPIPE"

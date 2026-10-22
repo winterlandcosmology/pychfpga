@@ -18,8 +18,10 @@ Each board sends PRBS-31 on its 4 QSFP TX lanes and checks its own RX lanes thro
 or an optical module with a loopback fibre). All boards are measured at the same time, so a test takes the same
 time for 1 or 16 boards.
 
-1. **Boot**: enter the serial numbers in their slot fields, select *QSFP loopback (shuffle8)*, press *Boot Boards*.
-   Any subset of slots can be used. The bitstream must have the CGE TX drive control bytes.
+1. **Boot**: press *Discover boards* (the boards broadcast their serial, crate and slot; the slot fields of the selected
+   crate are filled, boards in U-Boot only with *Include boards in U-Boot*), or enter the serial numbers in their
+   slot fields. Select *QSFP loopback (shuffle8)*, press *Boot Boards*. Any subset of slots can be used. The bitstream
+   must have the CGE TX drive control bytes.
 2. **4. QSFP loopback** page:
 
    - *Read plugs*: what is in each cage (vendor, part, copper or optical).
