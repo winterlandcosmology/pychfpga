@@ -118,6 +118,10 @@ class FPGAFirmware():
 
             RuntimeError will be raised if no match or more than one match is found.
         """
+        # Firmware classes register when their module is imported. chFPGA used to be imported only as a side effect
+        # of loading the Ice platform package, which does not happen if the CRS package was imported first (e.g. by
+        # board discovery); then no mode was found. Import it here so the registry is always complete.
+        import pychfpga.fpga_firmware.chfpga  # noqa: F401
 
         # find all the firmware classes and platform info that match the specified platform name
         # We only need one, but having them all is useful to show them to the user in case of error.
