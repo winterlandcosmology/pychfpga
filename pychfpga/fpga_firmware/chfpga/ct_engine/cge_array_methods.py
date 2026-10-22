@@ -26,6 +26,16 @@ class CGEArrayMethods(ArrayMethods):
     def _boards(self, serials):
         return [ib for ib in self.ib if getattr(ib, 'GPU', None) is not None and (serials is None or ib.serial in serials)]
 
+    def _with_module(self, serials, log=print):
+        """Boards whose QSFP cage has a module (ModPrsL). An EEPROM access to an empty cage times out (~10 s per try)."""
+        out = []
+        for ib in self._boards(serials):
+            if ib.i2c1_qsfp.is_present():
+                out.append(ib)
+            else:
+                log(f'  SN{ib.serial}: no QSFP module in the cage; skipped')
+        return out
+
     def _rpc(self, fn):
         """Run fn(), retrying on OSError (TimeoutError included)."""
         for attempt in range(self.RPC_TRIES):
@@ -78,7 +88,12 @@ class CGEArrayMethods(ArrayMethods):
         out = {}
         for ib in self._boards(serials):
             q = ib.i2c1_qsfp
-            s = dict(vendor=bytes(q.read(148, 16)).decode(errors='replace').strip(),
+            if not q.is_present():
+                out[ib.serial] = dict(present=False)
+                if verbose:
+                    print(f'  SN{ib.serial}: no QSFP module in the cage')
+                continue
+            s = dict(present=True, vendor=bytes(q.read(148, 16)).decode(errors='replace').strip(),
                      part=bytes(q.read(168, 16)).decode(errors='replace').strip(), **q.get_si_capabilities())
             if s['paged']:
                 s.update(tx_eq_db=q.get_tx_input_eq(), rx_emphasis_db=q.get_rx_output_emphasis(),
@@ -99,7 +114,7 @@ class CGEArrayMethods(ArrayMethods):
     def set_optical(self, tx_eq=None, rx_emph=None, rx_amp=None, adaptive=None, serials=None):
         """Set optical module SI settings; None leaves a setting unchanged. One value for all channels or a list for
         channels 1-4: tx_eq / rx_emph in dB, rx_amp as a code, adaptive True/False. Volatile. Returns read_optical()."""
-        for ib in self._boards(serials):
+        for ib in self._with_module(serials):
             q = ib.i2c1_qsfp
             if adaptive is not None:
                 q.set_tx_adaptive_eq(adaptive)
@@ -117,7 +132,7 @@ class CGEArrayMethods(ArrayMethods):
         'toggle': adaptive enables off, then back (other settings kept; boards without adaptive EQ on are skipped).
         'reset': pulse ResetL (ALL module settings back to power-on values; the link drops briefly; waits >= 2 s).
         Prints the latched flags after the wait: TX CDR LOL set means the module input was acquired again."""
-        bs = self._boards(serials)
+        bs = self._with_module(serials)
         for ib in bs:
             ib.i2c1_qsfp.get_signal_flags()                       # clear old latched flags
         for ib in bs:

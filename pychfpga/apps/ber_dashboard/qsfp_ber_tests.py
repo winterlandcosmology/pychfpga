@@ -34,6 +34,9 @@ def read_plugs(ca, log=_noop):
         r = dict(serial=ib.serial)
         try:
             r['present'] = bool(q.is_present())
+            if not r['present']:                         # an EEPROM read of an empty cage times out
+                r.update(vendor='', part='no module', kind='empty')
+                raise LookupError('no QSFP module in the cage')
             r['vendor'] = bytes(q.read(148, 16)).decode(errors='replace').strip()
             r['part'] = bytes(q.read(168, 16)).decode(errors='replace').strip()
             tech = q.read(147)[0] >> 4                  # SFF-8636 byte 147 bits 7-4: transmitter technology
@@ -43,6 +46,8 @@ def read_plugs(ca, log=_noop):
             if r.get('paged') and r.get('tx_eq_programmable'):
                 r.update(tx_eq_db=q.get_tx_input_eq(), rx_emphasis_db=q.get_rx_output_emphasis(),
                          tx_adaptive_eq=q.get_tx_adaptive_eq())
+        except LookupError:
+            pass
         except Exception as e:
             r['error'] = repr(e)
         try:

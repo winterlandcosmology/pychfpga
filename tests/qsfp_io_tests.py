@@ -41,6 +41,7 @@ def make_qsfp(faults=()):
     q._logger = logging.getLogger('test')
     q.selected = []
     q.enable_i2c = q.selected.append
+    q.is_present = lambda: True
     q.parent = 'fake'
     q.I2C_RETRY_DELAY = q.I2C_SELECT_DELAY = q.I2C_WRITE_SETTLE = 0
     return q
@@ -115,6 +116,15 @@ def test_read_optical_keeps_capability_and_enables_apart():
     arr = type('Arr', (), dict(ib=[ib]))()
     s = CGEArrayMethods(arr).read_optical(verbose=False)['0001']
     assert s['tx_adaptive_eq_capable'] is True and s['tx_adaptive_eq'] == [False] * 4
+
+
+def test_read_optical_skips_empty_cage():
+    q = make_qsfp([OSError('must not touch the EEPROM')] * 99)
+    q.is_present = lambda: False
+    ib = type('IB', (), dict(serial='0002', GPU=object(), i2c1_qsfp=q))()
+    arr = type('Arr', (), dict(ib=[ib]))()
+    assert CGEArrayMethods(arr).read_optical(verbose=False) == {'0002': {'present': False}}
+    assert len(q._qsfp_eeprom.faults) == 99
 
 
 def test_nearest_tx_codes():
