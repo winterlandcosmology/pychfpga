@@ -432,7 +432,7 @@ class CGE(MMI):
 
     def set_tx_drive(self, lane, swing=0, pre=0, post=0):
         """Set GT lane TX swing (TXDIFFCTRL), pre-cursor (TXPRECURSOR) and post-cursor (TXPOSTCURSOR) codes, 0-31 each.
-        0/0/0 = 390 mV, 0.01 dB, 0 dB. Firmware reset value: 24/0/0 = 950 mV (chfpgalite ea4d20c on; 0/0/0 before).
+        0/0/0 = 390 mV, 0.01 dB, 0 dB. Firmware reset value: 24/0/15 = 950 mV, 0.01 dB, 3.99 dB (chfpgalite 07c6572 on; 24/0/0 in ea4d20c, 0/0/0 before).
         Values: TXDIFF_MV, TXPRE_DB, TXPOST_DB."""
         self._check_tx_drive()
         assert lane in range(4) and all(0 <= c <= 31 for c in (swing, pre, post)), (lane, swing, pre, post)

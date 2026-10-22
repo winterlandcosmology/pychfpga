@@ -10,14 +10,14 @@ with the CGE TX drive control bytes; on older bitstreams the FPGA methods refuse
     ca = await FPGAArray('crs 247 224', mode='shuffle8')
 
     ca.get_fpga_tx()                                     # (swing, pre, post) codes per lane
-    ca.set_fpga_tx(*ca.nearest_tx_codes(950, 0.01, 0))   # 950 mV, no pre/post-cursor (= the reset value)
+    ca.set_fpga_tx(*ca.nearest_tx_codes(950, 0.01, 3.99))  # 950 mV, 3.99 dB post-cursor (= the reset value)
     ca.set_fpga_tx(0, 0, 21, lanes=[2], serials=['0224'])  # one lane of one board
 
     ca.read_optical()                                    # module settings, adaptive EQ enables, latched flags
     ca.retrain_optical()                                 # module TX input equalizer adapts to the new FPGA signal
     ca.set_optical(adaptive=False, tx_eq=5)              # manual module settings (volatile)
 
-    ca.restore_si_defaults()                             # FPGA TX 950 mV, DFE, module reset
+    ca.restore_si_defaults()                             # FPGA TX 950 mV / 3.99 dB, DFE, module reset
 
 Notes:
 

@@ -30,7 +30,7 @@ time for 1 or 16 boards.
    - *Run sweep*: every swing x pre x post combination; the *Lanes* tab then shows, per lane, how many settings
      have 0 errors and the best setting, and the *Sweep* tab shows the BER maps.
    - *Eye scans*: eye diagram of every lane at the TX setting.
-   - *Restore defaults*: FPGA TX 950 mV / 0 / 0, DFE.
+   - *Restore defaults*: FPGA TX 950 mV / 0.01 dB / 3.99 dB (the firmware reset value), DFE.
 
 *RX equalizer* "Auto" uses DFE behind a copper plug and LPM behind an optical module: on CRS rev5, passive copper
 loopbacks fail in LPM and SR4 optical modules work best in LPM. Every action saves its data (JSON) and figures
