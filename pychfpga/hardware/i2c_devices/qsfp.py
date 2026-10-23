@@ -16,6 +16,7 @@ class QSFP(object):
          'Identifier': ('bin', 0, 1, 0),
          'Status': ('bin', 1, 2, 0),
          'ChanStatusIntFlags': ('bin', 3, 2, 0),
+         'ChanFlags': ('bin', 3, 3, 0),          # latched LOS, TX fault/adaptive EQ fault, CDR LOL (bytes 3-5)
          'ModMonIntFlags': ('bin', 6, 2, 0),
          'ChanMonIntFlags' : ('bin', 9, 4, 0),
          'MeasuredTemp' : ('bin', 22, 2, 0),
@@ -55,14 +56,22 @@ class QSFP(object):
          'MaxCaseTemp':('bin', 190, 1, 0),
          'CCBase':('bin', 191, 1, 0),
          'ExtOptions':('bin', 192, 4, 0),
+         'SIOptions':('bin', 193, 1, 0),          # signal-integrity controls implemented
          'VenSN': ('str', 196, 16, 0),
          'DateCode':('str', 212, 8, 0),
          'DiagMon':('bin', 220, 1, 0),
          'EnhOpt':('bin', 221, 1, 0),
          'CCExt':('bin', 223, 1, 0),
-         'VenSpecEEPROM':('str', 224, 32, 0)      #no idea if a string or binary info
-         ##The other pages don't seem useful to us at all.
+         'VenSpecEEPROM':('str', 224, 32, 0),     #no idea if a string or binary info
+
+         # Page 03h signal-integrity controls (SFF-8636). Not on flat-memory modules. One nibble per channel 1-4.
+         'SIMaxLevels':('bin', 224, 2, 3),        # max TX EQ / RX emphasis, supported RX amplitude codes
+         'TxInputEq':('bin', 234, 2, 3),
+         'RxOutputEmphasis':('bin', 236, 2, 3),
+         'RxOutputAmplitude':('bin', 238, 2, 3),
+         'TxAdaptEqEnable':('bin', 241, 1, 3),    # bits 3-0
     }
+    PAGE_SELECT = QSFP_EEPROM_MAP['PageSelect'][1]
 
     def __init__(self, i2c, bus_name, gpio_prefix, gpio, address=0x50, parent=None):
         """ Create a QSFP object that allows read/write of the QSFP's hardware control lines and internal registers.
@@ -383,7 +392,7 @@ class QSFP(object):
                 if upper and (page or self._page_dirty):
                     if page:
                         self._page_dirty = True               # the page register may change even if the write fails
-                    self._qsfp_eeprom.write(addr=127, data=page)  # Writing to page select register
+                    self._qsfp_eeprom.write(addr=self.PAGE_SELECT, data=page)  # Writing to page select register
                     time.sleep(self.I2C_WRITE_SETTLE)
                     if not page:
                         self._page_dirty = False
@@ -407,7 +416,7 @@ class QSFP(object):
         """Put the page register back to 0. Never raises: a failure is logged and retried on the next upper access."""
         for _ in range(self.I2C_TRIES):
             try:
-                self._qsfp_eeprom.write(addr=127, data=0)  # Putting page back to 0
+                self._qsfp_eeprom.write(addr=self.PAGE_SELECT, data=0)  # Putting page back to 0
                 time.sleep(self.I2C_WRITE_SETTLE)
                 self._page_dirty = False
                 return
@@ -416,90 +425,90 @@ class QSFP(object):
         self._logger.error(f'{self!r}: could not restore page 0; it will be selected again before the next upper-memory access')
 
     # SFF-8636 page 03h signal-integrity controls, one 4-bit value per channel 1-4. Volatile: lost at module power-down.
-    def _get_nibbles(self, addr):
-        b = self.read(addr, 2, page=3)
+    def _get_nibbles(self, name):
+        b = self.read(name)
         return [b[0] >> 4, b[0] & 15, b[1] >> 4, b[1] & 15]
 
-    def _set_nibbles(self, addr, values, allowed):
+    def _set_nibbles(self, name, values, allowed):
         ch = [values] * 4 if isinstance(values, int) else list(values)
         if len(ch) != 4 or not all(c in allowed for c in ch):
             raise ValueError(f'{self!r}: values {ch} not in {list(allowed)} (one value, or one per channel 1-4)')
         data = [ch[0] << 4 | ch[1], ch[2] << 4 | ch[3]]
-        self._write_verified(addr, data, page=3)
+        self._write_verified(name, data)
 
-    def _write_verified(self, addr, data, page):
-        """Write, read back, and write once more if the read-back differs (a write can be lost to a NACK)."""
+    def _write_verified(self, name, data):
+        """Write register `name`, read back, and write once more if the read-back differs (a write can be lost to a NACK)."""
         for _ in range(2):
-            self.write(addr, data, page=page)
-            if list(self.read(addr, len(data), page=page)) == list(data):
+            self.write(name, data)
+            if list(self.read(name)) == list(data):
                 return
-        raise IOError(f'{self!r}: page {page} byte {addr}: wrote {list(data)}, read back {list(self.read(addr, len(data), page=page))}')
+        raise IOError(f'{self!r}: {name}: wrote {list(data)}, read back {list(self.read(name))}')
 
     def get_si_capabilities(self):
         """Signal-integrity capabilities: page 00h byte 193 and page 03h bytes 224-225 (flat-memory modules: byte 193 only)."""
-        b193 = self.read(193)[0]
-        caps = dict(tx_adaptive_eq_capable=bool(b193 & 8), tx_eq_programmable=bool(b193 & 4),
-                    rx_emphasis_programmable=bool(b193 & 2), rx_amplitude_programmable=bool(b193 & 1),
-                    paged=not (self.read(2)[0] >> 2 & 1))
+        opt = self.read('SIOptions')[0]
+        caps = dict(tx_adaptive_eq_capable=bool(opt & 8), tx_eq_programmable=bool(opt & 4),
+                    rx_emphasis_programmable=bool(opt & 2), rx_amplitude_programmable=bool(opt & 1),
+                    paged=not (self.read('Status')[1] >> 2 & 1))  # byte 2 bit 2: flat memory
         if caps['paged']:
-            m = self.read(224, 2, page=3)
+            m = self.read('SIMaxLevels')
             caps.update(max_tx_eq_db=m[0] >> 4, max_rx_emphasis_db=m[0] & 15, rx_amplitude_codes=[c for c in range(4) if m[1] >> c & 1])
         return caps
 
     def get_tx_adaptive_eq(self):
         """TX input adaptive equalization enable per channel 1-4 (page 03h byte 241 bits 3-0)."""
-        b = self.read(241, page=3)[0]
+        b = self.read('TxAdaptEqEnable')[0]
         return [bool(b >> c & 1) for c in range(4)]
 
     def set_tx_adaptive_eq(self, enable):
         """Enable or disable TX input adaptive equalization: one bool, or a list for channels 1-4. Keeps byte 241 bits 7-4."""
         en = [enable] * 4 if isinstance(enable, bool) else list(enable)
-        b = self.read(241, page=3)[0]
-        self._write_verified(241, [b & 0xF0 | sum(1 << c for c in range(4) if en[c])], page=3)
+        b = self.read('TxAdaptEqEnable')[0]
+        self._write_verified('TxAdaptEqEnable', [b & 0xF0 | sum(1 << c for c in range(4) if en[c])])
 
     def retrain_tx_adaptive_eq(self):
         """Make the TX input adaptive equalizer adapt again to the current host signal: enables off, then back on.
         Channels with adaptive equalization off are not changed. Returns False if no channel has it on."""
-        b = self.read(241, page=3)[0]
+        b = self.read('TxAdaptEqEnable')[0]
         if not b & 0x0F:
             return False
         try:
-            self.write(241, [b & 0xF0], page=3)
+            self.write('TxAdaptEqEnable', [b & 0xF0])
             time.sleep(0.1)
         finally:
-            self._write_verified(241, [b], page=3)  # always put the enables back
+            self._write_verified('TxAdaptEqEnable', [b])  # always put the enables back
         return True
 
     def get_signal_flags(self):
         """Latched TX/RX flags (page 00h bytes 3-5), one bit per channel (bit 0 = channel 1). Reading clears them."""
-        los, fault, lol = self.read(3, 3)
+        los, fault, lol = self.read('ChanFlags')
         return dict(tx_los=los >> 4, rx_los=los & 15, tx_adaptive_eq_fault=fault >> 4, tx_fault=fault & 15,
                     tx_cdr_lol=lol >> 4, rx_cdr_lol=lol & 15)
 
     def get_tx_input_eq(self):
         """TX input equalization per channel 1-4, in dB (page 03h bytes 234-235)."""
-        return self._get_nibbles(234)
+        return self._get_nibbles('TxInputEq')
 
     def set_tx_input_eq(self, db):
         """Set TX input equalization: one value for all channels, or a list for channels 1-4. 0..max dB (page 03h byte 224[7:4])."""
-        self._set_nibbles(234, db, range((self.read(224, page=3)[0] >> 4) + 1))
+        self._set_nibbles('TxInputEq', db, range((self.read('SIMaxLevels')[0] >> 4) + 1))
 
     def get_rx_output_emphasis(self):
         """RX output emphasis per channel 1-4, in dB (page 03h bytes 236-237)."""
-        return self._get_nibbles(236)
+        return self._get_nibbles('RxOutputEmphasis')
 
     def set_rx_output_emphasis(self, db):
         """Set RX output emphasis: one value for all channels, or a list for channels 1-4. 0..max dB (page 03h byte 224[3:0])."""
-        self._set_nibbles(236, db, range((self.read(224, page=3)[0] & 15) + 1))
+        self._set_nibbles('RxOutputEmphasis', db, range((self.read('SIMaxLevels')[0] & 15) + 1))
 
     def get_rx_output_amplitude(self):
         """RX output amplitude code per channel 1-4 (page 03h bytes 238-239; 0 = 100-400 mV, 1 = 300-600 mV, ...)."""
-        return self._get_nibbles(238)
+        return self._get_nibbles('RxOutputAmplitude')
 
     def set_rx_output_amplitude(self, code):
         """Set RX output amplitude code: one value for all channels, or a list for channels 1-4. Supported codes: page 03h byte 225[3:0]."""
-        sup = self.read(225, page=3)[0]
-        self._set_nibbles(238, code, [c for c in range(4) if sup >> c & 1])
+        sup = self.read('SIMaxLevels')[1]
+        self._set_nibbles('RxOutputAmplitude', code, [c for c in range(4) if sup >> c & 1])
 
     def read_str(self, addr=148, length=16, page=0):
         """Read and decode a fixed-length text field.
@@ -685,6 +694,8 @@ class QSFP(object):
 
         data = {}
         for (key, (datatype, addr, length, page)) in list(self.QSFP_EEPROM_MAP.items()):
+            if page:  # upper pages: flat-memory modules have none
+                continue
             if datatype == 'str':  # String detected, converting to readable characters
                 data[key] = self.read(addr=addr, length=length, page=page)
             else:  # assuming binary

@@ -37,9 +37,9 @@ def read_plugs(ca, log=_noop):
             if not r['present']:                         # an EEPROM read of an empty cage times out
                 r.update(vendor='', part='no module', kind='empty')
                 raise LookupError('no QSFP module in the cage')
-            r['vendor'] = bytes(q.read(148, 16)).decode(errors='replace').strip()
-            r['part'] = bytes(q.read(168, 16)).decode(errors='replace').strip()
-            tech = q.read(147)[0] >> 4                  # SFF-8636 byte 147 bits 7-4: transmitter technology
+            r['vendor'] = bytes(q.read('VendName')).decode(errors='replace').strip()
+            r['part'] = bytes(q.read('VenPN')).decode(errors='replace').strip()
+            tech = q.read('DeviceTech')[0] >> 4         # bits 7-4: transmitter technology
             r['kind'] = ('copper' if tech >= 10 or 'LOOPBACK' in r['part'].upper()   # passive plugs often report 1000 (other)
                          else 'unknown' if tech == 8 else 'optical')
             r.update(q.get_si_capabilities())

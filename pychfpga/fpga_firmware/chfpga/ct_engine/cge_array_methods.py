@@ -93,8 +93,8 @@ class CGEArrayMethods(ArrayMethods):
                 if verbose:
                     print(f'  SN{ib.serial}: no QSFP module in the cage')
                 continue
-            s = dict(present=True, vendor=bytes(q.read(148, 16)).decode(errors='replace').strip(),
-                     part=bytes(q.read(168, 16)).decode(errors='replace').strip(), **q.get_si_capabilities())
+            s = dict(present=True, vendor=bytes(q.read('VendName')).decode(errors='replace').strip(),
+                     part=bytes(q.read('VenPN')).decode(errors='replace').strip(), **q.get_si_capabilities())
             if s['paged']:
                 s.update(tx_eq_db=q.get_tx_input_eq(), rx_emphasis_db=q.get_rx_output_emphasis(),
                          rx_amplitude=q.get_rx_output_amplitude(), tx_adaptive_eq=q.get_tx_adaptive_eq())

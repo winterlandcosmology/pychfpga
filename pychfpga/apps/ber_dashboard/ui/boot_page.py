@@ -3,6 +3,7 @@ import os
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QTextEdit, QLineEdit, QLabel, QHBoxLayout ,QComboBox, QCheckBox
 from pychfpga.hardware.crs.discover import collect_beacons
+import pychfpga.fpga_firmware.chfpga  # noqa: F401  registers the chFPGA modes; importing CRS first does not load them
 from ..workers.boot_worker import BootWorker
 from ..workers.task_worker import TaskWorker
 import numpy as np

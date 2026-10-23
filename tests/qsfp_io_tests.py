@@ -135,6 +135,23 @@ def test_nearest_tx_codes():
     assert n(1040, 0.81, 7.84) == (31, 4, 24)
 
 
+def test_si_registers_by_name():
+    q = make_qsfp()
+    m0, m3 = q._qsfp_eeprom.mem[0], q._qsfp_eeprom.mem[3]
+    m0[193] = 0x0F                                       # all SI controls; byte 2 bit 2 = 0: paged
+    m3[224], m3[225], m3[241] = 0x77, 0x0F, 0xA0         # max 7 dB / 7 dB, amplitude codes 0-3
+    assert q.get_si_capabilities()['max_tx_eq_db'] == 7
+    q.set_tx_input_eq([1, 2, 3, 4])
+    q.set_rx_output_emphasis(5)
+    q.set_rx_output_amplitude(2)
+    q.set_tx_adaptive_eq([True, False, False, True])
+    assert list(m3[234:240]) == [0x12, 0x34, 0x55, 0x55, 0x22, 0x22]
+    assert m3[241] == 0xA9 and q.get_tx_adaptive_eq() == [True, False, False, True]
+    m0[3:6] = bytes([0x21, 0x00, 0x30])
+    assert q.get_signal_flags() == dict(tx_los=2, rx_los=1, tx_adaptive_eq_fault=0, tx_fault=0, tx_cdr_lol=3, rx_cdr_lol=0)
+    assert q._qsfp_eeprom.page == 0
+
+
 if __name__ == '__main__':
     for name, fn in list(globals().items()):
         if name.startswith('test_'):
