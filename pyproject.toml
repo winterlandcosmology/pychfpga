@@ -109,6 +109,11 @@ errors-only = true
 
 
 [project.optional-dependencies]
+    ber_dashboard = [  # pychfpga.apps.ber_dashboard (python -m pychfpga.apps.ber_dashboard)
+        "PyQt6",
+        "matplotlib",
+        ]
+
     docs = [
         "sphinx",
         "sphinx_rtd_theme",

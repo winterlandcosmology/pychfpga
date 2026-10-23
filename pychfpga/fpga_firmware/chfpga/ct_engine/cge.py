@@ -15,6 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ..mmi import MMI, BitField, CONTROL, STATUS, DRP
+from .cge_array_methods import CGEArrayMethods
 
 
 class _CGEDrpPort:
@@ -393,6 +394,7 @@ class CGE(MMI):
         self.verbose = verbose
         super().__init__(router=router, router_port=router_port)
         self.config = config
+        self.fpga.register_array_methods(CGEArrayMethods, key='CGE')   # ca.set_fpga_tx(), ca.read_optical(), ...
         self.core = CGECore(self, self.PORT_CORE_DRP)
         self.gt_common = CGECommon(self, self.PORT_GT_CMN_DRP)
         # Per-lane GT access (same API as xxvglink array GTX instances)
@@ -430,7 +432,8 @@ class CGE(MMI):
 
     def set_tx_drive(self, lane, swing=0, pre=0, post=0):
         """Set GT lane TX swing (TXDIFFCTRL), pre-cursor (TXPRECURSOR) and post-cursor (TXPOSTCURSOR) codes, 0-31 each.
-        0/0/0 is the firmware default: 390 mV, 0.01 dB, 0 dB. Values: TXDIFF_MV, TXPRE_DB, TXPOST_DB."""
+        0/0/0 = 390 mV, 0.01 dB, 0 dB. Firmware reset value: 24/0/15 = 950 mV, 0.01 dB, 3.99 dB (chfpgalite 07c6572 on; 24/0/0 in ea4d20c, 0/0/0 before).
+        Values: TXDIFF_MV, TXPRE_DB, TXPOST_DB."""
         self._check_tx_drive()
         assert lane in range(4) and all(0 <= c <= 31 for c in (swing, pre, post)), (lane, swing, pre, post)
         self.write_control(8 + 3 * lane, bytes([swing, pre, post]))
