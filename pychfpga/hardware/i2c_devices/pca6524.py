@@ -21,7 +21,7 @@ class pca6524(object):
 
         'POL0': 0x08,
         'POL1': 0x09,
-        'POL1': 0x0A,
+        'POL2': 0x0A,
 
         'CFG0': 0x0C,  # 1=in, 0=out
         'CFG1': 0x0D,  # 1=in, 0=out
@@ -106,7 +106,7 @@ class pca6524(object):
         return self.i2c.write_read(self.address, data=[register], read_length=1)[0]
 
     def write(self, byte, value, mask=0xff, select=True):
-        """Write data to the device.
+        """Drive the `mask` bits of port `byte` to `value`, and make them outputs (the pins power up as inputs).
 
         Args:
             byte (Any): Parameter value.
@@ -118,6 +118,7 @@ class pca6524(object):
             None: No value is returned.
         """
         self.write_reg(f'OUT{int(byte)}', value, mask=mask, select=select)
+        self.write_reg(f'CFG{int(byte)}', 0, mask=mask, select=False)  # output level first, then output enable
 
     def read(self, byte, select=True):
         """Read data from the device.

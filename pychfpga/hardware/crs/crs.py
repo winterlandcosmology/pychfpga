@@ -95,6 +95,20 @@ class CRS(Motherboard):
     SLOT_TO_LANE_MAP = {(ss,ds):(sl,dl) for (ss,sl),(ds,dl) in TX_TO_RX_LANE_MAP.items()}
     # ---------------
 
+    # Backplane QSFP ports (4SBP backplane schematic, U11 PCAL6524): connector: (U11 port, first bit of ModSelL/ResetL/IntL/ModPrsL,
+    # LPMode bit on port 2). Data lanes: P5A, P5B and P6A carry one lane of each slot to backplanes BD1, BD2 and BD3; P6B has none.
+    BP_QSFP_PINS = {'P5A': (1, 4, 3), 'P5B': (0, 0, 0), 'P6A': (0, 4, 1), 'P6B': (1, 0, 2)}
+
+    @classmethod
+    def bp_qsfp_gpio_table(cls, expander):
+        """GPIO table for the backplane QSFP ports: '<connector>_<signal>': (expander, port, bit, width)."""
+        table = {}
+        for port, (byte, bit, lp_bit) in cls.BP_QSFP_PINS.items():
+            for i, name in enumerate(('ModSelL', 'ResetL', 'IntL', 'ModPrsL')):
+                table[f'{port}_{name}'] = (expander, byte, bit + i, 1)
+            table[f'{port}_LPMode'] = (expander, 2, lp_bit, 1)
+        return table
+
     REFCLK_BP = 1
     REFCLK_MB_SMA = 2
 
@@ -246,8 +260,12 @@ class CRS(Motherboard):
         # 24C02, 256 bytes, 8-bit word address (I2C0 @ 0x51, no mux)
         self.i2c0_bp_eeprom_data = eeprom(self.iic, address=0x51, bus_name=0, address_width=8, max_read_length=255, max_write_length=8, write_page_size=8)
         self.i2c0_bp_tmp421 = tmp421(self.iic, address=0x4E, port=0) # only on slot 0
-        self.i2c0_bp_gpio = pca6524(self.iic, address=0x44, port=0) # only on slot 0
-        self.i2c0_qsfp = qsfp(self.iic, bus_name=0, gpio_prefix='QSFP_', gpio=self.i2c0_bp_gpio, address=0x50) # only on slot 0
+        # U11 PCAL6524: 7-bit address 0x22 (the backplane schematic's "0x44" is the 8-bit form). Only on slot 1.
+        self.i2c0_bp_gpio = pca6524(self.iic, address=0x22, port=0)
+        self.i2c0_bp_gpios = GPIO(gpio_table=self.bp_qsfp_gpio_table(self.i2c0_bp_gpio))
+        # Backplane QSFP ports, all at 0x50; ModSelL selects one. Only on slot 1. P6B has no data lanes.
+        self.i2c0_bp_qsfp = {port: qsfp(self.iic, bus_name=0, gpio_prefix=f'{port}_', gpio=self.i2c0_bp_gpios, address=0x50)
+                             for port in self.BP_QSFP_PINS}
 
         # list of sensors
         self.i2c1_ina231_list = {
