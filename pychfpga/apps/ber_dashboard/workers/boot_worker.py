@@ -46,13 +46,11 @@ class BootWorker(QThread):
                 i.GPIO.CORR_RESET = 0
 
         if self.mode.startswith('corr'):
-            # Backplane QSFP lanes come up at the single copper TX drive (set in the corner-turn init); the ports must hold copper.
+            # Backplane QSFP lanes come up at the single copper TX drive (set in the corner-turn init); warns on other media.
             try:
                 check_bp_qsfp_copper(self.ca, log=self.log.emit)
-            except RuntimeError as e:
-                self.log.emit(f'ERROR: {e}')
-                self.log.emit('Boot refused: replace the module(s) with copper and boot again.')
-                return
+            except Exception as e:
+                self.log.emit(f'Backplane QSFP port check failed: {type(e).__name__}: {e}')
         self.state.ca = self.ca
         self.state.mode = self.mode
         self.log.emit("Boot complete.")

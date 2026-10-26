@@ -54,9 +54,8 @@ def test_media_rule():
 
 
 def test_check_bp_qsfp_copper():
-    """Copper or empty ports pass; an optical module raises and names its port; a backplane without its position-1 board is skipped."""
+    """Copper or empty ports pass; an optical module is reported as a warning naming its port; a backplane without its position-1 board is skipped."""
     from pychfpga.apps.ber_dashboard.sfp_ber_tests import check_bp_qsfp_copper
-    import pytest
 
     class Board:
         def __init__(self, slot, media=None):
@@ -69,8 +68,9 @@ def test_check_bp_qsfp_copper():
 
     msgs = []
     ok = Arr(Board(1, {'P5A': 'copper', 'P5B': None, 'P6A': 'copper', 'P6B': 'copper'}), Board(2), Board(6))   # no board in slot 5
-    assert check_bp_qsfp_copper(ok, log=msgs.append) == {1: ok.ib[0]._media}
-    assert any('slot 5' in m and 'not checked' in m for m in msgs)
+    assert check_bp_qsfp_copper(ok, log=msgs.append) == ({1: ok.ib[0]._media}, [])
+    assert any('slot 5' in m and 'not checked' in m for m in msgs) and not any('WARNING' in m for m in msgs)
+    msgs.clear()
     bad = Arr(Board(9, {'P5A': 'optical', 'P5B': 'copper', 'P6A': None, 'P6B': 'copper'}))
-    with pytest.raises(RuntimeError, match='slot 9 P5A'):
-        check_bp_qsfp_copper(bad)
+    assert check_bp_qsfp_copper(bad, log=msgs.append)[1] == [(9, 'P5A')]
+    assert any(m.startswith('WARNING') and 'slot 9 P5A' in m for m in msgs)

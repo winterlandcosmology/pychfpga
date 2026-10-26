@@ -27,11 +27,11 @@ def emit_log(logger, msg):
 
 
 def check_bp_qsfp_copper(ca, log=None):
-    """Insist that every populated backplane QSFP port holds copper (DAC or loopback plug); raise otherwise.
+    """Check that every populated backplane QSFP port holds copper (DAC or loopback plug); warn otherwise.
 
     The board in slot position 1 of each backplane reads its ports through the U11 expander (SFF-8636 connector and
     technology bytes). Backplanes without that board, or whose expander does not answer, are logged and skipped.
-    Returns {slot_position_1: {port: media or None}} for the backplanes that were read.
+    Returns ({slot_position_1: {port: media or None}} for the backplanes read, [(slot_position_1, port), ...] not copper).
     """
     by_slot = {ib.slot: ib for ib in ca.ib}
     read, bad = {}, []
@@ -48,9 +48,9 @@ def check_bp_qsfp_copper(ca, log=None):
         emit_log(log, f'backplane of slot {head}: ' + ', '.join(f'{p} {m or "empty"}' for p, m in media.items()))
         bad += [(head, port) for port, m in media.items() if m not in (None, 'copper')]
     if bad:
-        raise RuntimeError('Backplane QSFP ports must hold copper (DAC or loopback plug); not copper: '
-                           + ', '.join(f'slot {h} {p}' for h, p in bad))
-    return read
+        emit_log(log, 'WARNING: backplane QSFP ports should hold copper (DAC or loopback plug); the lanes into '
+                      + ', '.join(f'slot {h} {p}' for h, p in bad) + ' are at the copper TX drive and will run poorly')
+    return read, bad
 
 #---
 PRBS = 5         

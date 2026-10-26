@@ -86,7 +86,7 @@ values.
 Optical modules are not supported on these ports: the two sets of SR4 modules
 tested wanted different, strong de-emphasis and no single setting was clean on
 all of them. The dashboard boot (corr modes) reads every backplane port through
-U11 and refuses to boot when a port holds anything but copper
+U11 and logs a warning when a port holds anything but copper
 (`check_bp_qsfp_copper`); the media comes from SFF-8636 bytes 130 and 147.
 
 ## Status
