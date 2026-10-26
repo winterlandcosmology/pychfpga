@@ -238,21 +238,27 @@ class QSFP(object):
                 self._logger.exception(
                     '%r: Failed to program PowerSet (byte 93) for high power '
                     'class; module may stay clamped to Power Class 1.', self)
-        self.set_control_bit('LPMode', not state)
+        self.set_control_bit('LPMode', state) # not state)
 
-    def get_power_class(self):
+    def get_power_class(self, retries = 5):
         """ Return the QSFP module's declared Power Class (1..8) based on
         byte 129 (ExtIdentifier) per SFF-8636.
 
         Returns None if the module is not present or cannot be read.
         """
         if not self.is_present():
+            self._logger.debug(f'{self!r}: QSFP module not detected when calling get_power_class()')
             return None
-        try:
-            ext = self.read_byte('ExtIdentifier')
-        except Exception:
-            self._logger.exception('%r: Failed to read ExtIdentifier', self)
-            return None
+        trial = 0
+        while trial < retries:
+            self._logger.debug(f'{self!r}: Attempting to read power class byte on the QSFP... trial {trial}')
+            try:
+                ext = self.read_byte('ExtIdentifier')
+                break
+            except:
+                self._logger.exception('%r: Failed to read ExtIdentifier', self)
+                trial += 1
+                pass
         # bit 5: Power Class 8 implemented (max power encoded in byte 107)
         if ext & (1 << 5):
             return 8
@@ -263,7 +269,7 @@ class QSFP(object):
         # bits [7:6]: Power Class 1-4 (00->1 .. 11->4)
         return ((ext >> 6) & 0b11) + 1
 
-    def enable_high_power_class(self):
+    def enable_high_power_class(self, retries = 5):
         """ Program byte 93 (PowerSet) according to the module's declared
         Power Class so that classes >3.5 W are allowed to power up.
 
@@ -285,7 +291,15 @@ class QSFP(object):
         self._logger.info(
             '%r: Module declares Power Class %d; writing PowerSet=0x%02X',
             self, power_class, value)
-        self.write('PowerSet', bytes([value]))
+        trial = 0
+        while trial < retries:
+            self._logger.debug(f'{self!r}: Attempting to enable high-power on the QSFP... trial {trial}')
+            try:
+                self.write('PowerSet', bytes([value]))
+                break
+            except:
+                trial += 1
+                pass
         return value
 
     def __getattr__(self, name):
