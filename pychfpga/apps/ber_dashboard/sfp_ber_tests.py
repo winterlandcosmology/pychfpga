@@ -100,9 +100,10 @@ def reset_and_setup_links(ca, PRBS, TX_POW, TX_PRE, TX_POST):
         for ch in ib.CT.BPLINKS.gty:
             ch.TXPRBSSEL   = PRBS
             ch.RXPRBSSEL   = PRBS
-            ch.TXDIFFCTRL  = TX_POW
-            ch.TXPRECURSOR = TX_PRE
-            ch.TXPOSTCURSOR= TX_POST
+            if TX_POW is not None:   # None: keep the TX drive already set (e.g. by set_bp_qsfp_tx)
+                ch.TXDIFFCTRL  = TX_POW
+                ch.TXPRECURSOR = TX_PRE
+                ch.TXPOSTCURSOR= TX_POST
             ch.TXPRBSFORCEERR = 0
             ch.RXLPMEN = 0
             ch.TXINHIBIT = 1

@@ -94,6 +94,11 @@ class BootPage(QWidget):
         self.mode = QComboBox()
         self.mode.addItems(list(BootWorker.MODES))
         moderow.addWidget(self.mode, 4)
+        self.per_port_tx = QCheckBox("Set backplane QSFP TX from the plugged media")
+        self.per_port_tx.setChecked(True)
+        self.per_port_tx.setToolTip("corr64 only: after boot, read each backplane QSFP port through the expander and set the TX drive of the lanes "
+                                    "reaching it (copper 13/6/8, optical 15/15/20, DFE). The Map page can keep these settings.")
+        moderow.addWidget(self.per_port_tx, 3)
         layout.addLayout(moderow)
 
         # auto-discovery: every board broadcasts a beacon with its serial, crate and slot (TCPipe and U-Boot)
@@ -173,7 +178,7 @@ class BootPage(QWidget):
             self.state.crate = crate
             logging.info(f"Booting crate {crate} with HWM: {hwm}")
         
-        self.worker = BootWorker(hwm, self.state, BootWorker.MODES[self.mode.currentText()])
+        self.worker = BootWorker(hwm, self.state, BootWorker.MODES[self.mode.currentText()], self.per_port_tx.isChecked())
         self.worker.log.connect(self.log.append)
         self.worker.start()
 

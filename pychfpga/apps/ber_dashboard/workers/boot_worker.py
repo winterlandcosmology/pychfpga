@@ -3,18 +3,20 @@ import asyncio
 
 from PyQt6.QtCore import QThread, pyqtSignal
 from pychfpga.fpga_array import FPGAArray
+from ..sfp_ber_tests import set_bp_qsfp_tx
 
 class BootWorker(QThread):
     log = pyqtSignal(str)
 
     MODES = {'Backplane links (corr64)': 'corr64', 'QSFP loopback (shuffle8)': 'shuffle8'}
 
-    def __init__(self, hwm, state, mode='corr64'):
+    def __init__(self, hwm, state, mode='corr64', per_port_tx=True):
         super().__init__()
         self.hwm = hwm
         self.ca = None
         self.state = state
         self.mode = mode
+        self.per_port_tx = per_port_tx   # corr modes: set the backplane QSFP TX lanes from the media plugged into each port
 
     async def initialize_fpga_array(self):
         if self.mode == 'shuffle8':
@@ -46,4 +48,15 @@ class BootWorker(QThread):
 
         self.state.ca = self.ca
         self.state.mode = self.mode
+        self.state.bp_qsfp_tx = None
+        if self.mode.startswith('corr') and self.per_port_tx:
+            try:
+                done = set_bp_qsfp_tx(self.ca, log=self.log.emit)
+                self.state.bp_qsfp_tx = done or None
+                for slot in sorted(done):
+                    self.log.emit(f'slot {slot}: ' + ', '.join(f'GTY {l} -> {p} {m} {st}' for l, (p, m, st) in sorted(done[slot].items())))
+                if not done:
+                    self.log.emit('Backplane QSFP TX: no port read (no board in slot position 1 of a backplane, or empty ports); lanes left at the firmware values.')
+            except Exception as e:
+                self.log.emit(f'Backplane QSFP TX per port failed: {type(e).__name__}: {e}')
         self.log.emit("Boot complete.")
