@@ -66,13 +66,14 @@ def set_bp_qsfp_tx(ca, settings=BP_QSFP_TX, log=None):
                 ch = ib.CT.BPLINKS.gty[lane]
                 ch.TXDIFFCTRL, ch.TXPRECURSOR, ch.TXPOSTCURSOR = settings[m]
                 done.setdefault(slot, {})[lane] = (port, m, settings[m])
-        # the receivers adapted to the firmware's TX drive during init: DFE on, and retrain on the new drive
-        for slot in range(head, head + 4):
-            if slot in by_slot:
-                for lane in CROSS_BACKPLANE_LANES:
-                    ch = by_slot[slot].CT.BPLINKS.gty[lane]
-                    ch.RXLPMEN = 0
-                    ch.reset_rx_equalizer()
+    # Every TX is set; now retrain every backplane-QSFP receiver on the new drive (they adapted to the firmware drive
+    # during init). After all TX changes, not per backplane: a receiver's transmitter is on another backplane when the
+    # ports hold cables.
+    for ib in by_slot.values():
+        for lane in CROSS_BACKPLANE_LANES:
+            ch = ib.CT.BPLINKS.gty[lane]
+            ch.RXLPMEN = 0
+            ch.reset_rx_equalizer()
     return done
 
 #---
