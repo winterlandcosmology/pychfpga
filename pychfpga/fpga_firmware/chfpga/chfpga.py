@@ -1163,6 +1163,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 self.GPU.set_enable(enable_gpu_link)
                 self.logger.debug(f"{self!r}: Data offload links are currently {('Disabled', 'Enabled')[bool(enable_gpu_link)]}")
 
+                # Enable high-power mode if transceiver declares Power Class 5-8
                 if hasattr(self.mb, 'i2c1_qsfp'):
 
                     self.logger.debug(f'{self!r}: QSFP module is present: {self.mb.i2c1_qsfp.is_present()}')
@@ -1181,6 +1182,10 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                                 self.logger.warning(f'{self!r}: Attempted to disable FEC on {self.mb}, but it is still enabled.')
                     except Exception as e:
                         raise Exception(f'Attempted to set high-power mode and disable FEC on QSFP link for {self.mb}, but high-power mode was not enabled. The error is {e}.')
+
+                    # If high-power mode is enabled, disable FEC
+                    if self.mb.i2c1_qsfp.get_power_mode() == 1:
+                        self.mb.GPU.set_fec(False)
 
             if self.CAPTURE_TYPE == 'UCAP':
                 self.logger.debug(f'{self!r}: === Initializing UCAP')

@@ -660,8 +660,6 @@ class POCKET_CORRELATOR:
         return t, d, c, info
 
 
-
-
     async def read_adc_frames(self,
                               n_frames = 2,
                               data_source = 'adc',
@@ -750,6 +748,7 @@ class POCKET_CORRELATOR:
         )
 
         return d_adc, info
+
 
     async def read_fft_frames(self,
                              n_frames = 2,
@@ -882,11 +881,13 @@ class POCKET_CORRELATOR:
         # The receiver already returns the frequency axis in ascending order with length NBINS.
         return d_fft, info
 
+
     async def compute_gains(self,
                             target = 1.5*np.sqrt(2), # default value borrowed from CHIME
                             n_fft_frames = 1000,
                             data_source = 'adc',
                             channels = list(range(ADCS_PER_BOARD)),
+                            period = 0.02,
                             fft_bypass = False,
                             bank = 0,
                             return_scaler_frames = False,
@@ -980,7 +981,7 @@ class POCKET_CORRELATOR:
                                                      data_source = data_source,
                                                      channels = channels,
                                                      fft_bypass = fft_bypass,
-                                                     period = None,
+                                                     period = period,
                                                      split = True,
                                                      check_adc_flags = True,
                                                      check_packets = True,
@@ -1036,7 +1037,7 @@ class POCKET_CORRELATOR:
                                                       channels = channels,
                                                       fft_bypass = fft_bypass,
                                                       scaler_bypass = False,
-                                                      period = 0.02,
+                                                      period = period,
                                                       split = True,
                                                       verbose = 0,
                                                       **function_kwargs)
@@ -1948,6 +1949,9 @@ class POCKET_CORRELATOR:
                 ucap_overrun_buf = np.zeros(n_vis_per_file, dtype = int)
                 temperature_buf = np.zeros(n_vis_per_file, dtype = np.float64)
 
+                # Define burst period if ADC/FFT are requested
+                period = 0.2
+
                 if capture_adc_bursts:
                     # Capture ADC data. Note: a single capture for all 8 pols in mode 0 is equal to
                     # 16384 samples per frames * 16 frames per capture * 16 bits per sample / 8 bits per byte / 1e6 B per MB = 0.524288 MB of data.
@@ -1959,7 +1963,7 @@ class POCKET_CORRELATOR:
                     print(f'Capturing {n_adc_frames_per_file} ADC frames...')
                     d_adc, _ = await self.read_adc_frames(n_frames = n_adc_frames_per_file,
                                                           data_source = 'adc',
-                                                          period = 0.02,
+                                                          period = period,
                                                           split = True,
                                                           verbose = 0
                                                           )
@@ -1987,10 +1991,11 @@ class POCKET_CORRELATOR:
                     # Capture bursts
                     print('')
                     print(f'Capturing {n_fft_frames_per_file} FFT frames...')
-                    d_fft, _ = await self.read_fft_frames(n_frames = n_fft_frames_per_file,
+                    # need to request twice the number of frames to actually get n_fft_frames_per_file with fft_bit_res = '32+32'
+                    d_fft, _ = await self.read_fft_frames(n_frames = 2*n_fft_frames_per_file, 
                                                           fft_bit_res = '32+32',
                                                           data_source = 'adc',
-                                                          period = None,
+                                                          period = period,
                                                           split = True,
                                                           verbose = 0
                                                           )
@@ -2134,7 +2139,7 @@ class POCKET_CORRELATOR:
                 # Increment file number
                 file_number += 1
 
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, asyncio.CancelledError):
             print('')
             print('')
             print('===================================')
@@ -2162,6 +2167,9 @@ class POCKET_CORRELATOR:
             print('')
             print(f'Ending observation {self.obs_string}.')
             print('')
+
+        finally:
+            # Close the open file before ending
 
         return
 
