@@ -47,6 +47,10 @@ from pychfpga import __version__
 # from ps import PowerSupplyAsyncRESTClient
 from pychfpga.raw_acq import RawAcqAsyncRESTClient
 
+# # Temporarily include Joshua's functions for tuning 100G link parameters
+# sys.path.insert(0, '/home/ih')
+# from crs_si_tools import set_fpga_tx, set_optical, read_optical, retrain_optical
+
 
 def convert_types(val):
     """
@@ -1427,6 +1431,230 @@ class FPGAMaster(object):
         # Compute new gains if requested
         if self.config.fpga.compute_gains.enable:
             await self.compute_gains(**conf.fpga.compute_gains)
+
+        ########################################################################################################################################################################################################################################################################
+        
+        #################################
+        # TEMPORARY 100G LINK PARAMETER TUNING
+        #################################
+
+        # GTY TX driver code -> value (UG578)
+        SWING_MV = [390, 430, 450, 470, 490, 530, 550, 570, 590, 630, 650, 670, 690, 730, 740, 760,
+                    780, 820, 840, 850, 870, 900, 920, 930, 950, 970, 980, 990, 1000, 1020, 1030, 1040]
+        PRE_DB = [0.01, 0.20, 0.32, 0.73, 0.81, 1.17, 1.30, 1.74, 1.87, 2.24, 2.28, 2.93, 3.08, 3.55, 3.66, 3.90,
+                  4.07, 4.66, 4.94, 5.44] + [5.67] * 12
+        POST_DB = [0.00, 0.20, 0.32, 0.74, 0.82, 1.19, 1.32, 1.77, 1.91, 2.28, 2.32, 2.98, 3.14, 3.62, 3.73, 3.99,
+                   4.16, 4.76, 5.05, 5.57, 5.81, 6.69, 7.07, 7.43, 7.84, 8.77, 9.14, 10.08, 10.51, 11.63, 12.29, 13.67]
+        
+        
+        def _boards(ca, serials):
+            boards = [ib for ib in ca.ib if serials is None or ib.serial in serials] 
+            boards = [ib for ib in ca.ib if _tx_class_is_high_power(ib) != 1] # skip boards with high-power class enabled
+            return boards
+        
+        
+        def nearest_codes(swing_mv=390, pre_db=0.01, post_db=0.0):
+            """(swing, pre, post) codes nearest to the requested values."""
+            def near(table, x):
+                return min(range(21 if table is PRE_DB else 32), key=lambda c: abs(table[c] - x))
+            return near(SWING_MV, swing_mv), near(PRE_DB, pre_db), near(POST_DB, post_db)
+        
+        
+        # ---------------------------------------------------------------- FPGA TX / RX
+        
+        def _tx_class_is_high_power(ib):
+            return ib.i2c1_qsfp.get_power_mode() # 0 or 1
+        
+        def tx_drive_supported(ib):
+            """Read-only: True if the firmware has the TX drive control bytes (on old firmware byte 9 aliases byte 1)."""
+            return int(ib.GPU.read_control(9, type=int, length=1)) != int(ib.GPU.read_control(1, type=int, length=1))
+        
+        
+        def _check(ib):
+            if not tx_drive_supported(ib):
+                raise RuntimeError(f'SN{ib.serial}: firmware has no TX drive control bytes; not writing (a write would reset the CMAC)')
+        
+        
+        def set_fpga_tx(ca, swing=0, pre=0, post=0, lanes=range(4), serials=None):
+            """Set FPGA TX swing / pre-cursor / post-cursor codes (0-31; 0/0/0 = CHORD default) on `lanes` of each board."""
+            assert all(0 <= c <= 31 for c in (swing, pre, post)), (swing, pre, post)
+            for ib in _boards(ca, serials):
+                _check(ib)
+                for lane in lanes:
+                    ib.GPU.write_control(8 + 3 * lane, bytes([swing, pre, post]))
+            print(f'FPGA TX set: {SWING_MV[swing]} mV, pre {PRE_DB[pre]} dB, post {POST_DB[post]} dB (codes {swing}, {pre}, {post})')
+            return get_fpga_tx(ca, serials=serials)
+        
+        
+        def get_fpga_tx(ca, serials=None, verbose=True):
+            """{serial: [(swing, pre, post) codes for lanes 0-3]}."""
+            out = {}
+            for ib in _boards(ca, serials):
+                _check(ib)
+                out[ib.serial] = [tuple(int(ib.GPU.read_control(8 + 3 * l + i, type=int, length=1)) for i in range(3)) for l in range(4)]
+                if verbose:
+                    print(f'  SN{ib.serial} FPGA TX codes lanes 0-3: {out[ib.serial]}')
+            return out
+        
+        
+        def set_fpga_rx_lpm(ca, enable, serials=None):
+            """FPGA receiver equalizer: LPM (True) or DFE (False, default) on all 4 lanes, then retrain. Affects only CRS reception."""
+            for ib in _boards(ca, serials):
+                _check(ib)
+                ib.GPU.write_control(20, bytes([0x0F if enable else 0x00]))
+                for lane in range(4):                      # control byte 7 is copied to the selected lane
+                    ib.GPU.select_gt_lane(lane)
+                    ib.GPU.RXDFELPMRESET = 1
+                    ib.GPU.RXDFELPMRESET = 0
+            print('FPGA RX equalizer:', 'LPM' if enable else 'DFE')
+        
+        
+        # ---------------------------------------------------------------- optical module (SFF-8636)
+        
+        def _qsfp(ib, fn, tries=5):
+            """Run fn(eeprom) with ModSelL asserted; retry on I2C errors."""
+            q = ib.i2c1_qsfp
+            for t in range(tries):
+                q.enable_i2c(True)
+                try:
+                    return fn(q._qsfp_eeprom)
+                except OSError:
+                    if t == tries - 1:
+                        raise
+                    time.sleep(0.1)
+                finally:
+                    q.enable_i2c(False)
+        
+        
+        def qsfp_read(ib, addr, n=1, page=0):
+            def f(e):
+                if page:
+                    e.write(addr=127, data=page)           # page select (pychfpga jfc/dev paged read is broken)
+                try:
+                    return list(e.read(addr=addr, length=n))
+                finally:
+                    if page:
+                        e.write(addr=127, data=0)
+            return _qsfp(ib, f)
+        
+        
+        def qsfp_write(ib, addr, data, page=0):
+            def f(e):
+                if page:
+                    e.write(addr=127, data=page)
+                try:
+                    e.write(addr=addr, data=list(data))
+                finally:
+                    if page:
+                        e.write(addr=127, data=0)
+            _qsfp(ib, f)
+        
+        
+        def _nibbles(b):
+            return [b[0] >> 4, b[0] & 15, b[1] >> 4, b[1] & 15]
+        
+        
+        def _pack(v):
+            ch = [v] * 4 if isinstance(v, int) else list(v)
+            assert len(ch) == 4 and all(0 <= c <= 15 for c in ch), v
+            return [ch[0] << 4 | ch[1], ch[2] << 4 | ch[3]]
+        
+        
+        def read_optical(ca, serials=None, verbose=True):
+            """Optical module identity, capabilities, page-03h settings and latched TX/RX flags (reading clears the flags)."""
+            out = {}
+            self.log.debug(f"{self!r}: ca: {ca}")
+            for ib in _boards(ca, serials):
+                self.log.debug(f"{self!r}: board: {ib}")
+                caps = qsfp_read(ib, 193)[0]
+                flat = qsfp_read(ib, 2)[0] >> 2 & 1
+                los, fault, lol = qsfp_read(ib, 3, 3)
+                s = dict(vendor=bytes(qsfp_read(ib, 148, 16)).decode(errors='replace').strip(),
+                         part=bytes(qsfp_read(ib, 168, 16)).decode(errors='replace').strip(),
+                         adaptive_capable=bool(caps & 8), tx_eq_programmable=bool(caps & 4),
+                         rx_emph_programmable=bool(caps & 2), rx_amp_programmable=bool(caps & 1),
+                         flags=dict(tx_los=los >> 4, rx_los=los & 15, tx_adapt_eq_fault=fault >> 4, tx_fault=fault & 15,
+                                    tx_cdr_lol=lol >> 4, rx_cdr_lol=lol & 15))
+                if not flat:
+                    m = qsfp_read(ib, 224, 2, page=3)
+                    p = qsfp_read(ib, 234, 8, page=3)
+                    s.update(max_tx_eq_db=m[0] >> 4, max_rx_emph_db=m[0] & 15,
+                             rx_amp_codes=[c for c in range(4) if m[1] >> c & 1],
+                             tx_eq_db=_nibbles(p[0:2]), rx_emph_db=_nibbles(p[2:4]), rx_amp=_nibbles(p[4:6]),
+                             byte241=p[7], adaptive=[bool(p[7] >> c & 1) for c in range(4)])
+                out[ib.serial] = s
+                if verbose:
+                    f = s['flags']
+                    print(f'  SN{ib.serial} {s["vendor"]} {s["part"]}: adaptive capable {s["adaptive_capable"]}')
+                    if not flat:
+                        print(f'    TX input EQ {s["tx_eq_db"]} dB (max {s["max_tx_eq_db"]}), adaptive ch1-4 {[int(a) for a in s["adaptive"]]} '
+                              f'(byte241={s["byte241"]:08b}) | RX emphasis {s["rx_emph_db"]} dB (max {s["max_rx_emph_db"]}) '
+                              f'| RX amplitude {s["rx_amp"]} (codes {s["rx_amp_codes"]})')
+                    print(f'    latched flags ch4..1: TX LOS {f["tx_los"]:04b} TX CDR LOL {f["tx_cdr_lol"]:04b} '
+                          f'TX adaptive EQ fault {f["tx_adapt_eq_fault"]:04b} | RX LOS {f["rx_los"]:04b} RX CDR LOL {f["rx_cdr_lol"]:04b}')
+            return out
+        
+        
+        def set_optical(ca, tx_eq=None, rx_emph=None, rx_amp=None, adaptive=None, serials=None):
+            """Set optical module settings; None leaves a setting unchanged. Values: one int for all channels or a list for ch1-4.
+            tx_eq / rx_emph in dB, rx_amp as a code, adaptive True/False (TX input adaptive EQ, page 03h byte 241 bits 3-0)."""
+            for ib in _boards(ca, serials):
+                m = qsfp_read(ib, 224, 2, page=3)
+                if adaptive is not None:
+                    a = [adaptive] * 4 if isinstance(adaptive, bool) else list(adaptive)
+                    b = qsfp_read(ib, 241, page=3)[0] & 0xF0
+                    qsfp_write(ib, 241, [b | sum(1 << c for c in range(4) if a[c])], page=3)
+                for v, addr, ok in ((tx_eq, 234, range((m[0] >> 4) + 1)), (rx_emph, 236, range((m[0] & 15) + 1)),
+                                    (rx_amp, 238, [c for c in range(4) if m[1] >> c & 1])):
+                    if v is not None:
+                        vals = [v] * 4 if isinstance(v, int) else list(v)
+                        if not all(c in ok for c in vals):
+                            raise ValueError(f'SN{ib.serial}: {vals} not in {list(ok)} (byte {addr})')
+                        qsfp_write(ib, addr, _pack(v), page=3)
+            return read_optical(ca, serials=serials)
+        
+        
+        def retrain_optical(ca, method='toggle', wait=1.0, serials=None):
+            """Force the optical module TX input equalizer to re-adapt to the current FPGA signal.
+            'toggle': adaptive off -> previous enables (keeps all other settings; skipped where adaptive is off). 'reset': pulse ResetL (restores ALL module defaults,
+            drops the link briefly; wait >= 2 s). Prints the latched flags after the wait (TX CDR LOL set = input re-acquired)."""
+            bs = _boards(ca, serials)
+            #read_optical(ca, serials=serials, verbose=False)          # clear old latched flags
+            for ib in bs:
+                if method == 'toggle':
+                    b = qsfp_read(ib, 241, page=3)[0]
+                    if not b & 0x0F:
+                        print(f'  SN{ib.serial}: adaptive TX EQ is off on all channels; nothing to re-adapt (use method="reset")')
+                        continue
+                    qsfp_write(ib, 241, [b & 0xF0], page=3)     # adaptive off
+                    time.sleep(0.1)
+                    qsfp_write(ib, 241, [b], page=3)            # back to the previous enables: re-adapt
+                elif method == 'reset':
+                    ib.i2c1_qsfp.reset()
+                else:
+                    raise ValueError(method)
+            time.sleep(max(wait, 2.0) if method == 'reset' else wait)
+            print(f'retrain ({method}) done; state after:')
+            return #read_optical(ca, serials=serials)
+        
+        try:
+            self.log.info(f"{self!r}: Attempting to tune 100G link parameters...")
+            self.log.debug(f'{self!r}: Reading optical...')
+            read_optical(ca)
+            self.log.debug(f'{self!r}: Setting parameters...')
+            set_fpga_tx(ca, 24, 0, 15)
+            self.log.debug(f'{self!r}: Enabling adaptive equalization, setting tx_eq = 0...')
+            set_optical(ca, adaptive = True, tx_eq = 0)
+            self.log.debug(f'{self!r}: Retraining optical...')
+            retrain_optical(ca)
+            self.log.debug(f'{self!r}: Checking optical one last time...')
+            read_optical(ca)
+            self.log.debug(f'{self!r}: Done!')
+        except Exception as e:
+            self.log.info(f'{self!r}: got error during 100G link parameter tuning: {e}')
+            pass
+
+        ########################################################################################################################################################################################################################################################################
 
         # self.log.info("Waiting for 2 seconds")
         # await asyncio.sleep(2)
