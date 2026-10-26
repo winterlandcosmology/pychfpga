@@ -23,6 +23,46 @@ def emit_log(logger, msg):
     if logger:
         logger(msg)
 
+
+# Backplane QSFP TX drive per media (swing field, pre-cursor, post-cursor codes; GTY swing code = 2 * field + 1), receivers in DFE.
+# From the 2026-10-26 grids on crate SN008: SR4 optical loopbacks need pre + post ~ 30-32 codes; 1 m copper DACs and copper
+# loopback plugs need much less (13/6/8: 33 of 33 legs clean in 10 s; 10/10/10 left 15 errors on 4 legs).
+BP_QSFP_TX = {'optical': (15, 15, 20), 'copper': (13, 6, 8)}
+
+
+def set_bp_qsfp_tx(ca, settings=BP_QSFP_TX, log=None):
+    """Set every backplane-QSFP TX lane from the media plugged into the port it reaches.
+
+    The board in slot position 1 of each backplane reads the port contents through the U11 expander; optical ports get
+    LPMode released. Lanes whose port is empty, or whose backplane expander cannot be read, are left as they are.
+    Returns {slot: {lane: (port, media, (swing, pre, post))}}.
+    """
+    by_slot = {ib.slot: ib for ib in ca.ib}
+    done = {}
+    for head in sorted(s for s in by_slot if (s - 1) % 4 == 0):
+        try:
+            media = by_slot[head].bp_qsfp_media()
+        except Exception as e:
+            emit_log(log, f'slot {head}: backplane QSFP ports not read ({type(e).__name__}: {e}); lanes left as they are')
+            continue
+        for port, m in media.items():
+            if m == 'optical':
+                by_slot[head].i2c0_bp_qsfp[port].set_control_bit('LPMode', 0)
+        emit_log(log, f'backplane of slot {head}: ' + ', '.join(f'{p} {m or "empty"}' for p, m in media.items()))
+        for slot in range(head, head + 4):
+            ib = by_slot.get(slot)
+            if ib is None:
+                continue
+            for lane, port in ib.BP_QSFP_TX_PORT[(slot - 1) % 4 + 1].items():
+                m = media.get(port)
+                if m is None:
+                    continue
+                ch = ib.CT.BPLINKS.gty[lane]
+                ch.TXDIFFCTRL, ch.TXPRECURSOR, ch.TXPOSTCURSOR = settings[m]
+                ch.RXLPMEN = 0
+                done.setdefault(slot, {})[lane] = (port, m, settings[m])
+    return done
+
 #---
 PRBS = 5         
 BIT_RATE = 25e9   # 25 Gb/s per lane

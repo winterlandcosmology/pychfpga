@@ -44,3 +44,13 @@ def test_write_makes_only_that_pin_an_output():
     q.set_control_bit('LPMode', 0)                       # port 2 bit 3
     assert bus.regs[0x06] == 0xF7 and bus.regs[0x0E] == 0xF7
     assert bus.addresses == {0x22}
+
+
+def test_tx_port_table_and_media_rule():
+    wired = {'P5A', 'P5B', 'P6A'}
+    for pos, lanes in CRS.BP_QSFP_TX_PORT.items():
+        assert set(lanes) == {7, 9, 11} and set(lanes.values()) == wired   # each wired port once per slot position
+    assert CRS.qsfp_media(0x23, 0xA0) == 'copper'    # 1 m DAC: no separable connector, copper cable unequalized
+    assert CRS.qsfp_media(0x00, 0x80) == 'copper'    # StarTech loopback plug, as read on hardware
+    assert CRS.qsfp_media(0x0C, 0x00) == 'optical'   # SR4: MPO, 850 nm VCSEL
+    assert CRS.qsfp_media(0x07, 0x40) == 'optical'   # LR4: LC, 1310 nm DFB

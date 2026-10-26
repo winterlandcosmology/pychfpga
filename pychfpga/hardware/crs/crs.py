@@ -109,6 +109,28 @@ class CRS(Motherboard):
             table[f'{port}_LPMode'] = (expander, 2, lp_bit, 1)
         return table
 
+    # Which backplane QSFP port each backplane-QSFP GTY TX lane (7, 9, 11) reaches, by slot position 1-4 within the backplane
+    # (4SBP schematic slot-connector routing; confirmed by loopback and cable maps on 2026-10-26).
+    BP_QSFP_TX_PORT = {1: {7: 'P6A', 9: 'P5B', 11: 'P5A'}, 2: {7: 'P5A', 9: 'P5B', 11: 'P6A'},
+                       3: {7: 'P6A', 9: 'P5B', 11: 'P5A'}, 4: {7: 'P6A', 9: 'P5A', 11: 'P5B'}}
+
+    @staticmethod
+    def qsfp_media(connector, device_tech):
+        """'optical' or 'copper' from SFF-8636 byte 130 (connector) and byte 147[7:4] (transmitter technology).
+        Copper unless the connector is optical (LC, MPO, MXC) and the technology is not a copper cable (>= 0xA)."""
+        return 'optical' if connector in (0x07, 0x0B, 0x0C, 0x0D, 0x24) and (device_tech >> 4) < 0xA else 'copper'
+
+    def bp_qsfp_media(self):
+        """Media in each backplane QSFP port, read through U11: {'P5A': 'copper' | 'optical' | None (empty), ...}.
+        Meaningful only on the board in slot position 1 of a backplane (the only one on U11's bus)."""
+        media = {}
+        for port, q in self.i2c0_bp_qsfp.items():
+            if not q.is_present():
+                media[port] = None
+                continue
+            media[port] = self.qsfp_media(q.read('Connector')[0], q.read('DeviceTech')[0])
+        return media
+
     REFCLK_BP = 1
     REFCLK_MB_SMA = 2
 
