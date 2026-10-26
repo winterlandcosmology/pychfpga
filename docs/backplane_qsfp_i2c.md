@@ -84,4 +84,9 @@ branch:
 - Lane map on slots 1-4: 12 of 12 backplane QSFP legs link, on the GTYs the
   schematic routing predicts; P6B adds no link.
 
-Not yet tested: optical modules in the backplane ports (set LPMode 0 first).
+Optical loopback modules (SR4) in all four ports, same day: after LPMode 0 on
+every port all 12 legs link; at module defaults most legs run at BER 1e-7 to
+1e-3, with module TX input EQ 5 dB and RX output emphasis 4 dB (page 03h, through
+`ib.i2c0_bp_qsfp[port]`) 11 of 12 legs are error-free in DFE. LPM is worse on
+this path. The modules' DDM and LOS/LOL flags are static and cannot be used as a
+light check.
