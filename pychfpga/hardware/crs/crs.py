@@ -281,7 +281,7 @@ class CRS(Motherboard):
             d = info['device']
             self.logger.info(f'Rail {name}: Vbus={d.get_bus_voltage():.3f}V, I={d.get_current():.3f}A, P={d.get_power():.1f}W')
 
-    def enable_qsfp_high_power_mode(self, ready_timeout=2.5, poll_interval=0.1):
+    def enable_qsfp_high_power_mode(self, ready_timeout=5, poll_interval=0.5):
         """Bring the QSFP module into high-power mode at startup.
 
         Waits for the module to be present and for its management interface
@@ -304,18 +304,24 @@ class CRS(Motherboard):
             # after ResetL deassert). The GPIO defaults already release ResetL well
             # before this code runs, but a freshly hot-plugged module may still be
             # in its init window.
+            ctr = 0
             deadline = time.monotonic() + ready_timeout
             ready = False
             while time.monotonic() < deadline:
+                self.logger.debug(f'{self!r}: QSFP presence check trial {ctr}')
                 try:
                     self.i2c1_qsfp.enable_i2c(True)
+                    self.logger.debug(f'{self!r}: QSFP i2c enabled')
                     try:
                         if self.i2c1_qsfp.is_present():
+                            self.logger.debug(f'{self!r}: QSFP is present')
                             ready = True
                             break
                     finally:
+                        self.logger.debug(f'{self!r}: Disabling QSFP i2c')
                         self.i2c1_qsfp.enable_i2c(False)
                 except Exception:
+                    ctr += 1
                     pass
                 time.sleep(poll_interval)
 
@@ -324,6 +330,8 @@ class CRS(Motherboard):
                     f'{self!r}: QSFP module present but did not respond on I2C within '
                     f'{ready_timeout:.1f}s; skipping high-power enable')
                 return
+
+            self.logger.debug(f'{self!r}: QSFP is ready: {ready}')
 
             # set_power_mode(1) programs byte 93 according to the module's declared
             # Power Class (via enable_high_power_class()) and then deasserts LPMode.
