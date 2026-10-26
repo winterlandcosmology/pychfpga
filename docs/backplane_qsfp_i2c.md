@@ -74,11 +74,14 @@ q.set_control_bit('LPMode', 0)     # high-power mode (optical loopbacks)
 
 ## Status
 
-Not tested on hardware. Next test, from the board in slot 1:
+Tested on hardware 2026-10-26 (crate SN008, backplane 068, slot 1 = SN0229, StarTech
+LOOPBACKPLUG100G copper plugs in all four ports), with the corriscope port of this
+branch:
 
-1. Read U11 at 0x22 (`ib.i2c0_bp_gpio.read_reg('IN0')`).
-2. Read a module in P5A (`is_present()`, `read('VendName')`).
-3. Optical loopback in a data port: set LPMode to 0, then do the lane mapping.
+- U11 answers at 0x22. ModPrsL reads low on all four ports, LPMode high (pull-ups).
+- All four ports read their plug EEPROM through ModSelL (vendor, part, serial).
+- LPMode on P5A: written 0 reads 0, written 1 reads 1; the pin becomes an output.
+- Lane map on slots 1-4: 12 of 12 backplane QSFP legs link, on the GTYs the
+  schematic routing predicts; P6B adds no link.
 
-Sources: backplane schematic "t0.technology 4SBP" rev 2, page 5 (U11, P5, P6);
-CRS board schematic pages 4 (backplane connector) and 35 (U26).
+Not yet tested: optical modules in the backplane ports (set LPMode 0 first).
