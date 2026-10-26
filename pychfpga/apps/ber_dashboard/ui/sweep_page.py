@@ -57,7 +57,7 @@ class SweepPage(QWidget):
         
         PWRrow = QHBoxLayout()
         PWRrow.addWidget(QLabel("TX Power"))
-        self.power_input = QLineEdit("10")
+        self.power_input = QLineEdit("13")
         PWRrow.addWidget(self.power_input)
 
         DWELLrow = QHBoxLayout()

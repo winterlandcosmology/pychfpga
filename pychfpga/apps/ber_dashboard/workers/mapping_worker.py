@@ -11,7 +11,7 @@ class MappingWorker(QThread):
     result = pyqtSignal(dict)
     temps = pyqtSignal(list)
 
-    def __init__(self, ca, slots, lanes, dwell, retrain_delay, settle_time, power=10, pre=0, post=0):
+    def __init__(self, ca, slots, lanes, dwell, retrain_delay, settle_time, power=13, pre=6, post=8):
         super().__init__()
         self.ca = ca
         self.slots = list(slots)

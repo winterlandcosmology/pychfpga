@@ -72,21 +72,26 @@ q.read('VendName')                 # ModSelL low for the access, then high
 q.set_control_bit('LPMode', 0)     # high-power mode (optical loopbacks)
 ```
 
+## Backplane QSFP TX drive
+
+The backplane QSFP lanes (GTY 7, 9, 11) power up with the firmware's TX drive
+fields at 0/0/0 and nothing in the link bring-up sets them. The corner-turn
+engine init now writes one setting to those lanes on every board: swing field 13
+(GTY code 27), pre-cursor 6, post-cursor 8, receivers in DFE (`BP_QSFP_TX` in
+`xxvglink.py`). That is the copper optimum from the 2026-10-26 grids on crate
+SN008: 33 of 33 DAC and loopback-plug legs clean in 10 s, and again 24 of 24 on
+a four-backplane layout. The dashboard's Map and Sweep pages start from the same
+values.
+
+Optical modules are not supported on these ports: the two sets of SR4 modules
+tested wanted different, strong de-emphasis and no single setting was clean on
+all of them. The dashboard boot (corr modes) reads every backplane port through
+U11 and refuses to boot when a port holds anything but copper
+(`check_bp_qsfp_copper`); the media comes from SFF-8636 bytes 130 and 147.
+
 ## Status
 
-Tested on hardware 2026-10-26 (crate SN008, backplane 068, slot 1 = SN0229, StarTech
-LOOPBACKPLUG100G copper plugs in all four ports), with the corriscope port of this
-branch:
-
-- U11 answers at 0x22. ModPrsL reads low on all four ports, LPMode high (pull-ups).
-- All four ports read their plug EEPROM through ModSelL (vendor, part, serial).
-- LPMode on P5A: written 0 reads 0, written 1 reads 1; the pin becomes an output.
-- Lane map on slots 1-4: 12 of 12 backplane QSFP legs link, on the GTYs the
-  schematic routing predicts; P6B adds no link.
-
-Optical loopback modules (SR4) in all four ports, same day: after LPMode 0 on
-every port all 12 legs link; at module defaults most legs run at BER 1e-7 to
-1e-3, with module TX input EQ 5 dB and RX output emphasis 4 dB (page 03h, through
-`ib.i2c0_bp_qsfp[port]`) 11 of 12 legs are error-free in DFE. LPM is worse on
-this path. The modules' DDM and LOS/LOL flags are static and cannot be used as a
-light check.
+Hardware 2026-10-26, crate SN008: U11 at 0x22 answers from slots 1, 5, 9, 13;
+every port's module reads through ModSelL; LPMode writes work; DACs read
+connector 0x23 / technology 0xA0, loopback plugs 0x00 / 0x80, SR4 modules
+0x0C / 0x00. Copper legs clean at 13/6/8 on all four backplanes.

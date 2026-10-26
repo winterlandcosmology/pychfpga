@@ -255,6 +255,17 @@ class UCTEngine(MMIRouter):
         if sync:
             await fpga_array.sync_async()
 
+    def set_bp_qsfp_tx(self):
+        """Backplane QSFP lanes (GTY 7, 9, 11): the single copper TX drive, receivers in DFE.
+
+        The firmware powers these fields up at 0/0/0 and the link init is not run at boot. Called from init_crossbars(), i.e.
+        after the corner-turn reset is released: init() runs with the engine in reset, where its registers do not read back.
+        """
+        for ch in getattr(getattr(self, 'BPLINKS', None), 'gty', ()):
+            if ch.instance_number in xxvglink.BP_QSFP_LANES:
+                ch.TXDIFFCTRL, ch.TXPRECURSOR, ch.TXPOSTCURSOR = xxvglink.BP_QSFP_TX
+                ch.RXLPMEN = 0
+
     def init_crossbars(
             self,
             mode=None,
@@ -262,6 +273,7 @@ class UCTEngine(MMIRouter):
 
         if frames_per_packet not in (1, None):
             raise RuntimeError(f'UCT engine only supports 1 frame per packet. {frames_per_packet} frames/packet are not supported.')
+        self.set_bp_qsfp_tx()
 
         # For now, just do some basic checks. There isn't much to do for UCT.
         if mode in ('corr8', 'corr4'):

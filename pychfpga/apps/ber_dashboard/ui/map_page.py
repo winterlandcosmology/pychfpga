@@ -65,19 +65,14 @@ class MapPage(QWidget):
 
         pwr_layout = QHBoxLayout()
         pwr_layout.addWidget(QLabel("TX Power (0-15)"))
-        self.power_input = QLineEdit("10")
+        self.power_input = QLineEdit("13")
         pwr_layout.addWidget(self.power_input)
         pwr_layout.addWidget(QLabel("PRE (0-31)"))
-        self.pre_input = QLineEdit("10")
+        self.pre_input = QLineEdit("6")
         pwr_layout.addWidget(self.pre_input)
         pwr_layout.addWidget(QLabel("POST (0-31)"))
-        self.post_input = QLineEdit("10")
+        self.post_input = QLineEdit("8")
         pwr_layout.addWidget(self.post_input)
-        self.keep_tx = QCheckBox("Keep per-port TX from boot")
-        self.keep_tx.setChecked(True)
-        self.keep_tx.setToolTip("Map with the TX drive set at boot from each port's media, ignoring the three fields. "
-                                "Falls back to the fields when boot did not set it.")
-        pwr_layout.addWidget(self.keep_tx)
 
         self.start_btn = QPushButton("Run Mapping")
         self.edit_map_btn = QPushButton("Edit Map")
@@ -189,12 +184,6 @@ class MapPage(QWidget):
         pwr = int(self.power_input.text())
         pre = int(self.pre_input.text())
         post = int(self.post_input.text())
-        if self.keep_tx.isChecked():
-            if self.state.bp_qsfp_tx:
-                pwr = None   # the mapper leaves the TX drive as set_bp_qsfp_tx left it
-                self.log.append('Keeping the per-port backplane QSFP TX from boot (TX fields ignored).')
-            else:
-                self.log.append('No per-port TX from boot; using the TX fields.')
 
         if not slots or not lanes:
             return

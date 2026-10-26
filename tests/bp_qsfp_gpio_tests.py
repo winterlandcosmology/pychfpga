@@ -46,36 +46,31 @@ def test_write_makes_only_that_pin_an_output():
     assert bus.addresses == {0x22}
 
 
-def test_tx_port_table_and_media_rule():
-    wired = {'P5A', 'P5B', 'P6A'}
-    for pos, lanes in CRS.BP_QSFP_TX_PORT.items():
-        assert set(lanes) == {7, 9, 11} and set(lanes.values()) == wired   # each wired port once per slot position
+def test_media_rule():
     assert CRS.qsfp_media(0x23, 0xA0) == 'copper'    # 1 m DAC: no separable connector, copper cable unequalized
     assert CRS.qsfp_media(0x00, 0x80) == 'copper'    # StarTech loopback plug, as read on hardware
-    assert CRS.qsfp_media(0x0C, 0x00) == 'optical'   # SR4: MPO, 850 nm VCSEL
+    assert CRS.qsfp_media(0x0C, 0x00) == 'optical'   # SR4: MPO, 850 nm VCSEL, as read on hardware
     assert CRS.qsfp_media(0x07, 0x40) == 'optical'   # LR4: LC, 1310 nm DFB
 
 
-def test_set_bp_qsfp_tx_assumes_copper_without_head_board():
-    """A backplane whose slot-position-1 board is absent: every backplane-QSFP lane gets the copper setting."""
-    from pychfpga.apps.ber_dashboard.sfp_ber_tests import set_bp_qsfp_tx, BP_QSFP_TX
-
-    class Ch:
-        def __init__(self): self.TXDIFFCTRL = self.TXPRECURSOR = self.TXPOSTCURSOR = None; self.RXLPMEN = 1; self.resets = 0
-        def reset_rx_equalizer(self): self.resets += 1
+def test_check_bp_qsfp_copper():
+    """Copper or empty ports pass; an optical module raises and names its port; a backplane without its position-1 board is skipped."""
+    from pychfpga.apps.ber_dashboard.sfp_ber_tests import check_bp_qsfp_copper
+    import pytest
 
     class Board:
-        BP_QSFP_TX_PORT = CRS.BP_QSFP_TX_PORT
-        def __init__(self, slot):
-            self.slot = slot
-            self.CT = type('CT', (), {})(); self.CT.BPLINKS = type('BP', (), {})(); self.CT.BPLINKS.gty = [Ch() for _ in range(12)]
+        def __init__(self, slot, media=None):
+            self.slot, self._media = slot, media
+        def bp_qsfp_media(self):
+            return self._media
 
     class Arr:
-        ib = [Board(6), Board(7)]   # slots 6 and 7 of backplane 2, no board in slot 5
+        def __init__(self, *boards): self.ib = list(boards)
+
     msgs = []
-    done = set_bp_qsfp_tx(Arr, log=msgs.append)
-    assert set(done) == {6, 7} and all(set(v) == {7, 9, 11} for v in done.values())
-    ch = Arr.ib[0].CT.BPLINKS.gty[7]
-    assert (ch.TXDIFFCTRL, ch.TXPRECURSOR, ch.TXPOSTCURSOR) == BP_QSFP_TX['copper'] and ch.RXLPMEN == 0 and ch.resets == 1
-    assert Arr.ib[0].CT.BPLINKS.gty[6].TXDIFFCTRL is None      # PCB lane untouched
-    assert any('assuming copper' in m for m in msgs)
+    ok = Arr(Board(1, {'P5A': 'copper', 'P5B': None, 'P6A': 'copper', 'P6B': 'copper'}), Board(2), Board(6))   # no board in slot 5
+    assert check_bp_qsfp_copper(ok, log=msgs.append) == {1: ok.ib[0]._media}
+    assert any('slot 5' in m and 'not checked' in m for m in msgs)
+    bad = Arr(Board(9, {'P5A': 'optical', 'P5B': 'copper', 'P6A': None, 'P6B': 'copper'}))
+    with pytest.raises(RuntimeError, match='slot 9 P5A'):
+        check_bp_qsfp_copper(bad)

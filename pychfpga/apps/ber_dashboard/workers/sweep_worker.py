@@ -9,7 +9,7 @@ class SweepWorker(QThread):
     heatmap = pyqtSignal(str, str, int, int, int, int, object, object, object, float, float)  # tx_sn, rx_sn, tx_slot, tx_lane, rx_slot, rx_lane, prerange, postrange, matrix, ber_floor, vmax
     finished = pyqtSignal(list)
     
-    def __init__(self, ca, mapping, pre_range, post_range, dwell, power=10):
+    def __init__(self, ca, mapping, pre_range, post_range, dwell, power=13):
         super().__init__()
         self.ca = ca
         self.mapping = mapping

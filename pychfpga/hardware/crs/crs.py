@@ -109,11 +109,6 @@ class CRS(Motherboard):
             table[f'{port}_LPMode'] = (expander, 2, lp_bit, 1)
         return table
 
-    # Which backplane QSFP port each backplane-QSFP GTY TX lane (7, 9, 11) reaches, by slot position 1-4 within the backplane
-    # (4SBP schematic slot-connector routing; confirmed by loopback and cable maps on 2026-10-26).
-    BP_QSFP_TX_PORT = {1: {7: 'P6A', 9: 'P5B', 11: 'P5A'}, 2: {7: 'P5A', 9: 'P5B', 11: 'P6A'},
-                       3: {7: 'P6A', 9: 'P5B', 11: 'P5A'}, 4: {7: 'P6A', 9: 'P5A', 11: 'P5B'}}
-
     @staticmethod
     def qsfp_media(connector, device_tech):
         """'optical' or 'copper' from SFF-8636 byte 130 (connector) and byte 147[7:4] (transmitter technology).

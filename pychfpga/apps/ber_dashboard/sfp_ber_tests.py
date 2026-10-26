@@ -1,4 +1,6 @@
 import time
+
+from pychfpga.fpga_firmware.chfpga.ct_engine.xxvglink import BP_QSFP_TX
 import logging
 import sys
 import pickle
@@ -24,66 +26,38 @@ def emit_log(logger, msg):
         logger(msg)
 
 
-# Backplane QSFP TX drive per media (swing field, pre-cursor, post-cursor codes; GTY swing code = 2 * field + 1), receivers in DFE.
-# From the 2026-10-26 grids on crate SN008: SR4 optical loopbacks need pre + post ~ 30-32 codes; 1 m copper DACs and copper
-# loopback plugs need much less (13/6/8: 33 of 33 legs clean in 10 s; 10/10/10 left 15 errors on 4 legs).
-CROSS_BACKPLANE_LANES = (7, 9, 11)
-BP_QSFP_TX = {'optical': (15, 15, 20), 'copper': (13, 6, 8)}
+def check_bp_qsfp_copper(ca, log=None):
+    """Insist that every populated backplane QSFP port holds copper (DAC or loopback plug); raise otherwise.
 
-
-def set_bp_qsfp_tx(ca, settings=BP_QSFP_TX, log=None):
-    """Set every backplane-QSFP TX lane from the media plugged into the port it reaches.
-
-    The board in slot position 1 of each backplane reads the port contents through the U11 expander; optical ports get
-    LPMode released. Lanes whose port is empty are left as they are. When a backplane's ports cannot be read (no board
-    in its slot position 1, or the expander does not answer) every lane of that backplane is set for copper, the
-    deployment cabling. Returns {slot: {lane: (port, media, (swing, pre, post))}}.
+    The board in slot position 1 of each backplane reads its ports through the U11 expander (SFF-8636 connector and
+    technology bytes). Backplanes without that board, or whose expander does not answer, are logged and skipped.
+    Returns {slot_position_1: {port: media or None}} for the backplanes that were read.
     """
     by_slot = {ib.slot: ib for ib in ca.ib}
-    done = {}
+    read, bad = {}, []
     for head in sorted({(s - 1) // 4 * 4 + 1 for s in by_slot}):
+        if head not in by_slot:
+            emit_log(log, f'backplane of slot {head}: no board in slot position 1, ports not checked')
+            continue
         try:
-            media = by_slot[head].bp_qsfp_media() if head in by_slot else None
+            media = by_slot[head].bp_qsfp_media()
         except Exception as e:
-            emit_log(log, f'slot {head}: backplane QSFP ports not read ({type(e).__name__}: {e})')
-            media = None
-        if media is None:
-            media = {port: 'copper' for port in ('P5A', 'P5B', 'P6A', 'P6B')}
-            emit_log(log, f'backplane of slot {head}: ports not readable, assuming copper on every port')
-        else:
-            for port, m in media.items():
-                if m == 'optical':
-                    by_slot[head].i2c0_bp_qsfp[port].set_control_bit('LPMode', 0)
-            emit_log(log, f'backplane of slot {head}: ' + ', '.join(f'{p} {m or "empty"}' for p, m in media.items()))
-        for slot in range(head, head + 4):
-            ib = by_slot.get(slot)
-            if ib is None:
-                continue
-            for lane, port in ib.BP_QSFP_TX_PORT[(slot - 1) % 4 + 1].items():
-                m = media.get(port)
-                if m is None:
-                    continue
-                ch = ib.CT.BPLINKS.gty[lane]
-                ch.TXDIFFCTRL, ch.TXPRECURSOR, ch.TXPOSTCURSOR = settings[m]
-                done.setdefault(slot, {})[lane] = (port, m, settings[m])
-    # Every TX is set; now retrain every backplane-QSFP receiver on the new drive (they adapted to the firmware drive
-    # during init). After all TX changes, not per backplane: a receiver's transmitter is on another backplane when the
-    # ports hold cables.
-    for ib in by_slot.values():
-        for lane in CROSS_BACKPLANE_LANES:
-            ch = ib.CT.BPLINKS.gty[lane]
-            ch.RXLPMEN = 0
-            ch.reset_rx_equalizer()
-    return done
+            emit_log(log, f'backplane of slot {head}: ports not read ({type(e).__name__}: {e})')
+            continue
+        read[head] = media
+        emit_log(log, f'backplane of slot {head}: ' + ', '.join(f'{p} {m or "empty"}' for p, m in media.items()))
+        bad += [(head, port) for port, m in media.items() if m not in (None, 'copper')]
+    if bad:
+        raise RuntimeError('Backplane QSFP ports must hold copper (DAC or loopback plug); not copper: '
+                           + ', '.join(f'slot {h} {p}' for h, p in bad))
+    return read
 
 #---
 PRBS = 5         
 BIT_RATE = 25e9   # 25 Gb/s per lane
 TEST_DWELL = 0.5
 DWELL = 5      # seconds; can increase if marginal links
-TX_POW = 0      # your TXDIFFCTRL
-TX_PRE = 10       # your TXPRECURSOR
-TX_POST = 0       # your TXPOSTCURSOR
+TX_POW, TX_PRE, TX_POST = BP_QSFP_TX   # backplane QSFP TX drive (swing field, pre, post), see xxvglink
 #---
 
 #---
@@ -113,10 +87,9 @@ def reset_and_setup_links(ca, PRBS, TX_POW, TX_PRE, TX_POST):
         for ch in ib.CT.BPLINKS.gty:
             ch.TXPRBSSEL   = PRBS
             ch.RXPRBSSEL   = PRBS
-            if TX_POW is not None:   # None: keep the TX drive already set (e.g. by set_bp_qsfp_tx)
-                ch.TXDIFFCTRL  = TX_POW
-                ch.TXPRECURSOR = TX_PRE
-                ch.TXPOSTCURSOR= TX_POST
+            ch.TXDIFFCTRL  = TX_POW
+            ch.TXPRECURSOR = TX_PRE
+            ch.TXPOSTCURSOR= TX_POST
             ch.TXPRBSFORCEERR = 0
             ch.RXLPMEN = 0
             ch.TXINHIBIT = 1
@@ -207,7 +180,7 @@ def sweep_ber_heatmap(ca, tx_slot, tx_lane, rx_slot, rx_lane,
                      dwell=1.0,
                      prbs=5,
                      bit_rate=25e9,
-                     tx_pow=10,
+                     tx_pow=BP_QSFP_TX[0],
                      plot=False,
                      log=None,
                      progress=None):
