@@ -54,3 +54,28 @@ def test_tx_port_table_and_media_rule():
     assert CRS.qsfp_media(0x00, 0x80) == 'copper'    # StarTech loopback plug, as read on hardware
     assert CRS.qsfp_media(0x0C, 0x00) == 'optical'   # SR4: MPO, 850 nm VCSEL
     assert CRS.qsfp_media(0x07, 0x40) == 'optical'   # LR4: LC, 1310 nm DFB
+
+
+def test_set_bp_qsfp_tx_assumes_copper_without_head_board():
+    """A backplane whose slot-position-1 board is absent: every backplane-QSFP lane gets the copper setting."""
+    from pychfpga.apps.ber_dashboard.sfp_ber_tests import set_bp_qsfp_tx, BP_QSFP_TX
+
+    class Ch:
+        def __init__(self): self.TXDIFFCTRL = self.TXPRECURSOR = self.TXPOSTCURSOR = None; self.RXLPMEN = 1; self.resets = 0
+        def reset_rx_equalizer(self): self.resets += 1
+
+    class Board:
+        BP_QSFP_TX_PORT = CRS.BP_QSFP_TX_PORT
+        def __init__(self, slot):
+            self.slot = slot
+            self.CT = type('CT', (), {})(); self.CT.BPLINKS = type('BP', (), {})(); self.CT.BPLINKS.gty = [Ch() for _ in range(12)]
+
+    class Arr:
+        ib = [Board(6), Board(7)]   # slots 6 and 7 of backplane 2, no board in slot 5
+    msgs = []
+    done = set_bp_qsfp_tx(Arr, log=msgs.append)
+    assert set(done) == {6, 7} and all(set(v) == {7, 9, 11} for v in done.values())
+    ch = Arr.ib[0].CT.BPLINKS.gty[7]
+    assert (ch.TXDIFFCTRL, ch.TXPRECURSOR, ch.TXPOSTCURSOR) == BP_QSFP_TX['copper'] and ch.RXLPMEN == 0 and ch.resets == 1
+    assert Arr.ib[0].CT.BPLINKS.gty[6].TXDIFFCTRL is None      # PCB lane untouched
+    assert any('assuming copper' in m for m in msgs)
