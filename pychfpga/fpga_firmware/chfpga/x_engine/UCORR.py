@@ -5,6 +5,7 @@ CORR.py module
  History:
  2017-05-04 : JFC : Created
 """
+import hashlib
 import time
 import logging
 import warnings
@@ -161,7 +162,14 @@ class UCORR(MMI):
     def compute_bin_prod_maps(cls, ct_level, NDECIM, NCHAN, NCLK, fft_bin_map, autocorr_only=False):
         """Return derived correlator maps for one set of primary parameters."""
 
-        cache_key = (ct_level, NDECIM, NCHAN, NCLK, fft_bin_map.shape, id(fft_bin_map))
+        # Key the cache on the bin map's *content*, not on id(fft_bin_map). id() is the object's memory address,
+        # and Python reuses the address of a freed array for new arrays, so an id() key can return the maps that
+        # were computed for a different, earlier array. That shows up intermittently as one board's bin_map
+        # differing from the others ("Attribute 'bin_map' differs across states" in get_corr_data_config), or
+        # silently as products filed under the wrong bins. Hashing the bytes makes equal maps share an entry
+        # and different maps never collide.
+        fbm = np.ascontiguousarray(fft_bin_map, dtype=np.int64)
+        cache_key = (ct_level, NDECIM, NCHAN, NCLK, fbm.shape, hashlib.sha1(fbm.tobytes()).digest())
         if cache_key not in cls._MAP_CACHE:
  
             NPROD = NCHAN * (NCHAN + 1) // 2
