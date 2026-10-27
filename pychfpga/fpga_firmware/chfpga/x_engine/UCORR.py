@@ -5,7 +5,6 @@ CORR.py module
  History:
  2017-05-04 : JFC : Created
 """
-import hashlib
 import time
 import logging
 import warnings
@@ -123,6 +122,7 @@ class UCORR(MMI):
         The following parameters are then updated:
         - bin_map: (bin_set, corr, clkbin, prod) = bin
         - prod_map: (corr, clkbin, prod) = pix
+        - conj_map: (corr, clkbin, prod) = True where the firmware product is conj(V_ij)
         - NDECIM: number of decimation bins
         - NCORRS: number of correlators
         - NPROD_PER_CMAC: number of products per CMAC
@@ -166,10 +166,10 @@ class UCORR(MMI):
         # and Python reuses the address of a freed array for new arrays, so an id() key can return the maps that
         # were computed for a different, earlier array. That shows up intermittently as one board's bin_map
         # differing from the others ("Attribute 'bin_map' differs across states" in get_corr_data_config), or
-        # silently as products filed under the wrong bins. Hashing the bytes makes equal maps share an entry
+        # silently as products filed under the wrong bins. Keying on the bytes makes equal maps share an entry
         # and different maps never collide.
         fbm = np.ascontiguousarray(fft_bin_map, dtype=np.int64)
-        cache_key = (ct_level, NDECIM, NCHAN, NCLK, fbm.shape, hashlib.sha1(fbm.tobytes()).digest())
+        cache_key = (ct_level, NDECIM, NCHAN, NCLK, fbm.shape, fbm.tobytes())
         if cache_key not in cls._MAP_CACHE:
  
             NPROD = NCHAN * (NCHAN + 1) // 2
@@ -187,7 +187,6 @@ class UCORR(MMI):
                                 for i in range(NCHAN+1) for j in range(NCHAN//2//NCLK*clk, NCHAN//2//NCLK*(clk+1)) ]
                                 for clk in range(NCLK) ])
 
-            fft_bin_map = np.asarray(fft_bin_map)
             if not ct_level:
                 raise RuntimeError(f'Invalid CT_LEVEL with value {ct_level}')
 
@@ -195,7 +194,7 @@ class UCORR(MMI):
             if ct_level >= 1:
                 # In CT_LEVEL=1, there are 4 parallel bin streams coming from the FFT. We need to process all of them locally, so we need 4 parallel correlators on a single board.
                 # ct_bin_map[corr, bix] = bin
-                ct_bin_map = fft_bin_map
+                ct_bin_map = fbm
                 chan_map = np.arange(NCHAN)
 
             # Get CT Level 2 bin map
