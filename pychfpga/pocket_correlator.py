@@ -1550,8 +1550,9 @@ class POCKET_CORRELATOR:
 
         Returns
         -------
-        integ_ts : (np.ndarray) The hardware integration timestamp for each result, shape
-        ``(number_of_results,)``. This is the real, frame-synchronized timestamp from the firmware.
+        t1 : (float) A rough UNIX timestamp (seconds) of the capture, taken with time.time()
+        immediately before reading the correlated data from the receiver. A single value is
+        returned regardless of number_of_results.
 
         d_corr : (np.ndarray) The correlated data, shape ``(number_of_results, self.NBINS, NPROD)``.
         The receiver returns products in upper-triangle order and bins in ascending frequency order.
@@ -1641,7 +1642,7 @@ class POCKET_CORRELATOR:
                 f'per result).\n{PACKET_LOSS_SUGGESTIONS}'
             )
 
-        return integ_ts, d_corr, count, sat, info
+        return t1, d_corr, count, sat, info
 
     def make_time_string(self):
         """
@@ -1912,8 +1913,8 @@ class POCKET_CORRELATOR:
                 index_map_grp = f.create_group('index_map')
                 dset_freq = index_map_grp.create_dataset('freq', (self.NBINS, ), dtype = np.float64)
                 dset_prod = index_map_grp.create_dataset('prod', (self.NPROD, 2), dtype = np.int16)
-                # 'time' now holds the hardware integration timestamp (integ_ts) for each result.
-                dset_time = index_map_grp.create_dataset('time', (n_vis_per_file, ), dtype = np.uint64)
+                # 'time' holds the rough UNIX timestamp (time.time(), in seconds) of each capture.
+                dset_time = index_map_grp.create_dataset('time', (n_vis_per_file, ), dtype = np.float64)
                 dset_good_bin_mask = index_map_grp.create_dataset('good_bin_mask', (self.NBINS, ), dtype = bool)
 
                 dset_freq[:] = self.f
@@ -1921,7 +1922,7 @@ class POCKET_CORRELATOR:
                 dset_good_bin_mask[:] = self.good_bin_mask
 
                 # Make numpy buffers for index_map
-                t_buf = np.zeros(n_vis_per_file, dtype = np.uint64)
+                t_buf = np.zeros(n_vis_per_file, dtype = np.float64)
                 vis_buf = np.zeros((n_vis_per_file, self.NBINS, self.NPROD), dtype = np.complex128)
                 counts_buf = np.zeros(n_vis_per_file, dtype = np.uint32)
                 sat_buf = np.zeros((n_vis_per_file, self.NBINS, self.NPROD), dtype = np.complex64)
@@ -2033,31 +2034,32 @@ class POCKET_CORRELATOR:
                         # Capture correlated data (note that many default arguments are used here).
                         # raise_on_issue is left False so a single result with dropped packets does not
                         # abort the whole observation; packet loss is recorded via counts below.
-                        integ_ts, vis, counts, sat, _ = await self.read_corr_frames(data_source = 'adc',
-                                                                                    fft_bypass = False,
-                                                                                    scaler_bypass = False,
-                                                                                    n_software_frames = n_software_frames,
-                                                                                    number_of_results = 1,
-                                                                                    flush = flush,
-                                                                                    raise_on_issue = False,
-                                                                                    )
+                        t1, vis, counts, sat, _ = await self.read_corr_frames(data_source = 'adc',
+                                                                              fft_bypass = False,
+                                                                              scaler_bypass = False,
+                                                                              n_software_frames = n_software_frames,
+                                                                              number_of_results = 1,
+                                                                              flush = flush,
+                                                                              raise_on_issue = False,
+                                                                              )
 
                     except RuntimeError as e:
                         print('Caught an error while capturing correlated data')
                         print(f'RuntimeError: {e}')
 
                         # Try capturing data again, this time flushing the buffer
-                        integ_ts, vis, counts, sat, _ = await self.read_corr_frames(data_source = 'adc',
-                                                                                    fft_bypass = False,
-                                                                                    scaler_bypass = False,
-                                                                                    n_software_frames = n_software_frames,
-                                                                                    number_of_results = 1,
-                                                                                    flush = True,
-                                                                                    raise_on_issue = False,
-                                                                                    )
+                        t1, vis, counts, sat, _ = await self.read_corr_frames(data_source = 'adc',
+                                                                              fft_bypass = False,
+                                                                              scaler_bypass = False,
+                                                                              n_software_frames = n_software_frames,
+                                                                              number_of_results = 1,
+                                                                              flush = True,
+                                                                              raise_on_issue = False,
+                                                                              )
 
                     # Each returned array has a leading results axis of length 1 (number_of_results).
-                    t_buf[n] = integ_ts[0]
+                    # t1 is a single float (time.time() taken just before the capture).
+                    t_buf[n] = t1
                     vis_buf[n] = vis[0]
                     counts_buf[n] = counts[0]
                     sat_buf[n] = sat[0]
@@ -2170,7 +2172,8 @@ class POCKET_CORRELATOR:
 
         finally:
             # Close the open file before ending
-
+            f.close()
+            
         return
 
 
