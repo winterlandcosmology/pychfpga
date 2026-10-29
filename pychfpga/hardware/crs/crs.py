@@ -1098,11 +1098,13 @@ class CRS(Motherboard):
         try:
             for name, info_dict in self.i2c1_ina231_list.items():
                 d = info_dict['device']
+                # The INA231s are left uncalibrated (see open_platform_async), so the
+                # CURRENT and POWER registers are not usable; derive them from the shunt.
                 voltage = d.get_bus_voltage()
-                current = d.get_current()
-                power = d.get_power()
                 shunt_voltage = d.get_shunt_voltage()
-                
+                current = shunt_voltage / info_dict['rshunt']
+                power = voltage * current
+
                 # Add individual rail metrics
                 metrics.add('crs_power_voltage', voltage, rail=name)
                 metrics.add('crs_power_current', current, rail=name)

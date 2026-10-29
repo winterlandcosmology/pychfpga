@@ -31,6 +31,17 @@ class GPIO(object):
         value = (value >> bit) & ((1 << width)-1)
         return value
 
+    def read_all(self, select=True):
+        """Read every GPIO field.
+
+        Args:
+            select (Any): Parameter value.
+
+        Returns:
+            dict: ``{name: value}`` for each GPIO field.
+        """
+        return {name: self.read(name, select=select) for name in self._gpio_table}
+
     def write(self, name, value, select=True):
         """Write a GPIO field value by symbolic name.
 

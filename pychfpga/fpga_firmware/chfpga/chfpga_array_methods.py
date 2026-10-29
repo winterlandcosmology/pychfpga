@@ -1698,6 +1698,8 @@ class chFPGAArrayMethods(ArrayMethods):
         metrics += await self.ib.get_crossbar_metrics_async(reset=False)
         self.logger.debug(f'{self.fpga_array!r}: Getting channelizer metrics (over FPGA UDP link)')
         metrics += await self.ib.get_channelizer_metrics_async(reset=reset)
+        self.logger.debug(f'{self.fpga_array!r}: Getting FPGA core temperature metrics')
+        metrics += await self.ib.get_fpga_core_temperature_metrics_async()
         self.logger.debug(f'{self.fpga_array!r}: Finished gathering FPGA/backplane metrics')
 
         # Backplane GTX
