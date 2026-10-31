@@ -286,6 +286,11 @@ class TCPipe:
     #: Retry TCP connect while the board is still booting (port 7 comes up early).
     CONNECT_RETRY_INTERVAL_S = 1.0
     CONNECT_RETRY_MAX_S = 60.0
+    #: After an RPC timeout, a short reply or a board-side parse error, refuse
+    #: RPCs for this long. Doubles on each repeat up to the cap; a successful
+    #: RPC resets it.
+    LINK_SUSPEND_MIN_S = 2.0
+    LINK_SUSPEND_MAX_S = 60.0
 
     opened_sockets = {}
 
@@ -321,6 +326,9 @@ class TCPipe:
         self.firmware_crc = None
         self.log.debug(f'{self!r}: Opened TCPipe socket from local address{self.sock.getsockname()} to remote address {self.hostname}:{self.port}')
         self.bsb_sent_ctr = 0
+        self._link_suspended_until = 0.0
+        self._link_suspend_s = 0.0
+        self._link_suspend_why = ''
         self.perf = _TCPipePerf(self, self.RPC_PERF_LOG_INTERVAL) if log_performance else None
         self._bsb_aggregate_ctx_depth = 0
         self._bsb_agg_pending = []
@@ -386,6 +394,28 @@ class TCPipe:
             pass
         self.sock = None
 
+    def _suspend_link(self, why):
+        """Refuse RPCs for a while: the command and reply streams are out of step.
+
+        The BSB replies carry no sequence number, so after a timeout, a short
+        reply or a parse error on the board the next replies may belong to
+        earlier commands and the next commands may be parsed as other ones.
+        Queued batch writes stay queued for a later flush.
+        """
+        self._link_suspend_s = min(
+            max(self.LINK_SUSPEND_MIN_S, 2 * self._link_suspend_s),
+            self.LINK_SUSPEND_MAX_S)
+        self._link_suspended_until = time.monotonic() + self._link_suspend_s
+        self._link_suspend_why = why
+        self.log.warning('%r: %s; refusing RPCs for %.0f s', self, why, self._link_suspend_s)
+
+    def _check_link(self, rpc_id):
+        remaining = self._link_suspended_until - time.monotonic()
+        if remaining > 0:
+            raise IOError(
+                f'{self!r}: RPC {rpc_id} refused, link suspended for another '
+                f'{remaining:.0f} s after {self._link_suspend_why}')
+
     def _rpc_write_read(self, rpc_id, payload=b'', read_length=None, read_until=None, timeout=None):
         """Execute a RPC command and return the reply.
 
@@ -407,6 +437,7 @@ class TCPipe:
                 Leftover command-stream bytes are drained before the exception
                 is re-raised so the next RPC is not desynchronized.
         """
+        self._check_link(rpc_id)
         if self._bsb_agg_pending:
             self._bsb_batch_write_flush()
         tx_payload, tx_len = self._build_rpc_tx_payload(rpc_id, payload)
@@ -444,9 +475,8 @@ class TCPipe:
                 discarded = self._drain_socket_buffer(
                     quiet=self.RPC_DRAIN_QUIET_S,
                     max_time=self.RPC_DRAIN_MAX_S)
-                self.log.warning(
-                    '%r: RPC %s timed out; discarded %d leftover command-stream bytes',
-                    self, rpc_id, discarded)
+                self._suspend_link(
+                    f'RPC {rpc_id} timed out; discarded {discarded} leftover command-stream bytes')
                 raise
         finally:
             if timeout:
@@ -460,7 +490,9 @@ class TCPipe:
             recv_s=recv_done_time - send_done_time,
             total_s=recv_done_time - start_time)
         if read_length is not None and rx_len != read_length:
+            self._suspend_link(f'RPC {rpc_id} received {rx_len} bytes instead of {read_length}')
             raise IOError(f'{self!r}: RPC {rpc_id} received {rx_len} bytes instead of {read_length} bytes')
+        self._link_suspend_s = 0.0
         return reply
 
     def _build_rpc_tx_payload(self, rpc_id, payload=b''):
@@ -568,6 +600,7 @@ class TCPipe:
             self, rpc_id, payload=b'', read_length=None, read_until=None,
             timeout=None):
         """Async RPC body. Caller must hold ``_sock_lock``."""
+        self._check_link(rpc_id)
         if self._bsb_agg_pending:
             await self._bsb_batch_write_flush_locked_async()
         tx_payload, tx_len = self._build_rpc_tx_payload(rpc_id, payload)
@@ -587,9 +620,8 @@ class TCPipe:
                 discarded = await self._drain_socket_buffer_locked_async(
                     quiet=self.RPC_DRAIN_QUIET_S,
                     max_time=self.RPC_DRAIN_MAX_S)
-                self.log.warning(
-                    '%r: RPC %s timed out; discarded %d leftover command-stream bytes',
-                    self, rpc_id, discarded)
+                self._suspend_link(
+                    f'RPC {rpc_id} timed out; discarded {discarded} leftover command-stream bytes')
                 raise TimeoutError(
                     f'{self!r}: RPC {rpc_id} timed out after {timeout} s')
         finally:
@@ -604,9 +636,11 @@ class TCPipe:
                 recv_s=recv_done_time - send_done_time,
                 total_s=recv_done_time - start_time)
         if read_length is not None and rx_len != read_length:
+            self._suspend_link(f'RPC {rpc_id} received {rx_len} bytes instead of {read_length}')
             raise IOError(
                 f'{self!r}: RPC {rpc_id} received {rx_len} bytes instead of '
                 f'{read_length} bytes')
+        self._link_suspend_s = 0.0
         return reply
 
     async def _rpc_write_read_async(
@@ -706,6 +740,7 @@ class TCPipe:
             self.RPC_BSB_BATCH_WRITE, payload, read_length=1 + n)
         if len(reply) == 1:
             if reply[0] == 0xFF:
+                self._suspend_link('BSB batch RPC failed (protocol/parse error on board)')
                 raise IOError(f'{self!r}: BSB batch RPC failed (protocol/parse error on board)')
             raise IOError(
                 f'{self!r}: BSB batch RPC failed at command index {reply[0] - 1} '
@@ -715,6 +750,7 @@ class TCPipe:
                 f'{self!r}: BSB batch RPC expected {1 + n} reply bytes, got {len(reply)}')
         if reply[0] != 0:
             if reply[0] == 0xFF:
+                self._suspend_link('BSB batch RPC failed (protocol/parse error on board)')
                 raise IOError(f'{self!r}: BSB batch RPC failed (protocol/parse error on board)')
             raise IOError(
                 f'{self!r}: BSB batch RPC failed at command index {reply[0] - 1} '
@@ -761,6 +797,7 @@ class TCPipe:
             self.RPC_BSB_BATCH_WRITE, payload, read_length=1 + n)
         if len(reply) == 1:
             if reply[0] == 0xFF:
+                self._suspend_link('BSB batch RPC failed (protocol/parse error on board)')
                 raise IOError(f'{self!r}: BSB batch RPC failed (protocol/parse error on board)')
             raise IOError(
                 f'{self!r}: BSB batch RPC failed at command index {reply[0] - 1} '
@@ -770,6 +807,7 @@ class TCPipe:
                 f'{self!r}: BSB batch RPC expected {1 + n} reply bytes, got {len(reply)}')
         if reply[0] != 0:
             if reply[0] == 0xFF:
+                self._suspend_link('BSB batch RPC failed (protocol/parse error on board)')
                 raise IOError(f'{self!r}: BSB batch RPC failed (protocol/parse error on board)')
             raise IOError(
                 f'{self!r}: BSB batch RPC failed at command index {reply[0] - 1} '
