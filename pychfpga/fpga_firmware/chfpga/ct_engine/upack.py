@@ -344,6 +344,12 @@ class UPACK(MMI):
             dest_bin = self.sacrificial_bins[i]
             crate,slot = self.fpga.get_id(default_crate=0, default_slot=0)
             source_id = crate <<8 | slot << 4
+
+            """
+            Temporary hack to insert source_id into dest IP port
+            """
+            target['dest_ip_port'] = 10000 + i # note the stream_id = i in the next line
+            
             self.set_ethernet_header(target=target, dest_bin=dest_bin, length=length, stream_id=i, source_id= source_id)  # Program the ethernet header
             b = np.concatenate(([dest_bin], b)).astype('>u2')
             if any(b >= 8192):
