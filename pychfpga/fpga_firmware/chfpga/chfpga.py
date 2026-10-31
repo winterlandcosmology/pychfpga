@@ -1314,6 +1314,29 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             raise IOError('Attempted to write FPGA core registers before MMI is initialized')
         self.mmi.write(self.mmi._RAM_BASE_ADDR + addr, value.to_bytes(4, 'little'))
 
+    def _read_irigb_ctrl(self):
+        """Read SAMPLE2 for a read-modify-write of its trigger bits.
+
+        Bits 31:30 select the IRIG-B source that feeds the SYNC comparator, so
+        a wrong word written back re-fires the SYNC and restarts the frame
+        counter. Over a TCPipe link whose replies are out of step, reads return
+        the wrong word: read twice, require agreement and the selected source.
+        """
+        w2 = self.fpga_core_reg_read(self._IRIGB_SAMPLE2_ADDR)
+        w2_again = self.fpga_core_reg_read(self._IRIGB_SAMPLE2_ADDR)
+        if w2 != w2_again:
+            raise IOError(
+                f'{self!r}: IRIG-B control register read 0x{w2:08X} then 0x{w2_again:08X}; '
+                'the control link is out of step, not writing to it')
+        sel = getattr(self, '_current_irigb_source_sel_pol', None)
+        if sel is not None:
+            src = self._IRIGB_SOURCE_TABLE[sel[0]] & 0b011
+            if w2 >> 30 != src:
+                raise IOError(
+                    f'{self!r}: IRIG-B control register 0x{w2:08X} selects source {w2 >> 30} '
+                    f'but {sel[0]} ({src}) was set; not writing to it')
+        return w2
+
     async def fpga_core_reg_read_async(self, addr):
         """Reads the contents of a 32-bit core register at the specified address.
 
@@ -1939,7 +1962,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
             ts.system_time_before = time.time()
             if trig:
-                w2 = self.fpga_core_reg_read(self._IRIGB_SAMPLE2_ADDR)
+                w2 = self._read_irigb_ctrl()
                 # trigger time capture by creating a rising edge on `refclk_sample_trig`
                 self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 & ~(1 << 29))
                 self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 | (1 << 29))
@@ -2248,7 +2271,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         """
         def _mmi(trig=trig, timeout=timeout):
             if trig:
-                w2 = self.fpga_core_reg_read(self._IRIGB_SAMPLE2_ADDR)
+                w2 = self._read_irigb_ctrl()
                 self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 & ~(1 << 28))
                 self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 | (1 << 28))
                 t0 = time.time()
@@ -2272,7 +2295,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         Return the number of the next frame passing through the system.
         """
         def _mmi():
-            w2 = self.fpga_core_reg_read(self._IRIGB_SAMPLE2_ADDR)
+            w2 = self._read_irigb_ctrl()
             self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 & ~(1 << 28))
             self.fpga_core_reg_write(self._IRIGB_SAMPLE2_ADDR, w2 | (1 << 28))
             t0 = time.time()

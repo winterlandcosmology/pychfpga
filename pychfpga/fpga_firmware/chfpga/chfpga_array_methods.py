@@ -1676,7 +1676,7 @@ class chFPGAArrayMethods(ArrayMethods):
         Includes corner-turn link (BP shuffle) stats, crossbar stats, and
         channelizer stats (all over the FPGA UDP/MMI path). If the last
         successful sync was IRIG-B, also adds per-board frame-time deltas
-        relative to board 0 and to the stored sync timestamps.
+        relative to the first board that answers and to the stored sync timestamps.
 
         Parameters:
 
@@ -1709,10 +1709,11 @@ class chFPGAArrayMethods(ArrayMethods):
 
         sync_timestamps = self._sync_timestamps
         if sync_timestamps:
+            fn0 = ts0 = None
             for i, mb in enumerate(self.ib):
                 try:
                     fn, ts = await mb.capture_frame_time_async(format='raw')
-                    if not i:
+                    if fn0 is None:
                         fn0, ts0 = (fn, ts)
                     crate, slot = mb.get_id()
                     slot = mb.slot - 1
@@ -1729,6 +1730,8 @@ class chFPGAArrayMethods(ArrayMethods):
                                 crate=crate, slot=slot)
                 except RuntimeError:
                     self.logger.error(f'{mb!r}: Timeout while capturing frame time')
+                except OSError as e:
+                    self.logger.error(f'{mb!r}: Cannot capture frame time: {e}')
 
         return metrics
 
