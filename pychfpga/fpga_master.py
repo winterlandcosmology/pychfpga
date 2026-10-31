@@ -1381,6 +1381,11 @@ class FPGAMaster(object):
         else:
             self.log.info("raw_acq disabled. Not starting baseline raw data data capture")
 
+        # Reset foreground calibration for all ADCs
+        for n in range(len(ca.ib)):
+            self.log.info(f"Performing foreground recalibration on {ca.ib[n]}...")
+            ca.ib[n].tcpipe.adc_rerun_fg_cal(tile_id = -1, start_state = None, end_state = None)
+
         self.log.info("Synchronizing the array...")
         self.log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%%%% This is the last SYNC %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
         if conf.fpga.sync_params.enable:
@@ -1636,26 +1641,31 @@ class FPGAMaster(object):
             time.sleep(max(wait, 2.0) if method == 'reset' else wait)
             print(f'retrain ({method}) done; state after:')
             return #read_optical(ca, serials=serials)
-        
-        try:
-            self.log.info(f"{self!r}: Attempting to tune 100G link parameters...")
-            self.log.debug(f'{self!r}: Reading optical...')
-            read_optical(ca)
-            self.log.debug(f'{self!r}: Setting parameters...')
-            set_fpga_tx(ca, 24, 0, 15)
-            self.log.debug(f'{self!r}: Enabling adaptive equalization, setting tx_eq = 0...')
-            set_optical(ca, adaptive = True, tx_eq = 0)
-            self.log.debug(f'{self!r}: Retraining optical...')
-            retrain_optical(ca)
-            self.log.debug(f'{self!r}: Checking optical one last time...')
-            read_optical(ca)
-            self.log.debug(f'{self!r}: Done!')
-        except Exception as e:
-            self.log.info(f'{self!r}: got error during 100G link parameter tuning: {e}')
-            pass
+
+        tuning_retries = 5
+        trial = 0
+        while trial < tuning_retries:
+            self.log.info(f"{self!r}: Attempting to tune 100G link parameters. Trial {trial}/{tuning_retries}")
+            try:
+                self.log.debug(f'{self!r}: Reading optical...')
+                read_optical(ca)
+                self.log.debug(f'{self!r}: Setting parameters...')
+                set_fpga_tx(ca, 24, 0, 15)
+                self.log.debug(f'{self!r}: Enabling adaptive equalization, setting tx_eq = 0...')
+                set_optical(ca, adaptive = True, tx_eq = 0)
+                self.log.debug(f'{self!r}: Retraining optical...')
+                retrain_optical(ca)
+                self.log.debug(f'{self!r}: Checking optical one last time...')
+                read_optical(ca)
+                self.log.debug(f'{self!r}: Done!')
+                break
+            except Exception as e:
+                self.log.info(f'{self!r}: got error during 100G link parameter tuning: {e}')
+                trial += 1
+                pass
 
         ########################################################################################################################################################################################################################################################################
-
+        
         # self.log.info("Waiting for 2 seconds")
         # await asyncio.sleep(2)
         self.log.info("Finished initializing FPGAs")
