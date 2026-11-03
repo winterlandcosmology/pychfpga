@@ -1,8 +1,10 @@
 .. Use UTF-8 encoding
+Quick links
+===========
 
-Source code: https://github.com/winterlandcosmology/pychfpga
+- Source code: https://github.com/winterlandcosmology/pychfpga
 
-Documentation: https://winterlandcosmology.github.io/pychfpga (build locally with ``make docs`` from the repository root)
+- Online documentation: https://winterlandcosmology.github.io/pychfpga (use ``make docs`` to build the documentaiton locally in ``docs/build/html``)
 
 
 Introduction
@@ -15,10 +17,9 @@ Supported platforms: Xilinx KC705, Xilinx ZCU111, McGill IceBoard, and t0 CRS (U
 Requirements
 ============
 
-Python 3.12
-make 
-uv (used by makefile for building docs, and useful to create a virtual environment for the project)
-
+- Python 3.12
+- make
+- uv (used by the Makefile for building docs, and useful to create a virtual environment for the project)
 
 Installation
 ============
@@ -27,11 +28,12 @@ Installation
 
 Clone the repository, create a virtual environment, and install the package::
 
-    git clone git@github.com:winterlandcosmology/pychfpga.git
+    git clone https://github.com/winterlandcosmology/pychfpga.git
     cd pychfpga
     uv sync # install dependencies immediately
 
 To run scripts::
+
     uv run raw_acq # start the raw acquisition server
     uv run fpga_master # start the FPGA master server
     uv run pychfpga/hardware/crs/crs_discovery # start the CRS discovery app
@@ -50,6 +52,6 @@ Jupyter lab::
 
 Then, in the python interactive session, create and initialize an FPGA array with::
 
-    import pychfpga
-    ca = await pychfpga.FPGAArray("CRS 77:1 123:2", mode='corr8')
+    from pychfpga.fpga_array import FPGAArray
+    ca = await FPGAArray("CRS 77:1 123:2", mode='corr8')
     print(ca.ib)  # print each board in the array
