@@ -2230,7 +2230,8 @@ def create_fpga_array(args=None):
                                 or config.get('fpga_array_params', {}))
     cli_fpga_array_params = {k: v for k, v in args['cli_fpga_array'].items() if v is not None}
     fpga_array_params = merge_dict(config_fpga_array_params, cli_fpga_array_params)
-    fpga_array = FPGAArray(**fpga_array_params)  # Create FPGA array
+    # Constructor only stores args; hardware init requires await (CLI has no running loop).
+    fpga_array = asyncio.run(FPGAArray(**fpga_array_params).init())
 
     return config, fpga_array, Ccoll([]), ps_array
 
