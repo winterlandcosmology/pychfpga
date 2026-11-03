@@ -122,8 +122,12 @@ build_info = dict(
     commit_date="Unknown",
 )
 
-# Git metadata for published docs (bitbucket.io branch picker reads build_info.json).
-branch_name = os.environ.get("BITBUCKET_BRANCH", "")
+# Git metadata for published docs (branch picker reads build_info.json).
+branch_name = (
+    os.environ.get("BITBUCKET_BRANCH")
+    or os.environ.get("GITHUB_REF_NAME")
+    or ""
+)
 short_hash = ""
 try:
     from git import Repo
