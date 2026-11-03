@@ -54,9 +54,11 @@ on Ubuntu 22.04.
 
 Getting access to :bash:`pychfpga`
 ++++++++++++++++++++++++++++++++++
-First, create a BitBucket account if you don't have one. Then, contact Jean-Francois Cliche at jfcliche@jfcliche.com to
-request access to the repository and other winterland dependencies and include the email for which your
-BitBucket account is registered. After getting access, it is necessary to add your ssh key to your BitBucket account.
+First, create a GitHub account if you don't have one (and a Bitbucket account
+if you need private winterland dependencies). Then contact Jean-Francois
+Cliche at jfcliche@jfcliche.com to request access, and include the email for
+the accounts you registered. After getting access, add your SSH public key to
+GitHub (and Bitbucket if required). See :doc:`ssh_keys`.
 
 Create a new ssh key by typing in a terminal:
 
@@ -64,24 +66,24 @@ Create a new ssh key by typing in a terminal:
 
     cd
     mkdir .ssh
-    ssh-keygen -t ed25519 -b 4096 .ssh/bitbucket_key
+    ssh-keygen -t ed25519 -f .ssh/github_key
 
 Leave the passphrase field empty (press Enter twice). Type:
 
 .. code-block:: bash
 
-    cat .ssh/bitbucket_key_test.pub
+    cat .ssh/github_key.pub
 
-and copy the output. Now you need to add the copied key to BitBucket. To do that, on BitBucket go `Gear icon -> Personal
-BitBuket settings -> Security -> SSH keys -> Add key`. You can put any label in the respective field. Paste the key copied
-from the terminal in the "Key" field.
+and copy the output. Add the key in GitHub under
+`Settings -> SSH and GPG keys -> New SSH key`. Paste the key copied from the
+terminal in the "Key" field.
 
-Finally, add a created key to the ssh client. Run in terminal window:
+Finally, add the key to the ssh client. Run in a terminal window:
 
 .. code-block:: bash
 
     eval `ssh-agent`
-    ssh-add .ssh/bitbucket_key
+    ssh-add .ssh/github_key
 
 Creating an environment
 +++++++++++++++++++++++
@@ -130,10 +132,10 @@ First, download the software by running the following in terminal:
 
 .. code-block:: bash
 
-    git clone git@bitbucket.org:winterlandcosmology/pychfpga.git -b deploy
+    git clone git@github.com:winterlandcosmology/pychfpga.git -b deploy
 
 If you had issues with this step, you probably don't have access to the repository. Check if you properly set up your
-BitBucket key an if you have permissions. If the command succeeded, go to the cloned repo:
+GitHub SSH key and if you have permissions. If the command succeeded, go to the cloned repo:
 
 .. code-block:: bash
 

@@ -59,8 +59,8 @@
         # ipympl # for widgets
 [project.urls]
     # Homepage = "https://example.com"
-    Documentation = "https://winterlandcosmology.bitbucket.io/pychfpga/jfc/dev"
-    Repository = "https://bitbucket.com/winterlandcosmology/pychfpga.git"
+    Documentation = "https://winterlandcosmology.github.io/pychfpga/jfc/dev"
+    Repository = "https://github.com/winterlandcosmology/pychfpga.git"
     # Issues = "https://github.com/me/spam/issues"
     # Changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
 

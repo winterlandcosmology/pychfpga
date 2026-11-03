@@ -23,7 +23,7 @@ Currently supported hardware platforms are:
 
 ``pychfpga`` is currently used to operate telescopes such as CHIME, CHORD, HIRAX, various outrigger telescopes, and a number of small portable interferometer-based experiments.
 
-Source code is at https://bitbucket.org/winterlandcosmology/pychfpga
+Source code is at https://github.com/winterlandcosmology/pychfpga
 
 
 Features
@@ -47,7 +47,7 @@ Features
 Documentation
 =============
 
-Online documentation is available at https://winterlandcosmology.bitbucket.io/pychfpga. It is built automatically when major branches are pushed to the repository.
+Online documentation is available at https://winterlandcosmology.github.io/pychfpga. It is built automatically when major branches are pushed to the repository.
 
 The documentation can be locally built manually ``make docs`` from the repository root). The documentation will be in the ``docs/build/html`` directory.
 
@@ -116,7 +116,7 @@ See :doc:`howto/installation` for platform-specific notes. The essentials are:
 
 Clone the repository::
 
-    git clone git@bitbucket.org:winterlandcosmology/pychfpga.git
+    git clone git@github.com:winterlandcosmology/pychfpga.git
 
 Create and activate a virtual environment (assuming you are using venv)::
 
@@ -153,7 +153,7 @@ Server mode
 
 For production operation, the `fpga_master` and `raw_acq` servers can be launched. Those will initialize the array based on a YAML configuration file, and will provide HTTP REST endpoints to operate the array and serve real-time stats and performance metrics to an aggregator such as Prometheus (See :doc:`howto/server_operation`)
 
-.. - :doc:`howto/ssh_keys` — Bitbucket SSH keys
+.. - :doc:`howto/ssh_keys` — GitHub / Bitbucket SSH keys
 .. - :doc:`howto/installation` — Python environment and ``pip install``
 .. - :doc:`howto/hardware_setup` — IceBoard wiring, clock, and Ethernet
 .. - :doc:`howto/fpga_array` — interactive ``fpga_array``

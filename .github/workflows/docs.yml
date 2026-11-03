@@ -5,6 +5,7 @@
 #
 # Modelled on jfcliche/geomon .github/workflows/docs.yml (uv, concurrency),
 # with multi-branch publish adapted from bitbucket-pipelines.yml.
+# Assumes the gh-pages branch already exists.
 
 name: Docs
 
@@ -49,52 +50,28 @@ jobs:
         env:
           UV_PYTHON_PREFERENCE: only-system
 
-      - name: Publish branch docs to gh-pages
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: www
+
+      - name: Publish branch docs
+        run: rsync -a --delete docs/build/html/ "www/${GITHUB_REF_NAME}/"
+
+      - name: Update branch selector
+        run: python3 docs/update_branch_selector.py www
+
+      - name: Push docs
         run: |
           set -euo pipefail
-          BRANCH="${GITHUB_REF_NAME}"
-          DOC_PUBLISH_FOLDER="${BRANCH}"
-          REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-
-          rm -rf www
-          if git ls-remote --exit-code --heads "${REPO_URL}" gh-pages >/dev/null 2>&1; then
-            git clone --depth 1 --branch gh-pages "${REPO_URL}" www
-          else
-            mkdir www
-            git -C www init
-            git -C www checkout -b gh-pages
-            git -C www remote add origin "${REPO_URL}"
-          fi
-
-          mkdir -p "www/${DOC_PUBLISH_FOLDER}"
-          find "www/${DOC_PUBLISH_FOLDER}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-          cp -a docs/build/html/. "www/${DOC_PUBLISH_FOLDER}/"
-
-          # Entry page + machine-readable branch list for the picker
-          cp docs/branch_selector.html www/index.html
-          touch www/.nojekyll
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          root = Path("www")
-          branches = sorted(
-              p.parent.relative_to(root).as_posix()
-              for p in root.rglob("build_info.json")
-              if p.parent != root
-          )
-          (root / "branches.json").write_text(json.dumps(branches, indent=2) + "\n")
-          print("Published branches:", ", ".join(branches) or "(none)")
-          PY
-
           cd www
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git add -A
           if git status --porcelain | grep -q .; then
-            git commit -m "docs: update ${DOC_PUBLISH_FOLDER}"
-            git push -u origin HEAD:gh-pages
+            git commit -m "docs: update ${GITHUB_REF_NAME}"
+            git push
           else
             echo "No documentation changes to publish"
           fi
