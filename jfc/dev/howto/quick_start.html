@@ -1,0 +1,398 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quick start &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Installation" href="installation.html" />
+    <link rel="prev" title="Introduction" href="../introduction.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Quick start</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#programming-the-arm-firmware">Programming the ARM firmware</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuring-and-operating-the-agilent5700-8700-power-supplies">Configuring and operating the Agilent5700/8700 power supplies</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#running-the-array">Running the array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#resetting-a-single-board">Resetting a single board</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#accessing-the-weather-server">Accessing the Weather server</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#starting-the-weather-server">Starting the Weather server</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#manually-interacting-with-the-weather-server">Manually interacting with the weather server</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#checking-the-gps-serial-to-ethernet-adapters">Checking the GPS Serial to Ethernet adapters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuring-the-gps-ethernet-adapters">Configuring the GPS Ethernet adapters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#manually-interacting-with-the-gps-unit">Manually interacting with the GPS unit</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../_autosummaries/pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Quick start</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/howto/quick_start.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="quick-start">
+<h1>Quick start<a class="headerlink" href="#quick-start" title="Link to this heading"></a></h1>
+<section id="programming-the-arm-firmware">
+<h2>Programming the ARM firmware<a class="headerlink" href="#programming-the-arm-firmware" title="Link to this heading"></a></h2>
+<p>The ARM processor firmware includes the Linux operating system, a filesystem loaded with all the files and executables required to run the OS, the web server and and the IceBoard-specific software  that handles its hardware and provides the corresponding methods over a HTTP-based interface.</p>
+<p>The ARM firmware resides in the SD card that is inerted in each IceBoard, and the board boots locally from there. (There is an experimental network booting mode, which is not used for CHIME).</p>
+<p>The SD card image is built on a linux machine, and is then copied to the SD cards.</p>
+<p>It takes about 50 seconds to program a card using a fast SD card reader/writer (or the one on your PC), but that is tedious for a large array. For this reason, an experimental (and very hacky) remote, parallel programming method has been devised.</p>
+<p>To use this programming method, you first need an image compressed in bzip2 format (typically with a <code class="docutils literal notranslate"><span class="pre">.bz2</span></code> extension). Uncompressed images, or images compressed in another format are not currently accepted.</p>
+<p>The programming is done  in an interactive ipython session.</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>cd to the ch_acq folder</p></li>
+<li><p>Start ipython</p></li>
+</ul>
+</div></blockquote>
+<p>Then create an array of boards you whish to reprogram by using the <code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array</span></code> command-line interface. For example, if you want to load all the boards that are specified in the configuration <code class="docutils literal notranslate"><span class="pre">jfc.crate0</span></code> (define din <code class="docutils literal notranslate"><span class="pre">config.yaml</span></code>), you would do:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">run</span> <span class="o">-</span><span class="n">i</span> <span class="n">pychfpga</span><span class="o">/</span><span class="n">fpga_array</span> <span class="o">-</span><span class="n">y</span> <span class="n">jfc</span><span class="o">.</span><span class="n">crate0</span> <span class="o">--</span><span class="n">prog</span> <span class="mi">0</span> <span class="o">--</span><span class="nb">open</span> <span class="mi">0</span>
+</pre></div>
+</div>
+<p>This will create an array of boards accessible through variable <cite>ca</cite>. <cite>ca.ib</cite> is the collection of all IceBoards in the array. As a convenience, just <code class="docutils literal notranslate"><span class="pre">ib</span></code> will give you this array directly.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">--prog</span> <span class="pre">0</span></code> <code class="docutils literal notranslate"><span class="pre">--open</span> <span class="pre">0</span></code> arguments override the config so to prevent <cite>fpga_array</cite> from programming the FPGAs or attempt to open communication with them.</p>
+<p>This is just one example on how you select a collection of boards. You could also specify them directly by IP address, or, if mDNS is working, through the IceBoard or backplane serial numbers.</p>
+<p>Once you have an array, you can check the current firmware version with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ib</span><span class="o">.</span><span class="n">get_build_info</span><span class="p">()</span><span class="o">.</span><span class="n">icecore_git_hash</span>
+</pre></div>
+</div>
+<p>This returns a tuple with many fields describing various build informatio elements. To get a specific field from that array:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ib</span><span class="o">.</span><span class="n">get_build_info</span><span class="p">()</span><span class="o">.</span><span class="n">icecore_git_hash</span>
+</pre></div>
+</div>
+<p>You can then program the SD cards by invoking the <code class="xref py py-meth docutils literal notranslate"><span class="pre">FPGAController._update_arm_firmware()</span></code> method as follows:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ib</span><span class="o">.</span><span class="n">_update_arm_firmware</span><span class="p">(</span><span class="n">path_to_firmware_image_file</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Since <code class="docutils literal notranslate"><span class="pre">ib</span></code> is a <cite>Ccoll</cite>-type collection, and the <code class="docutils literal notranslate"><span class="pre">_update_arm_firmware</span></code> is designed to be asynchronous, the method will be run in parallel (concurrently) for all of the boards in the array.</p>
+<p>The method will:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>open a ssh shell to copy the image to a temporary RAM disk on the arm</p></li>
+<li><p>copy the image to the SD card (while the OS is still running from that OS – that is the hacky part. But apparently, it works).</p></li>
+<li><p>wait for 120 seconds to make sure the write buffers are flushed and writing to the SD card is completed.</p></li>
+</ul>
+</div></blockquote>
+<p>Once this is done, you need to power-cycle the boards, and thhey should boot with the new firmware.</p>
+<p>Warning: Do not interrupt this process. This will corrupt the SD card and the boards won’t boot again. Always have an evergency SD card image and a SD card programmer handy on site in case things go wrong.</p>
+</section>
+<section id="configuring-and-operating-the-agilent5700-8700-power-supplies">
+<h2>Configuring and operating the Agilent5700/8700 power supplies<a class="headerlink" href="#configuring-and-operating-the-agilent5700-8700-power-supplies" title="Link to this heading"></a></h2>
+<p>We use the Agilent 5764A (20V, 76A) to power the FPGA crates and the Agilent 8731A (8V, 400A) to power the FLAs (low noise pre-amp, and filtered post-amplifiers).</p>
+<p>When a new power supply unit is installed, it should be configured with a default voltage and current limit that will persist even after power failures. We need to set these important parameters manually, using the front panel or remotely using the Python object. For safety reasons, <cite>ch_master</cite> does not set these parameters automatically, as a simple configuration error could destroy hundred of thousands of dollars of equipment.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Make sure you connect to the right power supply!</p>
+</div>
+<p>Open an interactive ipython session, from the <code class="docutils literal notranslate"><span class="pre">ch_acq</span></code> folder:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ps</span><span class="w"> </span><span class="kn">import</span> <span class="n">AgilentN5700</span> <span class="c1"># load the class that can handle both the 5700 and 8700 series</span>
+<span class="n">ps</span> <span class="o">=</span> <span class="n">AgilentN5700</span><span class="p">(</span><span class="s1">'10.0.0.40'</span><span class="p">)</span> <span class="c1"># yoy can also use the hostname.In any case, make sure you connect to the right unit!</span>
+<span class="n">ps</span><span class="o">.</span><span class="n">unlock</span><span class="p">()</span>  <span class="c1"># disable software protection (This protection is implemented by the instance; it does not affect the instrument in any way)</span>
+<span class="n">ps</span><span class="o">.</span><span class="n">configure_power_on_state</span><span class="p">(</span><span class="n">voltage</span><span class="o">=</span><span class="mf">6.2</span><span class="p">,</span> <span class="n">current</span><span class="o">=</span><span class="mi">360</span><span class="p">)</span> <span class="c1"># Sets the voltage setpoint and current limit.</span>
+</pre></div>
+</div>
+<p>The <cite>configure_power_on_state</cite> first disables the power supply output and sets the voltage setpoint and maximum current, and also ensures that those parameters will be reloaded when the power to the unit is re-established. The power supply output is left disabled  after the command.</p>
+<p>Before enabling the supply, you can check the voltage and current limit settings with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ps</span><span class="o">.</span><span class="n">get_voltage_setting</span><span class="p">()</span>
+<span class="n">ps</span><span class="o">.</span><span class="n">get_current_limit</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The power supply can be powered on and off with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ps</span><span class="o">.</span><span class="n">unlock</span><span class="p">()</span> <span class="c1"># if was not done before on this instance</span>
+<span class="n">ps</span><span class="o">.</span><span class="n">power_on</span><span class="p">()</span>
+<span class="n">ps</span><span class="o">.</span><span class="n">power_off</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The status of the supply and the current voltage and current can be displayed with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ps</span><span class="o">.</span><span class="n">status</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Once you enable the supply, the status() method can be used to confirm that the output voltage is as desired. The current will be whatever the load uses, not the limit (hopefully).</p>
+</section>
+<section id="running-the-array">
+<h2>Running the array<a class="headerlink" href="#running-the-array" title="Link to this heading"></a></h2>
+<p>This section describe how to run the CHIME Array.</p>
+<p>Before you begin, make sure all the system and Python packages have been installed, as per the instruction in <a class="reference internal" href="installation.html"><span class="doc">Installation</span></a>.</p>
+</section>
+<section id="resetting-a-single-board">
+<h2>Resetting a single board<a class="headerlink" href="#resetting-a-single-board" title="Link to this heading"></a></h2>
+<p>Sometimes, when you initialize an array, a FPGA board (more precisely, its ARM processor) will fail to respond to pings. Unless there is a bad networking conneciton, this is because the board has not booted properly. This board needs to be rebooted. To solve this issue, the whole crate can be powercycled, but it is also possible to reboot a single board in the crate. This is explained here.</p>
+<p><code class="docutils literal notranslate"><span class="pre">ch_master</span></code> or <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code> will report the list of missing boards with as much information as it has on the identity of that board (hostname/IP address of the board,  serial number,  and (crate_number, slot_number) tuple). You can use the network map spreadsheed to find out in which crate and slot the board is located if that information is not preseted. Note that the (crate,slot) tuple use zero-based slot numbers.</p>
+<p>To reset the board, launch an <code class="docutils literal notranslate"><span class="pre">ipython</span></code> session and use fpga_array.py to create an array consisting of the crate that has the problematic board. There are various methods to select the boards (the IP address of a known working board in the crate, and if mDNS is working on that machine, the serial numbe rof the board or the crate). Here, we’ll use the boards defines in a pre-existing array in the config file:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">run</span> <span class="o">-</span><span class="n">i</span> <span class="n">pychfpga</span><span class="o">/</span><span class="n">fpga_array</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">y</span> <span class="n">jfc</span><span class="o">.</span><span class="n">crate7</span> <span class="o">--</span><span class="nb">open</span> <span class="mi">0</span> <span class="o">--</span><span class="n">prog</span> <span class="mi">0</span> <span class="o">--</span><span class="n">ignore_missing_boards</span>
+</pre></div>
+</div>
+<p>We use the <code class="docutils literal notranslate"><span class="pre">--open</span> <span class="pre">0</span> <span class="pre">--prog</span> <span class="pre">0</span></code> to override the config parameters and make sure the FPGAs are not initialized. We just want to talk to the ARM processors. The option <code class="docutils literal notranslate"><span class="pre">--ignore_missing_boards</span></code> is needed to prevent from fpga_array from raisong an exception if the problematic board is covered by the list.</p>
+<p>When the array is created, select a working board in the same crate:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">i</span> <span class="o">=</span> <span class="n">ib</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">ib</span></code> was defined by <code class="docutils literal notranslate"><span class="pre">fpga_array.py</span></code> script as a list of all selected boards. We just take the first one in the list.
+To reset the board, on slot N (one-based slot number), we do:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">i</span><span class="o">.</span><span class="n">set_power_on_slot</span><span class="p">(</span><span class="n">N</span><span class="p">,</span><span class="kc">False</span><span class="p">)</span> <span class="c1"># power off slot N</span>
+<span class="n">i</span><span class="o">.</span><span class="n">set_power_on_slot</span><span class="p">(</span><span class="n">N</span><span class="p">,</span><span class="kc">True</span><span class="p">)</span> <span class="c1"># power on slot N</span>
+</pre></div>
+</div>
+<p>After some delay (up to 60 seconds), the board will boot up and will respond to pings.</p>
+</section>
+<section id="accessing-the-weather-server">
+<h2>Accessing the Weather server<a class="headerlink" href="#accessing-the-weather-server" title="Link to this heading"></a></h2>
+<p>In CHIME, the <code class="docutils literal notranslate"><span class="pre">wview</span></code> service that gathers DRAO weather station data runs on <code class="docutils literal notranslate"><span class="pre">marimba</span></code>. Since <cite>weather.py</cite> needs to access the database file produced by this service, our server mush run on the same machine.</p>
+<p><code class="docutils literal notranslate"><span class="pre">marimba</span></code>’s Python has been configured to all users can run the server. However, it is common practice to run all experiment process as the chime user, and within a GNU <code class="docutils literal notranslate"><span class="pre">screen</span></code>. This allows multiple users to connect and re-connect simulatenously and to ensure the process continues in case of disconnections (which happens regularly if you are connecting from the outside). The default <code class="docutils literal notranslate"><span class="pre">screen</span></code> name is <code class="docutils literal notranslate"><span class="pre">ch_acq</span></code>.</p>
+<p>To access an existing (or create a new) weather <code class="docutils literal notranslate"><span class="pre">screen</span></code> from <code class="docutils literal notranslate"><span class="pre">liberty</span></code>/<code class="docutils literal notranslate"><span class="pre">tubular</span></code></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ssh</span> <span class="o">-</span><span class="n">A</span> <span class="n">chime</span><span class="nd">@marimba</span> <span class="o">-</span><span class="n">t</span> <span class="s2">"screen -c ~/.screenrc_ch_acq -xRS ch_acq"</span>
+</pre></div>
+</div>
+<p>Or from the outside world via <code class="docutils literal notranslate"><span class="pre">tubular</span></code> (192.139.21.135):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ssh</span> <span class="o">-</span><span class="n">A</span> <span class="n">jfcliche</span><span class="o">@</span><span class="mf">192.139.21.135</span> <span class="o">-</span><span class="n">t</span> <span class="s2">"ssh -A chime@marimba -t </span><span class="se">\"</span><span class="s2">screen -c ~/.screenrc_ch_acq -xRS ch_acq</span><span class="se">\"</span><span class="s2">"</span>
+</pre></div>
+</div>
+<p>This assumes you have ssh-agent running on your work terminal and which is loaded with a key that match one of those listed in <code class="docutils literal notranslate"><span class="pre">~/.ssh/authorized_keys</span></code> on <code class="docutils literal notranslate"><span class="pre">tubular</span></code> and <code class="docutils literal notranslate"><span class="pre">marimba</span></code>, or there are <code class="docutils literal notranslate"><span class="pre">~/.ssh/config</span></code>  that indicate how to authenticate to these machines. The <code class="docutils literal notranslate"><span class="pre">ssh</span> <span class="pre">-A</span></code> option allows the ssh-agent keys running on your work computer to be accessible from the ssh sessions, so your super-secret private key does not have to be on any of the servers.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">screen</span></code> options specify: <code class="docutils literal notranslate"><span class="pre">-R</span></code>: resume an existing screen, <code class="docutils literal notranslate"><span class="pre">-x</span></code>, allow commection to an already attached screen (multi-user); and <code class="docutils literal notranslate"><span class="pre">-S</span> <span class="pre">ch_acq</span></code>: if no screen exist, create a new screen named <code class="docutils literal notranslate"><span class="pre">ch_acq</span></code>, using the configuration specified by <code class="docutils literal notranslate"><span class="pre">-c</span> <span class="pre">~/.screenrc_ch_acq</span></code>.</p>
+<p>The server is normally running in the weather.py tab (<kbd class="kbd docutils literal notranslate">Ctrl</kbd>-<kbd class="kbd docutils literal notranslate">A</kbd> <kbd class="kbd docutils literal notranslate">1</kbd>).  The <code class="docutils literal notranslate"><span class="pre">.screenrc_ch_acq</span></code> config creates this tab by default if a new screen is created.</p>
+</section>
+<section id="starting-the-weather-server">
+<h2>Starting the Weather server<a class="headerlink" href="#starting-the-weather-server" title="Link to this heading"></a></h2>
+<p>If the server is not already running, it can be started with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">~/</span><span class="n">git</span><span class="o">/</span><span class="n">ch_acq</span>
+<span class="o">./</span><span class="n">weather</span><span class="o">.</span><span class="n">py</span> <span class="n">jfc</span><span class="o">.</span><span class="n">drao</span>
+</pre></div>
+</div>
+<p>Tip: <code class="docutils literal notranslate"><span class="pre">.inputrc</span></code> is configured so you can just conveniently type “cd [up-arrow]” or “./ [up arrow]” to search for these  commands from the history</p>
+</section>
+<section id="manually-interacting-with-the-weather-server">
+<h2>Manually interacting with the weather server<a class="headerlink" href="#manually-interacting-with-the-weather-server" title="Link to this heading"></a></h2>
+<p>If you need to confirm you are getting weather, you can manually print the latest weather data from an <code class="docutils literal notranslate"><span class="pre">ipython</span></code> session:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">~/</span><span class="n">git</span><span class="o">/</span><span class="n">ch_acq</span>
+<span class="n">ipython</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">weather</span>
+<span class="nb">print</span> <span class="n">weather</span><span class="o">.</span><span class="n">get_wview_metrics</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="checking-the-gps-serial-to-ethernet-adapters">
+<h2>Checking the GPS Serial to Ethernet adapters<a class="headerlink" href="#checking-the-gps-serial-to-ethernet-adapters" title="Link to this heading"></a></h2>
+<dl class="simple">
+<dt>These are Startech NETRS232 units. You can check if they work properly by pinging them, e.g.::</dt><dd><p>ping 10.0.0.10</p>
+</dd>
+</dl>
+<p>or by opening a browser page at <a class="reference external" href="http://10.0.0.10">http://10.0.0.10</a></p>
+<p>Sometimes, a NETRS232 stops working and needs to be power-cycled.</p>
+<p>You can check if a unit has open ports with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">nmap</span> <span class="o">-</span><span class="n">sV</span> <span class="o">-</span><span class="n">Pn</span> <span class="mf">10.0.0.10</span>  <span class="c1"># -Pn says to ignore pings and test the ports anyway</span>
+</pre></div>
+</div>
+<p>Which will yield a result such as:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Nmap scan report for 10.0.0.11
+Host is up (0.0097s latency).
+Not shown: 995 closed ports
+PORT     STATE SERVICE    VERSION
+80/tcp   open  tcpwrapped
+99/tcp   open  metagram?
+1001/tcp open  tcpwrapped
+5000/tcp open  upnp?
+6000/tcp open  X11?
+</pre></div>
+</div>
+<p>We expect port 80 (web interface), TCP 1001 (data port), 6000 (Control port)</p>
+</section>
+<section id="configuring-the-gps-ethernet-adapters">
+<h2>Configuring the GPS Ethernet adapters<a class="headerlink" href="#configuring-the-gps-ethernet-adapters" title="Link to this heading"></a></h2>
+<p>Use manufacturer procedure to configure the networking of the Startech NETRS323 device to DHCP. That might require the unit to be connected directly to an ethernet port configured with the default networking parameters, or use the Windows program (?).</p>
+<p>Once you have an IP address, over the web interface, set the following:</p>
+<blockquote>
+<div><ul>
+<li><p>System Status:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Nickname: gps-east or gps-west</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p>TCP mode:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Telnet Server/client: Server (Necessary, otherwise even simple tcp connection to the data port does not work)</p></li>
+<li><p>reverse telnet: off</p></li>
+<li><p>CLI Mode: NOT enabled</p></li>
+<li><p>Data port Number: 1001 (important. This is what the config file assumes)</p></li>
+<li><p>Control protocol:</p></li>
+<li><p>Remote IP server address: not used</p></li>
+<li><p>Client mod einactive timeout: (unused)</p></li>
+<li><p>Server mode protect timeout: 1 minute (default 60 minutes)</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p>UDP Mode: disabled, since TCP mode is active</p></li>
+<li><p>UART:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>RS232, 9600, 8 , N ,1</p></li>
+<li><p>no hardware flow control</p></li>
+<li><p>no delimiter selected</p></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+</div></blockquote>
+</section>
+<section id="manually-interacting-with-the-gps-unit">
+<h2>Manually interacting with the GPS unit<a class="headerlink" href="#manually-interacting-with-the-gps-unit" title="Link to this heading"></a></h2>
+<p>In <code class="docutils literal notranslate"><span class="pre">ipython</span></code>, from the ch_acq folder:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">gps</span>
+<span class="n">g</span><span class="o">=</span><span class="n">gps</span><span class="o">.</span><span class="n">SpectrumInstrumentsTM4D</span><span class="p">(</span><span class="s1">'10.0.0.10'</span><span class="p">)</span>
+<span class="n">g</span><span class="o">.</span><span class="n">set_polling_mode</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># stop the GPS from broacdasting continuously</span>
+<span class="n">g</span><span class="o">.</span><span class="n">get_date_time</span><span class="p">()</span> <span class="c1"># just for testing, ask the time and date</span>
+<span class="n">g</span><span class="o">.</span><span class="n">configure_gps</span><span class="p">()</span> <span class="c1"># setup the GPS parameters for CHIME</span>
+</pre></div>
+</div>
+<p>You can set the unit in survey mode, meaning it will average 10000 positions and then switch back into static mode (time only):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">g</span><span class="o">.</span><span class="n">set_polling_mode</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># stop the GPS from broacdasting continuously</span>
+<span class="n">g</span><span class="o">.</span><span class="n">set_timing_mode</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>  <span class="c1"># start the survey mode</span>
+</pre></div>
+</div>
+<p>You can check the setting with:</p>
+<blockquote>
+<div><p>g.get_timing_mode()  #</p>
+</div></blockquote>
+<p>You might have to repeat the command to flush the previous responses that were put in the buffer by pervious commands (or the broadcast mode)</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../introduction.html" class="btn btn-neutral float-left" title="Introduction" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="installation.html" class="btn btn-neutral float-right" title="Installation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

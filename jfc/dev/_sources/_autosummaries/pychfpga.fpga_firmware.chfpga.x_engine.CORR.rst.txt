@@ -1,0 +1,146 @@
+
+
+
+
+
+:py:mod:`CORR.py <pychfpga.fpga_firmware.chfpga.x_engine.CORR>`
+===============================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware.chfpga.x_engine
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware.chfpga.x_engine,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga.x_engine.CORR,
+..    | name==CORR
+..    | modules = 
+..    | classes = ['CORR', 'CORR_core', 'CorrFrameReceiver']
+
+.. automodule:: pychfpga.fpga_firmware.chfpga.x_engine.CORR
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         get_raw_corr_map
+         get_raw_to_matrix_map
+         get_raw_to_vector_map
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         CORR
+         CORR_core
+         CorrFrameReceiver
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: get_raw_corr_map
+
+
+.. autofunction:: get_raw_to_matrix_map
+
+
+.. autofunction:: get_raw_to_vector_map
+
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: CORR
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: CORR_core
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: CorrFrameReceiver
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

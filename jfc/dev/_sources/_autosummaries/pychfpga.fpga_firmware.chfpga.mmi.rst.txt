@@ -1,0 +1,117 @@
+
+
+
+
+
+:py:mod:`mmi.py <pychfpga.fpga_firmware.chfpga.mmi>`
+====================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware.chfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware.chfpga,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga.mmi,
+..    | name==mmi
+..    | modules = 
+..    | classes = ['BitField', 'MMI', 'MMIRouter']
+
+.. automodule:: pychfpga.fpga_firmware.chfpga.mmi
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         BitField
+         MMI
+         MMIRouter
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: BitField
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: MMI
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: MMIRouter
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

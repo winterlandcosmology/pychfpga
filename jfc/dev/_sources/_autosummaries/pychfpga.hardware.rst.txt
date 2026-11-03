@@ -1,0 +1,97 @@
+
+
+
+
+
+:py:mod:`hardware/ <pychfpga.hardware>`
+=======================================
+
+
+.. currentmodule:: pychfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga,
+..    | FULLNAME=pychfpga.hardware,
+..    | name==hardware
+..    | modules = ['Agilent_N5764A', 'crate', 'crs', 'hardware_map', 'i2c_devices', 'ice', 'interfaces', 'mezzanine', 'motherboard', 'supported_hardware', 'zcu111', 'zuboard']
+..    | classes = []
+
+.. automodule:: pychfpga.hardware
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~Agilent_N5764A
+         ~crate
+         ~crs
+         ~hardware_map
+         ~i2c_devices
+         ~ice
+         ~interfaces
+         ~mezzanine
+         ~motherboard
+         ~supported_hardware
+         ~zcu111
+         ~zuboard
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

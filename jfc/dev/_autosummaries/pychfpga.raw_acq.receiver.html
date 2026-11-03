@@ -1,0 +1,435 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>receiver.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="server.py" href="pychfpga.raw_acq.server.html" />
+    <link rel="prev" title="raw_data_processor.py" href="pychfpga.raw_acq.raw_data_processor.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.raw_acq.adc_data_processor.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">adc_data_processor.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.raw_acq.client.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">client.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.raw_acq.corr_data_processor.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">corr_data_processor.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.raw_acq.fft_data_processor.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fft_data_processor.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.raw_acq.hdf5_corr_writer.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hdf5_corr_writer.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.raw_acq.hdf5_raw_writer.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hdf5_raw_writer.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.raw_acq.raw_data_processor.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_data_processor.py</span></code></a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">receiver.py</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.raw_acq.receiver.RawAcqReceiver"><code class="docutils literal notranslate"><span class="pre">RawAcqReceiver</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.raw_acq.server.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">server.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.raw_acq.ucorr_acq_packet_processor.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ucorr_acq_packet_processor.py</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">receiver.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.raw_acq.receiver.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="receiver-py">
+<h1><a class="reference internal" href="#module-pychfpga.raw_acq.receiver" title="pychfpga.raw_acq.receiver"><code class="xref py py-mod docutils literal notranslate"><span class="pre">receiver.py</span></code></a><a class="headerlink" href="#receiver-py" title="Link to this heading"></a></h1>
+<p id="module-pychfpga.raw_acq.receiver">UDP raw acquisition receiver and packet processing loop.</p>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.raw_acq.receiver.RawAcqReceiver" title="pychfpga.raw_acq.receiver.RawAcqReceiver"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RawAcqReceiver</span></code></a></p></td>
+<td><p>Implement an array of multi-threaded UDP Raw data receiver and the data processor that will handle the received data.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.raw_acq.receiver.</span></span><span class="sig-name descname"><span class="pre">RawAcqReceiver</span></span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Implement an array of multi-threaded UDP Raw data receiver and the data processor that will handle the received data.</p>
+<p>The object offers <cite>start</cite> and <cite>stop</cite> methods to start and stop the receivers, a method to grab a
+snapshot of the current data, and a method to start a thred that continuously writes the data to
+disk if HDF5 format.</p>
+<p>This reciever uses Threads to implement concurrency, not Tornado.</p>
+<p>Packet buffer contract (aligned with <a class="reference internal" href="pychfpga.common.udp_packet_receiver.html#pychfpga.common.udp_packet_receiver.UDPPacketReceiver" title="pychfpga.common.udp_packet_receiver.UDPPacketReceiver"><code class="xref py py-class docutils literal notranslate"><span class="pre">UDPPacketReceiver</span></code></a>
+so <a class="reference internal" href="pychfpga.common.raw_data_packet_processor.html#pychfpga.common.raw_data_packet_processor.RawDataPacketProcessor" title="pychfpga.common.raw_data_packet_processor.RawDataPacketProcessor"><code class="xref py py-class docutils literal notranslate"><span class="pre">RawDataPacketProcessor</span></code></a> can use either as <code class="docutils literal notranslate"><span class="pre">packet_receiver</span></code>):</p>
+<p><code class="docutils literal notranslate"><span class="pre">buf</span></code>, <code class="docutils literal notranslate"><span class="pre">pkt_len</span></code>, <code class="docutils literal notranslate"><span class="pre">n_packets</span></code>, <code class="docutils literal notranslate"><span class="pre">n_stored</span></code>, <code class="docutils literal notranslate"><span class="pre">max_packet_size</span></code>, and <a class="reference internal" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.flush" title="pychfpga.raw_acq.receiver.RawAcqReceiver.flush"><code class="xref py py-meth docutils literal notranslate"><span class="pre">flush()</span></code></a>.</p>
+<p class="rubric">Notes</p>
+<p>The performance ofthis receiver is limited by Python. It is meant to be used mostly for debugging.</p>
+<p>Should probably fix the ‘serve forever bits’</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.check_ioloop_response_time_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">check_ioloop_response_time_async</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.check_ioloop_response_time_async" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.expand_path">
+<span class="sig-name descname"><span class="pre">expand_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extra_fields</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.expand_path" title="Link to this definition"></a></dt>
+<dd><p>Expand fields in a string.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.flush">
+<span class="sig-name descname"><span class="pre">flush</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_flush_time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.flush" title="Link to this definition"></a></dt>
+<dd><p>Clear packet buffer bookkeeping (UDPPacketReceiver-compatible signature).</p>
+<p>Unlike <code class="xref py py-meth docutils literal notranslate"><span class="pre">UDPPacketReceiver.flush()</span></code>, there is no UDP socket to drain;
+this only resets the in-memory ring used with <code class="xref py py-class docutils literal notranslate"><span class="pre">RawDataPacketProcessor</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.get_corr_data_config">
+<span class="sig-name descname"><span class="pre">get_corr_data_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.get_corr_data_config" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.get_metrics_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_metrics_async</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.get_metrics_async" title="Link to this definition"></a></dt>
+<dd><p>Gather metrics from all packet processors</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.get_raw_data_config">
+<span class="sig-name descname"><span class="pre">get_raw_data_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.get_raw_data_config" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.get_udp_dropped_packets">
+<span class="sig-name descname"><span class="pre">get_udp_dropped_packets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ports</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.get_udp_dropped_packets" title="Link to this definition"></a></dt>
+<dd><p>Return the number of packet dropped by the operating system IP stack</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.get_udp_socket">
+<span class="sig-name descname"><span class="pre">get_udp_socket</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.get_udp_socket" title="Link to this definition"></a></dt>
+<dd><p>Return a socket that is bound to the specified port/address.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.is_running">
+<span class="sig-name descname"><span class="pre">is_running</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.is_running" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.ping_sources_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">ping_sources_async</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.ping_sources_async" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.process_packets">
+<span class="sig-name descname"><span class="pre">process_packets</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.process_packets" title="Link to this definition"></a></dt>
+<dd><p>Process the data in the buffer by identifying the packet type (ADC,
+FFT, etc) and calling the appropriate processing method.</p>
+<dl class="simple">
+<dt>inputs:</dt><dd><p>self.n_stored: number of packets in the buffer
+self.buf and its structured references: captured packets, in random order</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.receive_packets">
+<span class="sig-name descname"><span class="pre">receive_packets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reset_stats</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_condition</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_time_between_processing</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.receive_packets" title="Link to this definition"></a></dt>
+<dd><p>This method is run in a thread to continuously receive packets in
+the buffer form all sockets and call process_packets when the buffer
+is sufficiently full or there is no more data immediately available.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>reset_stats</strong> (<em>bool</em>) – Unused. To be removed.</p></li>
+<li><p><strong>timeout</strong> (<em>float</em>) – Maximum time (in seconds) we will wait for packet. Sets how fast we figure out no more dta is coming.</p></li>
+<li><p><strong>stop_condition</strong> (<em>func</em><em> or </em><em>None</em>) – Function that returns True to stop the receive loop and the thread. If None, the function is not called.</p></li>
+<li><p><strong>max_time_between_processing</strong> (<em>float</em>) – Maximum time (in seconds) the system will
+wait until processing packets. This is to ensure that data will be
+processed even if the buffer is not full. This is useful when data
+is coming slowly, but we still want the processing (and resulting
+metrics refreshes) will happen  at regular intervals.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.start_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'RawAcq'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ports</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corr_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_thread</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics_refresh_time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adc_rms_refresh_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">jump_thresholds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">raw_capture_state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ping_port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_ping</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hostname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">post</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.start_async" title="Link to this definition"></a></dt>
+<dd><p>Start a raw data receiver for each specified port.</p>
+<p>For each port we monitor, create a data queue and start a
+multithreaded UDP receiver that will write data to that queue.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – Name of the receiver array, used for logging</p></li>
+<li><p><strong>ports</strong> (<em>list</em><em> of </em><em>dict</em>) – <p>describe the ports to be created. The list is in the format:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>[ {'port': port_id, 'sources': list_of_sources}, ...]
+
+
+Where :
+
+    port_id: the ID of the port to be created.
+
+       If the ``port_id`` is a string ID, a port number will
+       be selected automatically and *all* sources with that
+       same `port_id` will be assigned to that port.
+
+       If ``port_id`` is a non-zero integer, it will be
+       interpreted as a port number and all sources will be
+       assigned to that port number.
+
+       If ``port_id`` is Null or zero, *each* source in
+       `list_of_sources` will be assigned an individual random
+       port number.
+
+
+    list_of_sources:  (list of tuples): List of address:port
+        tuples [(addr, port)...] that describe the IceBoards
+        that will be sending data to this port. A TCP
+        connection will be attempted to those addresses to
+
+
+            1) confirm the presence of the source,
+
+            2) determine on which interface we should listen to,
+
+            3) and teach the switches routing table how to
+               route the UDP packets from the source to this
+               receiver (See Note below)
+</pre></div>
+</div>
+</p></li>
+<li><p><strong>stream_ids</strong> (<em>list</em><em> of </em><em>int</em>) – List of STREAM iD that are expected to
+be received. This will be used to preallocate and classify the
+incoming data. Any packets with a STREAM ID that is not in
+this list will be rejected.</p></li>
+<li><p><strong>jump_thresholds</strong> (<em>list</em><em> of </em><em>int</em>) – Threshold values</p></li>
+<li><p><strong>metrics_refresh_time</strong> (<em>float</em>) – cadence in seconds at which metrics are updated</p></li>
+<li><p><strong>adc_rms_refresh_count</strong> (<em>float</em>) – number of frames to average for the rms cache</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p><em>A dict with the following keys</em> –     status:  Status of the receiver
+recv_addr: Receiver addresses to which each source should send its data. This is a dict in the format:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{(</span><span class="n">src_addr</span><span class="p">,</span> <span class="n">src_port</span><span class="p">):(</span><span class="n">recv_addr</span><span class="p">,</span> <span class="n">recv_port</span><span class="p">,</span> <span class="n">recv_mac_addr</span><span class="p">),</span><span class="o">...</span><span class="p">}</span>
+</pre></div>
+</div>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>Concerning item 3), the FPGAs will send UDP data to a specific
+MAC and IP address without possibly ever having received a
+directed packets from the server. This means that the switch
+might not know on which port to forward the packet towards the
+receiver, which will cause the switches to broadcast the data
+everywhere. If we <strong>assume that the specified source addresses
+have interfaces on the same switch as the interface that sends
+the UDP packets*</strong>, establishing a bidirectional TCP connection
+to the source will tell all the switches between the source and
+the receiverhow to direct the data flow towards the server. This
+TCP connection needs to be redone periodically to prevent the
+cached entries in the switches MAC address tables from expiring.</p></li>
+<li><p>In <cite>ports</cite>, <code class="docutils literal notranslate"><span class="pre">port_id</span></code> can appear in multiple entries; this is
+therefore why <cite>ports</cite> is not structured as a {port_id:sources}
+dict.</p></li>
+</ul>
+<div class="admonition-todo admonition" id="id1">
+<p class="admonition-title">Todo</p>
+<ul class="simple">
+<li><p>Might need to ping the source periodically as the switches may clear their routing
+tables periodically for stale entries.</p></li>
+<li><p>Port numbers could in fact just be IDs or zero, and the server could assign its own port for each ID.</p></li>
+<li><p>There is currently no way to assign port numbers to specific interfaces. The system
+will work only if 1) all the ports are in the same interface which connect to all
+FPGAs ping addresses), or 2) ports listen to all interfaces. Not clear if the later
+can be related to a performance issue. Unless all ports listen to all interfaces, each
+port shall be associated with a ping address to we know on which interface it should
+connect.</p></li>
+</ul>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.start_processing_thread">
+<span class="sig-name descname"><span class="pre">start_processing_thread</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.start_processing_thread" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.stop">
+<span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.stop" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.raw_acq.receiver.RawAcqReceiver.update_config">
+<span class="sig-name descname"><span class="pre">update_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.raw_acq.receiver.RawAcqReceiver.update_config" title="Link to this definition"></a></dt>
+<dd><p>Apply REST data-config patches and refresh processor bindings.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.raw_acq.raw_data_processor.html" class="btn btn-neutral float-left" title="raw_data_processor.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.raw_acq.server.html" class="btn btn-neutral float-right" title="server.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,108 @@
+
+
+
+
+
+:py:mod:`chfpga.py <pychfpga.fpga_firmware.chfpga.chfpga>`
+==========================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware.chfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware.chfpga,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga.chfpga,
+..    | name==chfpga
+..    | modules = 
+..    | classes = ['chFPGA', 'chFPGA_config']
+
+.. automodule:: pychfpga.fpga_firmware.chfpga.chfpga
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         chFPGA
+         chFPGA_config
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: chFPGA
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: chFPGA_config
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

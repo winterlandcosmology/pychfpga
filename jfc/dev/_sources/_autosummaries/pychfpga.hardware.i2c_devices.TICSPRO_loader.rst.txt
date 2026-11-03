@@ -1,0 +1,95 @@
+
+
+
+
+
+:py:mod:`TICSPRO_loader.py <pychfpga.hardware.i2c_devices.TICSPRO_loader>`
+==========================================================================
+
+
+.. currentmodule:: pychfpga.hardware.i2c_devices
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.i2c_devices,
+..    | FULLNAME=pychfpga.hardware.i2c_devices.TICSPRO_loader,
+..    | name==TICSPRO_loader
+..    | modules = 
+..    | classes = []
+
+.. automodule:: pychfpga.hardware.i2c_devices.TICSPRO_loader
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         load_pll_regs
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: load_pll_regs
+
+
+
+
+
+.. *** Insert class descriptions
+
+

@@ -1,0 +1,163 @@
+
+
+
+
+
+:py:mod:`fpga_master.py <pychfpga.fpga_master>`
+===============================================
+
+
+.. currentmodule:: pychfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga,
+..    | FULLNAME=pychfpga.fpga_master,
+..    | name==fpga_master
+..    | modules = 
+..    | classes = ['DummyFPGAMaster', 'FPGAMaster', 'FPGAMasterAsyncRESTClient', 'FPGAMasterAsyncRESTServer']
+
+.. automodule:: pychfpga.fpga_master
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         convert_types
+         firmware_config_for_rest
+         main
+         reap_cached_sockets
+         sanitize_for_json
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         DummyFPGAMaster
+         FPGAMaster
+         FPGAMasterAsyncRESTClient
+         FPGAMasterAsyncRESTServer
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: convert_types
+
+
+.. autofunction:: firmware_config_for_rest
+
+
+.. autofunction:: main
+
+
+.. autofunction:: reap_cached_sockets
+
+
+.. autofunction:: sanitize_for_json
+
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: DummyFPGAMaster
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: FPGAMaster
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: FPGAMasterAsyncRESTClient
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: FPGAMasterAsyncRESTServer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

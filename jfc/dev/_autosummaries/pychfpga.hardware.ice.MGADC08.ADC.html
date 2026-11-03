@@ -1,0 +1,484 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ADC.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ADC_PLL.py" href="pychfpga.hardware.ice.MGADC08.ADC_PLL.html" />
+    <link rel="prev" title="MGADC08/" href="pychfpga.hardware.ice.MGADC08.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.Agilent_N5764A.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">Agilent_N5764A/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crate.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.crs.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.hardware_map.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware_map.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.i2c_devices.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">i2c_devices/</span></code></a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="pychfpga.hardware.ice.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ice/</span></code></a><ul class="current">
+<li class="toctree-l4 current"><a class="reference internal" href="pychfpga.hardware.ice.MGADC08.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">MGADC08/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.ice.iceboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">iceboard.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.ice.icecore.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">icecore/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.ice.icecrate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">icecrate.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.ice.icemezz.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">icemezz.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.interfaces.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">interfaces/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.mezzanine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mezzanine.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.motherboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">motherboard.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.supported_hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">supported_hardware.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.zcu111.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zcu111/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.zuboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zuboard/</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.hardware.ice.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ice/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.hardware.ice.MGADC08.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">MGADC08/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ADC.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.hardware.ice.MGADC08.ADC.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="adc-py">
+<h1><a class="reference internal" href="#module-pychfpga.hardware.ice.MGADC08.ADC" title="pychfpga.hardware.ice.MGADC08.ADC"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ADC.py</span></code></a><a class="headerlink" href="#adc-py" title="Link to this heading"></a></h1>
+<p id="module-pychfpga.hardware.ice.MGADC08.ADC">Implements the interface to the ADC chips MGADC08 FMC Mezzanine.</p>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_base" title="pychfpga.hardware.ice.MGADC08.ADC.ADC_base"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ADC_base</span></code></a></p></td>
+<td><p>Container for an array of ADC chips that can be indexed to access all the ADC on the board</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip" title="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ADC_chip</span></code></a></p></td>
+<td><p>Provides the parameters and methods related to one ADC chip.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_base">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.hardware.ice.MGADC08.ADC.</span></span><span class="sig-name descname"><span class="pre">ADC_base</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">adc_board</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_base" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Container for an array of ADC chips that can be indexed to access all the
+ADC on the board</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_base.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">adc_board</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_base.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_base.get_temperature">
+<span class="sig-name descname"><span class="pre">get_temperature</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">adc_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_base.get_temperature" title="Link to this definition"></a></dt>
+<dd><p>Reads the external temperature sensor connected to the sensing diode in the specified ADC chip</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_base.get_test_mode">
+<span class="sig-name descname"><span class="pre">get_test_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_base.get_test_mode" title="Link to this definition"></a></dt>
+<dd><p>Returns the test mode ofthe ADCs.
+An error will be raised if the mode is not the same for both ADCs</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_base.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_base.init" title="Link to this definition"></a></dt>
+<dd><p>Resets and initialize all ADCs on the FMC board</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>kwargs</strong> (<em>dict</em>) – arguments passed to the init() method of each ADC chip.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_base.pulse_reset">
+<span class="sig-name descname"><span class="pre">pulse_reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_base.pulse_reset" title="Link to this definition"></a></dt>
+<dd><p>Pulse the reset line on this mezzanine (resets both ADC chips)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_base.read">
+<span class="sig-name descname"><span class="pre">read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">adc_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">addr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_base.read" title="Link to this definition"></a></dt>
+<dd><p>Reads a 16-bit word from the register of the specified ADC</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>adc_number</strong> (<em>int</em>) – index numbr (0,1) of the target ADC chip on the mezzanine</p></li>
+<li><p><strong>addr</strong> (<em>int</em>) – address of the register to read</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>int</em> – 16-bit value of the register</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_base.set_test_mode">
+<span class="sig-name descname"><span class="pre">set_test_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_base.set_test_mode" title="Link to this definition"></a></dt>
+<dd><p>Set the test mode on all ADCs on the FMC board.
+A local sync is sent to all the local ADCs to activate the new mode.
+The sync is NOT encoded into the clock and doe snot affects other boards.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_base.status">
+<span class="sig-name descname"><span class="pre">status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_base.status" title="Link to this definition"></a></dt>
+<dd><p>Prints the status of all ADCs on the board</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_base.sync">
+<span class="sig-name descname"><span class="pre">sync</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_base.sync" title="Link to this definition"></a></dt>
+<dd><p>Resyncs both ADCs</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_base.write">
+<span class="sig-name descname"><span class="pre">write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">adc_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">addr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_base.write" title="Link to this definition"></a></dt>
+<dd><p>Writes a 16-bit word to the register of the specified ADC</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>adc_number</strong> (<em>int</em>) – index numbr (0,1) of the target ADC chip on the mezzanine</p></li>
+<li><p><strong>addr</strong> (<em>int</em>) – address of the register to write</p></li>
+<li><p><strong>data</strong> (<em>int</em>) – 16-bit value to write</p></li>
+<li><p><strong>check</strong> (<em>bool</em>) – Check that the write succeded by re-reading the value written</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.hardware.ice.MGADC08.ADC.</span></span><span class="sig-name descname"><span class="pre">ADC_chip</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">adc_instance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adc_number</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Provides the parameters and methods related to one ADC chip.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_CHANNEL_SELECT">
+<span class="sig-name descname"><span class="pre">REG_CHANNEL_SELECT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">15</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_CHANNEL_SELECT" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_CHIP_ID">
+<span class="sig-name descname"><span class="pre">REG_CHIP_ID</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_CHIP_ID" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_CH_CAL_CTRL">
+<span class="sig-name descname"><span class="pre">REG_CH_CAL_CTRL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">16</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_CH_CAL_CTRL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_CH_CAL_CTRL_MLBX">
+<span class="sig-name descname"><span class="pre">REG_CH_CAL_CTRL_MLBX</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">17</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_CH_CAL_CTRL_MLBX" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_CH_STATUS">
+<span class="sig-name descname"><span class="pre">REG_CH_STATUS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">18</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_CH_STATUS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_CONTROL">
+<span class="sig-name descname"><span class="pre">REG_CONTROL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_CONTROL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_STATUS">
+<span class="sig-name descname"><span class="pre">REG_STATUS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_STATUS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_SWRESET">
+<span class="sig-name descname"><span class="pre">REG_SWRESET</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">4</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_SWRESET" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_SYNC">
+<span class="sig-name descname"><span class="pre">REG_SYNC</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">6</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_SYNC" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_TEST">
+<span class="sig-name descname"><span class="pre">REG_TEST</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">5</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_TEST" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_TRIM">
+<span class="sig-name descname"><span class="pre">REG_TRIM</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">19</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.REG_TRIM" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">adc_instance</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adc_number</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.channel">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">channel</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.channel" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.chip_id">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">chip_id</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.chip_id" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.get_temperature">
+<span class="sig-name descname"><span class="pre">get_temperature</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.get_temperature" title="Link to this definition"></a></dt>
+<dd><p>Returns the temparature of this ADC chip in degC, as measured on the
+internal diode through the SPI ADC temperature sensor.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.get_test_mode">
+<span class="sig-name descname"><span class="pre">get_test_mode</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.get_test_mode" title="Link to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Reads the current test mode from the ADC and returns:</dt><dd><p>0 = no test mode (data)
+1 = ramp
+2 = pulse</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">adc_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">standby_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dmux</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gray_code</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bandwidth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_scale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_delay</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">8</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.init" title="Link to this definition"></a></dt>
+<dd><p>Writes the control and test register of the ADC. A SYNC is required if the operating mode of the ADC is changed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>adc_mode</strong> (<em>int</em>) – <p>(0-15, default=0=4 channel mode): selects between 1,2 and 4 channel mode and which analog input is used</p>
+<ul>
+<li><p>0b00xx: 4-channel mode A+B+C+D (1.25 Gsps/channel)</p></li>
+<li><p>0b0100: 2-channel mode A+C (2.5 Gsps/channel)</p></li>
+<li><p>0b0101: 2-channel mode B+C (2.5 Gsps/channel)</p></li>
+<li><p>0b0110: 2-channel mode A+D (2.5 Gsps/channel)</p></li>
+<li><p>0b0111: 2-channel mode B+D (2.5 Gsps/channel)</p></li>
+<li><p>0b1000: 1-channel mode A (5 Gsps/channel)</p></li>
+<li><p>0b1001: 1-channel mode B (5 Gsps/channel)</p></li>
+<li><p>0b1010: 1-channel mode C (5 Gsps/channel)</p></li>
+<li><p>0b1011: 1-channel mode D (5 Gsps/channel)</p></li>
+<li><p>0b1100: Common input mode, simultaneous sampling mode A</p></li>
+<li><p>0b1101: Common input mode, simultaneous sampling mode B</p></li>
+<li><p>0b1110: Common input mode, simultaneous sampling mode C</p></li>
+<li><p>0b1111: Common input mode, simultaneous sampling mode D</p></li>
+</ul>
+</p></li>
+<li><p><strong>standby_mode</strong> (<em>0-3</em><em>, </em><em>default=0 full active</em>) – selects the active mode. 0=Full active, 3=full standby</p></li>
+<li><p><strong>dmux</strong> (<em>bool</em><em>, </em><em>default=false</em>) – selects whether the 2:1 DMUX mode is selected</p></li>
+<li><p><strong>gray_code</strong> (<em>bool</em><em>, </em><em>default=False</em>) – selects if output is in binary (false) or gray code (True)</p></li>
+<li><p><strong>bandwidth</strong> (<em>0-3</em><em>, </em><em>default=2</em>) – 0 = 500 MHz
+1 = 600 MHz
+2 = 1.5 GHz
+3 = 2 GHz</p></li>
+<li><p><strong>full_scale</strong> (<em>0-1</em><em>, </em><em>default=0</em>) – voltage: 0=500 mV full scale, 1=625 mV full scale</p></li>
+<li><p><strong>test_mode</strong> (<em>0-2</em><em>, </em><em>default=0</em>) – test mode of the ADC: 0= Normal
+operation, 1=ramp, 2= 00/FF pulse</p></li>
+<li><p><strong>sync_delay</strong> (<em>0-15</em><em>, </em><em>default=8</em>) – Number of clocks to hold off the
+data clock after a SYNC event</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.read">
+<span class="sig-name descname"><span class="pre">read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.read" title="Link to this definition"></a></dt>
+<dd><p>Reads a register of the ADC chip</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.set_trim">
+<span class="sig-name descname"><span class="pre">set_trim</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.set_trim" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.soft_reset">
+<span class="sig-name descname"><span class="pre">soft_reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.soft_reset" title="Link to this definition"></a></dt>
+<dd><p>Performs a software reset of the ADC chip by writing to the reset register.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.status">
+<span class="sig-name descname"><span class="pre">status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.status" title="Link to this definition"></a></dt>
+<dd><p>Display the status of this ADC chip</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.temperature">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">temperature</span></span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.temperature" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.write">
+<span class="sig-name descname"><span class="pre">write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.write" title="Link to this definition"></a></dt>
+<dd><p>Writes a register of the ADC chip</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.hardware.ice.MGADC08.html" class="btn btn-neutral float-left" title="MGADC08/" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.hardware.ice.MGADC08.ADC_PLL.html" class="btn btn-neutral float-right" title="ADC_PLL.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

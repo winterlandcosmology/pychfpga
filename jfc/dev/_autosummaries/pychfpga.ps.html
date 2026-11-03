@@ -1,0 +1,833 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ps.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="raw_acq/" href="pychfpga.raw_acq.html" />
+    <link rel="prev" title="pocket_correlator.py" href="pychfpga.pocket_correlator.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.ps.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.ps.parse_cmdline_args"><code class="docutils literal notranslate"><span class="pre">parse_cmdline_args()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.ps.AgilentN5700"><code class="docutils literal notranslate"><span class="pre">AgilentN5700</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.SUPPORTED_PS"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.SUPPORTED_PS</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.__call__"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.__call__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.__init__"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.clear"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.clear()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.command"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.command()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.configure_power_on_state"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.configure_power_on_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.get_current_limit"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.get_current_limit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.get_output_state"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.get_output_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.get_power_on_state"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.get_power_on_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.get_protection"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.get_protection()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.get_state"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.get_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.get_voltage_setting"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.get_voltage_setting()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.is_enabled"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.is_enabled()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.is_ok"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.is_ok()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.lock"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.lock()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.open"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.open()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.power_cycle"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.power_cycle()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.power_enable"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.power_enable()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.power_off"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.power_off()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.power_on"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.power_on()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.query"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.query()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.query_float"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.query_float()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.query_int"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.query_int()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.set_current_limit"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.set_current_limit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.set_output"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.set_output()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.set_power_on_state"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.set_power_on_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.set_protection"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.set_protection()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.set_voltage"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.set_voltage()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.status"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.unlock"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.unlock()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.AgilentN5700.waituntilready"><code class="docutils literal notranslate"><span class="pre">AgilentN5700.waituntilready()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.DEFAULT_PORT"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.DEFAULT_PORT</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.__call__"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.__call__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.__init__"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.get_metrics"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.get_metrics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.is_enabled"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.is_enabled()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.is_ready"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.is_ready()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.is_started"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.is_started()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.list_names"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.list_names()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.power_cycle"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.power_cycle()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.power_off"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.power_off()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.power_on"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.power_on()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.start"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.start()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.status"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.stop"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient.stop()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.DEFAULT_PORT"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.DEFAULT_PORT</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.POWER_SUPPLY_CLASSES"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.POWER_SUPPLY_CLASSES</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.__call__"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.__call__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.__init__"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.get_is_ready"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.get_is_ready()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.get_metrics"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.get_metrics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.is_enabled"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.is_enabled()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.is_started"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.is_started()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.listNames"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.listNames()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.monitoringMetrics"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.monitoringMetrics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.power_off"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.power_off()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.power_on"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.power_on()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.start"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.start()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.status"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.stop"><code class="docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer.stop()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.ps.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="ps-py">
+<h1><a class="reference internal" href="#module-pychfpga.ps" title="pychfpga.ps"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a><a class="headerlink" href="#ps-py" title="Link to this heading"></a></h1>
+<p id="module-pychfpga.ps">REST Server and clients for the Agilent N5700-series power supplies.</p>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module functions summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.ps.main" title="pychfpga.ps.main"><code class="xref py py-obj docutils literal notranslate"><span class="pre">main</span></code></a></p></td>
+<td><p>Command-line interface to operate the Power Supply server.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.ps.parse_cmdline_args" title="pychfpga.ps.parse_cmdline_args"><code class="xref py py-obj docutils literal notranslate"><span class="pre">parse_cmdline_args</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.ps.AgilentN5700" title="pychfpga.ps.AgilentN5700"><code class="xref py py-obj docutils literal notranslate"><span class="pre">AgilentN5700</span></code></a></p></td>
+<td><p>A class to communicate with an Agilent N5700- or N8700-type power supply</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTClient" title="pychfpga.ps.PowerSupplyAsyncRESTClient"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTClient</span></code></a></p></td>
+<td><p>Implements an asynchronous client that exposes the functions of the specified remote RawAcq server.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.ps.PowerSupplyAsyncRESTServer" title="pychfpga.ps.PowerSupplyAsyncRESTServer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PowerSupplyAsyncRESTServer</span></code></a></p></td>
+<td><p>Web server with REST interface to operate an array of Agilent/Keysight power supplies.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module functions</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.ps.main">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.ps.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.main" title="Link to this definition"></a></dt>
+<dd><p>Command-line interface to operate the Power Supply server.</p>
+<p>./ch_ps.py [config [server_name]] [command {args}] [–host hostname] [–port port_number] [–no-run | –run] [–no-start]</p>
+<dl class="simple">
+<dt>where:</dt><dd><p><em>config</em> : configuration in the format [[<em>filename</em>]:][<em>path_to_config_object</em>]
+<em>server_name</em> : power supply server config to use. Optional if there is only one.
+<em>command</em> : the name of a ChimeMaster client method.
+–host: hostname of the server. Overrides the hostname found in the config. Default is ‘localhost’.
+–port: port number of the server. Overrides the port number found in the config.  Default is 54321.
+–run: run the client/server until Ctrl-C is pressed. Default when no command is provided.
+–no-run: Do not run the client/server even if no comman dis provided.
+–no_start: do not attempt to initialize the server even if a configuration is provided.</p>
+</dd>
+</dl>
+<p>The <cite>ch_master</cite> command is invoked from the command line with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">ps</span><span class="o">.</span><span class="n">py</span> <span class="n">arguments</span><span class="o">...</span>  <span class="c1"># linux only</span>
+<span class="n">python</span> <span class="n">ps</span><span class="o">.</span><span class="n">py</span> <span class="n">arguments</span>
+</pre></div>
+</div>
+<p>Or from an ipython interactive session:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">run</span> <span class="o">-</span><span class="n">i</span> <span class="n">ps</span> <span class="n">arguments</span>
+</pre></div>
+</div>
+<p>Operations done:</p>
+<blockquote>
+<div><ol class="arabic">
+<li><p>Create client:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Always starts a client that connects to server at address specified in config or as
+overriden by –host and –port.</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p>Create server if none already esists:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>If there is no server, a server is created at localhost on the port specified in the
+config or as overriden by –port, unless -no-server is specified</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p>Initialize server with config file if requested:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>If no config is present, or if –no-start option is specified, the server is not started</p></li>
+<li><p>If there is a config file, the ‘start’ command is sent along with the specified
+config. If the server is already started with a different config, an error will be
+raised.</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p>Execute command or run server:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>If a command and arguments are specified, the corresponding client methods commands
+are invoked. Those generally pass on the command to the corresponding server endpoint.</p></li>
+<li><p>If no command is specified and a local server was started, the client (and locally
+started server if any) are run continually until stopped by Ctrl-C. Bypassed if –no-
+run is specified</p></li>
+</ul>
+</div></blockquote>
+</li>
+</ol>
+</div></blockquote>
+<p>Examples:</p>
+<p>Create and initialize and run a new local server  or initialize an existing server:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">ps</span><span class="o">.</span><span class="n">py</span> <span class="n">jfc</span><span class="o">.</span><span class="n">erh</span>
+</pre></div>
+</div>
+<p>Create an non-initialized server</p>
+<blockquote>
+<div><p>./ps.py  # starts server on localhost:54321
+./ps.py config –no-start # starts server at address specified in config</p>
+</div></blockquote>
+<p>Send a command to server:</p>
+<blockquote>
+<div><p>./ps stop # send stop command to server on localhost:54321
+./ps jfc.erh power_off # power off supplies used by server running at theaddress specified in the jfc.erh config</p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.ps.parse_cmdline_args">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.ps.</span></span><span class="sig-name descname"><span class="pre">parse_cmdline_args</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">argv</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.parse_cmdline_args" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.ps.</span></span><span class="sig-name descname"><span class="pre">AgilentN5700</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">SocketContext</span></code></p>
+<p>A class to communicate with an Agilent N5700- or N8700-type power supply</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.SUPPORTED_PS">
+<span class="sig-name descname"><span class="pre">SUPPORTED_PS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'N5743A':</span> <span class="pre">('Agilent</span> <span class="pre">Power</span> <span class="pre">Supply',</span> <span class="pre">'Agilent</span> <span class="pre">Technologies,N5743A',</span> <span class="pre">8,</span> <span class="pre">50),</span> <span class="pre">'N5764A':</span> <span class="pre">('Agilent</span> <span class="pre">Power</span> <span class="pre">Supply',</span> <span class="pre">'Agilent</span> <span class="pre">Technologies,N5764A',</span> <span class="pre">21,</span> <span class="pre">79.8),</span> <span class="pre">'N8731':</span> <span class="pre">('Agilent</span> <span class="pre">Power</span> <span class="pre">Supply',</span> <span class="pre">'Agilent</span> <span class="pre">Technologies,N8731A',</span> <span class="pre">8,</span> <span class="pre">400)}</span></span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.SUPPORTED_PS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.__call__" title="Link to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hostname</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5025</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.clear">
+<span class="sig-name descname"><span class="pre">clear</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.clear" title="Link to this definition"></a></dt>
+<dd><p>If any of the protection has triggered will need to clear it. Will
+return a False if everything is good</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.command">
+<span class="sig-name descname"><span class="pre">command</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">comstr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flush</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.command" title="Link to this definition"></a></dt>
+<dd><p>Sends a command to the instrument. The terminator is added automatically.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.configure_power_on_state">
+<span class="sig-name descname"><span class="pre">configure_power_on_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">voltage</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">current</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.configure_power_on_state" title="Link to this definition"></a></dt>
+<dd><p>Configure the power supply so it will automatically power up at the specified voltage and current limit.</p>
+<p>The power supply is turned off before the new settings are applied.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.get_current_limit">
+<span class="sig-name descname"><span class="pre">get_current_limit</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.get_current_limit" title="Link to this definition"></a></dt>
+<dd><p>Returns the power supply current limit</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.get_output_state">
+<span class="sig-name descname"><span class="pre">get_output_state</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.get_output_state" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.get_power_on_state">
+<span class="sig-name descname"><span class="pre">get_power_on_state</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.get_power_on_state" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.get_protection">
+<span class="sig-name descname"><span class="pre">get_protection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">history</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.get_protection" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.get_state">
+<span class="sig-name descname"><span class="pre">get_state</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.get_state" title="Link to this definition"></a></dt>
+<dd><p>Return the power supply operational state of the power supply.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>‘OK’</em> – power supply is turned on and operates normally
+‘OFF’: power supply is turned off
+‘ILIMIT’: power supply is in current limit mode
+‘FAULT’: A fault has occured</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.get_voltage_setting">
+<span class="sig-name descname"><span class="pre">get_voltage_setting</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.get_voltage_setting" title="Link to this definition"></a></dt>
+<dd><p>Returns the power supply setpoint voltage</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.is_enabled">
+<span class="sig-name descname"><span class="pre">is_enabled</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.is_enabled" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.is_ok">
+<span class="sig-name descname"><span class="pre">is_ok</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.is_ok" title="Link to this definition"></a></dt>
+<dd><p>Return the operational state of the power supply.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.lock">
+<span class="sig-name descname"><span class="pre">lock</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.lock" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.open">
+<span class="sig-name descname"><span class="pre">open</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.open" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.power_cycle">
+<span class="sig-name descname"><span class="pre">power_cycle</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">delay</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.power_cycle" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.power_enable">
+<span class="sig-name descname"><span class="pre">power_enable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.power_enable" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.power_off">
+<span class="sig-name descname"><span class="pre">power_off</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.power_off" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.power_on">
+<span class="sig-name descname"><span class="pre">power_on</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.power_on" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.query">
+<span class="sig-name descname"><span class="pre">query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">command</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flush</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.query" title="Link to this definition"></a></dt>
+<dd><p>Sends a command to the instrument and returns the reply string without the terminator or trailing spaces.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.query_float">
+<span class="sig-name descname"><span class="pre">query_float</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.query_float" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.query_int">
+<span class="sig-name descname"><span class="pre">query_int</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.query_int" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.set_current_limit">
+<span class="sig-name descname"><span class="pre">set_current_limit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">current</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ocp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.set_current_limit" title="Link to this definition"></a></dt>
+<dd><p>Sets the current limit and can enable disable ocp  - Valid range is 0
+to 76A - by default current is None and ocp is None</p>
+<p>Returns the power supply current limit</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.set_output">
+<span class="sig-name descname"><span class="pre">set_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.set_output" title="Link to this definition"></a></dt>
+<dd><p>Turns on and off the output and measures current output state input
+state can be varius spellings of ‘on’/ ‘off’, None, 0, or 1   (default
+is None)</p>
+<p>Returns status dictionary</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.set_power_on_state">
+<span class="sig-name descname"><span class="pre">set_power_on_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.set_power_on_state" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.set_protection">
+<span class="sig-name descname"><span class="pre">set_protection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">uvl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ovp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ocp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ilim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clear</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.set_protection" title="Link to this definition"></a></dt>
+<dd><p>Adjusts power supply protection settings
+Returns two dictionaries the first with the current protection settings, the second with the fail modes
+Warning - when clearing - return status is ‘dont trust anything’ - run protection another time</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.set_voltage">
+<span class="sig-name descname"><span class="pre">set_voltage</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">voltage</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.set_voltage" title="Link to this definition"></a></dt>
+<dd><p>Sets the output voltage - Valid range is 0 to 21V - default is None
+Returns the power supply setpoint voltage</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.status">
+<span class="sig-name descname"><span class="pre">status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.status" title="Link to this definition"></a></dt>
+<dd><p>Returns a dictionary containting the output voltage and current</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.unlock">
+<span class="sig-name descname"><span class="pre">unlock</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.unlock" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.AgilentN5700.waituntilready">
+<span class="sig-name descname"><span class="pre">waituntilready</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.AgilentN5700.waituntilready" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.ps.</span></span><span class="sig-name descname"><span class="pre">PowerSupplyAsyncRESTClient</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">AsyncRESTClient</span></code></p>
+<p>Implements an asynchronous client that exposes the functions of the specified remote RawAcq server.</p>
+<p>This client is used by ch_master to start, configue and operate all the RawAcq servers in the array.</p>
+<p>The client is implemented using a Tornado AsyncHTTPClient. It exposes the RawAcq server methods
+(i.e REST endpoints) as local methods. The local methods are Tornado coroutines so requests to
+multiple clients can be made in parallel. This is especially beneficial since the data requests
+from the server are slow IO operations which benefit the mist from co-execution.</p>
+<p>The client will operate only if the IOloop in which is was created is running.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – Name of the client, to be used in logging etc.</p></li>
+<li><p><strong>hostname</strong> (<em>str</em>) – The hostname of the RawAcq REST server. If <cite>host</cite> is None, an (experimental,
+Python-based) RawAcq REST server will be created locally.</p></li>
+<li><p><strong>port</strong> (<em>int</em>) – The port number to which the RawAcq REST server is listening. Default is port 80.</p></li>
+<li><p><strong>ps_names</strong> (<em>list</em><em> of </em><em>str</em>) – list of power supply names on which this client will operate. Other
+supplies will not be affected.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.DEFAULT_PORT">
+<span class="sig-name descname"><span class="pre">DEFAULT_PORT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">54324</span></span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.DEFAULT_PORT" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.__call__" title="Link to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hostname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'localhost'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">54324</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.get_metrics">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_metrics</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.get_metrics" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.is_enabled">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">is_enabled</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.is_enabled" title="Link to this definition"></a></dt>
+<dd><p>Indicates if the power supplies are enabled (but do not necessarily produce a valid output)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.is_ready">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">is_ready</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.is_ready" title="Link to this definition"></a></dt>
+<dd><p>Indicates if the power supplies are enabled, have a valid output and the power up delay has elapsed.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.is_started">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">is_started</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.is_started" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.list_names">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">list_names</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.list_names" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.power_cycle">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">power_cycle</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">ps_names</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.power_cycle" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.power_off">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">power_off</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">ps_names</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.power_off" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.power_on">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">power_on</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">ps_names</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.power_on" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.start">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.start" title="Link to this definition"></a></dt>
+<dd><p>If the PowerSupply remote server is not started, start it with the specified configuration</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>config</strong> (<em>str</em><em>, </em><em>dict</em><em> or </em><em>NameSpace</em>) – If a string, the configuration is
+loaded from the specified configuration file and name. if a
+dict, it is passed directly to the server. If a <cite>Namespace</cite>,
+it is converted to a dict befoe being passed to the server.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.status">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.status" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTClient.stop">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTClient.stop" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.ps.</span></span><span class="sig-name descname"><span class="pre">PowerSupplyAsyncRESTServer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">AsyncRESTServer</span></code></p>
+<p>Web server with REST interface to operate an array of Agilent/Keysight power supplies.</p>
+<p>Supports Agilent N5764 and N8731 supplies (although all related supplies will also work).</p>
+<p>The server is based on the asynchrounous Tornado web server.</p>
+<p>The following REST endpoints are provided by the web server:</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.DEFAULT_PORT">
+<span class="sig-name descname"><span class="pre">DEFAULT_PORT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">54324</span></span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.DEFAULT_PORT" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.POWER_SUPPLY_CLASSES">
+<span class="sig-name descname"><span class="pre">POWER_SUPPLY_CLASSES</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'AgilentN5764':</span> <span class="pre">&lt;class</span> <span class="pre">'pychfpga.ps.AgilentN5700'&gt;,</span> <span class="pre">'AgilentN8731':</span> <span class="pre">&lt;class</span> <span class="pre">'pychfpga.ps.AgilentN5700'&gt;}</span></span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.POWER_SUPPLY_CLASSES" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.__call__" title="Link to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">address</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">54324</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logging_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.__init__" title="Link to this definition"></a></dt>
+<dd><p>power_supplies list of dict with entries ‘type’, ‘name’, and ‘address’</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.get_is_ready">
+<span class="sig-name descname"><span class="pre">get_is_ready</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.get_is_ready" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.get_metrics">
+<span class="sig-name descname"><span class="pre">get_metrics</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.get_metrics" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.is_enabled">
+<span class="sig-name descname"><span class="pre">is_enabled</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.is_enabled" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.is_started">
+<span class="sig-name descname"><span class="pre">is_started</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.is_started" title="Link to this definition"></a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">endpoint:</span> <span class="pre">/is-started</span></code> indicates if the server is initialized.</p>
+<p>This information is also included in the status() dict.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>bool</em> – True if the power supply server is initialized</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.listNames">
+<span class="sig-name descname"><span class="pre">listNames</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.listNames" title="Link to this definition"></a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">endpoint:</span> <span class="pre">/list-names</span></code> Return the list of the names of the supplies handled bu
+the current running configuration.</p>
+<p>This information is also included in the status() dict.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>list of str</em> – names of the supplies, as defined in the configuration</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.monitoringMetrics">
+<span class="sig-name descname"><span class="pre">monitoringMetrics</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.monitoringMetrics" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.power_off">
+<span class="sig-name descname"><span class="pre">power_off</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ps_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.power_off" title="Link to this definition"></a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">endpoint:</span> <span class="pre">/power-off</span></code> Powers down the specified supplies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ps_names</strong> (<em>str</em><em> or </em><em>list</em><em> of </em><em>str</em>) – List of power supplies to power off. If a string, the
+string is splitted into a list at the space or comma delimiters. Each string in the
+list can be a supply name (the keys in the <code class="docutils literal notranslate"><span class="pre">units</span></code> dict of the configuration), or
+an alias (found as a key in the <code class="docutils literal notranslate"><span class="pre">alias</span></code> dict). If ‘all’, all the supplies are
+affected.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>str</em> – Message indicating the result of the operation</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.power_on">
+<span class="sig-name descname"><span class="pre">power_on</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ps_names</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.power_on" title="Link to this definition"></a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">endpoint:</span> <span class="pre">/power-on</span></code> Powers up the specified supplies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>ps_names</strong> (<em>str</em><em> or </em><em>list</em><em> of </em><em>str</em>) – List of power supplies to power on. If a string, the
+string is splitted into a list at the space or comma delimiters. Each string in the
+list can be a supply name (the keys in the <code class="docutils literal notranslate"><span class="pre">units</span></code> dict), or an alias (found as a
+key in the <code class="docutils literal notranslate"><span class="pre">alias</span></code> dict). If ‘all’, all the supplies are affected.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>str</em> – Message indicating the result of the operation</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.start">
+<span class="sig-name descname"><span class="pre">start</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.start" title="Link to this definition"></a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">endpoint:</span> <span class="pre">/start</span></code> Initializes the power supply server with the provided configuration.</p>
+<p>This creates a power supply instance for each of the supply specified under the <code class="docutils literal notranslate"><span class="pre">units</span></code> key.
+Units that are already powered on are marked immediately as ready.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.status">
+<span class="sig-name descname"><span class="pre">status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.status" title="Link to this definition"></a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">endpoint:</span> <span class="pre">/status</span></code> Return the status of all the supplies handled by this server.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><p><em>dict, with the following contents</em> –</p>
+<ul class="simple">
+<li><p>is_started (bool): true when the server is initialized</p></li>
+<li><dl class="simple">
+<dt>ps_names (list): list of str describing the names of all the supplies handled by</dt><dd><p>the current running configuration.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>name1 (dict): Dict that describes the status of the powert supply unit named</dt><dd><p><code class="docutils literal notranslate"><span class="pre">name1</span></code>, as returned by the <a class="reference internal" href="#pychfpga.ps.AgilentN5700.status" title="pychfpga.ps.AgilentN5700.status"><code class="xref py py-meth docutils literal notranslate"><span class="pre">AgilentN5700.status()</span></code></a> method. In the format:</p>
+<ul>
+<li><p>current (float): output current, in Amps</p></li>
+<li><p>power (float): output power, in Watts</p></li>
+<li><p>voltage (float):output voltage, in Volts</p></li>
+<li><p>status (str): ‘OK’, ‘OFF’, ‘ILIM’ or ‘FAULT’</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>name2 …</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.ps.PowerSupplyAsyncRESTServer.stop">
+<span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.ps.PowerSupplyAsyncRESTServer.stop" title="Link to this definition"></a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">endpoint:</span> <span class="pre">/stop</span></code> Uninlitializes the server and keep it running so it can be started with a new configuration.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.pocket_correlator.html" class="btn btn-neutral float-left" title="pocket_correlator.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.raw_acq.html" class="btn btn-neutral float-right" title="raw_acq/" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

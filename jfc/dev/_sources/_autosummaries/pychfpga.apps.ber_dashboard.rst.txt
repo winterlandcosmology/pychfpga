@@ -1,0 +1,93 @@
+
+
+
+
+
+:py:mod:`ber_dashboard/ <pychfpga.apps.ber_dashboard>`
+======================================================
+
+
+.. currentmodule:: pychfpga.apps
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.apps,
+..    | FULLNAME=pychfpga.apps.ber_dashboard,
+..    | name==ber_dashboard
+..    | modules = ['main', 'paths', 'qsfp_ber_tests', 'sfp_ber_tests', 'state', 'ui', 'utils', 'workers']
+..    | classes = []
+
+.. automodule:: pychfpga.apps.ber_dashboard
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~main
+         ~paths
+         ~qsfp_ber_tests
+         ~sfp_ber_tests
+         ~state
+         ~ui
+         ~utils
+         ~workers
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

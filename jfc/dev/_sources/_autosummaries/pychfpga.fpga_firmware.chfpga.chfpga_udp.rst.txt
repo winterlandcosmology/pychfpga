@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`chfpga_udp.py <pychfpga.fpga_firmware.chfpga.chfpga_udp>`
+==================================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware.chfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware.chfpga,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga.chfpga_udp,
+..    | name==chfpga_udp
+..    | modules = 
+..    | classes = ['chFPGA_UDP']
+
+.. automodule:: pychfpga.fpga_firmware.chfpga.chfpga_udp
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         chFPGA_UDP
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: chFPGA_UDP
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

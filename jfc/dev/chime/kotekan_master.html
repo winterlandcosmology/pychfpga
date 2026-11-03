@@ -1,0 +1,283 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>kotekan_master module: GPU node array master controller &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Networking configuration" href="networking_configuration.html" />
+    <link rel="prev" title="kotekan module: GPU node correlator control process" href="kotekan.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../_autosummaries/pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#command-line-interface">Command-line interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#commands">Commands:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-configuration-file">The configuration file</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-documentation">Module documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#class-summary">Class summary</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#classes">Classes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#design">Design</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#logging">Logging</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">&lt;no title&gt;</a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/chime/kotekan_master.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="kotekan-master-module-gpu-node-array-master-controller">
+<h1><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller<a class="headerlink" href="#kotekan-master-module-gpu-node-array-master-controller" title="Link to this heading"></a></h1>
+<section id="command-line-interface">
+<span id="kotekan-master-cli"></span><h2>Command-line interface<a class="headerlink" href="#command-line-interface" title="Link to this heading"></a></h2>
+<p>The module <code class="docutils literal notranslate"><span class="pre">kotekan_master.py</span></code> module can can be used as a script to start and operate the X-engine GPU nodes.</p>
+<p>The first line this module contains a shebang (<code class="docutils literal notranslate"><span class="pre">#!/usr/bin/env</span> <span class="pre">python</span></code>) that allows Linux to automatically recognize it as a python script and run it with the python interpreter when invoked as <code class="docutils literal notranslate"><span class="pre">./fpga_master.py</span></code>. Alternatively, the script can also be launched from a shell with <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">kotekan_master.py</span></code> or from within ipython with <code class="docutils literal notranslate"><span class="pre">run</span> <span class="pre">-i</span> <span class="pre">kotekan_master</span></code>.</p>
+<p>In a nutshell, the script operates by creating a <code class="docutils literal notranslate"><span class="pre">kotekan_master</span></code> REST client object that provides an interface to the kotekan_master REST server that is specified in the provided configuration. If the server is not found, a local server is created. The server is then initialized with the provided configuration file by sending the <cite>start</cite> REST command along with the configuration file.</p>
+<p>If a command and arguments are provided in the command line, the corresponding client method is called with those arguments, and control will be returned to the user. If no command is given, the server will run continuously until interrupted by <kbd class="kbd docutils literal notranslate">Ctrl</kbd>-<kbd class="kbd docutils literal notranslate">C</kbd>. When the server is running, it can responds to REST requests to get monitoring metrics, get status information, start or stop nodes etc.</p>
+<p>The command-line syntax is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">kote_master</span><span class="o">.</span><span class="n">py</span> <span class="p">[</span><span class="n">config</span><span class="p">]</span> <span class="p">[</span><span class="n">command</span> <span class="p">{</span><span class="n">args</span><span class="p">}]</span> <span class="p">{</span><span class="o">--</span><span class="n">host</span> <span class="n">hostname</span><span class="p">}</span> <span class="p">{</span><span class="o">--</span><span class="n">port</span> <span class="n">portnumber</span><span class="p">}</span> <span class="p">{</span><span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">start</span><span class="p">}</span> <span class="p">{</span><span class="o">--</span><span class="n">run</span> <span class="o">|</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">run</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>where:</p>
+<blockquote>
+<div><dl>
+<dt><code class="docutils literal notranslate"><span class="pre">config</span></code>:</dt><dd><p>reference to a <em>fpga_master</em> configuration element found in the specified YAML file. The command line code will automatically
+The <code class="docutils literal notranslate"><span class="pre">config</span></code> field is in the form [[filename]:]name{.name}. Default filename is
+<code class="docutils literal notranslate"><span class="pre">config.yaml</span></code>. For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">my_config</span><span class="p">:</span><span class="n">some</span><span class="o">.</span><span class="n">object</span>
+<span class="p">:</span><span class="n">some</span><span class="o">.</span><span class="n">object</span>
+<span class="n">some</span><span class="o">.</span><span class="n">object</span>
+</pre></div>
+</div>
+<p>If a config is specified, it is used to obtain the address and port of the server, unless overriden by the –host and –port options. The config will also be used to initialize the server if no command is specified.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">command</span></code>:</dt><dd><p>Name of a client method to be invoked with the following arguments as parameters. The command is
+identified as the first string that corresponds to a method in the <code class="docutils literal notranslate"><span class="pre">kotekan_master</span></code> client class. Some commands might require that the server be initialized beforehand. Once the command is executed, the script exits.</p>
+<p>If no command is specified, and a new local server was created, the script will continue to run the server continuously until <kbd class="kbd docutils literal notranslate">Ctrl</kbd>-<kbd class="kbd docutils literal notranslate">C</kbd> is pressed so the server can do its job (provide metrics, respond to client requests etc).</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">args</span></code>:</dt><dd><p>Any remaining arguments are passed as positional arguments to the power supply client method. The client method is responsible for validating and converting the strings to numeric format if needed.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">--no-start</span></code>:</dt><dd><p>Do not send the start command with the configuration to the server even if a configuration file is provided. Use if you don’t want the server to check if it is running the same configuration, or to initialize the server if it is not initialized.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">--run</span> <span class="pre">,</span> <span class="pre">--no-run</span></code>:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">--run</span></code> forces the server to keep running even if a command was specified. <code class="docutils literal notranslate"><span class="pre">--no-run</span></code> forces the script to exit even if no command is provided and a new server was created. Both option cannot be used at the same time. Useful mainly for interactive sessions.</p>
+</dd>
+</dl>
+</div></blockquote>
+<p>If there is no server runing at the target address specified in the config file or through the –host and –port options, then a server object will be created locally at the same port. If a config file was specified, the server will be initialized with it unless the –no-start flag is specified. Attempt to initialize an already-initialized server might raise an error.</p>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">kotekan_master</span><span class="o">.</span><span class="n">py</span> <span class="n">jfc</span><span class="o">.</span><span class="n">erh</span> <span class="c1">#  Start and run kotekan_master server continuously with the configuration jfc.erh until Ctrl-C.</span>
+</pre></div>
+</div>
+</section>
+<section id="commands">
+<h2>Commands:<a class="headerlink" href="#commands" title="Link to this heading"></a></h2>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">start</span></code> (implicit)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stop</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">status</span></code></p></li>
+<li><p>…</p></li>
+</ul>
+</div></blockquote>
+</section>
+<section id="the-configuration-file">
+<h2>The configuration file<a class="headerlink" href="#the-configuration-file" title="Link to this heading"></a></h2>
+<p>A configuration contains <strong>all</strong> the information that is required to set-up the hardware in order to run an experiment. The configuration is saved along with the run results in order to provide traceability of the results.</p>
+<p>The configuration is a Python dictionary, which is usually loaded from a YAML file. The YAML configuration file can contains multiple configurations, one of which  is selected and passed th <cite>ChimeMaster</cite> by specifying the path to the desired configuration object.  When not specified explicitely, the default configuration file is <code class="docutils literal notranslate"><span class="pre">config.yaml</span></code>.</p>
+<p>The YAML standard is human readable and editable. The standard allows references to be made internally to other blocks, which allows multiple configuration to be created by only specifying the differences. Once loaded, the references are resolved,a dn the fully resolved dictionary is passed to the server  <code class="docutils literal notranslate"><span class="pre">start()</span></code> method.</p>
+<dl class="simple">
+<dt>A configuration describes:</dt><dd><ul class="simple">
+<li><p>Server address and listening port number</p></li>
+<li><p>Correlator name</p></li>
+<li><p>Logging set-up</p></li>
+<li><p>Power supplies server configurations</p></li>
+<li><p>GPS server configurations</p></li>
+<li><p>FPGA F-engine and corner-turn engine configurations</p></li>
+<li><p>GPU Node X-engine controller (kotekan) configuration</p></li>
+<li><p>Raw data server (raw_acq) configurations</p></li>
+<li><p>Correlated data acquisition server (chrx) configurations</p></li>
+</ul>
+</dd>
+</dl>
+<p>The configuration file example is:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">fpga_master_config_name</span><span class="p">:</span>
+        <span class="n">servers</span><span class="p">:</span> <span class="c1"># List all the existing servers (multiple servers could operate different sets of nodes)</span>
+            <span class="n">default_server</span><span class="p">:</span>
+                    <span class="n">hostname</span><span class="p">:</span> <span class="n">localhost</span>
+                    <span class="n">port</span><span class="p">:</span> <span class="mi">54323</span>
+                    <span class="n">nodes</span><span class="p">:</span> <span class="c1"># node-specific config</span>
+                        <span class="s1">'csDg5'</span><span class="p">:</span> <span class="p">{</span><span class="n">hostname</span><span class="p">:</span> <span class="n">csDg5</span><span class="p">,</span> <span class="n">port</span><span class="p">:</span> <span class="mi">12048</span><span class="p">}</span>  <span class="c1"># define kotekan nodes. The key name is arbitrary.</span>
+                    <span class="n">aliases</span><span class="p">:</span> <span class="c1"># Lists names that can be used to access subsets of nodes in some client methods</span>
+                        <span class="n">alias1</span><span class="p">:</span> <span class="p">[</span><span class="n">csDg5</span><span class="p">]</span>
+
+                    <span class="n">common_config</span><span class="p">:</span> <span class="c1"># config appended to every-node-specific config</span>
+                        <span class="o">&lt;&lt;</span><span class="p">:</span> <span class="o">*</span><span class="n">kotekan_shuffle</span>
+            <span class="n">other_server</span><span class="p">:</span>
+              <span class="o">...</span>
+</pre></div>
+</div>
+</section>
+<section id="module-documentation">
+<h2>Module documentation<a class="headerlink" href="#module-documentation" title="Link to this heading"></a></h2>
+<section id="class-summary">
+<h3>Class summary<a class="headerlink" href="#class-summary" title="Link to this heading"></a></h3>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+</tbody>
+</table>
+</section>
+<section id="classes">
+<h3>Classes<a class="headerlink" href="#classes" title="Link to this heading"></a></h3>
+</section>
+</section>
+<section id="design">
+<h2>Design<a class="headerlink" href="#design" title="Link to this heading"></a></h2>
+<section id="logging">
+<h3>Logging<a class="headerlink" href="#logging" title="Link to this heading"></a></h3>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="kotekan.html" class="btn btn-neutral float-left" title="kotekan module: GPU node correlator control process" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="networking_configuration.html" class="btn btn-neutral float-right" title="Networking configuration" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

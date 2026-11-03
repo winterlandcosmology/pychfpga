@@ -1,0 +1,310 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Introduction &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="_static/chime_favicon.png"/>
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Quick start" href="howto/quick_start.html" />
+    <link rel="prev" title="&lt;no title&gt;" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html">
+            
+              <img src="_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Introduction</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#features">Features</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#documentation">Documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#requirements">Requirements</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#system-requirements">System requirements</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#networking-configuration">Networking configuration</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#real-time-data-fpga-offload-links">Real-time data FPGA offload links</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#fpga-control-and-data-capture-interface">FPGA Control and data capture interface</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#time-and-clock">Time and clock</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#optional-steps">Optional steps</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#operation">Operation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#interactive-mode">Interactive mode</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#server-mode">Server mode</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="_autosummaries/pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Introduction</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/introduction.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="introduction">
+<h1>Introduction<a class="headerlink" href="#introduction" title="Link to this heading"></a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">pychfpga</span></code> is a Python package for operating arrays of FPGA boards running the <cite>chFPGA</cite> firmware (<a class="reference external" href="https://winterlandcosmology.bitbucket.io/chfpga/">https://winterlandcosmology.bitbucket.io/chfpga/</a>) in order to implement radiotelescope arrays of various sizes, from a single-board desktop correlator up to arrays of hundreds of crate-mounted boards forming a multi-thousand element interferometer.</p>
+<p>Currently supported hardware platforms are:</p>
+<ul class="simple">
+<li><p><strong>Xilinx KC705</strong> (FPGA: Kintex 7). Off-the-shelf evaluation board. Needs one or two McGill MGADC08 8-channel ADC boards.</p></li>
+<li><p><strong>Xilinx ZCU111</strong> (FPGA: Ultrascale+ RFSoC). Off-the-shelf evaluation board. Needs ADC breakout board.</p></li>
+<li><p><strong>IceBoard</strong> (FPGA Xilinx Kintex 7). Custom board designed by McGill University for large synchronized arrays. Needs one or two McGill MGADC08 8-channel ADC boards.</p></li>
+<li><p><strong>CRS</strong> (Ultrascale+ RFSoC). Custom board designed by <a class="reference external" href="https://www.t0.technology">t0 technology</a> for large synchronized arrays.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">pychfpga</span></code> uploads the chFPGA firmware to the FPGA and initializes all of its subsystems, including:</p>
+<ul class="simple">
+<li><p>ADC data acquisition (including calibration)</p></li>
+<li><p>F-Engine (channelizer) including a function generator, PFB/FFT, Scaler and raw data capture</p></li>
+<li><p>Corner-turn engine for transposing data between 1 board, 1 crate (16 boards) or 2 crates (32 boards)</p></li>
+<li><p>Optional on-board X-Engine (N² correlator): (4 + 4j) bit data width</p></li>
+<li><p>Optional 40- or 100 Gbps Ethernet real-time data offload to an external X-Engine farm.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">pychfpga</span></code> is currently used to operate telescopes such as CHIME, CHORD, HIRAX, various outrigger telescopes, and a number of small portable interferometer-based experiments.</p>
+<p>Source code is at <a class="reference external" href="https://bitbucket.org/winterlandcosmology/pychfpga">https://bitbucket.org/winterlandcosmology/pychfpga</a></p>
+<section id="features">
+<h2>Features<a class="headerlink" href="#features" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Multi-platform: Supports multiple hardware platforms</p></li>
+<li><p>Hardware map manager: Keeps track of all the boards, crates and mezzanine boards in an array and how they connect together.</p></li>
+<li><p>Auto-discovery: FPGA boards can be added to the hardware map explicitly by specifying their IP address, or can be automatically found on the local network by board or crate serial numbers.</p></li>
+<li><p>Concurrent operation: The array manager can perform operations on multiple boards at the same time using asynchronous coroutines to maximize performance. Has been used to operate arrays of 128 boards.</p></li>
+<li><p>Array-wide synchronization: Provides methods to perform array-wide data acquisition synchronization based on GPS-provided timestamps or a distributed trigger signal</p></li>
+<li><p>Multiple operational modes: The FPGA can be configured in various ways (correlator, baseband streaming etc.). The FPGA firmware applicable to the desired operational mode for the hardware platform is automatically selected, uploaded to the FPGA, and initialized.</p></li>
+</ul>
+</section>
+<section id="documentation">
+<h2>Documentation<a class="headerlink" href="#documentation" title="Link to this heading"></a></h2>
+<p>Online documentation is available at <a class="reference external" href="https://winterlandcosmology.bitbucket.io/pychfpga">https://winterlandcosmology.bitbucket.io/pychfpga</a>. It is built automatically when major branches are pushed to the repository.</p>
+<p>The documentation can be locally built manually <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">docs</span></code> from the repository root). The documentation will be in the <code class="docutils literal notranslate"><span class="pre">docs/build/html</span></code> directory.</p>
+</section>
+<section id="requirements">
+<h2>Requirements<a class="headerlink" href="#requirements" title="Link to this heading"></a></h2>
+<section id="system-requirements">
+<h3>System requirements<a class="headerlink" href="#system-requirements" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Git + LFS (<code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">lfs</span> <span class="pre">install</span></code> must have been run by the user to activate LFS)</p></li>
+<li><p>Python 3.12.x + pip</p></li>
+<li><p>Python virtual environment manager (venv, conda, etc.)</p></li>
+<li><p>build tools (make, cpp, etc.) (for python packages that need to be compiled)</p></li>
+<li><p>the matching <code class="docutils literal notranslate"><span class="pre">pythonX.X-dev</span></code> package (needed to compile <code class="docutils literal notranslate"><span class="pre">netifaces</span></code>).</p></li>
+</ul>
+<p>Optionally:</p>
+<ul class="simple">
+<li><p>uv (to build the documentation)</p></li>
+<li><p>Prometheus and Grafana if you want the graphs published by <code class="docutils literal notranslate"><span class="pre">fpga_master</span></code>.</p></li>
+<li><p>mDNS (for auto-discovery of boards and crates for the ICE platform)</p></li>
+</ul>
+</section>
+<section id="networking-configuration">
+<h3>Networking configuration<a class="headerlink" href="#networking-configuration" title="Link to this heading"></a></h3>
+<section id="real-time-data-fpga-offload-links">
+<h4>Real-time data FPGA offload links<a class="headerlink" href="#real-time-data-fpga-offload-links" title="Link to this heading"></a></h4>
+<p>In the “corner-turn” modes, the <cite>chfpga</cite> firmware sends its corner-turned data in real-time over dedicated platform interfaces (40G or 100G Ethernet QSFPs) as Jumbo UDP packets. Given the traffic exceeding 75 Gbps, those typically require dedicated wiring or network switches to the external X-Engine farm.</p>
+<p>Real-time data links are not used when the embedded X-Engine is enabled.</p>
+</section>
+<section id="fpga-control-and-data-capture-interface">
+<h4>FPGA Control and data capture interface<a class="headerlink" href="#fpga-control-and-data-capture-interface" title="Link to this heading"></a></h4>
+<p>A Slow 1G Ethernet link is used both to control the FPGA and to capture data from the FPGA.</p>
+<p>COntrol stream is sent over UDP or TCP sockets, depending on the platform.</p>
+<p>Data capture, which includes periodic snapshots of the raw ADC or FFT outputs, and the embedded X-Engine outputs, are sent as UDP Jumbo packets over the same link.</p>
+<p>For data capture to work, the networking equipment and the host computer interface must be configured to support jumbo frames. Misconfiguration of the networking is one of the most common causes of problems. In addition to this, the UDP buffers of the host computer networking stack must generally be enlarged to prevent the loss of packets:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">ifconfig</span> <span class="n">eth0</span> <span class="n">mtu</span> <span class="mi">9000</span>
+<span class="n">sudo</span> <span class="n">sysctl</span> <span class="o">-</span><span class="n">w</span> <span class="n">net</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">rmem_max</span><span class="o">=</span><span class="mi">262144000</span>
+<span class="n">sudo</span> <span class="n">sysctl</span> <span class="o">-</span><span class="n">w</span> <span class="n">net</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">rmem_default</span><span class="o">=</span><span class="mi">262144000</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="time-and-clock">
+<h3>Time and clock<a class="headerlink" href="#time-and-clock" title="Link to this heading"></a></h3>
+<p>When multiple boards are to be used in a coherent array, you will need:</p>
+<ul class="simple">
+<li><p>an external 10 MHz reference clock to synchronize sampling</p></li>
+<li><p>a trigger or IRIG-B time signal used to synchronize the data framing.</p></li>
+</ul>
+<p>Both can be provided by a GPS receiver. Note that the some FPGA boards can be installed in crates backplanes that can distribute these signals to all the boards in the crate.</p>
+<p>FPGA hardware, clock, and Ethernet requirements are in <a class="reference internal" href="howto/hardware_setup.html"><span class="doc">Configuring FPGA hardware</span></a>.</p>
+</section>
+</section>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h2>
+<p>See <a class="reference internal" href="howto/installation.html"><span class="doc">Installation</span></a> for platform-specific notes. The essentials are:</p>
+<p>Clone the repository:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">clone</span> <span class="n">git</span><span class="nd">@bitbucket</span><span class="o">.</span><span class="n">org</span><span class="p">:</span><span class="n">winterlandcosmology</span><span class="o">/</span><span class="n">pychfpga</span><span class="o">.</span><span class="n">git</span>
+</pre></div>
+</div>
+<p>Create and activate a virtual environment (assuming you are using venv):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">venv</span> <span class="n">my_env</span>
+<span class="n">source</span> <span class="n">my_env</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">activate</span>
+</pre></div>
+</div>
+<p>Install the package (we generally installing in-place, in “-e” editable mode):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="o">-</span><span class="n">e</span> <span class="o">./</span><span class="n">pychfpga</span>
+</pre></div>
+</div>
+<section id="optional-steps">
+<h3>Optional steps<a class="headerlink" href="#optional-steps" title="Link to this heading"></a></h3>
+<p>If you need to interact with the array, you can install ipython or jupyter:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">ipython</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">jupyter</span>
+</pre></div>
+</div>
+<p>If you plan to run the quality control scripts, the basic AND additional dependencies can be installed with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="o">-</span><span class="n">e</span> <span class="o">./</span><span class="n">pychfpga</span><span class="p">[</span><span class="n">qc</span><span class="p">]</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="operation">
+<h2>Operation<a class="headerlink" href="#operation" title="Link to this heading"></a></h2>
+<section id="interactive-mode">
+<h3>Interactive mode<a class="headerlink" href="#interactive-mode" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">pychfpga</span></code> can be used both in interactive manner for development in ipython or Jupyter notebooks. (See <a class="reference internal" href="howto/fpga_array.html"><span class="doc">Manual operation with fpga_array</span></a>)</p>
+</section>
+<section id="server-mode">
+<h3>Server mode<a class="headerlink" href="#server-mode" title="Link to this heading"></a></h3>
+<p>For production operation, the <cite>fpga_master</cite> and <cite>raw_acq</cite> servers can be launched. Those will initialize the array based on a YAML configuration file, and will provide HTTP REST endpoints to operate the array and serve real-time stats and performance metrics to an aggregator such as Prometheus (See <a class="reference internal" href="howto/server_operation.html"><span class="doc">Server-based operation</span></a>)</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="&lt;no title&gt;" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="howto/quick_start.html" class="btn btn-neutral float-right" title="Quick start" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

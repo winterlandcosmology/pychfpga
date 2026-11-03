@@ -1,0 +1,108 @@
+
+
+
+
+
+:py:mod:`calculate_gains.py <pychfpga.calculate_gains>`
+=======================================================
+
+
+.. currentmodule:: pychfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga,
+..    | FULLNAME=pychfpga.calculate_gains,
+..    | name==calculate_gains
+..    | modules = 
+..    | classes = ['DirectGainCalc', 'GainCalc']
+
+.. automodule:: pychfpga.calculate_gains
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         DirectGainCalc
+         GainCalc
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: DirectGainCalc
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: GainCalc
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

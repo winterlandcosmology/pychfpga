@@ -1,0 +1,74 @@
+
+
+
+
+
+:py:mod:`supported_hardware.py <pychfpga.hardware.supported_hardware>`
+======================================================================
+
+
+.. currentmodule:: pychfpga.hardware
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware,
+..    | FULLNAME=pychfpga.hardware.supported_hardware,
+..    | name==supported_hardware
+..    | modules = 
+..    | classes = []
+
+.. automodule:: pychfpga.hardware.supported_hardware
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

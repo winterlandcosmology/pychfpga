@@ -1,0 +1,99 @@
+﻿
+
+
+
+
+:py:mod:`pychfpga/ <pychfpga>`
+==============================
+
+
+.. currentmodule:: pychfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga,
+..    | FULLNAME=pychfpga,
+..    | name==pychfpga
+..    | modules = ['apps', 'calculate_gains', 'common', 'digital_gain', 'fpga_array', 'fpga_firmware', 'fpga_master', 'gps', 'hardware', 'mdns_discovery', 'network_utils', 'pocket_correlator', 'ps', 'raw_acq']
+..    | classes = []
+
+.. automodule:: pychfpga
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~apps
+         ~calculate_gains
+         ~common
+         ~digital_gain
+         ~fpga_array
+         ~fpga_firmware
+         ~fpga_master
+         ~gps
+         ~hardware
+         ~mdns_discovery
+         ~network_utils
+         ~pocket_correlator
+         ~ps
+         ~raw_acq
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

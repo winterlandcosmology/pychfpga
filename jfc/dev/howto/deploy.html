@@ -1,0 +1,214 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Code development and versioning guide &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Common errors" href="common_issues.html" />
+    <link rel="prev" title="Testing" href="testing.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Code development and versioning guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#development-process">Development process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#versioning-guide">Versioning guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../_autosummaries/pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Code development and versioning guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/howto/deploy.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="code-development-and-versioning-guide">
+<h1>Code development and versioning guide<a class="headerlink" href="#code-development-and-versioning-guide" title="Link to this heading"></a></h1>
+<p>The main development branch, as of July 3, 2024 is the <code class="code docutils literal notranslate"><span class="pre">deploy</span></code> branch.
+For synchronizing separate develoment efforts, all the new branches must be
+forked from <code class="code docutils literal notranslate"><span class="pre">deploy</span></code> branch and, after implementing desired changes,
+merged back to <code class="code docutils literal notranslate"><span class="pre">deploy</span></code>.</p>
+<section id="development-process">
+<h2>Development process<a class="headerlink" href="#development-process" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Create a new branch from the latest commit on <code class="code docutils literal notranslate"><span class="pre">deploy</span></code> branch.</p></li>
+<li><p>Make the desired changes.</p></li>
+<li><p>When developing, commit often and write concise commit messages - this will help other people
+debug the future compability problems.</p></li>
+<li><p>Run the necessary tests to make sure the code work for your target platform.</p></li>
+<li><p>[TBD] Run the tests to ensure there is no problems with other platforms.</p></li>
+<li><p><strong>Important</strong>: If there are any new commits on <code class="code docutils literal notranslate"><span class="pre">deploy</span></code> since your branch was created -
+merge <code class="code docutils literal notranslate"><span class="pre">deploy</span></code> into your branch. This is needed to maintain synchronization
+between different development branches. Merging <code class="code docutils literal notranslate"><span class="pre">deploy</span></code> into your branch may break
+the code, therefore you must re-run all available tests and fix the problems.</p></li>
+<li><p>Merge your branch into <code class="code docutils literal notranslate"><span class="pre">deploy</span></code>.</p></li>
+<li><p>Push all the changes. You need to push changes before putting a tag, so the newest changes will appear in
+<code class="code docutils literal notranslate"><span class="pre">deploy</span></code>. If you put a tag before pushing, the latest commit will not be added to <code class="code docutils literal notranslate"><span class="pre">deploy</span></code> history.</p></li>
+<li><p>Put a tag on the new commit specifying the version and the target platform of the commit. This
+is needed to ensure you always get the working code for any platform, because in general the
+latest version of the <code class="code docutils literal notranslate"><span class="pre">deploy</span></code> may not work on all platforms. See the versioning guide below.</p></li>
+<li><p>Push your tag to the remote by running <code class="code docutils literal notranslate"><span class="pre">git</span> <span class="pre">push</span> <span class="pre">origin</span> <span class="pre">deploy</span> <span class="pre">--tags</span></code>.</p></li>
+</ol>
+<p><strong>Note</strong>: If you are in rush, you can skip steps 5-8 and put a tag on your branch - see the guide below.</p>
+</section>
+<section id="versioning-guide">
+<h2>Versioning guide<a class="headerlink" href="#versioning-guide" title="Link to this heading"></a></h2>
+<ol class="arabic">
+<li><p>The general format of the tag is <code class="code docutils literal notranslate"><span class="pre">x.y.z+[platform].[config]</span></code>. The <cite>x</cite>, <cite>y</cite> and <cite>z</cite> are
+version numbers for major releases, minor releases and patches correspondingly. The <code class="code docutils literal notranslate"><span class="pre">[platform]</span></code>
+should be a three-symbol word indicating the targed platform. For example, <code class="code docutils literal notranslate"><span class="pre">crs</span></code> for CRS boards
+or <code class="code docutils literal notranslate"><span class="pre">ice</span></code> for the ICE board. The <code class="code docutils literal notranslate"><span class="pre">[config]</span></code> is the target configuration for which the code was tested. For
+example, <code class="code docutils literal notranslate"><span class="pre">co</span></code> is for configurations that support on-board correlation and <code class="code docutils literal notranslate"><span class="pre">ct</span></code> is for configurations that
+support corner-turn.</p></li>
+<li><p>The version number must always increase. For example, if the latest tag is <code class="code docutils literal notranslate"><span class="pre">1.2.3+ice.co</span></code> and you are
+deploying a <code class="code docutils literal notranslate"><span class="pre">crs.ct</span></code>, your tag must be either <code class="code docutils literal notranslate"><span class="pre">1.2.4+crs.ct</span></code> if it is a small patch or
+<code class="code docutils literal notranslate"><span class="pre">1.3.0+crs.ct</span></code> if it is a significant change.</p></li>
+<li><p>If you are tagging a branch that is not <code class="code docutils literal notranslate"><span class="pre">deploy</span></code> copy the latest tag on <code class="code docutils literal notranslate"><span class="pre">deploy</span></code>, change
+the platform and the mode, and update the version number. Also, add the <code class="code docutils literal notranslate"><span class="pre">rc1</span></code> to the tag after the last number
+to indicate that this tag is release candidate. For example, if the latest <code class="code docutils literal notranslate"><span class="pre">deploy</span></code> tag was
+<code class="code docutils literal notranslate"><span class="pre">1.2.3+ice.co</span></code>, you would change it to something like <code class="code docutils literal notranslate"><span class="pre">1.2.4rc1+crs.ct</span></code>.</p>
+<p>When merging your changes into <code class="code docutils literal notranslate"><span class="pre">deploy</span></code> follow the regular procedure (steps 1-2) and increase the version number.</p>
+<p><strong>Note</strong>: If you need to put several consecutive tags on your dirty branch - advance the number in the <code class="code docutils literal notranslate"><span class="pre">rc</span></code>
+flag, e.g. <code class="code docutils literal notranslate"><span class="pre">rc2</span></code>, <code class="code docutils literal notranslate"><span class="pre">rc3</span></code>, etc. This number represents the increasing
+level of shame you accumulate before merging changes into the main branch.</p>
+</li>
+</ol>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="testing.html" class="btn btn-neutral float-left" title="Testing" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="common_issues.html" class="btn btn-neutral float-right" title="Common errors" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

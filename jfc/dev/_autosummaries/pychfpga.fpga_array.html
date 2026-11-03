@@ -1,0 +1,928 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fpga_array.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="fpga_firmware/" href="pychfpga.fpga_firmware.html" />
+    <link rel="prev" title="digital_gain.py" href="pychfpga.digital_gain.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_array.PSArray"><code class="docutils literal notranslate"><span class="pre">PSArray()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_array.add_fpga_array_arguments"><code class="docutils literal notranslate"><span class="pre">add_fpga_array_arguments()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_array.add_logging_arguments"><code class="docutils literal notranslate"><span class="pre">add_logging_arguments()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_array.create_fpga_array"><code class="docutils literal notranslate"><span class="pre">create_fpga_array()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_array.parse_args_as_dict"><code class="docutils literal notranslate"><span class="pre">parse_args_as_dict()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_array.setup_logging"><code class="docutils literal notranslate"><span class="pre">setup_logging()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray"><code class="docutils literal notranslate"><span class="pre">FPGAArray</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.FPGA_IP_ADDR_FN_TABLE"><code class="docutils literal notranslate"><span class="pre">FPGAArray.FPGA_IP_ADDR_FN_TABLE</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.__init__"><code class="docutils literal notranslate"><span class="pre">FPGAArray.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.get_array_method"><code class="docutils literal notranslate"><span class="pre">FPGAArray.get_array_method()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.get_array_methods"><code class="docutils literal notranslate"><span class="pre">FPGAArray.get_array_methods()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.get_channel_ids"><code class="docutils literal notranslate"><span class="pre">FPGAArray.get_channel_ids()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.get_hwm"><code class="docutils literal notranslate"><span class="pre">FPGAArray.get_hwm()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.get_hwm_info"><code class="docutils literal notranslate"><span class="pre">FPGAArray.get_hwm_info()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.get_iceboard"><code class="docutils literal notranslate"><span class="pre">FPGAArray.get_iceboard()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.get_iceboard_from_id"><code class="docutils literal notranslate"><span class="pre">FPGAArray.get_iceboard_from_id()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.get_iceboards"><code class="docutils literal notranslate"><span class="pre">FPGAArray.get_iceboards()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.get_mode"><code class="docutils literal notranslate"><span class="pre">FPGAArray.get_mode()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.init"><code class="docutils literal notranslate"><span class="pre">FPGAArray.init()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.init_async"><code class="docutils literal notranslate"><span class="pre">FPGAArray.init_async()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.print_flush"><code class="docutils literal notranslate"><span class="pre">FPGAArray.print_flush()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.print_iceboard_table"><code class="docutils literal notranslate"><span class="pre">FPGAArray.print_iceboard_table()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.print_table"><code class="docutils literal notranslate"><span class="pre">FPGAArray.print_table()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.process_list_hwm"><code class="docutils literal notranslate"><span class="pre">FPGAArray.process_list_hwm()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.process_str_hwm"><code class="docutils literal notranslate"><span class="pre">FPGAArray.process_str_hwm()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.fpga_array.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="fpga-array-py">
+<h1><a class="reference internal" href="#module-pychfpga.fpga_array" title="pychfpga.fpga_array"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a><a class="headerlink" href="#fpga-array-py" title="Link to this heading"></a></h1>
+<p id="module-pychfpga.fpga_array">fpga_array.py module. Defines the objects that represent and handles
+operations on an array of FPGA motherboards.</p>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module functions summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_array.PSArray" title="pychfpga.fpga_array.PSArray"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PSArray</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.fpga_array.add_fpga_array_arguments" title="pychfpga.fpga_array.add_fpga_array_arguments"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_fpga_array_arguments</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_array.add_logging_arguments" title="pychfpga.fpga_array.add_logging_arguments"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add_logging_arguments</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.fpga_array.create_fpga_array" title="pychfpga.fpga_array.create_fpga_array"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_fpga_array</span></code></a></p></td>
+<td><p>Creates FPGAArray object interactively from the command line and/or a YAML configuration file, mainly for debugging and testing.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_array.parse_args_as_dict" title="pychfpga.fpga_array.parse_args_as_dict"><code class="xref py py-obj docutils literal notranslate"><span class="pre">parse_args_as_dict</span></code></a></p></td>
+<td><p>Parses arguments like argparse.parse_args(...), with the following differences:</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.fpga_array.setup_logging" title="pychfpga.fpga_array.setup_logging"><code class="xref py py-obj docutils literal notranslate"><span class="pre">setup_logging</span></code></a></p></td>
+<td><p>Configure logging levels when using interactive iPython sessions.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_array.FPGAArray" title="pychfpga.fpga_array.FPGAArray"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FPGAArray</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module functions</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.PSArray">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_array.</span></span><span class="sig-name descname"><span class="pre">PSArray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">power_supplies</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.PSArray" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.add_fpga_array_arguments">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_array.</span></span><span class="sig-name descname"><span class="pre">add_fpga_array_arguments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parser</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.add_fpga_array_arguments" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.add_logging_arguments">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_array.</span></span><span class="sig-name descname"><span class="pre">add_logging_arguments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parser</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.add_logging_arguments" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.create_fpga_array">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_array.</span></span><span class="sig-name descname"><span class="pre">create_fpga_array</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.create_fpga_array" title="Link to this definition"></a></dt>
+<dd><p>Creates FPGAArray object interactively from the command line and/or a YAML
+configuration file, mainly for debugging and testing. All command-line
+options can also be specified directly in the YAML file.</p>
+<p>The function can also create simple GPU nodes and power supply objects to
+assist testing of the FPGA array.</p>
+<p>The hardware map describing all the components of the FPGA array
+(motherboards, backplanes, mezzanines) can be specified by explicitrly
+instantiating the corresponding objects in the YAML file (e.g.
+IceBoardPlus!{…}).</p>
+<p>Alternatively, the hardware can  be specified  using the command line
+arguments or their equivalent entries in the configuration file, which
+allow those objects to be created from the motherboard IP address,
+hostname or serial number, or just the crate serial number. When serial
+numbers are specified, boards and crates and are looked up on the locan
+network using mDNS.</p>
+<p>Examples:</p>
+<ul class="simple">
+<li><p>create_fpga_array –iceboards 10.10.10.5 10.10.10.6   # Creates  an array of 2 boards at specified IP addresses</p></li>
+<li><p>create_fpga_array –iceboards iceboard0005.local iceboard0006.local   # Creates  an array of 2 boards at specified hostname (assuming the host computer runs a mDNS client)</p></li>
+<li><p>create_fpga_array –iceboards 0005 0006   # Creates  an array of 2 boards with specified serial numbers (resolved using a mDNS request on the network)</p></li>
+<li><p>create_fpga_array –iceboards 5 6   # Same as above. Works only with purely numeric serial numbers.</p></li>
+<li><p>create_fpga_array –icecrates MGK7BP16_003 MGK7BP16_007  # Load all boards in crate serial number 003 and 007</p></li>
+<li><p>create_fpga_array –icecrates 3 7  # Same as above. MGK7BP16-type backplane is assumed by default</p></li>
+</ul>
+<p>In the configuration file, some parameters are grouped in the following sub-dictionaries:</p>
+<p>root object:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">logging</span><span class="p">:</span>     <span class="c1"># Contains all the parameters related to logging</span>
+<span class="n">fpga_array</span><span class="p">:</span>  <span class="c1"># Contains all the parameters related to the creation and</span>
+             <span class="c1"># initialization of the FPGA motherboards, crates and mezzanines</span>
+<span class="n">gpu_array</span><span class="p">:</span>   <span class="c1"># Contains all the parameters related to the creation and</span>
+             <span class="c1"># initialization of the GPU nodes</span>
+<span class="n">power_supply_array</span><span class="p">:</span>  <span class="c1"># Contains all the parameters related to the creation</span>
+                     <span class="c1"># and initialization of the power supplies</span>
+</pre></div>
+</div>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">my_config</span><span class="p">:</span>
+    <span class="n">fpga_array</span><span class="p">:</span>
+        <span class="n">iceboards</span><span class="p">:</span> <span class="p">[</span><span class="s2">"10.10.10.5"</span><span class="p">,</span> <span class="s2">"10.10.10.6"</span><span class="p">]</span>  <span class="c1"># or any other syntax accepted by the comamnd line</span>
+        <span class="n">icecrates</span><span class="p">:</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">7</span><span class="p">]</span>
+        <span class="o">...</span>
+    <span class="n">logging</span><span class="p">:</span>
+        <span class="n">log_target</span><span class="p">:</span> <span class="s2">"syslog"</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<section id="generic-parameters-root-dict">
+<h2>Generic parameters (root dict)<a class="headerlink" href="#generic-parameters-root-dict" title="Link to this heading"></a></h2>
+<dl>
+<dt>yaml: Name of a YAML configuration file to load. One or more root object</dt><dd><p>can be specified, in which case the filename and the list of root
+objects must be separated by a single ‘:’. If multiple root objects are
+specified, they are all combined and lists or dictionaries with similar
+names are all combined.</p>
+<p>Objects can be specified hierarchically using the ‘.’ hierarchy
+separator. An object starting with ‘.’ starts at the same node level as
+the previous object.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">--</span><span class="n">yaml</span> <span class="n">file1</span><span class="o">.</span><span class="n">yaml</span> <span class="c1"># Load config from the top node of the file</span>
+<span class="o">--</span><span class="n">yaml</span> <span class="n">file1</span><span class="o">.</span><span class="n">yaml</span><span class="p">:</span><span class="n">site1</span> <span class="c1"># Load  config from the site1 element</span>
+<span class="o">--</span><span class="n">yaml</span> <span class="n">file1</span><span class="o">.</span><span class="n">yaml</span><span class="p">:</span><span class="n">site1</span> <span class="n">site2</span><span class="c1"># Load config by combining the elements of site1 and site2 objects</span>
+<span class="o">--</span><span class="n">yaml</span> <span class="n">file1</span><span class="o">.</span><span class="n">yaml</span><span class="p">:</span><span class="n">site1</span><span class="o">.</span><span class="n">boards</span> <span class="o">.</span><span class="n">gpus</span> <span class="o">.</span><span class="n">ps</span>  <span class="c1"># combine site1.boards, site1.gpus and site1.ps</span>
+</pre></div>
+</div>
+</section>
+<section id="fpga-array-parameters-fpga-array-sub-dict">
+<h2>FPGA array parameters (<code class="docutils literal notranslate"><span class="pre">fpga_array</span></code> sub-dict)<a class="headerlink" href="#fpga-array-parameters-fpga-array-sub-dict" title="Link to this heading"></a></h2>
+<p>Here is a summary of the FPGA array creation parameters. Detailed
+description of each parameter is profided in the <code class="docutils literal notranslate"><span class="pre">FPGAArray</span></code> object.</p>
+<ul class="simple">
+<li><p>hwm: Contains a hardware map object (config file only, created with HardwareMap! object)</p></li>
+<li><dl class="simple">
+<dt>iceboards: List of IceBoards (IP, hostnames or serial numbers) to add</dt><dd><p>to the hardware map. Their connected IceCrate and Mezzanine is
+also automatically added.</p>
+</dd>
+</dl>
+</li>
+<li><p>icecrates: List of IceCrates (serial numbers) to add to the hardware map. Adds all IceBoards in them.</p></li>
+<li><p>exclude_iceboards: Remove the specified IceBoards (serial numbers) from the hardware map.</p></li>
+<li><p>mdns_timeout: Time to wait for motherboards to responds to mDNS queries</p></li>
+<li><dl class="simple">
+<dt>arm_firmware_pathname: Path to platform ARM firmware used by</dt><dd><p>network discovery. For CRS, None uses the default tcpipe_rtos_rtos.elf in the
+CRS arm_firmware folder.</p>
+</dd>
+</dl>
+</li>
+<li><p>no_mezz: Do not discover nor initialize the mezzanine on the motherboards</p></li>
+<li><dl class="simple">
+<dt>subarrays: Keep only iceboards that are in the specified subarrays</dt><dd><p>(applicable only to objects created explicitely in the
+configuration file)</p>
+</dd>
+</dl>
+</li>
+<li><p>ping: Keep only boards that respond to requests</p></li>
+<li><dl class="simple">
+<dt>bitfile: path of the folder in which to search for default FPGA</dt><dd><p>bitstream files (based on the platform and mode), or full pathname
+to a FPGA bitstream to use (mode must still be specified to allow
+proper initialization)</p>
+</dd>
+</dl>
+</li>
+<li><p>prog: Overrides the default FPGA bitstream configuration level. 0=Do not program, 1=program if needed, 2=always program.</p></li>
+<li><p>init: Overrides the array initialization level. 0=just connect to platform, 1= program FPGA, 2= connect to firmware and configure firmware object, 3=initialize firmware indesired mode.</p></li>
+<li><dl class="simple">
+<dt>if_ip: address of the interface used to communicate with the FPGA. If</dt><dd><p>not specified, the same interface as the one used for communicate
+with the ARM processor is used.</p>
+</dd>
+</dl>
+</li>
+<li><p>sampling_frequency: Specifies the sampling frequency of the CHIME ADC mezzanine, in Hz (typically 800 MHz). If <cite>None</cite>, the platform/firmware mode default is used.</p></li>
+<li><p>reference_frequency: Specifies the frequency of the system’s reference clock in Hz (typically 10 MHz). If <cite>None</cite>, the platform/firmware mode default is used.</p></li>
+<li><p>data_width: Bit width used after the channelizer’s scaler (4 or 8)</p></li>
+<li><p>sync_method: string describing the method used to synchronize all the boards in the array</p></li>
+<li><p>sync_source: string describing the source of the synchronization signal.</p></li>
+</ul>
+</section>
+<section id="power-supply-array-parameters-ps-array-sub-dict">
+<h2>Power Supply Array parameters (<code class="docutils literal notranslate"><span class="pre">ps_array</span></code> sub_dict)<a class="headerlink" href="#power-supply-array-parameters-ps-array-sub-dict" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>power_supplies: list of GPU nodes (IP addresses or hostnames) for which power supply objects are to be created.</p></li>
+</ul>
+</section>
+<section id="logging-parameters-logging-sub-dict">
+<h2>Logging parameters: (<code class="docutils literal notranslate"><span class="pre">logging</span></code> sub-dict)<a class="headerlink" href="#logging-parameters-logging-sub-dict" title="Link to this heading"></a></h2>
+<ul>
+<li><p>log_target : String indicating the logging target (default = ‘syslog’). May be</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>‘stream’ : logs on stdout (not recommended in interactive sessions)</p></li>
+<li><p>‘syslog’: logs on Syslog on localhost</p></li>
+<li><p>any other string: logs to a file specified by the string</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><dl class="simple">
+<dt>log_level<span class="classifier">String indicating the logging level. May be ‘info’,</span></dt><dd><p>‘error’, ‘warning’ , ‘debug’. default is ‘debug’.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>sql_log_level<span class="classifier">String indicating SQLAlchemy logging level. Same</span></dt><dd><p>values as <code class="docutils literal notranslate"><span class="pre">log_level</span></code>. Defaults to ‘warning’.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>stderr_log_level<span class="classifier">String indicating what messages to log on stderr</span></dt><dd><p>(usually the console) in addition to the main log target. Is usually
+used to make sure that important messages (warnings and errors) are
+seen immediately by the interactive operator. Values are the same as
+<code class="docutils literal notranslate"><span class="pre">log_level</span></code>. Defaults to ‘warning’.</p>
+</dd>
+</dl>
+</li>
+</ul>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.parse_args_as_dict">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_array.</span></span><span class="sig-name descname"><span class="pre">parse_args_as_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parser</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.parse_args_as_dict" title="Link to this definition"></a></dt>
+<dd><p>Parses arguments like argparse.parse_args(…), with the following differences:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>The results are returned as a dictionary instead of a argparse namespace.</p></li>
+<li><p>If an argument is part of a group that has the <code class="docutils literal notranslate"><span class="pre">sub_dict</span></code> attribute, all the argument
+values of this group are stored in a subdictionary named by that attribute.</p></li>
+</ul>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.setup_logging">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_array.</span></span><span class="sig-name descname"><span class="pre">setup_logging</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">stderr_log_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'debug'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">syslog_log_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.setup_logging" title="Link to this definition"></a></dt>
+<dd><p>Configure logging levels when using interactive iPython sessions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>std_err_log_level</strong> (<em>str</em><em> or </em><em>int</em>) – Sets the logging level for the log messages displayed on the screen (on the stderr pipe)</p></li>
+<li><p><strong>syslog_log_level</strong> (<em>str</em><em> or </em><em>int</em>) – Sets the logging level for the log messages sent to syslog</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>root logger object</p>
+</dd>
+</dl>
+</dd></dl>
+
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_array.</span></span><span class="sig-name descname"><span class="pre">FPGAArray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hwm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">iceboards</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">icecrates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_iceboards</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignore_missing_boards</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subarrays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ping</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mdns_timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">platform_firmware_pathname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_mezz</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bitfile</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prog</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">if_ip</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">udp_retries</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fpga_ip_addr_fn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'(a,b,3,d)'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling_frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_master</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_master_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_master_output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_sync_time_difference</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adc_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adc_bandwidth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frames_per_packet</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chan8_channel_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0,</span> <span class="pre">1,</span> <span class="pre">2,</span> <span class="pre">3,</span> <span class="pre">4,</span> <span class="pre">5,</span> <span class="pre">6,</span> <span class="pre">7]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tx_power</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">integration_period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocorr_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corner_turn_bad_links</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corner_turn_bin_priority</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corner_turn_remap_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stderr_log_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">syslog_log_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.FPGA_IP_ADDR_FN_TABLE">
+<span class="sig-name descname"><span class="pre">FPGA_IP_ADDR_FN_TABLE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'(a,b,3,d)':</span> <span class="pre">&lt;function</span> <span class="pre">FPGAArray.&lt;lambda&gt;&gt;,</span> <span class="pre">'(a,b,c+1,d)':</span> <span class="pre">&lt;function</span> <span class="pre">FPGAArray.&lt;lambda&gt;&gt;}</span></span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.FPGA_IP_ADDR_FN_TABLE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hwm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">iceboards</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">icecrates</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_iceboards</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignore_missing_boards</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subarrays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ping</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mdns_timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">platform_firmware_pathname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_mezz</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bitfile</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prog</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">if_ip</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">udp_retries</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fpga_ip_addr_fn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'(a,b,3,d)'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling_frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_master</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_master_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_master_output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_sync_time_difference</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adc_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adc_bandwidth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frames_per_packet</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chan8_channel_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0,</span> <span class="pre">1,</span> <span class="pre">2,</span> <span class="pre">3,</span> <span class="pre">4,</span> <span class="pre">5,</span> <span class="pre">6,</span> <span class="pre">7]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tx_power</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">integration_period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocorr_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corner_turn_bad_links</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corner_turn_bin_priority</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corner_turn_remap_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stderr_log_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">syslog_log_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.__init__" title="Link to this definition"></a></dt>
+<dd><p>Create an FPGAArray; caller must <code class="docutils literal notranslate"><span class="pre">await</span></code> <a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.init" title="pychfpga.fpga_array.FPGAArray.init"><code class="xref py py-meth docutils literal notranslate"><span class="pre">init()</span></code></a> to initialize hardware.</p>
+<p class="centered">
+<strong><strong>Hardware map creation parameters</strong></strong></p><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hwm</strong> (<em>str</em><em>, </em><em>list</em><em> or </em><a class="reference internal" href="pychfpga.hardware.hardware_map.html#pychfpga.hardware.hardware_map.HardwareMap" title="pychfpga.hardware.hardware_map.HardwareMap"><em>HardwareMap</em></a>) – <p>Describes the hardware
+map, which lists the IceBoards, IceCrates and Mezzanines
+that are present in the system and their relationship. The hardware
+map creation depending on the type of the <cite>hwm</cite> parameter.</p>
+<ul>
+<li><p><em>str</em> or <em>list of str</em> : A string or list of strings that describes the hardware to be
+added to the hardware map in the format:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">hwm</span> <span class="o">:=</span> <span class="p">{</span><span class="n">board_descriptors</span> <span class="o">|</span> <span class="n">crate_descriptors</span> <span class="o">|</span> <span class="n">mezzanine_descriptors</span><span class="p">}</span> <span class="o">...</span>
+</pre></div>
+</div>
+<p>where</p>
+<p><code class="docutils literal notranslate"><span class="pre">Iceboard_descriptors</span> <span class="pre">:=</span> <span class="pre">{[MGK7]MB</span> <span class="pre">serial</span> <span class="pre">[serial]</span> <span class="pre">...</span> <span class="pre">|</span> <span class="pre">hostname</span> <span class="pre">|</span> <span class="pre">ip_address}</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">Icecrate_descriptors</span> <span class="pre">:=</span> <span class="pre">{[MGK7]BP16</span> <span class="pre">serial[:crate_number]</span> <span class="pre">[serial[:crate_number]]</span> <span class="pre">...}</span></code>,</p>
+<p>Autodiscovery is used as needed to complete the hardware map
+(see notes below).</p>
+</li>
+<li><p><em>list of dict</em>: list of dicts that describe the hardware map elements to create.</p></li>
+<li><p><em>HardwareMap</em>: Fully formed hardware map, provided directly as a
+HardwareMap database object. If a fully-formed hardware map is
+provided, it will additionally be vetted by removing the
+Iceboards that fail the <cite>ping</cite> test and do not meet the
+<code class="docutils literal notranslate"><span class="pre">subarray</span></code> criteria.</p></li>
+</ul>
+</p></li>
+<li><p><strong>iceboards</strong> (<em>list</em><em> of </em><em>str</em>) – Motherboard to add to the hardware map,
+specified as an IP address, hostname, or serial number. The
+boards specified here are added to the hardware map specified
+in <cite>hwm</cite> parameter. When a serial number is used, the IceBoard
+model MGK7MB is implied. For example, specifying <code class="docutils literal notranslate"><span class="pre">iceboards</span> <span class="pre">=</span>
+<span class="pre">&quot;003</span> <span class="pre">007&quot;</span></code> is equivalent to adding <code class="docutils literal notranslate"><span class="pre">&quot;MGK7MB</span> <span class="pre">003</span> <span class="pre">007&quot;</span></code> to
+the <cite>hwm</cite> parameter.</p></li>
+<li><p><strong>exclude_iceboards</strong> (<em>list</em><em> of </em><em>str</em>) – Serial numbers of Iceboards to be
+excluded in case of autodiscovered boards. Can be useful to specify a
+crate but exclude a few boards.</p></li>
+<li><p><strong>icecrates</strong> (<em>list</em><em> of </em><em>str</em>) – <p>Adds all the iceboards from the crates that have the
+serial numbers specified in the provided list of strings.</p>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>``icecrates='003'`` or ``icecrates=['003']`` will discover and select all boards from crate SN003
+
+``icecrates=['003', '004']`` will select boards from crates SN003 and SN004.
+
+``icecrates=[]`` will select all boards on the network
+</pre></div>
+</div>
+</p></li>
+</ul>
+</dd>
+</dl>
+<p class="centered">
+<strong><strong>Hardware map filtering parameters</strong></strong></p><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>subarrays</strong> (<em>list</em>) – List of integers describing the subarrays to include in
+the default Motherboard set. If None, all
+Iceboards in the hardware map will be selected. Affects only the
+boards specified in the hardware map specified with the <code class="docutils literal notranslate"><span class="pre">hwm</span></code> parameter.</p></li>
+<li><p><strong>ping</strong> (<em>int</em>) – If <code class="docutils literal notranslate"><span class="pre">ping=1</span></code>, The connection to Iceboards is checked
+by sending a dummy Tuber (http) request to their ARM processors. If a
+YAML-specified iceboards fails, it is simply removed from the
+<code class="docutils literal notranslate"><span class="pre">hwm</span></code> hardware map, but an exception is raised if a board listed
+explicitely fails. If <code class="docutils literal notranslate"><span class="pre">ping</span></code> is false, the presence of boards is not
+checked.</p></li>
+<li><p><strong>platform_firmware_pathname</strong> (<em>str</em>) – Optional path to platform ARM
+firmware used during network discovery. For CRS, <code class="docutils literal notranslate"><span class="pre">None</span></code> uses
+the default <code class="docutils literal notranslate"><span class="pre">tcpipe_rtos.elf</span></code> in the CRS <code class="docutils literal notranslate"><span class="pre">arm_firmware</span></code> folder.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="centered">
+<strong><strong>Configuration &amp; initialization parameters</strong></strong></p><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mode</strong> (<em>str</em>) – <p>Operational mode of required from the Motherboard
+array.</p>
+<p>The mode is used to select which FPGA firmware to load, unless
+overriden by the <cite>bitfile</cite> parameter .</p>
+<p>When <cite>mode</cite> is specified, the FPGA configuration (prog=2) and
+full initialization level (init=2) is implied, unless specifically
+modified by the prog and init commands.</p>
+<p>The following modes are supported:</p>
+<ul>
+<li><p>Ice hardware platform</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>’chan8’: 8-channel, 8-bit data streaming. The output of 8 F-Engine is streamed out on the 8 GPU links. Corner-turn engine is mostly bypassed.</p></li>
+<li><p>’chan4’: Corner-turn engine is mostly bypassed and raw 8-bit data from 16
+channelizers is sent directly to the 8 CT-Engine outputs.</p></li>
+<li><p>’shuffle16’: A corner-turn operation is applied only within the 16 channelizer
+outputs of this board.</p></li>
+<li><p>’shuffle128’: A corner-turn operation is applied between the first 8 boards in a crate.</p></li>
+<li><p>’shuffle256’: The corner-turn operation is applies between 16 channelizers within
+a board and between the 16 boards within a crate using the backplane PCB links.</p></li>
+<li><p>’shuffle512’: The corner-turn operation is applies between 16 channelizers within
+a board, between the 16 boards within a crate using the backplane PCB links,
+and between 2 crates using the backplane QSFP links.</p></li>
+<li><p>’corr16’: The corner-turn engine is configured to feed the
+internal firmware correlator (only if the firmware was
+compiled with it).</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p>ZCU111</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>’corr4’</p></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+</p></li>
+<li><p><strong>bitfile</strong> (<em>str</em>) – If <cite>bitfile</cite> points to a folder, use that folder to look for the default
+FPGA bitstream base don the platform/mode. If <cite>bitfile</cite> points to a file, use that
+file as a bitstream (but mode is still required to properly initialize the python
+object and firmware)</p></li>
+<li><p><strong>prog</strong> (<em>int</em>) – <p>Overrides the FPGA configuration level. If <cite>mode</cite> is specified, <cite>prog</cite>
+defaults to <cite>prog</cite> =2 otherwise <cite>prog</cite> =0.</p>
+<ul>
+<li><p>prog=0 or None: The FPGAs are not configured</p></li>
+<li><p>prog=1: the FPGAs are configured only if they are not already configured with the same
+firmware.</p></li>
+<li><p>prog=2: The FPGAs are always configured, ensuring a clean-state start.</p></li>
+</ul>
+</p></li>
+<li><p><strong>init</strong> (<em>int</em>) – <p>Sets the array initialization level. Defaults to <code class="docutils literal notranslate"><span class="pre">init=3</span></code> if <cite>mode</cite> is specified, otherwise defaults to <code class="docutils literal notranslate"><span class="pre">init=0</span></code></p>
+<ul>
+<li><p>init=0: Only creates the array and establish communication with the motherboards.</p></li>
+<li><p>init=1: like init=0, but configure the FPGA using prog=2
+unless explicitely specified, and creates the <code class="docutils literal notranslate"><span class="pre">fpga</span></code> object representing the loaded firmware. <cite>mode</cite> or <cite>bitfile</cite> must be specified so
+the bitfile to be used can be found.</p></li>
+<li><p>init=2: like init=1, but basic communication with the FPGAs
+is established and the <cite>fpga</cite> object is populated with the
+objects representing the firmware modules.</p></li>
+<li><p>init=3: full initialization of the FPGA in the specified <cite>mode</cite> is performed</p></li>
+</ul>
+</p></li>
+<li><p><strong>if_ip</strong> (<em>str</em>) – string corresponding to the IP address of adapter through
+which the connection to the FPGA will be established. If not
+specified, the system will assume that the FPGA is reached trough
+the same interface that reaches the platform on-board processor.</p></li>
+<li><p><strong>udp_retries</strong> (<em>int</em>) – Number of retries performed when UDP command
+packets sent to the FPGA do not receive a response. Applies
+only to platform that feature direct UDP communication with
+the FPGA.</p></li>
+<li><p><strong>fpga_ip_addr_fn</strong> (<em>str</em>) – <p>For platforms featuring direct UDP
+connection with the FPGA, specifies how the FPGA IP address is
+determined. The valid modes are shown below, and should be
+types exactly without additional spaces. In those modes,
+<code class="docutils literal notranslate"><span class="pre">a.b.c.d</span></code> corresponds to the IP address of the IceBoard ARM
+processor.</p>
+<ul>
+<li><p>’(a,b,3,d)’: Uses the IP address of the ARM but replaces the third byte by <code class="docutils literal notranslate"><span class="pre">3</span></code></p></li>
+<li><p>’(a,b,c+1,d)’: Uses the IP address of the ARM but adds 1 to the third byte</p></li>
+</ul>
+</p></li>
+<li><p><strong>sync_method</strong> (<em>str</em>) – <p>Method used to synchronize (to sync) the data acquisition on an array of boards:</p>
+<ul>
+<li><p>’local’: Syhchronize each board individually by software trigger. There is no synchronicity between boards.</p></li>
+<li><p>’irigb’: uses the IRIG-B time signal to perform an array-wide synchronization. The source of the IRIG-B signal can be specified in <cite>sync_source</cite>.</p></li>
+<li><p>Other modes are available</p></li>
+</ul>
+</p></li>
+<li><p><strong>sync_source</strong> (<em>str</em>) – Source of the signal that is used to synchronize each board</p></li>
+<li><p><strong>sync_master</strong> (<a class="reference internal" href="pychfpga.hardware.motherboard.html#pychfpga.hardware.motherboard.Motherboard" title="pychfpga.hardware.motherboard.Motherboard"><em>Motherboard</em></a><em> or </em><em>str</em>) – Board used to generate the synchrization signal,</p></li>
+<li><p><strong>sync_master_source</strong> (<em>str</em>) – Source of the synchronization signal generated by the master board</p></li>
+<li><p><strong>sync_master_output</strong> (<em>int</em>) – User output on which the synchronization signal is routed on the master board</p></li>
+<li><p><strong>max_sync_time_difference</strong> (<em>int</em>) – Maximum time difference, in
+nanoseconds, between the time of frame 0 of each board in an
+array.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="centered">
+<strong><strong>Corner-turn engine parameters</strong></strong></p><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>frames_per_packet</strong> (<em>int</em>) – Number of frames that are grouped in each
+packets at the output of the corner turn engine. Default is 2.
+Packets contents is ordered so that the data from both frames
+shows in a single block, followed by the scaler flages for
+both frames, etc. Is limited by the amount of buffering
+available in the FPGA’s corner turn engine stages. Contiguous
+data blocks help the receiver node make more efficient memory
+transfers.</p></li>
+<li><p><strong>tx_power</strong> (<em>dict</em>) – Initial training and final TX power levels to be
+assigned to the data links used by the corner turn engine.
+These include the backplane PCB links between boards in a
+crate, backplane QSFP links between crates, or iceboard QSFP
+links that offload  the output of the corner turn engine.</p></li>
+<li><p><strong>corner_turn_bad_links</strong> (<em>list</em><em> of </em><em>tuples</em>) – List of corner turn engine
+outputs links [(crate, slot, links), …] that should
+preferably NOT be assigned any frequency bins if possible.</p></li>
+<li><p><strong>corner_turn_bin_priority</strong> (<em>list</em><em> of </em><em>int</em>) – List of frequency bins
+that are to be assigned to the corner turn output, in order of
+priority (most desirable frequency first). The lowest priority
+bins will be assigned to the bad links as much as possible,
+depending on the constraints of the corner turn engine
+flexibility.</p></li>
+<li><p><strong>corner_turn_remap_level</strong> (<em>int</em>) – Sets the aggressivness of the remapping by
+selecting how many crossbar levels are involved. 0:no
+remapping, 1: 3rd crossbar only, 2: crossbars 2 and 3, 3: all
+crossbars.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="centered">
+<strong><strong>Firmware correlator parameters</strong></strong></p><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>integration_period</strong> (<em>int</em>) – =None,</p>
+</dd>
+</dl>
+<p class="centered">
+<strong><strong>Logging parameters</strong></strong></p><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>stderr_log_level</strong> (<em>str</em>) – sets up a handler that prints logs of specified log level on stderr.</p></li>
+<li><p><strong>syslog_log_level</strong> (<em>str</em>) – sets up a SYSLOG handler</p></li>
+</ul>
+</dd>
+</dl>
+<section id="logging">
+<h2>Logging<a class="headerlink" href="#logging" title="Link to this heading"></a></h2>
+<p>You can optionally specify log level arguments to create syslog and stderr handlers to help interactive operations. If a
+handler already exists, its log level is simply updated to prevent duplication of
+handlers. Log levels can be strings or numerical log levels.</p>
+<p class="rubric">Example</p>
+<p><strong>Hardware map specifications</strong></p>
+<p><code class="docutils literal notranslate"><span class="pre">hwm=&quot;MGK7BP16</span> <span class="pre">025</span> <span class="pre">026&quot;</span></code> or abbreviated form <code class="docutils literal notranslate"><span class="pre">hwm=&quot;BP16</span> <span class="pre">25</span> <span class="pre">26&quot;</span></code> selects
+all iceboards on crates SN025 and SN026 with default crate
+numbers 0 and 1 respectively.</p>
+<p><code class="docutils literal notranslate"><span class="pre">hwm=&quot;MGK7MB</span> <span class="pre">0125</span> <span class="pre">0330&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">hwm=&quot;MB</span> <span class="pre">0125</span> <span class="pre">0330&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">hwm=&quot;MB</span> <span class="pre">125</span> <span class="pre">330&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">hwm=&quot;MB</span>
+<span class="pre">10.10.10.225</span> <span class="pre">10.10.10.111&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">hwm=&quot;MB</span> <span class="pre">iceboard0125.local</span>
+<span class="pre">iceboard0330.local&quot;</span></code> all select the Iceboards specified by
+serial/hostname/IP address.</p>
+<p>Note:</p>
+<blockquote>
+<div><p>If a Motherboard is specified by IP address (e.g. ‘10.10.10.7’),
+then the board can be added directly in the hardware map. This
+does <em>not</em> rely on the system mDNS client or the Python
+<code class="docutils literal notranslate"><span class="pre">pybonjour</span></code> package.</p>
+<p>If an Motherboard is specified by its mDNS hostname (e.g.
+‘iceboard0007.local’), the operating system will automatically
+resolve the IP address using mDNS, assuming that a mDNS client
+(Bonjour on Windows or Mac, avahi on Linux) is running on this
+computer. The <code class="docutils literal notranslate"><span class="pre">pybonjour</span></code> Python package is <em>not</em> needed.</p>
+<p>In both cases, the crate, slot and serial number information will
+be automatically obtained directly through the Motherboard’s
+processor if that information not already present in the hardware
+map.</p>
+<p>If an Motherboard is specified by its serial number (e.g. ‘0007’, or
+just a numeric 7 as a convenient shortcut), the board will use its
+platform-specific network discovery method to actively find boards
+that match the serial number.</p>
+</div></blockquote>
+<p>Note:</p>
+<blockquote>
+<div><p>Selecting boards by Crate serial number uses the platform-specific
+network discovery method for that crate type.</p>
+</div></blockquote>
+</section>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.get_array_method">
+<span class="sig-name descname"><span class="pre">get_array_method</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.get_array_method" title="Link to this definition"></a></dt>
+<dd><p>Return an array-wide method bound to its provider instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<em>str</em>) – The name of the array-wide method to look up.</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>AttributeError</strong> – If <code class="docutils literal notranslate"><span class="pre">name</span></code> is not an array-wide method available
+    on every motherboard.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.get_array_methods">
+<span class="sig-name descname"><span class="pre">get_array_methods</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.get_array_methods" title="Link to this definition"></a></dt>
+<dd><p>Return array-wide methods available on every motherboard.</p>
+<p>The result is a dict of <code class="docutils literal notranslate"><span class="pre">{method_name:</span> <span class="pre">bound_provider_method}</span></code>.
+Provider methods have their provider instance already bound, and the
+provider keeps a reference to this <a class="reference internal" href="#pychfpga.fpga_array.FPGAArray" title="pychfpga.fpga_array.FPGAArray"><code class="xref py py-class docutils literal notranslate"><span class="pre">FPGAArray</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.get_channel_ids">
+<span class="sig-name descname"><span class="pre">get_channel_ids</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.get_channel_ids" title="Link to this definition"></a></dt>
+<dd><p>Returns the channel IDs of every board and channel in the array</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.get_hwm">
+<span class="sig-name descname"><span class="pre">get_hwm</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.get_hwm" title="Link to this definition"></a></dt>
+<dd><p>Returns the current hardware map as a dict.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><p>hardware map dict in the format:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="s1">'crate'</span><span class="p">:</span> <span class="p">{</span><span class="s1">'number'</span><span class="p">:</span><span class="n">n</span><span class="p">,</span> <span class="s1">'model'</span><span class="p">:</span><span class="n">m</span><span class="p">,</span> <span class="s1">'serial'</span><span class="p">:</span><span class="n">s</span><span class="p">,</span>
+    <span class="s1">'iceboards'</span><span class="p">:</span> <span class="p">[</span>
+    <span class="s1">'slot'</span><span class="p">:</span><span class="n">s</span><span class="p">,</span> <span class="s1">'model'</span><span class="p">:</span><span class="n">m</span><span class="p">,</span> <span class="s1">'serial'</span><span class="p">:</span><span class="n">s</span><span class="p">,</span> <span class="s1">'mezzanines'</span><span class="p">:[</span>
+        <span class="p">{</span><span class="s1">'slot'</span><span class="p">:</span><span class="n">s</span><span class="p">,</span> <span class="s1">'model'</span><span class="p">:</span><span class="n">m</span><span class="p">,</span> <span class="s1">'serial'</span><span class="p">:</span><span class="n">s</span><span class="p">},</span> <span class="o">...</span><span class="p">]},</span> <span class="o">...</span><span class="p">]</span>
+</pre></div>
+</div>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.get_hwm_info">
+<span class="sig-name descname"><span class="pre">get_hwm_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.get_hwm_info" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.get_iceboard">
+<span class="sig-name descname"><span class="pre">get_iceboard</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">board</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.get_iceboard" title="Link to this definition"></a></dt>
+<dd><p>Return the Motherboard specified by tuple or serial number.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>board</strong> (<em>tuple</em><em>, </em><em>str</em><em> or </em><a class="reference internal" href="pychfpga.hardware.motherboard.html#pychfpga.hardware.motherboard.Motherboard" title="pychfpga.hardware.motherboard.Motherboard"><em>Motherboard</em></a>) – <p>board identifier.</p>
+<ul class="simple">
+<li><p>If <cite>board</cite> is a str, it will be matched with either the
+board serial number string (with leading zeros) or with the
+board hostname.</p></li>
+<li><p>If <cite>board</cite> is a tuple or a list,  describing a (crate,
+slot), it will be matched with the board ID as return by the
+board’s get_id().</p></li>
+<li><p>If <cite>board</cite> is already an Motherboard object, <cite>board</cite> is
+returned directly. An exception is raised if there are
+multiple matches.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.get_iceboard_from_id">
+<span class="sig-name descname"><span class="pre">get_iceboard_from_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.get_iceboard_from_id" title="Link to this definition"></a></dt>
+<dd><p>return the Motherboard corresponding to the specified (crate,slot) tuple. <code class="docutils literal notranslate"><span class="pre">slot</span></code> is zero-based.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.get_iceboards">
+<span class="sig-name descname"><span class="pre">get_iceboards</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">board_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lane_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.get_iceboards" title="Link to this definition"></a></dt>
+<dd><p>Return the Motherboard object(s) corresponding to the board ID tuples or
+dict specified in <cite>mb</cite> , including wildcards.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>board_ids</strong> (<em>list</em><em> of </em><em>tuple</em>) – List of (crate_number, slot_number)
+tuple describing the a Motherboard. A value of None is
+equivalent to a ‘*’ wildcard. Missing tuple entries are
+considered to be None.</p></li>
+<li><p><strong>lane_type</strong> (<em>str</em>) – type of lane  that can be specified in the spec:
+(‘channel’, ‘gpu’, ‘bp_pcb’, ‘bp_qsfp’). If ‘None’, lane
+numbers are not decoded nor returned.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>if <cite>lane_type</cite> is None – list of Motherboard objects
+otherwise: a dict of {iceboard_object:set_of_lanes, …}</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<dl class="simple">
+<dt>A board id can be specified as follows:</dt><dd><ul class="simple">
+<li><p>(‘*’,) or (‘*’, ‘*’) # All boards in the array</p></li>
+<li><p>(0,) or (0, None) or (0, ‘*’) # All boards in crate 0</p></li>
+<li><p>{crate=0} or {crate=0, slot=None} or {crate=0, slot=’*’} # The same</p></li>
+<li><p>(0, 3, 2) # crate 0, slot 3, lane/channel 2</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.get_mode">
+<span class="sig-name descname"><span class="pre">get_mode</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.get_mode" title="Link to this definition"></a></dt>
+<dd><p>Return the operational FPGA mode programmed on the boards.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.init">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.init" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.init_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">init_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.init_async" title="Link to this definition"></a></dt>
+<dd><p>Co-routine implementation of fpga_array initialization.</p>
+<p>Hardware-map / discovery parameters are consumed here. FPGA
+programming and open (with retry) run here. Remaining <code class="docutils literal notranslate"><span class="pre">kwargs</span></code> are
+forwarded to firmware <code class="docutils literal notranslate"><span class="pre">array_init_async</span></code>. Constructor parameters
+are documented on <a class="reference internal" href="#pychfpga.fpga_array.FPGAArray.__init__" title="pychfpga.fpga_array.FPGAArray.__init__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__init__()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.print_flush">
+<span class="sig-name descname"><span class="pre">print_flush</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.print_flush" title="Link to this definition"></a></dt>
+<dd><p>Make sure that the test sent previously to stdout shows immediately on the console.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.print_iceboard_table">
+<span class="sig-name descname"><span class="pre">print_iceboard_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">row_labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">grid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_serial</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.print_iceboard_table" title="Link to this definition"></a></dt>
+<dd><p>Print a board/crate summary table using only hardware-map metadata.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.print_table">
+<span class="sig-name descname"><span class="pre">print_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">row_labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">col_labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corner_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">row_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">col_keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_width</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">180</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line_sep</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.print_table" title="Link to this definition"></a></dt>
+<dd><p>Print a formatted table where <code class="docutils literal notranslate"><span class="pre">data</span></code> is a list of columns.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.process_list_hwm">
+<span class="sig-name descname"><span class="pre">process_list_hwm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hwm</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.process_list_hwm" title="Link to this definition"></a></dt>
+<dd><p>Create the hardware map objects that are specified in a list-based hardware map <cite>hwm</cite></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>hwm</strong> (<em>list</em>) – <p>list containing hardware items, each of which is in the form</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">"class"</span><span class="p">:</span> <span class="n">class_name</span><span class="p">,</span> <span class="s2">"arg1"</span><span class="p">:</span><span class="n">arg1</span><span class="p">,</span> <span class="o">...</span><span class="p">}</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">class_name</span></code> is a string describing the name of a Motherboard or Crate subclass (e..g IceBoard, ZCU111, IceCrate etc.).</p>
+<p><code class="docutils literal notranslate"><span class="pre">&quot;arg1&quot;:arg1</span></code> are the arguments passed to the class
+constructor. Arguments that are not needed directly by the
+class constructor are stored by that constructor to be used
+later as arguments for further initializing the platform or
+the FPGA.</p>
+</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Nothing. The new objects are added in the instance registry of each hardware base class.</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Hardware map objects can be generic base objects (‘Motherboard’,
+‘Crate’ etc.).  In this case, their class will be updated based on
+self-discovery.</p>
+<p>‘IceBoard’-type of objects can take the additional <code class="docutils literal notranslate"><span class="pre">crate_number</span></code>
+object, which will link to an existing crate object with the same
+number, or will create a generic one that will be resolved in the
+self-discovery process.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_array.FPGAArray.process_str_hwm">
+<span class="sig-name descname"><span class="pre">process_str_hwm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hwm</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_generic_motherboard</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_array.FPGAArray.process_str_hwm" title="Link to this definition"></a></dt>
+<dd><p>Create the hardware map objects that are specified in a string-based hardware map <cite>hwm</cite></p>
+<p>The Motherboard and Crate objects created from the string description
+are added directly in the global hardware map.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.digital_gain.html" class="btn btn-neutral float-left" title="digital_gain.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.fpga_firmware.html" class="btn btn-neutral float-right" title="fpga_firmware/" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

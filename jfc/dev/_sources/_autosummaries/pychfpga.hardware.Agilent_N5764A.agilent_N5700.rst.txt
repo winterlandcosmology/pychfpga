@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`agilent_N5700.py <pychfpga.hardware.Agilent_N5764A.agilent_N5700>`
+===========================================================================
+
+
+.. currentmodule:: pychfpga.hardware.Agilent_N5764A
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.Agilent_N5764A,
+..    | FULLNAME=pychfpga.hardware.Agilent_N5764A.agilent_N5700,
+..    | name==agilent_N5700
+..    | modules = 
+..    | classes = ['agilent_N5700']
+
+.. automodule:: pychfpga.hardware.Agilent_N5764A.agilent_N5700
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         agilent_N5700
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: agilent_N5700
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

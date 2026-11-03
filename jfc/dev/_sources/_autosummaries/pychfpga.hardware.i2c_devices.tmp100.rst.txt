@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`tmp100.py <pychfpga.hardware.i2c_devices.tmp100>`
+==========================================================
+
+
+.. currentmodule:: pychfpga.hardware.i2c_devices
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.i2c_devices,
+..    | FULLNAME=pychfpga.hardware.i2c_devices.tmp100,
+..    | name==tmp100
+..    | modules = 
+..    | classes = ['tmp100']
+
+.. automodule:: pychfpga.hardware.i2c_devices.tmp100
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         tmp100
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: tmp100
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

@@ -1,0 +1,106 @@
+
+
+
+
+
+:py:mod:`i2c_devices/ <pychfpga.hardware.i2c_devices>`
+======================================================
+
+
+.. currentmodule:: pychfpga.hardware
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware,
+..    | FULLNAME=pychfpga.hardware.i2c_devices,
+..    | name==i2c_devices
+..    | modules = ['TICSPRO_loader', 'amc6821', 'eeprom', 'gpio', 'hmc7044', 'ina230', 'lmk04208spi', 'lmx2594spi', 'pca6524', 'pca8574', 'pca9546a', 'pca9575', 'pca9698', 'qsfp', 'sc18is602b', 'ssd1306', 'tca6416a', 'tca9544a', 'tca9548a', 'tmp100', 'tmp421']
+..    | classes = []
+
+.. automodule:: pychfpga.hardware.i2c_devices
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~TICSPRO_loader
+         ~amc6821
+         ~eeprom
+         ~gpio
+         ~hmc7044
+         ~ina230
+         ~lmk04208spi
+         ~lmx2594spi
+         ~pca6524
+         ~pca8574
+         ~pca9546a
+         ~pca9575
+         ~pca9698
+         ~qsfp
+         ~sc18is602b
+         ~ssd1306
+         ~tca6416a
+         ~tca9544a
+         ~tca9548a
+         ~tmp100
+         ~tmp421
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

@@ -1,0 +1,74 @@
+
+
+
+
+
+:py:mod:`mdns_discovery.py <pychfpga.mdns_discovery>`
+=====================================================
+
+
+.. currentmodule:: pychfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga,
+..    | FULLNAME=pychfpga.mdns_discovery,
+..    | name==mdns_discovery
+..    | modules = 
+..    | classes = []
+
+.. automodule:: pychfpga.mdns_discovery
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

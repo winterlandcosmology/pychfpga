@@ -1,0 +1,92 @@
+
+
+
+
+
+:py:mod:`f_engine/ <pychfpga.fpga_firmware.chfpga.f_engine>`
+============================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware.chfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware.chfpga,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga.f_engine,
+..    | name==f_engine
+..    | modules = ['adcdaq', 'chan', 'fft', 'funcgen', 'prober', 'scaler', 'ucap']
+..    | classes = []
+
+.. automodule:: pychfpga.fpga_firmware.chfpga.f_engine
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~adcdaq
+         ~chan
+         ~fft
+         ~funcgen
+         ~prober
+         ~scaler
+         ~ucap
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

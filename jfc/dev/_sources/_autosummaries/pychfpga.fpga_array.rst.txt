@@ -1,0 +1,140 @@
+
+
+
+
+
+:py:mod:`fpga_array.py <pychfpga.fpga_array>`
+=============================================
+
+
+.. currentmodule:: pychfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga,
+..    | FULLNAME=pychfpga.fpga_array,
+..    | name==fpga_array
+..    | modules = 
+..    | classes = ['FPGAArray']
+
+.. automodule:: pychfpga.fpga_array
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         PSArray
+         add_fpga_array_arguments
+         add_logging_arguments
+         create_fpga_array
+         parse_args_as_dict
+         setup_logging
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         FPGAArray
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: PSArray
+
+
+.. autofunction:: add_fpga_array_arguments
+
+
+.. autofunction:: add_logging_arguments
+
+
+.. autofunction:: create_fpga_array
+
+
+.. autofunction:: parse_args_as_dict
+
+
+.. autofunction:: setup_logging
+
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: FPGAArray
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

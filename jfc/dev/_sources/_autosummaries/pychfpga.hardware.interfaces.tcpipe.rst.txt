@@ -1,0 +1,126 @@
+
+
+
+
+
+:py:mod:`tcpipe.py <pychfpga.hardware.interfaces.tcpipe>`
+=========================================================
+
+
+.. currentmodule:: pychfpga.hardware.interfaces
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.interfaces,
+..    | FULLNAME=pychfpga.hardware.interfaces.tcpipe,
+..    | name==tcpipe
+..    | modules = 
+..    | classes = ['TCPipe', 'TCPipe_BSB_MMI', 'TCPipe_I2C', 'TCPipe_SPI']
+
+.. automodule:: pychfpga.hardware.interfaces.tcpipe
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         TCPipe
+         TCPipe_BSB_MMI
+         TCPipe_I2C
+         TCPipe_SPI
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: TCPipe
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: TCPipe_BSB_MMI
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: TCPipe_I2C
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: TCPipe_SPI
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

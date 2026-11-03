@@ -1,0 +1,964 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>pocket_correlator.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ps.py" href="pychfpga.ps.html" />
+    <link rel="prev" title="network_utils.py" href="pychfpga.network_utils.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.pocket_correlator.create_pc"><code class="docutils literal notranslate"><span class="pre">create_pc()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.__init__"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.compute_gains"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.compute_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.configure_corr"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.configure_corr()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.generate_prod_map"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.generate_prod_map()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.make_bin_map"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.make_bin_map()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.make_inv_bin_map"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.make_inv_bin_map()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.make_time_string"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.make_time_string()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.n_frames_per_capture"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.n_frames_per_capture()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.observe"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.observe()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.read_adc_frames"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.read_adc_frames()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.read_corr_frames"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.read_corr_frames()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.read_fft_frames"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.read_fft_frames()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.read_post_gain_frames"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.read_post_gain_frames()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.read_scaler_frames"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.read_scaler_frames()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.save_gains"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.save_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.set_ucap_mode"><code class="docutils literal notranslate"><span class="pre">POCKET_CORRELATOR.set_ucap_mode()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.pocket_correlator.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="pocket-correlator-py">
+<h1><a class="reference internal" href="#module-pychfpga.pocket_correlator" title="pychfpga.pocket_correlator"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a><a class="headerlink" href="#pocket-correlator-py" title="Link to this heading"></a></h1>
+<p id="module-pychfpga.pocket_correlator">Module for capturing and writing raw corelated data from a t0.CRS board.</p>
+<p>The script can be run within an ipython session.</p>
+<p>Make sure you’ve got the latest firmware that supports corr8 mode with all 8 channelizers!</p>
+<p>You can connect to a board with serial number 0016 in ipython by running</p>
+<blockquote>
+<div><p>run sifpga_crs_corr_capture.py –serial 0016 –stderr_log_level info –prog 2</p>
+</div></blockquote>
+<p>The following is directly copied from pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/ucap.py:</p>
+<blockquote>
+<div><p>System Requirements:</p>
+<p>The Ethernet interface must be set to receive Jumbo frames:</p>
+<blockquote>
+<div><p>sudo ifconfig eno1 mtu 9000</p>
+</div></blockquote>
+<p>The UDP buffers shall be increased to reduce packet loss to a minimum:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">sysctl</span> <span class="o">-</span><span class="n">w</span> <span class="n">net</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">rmem_max</span><span class="o">=</span><span class="mi">26214400</span>
+<span class="n">sudo</span> <span class="n">sysctl</span> <span class="o">-</span><span class="n">w</span> <span class="n">net</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">rmem_default</span><span class="o">=</span><span class="mi">26214400</span>
+<span class="n">sudo</span> <span class="n">sysctl</span> <span class="o">-</span><span class="n">w</span> <span class="n">net</span><span class="o">.</span><span class="n">ipv4</span><span class="o">.</span><span class="n">udp_mem</span><span class="o">=</span><span class="s1">'26214400 26214400 26214400'</span>
+<span class="n">sudo</span> <span class="n">sysctl</span> <span class="o">-</span><span class="n">w</span> <span class="n">net</span><span class="o">.</span><span class="n">ipv4</span><span class="o">.</span><span class="n">udp_rmem_min</span><span class="o">=</span><span class="mi">26214400</span>
+</pre></div>
+</div>
+<p>Check udp buffers:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sysctl</span> <span class="o">-</span><span class="n">a</span> <span class="o">|</span> <span class="n">grep</span> <span class="n">mem</span>
+</pre></div>
+</div>
+<p>Monitor UDP buffer:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">watch</span> <span class="o">-</span><span class="n">cd</span> <span class="o">-</span><span class="n">n</span> <span class="mf">.5</span> <span class="s2">"cat /proc/net/udp"</span>
+</pre></div>
+</div>
+</div></blockquote>
+<dl class="simple">
+<dt>Some of the function descriptions have been borrowed from the following scripts:</dt><dd><p>pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/ucap.py
+pychfpga/pychfpga/fpga_firmware/chfpga/chfpga.py</p>
+</dd>
+</dl>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module functions summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.pocket_correlator.create_pc" title="pychfpga.pocket_correlator.create_pc"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_pc</span></code></a></p></td>
+<td><p>Creates pocket correlator object in the command line using argparse.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR" title="pychfpga.pocket_correlator.POCKET_CORRELATOR"><code class="xref py py-obj docutils literal notranslate"><span class="pre">POCKET_CORRELATOR</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module functions</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.create_pc">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.pocket_correlator.</span></span><span class="sig-name descname"><span class="pre">create_pc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.create_pc" title="Link to this definition"></a></dt>
+<dd><p>Creates pocket correlator object in the command line using argparse.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>pc object - see the POCKET_CORRELATOR docstring.</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.pocket_correlator.</span></span><span class="sig-name descname"><span class="pre">POCKET_CORRELATOR</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hwm</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stderr_log_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'info'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prog</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hwm</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stderr_log_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'info'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prog</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.__init__" title="Link to this definition"></a></dt>
+<dd><p>The POCKET_CORRELATOR class is a wrapper for the FPGAArray class of fpga_array.py designed to optimize data collection
+with a t0.CRS board. It provides an additional layer of processing to simplify measuremsnts of ADC, FUNCGEN, FFT, SCALER,
+and correlated data.</p>
+<p>This class was initially designed to function as an automated script for a single-board digital backend
+for computing and storing visibilities at the Deep Dish Development Array (D3A) at the Dominion Radio Astrophysical
+Observatory (DRAO), the site of the Canadian Hydrogen Observatory and Radio transient Detector (CHORD).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hwm</strong> (<em>str</em>) – Hardware map: part and serial, for example
+<code class="docutils literal notranslate"><span class="pre">'crs</span> <span class="pre">0016'</span></code> to find t0.CRS SN0016. This wrapper is for
+CRS boards, so the part is <code class="docutils literal notranslate"><span class="pre">crs</span></code> unless upgraded later.</p></li>
+<li><p><strong>stderr_log_level</strong> (<em>str</em>) – Logging level. See
+<a class="reference internal" href="pychfpga.fpga_array.html#module-pychfpga.fpga_array" title="pychfpga.fpga_array"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga.fpga_array</span></code></a>. Default <code class="docutils literal notranslate"><span class="pre">'info'</span></code>.</p></li>
+<li><p><strong>prog</strong> (<em>str</em><em> or </em><em>int</em>) – FPGA programming: <code class="docutils literal notranslate"><span class="pre">0</span></code> never, <code class="docutils literal notranslate"><span class="pre">1</span></code> only if
+not already programmed, <code class="docutils literal notranslate"><span class="pre">2</span></code> always reprogram.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.compute_gains">
+<span class="sig-name descname"><span class="pre">compute_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">np.float64(2.121320343559643)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_fft_frames</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'adc'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[np.int64(0),</span> <span class="pre">np.int64(1),</span> <span class="pre">np.int64(2),</span> <span class="pre">np.int64(3),</span> <span class="pre">np.int64(4),</span> <span class="pre">np.int64(5),</span> <span class="pre">np.int64(6),</span> <span class="pre">np.int64(7)]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fft_bypass</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_scaler_frames</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_gains</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">digital_gains_parent_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">digital_gains_dir_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">function_kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.compute_gains" title="Link to this definition"></a></dt>
+<dd><p>Compute digital gains used to quantize FFT data into 4+4 bits with the SCALER. When floating point
+digital gains are used, the digital gains correspond to an 11-bit “linear” (i.e., mantissa) component
+which is directly multiplied with the FFT data, and a 5-bit “logarithmic” (i.e., exponent) component
+which applies a bit shift, with a maximum value of 2^5 = 32 bits, or equivalently a multiplication by 2^32.
+The maximum digital gain is
+<code class="docutils literal notranslate"><span class="pre">maximum_gain_lin</span> <span class="pre">*</span> <span class="pre">maximum_gain_log</span> <span class="pre">=</span> <span class="pre">2^11</span> <span class="pre">*</span> <span class="pre">2^32</span></code>.</p>
+<p>The application of the digital gains results in a “post-gain” value with a bit-depth of 48+48 bits, of which the
+upper 4+4 MSBSs are taken and rounded to perform the 4+4-bit quantization.</p>
+<p>Since we can recover the full resolution of the FFT data, we can compute directly the digital gains
+necessary for optimial quantization in the SCALER, which is defined as a “target” SCALER magnitude.
+We can express the application of digital gains as:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">target_full</span> <span class="o">=</span> <span class="n">gain</span> <span class="o">*</span> <span class="o">|</span><span class="n">FFT</span><span class="o">|</span><span class="p">,</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">target_full</span> <span class="pre">=</span> <span class="pre">target</span> <span class="pre">*</span> <span class="pre">2^44</span></code>, and <code class="docutils literal notranslate"><span class="pre">|FFT|</span></code> refers to the magnitude of FFT data, averaged for a
+specified number of frames to reduce noise. The digital gains are therefore simply:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">gain</span> <span class="o">=</span> <span class="n">target_full</span> <span class="o">/</span> <span class="o">|</span><span class="n">FFT</span><span class="o">|.</span>
+</pre></div>
+</div>
+<p>This function uses the set_gain_table() function of the SCALER module (see scaler.py), which performs
+additional processing of the digital gains as computed with the equation above prior to writing them
+to the memory banks of the SCALER. Therefore, the “theoretical” gains, since they are computed as
+Python floating point numbers, are optimally broken up into linear and logarithmic components. As such,
+the “theoretical” gains are not necessarily equivalent to those that are actually applied by the SCALER,
+so the “actual” gains are returned to the user by this function. See</p>
+<blockquote>
+<div><p>pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/scaler.py</p>
+</div></blockquote>
+<p>for more information on how the “theoretical” gains are processed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>target</strong> (<em>float</em>) – Average magnitude of 4+4-bit SCALER frames. Too
+low and quantization noise dominates; too high and the
+scaler or correlator accumulator may saturate. The default
+is the CHIME F-engine empirical target.</p></li>
+<li><p><strong>n_fft_frames</strong> (<em>int</em>) – Number of FFT frames whose magnitudes are
+averaged when computing gains.</p></li>
+<li><p><strong>data_source</strong> (<em>str</em>) – <code class="docutils literal notranslate"><span class="pre">'adc'</span></code> for live ADC data, otherwise a
+FUNCGEN function name from
+<a class="reference internal" href="pychfpga.fpga_firmware.chfpga.f_engine.funcgen.html#module-pychfpga.fpga_firmware.chfpga.f_engine.funcgen" title="pychfpga.fpga_firmware.chfpga.f_engine.funcgen"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga.fpga_firmware.chfpga.f_engine.funcgen</span></code></a>.</p></li>
+<li><p><strong>channels</strong> (<em>list</em>) – Input channels to recover (0 = ADC1, …).
+Default is all eight.</p></li>
+<li><p><strong>fft_bypass</strong> (<em>bool</em>) – Bypass the FFT (useful when FUNCGEN already
+holds a simulated spectrum). Default False.</p></li>
+<li><p><strong>bank</strong> (<em>int</em>) – Gain bank to write (0 or 1).</p></li>
+<li><p><strong>return_scaler_frames</strong> (<em>bool</em>) – If True, also return scaler frames
+after the new gains are applied (same count as
+<code class="docutils literal notranslate"><span class="pre">n_fft_frames</span></code>).</p></li>
+<li><p><strong>save_gains</strong> (<em>bool</em>) – If True, write gains via <code class="docutils literal notranslate"><span class="pre">save_gains()</span></code>.</p></li>
+<li><p><strong>digital_gains_parent_path</strong> (<em>str</em>) – Parent directory for gain
+files. Used only if <code class="docutils literal notranslate"><span class="pre">save_gains</span></code> is True.</p></li>
+<li><p><strong>digital_gains_dir_name</strong> (<em>str</em>) – Subdirectory under the parent.
+Used only if <code class="docutils literal notranslate"><span class="pre">save_gains</span></code> is True.</p></li>
+<li><p><strong>function_kwargs</strong> (<em>dict</em>) – FUNCGEN arguments forwarded to
+<code class="docutils literal notranslate"><span class="pre">set_channelizer()</span></code> when <code class="docutils literal notranslate"><span class="pre">data_source</span></code> is not <code class="docutils literal notranslate"><span class="pre">'adc'</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>tuple</em> – <code class="docutils literal notranslate"><span class="pre">(d_fft,</span> <span class="pre">d_fft_mean_mag,</span> <span class="pre">gain_lin_actual,</span>
+<span class="pre">gain_log_actual)</span></code> and optionally <code class="docutils literal notranslate"><span class="pre">d_sclr</span></code>. Shapes use number
+of polarizations and number of frequency bins.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.configure_corr">
+<span class="sig-name descname"><span class="pre">configure_corr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_firmware_frames</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16384</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocorr_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_accum</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.configure_corr" title="Link to this definition"></a></dt>
+<dd><p>Configure the receiver for correlated data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_firmware_frames</strong> (<em>(</em><em>int</em><em>) </em><em>Number</em><em> of </em><em>frames to accumulate in firmware. Take care not to set this too</em>)</p></li>
+<li><p><strong>minimum</strong><strong>)</strong> (<em>low</em><em> (</em><em>see</em>)</p></li>
+<li><p><strong>rate</strong> (<em>as this will increase the data</em>)</p></li>
+<li><p><strong>take</strong> (<em>and could lead to overrun condition. Also</em>)</p></li>
+<li><p><strong>maximum</strong><strong>)</strong> (<em>care not to set this too high</em><em> (</em><em>see</em>)</p></li>
+<li><p><strong>firmware</strong> (<em>as this may cause increased saturation. The</em>)</p></li>
+<li><p><strong>values</strong> (<em>accumulator can add numbers up to 18+18-bit</em>)</p></li>
+<li><p><strong>saturate.</strong> (<em>at which point they</em>)</p></li>
+<li><p><strong>value!</strong> (<em>Use the recommended</em>) – 8192 : minimum
+16384: recommended
+32768: maximum</p></li>
+<li><p><strong>autocorr_only</strong> (<em>(</em><em>int</em><em>) </em><em>Bit to choose between return all correlated products</em><em>, or </em><em>only autocorrelations.</em>)</p></li>
+<li><p><strong>products.</strong> (<em>Default is to send all N</em><em>(</em><em>N-1</em><em>)</em><em>/2 correlated</em>) – 0: return all products
+1: return autocorrelations only</p></li>
+<li><p><strong>no_accum</strong> (<em>(</em><em>int</em><em>) </em><em>Bit to choose between accumulating</em><em> (</em><em>i.e.</em><em>, </em><em>summing</em><em>) </em><em>correalted SCALER frames</em><em>, </em><em>and not</em>)</p></li>
+<li><p><strong>accumulate.</strong> (<em>accumulating. Default is to</em>) – 0: do accumulate
+1: do not accumulate</p></li>
+<li><p><strong>verbose</strong> (<em>(</em><em>int</em><em>) </em><em>Verbosity level. 0: no messages</em><em>, </em><em>1: basic messages</em><em>, </em><em>2: detailed messages</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>None.</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.generate_prod_map">
+<span class="sig-name descname"><span class="pre">generate_prod_map</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.generate_prod_map" title="Link to this definition"></a></dt>
+<dd><p>Generate the product (“prod”) map, which resolves the index of a correalted product
+with the two corresponding polarizations of that correlated product.</p>
+<p>Originally, the map simply corresponded to flattened rows of the upper triangle of
+an N^2 matrix, but the new correlator applies some scrambling of the products.</p>
+<p>The map was originally written by JF Cliche.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None.</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>self.prod</strong> (<em>(np.ndarray) The product map. The shape is</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.make_bin_map">
+<span class="sig-name descname"><span class="pre">make_bin_map</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.make_bin_map" title="Link to this definition"></a></dt>
+<dd><p>The FFT module implements a decimation-in-frequency FFT, where the time-domain data
+is properly ordered, and the frequency bins are output in bit-reversed order.</p>
+<p>In addition, in order for the bits corresponding to the first few frequency bins to
+be allocated for packet header information when the t0.CRS board is in ‘chan8’ mode (i.e.,
+with a corner-turn engine implemented), an additional level of “scrambling” is added
+to the output of the FFT.</p>
+<p>As a result of these two levels of scrambling, the frequency bins that are captured
+by UCAP are not ordered according to increasing frequency. The make_bin_map() function
+returns an array that maps the scrambled data into the proper, user-friendly order.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None.</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>bin_map</strong> (<em>(np.ndarray) An array used to index a frequency bin axis to convert it from</em>)</p></li>
+<li><p><em>”scrambled” to proper order. Computed with JF Python sorcery.</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.make_inv_bin_map">
+<span class="sig-name descname"><span class="pre">make_inv_bin_map</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.make_inv_bin_map" title="Link to this definition"></a></dt>
+<dd><p>It may be necessary to take a properly-ordered frequency axis and scramble it; for example,
+if generating a simulated FFT spectrum with the FUNCGEN module, it is much easier to generate
+that signal with the frequency axis in the proper order, but it needs to be stored in the
+FUNCGEN memory banks in scrambled order.</p>
+<p>This function generates an array corresponding to the mapping needed to be applied to a properly-
+ordered frequency axis to scramble it.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None.</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>bin_map</strong> (<em>(np.ndarray) An array used to index a frequency bin axis to convert it from</em>)</p></li>
+<li><p><em>proper to “scrambled” order.</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.make_time_string">
+<span class="sig-name descname"><span class="pre">make_time_string</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.make_time_string" title="Link to this definition"></a></dt>
+<dd><p>Breaks down a datetime.datetime.now object into
+constituent units and refactors them in a single
+string. Used for creating file names.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None.</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul>
+<li><p><em>Datetime string in the format</em> – YEAR MONTH DAY T HOUR MINUTE SECOND Z</p></li>
+<li><p><em>For example</em> – 11:31:05 AM on May 1, 2023</p>
+<p>2023 05 01 T 11 31 05 Z</p>
+<p>20230501T113105Z</p>
+</li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.n_frames_per_capture">
+<span class="sig-name descname"><span class="pre">n_frames_per_capture</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.n_frames_per_capture" title="Link to this definition"></a></dt>
+<dd><p>Return the number of frames per capture (i.e., a single burst of 16 frames of data) based on the
+UCAP mode that is currently in use.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>None.</strong></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>n_frames_per_capture</strong> (<em>(int) Number of frames per capture given the UCAP mode currently in use.</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.observe">
+<span class="sig-name descname"><span class="pre">observe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">obs_tag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">digital_gains_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_vis_per_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">256</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_software_frames</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">119</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocorr_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_accum</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_firmware_frames</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16384</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gain_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">np.float64(2.121320343559643)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_fft_frames_for_gain_comp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_adc_bursts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_adc_frames_per_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_fft_bursts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_fft_frames_per_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.observe" title="Link to this definition"></a></dt>
+<dd><p>Compute and store visibility data for a small interferometer.</p>
+<p>Default UCAP mode is 0: ADC/FFT bursts have two frames per input
+channel. Channelizers are configured for live ADC data when this
+method is called.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_path</strong> (<em>str</em>) – Parent directory for visibility HDF5 files. A
+timestamped subdirectory is created per acquisition.</p></li>
+<li><p><strong>obs_tag</strong> (<em>str</em>) – Suffix on the observation name (for D3A use
+<code class="docutils literal notranslate"><span class="pre">'_D3A_rfsoc'</span></code> for compatibility).</p></li>
+<li><p><strong>digital_gains_path</strong> (<em>str</em>) – Directory containing <code class="docutils literal notranslate"><span class="pre">gains.hdf5</span></code> to
+load, or None to compute gains with <a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.compute_gains" title="pychfpga.pocket_correlator.POCKET_CORRELATOR.compute_gains"><code class="xref py py-meth docutils literal notranslate"><span class="pre">compute_gains()</span></code></a>
+and store them under <code class="docutils literal notranslate"><span class="pre">data_path</span></code>.</p></li>
+<li><p><strong>n_vis_per_file</strong> (<em>int</em>) – Visibilities per HDF5 file.</p></li>
+<li><p><strong>n_software_frames</strong> (<em>int</em>) – Host-side integrations of firmware
+frames. Larger values increase total integration time.</p></li>
+<li><p><strong>autocorr_only</strong> (<em>int</em>) – <code class="docutils literal notranslate"><span class="pre">0</span></code> all products, <code class="docutils literal notranslate"><span class="pre">1</span></code> autocorrelations
+only.</p></li>
+<li><p><strong>no_accum</strong> (<em>int</em>) – <code class="docutils literal notranslate"><span class="pre">0</span></code> accumulate in firmware, <code class="docutils literal notranslate"><span class="pre">1</span></code> do not.</p></li>
+<li><p><strong>n_firmware_frames</strong> (<em>int</em>) – Frames accumulated in firmware. Too
+low increases data rate; too high may saturate the 18+18-bit
+accumulator. Use the recommended default.</p></li>
+<li><p><strong>capture_adc_bursts</strong> (<em>bool</em>) – Capture ADC snapshots at the start of
+each HDF5 file.</p></li>
+<li><p><strong>n_adc_frames_per_file</strong> (<em>int</em>) – ADC frames per file when capturing
+ADC bursts.</p></li>
+<li><p><strong>capture_fft_bursts</strong> (<em>bool</em>) – Capture FFT snapshots at the start of
+each HDF5 file.</p></li>
+<li><p><strong>n_fft_frames_per_file</strong> (<em>int</em>) – FFT frames per file when capturing
+FFT bursts.</p></li>
+<li><p><strong>gain_target</strong> (<em>float</em>) – Scaler magnitude target forwarded to
+<a class="reference internal" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.compute_gains" title="pychfpga.pocket_correlator.POCKET_CORRELATOR.compute_gains"><code class="xref py py-meth docutils literal notranslate"><span class="pre">compute_gains()</span></code></a>.</p></li>
+<li><p><strong>n_fft_frames_for_gain_comp</strong> (<em>int</em>) – FFT frames used for gain
+computation (about 1000 recommended).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.read_adc_frames">
+<span class="sig-name descname"><span class="pre">read_adc_frames</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_frames</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'adc'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[np.int64(0),</span> <span class="pre">np.int64(1),</span> <span class="pre">np.int64(2),</span> <span class="pre">np.int64(3),</span> <span class="pre">np.int64(4),</span> <span class="pre">np.int64(5),</span> <span class="pre">np.int64(6),</span> <span class="pre">np.int64(7)]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.02</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">function_kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.read_adc_frames" title="Link to this definition"></a></dt>
+<dd><p>Read ADC frames using UCAP. By default, UCAP is in mode 0, meaning 2 frames for each ADC channel will be
+captured per burst of 16 frames.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_frames</strong> (<em>(</em><em>int</em><em>) </em><em>Number</em><em> of </em><em>frames captured per function call. n_frames must be an even-valued integer</em><em>, </em><em>as UCAP only</em>)</p></li>
+<li><p><strong>frames.</strong> (<em>receives data in bursts</em><em> of </em><em>16</em>)</p></li>
+<li><p><strong>data_source</strong> (<em>(</em><em>str</em><em>) </em><em>A string that sets whether real ADC data</em><em> or </em><em>data stored in the FUNCGEN buffer are sent out</em><em> of </em><em>the FUNCGEN.</em>) – <p>If ‘adc’, then real digitized data from the ADC will pass through the CHAN signal chain.</p>
+<p>Otherwise, the user can specify a desired function listed in pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py
+Keyword arguments can be included (see below).</p>
+</p></li>
+<li><p><strong>channels</strong> (<em>(</em><em>list</em><em>) </em><em>A list</em><em> of </em><em>the input channels</em><em> (</em><em>i.e.</em><em>, </em><em>0 for ADC1</em><em>, </em><em>1 for ADC2</em><em>, </em><em>etc.</em><em>) </em><em>for which you'd like to recover data.</em>)</p></li>
+<li><p><strong>[</strong><strong>0</strong> (<em>The default is to receive data from all channels</em>)</p></li>
+<li><p><strong>..</strong></p></li>
+<li><p><strong>7</strong><strong>]</strong><strong>.</strong></p></li>
+<li><p><strong>period</strong> (<em>(</em><em>float</em><em>) </em><em>Time</em><em> (</em><em>in seconds</em><em>) </em><em>between captured bursts. 0.02 is the minimum recommended to not saturate the ethernet link.</em>)</p></li>
+<li><p><strong>split</strong> (<em>(</em><em>bool</em><em>) </em><em>Whether to include a &quot;frames&quot; axis for the data array</em><em>, </em><em>which allows the user to inspect individual frames.</em>) – <dl class="simple">
+<dt>If True:</dt><dd><p>axis 0: ADC channel
+axis 1: frame number
+axis 2: sample number</p>
+</dd>
+<dt>If False:</dt><dd><p>axis 0: ADC channel
+axis 1: sample number, with all frames flattened</p>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>(</strong><strong>int</strong><strong>)</strong> (<em>verbose</em>)</p></li>
+<li><p><strong>function_kwargs</strong> (<em>(</em><em>dict</em><em>) </em><em>Arguments for FUNCGEN functions passed to set_channelizer</em><em>(</em><em>)</em><em>. Used when data_source is not 'adc'.</em>)</p></li>
+<li><p><strong>arguments.</strong> (<em>See pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py for functions and their</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul>
+<li><p><strong>d_adc</strong> (<em>(np.ndarray) The ADC data. The 14-bit ADC data is stored as two-byte/16-bit integers, so the data</em>)</p></li>
+<li><p><em>needs to be shifted down by 2 bits in order to recover the correct values. This shift is done automatically</em></p></li>
+<li><p><em>within this function.</em></p></li>
+<li><p><em>The shape of the array depends upon the choice for the “split” parameter.</em> –</p>
+<dl class="simple">
+<dt>If split is True:</dt><dd><p>d_adc.shape = (self.NPOLS, n_frames, self.M)</p>
+</dd>
+<dt>If split is False:</dt><dd><p>d_adc.shape = (self.NPOLS, n_frames*self.M)</p>
+</dd>
+</dl>
+</li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.read_corr_frames">
+<span class="sig-name descname"><span class="pre">read_corr_frames</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'adc'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fft_bypass</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scaler_bypass</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_software_frames</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_results</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flush</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flush_timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'raw'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corr_is_configured</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocorr_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_accum</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_firmware_frames</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16383</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">function_kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.read_corr_frames" title="Link to this definition"></a></dt>
+<dd><p>Read correlated and accumulated frames. Correlation is always performed in real-time in the FPGA.
+Accumulation is performed in two steps: (1) n_firmware_frames are accumulated in the FPGA,
+and (2) n_software_frames of pre-data accumulated for n_firmware_frames are accumulated in Python.
+The two-step accumulation reduces the data rate such that data can be sent over the 1G network,
+enabling longer integration times.</p>
+<p>This function is a wrapper for read_corr_frames() from</p>
+<blockquote>
+<div><p>pychfpga/pychfpga/fpga_firmware/chfpga/x_engine/UCORR.py</p>
+</div></blockquote>
+<p>and essentially performs the same operations, with some added processing of data specific to the
+POCKET_CORRELATOR class.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_source</strong> (<em>(</em><em>str</em><em>) </em><em>A string that sets whether real ADC data</em><em> or </em><em>data stored in the FUNCGEN buffer are sent out</em><em> of </em><em>the FUNCGEN.</em>) – <p>If ‘adc’, then real digitized data from the ADC will pass through the CHAN signal chain.</p>
+<p>Otherwise, the user can specify a desired function listed in pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py
+Keyword arguments can be included (see below).</p>
+</p></li>
+<li><p><strong>fft_bypass</strong> (<em>(</em><em>bool</em><em>) </em><em>Whether</em><em> or </em><em>not to bypass the FFT. Why include an option to bypass the FFT when you are requesting post-gain frames</em><em>,</em>)</p></li>
+<li><p><strong>Well</strong> (<em>you might ask?</em>)</p></li>
+<li><p><strong>spectrum</strong> (<em>sometimes it is useful to use the FUNCGEN to create a simulated</em>)</p></li>
+<li><p><strong>want</strong> (<em>in which case you wouldn't</em>)</p></li>
+<li><p><strong>FFT.</strong> (<em>the signal you have set in the FUNCGEN to propagate through the firmware</em>) – <p>With the fft_bypass option, you have the power to create simulated FFT outputs for signal path validation.</p>
+<p>If True, the FFT is bypassed.</p>
+<p>If False, the FFT is not bypassed. Default.</p>
+</p></li>
+<li><p><strong>scaler_bypass</strong> (<em>(</em><em>bool</em><em>) </em><em>Whether</em><em> or </em><em>not to bypass the Scaler</em><em>, </em><em>similar to the fft_bypass argument.</em>) – <p>With the scaler_bypass option, you have the power to create simulated Scaler outputs for signal path validation when
+combined with the fft_bypass option.</p>
+<p>If True, the Scaler is bypassed.</p>
+<p>If False, the Scaler is not bypassed. Default.</p>
+</p></li>
+<li><p><strong>n_software_frames</strong> (<em>(</em><em>int</em><em>) </em><em>The number</em><em> of </em><em>pre-integrated firmware frames to integrate in Python.</em>)</p></li>
+<li><p><strong>time.</strong> (<em>Increasing this value increases the total integration</em>)</p></li>
+<li><p><strong>number_of_results</strong> (<em>(</em><em>int</em><em>) </em><em>The number</em><em> of </em><em>integrated frames to return. Each &quot;result&quot; contains</em>)</p></li>
+<li><p><strong>product</strong> (<em>all frequency bins for each correlated</em>)</p></li>
+<li><p><strong>frames.</strong> (<em>integrated for the specified number of</em>)</p></li>
+<li><p><strong>flush</strong> (<em>(</em><em>bool</em><em>) </em><em>Whether to flush the UDP buffers. If data is allowed to accumulate in the UDP</em>)</p></li>
+<li><p><strong>while</strong> (<em>buffers for a</em>)</p></li>
+<li><p><strong>start.</strong> (<em>it's a good idea to flush the buffer and get a fresh</em>)</p></li>
+<li><p><strong>data_timeout</strong> (<em>(</em><em>float</em><em>) </em><em>The socket timeout for capturing data in the UDP buffer.</em>)</p></li>
+<li><p><strong>flush_timeout</strong> (<em>(</em><em>float</em><em>) </em><em>The socket timeout for flushing data in the UDP buffer.</em>)</p></li>
+<li><p><strong>return_format</strong> (<em>(</em><em>str</em><em>) </em><em>The format in which to return the data. Only 'raw' has been tested with</em>)</p></li>
+<li><p><strong>Correlator</strong> (<em>the Pocket</em>)</p></li>
+<li><p><strong>data</strong> (<em>and therefore should always be used by default. 'raw' returns the</em>)</p></li>
+<li><p><strong>applied</strong> (<em>in the native format without rearranging the data</em><em> (</em><em>although the bin_map correction is</em>)</p></li>
+<li><p><strong>function</strong><strong>)</strong><strong>.</strong> (<em>in this wrapper</em>)</p></li>
+<li><p><strong>verbose</strong> (<em>(</em><em>int</em><em>) </em><em>Verbosity level. 0: no messages</em><em>, </em><em>1: basic messages</em><em>, </em><em>2: detailed messages</em>)</p></li>
+<li><p><strong>corr_is_configured</strong> (<em>(</em><em>bool</em><em>) </em><em>Whether</em><em> or </em><em>not the correlator is already configured. If False</em><em>,</em>)</p></li>
+<li><p><strong>parameters.</strong> (<em>the correaltor will be automatically configured with the following three</em>)</p></li>
+<li><p><strong>autocorr_only</strong> (<em>(</em><em>int</em><em>) </em><em>Bit to choose between return all correlated products</em><em>, or </em><em>only autocorrelations.</em>)</p></li>
+<li><p><strong>products.</strong> (<em>Default is to send all N</em><em>(</em><em>N-1</em><em>)</em><em>/2 correlated</em>) – 0: return all products
+1: return autocorrelations only</p></li>
+<li><p><strong>no_accum</strong> (<em>(</em><em>int</em><em>) </em><em>Bit to choose between accumulating</em><em> (</em><em>i.e.</em><em>, </em><em>summing</em><em>) </em><em>correalted SCALER frames</em><em>, </em><em>and not</em>)</p></li>
+<li><p><strong>accumulate.</strong> (<em>accumulating. Default is to</em>) – 0: do accumulate
+1: do not accumulate</p></li>
+<li><p><strong>n_firmware_frames</strong> (<em>(</em><em>int</em><em>) </em><em>Number</em><em> of </em><em>frames to accumulate in firmware. Take care not to set this too</em>)</p></li>
+<li><p><strong>minimum</strong><strong>)</strong> (<em>low</em><em> (</em><em>see</em>)</p></li>
+<li><p><strong>rate</strong> (<em>as this will increase the data</em>)</p></li>
+<li><p><strong>take</strong> (<em>and could lead to overrun condition. Also</em>)</p></li>
+<li><p><strong>maximum</strong><strong>)</strong> (<em>care not to set this too high</em><em> (</em><em>see</em>)</p></li>
+<li><p><strong>firmware</strong> (<em>as this may cause increased saturation. The</em>)</p></li>
+<li><p><strong>values</strong> (<em>accumulator can add numbers up to 18+18-bit</em>)</p></li>
+<li><p><strong>saturate.</strong> (<em>at which point they</em>)</p></li>
+<li><p><strong>value!</strong> (<em>Use the recommended</em>) – 8192 - 1 : minimum
+16384 - 1: recommended
+32768 - 1: maximum</p></li>
+<li><p><strong>function_kwargs</strong> (<em>(</em><em>dict</em><em>) </em><em>Arguments for FUNCGEN functions passed to set_channelizer</em><em>(</em><em>)</em><em>. Used when data_source is not 'adc'.</em>)</p></li>
+<li><p><strong>arguments.</strong> (<em>See pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py for functions and their</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul>
+<li><p><strong>t1</strong> (<em>(float) A rough timestamp using time.time().</em>) – <strong>IMPORTANT</strong>: this value is not synchronized with the first frame for a given result, but is instead
+read immediately before capturing correlated data. Note that this results in some timing error in the
+interferometer. For testbed or prototype arrays, such a timestamp may be sufficient, but for science-ready
+arrays, synchronization must be implemented.</p>
+<p>Synchronized timestamps will be included in future upgrades to the Pocket Correlator.</p>
+</li>
+<li><p><strong>d_corr</strong> (<em>(np.ndarray) The correlated data. The shape is (number_of_results, n_bins, NCORR_PROD). Note that the</em>)</p></li>
+<li><p><em>final axis of size NCORR_PROD must be indexed using self.prod, which is created using generate_prod_map().</em></p></li>
+<li><p><strong>count</strong> (<em>(np.ndarray) The actual number of software frames that have been integrated for each</em>)</p></li>
+<li><p><em>frequency bins. count should be a 1D array of length n_bins, whose values are equivalent to</em></p></li>
+<li><p><em>n_software_frames; any lower values indicate that packets are being dropped, or otherwise not</em></p></li>
+<li><p><em>integrated in Python. count there informs the user of dropped packets, which is important to keep</em></p></li>
+<li><p><em>track of due to the relationship between integration time and noise through the radiometer equation.</em></p></li>
+<li><p><strong>sat</strong> (<em>(np.ndarray) The number of saturations that occurred in the firmware accumulator. The shape</em>)</p></li>
+<li><p><em>is (number_of_results, n_bins, NCORR_PROD).</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.read_fft_frames">
+<span class="sig-name descname"><span class="pre">read_fft_frames</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_frames</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fft_bit_res</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'32+32'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'adc'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[np.int64(0),</span> <span class="pre">np.int64(1),</span> <span class="pre">np.int64(2),</span> <span class="pre">np.int64(3),</span> <span class="pre">np.int64(4),</span> <span class="pre">np.int64(5),</span> <span class="pre">np.int64(6),</span> <span class="pre">np.int64(7)]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fft_bypass</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.02</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">function_kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.read_fft_frames" title="Link to this definition"></a></dt>
+<dd><p>Read FFT frames using UCAP. By default, UCAP is in mode 0, meaning 2 frames for each ADC channel will be
+captured per burst of 16 frames.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_frames</strong> (<em>(</em><em>int</em><em>) </em><em>Number</em><em> of </em><em>frames captured per function call. n_frames must be an even-valued integer</em><em>, </em><em>as UCAP only</em>)</p></li>
+<li><p><strong>frames.</strong> (<em>receives data in bursts</em><em> of </em><em>16</em>)</p></li>
+<li><p><strong>fft_bit_res</strong> (<em>(</em><em>str</em><em>) </em><em>The bit resolution</em><em> of </em><em>the captured FFT data. The FFT module generates 32+32-bit values for 4 frequency</em>)</p></li>
+<li><p><strong>cycle</strong> (<em>bins on every clock</em>) – <p>If fft_bit_res is ‘16+16’, 4 frequency bins are captured for a single clock cycle, such that
+128 bits / 4 frequency bins = 32 = 16+16 bits per frequency bin can be captured. The upper 16+16 bits of the
+FFT are captured in this case.</p>
+<p>If fft_bit_res is ‘32+32’, only 2 frequency bins are captured for a single clock cycle, such that
+128 bits / 2 frequency bins = 64 = 32+32 bits per frequency bin (i.e., the full resolution of the FFT
+will be returned). Therefore, since we cannot capture every frequency bin at full resoltion at the same time,
+the even and odd bins are captured separately (that is, they come from physically different FFT frames).</p>
+<blockquote>
+<div><p><strong>As such, the injected signal must be roughly stationary in time, such that we can justify combining even and odd
+bins from different frames. Caution is therefore warranted in using this mode, though it is preferable to ]
+recover the full FFT resolution.</strong></p>
+</div></blockquote>
+</p></li>
+<li><p><strong>wide.</strong> (<em>and the output bus</em><em> of </em><em>the FFT module is 128 bits</em>) – <p>If fft_bit_res is ‘16+16’, 4 frequency bins are captured for a single clock cycle, such that
+128 bits / 4 frequency bins = 32 = 16+16 bits per frequency bin can be captured. The upper 16+16 bits of the
+FFT are captured in this case.</p>
+<p>If fft_bit_res is ‘32+32’, only 2 frequency bins are captured for a single clock cycle, such that
+128 bits / 2 frequency bins = 64 = 32+32 bits per frequency bin (i.e., the full resolution of the FFT
+will be returned). Therefore, since we cannot capture every frequency bin at full resoltion at the same time,
+the even and odd bins are captured separately (that is, they come from physically different FFT frames).</p>
+<blockquote>
+<div><p><strong>As such, the injected signal must be roughly stationary in time, such that we can justify combining even and odd
+bins from different frames. Caution is therefore warranted in using this mode, though it is preferable to ]
+recover the full FFT resolution.</strong></p>
+</div></blockquote>
+</p></li>
+<li><p><strong>data_source</strong> (<em>(</em><em>str</em><em>) </em><em>A string that sets whether real ADC data</em><em> or </em><em>data stored in the FUNCGEN buffer are sent out</em><em> of </em><em>the FUNCGEN.</em>) – <p>If ‘adc’, then real digitized data from the ADC will pass through the CHAN signal chain.</p>
+<p>Otherwise, the user can specify a desired function listed in pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py
+Keyword arguments can be included (see below).</p>
+</p></li>
+<li><p><strong>channels</strong> (<em>(</em><em>list</em><em>) </em><em>A list</em><em> of </em><em>the input channels</em><em> (</em><em>i.e.</em><em>, </em><em>0 for ADC1</em><em>, </em><em>1 for ADC2</em><em>, </em><em>etc.</em><em>) </em><em>for which you'd like to recover data.</em>)</p></li>
+<li><p><strong>[</strong><strong>0</strong> (<em>The default is to receive data from all channels</em>)</p></li>
+<li><p><strong>..</strong></p></li>
+<li><p><strong>7</strong><strong>]</strong><strong>.</strong></p></li>
+<li><p><strong>fft_bypass</strong> (<em>(</em><em>bool</em><em>) </em><em>Whether</em><em> or </em><em>not to bypass the FFT. Why include an option to bypass the FFT when you are requesting FFT frames</em><em>,</em>)</p></li>
+<li><p><strong>Well</strong> (<em>you might ask?</em>)</p></li>
+<li><p><strong>spectrum</strong> (<em>sometimes it is useful to use the FUNCGEN to create a simulated</em>)</p></li>
+<li><p><strong>want</strong> (<em>in which case you wouldn't</em>)</p></li>
+<li><p><strong>FFT.</strong> (<em>the signal you have set in the FUNCGEN to propagate through the firmware</em>) – <p>With the fft_bypass option, you have the power to create simulated FFT outputs for signal path validation.</p>
+<p>If True, the FFT is bypassed.</p>
+<p>If False, the FFT is not bypassed. Default.</p>
+</p></li>
+<li><p><strong>period</strong> (<em>(</em><em>float</em><em>) </em><em>Time</em><em> (</em><em>in seconds</em><em>) </em><em>between captured bursts. 0.02 is the minimum recommended to not saturate the ethernet link.</em>)</p></li>
+<li><p><strong>split</strong> (<em>(</em><em>bool</em><em>) </em><em>Whether to include a &quot;frames&quot; axis for the data array</em><em>, </em><em>which allows the user to inspect individual frames.</em>) – <dl class="simple">
+<dt>If True:</dt><dd><p>axis 0: ADC channel
+axis 1: frame number
+axis 2: sample number</p>
+</dd>
+<dt>If False:</dt><dd><p>axis 0: ADC channel
+axis 1: sample number, with all frames flattened</p>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>(</strong><strong>int</strong><strong>)</strong> (<em>verbose</em>)</p></li>
+<li><p><strong>function_kwargs</strong> (<em>(</em><em>dict</em><em>) </em><em>Arguments for FUNCGEN functions passed to set_channelizer</em><em>(</em><em>)</em><em>. Used when data_source is not 'adc'.</em>)</p></li>
+<li><p><strong>arguments.</strong> (<em>See pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py for functions and their</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul>
+<li><p><strong>d_fft</strong> (<em>(np.ndarray) The FFT data. The frequency axis is returned in the proper order.</em>)</p></li>
+<li><p><em>The shape of the array depends upon the choice for the “split” parameter.</em> –</p>
+<dl class="simple">
+<dt>If split is True:</dt><dd><p>d_fft.shape = (self.NPOLS, n_frames, self.NBINS)</p>
+</dd>
+<dt>If split is False:</dt><dd><p>d_fft.shape = (self.NPOLS, n_frames*self.NBINS)</p>
+</dd>
+</dl>
+</li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.read_post_gain_frames">
+<span class="sig-name descname"><span class="pre">read_post_gain_frames</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_frames</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'adc'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[np.int64(0),</span> <span class="pre">np.int64(1),</span> <span class="pre">np.int64(2),</span> <span class="pre">np.int64(3),</span> <span class="pre">np.int64(4),</span> <span class="pre">np.int64(5),</span> <span class="pre">np.int64(6),</span> <span class="pre">np.int64(7)]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fft_bypass</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.02</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">function_kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.read_post_gain_frames" title="Link to this definition"></a></dt>
+<dd><p>Read “post-gain” FFT frames using UCAP. “Post-gain” FFT frames refer to the intermediate 48+48-bit value resulting from the
+multiplication of FFT data by digital gains prior to 4+4-bit quantization in the SCALER. read_post_gain_frames() returns to the
+user to recover the upper 16+16 bits of the post-gain FFT frames.</p>
+<p>Therefore, this function allows the user to use the digital gains to recover 16+16 bits of FFT data, tuned to the bits
+that the user wishes to recover. This method is advantageous compared to reading the upper 16+16 bits of FFT data with read_fft_frames(),
+as the signal may not necessarily be contained within those bits of the FFT. read_post_gain_frames() enables user-tunability of
+the FFT data so that the bits containing the signal can be recovered. Of course, the 32+32-bit mode of read_fft_frames() enables
+the capture of full-resolution FFT data, but the even and odd bins must be read separately, while this method enables all bins
+to be captured at the same time.</p>
+<p>By default, UCAP is in mode 0, meaning 2 frames for each ADC channel will be captured per burst of 16 frames.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_frames</strong> (<em>(</em><em>int</em><em>) </em><em>Number</em><em> of </em><em>frames captured per function call. n_frames must be an even-valued integer</em><em>, </em><em>as UCAP only</em>)</p></li>
+<li><p><strong>frames.</strong> (<em>receives data in bursts</em><em> of </em><em>16</em>)</p></li>
+<li><p><strong>data_source</strong> (<em>(</em><em>str</em><em>) </em><em>A string that sets whether real ADC data</em><em> or </em><em>data stored in the FUNCGEN buffer are sent out</em><em> of </em><em>the FUNCGEN.</em>) – <p>If ‘adc’, then real digitized data from the ADC will pass through the CHAN signal chain.</p>
+<p>Otherwise, the user can specify a desired function listed in pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py
+Keyword arguments can be included (see below).</p>
+</p></li>
+<li><p><strong>channels</strong> (<em>(</em><em>list</em><em>) </em><em>A list</em><em> of </em><em>the input channels</em><em> (</em><em>i.e.</em><em>, </em><em>0 for ADC1</em><em>, </em><em>1 for ADC2</em><em>, </em><em>etc.</em><em>) </em><em>for which you'd like to recover data.</em>)</p></li>
+<li><p><strong>[</strong><strong>0</strong> (<em>The default is to receive data from all channels</em>)</p></li>
+<li><p><strong>..</strong></p></li>
+<li><p><strong>7</strong><strong>]</strong><strong>.</strong></p></li>
+<li><p><strong>fft_bypass</strong> (<em>(</em><em>bool</em><em>) </em><em>Whether</em><em> or </em><em>not to bypass the FFT. Why include an option to bypass the FFT when you are requesting post-gain frames</em><em>,</em>)</p></li>
+<li><p><strong>Well</strong> (<em>you might ask?</em>)</p></li>
+<li><p><strong>spectrum</strong> (<em>sometimes it is useful to use the FUNCGEN to create a simulated</em>)</p></li>
+<li><p><strong>want</strong> (<em>in which case you wouldn't</em>)</p></li>
+<li><p><strong>FFT.</strong> (<em>the signal you have set in the FUNCGEN to propagate through the firmware</em>) – <p>With the fft_bypass option, you have the power to create simulated FFT outputs for signal path validation.</p>
+<p>If True, the FFT is bypassed.</p>
+<p>If False, the FFT is not bypassed. Default.</p>
+</p></li>
+<li><p><strong>period</strong> (<em>(</em><em>float</em><em>) </em><em>Time</em><em> (</em><em>in seconds</em><em>) </em><em>between captured bursts. 0.02 is the minimum recommended to not saturate the ethernet link.</em>)</p></li>
+<li><p><strong>split</strong> (<em>(</em><em>bool</em><em>) </em><em>Whether to include a &quot;frames&quot; axis for the data array</em><em>, </em><em>which allows the user to inspect individual frames.</em>) – <dl class="simple">
+<dt>If True:</dt><dd><p>axis 0: ADC channel
+axis 1: frame number
+axis 2: sample number</p>
+</dd>
+<dt>If False:</dt><dd><p>axis 0: ADC channel
+axis 1: sample number, with all frames flattened</p>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>(</strong><strong>int</strong><strong>)</strong> (<em>verbose</em>)</p></li>
+<li><p><strong>function_kwargs</strong> (<em>(</em><em>dict</em><em>) </em><em>Arguments for FUNCGEN functions passed to set_channelizer</em><em>(</em><em>)</em><em>. Used when data_source is not 'adc'.</em>)</p></li>
+<li><p><strong>arguments.</strong> (<em>See pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py for functions and their</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul>
+<li><p><strong>d_post_gain</strong> (<em>(np.ndarray) The 16+16-bit post-gain data. The frequency axis is returned in the proper order.</em>)</p></li>
+<li><p><em>The shape of the array depends upon the choice for the “split” parameter.</em> –</p>
+<dl class="simple">
+<dt>If split is True:</dt><dd><p>d_post_gain.shape = (self.NPOLS, n_frames, self.NBINS)</p>
+</dd>
+<dt>If split is False:</dt><dd><p>d_post_gain.shape = (self.NPOLS, n_frames*self.NBINS)</p>
+</dd>
+</dl>
+</li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.read_scaler_frames">
+<span class="sig-name descname"><span class="pre">read_scaler_frames</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_frames</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'adc'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[np.int64(0),</span> <span class="pre">np.int64(1),</span> <span class="pre">np.int64(2),</span> <span class="pre">np.int64(3),</span> <span class="pre">np.int64(4),</span> <span class="pre">np.int64(5),</span> <span class="pre">np.int64(6),</span> <span class="pre">np.int64(7)]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fft_bypass</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scaler_bypass</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.02</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">function_kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.read_scaler_frames" title="Link to this definition"></a></dt>
+<dd><p>Read SCALER frames using UCAP. By default, UCAP is in mode 0, meaning 2 frames for each ADC channel will be
+captured per burst of 16 frames.</p>
+<p>SCALER data is returned as 4+4-bit integers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_frames</strong> (<em>(</em><em>int</em><em>) </em><em>Number</em><em> of </em><em>frames captured per function call. n_frames must be an even-valued integer</em><em>, </em><em>as UCAP only</em>)</p></li>
+<li><p><strong>frames.</strong> (<em>receives data in bursts</em><em> of </em><em>16</em>)</p></li>
+<li><p><strong>data_source</strong> (<em>(</em><em>str</em><em>) </em><em>A string that sets whether real ADC data</em><em> or </em><em>data stored in the FUNCGEN buffer are sent out</em><em> of </em><em>the FUNCGEN.</em>) – <p>If ‘adc’, then real digitized data from the ADC will pass through the CHAN signal chain.</p>
+<p>Otherwise, the user can specify a desired function listed in pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py
+Keyword arguments can be included (see below).</p>
+</p></li>
+<li><p><strong>channels</strong> (<em>(</em><em>list</em><em>) </em><em>A list</em><em> of </em><em>the input channels</em><em> (</em><em>i.e.</em><em>, </em><em>0 for ADC1</em><em>, </em><em>1 for ADC2</em><em>, </em><em>etc.</em><em>) </em><em>for which you'd like to recover data.</em>)</p></li>
+<li><p><strong>[</strong><strong>0</strong> (<em>The default is to receive data from all channels</em>)</p></li>
+<li><p><strong>..</strong></p></li>
+<li><p><strong>7</strong><strong>]</strong><strong>.</strong></p></li>
+<li><p><strong>fft_bypass</strong> (<em>(</em><em>bool</em><em>) </em><em>Whether</em><em> or </em><em>not to bypass the FFT. Why include an option to bypass the FFT when you are requesting post-gain frames</em><em>,</em>)</p></li>
+<li><p><strong>Well</strong> (<em>you might ask?</em>)</p></li>
+<li><p><strong>spectrum</strong> (<em>sometimes it is useful to use the FUNCGEN to create a simulated</em>)</p></li>
+<li><p><strong>want</strong> (<em>in which case you wouldn't</em>)</p></li>
+<li><p><strong>FFT.</strong> (<em>the signal you have set in the FUNCGEN to propagate through the firmware</em>) – <p>With the fft_bypass option, you have the power to create simulated FFT outputs for signal path validation.</p>
+<p>If True, the FFT is bypassed.</p>
+<p>If False, the FFT is not bypassed. Default.</p>
+</p></li>
+<li><p><strong>scaler_bypass</strong> (<em>(</em><em>bool</em><em>) </em><em>Whether</em><em> or </em><em>not to bypass the Scaler</em><em>, </em><em>similar to the fft_bypass argument.</em>) – <p>With the scaler_bypass option, you have the power to create simulated Scaler outputs for signal path validation when
+combined with the fft_bypass option.</p>
+<p>If True, the Scaler is bypassed.</p>
+<p>If False, the Scaler is not bypassed. Default.</p>
+</p></li>
+<li><p><strong>period</strong> (<em>(</em><em>float</em><em>) </em><em>Time</em><em> (</em><em>in seconds</em><em>) </em><em>between captured bursts. 0.02 is the minimum recommended to not saturate the ethernet link.</em>)</p></li>
+<li><p><strong>split</strong> (<em>(</em><em>bool</em><em>) </em><em>Whether to include a &quot;frames&quot; axis for the data array</em><em>, </em><em>which allows the user to inspect individual frames.</em>) – <dl class="simple">
+<dt>If True:</dt><dd><p>axis 0: ADC channel
+axis 1: frame number
+axis 2: sample number</p>
+</dd>
+<dt>If False:</dt><dd><p>axis 0: ADC channel
+axis 1: sample number, with all frames flattened</p>
+</dd>
+</dl>
+</p></li>
+<li><p><strong>verbose</strong> (<em>(</em><em>int</em><em>) </em><em>Verbosity level. 0: no messages</em><em>, </em><em>1: basic messages</em><em>, </em><em>2: detailed messages</em>)</p></li>
+<li><p><strong>function_kwargs</strong> (<em>(</em><em>dict</em><em>) </em><em>Arguments for FUNCGEN functions passed to set_channelizer</em><em>(</em><em>)</em><em>. Used when data_source is not 'adc'.</em>)</p></li>
+<li><p><strong>arguments.</strong> (<em>See pychfpga/pychfpga/fpga_firmware/chfpga/f_engine/funcgen.py for functions and their</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul>
+<li><p><strong>d_scaler</strong> (<em>(np.ndarray) The 4+4-bit SCALER data. The frequency axis is returned in the proper order.</em>)</p></li>
+<li><p><em>The shape of the array depends upon the choice for the “split” parameter.</em> –</p>
+<dl class="simple">
+<dt>If split is True:</dt><dd><p>d_scaler.shape = (self.NPOLS, n_frames, self.NBINS)</p>
+</dd>
+<dt>If split is False:</dt><dd><p>d_scaler.shape = (self.NPOLS, n_frames*self.NBINS)</p>
+</dd>
+</dl>
+</li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.save_gains">
+<span class="sig-name descname"><span class="pre">save_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">gain_lin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gain_log</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">digital_gains_parent_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">digital_gains_dir_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.save_gains" title="Link to this definition"></a></dt>
+<dd><p>Save the digital gains to an HDF5 file. A parent directory “digital_gains_parent_path” containing all
+digital gains files should be specified, and a daughter directory “digital_gains_dir_name” in which the
+digital gains will be stored should also be specified. The digital_gains_dir_name is a
+datetime value connected to a specific observation when save_gains() is called with observe().</p>
+<p><strong>NOTE</strong>: be sure that you are saving the <em>actual</em> digital gains, which can be read with the
+SCALER.get_gain_table() method. It is critical that the <em>actual</em> digital gains are applied in
+offline analysis, not the theoretical gains! See compute_gains() for details.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>gain_lin</strong> (<em>(</em><em>np.ndarray</em><em>) </em><em>The linear component</em><em> of </em><em>the &quot;actual&quot; digital gains. The shape is</em><em> (</em><em>NPOLS</em><em>, </em><em>n_bins</em><em>)</em><em>.</em>)</p></li>
+<li><p><strong>gain_log</strong> (<em>(</em><em>np.ndarray</em><em>) </em><em>The logarithmic component</em><em> of </em><em>the &quot;actual&quot; digital gains. The shape is</em><em> (</em><em>NPOLS</em><em>, </em><em>n_bins</em><em>)</em><em>. gain_log should include the &quot;common&quot; log</em>)</p></li>
+<li><p><strong>gain</strong></p></li>
+<li><p><strong>self.i.chan</strong><strong>[</strong><strong>n</strong><strong>]</strong><strong>.SCALER.get_shift_left</strong><strong>(</strong><strong>bank</strong><strong>)</strong><strong>.</strong> (<em>which can be read using</em>)</p></li>
+<li><p><strong>digital_gains_parent_path</strong> (<em>(</em><em>str</em><em>) </em><em>A parent directory containing sub-directories</em><em> of </em><em>digital gains.</em>)</p></li>
+<li><p><strong>digital_gains_dir_name</strong> (<em>(</em><em>str</em><em>) </em><em>The directory in which the digital gains will be stored. This directory lives within</em>)</p></li>
+<li><p><strong>directory.</strong> (<em>the parent digital_gains_path</em>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>None.</em></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.pocket_correlator.POCKET_CORRELATOR.set_ucap_mode">
+<span class="sig-name descname"><span class="pre">set_ucap_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.pocket_correlator.POCKET_CORRELATOR.set_ucap_mode" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>mode</strong> (<em>(</em><em>int</em><em>)</em>)</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>n_frames_per_capture</strong> (<em>(int) Number of frames per capture given the UCAP mode currently in use.</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.network_utils.html" class="btn btn-neutral float-left" title="network_utils.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.ps.html" class="btn btn-neutral float-right" title="ps.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

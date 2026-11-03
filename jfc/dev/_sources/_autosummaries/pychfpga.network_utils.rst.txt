@@ -1,0 +1,119 @@
+
+
+
+
+
+:py:mod:`network_utils.py <pychfpga.network_utils>`
+===================================================
+
+
+.. currentmodule:: pychfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga,
+..    | FULLNAME=pychfpga.network_utils,
+..    | name==network_utils
+..    | modules = 
+..    | classes = []
+
+.. automodule:: pychfpga.network_utils
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         check_interface_mtu
+         check_udp_buffer_settings
+         find_best_interface
+         get_interface_for_ip
+         get_network_interfaces
+         show_network_status
+         verify_network_settings
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: check_interface_mtu
+
+
+.. autofunction:: check_udp_buffer_settings
+
+
+.. autofunction:: find_best_interface
+
+
+.. autofunction:: get_interface_for_ip
+
+
+.. autofunction:: get_network_interfaces
+
+
+.. autofunction:: show_network_status
+
+
+.. autofunction:: verify_network_settings
+
+
+
+
+
+.. *** Insert class descriptions
+
+

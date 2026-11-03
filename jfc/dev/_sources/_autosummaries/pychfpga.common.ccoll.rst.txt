@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`ccoll.py <pychfpga.common.ccoll>`
+==========================================
+
+
+.. currentmodule:: pychfpga.common
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.common,
+..    | FULLNAME=pychfpga.common.ccoll,
+..    | name==ccoll
+..    | modules = 
+..    | classes = ['Ccoll']
+
+.. automodule:: pychfpga.common.ccoll
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         Ccoll
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: Ccoll
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

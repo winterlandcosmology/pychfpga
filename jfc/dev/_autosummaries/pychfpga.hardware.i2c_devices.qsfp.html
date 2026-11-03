@@ -1,0 +1,691 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>qsfp.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="sc18is602b.py" href="pychfpga.hardware.i2c_devices.sc18is602b.html" />
+    <link rel="prev" title="pca9698.py" href="pychfpga.hardware.i2c_devices.pca9698.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.Agilent_N5764A.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">Agilent_N5764A/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crate.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.crs.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.hardware_map.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware_map.py</span></code></a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="pychfpga.hardware.i2c_devices.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">i2c_devices/</span></code></a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.TICSPRO_loader.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">TICSPRO_loader.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.amc6821.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">amc6821.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.eeprom.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">eeprom.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.gpio.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gpio.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.hmc7044.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hmc7044.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.ina230.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ina230.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.lmk04208spi.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">lmk04208spi.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.lmx2594spi.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">lmx2594spi.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.pca6524.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pca6524.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.pca8574.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pca8574.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.pca9546a.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pca9546a.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.pca9575.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pca9575.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.pca9698.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pca9698.py</span></code></a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qsfp.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.sc18is602b.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">sc18is602b.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.ssd1306.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ssd1306/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.tca6416a.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tca6416a.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.tca9544a.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tca9544a.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.tca9548a.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tca9548a.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.tmp100.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tmp100.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.tmp421.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tmp421.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.ice.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ice/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.interfaces.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">interfaces/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.mezzanine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mezzanine.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.motherboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">motherboard.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.supported_hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">supported_hardware.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.zcu111.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zcu111/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.zuboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zuboard/</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.hardware.i2c_devices.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">i2c_devices/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qsfp.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.hardware.i2c_devices.qsfp.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="qsfp-py">
+<h1><a class="reference internal" href="#module-pychfpga.hardware.i2c_devices.qsfp" title="pychfpga.hardware.i2c_devices.qsfp"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qsfp.py</span></code></a><a class="headerlink" href="#qsfp-py" title="Link to this heading"></a></h1>
+<p id="module-pychfpga.hardware.i2c_devices.qsfp">qsfp.py module: Provides a class to read/write to a QSFP cable</p>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP" title="pychfpga.hardware.i2c_devices.qsfp.QSFP"><code class="xref py py-obj docutils literal notranslate"><span class="pre">QSFP</span></code></a></p></td>
+<td><p>Class defining the interface to a QSFP+ cable.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.hardware.i2c_devices.qsfp.</span></span><span class="sig-name descname"><span class="pre">QSFP</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">i2c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bus_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gpio_prefix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gpio</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">address</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">80</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parent</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Class defining the interface to a QSFP+ cable.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.I2C_RETRY_DELAY">
+<span class="sig-name descname"><span class="pre">I2C_RETRY_DELAY</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.05</span></span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.I2C_RETRY_DELAY" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.I2C_SELECT_DELAY">
+<span class="sig-name descname"><span class="pre">I2C_SELECT_DELAY</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.002</span></span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.I2C_SELECT_DELAY" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.I2C_TRIES">
+<span class="sig-name descname"><span class="pre">I2C_TRIES</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">5</span></span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.I2C_TRIES" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.I2C_WRITE_SETTLE">
+<span class="sig-name descname"><span class="pre">I2C_WRITE_SETTLE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.04</span></span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.I2C_WRITE_SETTLE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.PAGE_SELECT">
+<span class="sig-name descname"><span class="pre">PAGE_SELECT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">127</span></span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.PAGE_SELECT" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.QSFP_EEPROM_MAP">
+<span class="sig-name descname"><span class="pre">QSFP_EEPROM_MAP</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'BitRate':</span> <span class="pre">('bin',</span> <span class="pre">140,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'CCBase':</span> <span class="pre">('bin',</span> <span class="pre">191,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'CCExt':</span> <span class="pre">('bin',</span> <span class="pre">223,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'ChanFlags':</span> <span class="pre">('bin',</span> <span class="pre">3,</span> <span class="pre">3,</span> <span class="pre">0),</span> <span class="pre">'ChanMonIntFlags':</span> <span class="pre">('bin',</span> <span class="pre">9,</span> <span class="pre">4,</span> <span class="pre">0),</span> <span class="pre">'ChanStatusIntFlags':</span> <span class="pre">('bin',</span> <span class="pre">3,</span> <span class="pre">2,</span> <span class="pre">0),</span> <span class="pre">'ChanTxBias':</span> <span class="pre">('bin',</span> <span class="pre">42,</span> <span class="pre">8,</span> <span class="pre">0),</span> <span class="pre">'CompCodes':</span> <span class="pre">('bin',</span> <span class="pre">131,</span> <span class="pre">8,</span> <span class="pre">0),</span> <span class="pre">'Connector':</span> <span class="pre">('bin',</span> <span class="pre">130,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'CopperLength':</span> <span class="pre">('bin',</span> <span class="pre">146,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'DateCode':</span> <span class="pre">('str',</span> <span class="pre">212,</span> <span class="pre">8,</span> <span class="pre">0),</span> <span class="pre">'DeviceTech':</span> <span class="pre">('bin',</span> <span class="pre">147,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'DiagMon':</span> <span class="pre">('bin',</span> <span class="pre">220,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'Encoding':</span> <span class="pre">('bin',</span> <span class="pre">139,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'EnhOpt':</span> <span class="pre">('bin',</span> <span class="pre">221,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'ExtIdentifier':</span> <span class="pre">('bin',</span> <span class="pre">129,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'ExtOptions':</span> <span class="pre">('bin',</span> <span class="pre">192,</span> <span class="pre">4,</span> <span class="pre">0),</span> <span class="pre">'ExtRateSelectComp':</span> <span class="pre">('bin',</span> <span class="pre">141,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'ExtTranCode':</span> <span class="pre">('bin',</span> <span class="pre">164,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'Identifier':</span> <span class="pre">('bin',</span> <span class="pre">0,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'Identifier2':</span> <span class="pre">('bin',</span> <span class="pre">128,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'IntLMask_LOS':</span> <span class="pre">('bin',</span> <span class="pre">100,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'IntLMask_TXFault':</span> <span class="pre">('bin',</span> <span class="pre">101,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'IntLMask_Temp':</span> <span class="pre">('bin',</span> <span class="pre">103,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'IntLMask_Vcc':</span> <span class="pre">('bin',</span> <span class="pre">104,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'LaserDisable':</span> <span class="pre">('bin',</span> <span class="pre">86,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'MaxCaseTemp':</span> <span class="pre">('bin',</span> <span class="pre">190,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'MeasuredSupV':</span> <span class="pre">('bin',</span> <span class="pre">26,</span> <span class="pre">2,</span> <span class="pre">0),</span> <span class="pre">'MeasuredTemp':</span> <span class="pre">('bin',</span> <span class="pre">22,</span> <span class="pre">2,</span> <span class="pre">0),</span> <span class="pre">'ModMonIntFlags':</span> <span class="pre">('bin',</span> <span class="pre">6,</span> <span class="pre">2,</span> <span class="pre">0),</span> <span class="pre">'PageSelect':</span> <span class="pre">('bin',</span> <span class="pre">127,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'PowerSet':</span> <span class="pre">('bin',</span> <span class="pre">93,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'RateSelect':</span> <span class="pre">('bin',</span> <span class="pre">87,</span> <span class="pre">2,</span> <span class="pre">0),</span> <span class="pre">'RxAppSelect':</span> <span class="pre">('bin',</span> <span class="pre">89,</span> <span class="pre">4,</span> <span class="pre">0),</span> <span class="pre">'RxOutputAmplitude':</span> <span class="pre">('bin',</span> <span class="pre">238,</span> <span class="pre">2,</span> <span class="pre">3),</span> <span class="pre">'RxOutputEmphasis':</span> <span class="pre">('bin',</span> <span class="pre">236,</span> <span class="pre">2,</span> <span class="pre">3),</span> <span class="pre">'RxPow1':</span> <span class="pre">('bin',</span> <span class="pre">34,</span> <span class="pre">8,</span> <span class="pre">0),</span> <span class="pre">'RxPow2':</span> <span class="pre">('bin',</span> <span class="pre">36,</span> <span class="pre">8,</span> <span class="pre">0),</span> <span class="pre">'RxPow3':</span> <span class="pre">('bin',</span> <span class="pre">38,</span> <span class="pre">8,</span> <span class="pre">0),</span> <span class="pre">'RxPow4':</span> <span class="pre">('bin',</span> <span class="pre">40,</span> <span class="pre">8,</span> <span class="pre">0),</span> <span class="pre">'SIMaxLevels':</span> <span class="pre">('bin',</span> <span class="pre">224,</span> <span class="pre">2,</span> <span class="pre">3),</span> <span class="pre">'SIOptions':</span> <span class="pre">('bin',</span> <span class="pre">193,</span> <span class="pre">1,</span> <span class="pre">0),</span> <span class="pre">'Status':</span> <span class="pre">('bin',</span> <span class="pre">1,</span> <span class="pre">2,</span> <span class="pre">0),</span> <span class="pre">'SupportedLengths':</span> <span class="pre">('bin',</span> <span class="pre">142,</span> <span class="pre">5,</span> <span class="pre">0),</span> <span class="pre">'TxAdaptEqEnable':</span> <span class="pre">('bin',</span> <span class="pre">241,</span> <span class="pre">1,</span> <span class="pre">3),</span> <span class="pre">'TxAppSelect':</span> <span class="pre">('bin',</span> <span class="pre">94,</span> <span class="pre">4,</span> <span class="pre">0),</span> <span class="pre">'TxInputEq':</span> <span class="pre">('bin',</span> <span class="pre">234,</span> <span class="pre">2,</span> <span class="pre">3),</span> <span class="pre">'VenOUI':</span> <span class="pre">('bin',</span> <span class="pre">165,</span> <span class="pre">3,</span> <span class="pre">0),</span> <span class="pre">'VenPN':</span> <span class="pre">('str',</span> <span class="pre">168,</span> <span class="pre">16,</span> <span class="pre">0),</span> <span class="pre">'VenRev':</span> <span class="pre">('bin',</span> <span class="pre">184,</span> <span class="pre">2,</span> <span class="pre">0),</span> <span class="pre">'VenSN':</span> <span class="pre">('str',</span> <span class="pre">196,</span> <span class="pre">16,</span> <span class="pre">0),</span> <span class="pre">'VenSpecEEPROM':</span> <span class="pre">('str',</span> <span class="pre">224,</span> <span class="pre">32,</span> <span class="pre">0),</span> <span class="pre">'VendName':</span> <span class="pre">('str',</span> <span class="pre">148,</span> <span class="pre">16,</span> <span class="pre">0),</span> <span class="pre">'WaveLength':</span> <span class="pre">('bin',</span> <span class="pre">186,</span> <span class="pre">2,</span> <span class="pre">0)}</span></span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.QSFP_EEPROM_MAP" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">i2c</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bus_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gpio_prefix</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gpio</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">address</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">80</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parent</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.__init__" title="Link to this definition"></a></dt>
+<dd><p>Create a QSFP object that allows read/write of the QSFP’s hardware control lines and internal registers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>i2c</strong> (<em>object</em>) – I2C interface object through which I2C communications will be performed. Must support the methods <code class="docutils literal notranslate"><span class="pre">select_bus()</span></code> and <code class="docutils literal notranslate"><span class="pre">write_read()</span></code>.</p></li>
+<li><p><strong>bus_name</strong> (<em>int</em><em>, </em><em>tuple</em><em>, </em><em>dict</em>) – Parameter that is passed to i2c.select_bus() to enable access to this device</p></li>
+<li><p><strong>gpio_prefix</strong> (<em>str</em>) – String that is prefixed to the GPIO names to access GPIOs provided by the <cite>gpio</cite> object</p></li>
+<li><p><strong>gpio</strong> (<a class="reference internal" href="pychfpga.hardware.i2c_devices.gpio.html#pychfpga.hardware.i2c_devices.gpio.GPIO" title="pychfpga.hardware.i2c_devices.gpio.GPIO"><code class="xref py py-class docutils literal notranslate"><span class="pre">GPIO</span></code></a>) – <p>GPIO-class object
+that provides read() and write() methods to access the QSFP hardware
+control lines.
+The object must define the following GPIOs:</p>
+<blockquote>
+<div><ul>
+<li><p>&lt;prefix&gt;ModPrsL</p></li>
+<li><p>&lt;prefix&gt;ResetL</p></li>
+<li><p>&lt;prefix&gt;IntL</p></li>
+<li><p>&lt;prefix&gt;ModSelL</p></li>
+<li><p>&lt;prefix&gt;LPMode</p></li>
+<li><p>&lt;prefix&gt;Led: Optional. Used in set/get_led only.</p></li>
+</ul>
+</div></blockquote>
+</p></li>
+<li><p><strong>address</strong> (<em>int</em>) – 7-bit I2C address of the QSFP</p></li>
+<li><p><strong>parent</strong> – Used in repr() of this QSFP object to clarify to which object this one is dependent from</p></li>
+</ul>
+</dd>
+</dl>
+<p>Valid control bit names are: ‘ModPrsL’, ‘ResetL’, ‘IntL’, ‘ModSelL’, ‘LPMode’, ‘Led’</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.close" title="Link to this definition"></a></dt>
+<dd><p>Close or release access to the device.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>None</em> – No value is returned.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.enable_high_power_class">
+<span class="sig-name descname"><span class="pre">enable_high_power_class</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.enable_high_power_class" title="Link to this definition"></a></dt>
+<dd><p>Program byte 93 (PowerSet) according to the module’s declared
+Power Class so that classes &gt;3.5 W are allowed to power up.</p>
+<ul class="simple">
+<li><p>Always sets Power_override (bit 0) so software controls the class.</p></li>
+<li><p>Clears Power_set (bit 1) so the module is not forced to low power.</p></li>
+<li><p>Sets High Power Class Enable (bit 2) for Power Class 5-8.</p></li>
+<li><p>Sets Class 8 Enable (bit 3) for Power Class 8.</p></li>
+</ul>
+<p>Returns the value written to byte 93, or None if no module is present.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.enable_i2c">
+<span class="sig-name descname"><span class="pre">enable_i2c</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enable</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.enable_i2c" title="Link to this definition"></a></dt>
+<dd><p>Enable QSFP I2C  when enable = True</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_control_bit">
+<span class="sig-name descname"><span class="pre">get_control_bit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">select</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_control_bit" title="Link to this definition"></a></dt>
+<dd><p>Return control bit value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>Any</em>) – Parameter value.</p></li>
+<li><p><strong>select</strong> (<em>Any</em>) – Parameter value.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Any</em> – Returned value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_info">
+<span class="sig-name descname"><span class="pre">get_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_info" title="Link to this definition"></a></dt>
+<dd><p>Gets all qsfp info marked up in the qsfp eeprom map for each slot
+Data is returned as a dictionary
+History:
+141015 AJG &amp; JF: created</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_led">
+<span class="sig-name descname"><span class="pre">get_led</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_led" title="Link to this definition"></a></dt>
+<dd><p>Return led value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Any</em> – Returned value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_power_class">
+<span class="sig-name descname"><span class="pre">get_power_class</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_power_class" title="Link to this definition"></a></dt>
+<dd><p>Return the QSFP module’s declared Power Class (1..8) based on
+byte 129 (ExtIdentifier) per SFF-8636.</p>
+<p>Returns None if the module is not present or cannot be read.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_power_mode">
+<span class="sig-name descname"><span class="pre">get_power_mode</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_power_mode" title="Link to this definition"></a></dt>
+<dd><p>Return power mode value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Any</em> – Returned value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_rx_output_amplitude">
+<span class="sig-name descname"><span class="pre">get_rx_output_amplitude</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_rx_output_amplitude" title="Link to this definition"></a></dt>
+<dd><p>RX output amplitude code per channel 1-4 (page 03h bytes 238-239; 0 = 100-400 mV, 1 = 300-600 mV, …).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_rx_output_emphasis">
+<span class="sig-name descname"><span class="pre">get_rx_output_emphasis</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_rx_output_emphasis" title="Link to this definition"></a></dt>
+<dd><p>RX output emphasis per channel 1-4, in dB (page 03h bytes 236-237).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_rx_power">
+<span class="sig-name descname"><span class="pre">get_rx_power</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_rx_power" title="Link to this definition"></a></dt>
+<dd><p>Return the optical power (in Watts) received by each of the 4 channels</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Any</em> – Returned value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_serial_number">
+<span class="sig-name descname"><span class="pre">get_serial_number</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_serial_number" title="Link to this definition"></a></dt>
+<dd><p>Return serial number value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Any</em> – Returned value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_si_capabilities">
+<span class="sig-name descname"><span class="pre">get_si_capabilities</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_si_capabilities" title="Link to this definition"></a></dt>
+<dd><p>Signal-integrity capabilities: page 00h byte 193 and page 03h bytes 224-225 (flat-memory modules: byte 193 only).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_signal_flags">
+<span class="sig-name descname"><span class="pre">get_signal_flags</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_signal_flags" title="Link to this definition"></a></dt>
+<dd><p>Latched TX/RX flags (page 00h bytes 3-5), one bit per channel (bit 0 = channel 1). Reading clears them.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_supply_voltage">
+<span class="sig-name descname"><span class="pre">get_supply_voltage</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_supply_voltage" title="Link to this definition"></a></dt>
+<dd><p>Return supply voltage value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Any</em> – Returned value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_temperature">
+<span class="sig-name descname"><span class="pre">get_temperature</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_temperature" title="Link to this definition"></a></dt>
+<dd><p>Return temperature value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Any</em> – Returned value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_tx_adaptive_eq">
+<span class="sig-name descname"><span class="pre">get_tx_adaptive_eq</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_tx_adaptive_eq" title="Link to this definition"></a></dt>
+<dd><p>TX input adaptive equalization enable per channel 1-4 (page 03h byte 241 bits 3-0).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_tx_input_eq">
+<span class="sig-name descname"><span class="pre">get_tx_input_eq</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_tx_input_eq" title="Link to this definition"></a></dt>
+<dd><p>TX input equalization per channel 1-4, in dB (page 03h bytes 234-235).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.get_uid">
+<span class="sig-name descname"><span class="pre">get_uid</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_uid" title="Link to this definition"></a></dt>
+<dd><p>Return uid value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Any</em> – Returned value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enable_i2c</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.init" title="Link to this definition"></a></dt>
+<dd><p>Initializes the QSFP module to a known state (enable it)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>enable_i2c</strong> (<em>Any</em>) – Parameter value.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>None</em> – No value is returned.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.is_present">
+<span class="sig-name descname"><span class="pre">is_present</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.is_present" title="Link to this definition"></a></dt>
+<dd><p>Indicate if the QSFP module is present by probing the ModPrsL
+line, which is grounded when the module is inserted.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.open">
+<span class="sig-name descname"><span class="pre">open</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.open" title="Link to this definition"></a></dt>
+<dd><p>Open or acquire access to the device.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>None</em> – No value is returned.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.read">
+<span class="sig-name descname"><span class="pre">read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.read" title="Link to this definition"></a></dt>
+<dd><p>Reads QSFP eeprom. Enables I2C, reads, Disables I2C. Returns the data as a string.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>int</em>) – memory address</p></li>
+<li><p><strong>length</strong> (<em>int</em>) – number of bytes to read</p></li>
+<li><p><strong>page</strong> (<em>int</em>) – data page to read (affects only address 128 and above)</p></li>
+<li><p><strong>enable</strong> (<em>bool</em>) – Enable the I2C port and I2C switch chain</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>bytes</em> – bytestring containing the requested bytes.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.read_byte">
+<span class="sig-name descname"><span class="pre">read_byte</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.read_byte" title="Link to this definition"></a></dt>
+<dd><p>Read 8-bit byte.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>Any</em>) – Parameter value.</p></li>
+<li><p><strong>page</strong> (<em>Any</em>) – Parameter value.</p></li>
+<li><p><strong>enable</strong> (<em>Any</em>) – Parameter value.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Any</em> – Returned value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.read_str">
+<span class="sig-name descname"><span class="pre">read_str</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">148</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.read_str" title="Link to this definition"></a></dt>
+<dd><p>Read and decode a fixed-length text field.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>Any</em>) – Parameter value.</p></li>
+<li><p><strong>length</strong> (<em>Any</em>) – Parameter value.</p></li>
+<li><p><strong>page</strong> (<em>Any</em>) – Parameter value.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Any</em> – Returned value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.read_word">
+<span class="sig-name descname"><span class="pre">read_word</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;class</span> <span class="pre">'numpy.uint16'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.read_word" title="Link to this definition"></a></dt>
+<dd><p>Read 16-bit word as an unsigned big endian.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>Any</em>) – Parameter value.</p></li>
+<li><p><strong>page</strong> (<em>Any</em>) – Parameter value.</p></li>
+<li><p><strong>type</strong> (<em>Any</em>) – Parameter value.</p></li>
+<li><p><strong>enable</strong> (<em>Any</em>) – Parameter value.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Any</em> – Returned value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.reset" title="Link to this definition"></a></dt>
+<dd><p>Set the QSFP reset line state.</p>
+<p>The reset line is active if state=True. If state is omitted or is None
+the module is reset line is pulsed.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.retrain_tx_adaptive_eq">
+<span class="sig-name descname"><span class="pre">retrain_tx_adaptive_eq</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.retrain_tx_adaptive_eq" title="Link to this definition"></a></dt>
+<dd><p>Make the TX input adaptive equalizer adapt again to the current host signal: enables off, then back on.
+Channels with adaptive equalization off are not changed. Returns False if no channel has it on.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.set_control_bit">
+<span class="sig-name descname"><span class="pre">set_control_bit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">select</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.set_control_bit" title="Link to this definition"></a></dt>
+<dd><p>Set control bit configuration.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>Any</em>) – Parameter value.</p></li>
+<li><p><strong>value</strong> (<em>Any</em>) – Parameter value.</p></li>
+<li><p><strong>select</strong> (<em>Any</em>) – Parameter value.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>None</em> – No value is returned.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.set_led">
+<span class="sig-name descname"><span class="pre">set_led</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.set_led" title="Link to this definition"></a></dt>
+<dd><p>Set led configuration.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>state</strong> (<em>Any</em>) – Parameter value.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>None</em> – No value is returned.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.set_power_mode">
+<span class="sig-name descname"><span class="pre">set_power_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.set_power_mode" title="Link to this definition"></a></dt>
+<dd><p>0 = low power, 1 = High power.</p>
+<p>Drives the LPMode hardware pin and, when enabling high power, also
+programs byte 93 (PowerSet) so that modules declaring Power Class 5-8
+(&gt;3.5 W) are actually allowed to draw their full rated power. Per
+SFF-8636 the LPMode pin alone only gates Power Classes 1-4; classes
+5-7 additionally require the “High Power Class Enable” bit and
+class 8 requires the “Class 8 Enable” bit.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.set_rx_output_amplitude">
+<span class="sig-name descname"><span class="pre">set_rx_output_amplitude</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">code</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.set_rx_output_amplitude" title="Link to this definition"></a></dt>
+<dd><p>Set RX output amplitude code: one value for all channels, or a list for channels 1-4. Supported codes: page 03h byte 225[3:0].</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.set_rx_output_emphasis">
+<span class="sig-name descname"><span class="pre">set_rx_output_emphasis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">db</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.set_rx_output_emphasis" title="Link to this definition"></a></dt>
+<dd><p>Set RX output emphasis: one value for all channels, or a list for channels 1-4. 0..max dB (page 03h byte 224[3:0]).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.set_tx_adaptive_eq">
+<span class="sig-name descname"><span class="pre">set_tx_adaptive_eq</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enable</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.set_tx_adaptive_eq" title="Link to this definition"></a></dt>
+<dd><p>Enable or disable TX input adaptive equalization: one bool, or a list for channels 1-4. Keeps byte 241 bits 7-4.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.set_tx_input_eq">
+<span class="sig-name descname"><span class="pre">set_tx_input_eq</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">db</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.set_tx_input_eq" title="Link to this definition"></a></dt>
+<dd><p>Set TX input equalization: one value for all channels, or a list for channels 1-4. 0..max dB (page 03h byte 224[7:4]).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.status">
+<span class="sig-name descname"><span class="pre">status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.status" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.i2c_devices.qsfp.QSFP.write">
+<span class="sig-name descname"><span class="pre">write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.i2c_devices.qsfp.QSFP.write" title="Link to this definition"></a></dt>
+<dd><p>Write data to the device.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>Any</em>) – Parameter value.</p></li>
+<li><p><strong>data</strong> (<em>Any</em>) – Parameter value.</p></li>
+<li><p><strong>page</strong> (<em>Any</em>) – Parameter value.</p></li>
+<li><p><strong>enable</strong> (<em>Any</em>) – Parameter value.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>None</em> – No value is returned.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.hardware.i2c_devices.pca9698.html" class="btn btn-neutral float-left" title="pca9698.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.hardware.i2c_devices.sc18is602b.html" class="btn btn-neutral float-right" title="sc18is602b.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

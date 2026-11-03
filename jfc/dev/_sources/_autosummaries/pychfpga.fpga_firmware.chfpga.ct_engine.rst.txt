@@ -1,0 +1,100 @@
+
+
+
+
+
+:py:mod:`ct_engine/ <pychfpga.fpga_firmware.chfpga.ct_engine>`
+==============================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware.chfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware.chfpga,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga.ct_engine,
+..    | name==ct_engine
+..    | modules = ['SHUFFLE_BIN_SEL', 'bct_array_methods', 'bct_engine', 'cge', 'cge_array_methods', 'chan_bin_sel', 'chan_crossbar', 'gpu', 'shuffle', 'shuffle_crossbar', 'uct_array_methods', 'uct_engine', 'upack', 'xglink', 'xxvglink']
+..    | classes = []
+
+.. automodule:: pychfpga.fpga_firmware.chfpga.ct_engine
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~SHUFFLE_BIN_SEL
+         ~bct_array_methods
+         ~bct_engine
+         ~cge
+         ~cge_array_methods
+         ~chan_bin_sel
+         ~chan_crossbar
+         ~gpu
+         ~shuffle
+         ~shuffle_crossbar
+         ~uct_array_methods
+         ~uct_engine
+         ~upack
+         ~xglink
+         ~xxvglink
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

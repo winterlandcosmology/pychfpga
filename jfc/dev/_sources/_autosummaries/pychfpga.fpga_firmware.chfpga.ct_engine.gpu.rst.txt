@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`gpu.py <pychfpga.fpga_firmware.chfpga.ct_engine.gpu>`
+==============================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware.chfpga.ct_engine
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware.chfpga.ct_engine,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga.ct_engine.gpu,
+..    | name==gpu
+..    | modules = 
+..    | classes = ['GPU']
+
+.. automodule:: pychfpga.fpga_firmware.chfpga.ct_engine.gpu
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         GPU
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: GPU
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

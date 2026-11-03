@@ -1,0 +1,140 @@
+
+
+
+
+
+:py:mod:`mdns_discovery.py <pychfpga.common.mdns_discovery>`
+============================================================
+
+
+.. currentmodule:: pychfpga.common
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.common,
+..    | FULLNAME=pychfpga.common.mdns_discovery,
+..    | name==mdns_discovery
+..    | modules = 
+..    | classes = ['ThreadData']
+
+.. automodule:: pychfpga.common.mdns_discovery
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         match
+         match_int
+         mdns_discover
+         mdns_resolve
+         test
+         tuple_match
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         ThreadData
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: match
+
+
+.. autofunction:: match_int
+
+
+.. autofunction:: mdns_discover
+
+
+.. autofunction:: mdns_resolve
+
+
+.. autofunction:: test
+
+
+.. autofunction:: tuple_match
+
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: ThreadData
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

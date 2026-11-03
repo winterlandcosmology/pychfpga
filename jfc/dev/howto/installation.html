@@ -1,0 +1,521 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Installation &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="SSH keys" href="ssh_keys.html" />
+    <link rel="prev" title="Quick start" href="quick_start.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html">Quick start</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#requirements">Requirements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#windows-installation">Windows installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#centos-7-installation">Centos 7 installation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#os-version-check">OS version check</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#git">Git</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#python">Python</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pip">Pip</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#virtualenv">Virtualenv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#python-packages">Python packages</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#getting-the-source-code">Getting the source code</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#testing-ch-acq">Testing ch_acq</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#networking-configuration-tricks-tips">Networking Configuration, Tricks &amp; Tips</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#opening-ports">Opening ports</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#enabling-jumbo-frames">Enabling Jumbo Frames</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#checking-the-traffic-on-the-interface">Checking the traffic on the interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#checking-mdns-avahi">Checking mDNS/Avahi</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#finding-boards-using-mdns">Finding boards using mDNS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#checking-crates-visible-to-mdns">Checking crates visible to mDNS:</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#editing-static-dhcp-entries">Editing static DHCP entries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#dhcp-leases">DHCP leases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#update-prometheus">Update prometheus</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#extract-a-folder-into-its-own-repository">Extract a folder into its own repository</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../_autosummaries/pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Installation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/howto/installation.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="installation">
+<span id="detailed-installation"></span><h1>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h1>
+<p>This page describes how to install and configure the software required to run
+<code class="docutils literal notranslate"><span class="pre">fpga_master</span></code> and the rest of the <a class="reference internal" href="../_autosummaries/pychfpga.html#module-pychfpga" title="pychfpga"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code></a> package.</p>
+<p>Private repositories require SSH access first: see <a class="reference internal" href="ssh_keys.html"><span class="doc">SSH keys</span></a>. For
+IceBoard wiring, see <a class="reference internal" href="hardware_setup.html"><span class="doc">Configuring FPGA hardware</span></a>.</p>
+<section id="requirements">
+<h2>Requirements<a class="headerlink" href="#requirements" title="Link to this heading"></a></h2>
+<blockquote>
+<div><ul>
+<li><dl class="simple">
+<dt>system files</dt><dd><ul class="simple">
+<li><p>git (&gt;1.8.2 for git-lfs)</p></li>
+<li><p>git-lfs (needed to pull fpga firmware)</p></li>
+<li><p>Python 2.7.X (Python 3 <strong>not</strong> supported)</p></li>
+<li><p>python pip</p></li>
+<li><p>python-devel (needed on some system to install ipython, matplotlib)</p></li>
+<li><p>tkinter (needed on Centos for matplotlib)</p></li>
+<li><p>mdns/avahi/bonjour services with development libraries</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><p>Python packages:</p>
+<blockquote>
+<div><ul>
+<li><p>virtualenv (pip)</p></li>
+<li><p>ipython</p></li>
+<li><p>numpy</p></li>
+<li><p>matplotlib</p></li>
+<li><p>sqlalchemy</p></li>
+<li><p>pyyaml</p></li>
+<li><p>tornado</p></li>
+<li><p>lxml</p></li>
+<li><p>h5py</p></li>
+<li><p>nose</p></li>
+<li><p>docutils</p></li>
+<li><p>futures</p></li>
+<li><p>requests</p></li>
+<li><p>netifaces</p></li>
+<li><p>psutil</p></li>
+<li><p>pybonjour (requires avahi/mdns/bonjour system files to be installed):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="o">-</span><span class="n">e</span> <span class="n">git</span><span class="o">+</span><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">Eichhoernchen</span><span class="o">/</span><span class="n">pybonjour</span><span class="o">.</span><span class="n">git</span><span class="c1">#egg=pybonjour</span>
+
+<span class="ow">or</span>
+
+<span class="n">wget</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">storage</span><span class="o">.</span><span class="n">googleapis</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">google</span><span class="o">-</span><span class="n">code</span><span class="o">-</span><span class="n">archive</span><span class="o">-</span><span class="n">downloads</span><span class="o">/</span><span class="n">v2</span><span class="o">/</span><span class="n">code</span><span class="o">.</span><span class="n">google</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">pybonjour</span><span class="o">/</span><span class="n">pybonjour</span><span class="o">-</span><span class="mf">1.1.1</span><span class="o">.</span><span class="n">tar</span><span class="o">.</span><span class="n">gz</span>
+<span class="n">tar</span> <span class="n">zxf</span> <span class="n">pybonjour</span><span class="o">-</span><span class="mf">1.1.1</span><span class="o">.</span><span class="n">tar</span><span class="o">.</span><span class="n">gz</span>
+<span class="n">cd</span> <span class="n">pybonjour</span><span class="o">-</span><span class="mf">1.1.1</span>
+<span class="n">python</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">install</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+</div></blockquote>
+</section>
+<section id="windows-installation">
+<h2>Windows installation<a class="headerlink" href="#windows-installation" title="Link to this heading"></a></h2>
+<p><em>JFC 2018-10-03</em></p>
+<p>Pre-requisites:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>You need Microsoft Visual C++ 9.0 for <cite>netifaces</cite>. Get it from <a class="reference external" href="http://aka.ms/vcpython27">http://aka.ms/vcpython27</a></p></li>
+<li><dl class="simple">
+<dt>Install <code class="docutils literal notranslate"><span class="pre">bonjour</span></code></dt><dd><p>(part of itunes - you can extract the Itunes install package and just install bonjour).</p>
+</dd>
+</dl>
+</li>
+</ul>
+</div></blockquote>
+<p>Create and activate an environment if needed.</p>
+<p>Installation of all packages can then be made with:</p>
+<blockquote>
+<div><p>pip install -r requirements.txt</p>
+</div></blockquote>
+</section>
+<section id="centos-7-installation">
+<h2>Centos 7 installation<a class="headerlink" href="#centos-7-installation" title="Link to this heading"></a></h2>
+<section id="os-version-check">
+<h3>OS version check<a class="headerlink" href="#os-version-check" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cat</span> <span class="o">/</span><span class="n">etc</span><span class="o">/*-</span><span class="n">release</span>
+</pre></div>
+</div>
+</section>
+<section id="git">
+<h3>Git<a class="headerlink" href="#git" title="Link to this heading"></a></h3>
+<p>Check the Git and git-lfs version with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="o">--</span><span class="n">version</span>
+<span class="n">git</span><span class="o">-</span><span class="n">lfs</span> <span class="o">--</span><span class="n">version</span>
+</pre></div>
+</div>
+<p>If git is lower than 1.8.2, we need to update it for git-lfs. Git and git-lfs are installed following the instructions from <a class="reference external" href="https://github.com/git-lfs/git-lfs/wiki/Installation">https://github.com/git-lfs/git-lfs/wiki/Installation</a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">yum</span> <span class="n">install</span> <span class="n">epel</span><span class="o">-</span><span class="n">release</span>
+<span class="n">sudo</span> <span class="n">yum</span> <span class="n">install</span> <span class="n">git</span> <span class="c1"># if needed</span>
+<span class="n">curl</span> <span class="o">-</span><span class="n">s</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">packagecloud</span><span class="o">.</span><span class="n">io</span><span class="o">/</span><span class="n">install</span><span class="o">/</span><span class="n">repositories</span><span class="o">/</span><span class="n">github</span><span class="o">/</span><span class="n">git</span><span class="o">-</span><span class="n">lfs</span><span class="o">/</span><span class="n">script</span><span class="o">.</span><span class="n">rpm</span><span class="o">.</span><span class="n">sh</span> <span class="o">|</span> <span class="n">sudo</span> <span class="n">bash</span>
+<span class="n">sudo</span> <span class="n">yum</span> <span class="n">install</span> <span class="n">git</span><span class="o">-</span><span class="n">lfs</span>
+<span class="n">git</span> <span class="n">lfs</span> <span class="n">version</span>
+</pre></div>
+</div>
+<p>Activate the git-lfs install (needs to be done only once by this specific user):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">lfs</span> <span class="n">install</span>
+</pre></div>
+</div>
+</section>
+<section id="python">
+<h3>Python<a class="headerlink" href="#python" title="Link to this heading"></a></h3>
+<p>Check version:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="o">--</span><span class="n">version</span>
+</pre></div>
+</div>
+<p>Hopefully this will will be one of the 2.7 releases. Any one should do (we operated successfully with 2.7.5 - 2.7.11). We cannot operate with python 3. It is not trivial to install another python version: Centos uses it for its system and is very picky on which verison is installed, and it is hard to get and compile all the dependencies. We tried to install 2.7.13 instead of 2.7.5 and fai;led because we could not find tkinter libraries for that specific version.</p>
+</section>
+<section id="pip">
+<h3>Pip<a class="headerlink" href="#pip" title="Link to this heading"></a></h3>
+<p>If there is no pip,  install with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">curl</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">bootstrap</span><span class="o">.</span><span class="n">pypa</span><span class="o">.</span><span class="n">io</span><span class="o">/</span><span class="n">get</span><span class="o">-</span><span class="n">pip</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">o</span> <span class="n">get</span><span class="o">-</span><span class="n">pip</span><span class="o">.</span><span class="n">py</span>
+<span class="n">sudo</span> <span class="n">python</span> <span class="n">get</span><span class="o">-</span><span class="n">pip</span><span class="o">.</span><span class="n">py</span>
+</pre></div>
+</div>
+</section>
+<section id="virtualenv">
+<h3>Virtualenv<a class="headerlink" href="#virtualenv" title="Link to this heading"></a></h3>
+<p>If the user want to use his/her own package configuration, or don;t have the right to install packages at the system level, it is recommendd to install those package within a Python virtual environment. This is not necessary to run the basic modules in the <code class="xref py py-mod docutils literal notranslate"><span class="pre">ch_acq</span></code> since all the necessary packages have been installed at the system level.</p>
+<p>If the virtualenv package is not installed:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">pip</span> <span class="n">install</span> <span class="n">virtualenv</span>
+</pre></div>
+</div>
+<p>We don’t want to mess up Centos or other user Python install, so we’ll install our packages in out own local user environment.
+We create a virtualenv with the default system python version with:</p>
+<blockquote>
+<div><p>virtualenv ~/py275</p>
+</div></blockquote>
+<p>And we activate the environment with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">source</span> <span class="o">~/</span><span class="n">py275</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">activate</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If packages are installed within the virtualenv environemnt, the environment will needs to be activated on every new user session</p>
+</div>
+</section>
+<section id="python-packages">
+<h3>Python packages<a class="headerlink" href="#python-packages" title="Link to this heading"></a></h3>
+<p>Some packages have system library dependencies. Let’s install them first:</p>
+<p>ipython and matplotlib need python development libs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">yum</span> <span class="n">install</span> <span class="n">python</span><span class="o">-</span><span class="n">devel</span>
+<span class="n">sudo</span> <span class="n">yum</span> <span class="n">install</span> <span class="n">tkinter</span>
+</pre></div>
+</div>
+<p>We will use pybonjour, which requires avahi system libraries:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">yum</span> <span class="n">install</span> <span class="n">avahi</span> <span class="n">avahi</span><span class="o">-</span><span class="n">compat</span><span class="o">-</span><span class="n">libdns_sd</span> <span class="n">avahi</span><span class="o">-</span><span class="n">compat</span><span class="o">-</span><span class="n">libdns_sd</span><span class="o">-</span><span class="n">devel</span>
+<span class="n">sudo</span> <span class="n">yum</span> <span class="n">install</span> <span class="n">avahi</span><span class="o">-</span><span class="n">tools</span> <span class="n">avahi</span><span class="o">-</span><span class="n">ui</span><span class="o">-</span><span class="n">tools</span> <span class="c1"># to get the command-line tools like avahi-browse, avahi-discover</span>
+</pre></div>
+</div>
+<p>Now, install python packages, including pybonjour:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">ipython</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">numpy</span> <span class="n">matplotlib</span> <span class="n">sqlalchemy</span> <span class="n">pyyaml</span> <span class="n">tornado</span> <span class="n">lxml</span> <span class="n">h5py</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">nose</span> <span class="n">docutils</span> <span class="n">futures</span> <span class="n">requests</span> <span class="n">netifaces</span> <span class="n">psutil</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="o">-</span><span class="n">e</span> <span class="n">git</span><span class="o">+</span><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">Eichhoernchen</span><span class="o">/</span><span class="n">pybonjour</span><span class="o">.</span><span class="n">git</span><span class="c1">#egg=pybonjour</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Pybonjour can also be installed manually
+with</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">wget</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">storage</span><span class="o">.</span><span class="n">googleapis</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">google</span><span class="o">-</span><span class="n">code</span><span class="o">-</span><span class="n">archive</span><span class="o">-</span><span class="n">downloads</span><span class="o">/</span><span class="n">v2</span><span class="o">/</span><span class="n">code</span><span class="o">.</span><span class="n">google</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">pybonjour</span><span class="o">/</span><span class="n">pybonjour</span><span class="o">-</span><span class="mf">1.1.1</span><span class="o">.</span><span class="n">tar</span><span class="o">.</span><span class="n">gz</span>
+<span class="n">tar</span> <span class="n">zxf</span> <span class="n">pybonjour</span><span class="o">-</span><span class="mf">1.1.1</span><span class="o">.</span><span class="n">tar</span><span class="o">.</span><span class="n">gz</span>
+<span class="n">cd</span> <span class="n">pybonjour</span><span class="o">-</span><span class="mf">1.1.1</span>
+<span class="n">python</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">install</span>
+</pre></div>
+</div>
+</div>
+</section>
+<section id="getting-the-source-code">
+<span id="getting-source-code"></span><h3>Getting the source code<a class="headerlink" href="#getting-the-source-code" title="Link to this heading"></a></h3>
+<p>We need ch_acq (python code) and chfpgalite (FPGA firmware) repositories, which are located on bitbucket.</p>
+<p>if you use ssh keys to access these repos, setup ssh keys in .ssh/config or start ssh-agent and provide it with your keys:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>eval `ssh-agent`
+ssh-add path_to_bitbucket_key
+</pre></div>
+</div>
+<p>If the key requires a password, enter it. Alternatively, a special hostname can be defined in your <code class="docutils literal notranslate"><span class="pre">~/.ssh/config</span></code> file with the appropriate associated key, and that hostname can be used in the git configuration.</p>
+<p>Create a you own user folder to put the repos:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">mkdir</span> <span class="o">~/</span><span class="n">git</span>
+<span class="n">cd</span> <span class="o">~/</span><span class="n">git</span>
+</pre></div>
+</div>
+<p>Get the repos:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">clone</span>  <span class="n">git</span><span class="nd">@bitbucket</span><span class="o">.</span><span class="n">org</span><span class="p">:</span><span class="n">chime</span><span class="o">/</span><span class="n">ch_acq</span><span class="o">.</span><span class="n">git</span> <span class="n">ch_acq</span>
+<span class="n">git</span><span class="o">-</span><span class="n">lfs</span> <span class="n">clone</span>  <span class="n">git</span><span class="nd">@bitbucket</span><span class="o">.</span><span class="n">org</span><span class="p">:</span><span class="n">winterlandcosmology</span><span class="o">/</span><span class="n">chfpgalite</span><span class="o">.</span><span class="n">git</span> <span class="n">chfpga</span>
+</pre></div>
+</div>
+<p>Checkout the proper branches. In this example, we use jfc_dev for ch_acq and jfc/dev for chfpgalite:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="n">ch_acq</span>
+<span class="n">checkout</span> <span class="n">jfc_dev</span>
+<span class="n">cd</span> <span class="o">../</span><span class="n">chfpga</span>
+<span class="n">checkout</span> <span class="n">jfc</span><span class="o">/</span><span class="n">dev</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="testing-ch-acq">
+<h2>Testing ch_acq<a class="headerlink" href="#testing-ch-acq" title="Link to this heading"></a></h2>
+<p>If you installed the Python packages in a virtual environment, make sure the virtualenv is enabled. Otherwise, skip this step:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">source</span> <span class="o">~/</span><span class="n">py275</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">activate</span>
+</pre></div>
+</div>
+<p>Then launch ipython</p>
+<blockquote>
+<div><p>cd ~/git/ch_acq
+ipython</p>
+</div></blockquote>
+<p>in ipython, create a fpga_array with no boards in it, just to see if there are no missing packages:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">run</span> <span class="o">-</span><span class="n">i</span> <span class="n">pychfpga</span><span class="o">/</span><span class="n">fpga_array</span><span class="o">.</span><span class="n">py</span>
+</pre></div>
+</div>
+<section id="networking-configuration-tricks-tips">
+<h3>Networking Configuration, Tricks &amp; Tips<a class="headerlink" href="#networking-configuration-tricks-tips" title="Link to this heading"></a></h3>
+<dl class="simple">
+<dt>To make the system work, we need to</dt><dd><ol class="arabic simple">
+<li><p>allow mDNS and UDP packets from the FPGA to be allowed in, and</p></li>
+<li><p>accept jumbo frames for raw data acquisition.</p></li>
+</ol>
+</dd>
+</dl>
+</section>
+</section>
+<section id="opening-ports">
+<h2>Opening ports<a class="headerlink" href="#opening-ports" title="Link to this heading"></a></h2>
+<p>To temporarily allow Avahi to work and accept all UDP packets for the FPGA commands and raw data (which might also allow mDNS)</p>
+<blockquote>
+<div><p>sudo iptables -I INPUT -p udp -j ACCEPT</p>
+</div></blockquote>
+<p>Opeen port to allow clients to connect to servers</p>
+<blockquote>
+<div><p>sudo iptables -I INPUT 1 -p tcp  –dport 54320-54329 -j ACCEPT  # all servers</p>
+</div></blockquote>
+<p>On Centos 7, this could be made permanent by usingthe equivalent firewalld commands:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">firewall</span><span class="o">-</span><span class="n">cmd</span> <span class="o">--</span><span class="n">permanent</span> <span class="o">--</span><span class="n">add</span><span class="o">-</span><span class="n">port</span><span class="o">=</span><span class="mi">54320</span><span class="o">-</span><span class="mi">54329</span><span class="o">/</span><span class="n">tcp</span>
+<span class="n">sudo</span> <span class="n">firewall</span><span class="o">-</span><span class="n">cmd</span> <span class="o">--</span><span class="n">permanent</span> <span class="o">--</span><span class="n">add</span><span class="o">-</span><span class="n">port</span> <span class="mi">0</span><span class="o">-</span><span class="mi">65535</span><span class="o">/</span><span class="n">udp</span>
+</pre></div>
+</div>
+</section>
+<section id="enabling-jumbo-frames">
+<h2>Enabling Jumbo Frames<a class="headerlink" href="#enabling-jumbo-frames" title="Link to this heading"></a></h2>
+<p>Raw data packets are large and require the interface to accept JUMBO frames. Enable JUMBO frames temporarily with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">ifconfig</span> <span class="n">enp0s31f6</span> <span class="n">mtu</span> <span class="mi">9000</span>
+</pre></div>
+</div>
+<p>To make the change permanent on Centos 7:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">vim</span> <span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">sysconfig</span><span class="o">/</span><span class="n">network</span><span class="o">-</span><span class="n">scripts</span><span class="o">/</span><span class="n">ifcfg</span><span class="o">-</span><span class="n">enp0s31f6</span>
+</pre></div>
+</div>
+<p>and add the line:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">MTU</span><span class="o">=</span><span class="mi">9000</span>
+</pre></div>
+</div>
+</section>
+<section id="checking-the-traffic-on-the-interface">
+<h2>Checking the traffic on the interface<a class="headerlink" href="#checking-the-traffic-on-the-interface" title="Link to this heading"></a></h2>
+<p>Tip: you can check incoming trafic with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ip</span> <span class="o">-</span><span class="n">s</span>  <span class="n">link</span> <span class="n">show</span> <span class="n">enp0s31f6</span>
+</pre></div>
+</div>
+</section>
+<section id="checking-mdns-avahi">
+<h2>Checking mDNS/Avahi<a class="headerlink" href="#checking-mdns-avahi" title="Link to this heading"></a></h2>
+<p>To check if mDNS works, you can query the FPGA boards using the mdns client Avahi:</p>
+<blockquote>
+<div><p>avahi-browse _tuber-jsonrpc._tcp –resolve</p>
+</div></blockquote>
+<p>If resolve timeouts after 10 seconds, there is a problem. Sould kill the avahi server:</p>
+<blockquote>
+<div><p>sudo avahi-daemon -k</p>
+</div></blockquote>
+<p>a new server will apparently be started when needed.</p>
+</section>
+<section id="finding-boards-using-mdns">
+<h2>Finding boards using mDNS<a class="headerlink" href="#finding-boards-using-mdns" title="Link to this heading"></a></h2>
+<p>To list new boards that are not in the static DHCP table and ended up with dynamic addresses (10.0.1.x):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">avahi</span><span class="o">-</span><span class="n">daemon</span> <span class="o">-</span><span class="n">k</span>
+<span class="n">avahi</span><span class="o">-</span><span class="n">browse</span>  <span class="n">_tuber</span><span class="o">-</span><span class="n">jsonrpc</span><span class="o">.</span><span class="n">_tcp</span> <span class="o">--</span><span class="n">resolve</span> <span class="o">-</span><span class="n">t</span> <span class="o">|</span> <span class="n">grep</span> <span class="o">-</span><span class="n">B2</span> <span class="o">-</span><span class="n">A2</span> <span class="s1">'10.0.1.'</span>
+</pre></div>
+</div>
+</section>
+<section id="checking-crates-visible-to-mdns">
+<h2>Checking crates visible to mDNS:<a class="headerlink" href="#checking-crates-visible-to-mdns" title="Link to this heading"></a></h2>
+<p>You can get a list of all active FPGA crates in the network with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">avahi</span><span class="o">-</span><span class="n">daemon</span> <span class="o">-</span><span class="n">k</span>
+<span class="n">avahi</span><span class="o">-</span><span class="n">browse</span>  <span class="n">_tuber</span><span class="o">-</span><span class="n">jsonrpc</span><span class="o">.</span><span class="n">_tcp</span> <span class="o">--</span><span class="n">resolve</span> <span class="o">-</span><span class="n">t</span> <span class="o">|</span> <span class="n">grep</span> <span class="o">-</span><span class="n">o</span> <span class="s1">'backplane-serial=[0-9]*'</span> <span class="o">|</span> <span class="n">sort</span> <span class="o">-</span><span class="n">u</span>
+</pre></div>
+</div>
+</section>
+<section id="editing-static-dhcp-entries">
+<h2>Editing static DHCP entries<a class="headerlink" href="#editing-static-dhcp-entries" title="Link to this heading"></a></h2>
+<p>The following files contain the static DHCP assignemetes that are based on MAC addresses. The entries can be cut and pasted from the receiver hut address table Google spreadsheet at <a class="reference external" href="https://bao.phas.ubc.ca/wiki/index.php/Receiver_Hut_Networking#IP_Address_map">https://bao.phas.ubc.ca/wiki/index.php/Receiver_Hut_Networking#IP_Address_map</a>. To edit the files:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">vim</span> <span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">dhcp</span><span class="o">/</span><span class="n">dhcpd</span><span class="o">.</span><span class="n">conf</span> <span class="c1"># general config</span>
+<span class="n">sudo</span> <span class="n">vim</span> <span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">dhcp</span><span class="o">/</span><span class="n">fpga</span><span class="o">.</span><span class="n">network</span> <span class="c1"># fpga equipment assignments</span>
+</pre></div>
+</div>
+<dl class="simple">
+<dt>Once the files are edited:</dt><dd><p>sudo service dhcpd restart</p>
+</dd>
+</dl>
+</section>
+<section id="dhcp-leases">
+<h2>DHCP leases<a class="headerlink" href="#dhcp-leases" title="Link to this heading"></a></h2>
+<p>To check the Ip addresses that are dynamically allocated to hardware over DHCP, you can do on <code class="docutils literal notranslate"><span class="pre">carillon</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cat</span> <span class="o">/</span><span class="n">var</span><span class="o">/</span><span class="n">lib</span><span class="o">/</span><span class="n">dhcpd</span><span class="o">/</span><span class="n">dhcpd</span><span class="o">.</span><span class="n">leases</span>
+</pre></div>
+</div>
+<p>This, however, will not show the statically assigned IPs (the IPs bound to specific MAC addresses). To see those:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">cat</span> <span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">dhcp</span><span class="o">/</span><span class="n">dhcpd</span><span class="o">.</span><span class="n">conf</span> <span class="c1"># general config</span>
+<span class="n">sudo</span> <span class="n">cat</span> <span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">dhcp</span><span class="o">/</span><span class="n">fpga</span><span class="o">.</span><span class="n">network</span> <span class="c1"># fpga equipment assignments</span>
+</pre></div>
+</div>
+<p>If you need to find the IP address of equipment with specific hardware address from the dynamic or static lease lists, you can do:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cat</span> <span class="o">/</span><span class="n">var</span><span class="o">/</span><span class="n">lib</span><span class="o">/</span><span class="n">dhcpd</span><span class="o">/</span><span class="n">dhcpd</span><span class="o">.</span><span class="n">leases</span> <span class="o">|</span> <span class="n">grep</span> <span class="o">-</span><span class="n">B</span> <span class="mi">7</span> <span class="s1">'00:18'</span>
+<span class="n">sudo</span> <span class="n">cat</span> <span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">dhcp</span><span class="o">/</span><span class="n">dhcpd</span><span class="o">.</span><span class="n">conf</span> <span class="o">|</span> <span class="n">grep</span> <span class="s1">'00:18'</span>
+</pre></div>
+</div>
+</section>
+<section id="update-prometheus">
+<h2>Update prometheus<a class="headerlink" href="#update-prometheus" title="Link to this heading"></a></h2>
+<p>Log on hk-east as chime
+sudo vim /etc/prometheus/prometheus.yml
+curl -X POST localhost:9090/-/reload</p>
+</section>
+<section id="extract-a-folder-into-its-own-repository">
+<h2>Extract a folder into its own repository<a class="headerlink" href="#extract-a-folder-into-its-own-repository" title="Link to this heading"></a></h2>
+<p><a class="reference external" href="https://help.github.com/articles/splitting-a-subfolder-out-into-a-new-repository/">https://help.github.com/articles/splitting-a-subfolder-out-into-a-new-repository/</a></p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="quick_start.html" class="btn btn-neutral float-left" title="Quick start" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="ssh_keys.html" class="btn btn-neutral float-right" title="SSH keys" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

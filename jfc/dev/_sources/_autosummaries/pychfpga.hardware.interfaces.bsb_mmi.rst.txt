@@ -1,0 +1,119 @@
+
+
+
+
+
+:py:mod:`bsb_mmi.py <pychfpga.hardware.interfaces.bsb_mmi>`
+===========================================================
+
+
+.. currentmodule:: pychfpga.hardware.interfaces
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.interfaces,
+..    | FULLNAME=pychfpga.hardware.interfaces.bsb_mmi,
+..    | name==bsb_mmi
+..    | modules = 
+..    | classes = ['BSB_MMI']
+
+.. automodule:: pychfpga.hardware.interfaces.bsb_mmi
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Module exceptions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         FpgaMmiException
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         BSB_MMI
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+----
+
+.. rubric:: Exceptions
+
+
+.. autoexception:: FpgaMmiException
+
+
+----
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: BSB_MMI
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

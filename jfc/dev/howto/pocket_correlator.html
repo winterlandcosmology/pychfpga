@@ -1,0 +1,455 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pocket correlator guide &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="chFPGA State Tree" href="chfpga_state.html" />
+    <link rel="prev" title="Server-based operation" href="server_operation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Pocket correlator guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#board-overview">Board overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#hardware-setup">Hardware setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#software-installation">Software installation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#getting-access-to-pychfpga">Getting access to <code class="code highlight bash docutils literal highlight-bash">pychfpga</code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#creating-an-environment">Creating an environment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#installing-pychfpga">Installing <code class="code highlight bash docutils literal highlight-bash">pychfpga</code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#correlator-configuration">Correlator configuration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#running-the-correlator">Running the correlator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reading-the-data">Reading the data</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../_autosummaries/pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Pocket correlator guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/howto/pocket_correlator.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="pocket-correlator-guide">
+<h1>Pocket correlator guide<a class="headerlink" href="#pocket-correlator-guide" title="Link to this heading"></a></h1>
+<p>This guide includes all essential info and tips about running a single ICE board in a correlator mode.</p>
+<section id="board-overview">
+<h2>Board overview<a class="headerlink" href="#board-overview" title="Link to this heading"></a></h2>
+<p>#TODO</p>
+</section>
+<section id="hardware-setup">
+<h2>Hardware setup<a class="headerlink" href="#hardware-setup" title="Link to this heading"></a></h2>
+<figure class="align-center" id="id1">
+<a class="reference internal image-reference" href="../_images/example1.jpg"><img alt="example1" src="../_images/example1.jpg" style="width: 75%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Example of the ICE board setup</span><a class="headerlink" href="#id1" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id2">
+<a class="reference internal image-reference" href="../_images/example2.jpg"><img alt="example2" src="../_images/example2.jpg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Example of the ethernet wiring. You’ll need at least four cables and a gigabit switch</span><a class="headerlink" href="#id2" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id3">
+<a class="reference internal image-reference" href="../_images/example3.jpg"><img alt="example3" src="../_images/example3.jpg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Connection ethernet cables to the ICE board</span><a class="headerlink" href="#id3" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id4">
+<a class="reference internal image-reference" href="../_images/example4.jpg"><img alt="example4" src="../_images/example4.jpg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Front of the ICE board</span><a class="headerlink" href="#id4" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="software-installation">
+<h2>Software installation<a class="headerlink" href="#software-installation" title="Link to this heading"></a></h2>
+<p><code class="code highlight bash docutils literal highlight-bash">pychfpga</code> is developed and tested on Ubuntu OS, so it is recommended to run this on Ubuntu. This guide was tested
+on Ubuntu 22.04.</p>
+<section id="getting-access-to-pychfpga">
+<h3>Getting access to <code class="code highlight bash docutils literal highlight-bash">pychfpga</code><a class="headerlink" href="#getting-access-to-pychfpga" title="Link to this heading"></a></h3>
+<p>First, create a BitBucket account if you don’t have one. Then, contact Jean-Francois Cliche at <a class="reference external" href="mailto:jfcliche&#37;&#52;&#48;jfcliche&#46;com">jfcliche<span>&#64;</span>jfcliche<span>&#46;</span>com</a> to
+request access to the repository and other winterland dependencies and include the email for which your
+BitBucket account is registered. After getting access, it is necessary to add your ssh key to your BitBucket account.</p>
+<p>Create a new ssh key by typing in a terminal:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span>
+mkdir<span class="w"> </span>.ssh
+ssh-keygen<span class="w"> </span>-t<span class="w"> </span>ed25519<span class="w"> </span>-b<span class="w"> </span><span class="m">4096</span><span class="w"> </span>.ssh/bitbucket_key
+</pre></div>
+</div>
+<p>Leave the passphrase field empty (press Enter twice). Type:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>.ssh/bitbucket_key_test.pub
+</pre></div>
+</div>
+<p>and copy the output. Now you need to add the copied key to BitBucket. To do that, on BitBucket go <cite>Gear icon -&gt; Personal
+BitBuket settings -&gt; Security -&gt; SSH keys -&gt; Add key</cite>. You can put any label in the respective field. Paste the key copied
+from the terminal in the “Key” field.</p>
+<p>Finally, add a created key to the ssh client. Run in terminal window:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">eval</span><span class="w"> </span><span class="sb">`</span>ssh-agent<span class="sb">`</span>
+ssh-add<span class="w"> </span>.ssh/bitbucket_key
+</pre></div>
+</div>
+</section>
+<section id="creating-an-environment">
+<h3>Creating an environment<a class="headerlink" href="#creating-an-environment" title="Link to this heading"></a></h3>
+<p>The recommended version of Python to use is <cite>3.8</cite>. You can install the older version of Python by
+typing in the terminal:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>add-apt-repository<span class="w"> </span>ppa:deadsnakes/ppa
+sudo<span class="w"> </span>apt<span class="w"> </span>update
+sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>python3.8
+</pre></div>
+</div>
+<p>To check that the Python is properly installed run. This should output the installed Python version:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python3.8<span class="w"> </span>--version
+</pre></div>
+</div>
+<p>It is recommended to create a separate directory for the <code class="code highlight bash docutils literal highlight-bash">pychfpga</code> environment, for example:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>icecorr
+<span class="nb">cd</span><span class="w"> </span>icecorr
+</pre></div>
+</div>
+<p>Inside the directory, create a Python 3.8 virtual environment by running</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>python3.8-venv
+python3.8<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv_pychfpga
+</pre></div>
+</div>
+<p>Now, anytime you are runing the ICE board, you should activate the created environment by running</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">source</span><span class="w"> </span>.venv_pychfpga/bin/activate
+</pre></div>
+</div>
+<p>from the directory where the environment is located. In our case it is <cite>~/icecorr</cite>.</p>
+</section>
+<section id="installing-pychfpga">
+<h3>Installing <code class="code highlight bash docutils literal highlight-bash">pychfpga</code><a class="headerlink" href="#installing-pychfpga" title="Link to this heading"></a></h3>
+<p>First, download the software by running the following in terminal:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>git@bitbucket.org:winterlandcosmology/pychfpga.git<span class="w"> </span>-b<span class="w"> </span>deploy
+</pre></div>
+</div>
+<p>If you had issues with this step, you probably don’t have access to the repository. Check if you properly set up your
+BitBucket key an if you have permissions. If the command succeeded, go to the cloned repo:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>pychfpga
+</pre></div>
+</div>
+<p>Make sure the large files were cloned too:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>git-lfs
+git-lfs<span class="w"> </span>fetch
+</pre></div>
+</div>
+<p>Now you need to find the latest version tested for a single board correlator. To do it, see the tags in the
+<code class="code highlight bash docutils literal highlight-bash">pychfpga</code> repository. The correct tag format for a single ICE board correlator would be
+<code class="code docutils literal notranslate"><span class="pre">x.y.z+ice.co</span></code>, where <code class="code docutils literal notranslate"><span class="pre">x</span></code>, <code class="code docutils literal notranslate"><span class="pre">y</span></code> and <code class="code docutils literal notranslate"><span class="pre">z</span></code> are version numbers. To list all relevant tags run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>tag<span class="w"> </span>--list<span class="w"> </span><span class="s1">'*.*.*+ice.co'</span>
+</pre></div>
+</div>
+<p>Then choose the latest available version. At the moment of writing, this version is <code class="code docutils literal notranslate"><span class="pre">1.3.1+ice.co</span></code>. Now you need
+to switch to the selected version of the code by running the following command. You need to replace the
+<code class="code docutils literal notranslate"><span class="pre">[selected_tag]</span></code> with the version you selected in previous step.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>checkout<span class="w"> </span><span class="o">[</span>selected_tag<span class="o">]</span>
+</pre></div>
+</div>
+<p>While doing checkout, git may download additional files.</p>
+<p>Now, it’s time to install the software. While in <code class="code highlight bash docutils literal highlight-bash">pychfpga</code> directory, run</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+</pre></div>
+</div>
+<p>If you had problems during installation - check if you’re using Python 3.8 and if you have access to all the winterland
+dependencies needed to install the software. For dependency access requests contact Jean-Francois Cliche
+at <a class="reference external" href="mailto:jfcliche&#37;&#52;&#48;jfcliche&#46;com">jfcliche<span>&#64;</span>jfcliche<span>&#46;</span>com</a>.</p>
+<p>After installation, you can run an <code class="code highlight bash docutils literal highlight-bash">fpga_master</code> command to see if installation is complete
+(it will throw an error for now).</p>
+</section>
+</section>
+<section id="correlator-configuration">
+<h2>Correlator configuration<a class="headerlink" href="#correlator-configuration" title="Link to this heading"></a></h2>
+<p>The board is conﬁgured in the dedicated yaml ﬁle. You can ﬁnd the example described here in
+the pychfpga/config/example_corr16.yaml. Please open that file for the reference. It is
+structured as follows:</p>
+<ul>
+<li><div class="line-block">
+<div class="line">Lines 1-300 - a deﬁned preset with default settings. Do not modify this part of the ﬁle.</div>
+<div class="line">Some of the deﬁned here properties will be overriden in the custom section.</div>
+</div>
+</li>
+<li><div class="line-block">
+<div class="line">Lines 300-482 - a custom group of settings used for a speciﬁc application. In the example,</div>
+<div class="line">the group is called “EXAMPLE”; when running a correlator, we will directly refer to these</div>
+<div class="line">settings by this name.</div>
+</div>
+</li>
+</ul>
+<p>We will now take a closer look at what parameters we should specify for a pocket correlator.</p>
+<p>We follow the hierarchical structure of the setting from top to bottom. Only relevant
+parameters are described below; all the parameters that were not mentioned are better
+remaining untouched (unless you know what you are doing). The number in parentheses
+speciﬁes the line number in the example conﬁg file.</p>
+<ul>
+<li><div class="line-block">
+<div class="line">[303] EXAMPLE: - change the conﬁg group name for your convenience</div>
+</div>
+</li>
+<li><div class="line-block">
+<div class="line">[306] corr_name: “EXAMPLE” is used in the created directory names for clariﬁca�on. Can be anything.</div>
+</div>
+</li>
+<li><div class="line-block">
+<div class="line">[307] comment: “EXAMPLE, corr16 mode, one board” - provide more informa�on for future</div>
+<div class="line">reference.</div>
+</div>
+</li>
+<li><div class="line-block">
+<div class="line">[309] data_folder: ‘~/EXAMPLE/data’ - specify the path where you want your data to be stored.</div>
+<div class="line">All the additional directories will be automatically created inside.</div>
+</div>
+</li>
+<li><div class="line-block">
+<div class="line">[321] hwm: ‘mb 498:1’ Hardware map. Must include ‘mb’ for a single ICE board and the</div>
+<div class="line">ID of the board used. The number after colon is used if you are using more than one</div>
+<div class="line">board. keep it 1 for a single board.</div>
+</div>
+</li>
+<li><div class="line-block">
+<div class="line">[352] fft_shift : 1367 - shift schedule for the FFT. Default is 1367 (0b10101010111 in</div>
+<div class="line">binary), but in general the right value is obtained after some tests to balance the noise and</div>
+<div class="line">saturation.</div>
+</div>
+</li>
+<li><div class="line-block">
+<div class="line">[387] (compute gains:) enable: True - enable or disable computing gains. Generally, it is recommended to</div>
+<div class="line">calculate gains every time you run a correlator, unless you are sure that characteristics of</div>
+<div class="line">the input signal will not change.</div>
+</div>
+</li>
+<li><div class="line-block">
+<div class="line">[419] firmware_integration_period: 16384 - the integration period in frames inside the</div>
+<div class="line">FPGA. ADCs sample with rate 800 Msps/s and each frame includes 2048 samples.</div>
+<div class="line">Therefore each frame spans 0.00000256 s of time. Integration period of 16384 frames approximately equals 42 ms</div>
+<div class="line">(precisely 41.94304 ms). It is not recommended to change this</div>
+<div class="line">value drastically. Instead, see software_integration_period.</div>
+</div>
+</li>
+<li><div class="line-block">
+<div class="line">[423] software_integration_period: 250 - integrates the data pre-integrated by the</div>
+<div class="line">firmware; basically acts like a multiplier. 250 (sip) x 42 ms (fip) -&gt; 10.5 s of total</div>
+<div class="line">integration time.</div>
+</div>
+</li>
+</ul>
+</section>
+<section id="running-the-correlator">
+<h2>Running the correlator<a class="headerlink" href="#running-the-correlator" title="Link to this heading"></a></h2>
+<ol class="arabic">
+<li><p>Make sure you have the latest stable firmware on your SD card. At the moment of writing it is <code class="code docutils literal notranslate"><span class="pre">11.3i</span></code></p></li>
+<li><p>Check network connection - your computer must be connected by ethernet cable to a gigabit switch that supports jumbo frames.</p>
+<blockquote>
+<div><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ifconfig
+</pre></div>
+</div>
+</div></blockquote>
+</li>
+<li><div class="line-block">
+<div class="line">Make sure that the connection you have is set to mtu 9000. If not, on Ubuntu you can navigate:</div>
+<div class="line"><code class="code docutils literal notranslate"><span class="pre">Ethernet</span> <span class="pre">Connection</span> <span class="pre">&gt;&gt;</span> <span class="pre">Edit</span> <span class="pre">Connections</span> <span class="pre">&gt;&gt;</span> <span class="pre">Ethernet</span> <span class="pre">&gt;&gt;</span> <span class="pre">[name</span> <span class="pre">of</span> <span class="pre">connection]</span> <span class="pre">&gt;&gt;</span> <span class="pre">Ethernet</span> <span class="pre">&gt;&gt;</span> <span class="pre">MTU</span></code></div>
+<div class="line">and set MTU to 9000.</div>
+</div>
+<div class="line-block">
+<div class="line">Alternatively, run in terminal</div>
+</div>
+<blockquote>
+<div><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>ifconfig<span class="w"> </span><span class="o">[</span>name<span class="w"> </span>of<span class="w"> </span>connection<span class="o">]</span><span class="w"> </span>mtu<span class="w"> </span><span class="m">9000</span>
+</pre></div>
+</div>
+</div></blockquote>
+<div class="line-block">
+<div class="line">Run <code class="code docutils literal notranslate"><span class="pre">ifconfig</span></code> again to check the MTU.</div>
+</div>
+</li>
+<li><p>Set proper UDP buffer size on system by running (the following should be a single line command):</p>
+<blockquote>
+<div><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>sysctl<span class="w"> </span>-w<span class="w"> </span>net.core.rmem_max<span class="o">=</span><span class="m">26214400</span><span class="w"> </span>net.core.rmem_default<span class="o">=</span><span class="m">26214400</span><span class="w"> </span>net.ipv4.udp_mem<span class="o">=</span><span class="s1">'26214400 26214400 26214400'</span><span class="w"> </span>net.ipv4.udp_rmem_min<span class="o">=</span><span class="m">26214400</span>
+</pre></div>
+</div>
+</div></blockquote>
+</li>
+<li><div class="line-block">
+<div class="line">Make sure your DHCP server (e.g. router) has a /16 (255.255.0.0) netmask. Otherwise you won’t be able to reach to</div>
+<div class="line">the FPGA and will get “FPGA command timeout” errors.</div>
+</div>
+</li>
+<li><p>Activate a virtual environment you set up for <code class="code docutils literal notranslate"><span class="pre">pychfpga</span></code> (if not already activated)</p></li>
+<li><p>Open a separate terminal and run the raw data acquisition server:</p>
+<blockquote>
+<div><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>chime_raw_acq
+</pre></div>
+</div>
+</div></blockquote>
+</li>
+<li><div class="line-block">
+<div class="line">Open a separate terminal and run <code class="code docutils literal notranslate"><span class="pre">fpga_master</span></code> with config you edited before:</div>
+</div>
+<blockquote>
+<div><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fpga_master<span class="w"> </span><span class="o">[</span>path<span class="w"> </span>to<span class="w"> </span>your<span class="w"> </span>config.yaml<span class="o">]</span>/config.yaml:<span class="o">[</span>your<span class="w"> </span>config<span class="w"> </span>name<span class="o">]</span>
+</pre></div>
+</div>
+</div></blockquote>
+<div class="line-block">
+<div class="line">The config name is whatever you entered in line 303. Assuming the current workin directory is <code class="code docutils literal notranslate"><span class="pre">pychfpga</span></code>,</div>
+<div class="line">the command for the example file would look something like this:</div>
+</div>
+<blockquote>
+<div><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fpga_master<span class="w"> </span>./config/example_corr16.yaml:EXAMPLE
+</pre></div>
+</div>
+</div></blockquote>
+</li>
+</ol>
+<p>It will take some time for the script to find and configure the board</p>
+</section>
+<section id="reading-the-data">
+<h2>Reading the data<a class="headerlink" href="#reading-the-data" title="Link to this heading"></a></h2>
+<p>#TODO</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="server_operation.html" class="btn btn-neutral float-left" title="Server-based operation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="chfpga_state.html" class="btn btn-neutral float-right" title="chFPGA State Tree" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

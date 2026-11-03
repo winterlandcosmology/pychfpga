@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`state.py <pychfpga.common.state>`
+==========================================
+
+
+.. currentmodule:: pychfpga.common
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.common,
+..    | FULLNAME=pychfpga.common.state,
+..    | name==state
+..    | modules = 
+..    | classes = ['State']
+
+.. automodule:: pychfpga.common.state
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         State
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: State
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

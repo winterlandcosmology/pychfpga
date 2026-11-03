@@ -1,0 +1,1814 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fpga_master.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="gps.py" href="pychfpga.gps.html" />
+    <link rel="prev" title="fpga_firmware.py" href="pychfpga.fpga_firmware.fpga_firmware.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_master.convert_types"><code class="docutils literal notranslate"><span class="pre">convert_types()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_master.firmware_config_for_rest"><code class="docutils literal notranslate"><span class="pre">firmware_config_for_rest()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_master.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_master.reap_cached_sockets"><code class="docutils literal notranslate"><span class="pre">reap_cached_sockets()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_master.sanitize_for_json"><code class="docutils literal notranslate"><span class="pre">sanitize_for_json()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.DEFAULT_LOGGING"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.DEFAULT_LOGGING</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.__init__"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.compute_direct_gains"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.compute_direct_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.compute_gains"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.compute_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.compute_iterative_gains"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.compute_iterative_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.expand_path"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.expand_path()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.get_channelizer_output"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.get_channelizer_output()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.get_data_config"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.get_data_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.get_frequency_map"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.get_frequency_map()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.get_noise_injection_status"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.get_noise_injection_status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.initialize_gain_hdf5"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.initialize_gain_hdf5()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.load_gains"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.load_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.register_config"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.register_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.register_hardware"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.register_hardware()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.reset_bp_shuffle_stats"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.reset_bp_shuffle_stats()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.reset_crossbar_stats"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.reset_crossbar_stats()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.reset_fpga_stats"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.reset_fpga_stats()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.save_gains"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.save_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.serial_compute_gains"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.serial_compute_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.set_config"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.set_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.set_fpga_data_capture"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.set_fpga_data_capture()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.set_gains_async"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.set_gains_async()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.set_state"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.set_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.setup_noise_injection"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.setup_noise_injection()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.start"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.start()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.start_corr_hdf5_capture"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.start_corr_hdf5_capture()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.start_fpga_raw_data_transmission"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.start_fpga_raw_data_transmission()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.start_hdf5_capture"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.start_hdf5_capture()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.start_raw_acq_servers"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.start_raw_acq_servers()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.status"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.stop"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.stop()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster.update_channelizers"><code class="docutils literal notranslate"><span class="pre">DummyFPGAMaster.update_channelizers()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster"><code class="docutils literal notranslate"><span class="pre">FPGAMaster</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.DEFAULT_LOGGING"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.DEFAULT_LOGGING</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.__init__"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.compute_direct_gains"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.compute_direct_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.compute_gains"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.compute_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.compute_iterative_gains"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.compute_iterative_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.expand_path"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.expand_path()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.get_channelizer_output"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.get_channelizer_output()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.get_data_config"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.get_data_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.get_frequency_map"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.get_frequency_map()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.get_noise_injection_status"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.get_noise_injection_status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.initialize_gain_hdf5"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.initialize_gain_hdf5()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.load_gains"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.load_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.register_config"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.register_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.register_hardware"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.register_hardware()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.reset_bp_shuffle_stats"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.reset_bp_shuffle_stats()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.reset_crossbar_stats"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.reset_crossbar_stats()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.reset_fpga_stats"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.reset_fpga_stats()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.save_gains"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.save_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.serial_compute_gains"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.serial_compute_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.set_config"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.set_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.set_fpga_data_capture"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.set_fpga_data_capture()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.set_gains_async"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.set_gains_async()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.set_state"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.set_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.setup_noise_injection"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.setup_noise_injection()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.start"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.start()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.start_corr_hdf5_capture"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.start_corr_hdf5_capture()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.start_fpga_raw_data_transmission"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.start_fpga_raw_data_transmission()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.start_hdf5_capture"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.start_hdf5_capture()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.start_raw_acq_servers"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.start_raw_acq_servers()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.status"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.stop"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.stop()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster.update_channelizers"><code class="docutils literal notranslate"><span class="pre">FPGAMaster.update_channelizers()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.DEFAULT_PORT"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.DEFAULT_PORT</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.__call__"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.__call__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.__init__"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.config"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_channelizer_output"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.get_channelizer_output()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_current_gain_filename"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.get_current_gain_filename()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_frame0_time"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.get_frame0_time()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_frame_time"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.get_frame_time()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_frequency_map"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.get_frequency_map()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_hw_map"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.get_hw_map()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_methods"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.get_methods()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.load_gains"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.load_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.nop"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.nop()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.ping"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.ping()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.print_result"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.print_result()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.raise_exception"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.raise_exception()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.set_state"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.set_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.start"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.start()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.status"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.stop"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient.stop()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.DEFAULT_PORT"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.DEFAULT_PORT</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.__call__"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.__call__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.__init__"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.abort"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.abort()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.call_fpga_array_method"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.call_fpga_array_method()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.compute_gains"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.compute_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.config"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.dataset_id"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.dataset_id()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.echo"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.echo()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_channelizer_output"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.get_channelizer_output()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_current_gain_file"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.get_current_gain_file()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_current_gain_filename"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.get_current_gain_filename()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_frame0_time"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.get_frame0_time()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_frame_time"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.get_frame_time()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_frequency_map"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.get_frequency_map()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_hw_map"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.get_hw_map()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_monitoring_data"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.get_monitoring_data()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_noise_injection_status"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.get_noise_injection_status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.load_gains"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.load_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.print_iceboard_info_callback"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.print_iceboard_info_callback()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.reset_bp_shuffle_stats"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.reset_bp_shuffle_stats()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.reset_crossbar_stats"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.reset_crossbar_stats()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.reset_fpga_stats"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.reset_fpga_stats()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.reset_gpu_links"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.reset_gpu_links()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.serial_compute_gains"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.serial_compute_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_adc_delays"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.set_adc_delays()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_data_capture"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.set_data_capture()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_funcgen_function"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.set_funcgen_function()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_gains"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.set_gains()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_gtx_power"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.set_gtx_power()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_state"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.set_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.shutdown"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.shutdown()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.start"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.start()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.status"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.stop"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.stop()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.sync"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.sync()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.update_channelizers"><code class="docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer.update_channelizers()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.fpga_master.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="fpga-master-py">
+<h1><a class="reference internal" href="#module-pychfpga.fpga_master" title="pychfpga.fpga_master"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a><a class="headerlink" href="#fpga-master-py" title="Link to this heading"></a></h1>
+<p id="module-pychfpga.fpga_master">Classes used to run the REST-based server and underlying objects used to
+initialize and operate an array of IceBoard used as F (and optionally X)
+engines of a radiotelescope.</p>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module functions summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_master.convert_types" title="pychfpga.fpga_master.convert_types"><code class="xref py py-obj docutils literal notranslate"><span class="pre">convert_types</span></code></a></p></td>
+<td><p>Do the annoying conversion of numpy types to native Python types.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.fpga_master.firmware_config_for_rest" title="pychfpga.fpga_master.firmware_config_for_rest"><code class="xref py py-obj docutils literal notranslate"><span class="pre">firmware_config_for_rest</span></code></a></p></td>
+<td><p>JSON-safe firmware config for raw_acq REST start (includes corr maps).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_master.main" title="pychfpga.fpga_master.main"><code class="xref py py-obj docutils literal notranslate"><span class="pre">main</span></code></a></p></td>
+<td><p>Command-line interface to operate the FPGAMaster server.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.fpga_master.reap_cached_sockets" title="pychfpga.fpga_master.reap_cached_sockets"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reap_cached_sockets</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_master.sanitize_for_json" title="pychfpga.fpga_master.sanitize_for_json"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sanitize_for_json</span></code></a></p></td>
+<td><p>Modify an object to make it JSON-compatible.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_master.DummyFPGAMaster" title="pychfpga.fpga_master.DummyFPGAMaster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DummyFPGAMaster</span></code></a></p></td>
+<td><p>A variant of FPGAMaster that doesn't do anything hardware related.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster" title="pychfpga.fpga_master.FPGAMaster"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FPGAMaster</span></code></a></p></td>
+<td><p>Object that provide methods to initialize, control, monitor and shutdown a CHIME telescope array (or subarray)</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient" title="pychfpga.fpga_master.FPGAMasterAsyncRESTClient"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTClient</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer" title="pychfpga.fpga_master.FPGAMasterAsyncRESTServer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FPGAMasterAsyncRESTServer</span></code></a></p></td>
+<td><p>Wraps the FPGAMaster object within a REST server to expose its key methods over HTTP GET or POST requests.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module functions</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.convert_types">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_master.</span></span><span class="sig-name descname"><span class="pre">convert_types</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">val</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.convert_types" title="Link to this definition"></a></dt>
+<dd><p>Do the annoying conversion of numpy types to native Python types. Sigh.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.firmware_config_for_rest">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_master.</span></span><span class="sig-name descname"><span class="pre">firmware_config_for_rest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fw_config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.firmware_config_for_rest" title="Link to this definition"></a></dt>
+<dd><p>JSON-safe firmware config for raw_acq REST start (includes corr maps).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.main">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_master.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.main" title="Link to this definition"></a></dt>
+<dd><p>Command-line interface to operate the FPGAMaster server.</p>
+<p>./fpga_master.py [config] [command {args}] [–host hostname] [–port port_number] [–no-run | –run] [–no-start]</p>
+<dl class="simple">
+<dt>where:</dt><dd><p><em>config</em> : configuration in the format [[<em>filename</em>]:][<em>path_to_config_object</em>]
+<em>command</em> : the name of a FPGAMaster client method.
+–host: hostname of the server. Overrides the hostname found in the config. Default is ‘localhost’.
+–port: port number of the server. Overrides the port number found in the config.  Default is 54321.
+–run: run the client/server until Ctrl-C is pressed. Default when no command is provided.
+–no-run: Do not run the client/server even if no comman dis provided.
+–no_start: do not attempt to initialize the server even if a configuration is provided.</p>
+</dd>
+</dl>
+<p>The <cite>fpga_master</cite> command is invoked from the command line with:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">fpga_master</span><span class="o">.</span><span class="n">py</span> <span class="n">arguments</span><span class="o">...</span>  <span class="c1"># linux only</span>
+<span class="n">python</span> <span class="n">fpga_master</span><span class="o">.</span><span class="n">py</span> <span class="n">arguments</span>
+</pre></div>
+</div>
+<p>Or from an ipython interactive session:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">run</span> <span class="o">-</span><span class="n">i</span> <span class="n">fpga_master</span> <span class="n">arguments</span>
+</pre></div>
+</div>
+<p>Operations done:</p>
+<blockquote>
+<div><ol class="arabic">
+<li><p>Create client:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Always starts a client that connects to server at address specified in config or as
+overriden by –host and –port.</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p>Create server if none already esists:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>If there is no server, a server is created at localhost on the port specified in the
+config or as overriden by –port, unless -no-server is specified</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p>Initialize server with config file if requested:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>If no config is present, or if –no-start option is specified, the server is not started</p></li>
+<li><p>If there is a config file, the ‘start’ command is sent along with the specified
+config. If the server is already started with a different config, an error will be
+raised.</p></li>
+</ul>
+</div></blockquote>
+</li>
+<li><p>Execute command or run server:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>If a command and arguments are specified, the corresponding client methods commands
+are invoked. Those generally pass on the command to the corresponding server endpoint.</p></li>
+<li><p>If no command is specified and a local server was started, the client (and locally
+started server if any) are run continually until stopped by Ctrl-C. Bypassed if –no-
+run is specified</p></li>
+</ul>
+</div></blockquote>
+</li>
+</ol>
+</div></blockquote>
+<p>Examples:</p>
+<p>Create and initialize and run a new local server  or initialize an existing server:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">fpga_master</span><span class="o">.</span><span class="n">py</span> <span class="n">jfc</span><span class="o">.</span><span class="n">erh</span>
+</pre></div>
+</div>
+<p>Create an non-initialized server</p>
+<blockquote>
+<div><p>./fpga_master.py  # starts server on localhost:54321
+./fpga_master.py config –no-start # starts server at address specified in config</p>
+</div></blockquote>
+<p>Send a command to server:</p>
+<blockquote>
+<div><p>./fpga_master stop # send stop command to server on localhost:54321
+./fpga_master jfc.erh power_off # power off supplies used by server running at theaddress specified in the jfc.erh config</p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.reap_cached_sockets">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_master.</span></span><span class="sig-name descname"><span class="pre">reap_cached_sockets</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.reap_cached_sockets" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.sanitize_for_json">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_master.</span></span><span class="sig-name descname"><span class="pre">sanitize_for_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.sanitize_for_json" title="Link to this definition"></a></dt>
+<dd><p>Modify an object to make it JSON-compatible. Contents of dicts and
+lists contained in the object are recursively converted.</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>dict-like object with string keys are converted to Python dict</p></li>
+<li><p>dict-like objects with non-string keys are converted into a Python list of (key,value) tuples.</p></li>
+<li><p>list objects are converted into Python list</p></li>
+<li><p>other objects stay the same.</p></li>
+</ul>
+</div></blockquote>
+</dd></dl>
+
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_master.</span></span><span class="sig-name descname"><span class="pre">DummyFPGAMaster</span></span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="#pychfpga.fpga_master.FPGAMaster" title="pychfpga.fpga_master.FPGAMaster"><code class="xref py py-class docutils literal notranslate"><span class="pre">FPGAMaster</span></code></a></p>
+<p>A variant of FPGAMaster that doesn’t do anything hardware related.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.DEFAULT_LOGGING">
+<span class="sig-name descname"><span class="pre">DEFAULT_LOGGING</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'handlers':</span> <span class="pre">{'stderr':</span> <span class="pre">{'class':</span> <span class="pre">'logging.StreamHandler',</span> <span class="pre">'level':</span> <span class="pre">'INFO'}},</span> <span class="pre">'loggers':</span> <span class="pre">{'':</span> <span class="pre">{'handlers':</span> <span class="pre">['stderr']}}}</span></span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.DEFAULT_LOGGING" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.compute_direct_gains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">compute_direct_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">23</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_gains</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_injection</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_fft_averages</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scaler_cap_data_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fft_2x'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">post_gain_bits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">44</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_rms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.compute_direct_gains" title="Link to this definition"></a></dt>
+<dd><p>Compute float digital gains in one shot from full-resolution FFT RMS.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.compute_gains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">compute_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'direct'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">23</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_gains</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_injection</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_fft_averages</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_gain_update_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial_gains</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[('*',</span> <span class="pre">[1.0,</span> <span class="pre">22])]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scaler_cap_data_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fft_2x'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">post_gain_bits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">44</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_rms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.compute_gains" title="Link to this definition"></a></dt>
+<dd><p>Compute digital gains using the direct or legacy iterative method.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.compute_iterative_gains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">compute_iterative_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">23</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_gains</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_injection</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_fft_averages</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_gain_update_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial_gains</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[('*',</span> <span class="pre">[1.0,</span> <span class="pre">22])]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.compute_iterative_gains" title="Link to this definition"></a></dt>
+<dd><p>Perform the iterative process of computing the optimal digital gains on the FPGA to acheive the target RMS on specified target channels.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>targets</strong> – list of tuples (or dict) describing the (crate, board,
+channel) (or {crate:c, board:b, channel:ch}) whose gains needs
+to be recomputed. Missing elements, <cite>None</cite> or  <code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code> is treated
+as a wildcard.</p></li>
+<li><p><strong>capture_rate</strong> (<em>int</em>) – Sets how fast the data is to be temporarily
+transmitted and captured for the selected channel. This sets
+the number of frames between captures, which is a power of 2
+set by <code class="docutils literal notranslate"><span class="pre">Nframes=2**(capture_rate+1)</span></code>. Independently of this,
+the rate cannot be slower than the promary capture rate set at
+FPGA initialization.</p></li>
+<li><p><strong>enable</strong> (<em>bool</em>) – if False, nothing is done.</p></li>
+<li><p><strong>noise_injection</strong> – noise injection parameters to be set for these
+gains computations. If it evaluates to False, noise injection
+parameters are not set. Note that multiple channels might be
+affected by this, not just the sleected channels.</p></li>
+<li><p><strong>number_of_fft_averages</strong> (<em>int</em>) – Number of FFT frames that will be
+captured and averaged before returning the averages spectrum
+that will be used to perform a gain update iteration. Defaults
+to 100. This parameter and the capture rate affects the speed
+at which the gain computations will occur</p></li>
+<li><p><strong>number_of_gain_update_iterations</strong> – Number of incremental gain
+updates that will be performed before the final gain solution.</p></li>
+<li><p><strong>weight</strong> (<em>float</em>) – new data in theevolving gain solution.</p></li>
+<li><p><strong>initial_gains</strong> (<em>list</em>) – list of [(target, (glin, glog)),…] describing the initial
+gains to be used to start computing new gains.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>chan_id = [(0,1), (1,3,4)] or [{crate:0, slot:1}, {crate:1, slot:3, channel:4}] # Select all channels of board in crate 0 slot 1, and channel 4 of crate 1 slot 3.
+chan_id = None # Selects all boards and channels in the array
+chan_id = [(4,’*’, 5)] or [(4, None, 5)] or [{crate:4, channel:5}, {crate:4, slot:’*’, channel:5}  # select channel 5 of all boards in crate 4</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.expand_path">
+<span class="sig-name descname"><span class="pre">expand_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pattern</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extra_fields</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.expand_path" title="Link to this definition"></a></dt>
+<dd><p>Expand fields in a string.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.get_channelizer_output">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_channelizer_output</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.get_channelizer_output" title="Link to this definition"></a></dt>
+<dd><p>Return the output of the channelizer, assuming  the function generator is configuring to send its buffer.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.get_data_config">
+<span class="sig-name descname"><span class="pre">get_data_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.get_data_config" title="Link to this definition"></a></dt>
+<dd><p>Compose <code class="docutils literal notranslate"><span class="pre">{raw,</span> <span class="pre">corr}</span></code> dict for REST from array getters.</p>
+<p><code class="docutils literal notranslate"><span class="pre">source</span></code> is ignored; raw/corr configs are always assembled from
+<code class="docutils literal notranslate"><span class="pre">self.fpgas</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.get_frequency_map">
+<span class="sig-name descname"><span class="pre">get_frequency_map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'s:b'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.get_frequency_map" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.get_noise_injection_status">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_noise_injection_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.get_noise_injection_status" title="Link to this definition"></a></dt>
+<dd><p>Return the actual configuration of the specified noise injection source.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<em>str</em>) – name of the noise injection configuration, as defined
+in the configuration file under the fpga.noise_injection
+configuration group. Is case sensitive.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A dict containing the configuration and state of the specified
+noise injection source. See
+<cite>FPGAArray.get_user_output_state_async()</cite> for the format.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.initialize_gain_hdf5">
+<span class="sig-name descname"><span class="pre">initialize_gain_hdf5</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.initialize_gain_hdf5" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.load_gains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">load_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">update_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'now'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.load_gains" title="Link to this definition"></a></dt>
+<dd><p>Read gains from the archive and load on FPGAs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>update_id</strong> – str or float
+Either a unique update_id string or a unix timestamp.  If unix timestamp
+then the most recent update occuring before that timestamp will be loaded.
+Defaults to the last update_id.</p></li>
+<li><p><strong>bank</strong> – 0 or 1
+Bank where there gains will be loaded.</p></li>
+<li><p><strong>when</strong> – ‘now’ or int
+If <cite>when</cite> is ‘now’ or a negative integer, the target gains are made active immediately.
+If <cite>when</cite> is None, the gains are written in the specified bank but the bank switching is not activated.
+If <cite>when</cite> is a positive integer, the gains will be activated starting on the unix timestamp specified by <cite>when</cite>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.register_config">
+<span class="sig-name descname"><span class="pre">register_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.register_config" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.register_hardware">
+<span class="sig-name descname"><span class="pre">register_hardware</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.register_hardware" title="Link to this definition"></a></dt>
+<dd><p>Registers the hardware map and frequency map with the configuration manager (Comet)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.reset_bp_shuffle_stats">
+<span class="sig-name descname"><span class="pre">reset_bp_shuffle_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.reset_bp_shuffle_stats" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.reset_crossbar_stats">
+<span class="sig-name descname"><span class="pre">reset_crossbar_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.reset_crossbar_stats" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.reset_fpga_stats">
+<span class="sig-name descname"><span class="pre">reset_fpga_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.reset_fpga_stats" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.save_gains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">save_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.save_gains" title="Link to this definition"></a></dt>
+<dd><p>Read gains from FPGAs and save them to the HDF5 archive.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>bank</strong> – 0 or 1
+Read the gains from this bank.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.serial_compute_gains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">serial_compute_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.serial_compute_gains" title="Link to this definition"></a></dt>
+<dd><p>Wrapper for <cite>compute_gains</cite> that computes the gains for the target channels in serial.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>targets</strong> – list of tuples (or dict) describing the <code class="docutils literal notranslate"><span class="pre">(crate,</span> <span class="pre">board,</span>
+<span class="pre">channel)</span></code> or <code class="docutils literal notranslate"><span class="pre">{crate:c,</span> <span class="pre">board:b,</span> <span class="pre">channel:ch}</span></code> whose gains needs
+to be recomputed. Missing elements, <code class="docutils literal notranslate"><span class="pre">None</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code> are treated
+as a wildcard.  List will be iterated over and the channels matching
+each element of the list will have their gains computed in parallel.
+If not provided, then will default to  a list of the crates.</p></li>
+<li><p><strong>**</strong> (<em>** accepts all other parameters for compute_gains</em>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.set_config">
+<span class="sig-name descname"><span class="pre">set_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.set_config" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.set_fpga_data_capture">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_fpga_data_capture</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">23</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.set_fpga_data_capture" title="Link to this definition"></a></dt>
+<dd><p>Sets the data source and capture rate for the specified channels. This
+can be called at any time after array initializationand does not
+require sync.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>targets</strong> – channels to be configured. Is processed through ca.get_iceboards()</p></li>
+<li><p><strong>capture_rate</strong> (<em>int</em>) – sets the sub-period capture rate, which is faster than the base capture rate. It corresponds to 2**capture_rate frame.</p></li>
+<li><p><strong>source</strong> (<em>str</em>) – ‘adc’ or ‘scaler’. If None, the config default (<cite>fpga.raw_data_capture.capture_source</cite>) will be used.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.set_gains_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_gains_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">gains</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.set_gains_async" title="Link to this definition"></a></dt>
+<dd><p>Sets the scaler gains for the target channels and gains values specified in <cite>gains</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>gains</strong> (<em>dict</em><em> or </em><em>list</em>) – list describing which channels are involved</p></li>
+<li><p><strong>format::</strong> (<em>and what gains are applied to them. In the</em>) – [ (target, (glin, glog)), …]</p></li>
+</ul>
+</dd>
+</dl>
+<p>or:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span> <span class="n">target</span><span class="p">:</span> <span class="p">(</span><span class="n">glin</span><span class="p">,</span> <span class="n">glog</span><span class="p">),</span> <span class="o">...</span><span class="p">}</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.set_state">
+<span class="sig-name descname"><span class="pre">set_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.set_state" title="Link to this definition"></a></dt>
+<dd><p>Sets the state to a specified value. Used for debugging.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.setup_noise_injection">
+<span class="sig-name descname"><span class="pre">setup_noise_injection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ni_params</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.setup_noise_injection" title="Link to this definition"></a></dt>
+<dd><p>Setup the noise gating PWM signals for all the boards specified in <cite>ni_params</cite>.</p>
+<p><cite>ni_params</cite> is a dictionary containing the parameters passed to the fpga_array’s setup_noise_injection() method.</p>
+<p>If no board is specified for an entry (.board evaluates to False), the parameters are ignored.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.start">
+<span class="sig-name descname"><span class="pre">start</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.start" title="Link to this definition"></a></dt>
+<dd><p>Make the telescope operational by starting and initializing the FPGA
+F-Engine and the GPU X Engine (Kotekan), CHRX, and raw_acq remote
+processes.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.start_corr_hdf5_capture">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start_corr_hdf5_capture</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">capture_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_duration</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_n_inputs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocorr_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_elements_per_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.start_corr_hdf5_capture" title="Link to this definition"></a></dt>
+<dd><p>Instructs the raw_acq server to start storing raw data in HDF5 files
+at a specified rate, duration and in the specified folder.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>capture_folder</strong> (<em>str</em>) – path to the folder where the raw data folder will be created. If it is
+a relative path, it will be relative to the run folder. If not specified or <cite>None</cite>, it
+will be taken from the config file.</p></li>
+<li><p><strong>capture_filename</strong> (<em>str</em>) – name of the folder in which the HDF5 files <code class="docutils literal notranslate"><span class="pre">nnnnnn.h5</span></code> will be
+created. Is prepended with the time. If not specified or <cite>None</cite>, it will be taken
+from the config file.</p></li>
+<li><p><strong>capture_refresh_time</strong> (<em>float</em>) – cadence in seconds at which raw data is written to the hdf5 file.</p></li>
+<li><p><strong>capture_duration</strong> (<em>float</em>) – period of time (in seconds) during which the captured data
+will be stored to HDF5 files. After which the capture will revert to the idle rate.
+if <code class="docutils literal notranslate"><span class="pre">0</span></code>, the capture will continue indefinitely.  If not specified or <cite>None</cite>, it will be taken
+from the config file.</p></li>
+<li><p><strong>capture_elements_per_file</strong> (<em>int</em>) – Number of frames to store in each HDF5 files. If not</p></li>
+<li><p><strong>None</strong> (<em>specified or</em>)</p></li>
+<li><p><strong>file.</strong> (<em>the parameter is taken from the config</em>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.start_fpga_raw_data_transmission">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start_fpga_raw_data_transmission</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">capture_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tmux_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.start_fpga_raw_data_transmission" title="Link to this definition"></a></dt>
+<dd><p>Configure the FPGAs to transmit raw data.</p>
+<p>This is the static baseline data capture configuration that cannot be
+dynamically changed without sync(). See set_fpga_data_capture() for
+on-the-fly rource and rate changes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>capture_rate</strong> (<em>float</em>) – Number of frames to send per second.</p></li>
+<li><p><strong>capture_source</strong> (<em>str</em>) – selects the data source. ‘adc’:  the data is taken after the function generator (sorry, non
+intuitive). <cite>scaler</cite>: the data is taken after the scaler. Default is ‘scaler’.</p></li>
+<li><p><strong>tmux_factor</strong> (<em>int</em>) – Number between 0 and 64.  Raw data transmission is staggered across FPGAs in the array
+with a step size equal to tmux_factor * 524.288 microsec.</p></li>
+</ul>
+</dd>
+</dl>
+<p>If no arguments are provided, the FPGA will be set to transmit data at the idle rate and from source defined in the config file.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.start_hdf5_capture">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start_hdf5_capture</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">capture_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_refresh_time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_duration</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_elements_per_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_aux_enable</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_aux_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_aux_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_aux_refresh_time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_aux_stream_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_aux_elements_per_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.start_hdf5_capture" title="Link to this definition"></a></dt>
+<dd><p>Instructs the raw_acq server to start storing raw data in HDF5 files
+at a specified rate, duration and in the specified folder. It has an option to save up to two
+streams of raw adc data with different cadence, to a different folder and with a different filename,
+and for the auxiliary channel one can specify which particular adc inputs to save.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>capture_folder</strong> (<em>str</em>) – path to the folder where the raw data folder will be created. If it is
+a relative path, it will be relative to the run folder. If not specified or <cite>None</cite>, it
+will be taken from the config file.</p></li>
+<li><p><strong>capture_filename</strong> (<em>str</em>) – name of the folder in which the HDF5 files <code class="docutils literal notranslate"><span class="pre">nnnnnn.h5</span></code> will be
+created. Is prepended with the time. If not specified or <cite>None</cite>, it will be taken
+from the config file.</p></li>
+<li><p><strong>capture_refresh_time</strong> (<em>float</em>) – cadence in seconds at which raw data is written to the hdf5 file.</p></li>
+<li><p><strong>capture_duration</strong> (<em>float</em>) – period of time (in seconds) during which the captured data
+will be stored to HDF5 files. After which the capture will revert to the idle rate.
+if <code class="docutils literal notranslate"><span class="pre">0</span></code>, the capture will continue indefinitely.  If not specified or <cite>None</cite>, it will be taken
+from the config file.</p></li>
+<li><p><strong>capture_elements_per_file</strong> (<em>int</em>) – Number of frames to store in each HDF5 files. If not</p></li>
+<li><p><strong>None</strong> (<em>specified or</em>)</p></li>
+<li><p><strong>file.</strong> (<em>the parameter is taken from the config</em>)</p></li>
+<li><p><strong>capture_aux_enable</strong> (<em>bool</em>) – True for writting auxiliary raw_adc channel with separate folder,</p></li>
+<li><p><strong>input</strong> (<em>cadence and for a particular</em>)</p></li>
+<li><p><strong>capture_aux_folder</strong> (<em>str</em><em>)</em><em>, </em><em>capture_aux_filename</em><em> (</em><em>str</em><em>)</em><em>, </em><em>capture_aux_refresh_time</em><em> (</em><em>float</em>)</p></li>
+<li><p><strong>capture_aux_elements_per_file</strong> (<em>int</em>) – same as for pars above but for the auxiliary raw_adc channel</p></li>
+<li><p><strong>capture_aux_stream_ids</strong> (<em>int</em>) – raw adc input numbers for which to save the auxiliary stream.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.start_raw_acq_servers">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start_raw_acq_servers</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.start_raw_acq_servers" title="Link to this definition"></a></dt>
+<dd><p>Start raw data acquisition servers and set the FPGAs raw data transmit addresses.</p>
+<p>Requires the FPGAs to be initialized.</p>
+<p>Creates</p>
+<blockquote>
+<div><p>self.raw_acq_ports (dict):  List of port entries {port, iceboards)  associated with each RawAcq server.
+self.raw_acq_ibs (dict): lists the iceboards objects associated with each RawAcq server.</p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.status">
+<span class="sig-name descname"><span class="pre">status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.status" title="Link to this definition"></a></dt>
+<dd><p>Get the operational status of the telescope as a dictionary</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.stop">
+<span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.stop" title="Link to this definition"></a></dt>
+<dd><p>Stop the F-engine and the correlator data acquisition processes</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.DummyFPGAMaster.update_channelizers">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">update_channelizers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.DummyFPGAMaster.update_channelizers" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_master.</span></span><span class="sig-name descname"><span class="pre">FPGAMaster</span></span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Object that provide methods to initialize, control, monitor and shutdown a CHIME telescope
+array (or subarray)</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.DEFAULT_LOGGING">
+<span class="sig-name descname"><span class="pre">DEFAULT_LOGGING</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'handlers':</span> <span class="pre">{'stderr':</span> <span class="pre">{'class':</span> <span class="pre">'logging.StreamHandler',</span> <span class="pre">'level':</span> <span class="pre">'INFO'}},</span> <span class="pre">'loggers':</span> <span class="pre">{'':</span> <span class="pre">{'handlers':</span> <span class="pre">['stderr']}}}</span></span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.DEFAULT_LOGGING" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.compute_direct_gains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">compute_direct_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">23</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_gains</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_injection</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_fft_averages</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scaler_cap_data_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fft_2x'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">post_gain_bits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">44</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_rms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.compute_direct_gains" title="Link to this definition"></a></dt>
+<dd><p>Compute float digital gains in one shot from full-resolution FFT RMS.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.compute_gains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">compute_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'direct'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">23</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_gains</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_injection</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_fft_averages</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_gain_update_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial_gains</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[('*',</span> <span class="pre">[1.0,</span> <span class="pre">22])]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scaler_cap_data_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'fft_2x'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">post_gain_bits</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">44</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_rms</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.compute_gains" title="Link to this definition"></a></dt>
+<dd><p>Compute digital gains using the direct or legacy iterative method.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.compute_iterative_gains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">compute_iterative_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">23</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_gains</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noise_injection</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_fft_averages</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_gain_update_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initial_gains</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[('*',</span> <span class="pre">[1.0,</span> <span class="pre">22])]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.compute_iterative_gains" title="Link to this definition"></a></dt>
+<dd><p>Perform the iterative process of computing the optimal digital gains on the FPGA to acheive the target RMS on specified target channels.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>targets</strong> – list of tuples (or dict) describing the (crate, board,
+channel) (or {crate:c, board:b, channel:ch}) whose gains needs
+to be recomputed. Missing elements, <cite>None</cite> or  <code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code> is treated
+as a wildcard.</p></li>
+<li><p><strong>capture_rate</strong> (<em>int</em>) – Sets how fast the data is to be temporarily
+transmitted and captured for the selected channel. This sets
+the number of frames between captures, which is a power of 2
+set by <code class="docutils literal notranslate"><span class="pre">Nframes=2**(capture_rate+1)</span></code>. Independently of this,
+the rate cannot be slower than the promary capture rate set at
+FPGA initialization.</p></li>
+<li><p><strong>enable</strong> (<em>bool</em>) – if False, nothing is done.</p></li>
+<li><p><strong>noise_injection</strong> – noise injection parameters to be set for these
+gains computations. If it evaluates to False, noise injection
+parameters are not set. Note that multiple channels might be
+affected by this, not just the sleected channels.</p></li>
+<li><p><strong>number_of_fft_averages</strong> (<em>int</em>) – Number of FFT frames that will be
+captured and averaged before returning the averages spectrum
+that will be used to perform a gain update iteration. Defaults
+to 100. This parameter and the capture rate affects the speed
+at which the gain computations will occur</p></li>
+<li><p><strong>number_of_gain_update_iterations</strong> – Number of incremental gain
+updates that will be performed before the final gain solution.</p></li>
+<li><p><strong>weight</strong> (<em>float</em>) – new data in theevolving gain solution.</p></li>
+<li><p><strong>initial_gains</strong> (<em>list</em>) – list of [(target, (glin, glog)),…] describing the initial
+gains to be used to start computing new gains.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>chan_id = [(0,1), (1,3,4)] or [{crate:0, slot:1}, {crate:1, slot:3, channel:4}] # Select all channels of board in crate 0 slot 1, and channel 4 of crate 1 slot 3.
+chan_id = None # Selects all boards and channels in the array
+chan_id = [(4,’*’, 5)] or [(4, None, 5)] or [{crate:4, channel:5}, {crate:4, slot:’*’, channel:5}  # select channel 5 of all boards in crate 4</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.expand_path">
+<span class="sig-name descname"><span class="pre">expand_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pattern</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extra_fields</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.expand_path" title="Link to this definition"></a></dt>
+<dd><p>Expand fields in a string.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.get_channelizer_output">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_channelizer_output</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.get_channelizer_output" title="Link to this definition"></a></dt>
+<dd><p>Return the output of the channelizer, assuming  the function generator is configuring to send its buffer.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.get_data_config">
+<span class="sig-name descname"><span class="pre">get_data_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.get_data_config" title="Link to this definition"></a></dt>
+<dd><p>Compose <code class="docutils literal notranslate"><span class="pre">{raw,</span> <span class="pre">corr}</span></code> dict for REST from array getters.</p>
+<p><code class="docutils literal notranslate"><span class="pre">source</span></code> is ignored; raw/corr configs are always assembled from
+<code class="docutils literal notranslate"><span class="pre">self.fpgas</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.get_frequency_map">
+<span class="sig-name descname"><span class="pre">get_frequency_map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'s:b'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.get_frequency_map" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.get_noise_injection_status">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_noise_injection_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.get_noise_injection_status" title="Link to this definition"></a></dt>
+<dd><p>Return the actual configuration of the specified noise injection source.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<em>str</em>) – name of the noise injection configuration, as defined
+in the configuration file under the fpga.noise_injection
+configuration group. Is case sensitive.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A dict containing the configuration and state of the specified
+noise injection source. See
+<cite>FPGAArray.get_user_output_state_async()</cite> for the format.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.initialize_gain_hdf5">
+<span class="sig-name descname"><span class="pre">initialize_gain_hdf5</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.initialize_gain_hdf5" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.load_gains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">load_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">update_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'now'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.load_gains" title="Link to this definition"></a></dt>
+<dd><p>Read gains from the archive and load on FPGAs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>update_id</strong> – str or float
+Either a unique update_id string or a unix timestamp.  If unix timestamp
+then the most recent update occuring before that timestamp will be loaded.
+Defaults to the last update_id.</p></li>
+<li><p><strong>bank</strong> – 0 or 1
+Bank where there gains will be loaded.</p></li>
+<li><p><strong>when</strong> – ‘now’ or int
+If <cite>when</cite> is ‘now’ or a negative integer, the target gains are made active immediately.
+If <cite>when</cite> is None, the gains are written in the specified bank but the bank switching is not activated.
+If <cite>when</cite> is a positive integer, the gains will be activated starting on the unix timestamp specified by <cite>when</cite>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.register_config">
+<span class="sig-name descname"><span class="pre">register_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.register_config" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.register_hardware">
+<span class="sig-name descname"><span class="pre">register_hardware</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.register_hardware" title="Link to this definition"></a></dt>
+<dd><p>Registers the hardware map and frequency map with the configuration manager (Comet)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.reset_bp_shuffle_stats">
+<span class="sig-name descname"><span class="pre">reset_bp_shuffle_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.reset_bp_shuffle_stats" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.reset_crossbar_stats">
+<span class="sig-name descname"><span class="pre">reset_crossbar_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.reset_crossbar_stats" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.reset_fpga_stats">
+<span class="sig-name descname"><span class="pre">reset_fpga_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.reset_fpga_stats" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.save_gains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">save_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.save_gains" title="Link to this definition"></a></dt>
+<dd><p>Read gains from FPGAs and save them to the HDF5 archive.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>bank</strong> – 0 or 1
+Read the gains from this bank.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.serial_compute_gains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">serial_compute_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.serial_compute_gains" title="Link to this definition"></a></dt>
+<dd><p>Wrapper for <cite>compute_gains</cite> that computes the gains for the target channels in serial.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>targets</strong> – list of tuples (or dict) describing the <code class="docutils literal notranslate"><span class="pre">(crate,</span> <span class="pre">board,</span>
+<span class="pre">channel)</span></code> or <code class="docutils literal notranslate"><span class="pre">{crate:c,</span> <span class="pre">board:b,</span> <span class="pre">channel:ch}</span></code> whose gains needs
+to be recomputed. Missing elements, <code class="docutils literal notranslate"><span class="pre">None</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code> are treated
+as a wildcard.  List will be iterated over and the channels matching
+each element of the list will have their gains computed in parallel.
+If not provided, then will default to  a list of the crates.</p></li>
+<li><p><strong>**</strong> (<em>** accepts all other parameters for compute_gains</em>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.set_config">
+<span class="sig-name descname"><span class="pre">set_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.set_config" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.set_fpga_data_capture">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_fpga_data_capture</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">23</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.set_fpga_data_capture" title="Link to this definition"></a></dt>
+<dd><p>Sets the data source and capture rate for the specified channels. This
+can be called at any time after array initializationand does not
+require sync.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>targets</strong> – channels to be configured. Is processed through ca.get_iceboards()</p></li>
+<li><p><strong>capture_rate</strong> (<em>int</em>) – sets the sub-period capture rate, which is faster than the base capture rate. It corresponds to 2**capture_rate frame.</p></li>
+<li><p><strong>source</strong> (<em>str</em>) – ‘adc’ or ‘scaler’. If None, the config default (<cite>fpga.raw_data_capture.capture_source</cite>) will be used.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.set_gains_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_gains_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">gains</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.set_gains_async" title="Link to this definition"></a></dt>
+<dd><p>Sets the scaler gains for the target channels and gains values specified in <cite>gains</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>gains</strong> (<em>dict</em><em> or </em><em>list</em>) – list describing which channels are involved</p></li>
+<li><p><strong>format::</strong> (<em>and what gains are applied to them. In the</em>) – [ (target, (glin, glog)), …]</p></li>
+</ul>
+</dd>
+</dl>
+<p>or:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span> <span class="n">target</span><span class="p">:</span> <span class="p">(</span><span class="n">glin</span><span class="p">,</span> <span class="n">glog</span><span class="p">),</span> <span class="o">...</span><span class="p">}</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.set_state">
+<span class="sig-name descname"><span class="pre">set_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.set_state" title="Link to this definition"></a></dt>
+<dd><p>Sets the state to a specified value. Used for debugging.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.setup_noise_injection">
+<span class="sig-name descname"><span class="pre">setup_noise_injection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ni_params</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.setup_noise_injection" title="Link to this definition"></a></dt>
+<dd><p>Setup the noise gating PWM signals for all the boards specified in <cite>ni_params</cite>.</p>
+<p><cite>ni_params</cite> is a dictionary containing the parameters passed to the fpga_array’s setup_noise_injection() method.</p>
+<p>If no board is specified for an entry (.board evaluates to False), the parameters are ignored.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.start">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.start" title="Link to this definition"></a></dt>
+<dd><p>Make the telescope operational by starting and initializing the FPGA
+F-Engine and the GPU X Engine (Kotekan), CHRX, and raw_acq remote
+processes.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.start_corr_hdf5_capture">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start_corr_hdf5_capture</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">capture_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_duration</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_n_inputs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocorr_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_elements_per_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.start_corr_hdf5_capture" title="Link to this definition"></a></dt>
+<dd><p>Instructs the raw_acq server to start storing raw data in HDF5 files
+at a specified rate, duration and in the specified folder.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>capture_folder</strong> (<em>str</em>) – path to the folder where the raw data folder will be created. If it is
+a relative path, it will be relative to the run folder. If not specified or <cite>None</cite>, it
+will be taken from the config file.</p></li>
+<li><p><strong>capture_filename</strong> (<em>str</em>) – name of the folder in which the HDF5 files <code class="docutils literal notranslate"><span class="pre">nnnnnn.h5</span></code> will be
+created. Is prepended with the time. If not specified or <cite>None</cite>, it will be taken
+from the config file.</p></li>
+<li><p><strong>capture_refresh_time</strong> (<em>float</em>) – cadence in seconds at which raw data is written to the hdf5 file.</p></li>
+<li><p><strong>capture_duration</strong> (<em>float</em>) – period of time (in seconds) during which the captured data
+will be stored to HDF5 files. After which the capture will revert to the idle rate.
+if <code class="docutils literal notranslate"><span class="pre">0</span></code>, the capture will continue indefinitely.  If not specified or <cite>None</cite>, it will be taken
+from the config file.</p></li>
+<li><p><strong>capture_elements_per_file</strong> (<em>int</em>) – Number of frames to store in each HDF5 files. If not</p></li>
+<li><p><strong>None</strong> (<em>specified or</em>)</p></li>
+<li><p><strong>file.</strong> (<em>the parameter is taken from the config</em>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.start_fpga_raw_data_transmission">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start_fpga_raw_data_transmission</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">capture_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tmux_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.start_fpga_raw_data_transmission" title="Link to this definition"></a></dt>
+<dd><p>Configure the FPGAs to transmit raw data.</p>
+<p>This is the static baseline data capture configuration that cannot be
+dynamically changed without sync(). See set_fpga_data_capture() for
+on-the-fly rource and rate changes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>capture_rate</strong> (<em>float</em>) – Number of frames to send per second.</p></li>
+<li><p><strong>capture_source</strong> (<em>str</em>) – selects the data source. ‘adc’:  the data is taken after the function generator (sorry, non
+intuitive). <cite>scaler</cite>: the data is taken after the scaler. Default is ‘scaler’.</p></li>
+<li><p><strong>tmux_factor</strong> (<em>int</em>) – Number between 0 and 64.  Raw data transmission is staggered across FPGAs in the array
+with a step size equal to tmux_factor * 524.288 microsec.</p></li>
+</ul>
+</dd>
+</dl>
+<p>If no arguments are provided, the FPGA will be set to transmit data at the idle rate and from source defined in the config file.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.start_hdf5_capture">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start_hdf5_capture</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">capture_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_refresh_time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_duration</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_elements_per_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_aux_enable</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_aux_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_aux_filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_aux_refresh_time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_aux_stream_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">capture_aux_elements_per_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.start_hdf5_capture" title="Link to this definition"></a></dt>
+<dd><p>Instructs the raw_acq server to start storing raw data in HDF5 files
+at a specified rate, duration and in the specified folder. It has an option to save up to two
+streams of raw adc data with different cadence, to a different folder and with a different filename,
+and for the auxiliary channel one can specify which particular adc inputs to save.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>capture_folder</strong> (<em>str</em>) – path to the folder where the raw data folder will be created. If it is
+a relative path, it will be relative to the run folder. If not specified or <cite>None</cite>, it
+will be taken from the config file.</p></li>
+<li><p><strong>capture_filename</strong> (<em>str</em>) – name of the folder in which the HDF5 files <code class="docutils literal notranslate"><span class="pre">nnnnnn.h5</span></code> will be
+created. Is prepended with the time. If not specified or <cite>None</cite>, it will be taken
+from the config file.</p></li>
+<li><p><strong>capture_refresh_time</strong> (<em>float</em>) – cadence in seconds at which raw data is written to the hdf5 file.</p></li>
+<li><p><strong>capture_duration</strong> (<em>float</em>) – period of time (in seconds) during which the captured data
+will be stored to HDF5 files. After which the capture will revert to the idle rate.
+if <code class="docutils literal notranslate"><span class="pre">0</span></code>, the capture will continue indefinitely.  If not specified or <cite>None</cite>, it will be taken
+from the config file.</p></li>
+<li><p><strong>capture_elements_per_file</strong> (<em>int</em>) – Number of frames to store in each HDF5 files. If not</p></li>
+<li><p><strong>None</strong> (<em>specified or</em>)</p></li>
+<li><p><strong>file.</strong> (<em>the parameter is taken from the config</em>)</p></li>
+<li><p><strong>capture_aux_enable</strong> (<em>bool</em>) – True for writting auxiliary raw_adc channel with separate folder,</p></li>
+<li><p><strong>input</strong> (<em>cadence and for a particular</em>)</p></li>
+<li><p><strong>capture_aux_folder</strong> (<em>str</em><em>)</em><em>, </em><em>capture_aux_filename</em><em> (</em><em>str</em><em>)</em><em>, </em><em>capture_aux_refresh_time</em><em> (</em><em>float</em>)</p></li>
+<li><p><strong>capture_aux_elements_per_file</strong> (<em>int</em>) – same as for pars above but for the auxiliary raw_adc channel</p></li>
+<li><p><strong>capture_aux_stream_ids</strong> (<em>int</em>) – raw adc input numbers for which to save the auxiliary stream.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.start_raw_acq_servers">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start_raw_acq_servers</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.start_raw_acq_servers" title="Link to this definition"></a></dt>
+<dd><p>Start raw data acquisition servers and set the FPGAs raw data transmit addresses.</p>
+<p>Requires the FPGAs to be initialized.</p>
+<p>Creates</p>
+<blockquote>
+<div><p>self.raw_acq_ports (dict):  List of port entries {port, iceboards)  associated with each RawAcq server.
+self.raw_acq_ibs (dict): lists the iceboards objects associated with each RawAcq server.</p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.status">
+<span class="sig-name descname"><span class="pre">status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.status" title="Link to this definition"></a></dt>
+<dd><p>Get the operational status of the telescope as a dictionary</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.stop">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.stop" title="Link to this definition"></a></dt>
+<dd><p>Stop the F-engine and the correlator data acquisition processes</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMaster.update_channelizers">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">update_channelizers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMaster.update_channelizers" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_master.</span></span><span class="sig-name descname"><span class="pre">FPGAMasterAsyncRESTClient</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">AsyncRESTClient</span></code></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.DEFAULT_PORT">
+<span class="sig-name descname"><span class="pre">DEFAULT_PORT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">54321</span></span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.DEFAULT_PORT" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.__call__" title="Link to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hostname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'localhost'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">54321</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.config">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.config" title="Link to this definition"></a></dt>
+<dd><p>Get the full configuration currently loaded in fpga_master.</p>
+<p>Returns None if no configuration has been loaded (i.e. the server
+is running but /start has not yet been called).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_channelizer_output">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_channelizer_output</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_channelizer_output" title="Link to this definition"></a></dt>
+<dd><p>Get the channelizer output buffer.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_current_gain_filename">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_current_gain_filename</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_current_gain_filename" title="Link to this definition"></a></dt>
+<dd><p>Get information about the current digital gains file.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_frame0_time">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_frame0_time</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_frame0_time" title="Link to this definition"></a></dt>
+<dd><p>Get the gps time corresponding to frame 0.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_frame_time">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_frame_time</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_frame_time" title="Link to this definition"></a></dt>
+<dd><p>Get the current frame number and gps time.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_frequency_map">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_frequency_map</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_frequency_map" title="Link to this definition"></a></dt>
+<dd><p>Print fpga_master status.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_hw_map">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_hw_map</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_hw_map" title="Link to this definition"></a></dt>
+<dd><p>Get hardware map</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_methods">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_methods</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_methods" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.load_gains">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">load_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">update_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'now'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.load_gains" title="Link to this definition"></a></dt>
+<dd><p>Load digital gains.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.nop">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">nop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.nop" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.ping">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">ping</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.ping" title="Link to this definition"></a></dt>
+<dd><p>Test connection to fpga_master.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.print_result">
+<span class="sig-name descname"><span class="pre">print_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.print_result" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.raise_exception">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">raise_exception</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.raise_exception" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.set_state">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.set_state" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.start">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.start" title="Link to this definition"></a></dt>
+<dd><p>Start fpga_master with specified config file.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.status">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.status" title="Link to this definition"></a></dt>
+<dd><p>Get fpga_master server status.</p>
+<p>Raises an exception if the start process failed.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTClient.stop">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.stop" title="Link to this definition"></a></dt>
+<dd><p>Stop fpga_master.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_master.</span></span><span class="sig-name descname"><span class="pre">FPGAMasterAsyncRESTServer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">AsyncRESTServer</span></code></p>
+<p>Wraps the FPGAMaster object within a REST server to expose its key methods over HTTP GET or POST requests.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.DEFAULT_PORT">
+<span class="sig-name descname"><span class="pre">DEFAULT_PORT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">54321</span></span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.DEFAULT_PORT" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.__call__" title="Link to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">address</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">54321</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dummy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.abort">
+<span class="sig-name descname"><span class="pre">abort</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.abort" title="Link to this definition"></a></dt>
+<dd><p>Savagely stop the server for debugging purposes.</p>
+<p class="rubric">Example</p>
+<p>curl <a class="reference external" href="http://localhost:54321/abort">http://localhost:54321/abort</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.call_fpga_array_method">
+<span class="sig-name descname"><span class="pre">call_fpga_array_method</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.call_fpga_array_method" title="Link to this definition"></a></dt>
+<dd><p>For debuging: calls any fpga_array method.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.compute_gains">
+<span class="sig-name descname"><span class="pre">compute_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.compute_gains" title="Link to this definition"></a></dt>
+<dd><p>REST endpoint to compute gains for desired channels.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>targets</strong> (<em>list</em><em> of </em><em>tuple/dict</em>) – List of tuples describing the
+(crate, slot, channels) for which gains shall be recomputed.
+Missing tuple elements, <code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code> and <cite>None</cite> are considered to be a
+wildcard.</p></li>
+<li><p><strong>**</strong> (<em>**accepts all other parameters for FPGAMaster.compute_gains</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">curl</span>  <span class="o">-</span><span class="n">H</span> <span class="s2">"Content-Type: application/json"</span> <span class="o">-</span><span class="n">X</span> <span class="n">POST</span> <span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">54321</span><span class="o">/</span><span class="n">compute</span><span class="o">-</span><span class="n">gains</span> <span class="o">-</span><span class="n">d</span> <span class="s1">'{"targets": [[0, 0, "*"]]}'</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.config">
+<span class="sig-name descname"><span class="pre">config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.config" title="Link to this definition"></a></dt>
+<dd><p>Return the full configuration currently loaded in the FPGAMaster.</p>
+<p>The configuration is set by the /start endpoint. If /start has not
+yet been called, the returned value will be None.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>dict</em> – The configuration that was passed to /start (served up as json).
+None if no configuration is currently loaded.</p>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<p>curl <a class="reference external" href="http://localhost:54321/config">http://localhost:54321/config</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.dataset_id">
+<span class="sig-name descname"><span class="pre">dataset_id</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.dataset_id" title="Link to this definition"></a></dt>
+<dd><p>Return the comet dataset ID</p>
+<p class="rubric">Example</p>
+<p>curl <a class="reference external" href="http://localhost:54321/dataset-id">http://localhost:54321/dataset-id</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.echo">
+<span class="sig-name descname"><span class="pre">echo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.echo" title="Link to this definition"></a></dt>
+<dd><p>curl -d ‘{“arg1”: “Hello again”}’ -H “Content-Type: application/json” -X POST <a class="reference external" href="http://localhost:54321/echo">http://localhost:54321/echo</a>
+curl  <a class="reference external" href="http://localhost:54321/echo">http://localhost:54321/echo</a> -d ‘{“arg1”: “Hello again”}’ # also works</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_channelizer_output">
+<span class="sig-name descname"><span class="pre">get_channelizer_output</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_channelizer_output" title="Link to this definition"></a></dt>
+<dd><p>Return the output of the channelizer when the function generator is enabled</p>
+<p class="rubric">Example</p>
+<p>curl <a class="reference external" href="http://localhost:54321/get-channelizer-output">http://localhost:54321/get-channelizer-output</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_current_gain_file">
+<span class="sig-name descname"><span class="pre">get_current_gain_file</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_current_gain_file" title="Link to this definition"></a></dt>
+<dd><p>REST endpoint that returns the current digital gains .h5 file over HTTP.</p>
+<p>Returns the file contents themselves (not just the path). The original
+filename is reported in the Content-Disposition header so clients using
+<cite>curl -OJ</cite> (or equivalent) will save it under the same name.</p>
+<p>Responses:</p>
+<blockquote>
+<div><dl class="simple">
+<dt>200 - application/octet-stream, body is the raw .h5 file bytes.</dt><dd><p>Content-Disposition: attachment; filename=”&lt;basename&gt;”</p>
+</dd>
+<dt>503 - FPGA array is not ready (state != ‘on’). Body is a short</dt><dd><p>plain-text message.</p>
+</dd>
+<dt>404 - No current gain file is set, or the referenced path does</dt><dd><p>not exist on disk. Body is a short plain-text message.</p>
+</dd>
+</dl>
+</div></blockquote>
+<p class="rubric">Example</p>
+<p>curl -OJ <a class="reference external" href="http://localhost:54321/get-current-gain-file">http://localhost:54321/get-current-gain-file</a></p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The gain file is written to by the server as new gains are
+loaded. A download taken concurrently with a write may observe
+partially-flushed HDF5 state.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_current_gain_filename">
+<span class="sig-name descname"><span class="pre">get_current_gain_filename</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_current_gain_filename" title="Link to this definition"></a></dt>
+<dd><p>REST endpoint to return the absolute path of the current digital gains file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>current_gain_file_info (dict)</em> –     current_gain_file: (str) the full file path to the current gains, including the name of the .h5 file
+current_update_id: (str) the update id of the current gains</p>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<p>curl <a class="reference external" href="http://localhost:54321/get-current-gain-filename">http://localhost:54321/get-current-gain-filename</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_frame0_time">
+<span class="sig-name descname"><span class="pre">get_frame0_time</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_frame0_time" title="Link to this definition"></a></dt>
+<dd><p>Get the time of the first frame (frame 0) of the current acquisition.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>A dict containng the time information</em> –     {
+start_ctime # system time of when the acquisition was started
+frame0_time # time_struct,
+frame0_ctime # ctime,
+frame0_nano  #
+}</p>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<p>curl <a class="reference external" href="http://localhost:54321/get-frame0-time">http://localhost:54321/get-frame0-time</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_frame_time">
+<span class="sig-name descname"><span class="pre">get_frame_time</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_frame_time" title="Link to this definition"></a></dt>
+<dd><p>Return the dict describing the timing information gathered from the first board of the array.
+The information is refreshed only once per minute.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>dict containing various time information</em> –     {
+frame_number,  # 48-bit frame number
+gps_time,            # time structure [year, month, day, hour, minute, second, microsecond (float, 10 ns resolution)]
+gps_ctime,           # GPS time, expressed in ctime format (float expressing seconds since UTC epoch)
+gps_nano,
+gps_time2            # time structure [year, month, day, hour, minute, second, microsecond (float, 10 ns resolution)]
+gps_ctime2           # GPS time, expressed in ctime format (float expressing seconds since UTC epoch)
+gps_nano2,
+server_ctime         # system time, expressed in ctime format (float expressing seconds since UTC epoch)
+server_ctime_before  # system time, expressed in ctime format (float expressing seconds since UTC epoch)
+start_ctime,
+frame0_time,
+frame0_ctime,
+frame0_nano)
+}</p>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<p>curl <a class="reference external" href="http://localhost:54321/get-frame-time">http://localhost:54321/get-frame-time</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_frequency_map">
+<span class="sig-name descname"><span class="pre">get_frequency_map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'s:b'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_frequency_map" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>format</strong> (<em>str</em>) – <p>format of the frequency map.</p>
+<p>’s:b’: # stream_id:bins
+‘l:b’: # lane_tuple: bins
+‘l:s’: # lane_tuple: stream_id
+‘l:cscb’,
+‘l:cc’,
+‘l:cb’,
+‘l:bb’:</p>
+</p>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<p>curl -H “Content-Type: application/json” -X POST <a class="reference external" href="http://localhost:54321/get-frequency-map">http://localhost:54321/get-frequency-map</a> -d ‘{}’</p>
+<p>curl -H “Content-Type: application/json” -X POST <a class="reference external" href="http://localhost:54321/get-frequency-map">http://localhost:54321/get-frequency-map</a> -d ‘{“format”:”l:s”}’</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_hw_map">
+<span class="sig-name descname"><span class="pre">get_hw_map</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_hw_map" title="Link to this definition"></a></dt>
+<dd><p class="rubric">Example</p>
+<p>curl <a class="reference external" href="http://localhost:54321/get-hw-map">http://localhost:54321/get-hw-map</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_monitoring_data">
+<span class="sig-name descname"><span class="pre">get_monitoring_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_monitoring_data" title="Link to this definition"></a></dt>
+<dd><p>REST endpoint that returns the current metric values in Prometheus text format.</p>
+<p class="rubric">Example</p>
+<p>curl –compressed <a class="reference external" href="http://localhost:54321/get-monitoring-data">http://localhost:54321/get-monitoring-data</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_noise_injection_status">
+<span class="sig-name descname"><span class="pre">get_noise_injection_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_noise_injection_status" title="Link to this definition"></a></dt>
+<dd><p>REST endpoint to return the state of the specified noise injection source</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>source_name</strong> (<em>str</em>) – name of the noise injection source as found in
+the fpga.noise_injection configuration block.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p>Dictionary describing the configuration and state of the noise injection output.</p>
+<blockquote>
+<div><p>name: Name of the noise injection configuration, as found in the config file</p>
+<p>board: board the generates the noise injection signal</p>
+<p>output: output used to output the noise injection signal</p>
+<p>output_source: current source of the signal routed to the output.</p>
+<dl class="simple">
+<dt>pwm_selected_and_enabled: Convenience field that is True if</dt><dd><p>the PWM generator is enabled AND is routed to the output.
+Be aware that a False value does not necessarily guarantee that the
+noise injection output is low or is not toggling if another source than ‘pwm’
+is selected.</p>
+</dd>
+</dl>
+<p>pwm_offset (int): the PWM waveform offset from frame 0, in frames</p>
+<p>pwm_high_time (int): the high time of the PWM waveform, in frames</p>
+<p>pwm_period (int): the period of the PWM waveform, in frames</p>
+<p>pwm_enabled (bool): True when the PWM is not in reset</p>
+<p>user_bit0 (int): State of the user bit 0. Useful when output_source is ‘user_bit0’.</p>
+<p>user_bit1 (int): State of the user bit 1. Useful when output_source is ‘user_bit1’.</p>
+</div></blockquote>
+</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">curl</span> <span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">54321</span><span class="o">/</span><span class="n">get</span><span class="o">-</span><span class="n">noise</span><span class="o">-</span><span class="n">injection</span><span class="o">-</span><span class="n">status</span> <span class="o">-</span><span class="n">d</span> <span class="s1">'{"name": "26m"}'</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.load_gains">
+<span class="sig-name descname"><span class="pre">load_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">update_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'now'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.load_gains" title="Link to this definition"></a></dt>
+<dd><p class="rubric">Example</p>
+<p>curl -H “Content-Type: application/json” -X POST <a class="reference external" href="http://localhost:54321/load-gains">http://localhost:54321/load-gains</a> -d ‘{}’</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.print_iceboard_info_callback">
+<span class="sig-name descname"><span class="pre">print_iceboard_info_callback</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.print_iceboard_info_callback" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.reset_bp_shuffle_stats">
+<span class="sig-name descname"><span class="pre">reset_bp_shuffle_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.reset_bp_shuffle_stats" title="Link to this definition"></a></dt>
+<dd><p class="rubric">Example</p>
+<p>curl <a class="reference external" href="http://localhost:54321/reset-bp-shuffle-stats">http://localhost:54321/reset-bp-shuffle-stats</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.reset_crossbar_stats">
+<span class="sig-name descname"><span class="pre">reset_crossbar_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.reset_crossbar_stats" title="Link to this definition"></a></dt>
+<dd><p class="rubric">Example</p>
+<p>curl <a class="reference external" href="http://localhost:54321/reset-crossbar-stats">http://localhost:54321/reset-crossbar-stats</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.reset_fpga_stats">
+<span class="sig-name descname"><span class="pre">reset_fpga_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.reset_fpga_stats" title="Link to this definition"></a></dt>
+<dd><p class="rubric">Example</p>
+<p>curl <a class="reference external" href="http://localhost:54321/reset-fpga-stats">http://localhost:54321/reset-fpga-stats</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.reset_gpu_links">
+<span class="sig-name descname"><span class="pre">reset_gpu_links</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">board_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.reset_gpu_links" title="Link to this definition"></a></dt>
+<dd><p>REST endpoint to reset the GPU links on specified boards</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>board_ids</strong> (<em>list</em><em> of </em><em>tuple/dict</em>) – List of boards whose GPU links should be resetted.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of board IDs that were actually reset.</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">curl</span> <span class="o">-</span><span class="n">d</span> <span class="s1">'{"board_ids": [["*"]]}'</span> <span class="o">-</span><span class="n">H</span> <span class="s2">"Content-Type: application/json"</span> <span class="o">-</span><span class="n">X</span> <span class="n">POST</span> <span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">54321</span><span class="o">/</span><span class="n">reset</span><span class="o">-</span><span class="n">gpu</span><span class="o">-</span><span class="n">links</span>   <span class="c1"># Resets allGPU links</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.serial_compute_gains">
+<span class="sig-name descname"><span class="pre">serial_compute_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.serial_compute_gains" title="Link to this definition"></a></dt>
+<dd><p>REST endpoint to compute gains for desired channels in serial.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>targets</strong> – list of tuples (or dict) describing the (crate, board,
+channel) (or {crate:c, board:b, channel:ch}) whose gains needs
+to be recomputed. Missing elements, <cite>None</cite> or <code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code> are treated
+as a wildcard.  List will be iterated over and the channels matching
+each element of the list will have their gains computed in parallel.
+If not provided, then will default to  a list of the crates.</p></li>
+<li><p><strong>**</strong> (<em>** accepts all other parameters for FPGAMaster.compute_gains</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># Compute gains for crate 0 and then crate 1</span>
+<span class="n">curl</span>  <span class="o">-</span><span class="n">H</span> <span class="s2">"Content-Type: application/json"</span> <span class="o">-</span><span class="n">X</span> <span class="n">POST</span> <span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">54321</span><span class="o">/</span><span class="n">serial</span><span class="o">-</span><span class="n">compute</span><span class="o">-</span><span class="n">gains</span> <span class="o">-</span><span class="n">d</span> <span class="s1">'{"targets": [[0, "*", "*"], [1, "*", "*]]}'</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_adc_delays">
+<span class="sig-name descname"><span class="pre">set_adc_delays</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_adc_delays" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_data_capture">
+<span class="sig-name descname"><span class="pre">set_data_capture</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_data_capture" title="Link to this definition"></a></dt>
+<dd><p>REST endpoint to set the data capture for desired channels.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>targets</strong> (<em>list</em><em> of </em><em>tuple/dict</em>) – List of tuples describing the
+(crate, slot, channels) for which gains shall be recomputed.
+Missing tuple elements, <code class="docutils literal notranslate"><span class="pre">&quot;*&quot;</span></code> and None are considered to be a
+wildcard.</p></li>
+<li><p><strong>**</strong> (<em>**accepts all other parameters for FPGAMaster.compute_gains</em>)</p></li>
+</ul>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">curl</span> <span class="o">-</span><span class="n">H</span> <span class="s2">"Content-Type: application/json"</span> <span class="o">-</span><span class="n">X</span> <span class="n">POST</span> <span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">54321</span><span class="o">/</span><span class="nb">set</span><span class="o">-</span><span class="n">data</span><span class="o">-</span><span class="n">capture</span> <span class="o">-</span><span class="n">d</span> <span class="s1">'{"targets": [[0, 0, "*"]], "source": "scaler", "capture_rate": 16}'</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_funcgen_function">
+<span class="sig-name descname"><span class="pre">set_funcgen_function</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">max_trial</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">function</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ab'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_funcgen_function" title="Link to this definition"></a></dt>
+<dd><p>Set the function generated by the function generators.</p>
+<p class="rubric">Example</p>
+<p>curl -H “Content-Type: application/json” -X POST <a class="reference external" href="http://localhost:54321/set-funcgen-function">http://localhost:54321/set-funcgen-function</a> -d ‘{“function”:”ab”, “a”:0, “b”:1}’</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_gains">
+<span class="sig-name descname"><span class="pre">set_gains</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">gains</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_gains" title="Link to this definition"></a></dt>
+<dd><p>REST endpoint to set the gains for desired channels.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>gains</strong> (<em>list</em>) – <p>List of of (target, gain_spec) describing the
+gains to be applied to the specified targets.</p>
+<p><code class="docutils literal notranslate"><span class="pre">target_list</span></code> is a list of tuples specifying the (crate,
+slot, channels) to apply the gain to. “*” can be used as a
+wildcard, and any missing element is also considered to be a
+wildcard.</p>
+<p><code class="docutils literal notranslate"><span class="pre">gain_spec</span></code> specify the target gain as a (glin, glog) tuple,
+where <code class="docutils literal notranslate"><span class="pre">glin</span></code> is a gain scalar or 1024-element vector, and
+<code class="docutils literal notranslate"><span class="pre">glog</span></code> is a integer post-scaler value.</p>
+</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">curl</span> <span class="o">-</span><span class="n">H</span> <span class="s2">"Content-Type: application/json"</span> <span class="o">-</span><span class="n">X</span> <span class="n">POST</span> <span class="n">http</span><span class="p">:</span><span class="o">//</span><span class="n">localhost</span><span class="p">:</span><span class="mi">54321</span><span class="o">/</span><span class="nb">set</span><span class="o">-</span><span class="n">gains</span> <span class="o">-</span><span class="n">d</span> <span class="s1">'{"gains": [ [["*"], [1.0, 22]] ] }'</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_gtx_power">
+<span class="sig-name descname"><span class="pre">set_gtx_power</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ib_serial</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">power</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">13</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">link_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_gtx_power" title="Link to this definition"></a></dt>
+<dd><p>Set gtx power of backplane links for a specific fpga motherboard.</p>
+<section id="parameters">
+<h2>Parameters:<a class="headerlink" href="#parameters" title="Link to this heading"></a></h2>
+<p>ib_serial (str):  serial number of iceboard
+power (int):  gtx power level. Integer in the range 0-15. The fpga_master default level is 13.</p>
+</section>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_state">
+<span class="sig-name descname"><span class="pre">set_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.set_state" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.shutdown">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">shutdown</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.shutdown" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.start">
+<span class="sig-name descname"><span class="pre">start</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.start" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.status">
+<span class="sig-name descname"><span class="pre">status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.status" title="Link to this definition"></a></dt>
+<dd><p>Return a dict describing the state of the server.</p>
+<p>If the FPGAMaster raised an exception during the background start() process, the exception is risen now.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><p><em>dict</em> –</p>
+<dl class="simple">
+<dt>containing the fields:</dt><dd><dl class="field-list simple">
+<dt class="field-odd">state<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(str): current state string.</p>
+</dd>
+<dt class="field-even">is_ready (bool)<span class="colon">:</span></dt>
+<dd class="field-even"><p>true when FPGAMaster has finished initializing successfully</p>
+</dd>
+<dt class="field-odd">start_result (str)<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Messsage returned by FPGAMaster.start() command.</p>
+</dd>
+<dt class="field-even">config (dict)<span class="colon">:</span></dt>
+<dd class="field-even"><p>Current configuration</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</p>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<p>curl <a class="reference external" href="http://localhost:54321/status">http://localhost:54321/status</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.stop">
+<span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.stop" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.sync">
+<span class="sig-name descname"><span class="pre">sync</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.sync" title="Link to this definition"></a></dt>
+<dd><p>Syncs the array</p>
+<p class="rubric">Example</p>
+<p>curl <a class="reference external" href="http://localhost:54321/sync">http://localhost:54321/sync</a></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_master.FPGAMasterAsyncRESTServer.update_channelizers">
+<span class="sig-name descname"><span class="pre">update_channelizers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'config.yaml:jfc.freq_test'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.update_channelizers" title="Link to this definition"></a></dt>
+<dd><p>Update channelizers using the parameters in the provided config.fpga.channelizer_params.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.fpga_firmware.fpga_firmware.html" class="btn btn-neutral float-left" title="fpga_firmware.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.gps.html" class="btn btn-neutral float-right" title="gps.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

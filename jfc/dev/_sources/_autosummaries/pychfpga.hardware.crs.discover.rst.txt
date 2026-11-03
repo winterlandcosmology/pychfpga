@@ -1,0 +1,152 @@
+
+
+
+
+
+:py:mod:`discover.py <pychfpga.hardware.crs.discover>`
+======================================================
+
+
+.. currentmodule:: pychfpga.hardware.crs
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.crs,
+..    | FULLNAME=pychfpga.hardware.crs.discover,
+..    | name==discover
+..    | modules = 
+..    | classes = ['BoardRecord']
+
+.. automodule:: pychfpga.hardware.crs.discover
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         board_columns
+         collect_beacons
+         constrain_widths
+         fitted_column_widths
+         format_row
+         format_table
+         live_columns
+         main
+         run_live
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         BoardRecord
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: board_columns
+
+
+.. autofunction:: collect_beacons
+
+
+.. autofunction:: constrain_widths
+
+
+.. autofunction:: fitted_column_widths
+
+
+.. autofunction:: format_row
+
+
+.. autofunction:: format_table
+
+
+.. autofunction:: live_columns
+
+
+.. autofunction:: main
+
+
+.. autofunction:: run_live
+
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: BoardRecord
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

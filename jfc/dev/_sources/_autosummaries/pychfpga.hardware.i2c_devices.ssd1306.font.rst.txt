@@ -1,0 +1,74 @@
+
+
+
+
+
+:py:mod:`font.py <pychfpga.hardware.i2c_devices.ssd1306.font>`
+==============================================================
+
+
+.. currentmodule:: pychfpga.hardware.i2c_devices.ssd1306
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.i2c_devices.ssd1306,
+..    | FULLNAME=pychfpga.hardware.i2c_devices.ssd1306.font,
+..    | name==font
+..    | modules = 
+..    | classes = []
+
+.. automodule:: pychfpga.hardware.i2c_devices.ssd1306.font
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

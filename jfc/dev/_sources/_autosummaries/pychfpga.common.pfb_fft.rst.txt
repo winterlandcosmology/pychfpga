@@ -1,0 +1,95 @@
+
+
+
+
+
+:py:mod:`pfb_fft.py <pychfpga.common.pfb_fft>`
+==============================================
+
+
+.. currentmodule:: pychfpga.common
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.common,
+..    | FULLNAME=pychfpga.common.pfb_fft,
+..    | name==pfb_fft
+..    | modules = 
+..    | classes = []
+
+.. automodule:: pychfpga.common.pfb_fft
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         pfb_fft
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: pfb_fft
+
+
+
+
+
+.. *** Insert class descriptions
+
+

@@ -1,0 +1,1513 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>chfpga_array_methods.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="chfpga_udp.py" href="pychfpga.fpga_firmware.chfpga.chfpga_udp.html" />
+    <link rel="prev" title="chfpga.py" href="pychfpga.fpga_firmware.chfpga.chfpga.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga/</span></code></a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.SocketIO.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">SocketIO.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chFPGA_receiver.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chFPGA_receiver.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga.py</span></code></a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga_array_methods.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga_udp.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga_udp.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.ct_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ct_engine/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.f_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">f_engine/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.mmi.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mmi.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.system.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">system/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.x_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">x_engine/</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_firmware.fpga_bitstream.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_bitstream.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_firmware.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.fpga_firmware.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga_array_methods.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga_array_methods.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="chfpga-array-methods-py">
+<h1><a class="reference internal" href="#module-pychfpga.fpga_firmware.chfpga.chfpga_array_methods" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga_array_methods.py</span></code></a><a class="headerlink" href="#chfpga-array-methods-py" title="Link to this heading"></a></h1>
+<p id="module-pychfpga.fpga_firmware.chfpga.chfpga_array_methods">Array-wide methods for <a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA" title="pychfpga.fpga_firmware.chfpga.chfpga.chFPGA"><code class="xref py py-class docutils literal notranslate"><span class="pre">pychfpga.fpga_firmware.chfpga.chfpga.chFPGA</span></code></a>.</p>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods"><code class="xref py py-obj docutils literal notranslate"><span class="pre">chFPGAArrayMethods</span></code></a></p></td>
+<td><p>Array-wide methods for chFPGA firmware arrays.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_firmware.chfpga.chfpga_array_methods.</span></span><span class="sig-name descname"><span class="pre">chFPGAArrayMethods</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fpga_array</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="pychfpga.common.array_methods.html#pychfpga.common.array_methods.ArrayMethods" title="pychfpga.common.array_methods.ArrayMethods"><code class="xref py py-class docutils literal notranslate"><span class="pre">ArrayMethods</span></code></a></p>
+<p>Array-wide methods for chFPGA firmware arrays.</p>
+<p>FPGAArray instantiates this provider once the array is hardware-mapped and
+every motherboard shares the chFPGA firmware. Methods operate on
+<code class="docutils literal notranslate"><span class="pre">self.ib</span></code> / <code class="docutils literal notranslate"><span class="pre">self.ic</span></code> (the array motherboard and crate collections).</p>
+<p><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_init_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_init_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">array_init_async()</span></code></a> is the firmware-level init (channelizers, backplane,
+sync, operational mode). FPGA bitstream programming and MMI open are owned
+by <a class="reference internal" href="pychfpga.fpga_array.html#pychfpga.fpga_array.FPGAArray" title="pychfpga.fpga_array.FPGAArray"><code class="xref py py-class docutils literal notranslate"><span class="pre">FPGAArray</span></code></a>, not this class.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.IRIGB_SYNC_METHODS">
+<span class="sig-name descname"><span class="pre">IRIGB_SYNC_METHODS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">('irig-b',</span> <span class="pre">'irigb',</span> <span class="pre">'distributed_time')</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.IRIGB_SYNC_METHODS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.LOCAL_SYNC_METHODS">
+<span class="sig-name descname"><span class="pre">LOCAL_SYNC_METHODS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">('local',</span> <span class="pre">'local_soft_trigger')</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.LOCAL_SYNC_METHODS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.TRIG_SYNC_METHODS">
+<span class="sig-name descname"><span class="pre">TRIG_SYNC_METHODS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">('trig',</span> <span class="pre">'centralized_soft_trigger')</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.TRIG_SYNC_METHODS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fpga_array</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.__init__" title="Link to this definition"></a></dt>
+<dd><p>Bind this provider to <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code> and initialize sync/capture state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>fpga_array</strong> (<a class="reference internal" href="pychfpga.fpga_array.html#pychfpga.fpga_array.FPGAArray" title="pychfpga.fpga_array.FPGAArray"><em>FPGAArray</em></a>) – The array this provider serves.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_init_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">array_init_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bitfile</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prog</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">if_ip</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fpga_ip_addr_fn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">udp_retries</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_master</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_master_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync_master_output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_sync_time_difference</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adc_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">adc_bandwidth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frames_per_packet</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chan8_channel_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling_frequency</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tx_power</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">integration_period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocorr_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corner_turn_bad_links</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corner_turn_bin_priority</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corner_turn_remap_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_init_async" title="Link to this definition"></a></dt>
+<dd><p>Initialize chFPGA firmware after FPGAArray has programmed and opened the FPGAs.</p>
+<p>This is firmware-level init (init &gt;= 3): channelizers / CT engines,
+backplane, sync method, then operational mode (which itself ends with an
+array <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a>). Bitstream programming, MMI open, and the
+program/open retry loop belong to <a class="reference internal" href="pychfpga.fpga_array.html#pychfpga.fpga_array.FPGAArray" title="pychfpga.fpga_array.FPGAArray"><code class="xref py py-class docutils literal notranslate"><span class="pre">FPGAArray</span></code></a>.</p>
+<p>If the array has no motherboards, this returns immediately.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mode</strong> (<em>str</em>) – Operational mode to apply at init &gt;= 3. Required when
+<code class="docutils literal notranslate"><span class="pre">init</span> <span class="pre">&gt;=</span> <span class="pre">3</span></code>. See <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_operational_mode_async()</span></code></a> for
+platform-specific names (<code class="docutils literal notranslate"><span class="pre">shuffle8</span></code>, <code class="docutils literal notranslate"><span class="pre">corr16</span></code>, …). Stored
+as the default for later mode changes.</p></li>
+<li><p><strong>bitfile</strong> – Accepted for FPGAArray kwargs compatibility. Unused
+here; FPGAArray pops it before calling this method.</p></li>
+<li><p><strong>prog</strong> – Same as <code class="docutils literal notranslate"><span class="pre">bitfile</span></code>.</p></li>
+<li><p><strong>if_ip</strong> – Used by FPGAArray while opening MMI, not here.</p></li>
+<li><p><strong>fpga_ip_addr_fn</strong> – Same as <code class="docutils literal notranslate"><span class="pre">if_ip</span></code>.</p></li>
+<li><p><strong>udp_retries</strong> – Popped by FPGAArray before calling this method.</p></li>
+<li><p><strong>init</strong> (<em>int</em><em> or </em><em>None</em>) – Firmware init level. <code class="docutils literal notranslate"><span class="pre">None</span></code> becomes <code class="docutils literal notranslate"><span class="pre">3</span></code>
+if <code class="docutils literal notranslate"><span class="pre">mode</span></code> is set, else <code class="docutils literal notranslate"><span class="pre">0</span></code>. Values below 3 skip firmware
+init (FPGAArray may already have programmed and opened the
+FPGAs). Values of 3 or more run <code class="docutils literal notranslate"><span class="pre">init_fpga</span></code> on every board,
+crate <code class="docutils literal notranslate"><span class="pre">init()</span></code>, then sync method and operational mode.</p></li>
+<li><p><strong>sync_method</strong> – Forwarded to <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_sync_method_async()</span></code></a>. If
+<code class="docutils literal notranslate"><span class="pre">None</span></code> at init &gt;= 3, inferred as <code class="docutils literal notranslate"><span class="pre">'irig-b'</span></code> when every
+board is in a crate, or <code class="docutils literal notranslate"><span class="pre">'local'</span></code> when none are. A mixed
+crate/no-crate array logs a warning and leaves the method
+unset unless <code class="docutils literal notranslate"><span class="pre">sync_source</span></code> is also given.</p></li>
+<li><p><strong>sync_source</strong> – Forwarded to <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_sync_method_async()</span></code></a>.</p></li>
+<li><p><strong>sync_master</strong> – Forwarded to <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_sync_method_async()</span></code></a>.</p></li>
+<li><p><strong>sync_master_source</strong> – Forwarded to <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_sync_method_async()</span></code></a>.</p></li>
+<li><p><strong>sync_master_output</strong> – Forwarded to <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_sync_method_async()</span></code></a>.</p></li>
+<li><p><strong>max_sync_time_difference</strong> (<em>float</em>) – Maximum allowed Frame-0 IRIG
+spread in nanoseconds, stored for later <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a>
+checks. Default 100 ns.</p></li>
+<li><p><strong>adc_mode</strong> (<em>int</em>) – ADC chip mode passed to each board’s
+<code class="docutils literal notranslate"><span class="pre">init_fpga_async</span></code>. Default 0 (normal data).</p></li>
+<li><p><strong>adc_bandwidth</strong> (<em>int</em>) – ADC analog bandwidth setting passed to
+<code class="docutils literal notranslate"><span class="pre">init_fpga_async</span></code>. Default 2.</p></li>
+<li><p><strong>frames_per_packet</strong> – Forwarded to
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_operational_mode_async()</span></code></a> at init &gt;= 3.</p></li>
+<li><p><strong>chan8_channel_map</strong> – Forwarded to
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_operational_mode_async()</span></code></a> at init &gt;= 3.</p></li>
+<li><p><strong>tx_power</strong> – Forwarded to <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_operational_mode_async()</span></code></a>.</p></li>
+<li><p><strong>integration_period</strong> – Forwarded to
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_operational_mode_async()</span></code></a>.</p></li>
+<li><p><strong>autocorr_only</strong> – Forwarded to <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_operational_mode_async()</span></code></a>.</p></li>
+<li><p><strong>corner_turn_bad_links</strong> – Forwarded to
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_operational_mode_async()</span></code></a>.</p></li>
+<li><p><strong>corner_turn_bin_priority</strong> – Forwarded to
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_operational_mode_async()</span></code></a>.</p></li>
+<li><p><strong>corner_turn_remap_level</strong> – Forwarded to
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_operational_mode_async()</span></code></a>.</p></li>
+<li><p><strong>sampling_frequency</strong> (<em>float</em>) – ADC sampling frequency in Hz, passed
+to <code class="docutils literal notranslate"><span class="pre">init_fpga_async</span></code>. <code class="docutils literal notranslate"><span class="pre">None</span></code> uses the platform/mode
+default.</p></li>
+<li><p><strong>**kwargs</strong> – Extra arguments forwarded to each board’s
+<code class="docutils literal notranslate"><span class="pre">init_fpga_async</span></code> (firmware <code class="docutils literal notranslate"><span class="pre">init_async</span></code>), e.g.
+<code class="docutils literal notranslate"><span class="pre">processing_frequency</span></code>, <code class="docutils literal notranslate"><span class="pre">reference_frequency</span></code>,
+<code class="docutils literal notranslate"><span class="pre">data_width</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">get_ber()</span></code> before shuffle/mode init will lead to errors (see
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_operational_mode_async()</span></code></a>).</p></li>
+<li><p>All boards must have the same corner-turn engine type (or none);
+that is checked when the operational mode is applied.</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_method_names">
+<span class="sig-name descname"><span class="pre">array_method_names</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_method_names" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.check_clock_source">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">check_clock_source</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.check_clock_source" title="Link to this definition"></a></dt>
+<dd><p>Check that crate membership and backplane clock selection agree.</p>
+<p>To make sure that data acquisition and transmission run at the same
+rate, refuse to operate if a board that is in a crate is not using the
+backplane clock.</p>
+<p>A board that is not in a crate but is using the backplane clock only
+logs a warning (crate discovery may have failed).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_arm_metrics_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_arm_metrics_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metrics</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_arm_metrics_async" title="Link to this definition"></a></dt>
+<dd><p>Append ARM-accessible backplane and motherboard metrics to <code class="docutils literal notranslate"><span class="pre">metrics</span></code>.</p>
+<p>Includes:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Backplane metrics, as measured from one board in each crate</p></li>
+<li><p>Motherboard hardware metrics (voltages, temperatures), including
+mezzanine voltage/current</p></li>
+<li><p>FPGA UDP MMI metrics, for boards that have an <code class="docutils literal notranslate"><span class="pre">fpga</span></code> object</p></li>
+</ul>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>metrics</strong> (<em>Metrics</em>) – Object to extend in place.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None. The caller’s <code class="docutils literal notranslate"><span class="pre">metrics</span></code> object is mutated.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_array_methods">
+<span class="sig-name descname"><span class="pre">get_array_methods</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_array_methods" title="Link to this definition"></a></dt>
+<dd><p>Return public callables defined on this provider class.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_corr_data_config">
+<span class="sig-name descname"><span class="pre">get_corr_data_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_corr_data_config" title="Link to this definition"></a></dt>
+<dd><p>Assemble array-wide correlator config from firmware CORR States.</p>
+<p>Cached until any board’s CORR config <code class="docutils literal notranslate"><span class="pre">has_changed</span></code> for context
+<code class="docutils literal notranslate"><span class="pre">('get_corr_data_config',</span> <span class="pre">self)</span></code>. Common fields (<code class="docutils literal notranslate"><span class="pre">NCHAN</span></code>,
+<code class="docutils literal notranslate"><span class="pre">NBINS</span></code>, <code class="docutils literal notranslate"><span class="pre">bin_map</span></code>, <code class="docutils literal notranslate"><span class="pre">prod_map</span></code>, <code class="docutils literal notranslate"><span class="pre">firmware_integ_period</span></code>, …)
+must match across boards. <code class="docutils literal notranslate"><span class="pre">READOUT_BINS</span></code> is per-board (one clkbin
+per local correlator) and is concatenated in board order so its
+length matches the array-wide <code class="docutils literal notranslate"><span class="pre">NCORRS</span></code> axis of <code class="docutils literal notranslate"><span class="pre">bin_map</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>State or None</em> – Aggregated correlator config, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if no
+board has a CORR engine.</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>RuntimeError</strong> – No boards in the array.</p></li>
+<li><p><strong>ValueError</strong> – Some but not all boards have a correlator.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_corr_receiver_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_corr_receiver_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">port_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tcp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_corr_receiver_async" title="Link to this definition"></a></dt>
+<dd><p>Return a correlator frame receiver for the whole array.</p>
+<p>A packet receiver and associated socket will be created if none already
+exist, otherwise the existing ones will be reused. The correlator and
+raw data receivers share the same packet receiver.</p>
+<p>The receiver binds <code class="docutils literal notranslate"><span class="pre">config_getter=self.get_corr_data_config</span></code> at first
+creation; later calls reuse the receiver and refresh config via the
+getter on each packet-processing call.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>port_number</strong> (<em>int</em><em> or </em><em>None</em>) – Port for the packet receiver if one
+has not already been allocated. <code class="docutils literal notranslate"><span class="pre">None</span></code> uses the FPGA
+destination port (or behaves as <code class="docutils literal notranslate"><span class="pre">0</span></code> if that is zero);
+<code class="docutils literal notranslate"><span class="pre">0</span></code> binds a random OS port and programs it into the FPGA;
+non-zero binds that port (raises if already in use).</p></li>
+<li><p><strong>tcp</strong> (<em>bool</em><em> or </em><em>None</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, use TCP. If <code class="docutils literal notranslate"><span class="pre">False</span></code>, use UDP.
+If <code class="docutils literal notranslate"><span class="pre">None</span></code> (default), reuse the existing packet receiver’s
+transport, or UDP if none exists.</p></li>
+<li><p><strong>force</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, discard cached correlator/packet
+receivers and reconnect.</p></li>
+<li><p><strong>**kwargs</strong> – Forwarded to
+<a class="reference internal" href="pychfpga.common.ucorr_frame_receiver.html#pychfpga.common.ucorr_frame_receiver.UCorrFrameReceiver" title="pychfpga.common.ucorr_frame_receiver.UCorrFrameReceiver"><code class="xref py py-class docutils literal notranslate"><span class="pre">UCorrFrameReceiver</span></code></a>
+when creating the receiver (e.g. <code class="docutils literal notranslate"><span class="pre">verbose</span></code>, <code class="docutils literal notranslate"><span class="pre">pre_func</span></code>).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>UCorrFrameReceiver</em> – Array correlator receiver.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_data_receiver_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_data_receiver_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">port_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tcp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_data_receiver_async" title="Link to this definition"></a></dt>
+<dd><p>Returns a raw data receiver for the whole array.</p>
+<p>A packet receiver and associated socket(s) will be created if none
+already exist, otherwise the existing ones will be reused.
+The correlator packet receiver and the raw data receiver share the same
+packet receiver (UDP or TCP — not both).</p>
+<p>The receiver binds <code class="docutils literal notranslate"><span class="pre">config_getter=self.get_raw_data_config</span></code> at first
+creation; later calls reuse the receiver and refresh config via the getter
+on each <code class="docutils literal notranslate"><span class="pre">process_udp_packets</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>port_number</strong> (<em>int</em>) – Port to use if a socket has not already been
+allocated. For UDP (<code class="docutils literal notranslate"><span class="pre">tcp=False</span></code>): <code class="docutils literal notranslate"><span class="pre">None</span></code> opens the FPGA
+destination port (or behaves as <code class="docutils literal notranslate"><span class="pre">0</span></code> if that port is zero);
+<code class="docutils literal notranslate"><span class="pre">0</span></code> binds a random OS port and programs it into the FPGA;
+non-zero binds that port (raises if already in use). For TCP
+(<code class="docutils literal notranslate"><span class="pre">tcp=True</span></code>): board listen port; <code class="docutils literal notranslate"><span class="pre">None</span></code> uses the default
+TCPipe TCP data port.</p></li>
+<li><p><strong>tcp</strong> (<em>bool</em><em> or </em><em>None</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, use TCP
+(<a class="reference internal" href="pychfpga.common.tcp_packet_receiver.html#pychfpga.common.tcp_packet_receiver.TCPPacketReceiver" title="pychfpga.common.tcp_packet_receiver.TCPPacketReceiver"><code class="xref py py-class docutils literal notranslate"><span class="pre">TCPPacketReceiver</span></code></a>).
+If <code class="docutils literal notranslate"><span class="pre">False</span></code>, use UDP
+(<a class="reference internal" href="pychfpga.common.udp_packet_receiver.html#pychfpga.common.udp_packet_receiver.UDPPacketReceiver" title="pychfpga.common.udp_packet_receiver.UDPPacketReceiver"><code class="xref py py-class docutils literal notranslate"><span class="pre">UDPPacketReceiver</span></code></a>).
+If <code class="docutils literal notranslate"><span class="pre">None</span></code> (default), reuse the existing packet receiver’s
+transport, or UDP if none exists.</p></li>
+<li><p><strong>force</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, discard cached packet/data receivers
+and reconnect TCP data sockets (call on array reinit).</p></li>
+<li><p><strong>**kwargs</strong> – Forwarded to
+<a class="reference internal" href="pychfpga.common.raw_frame_receiver.html#pychfpga.common.raw_frame_receiver.RawFrameReceiver" title="pychfpga.common.raw_frame_receiver.RawFrameReceiver"><code class="xref py py-class docutils literal notranslate"><span class="pre">RawFrameReceiver</span></code></a>
+when creating the receiver (e.g. <code class="docutils literal notranslate"><span class="pre">verbose</span></code>,
+<code class="docutils literal notranslate"><span class="pre">ring_buffer_size</span></code>).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>RawFrameReceiver</em> – Array raw-data receiver.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_data_socket_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_data_socket_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">port_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_data_socket_async" title="Link to this definition"></a></dt>
+<dd><p>Open one UDP data socket and program every board to send to it.</p>
+<p>Uses board 0 to bind (or reuse) the socket, then
+<code class="docutils literal notranslate"><span class="pre">set_data_socket_async</span></code> on every board so the whole array shares
+one host UDP port. Prefer <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_packet_receiver_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_packet_receiver_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_packet_receiver_async()</span></code></a> /
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_data_receiver_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_data_receiver_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_data_receiver_async()</span></code></a> for capture.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>port_number</strong> (<em>int</em><em> or </em><em>None</em>) – <ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">None</span></code>: bind the destination port currently programmed in
+the FPGA; if that port is 0, behave as <code class="docutils literal notranslate"><span class="pre">port_number=0</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">0</span></code>: bind an OS-assigned port and program it into the FPGA.</p></li>
+<li><p>non-zero: bind that port (raises if already in use).</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>socket.socket</em> – The shared UDP socket.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_fpga_metrics_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_fpga_metrics_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metrics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_fpga_metrics_async" title="Link to this definition"></a></dt>
+<dd><p>Append FPGA firmware status metrics across the array to <code class="docutils literal notranslate"><span class="pre">metrics</span></code>.</p>
+<p>Includes corner-turn link (BP shuffle) stats, crossbar stats, and
+channelizer stats (all over the FPGA UDP/MMI path). If the last
+successful sync was IRIG-B, also adds per-board frame-time deltas
+relative to board 0 and to the stored sync timestamps.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>metrics</strong> (<em>Metrics</em>) – Object to extend in place.</p></li>
+<li><p><strong>reset</strong> (<em>bool</em>) – If True, reset BP-shuffle and channelizer stat
+counters after reading. Crossbar stats are always read with
+<code class="docutils literal notranslate"><span class="pre">reset=False</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Metrics</em> – The same <code class="docutils literal notranslate"><span class="pre">metrics</span></code> object, after the FPGA samples
+have been added.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_funcgen_buffer_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_funcgen_buffer_async</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_funcgen_buffer_async" title="Link to this definition"></a></dt>
+<dd><p>Return the function-generator waveform buffers for every channel.</p>
+<p>Walks crates (<code class="docutils literal notranslate"><span class="pre">self.ic</span></code>) so only boards that are in a crate are
+included. The buffer matches the function-generator output if that
+source is selected, or the channelizer output if FFT and scaler are
+bypassed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>dict</em> – Merged per-board <code class="docutils literal notranslate"><span class="pre">get_funcgen_buffer()</span></code> maps (typically
+keyed by channel id).</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_gain_timestamps_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_gain_timestamps_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_gain_timestamps_async" title="Link to this definition"></a></dt>
+<dd><p>Return the unix time at which each channel’s gains were last set.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>bank</strong> (<em>int</em>) – Gain bank whose timestamps are read.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>dict</em> – <code class="docutils literal notranslate"><span class="pre">{chan_id:</span> <span class="pre">timestamp,</span> <span class="pre">...}</span></code> where <code class="docutils literal notranslate"><span class="pre">chan_id</span></code> is
+<code class="docutils literal notranslate"><span class="pre">(crate,</span> <span class="pre">slot,</span> <span class="pre">channel)</span></code> and <code class="docutils literal notranslate"><span class="pre">timestamp</span></code> is a <code class="docutils literal notranslate"><span class="pre">time.time()</span></code>
+value, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if that channel’s gains were never set.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_gains_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_gains_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_cache</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_gains_async" title="Link to this definition"></a></dt>
+<dd><p>Return the digital gains programmed in <code class="docutils literal notranslate"><span class="pre">bank</span></code> for every channel.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>bank</strong> (<em>int</em>) – Gain bank to read.</p></li>
+<li><p><strong>use_cache</strong> (<em>bool</em>) – If True, allow the software-cached tables
+(much faster than reading back from the FPGAs).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p><em>dict</em> –</p>
+<p><code class="docutils literal notranslate"><span class="pre">{chan_id:</span> <span class="pre">(glin,</span> <span class="pre">glog),</span> <span class="pre">...}</span></code> where:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">chan_id</span></code> is <code class="docutils literal notranslate"><span class="pre">(crate,</span> <span class="pre">slot,</span> <span class="pre">channel)</span></code> from
+<code class="docutils literal notranslate"><span class="pre">mb.get_id(ch)</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">glin</span></code> is an array of 1024 <code class="docutils literal notranslate"><span class="pre">(int16</span> <span class="pre">+</span> <span class="pre">1j*int16)</span></code> linear
+gains (or the full floating-point table if that mode is on)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">glog</span></code> is the post-scaler (extra gain <code class="docutils literal notranslate"><span class="pre">2**glog</span></code>); <code class="docutils literal notranslate"><span class="pre">-1</span></code>
+means floating-point gains and <code class="docutils literal notranslate"><span class="pre">glog</span></code> is unused</p></li>
+</ul>
+</div></blockquote>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_next_gain_bank">
+<span class="sig-name descname"><span class="pre">get_next_gain_bank</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_next_gain_bank" title="Link to this definition"></a></dt>
+<dd><p>Return the currently unused scaler gain bank of the first channel.</p>
+<p>Reads channel 0 of the first board only. The caller must ensure no
+gain switch happens between this call and the subsequent write.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>int</em> – Inactive bank number (0 or 1) of that first channel, not a
+per-channel map.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_operational_mode">
+<span class="sig-name descname"><span class="pre">get_operational_mode</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_operational_mode" title="Link to this definition"></a></dt>
+<dd><p>Return the operational mode last set on this array.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>str or None</em> – Mode string such as <code class="docutils literal notranslate"><span class="pre">'shuffle8'</span></code> or <code class="docutils literal notranslate"><span class="pre">'corr16'</span></code>, or
+<code class="docutils literal notranslate"><span class="pre">None</span></code> if <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_operational_mode_async()</span></code></a> has not run.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_packet_receiver_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_packet_receiver_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">port_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">tcp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rcvbuf</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">8388608</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_packet_receiver_async" title="Link to this definition"></a></dt>
+<dd><p>Return the shared packet receiver (UDP or TCP), creating it if needed.</p>
+<p>Only one transport is active. If a receiver already exists, it is reused
+unless <code class="docutils literal notranslate"><span class="pre">tcp</span></code> explicitly requests the other transport, in which case a
+<code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> is raised.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>port_number</strong> (<em>int</em><em> or </em><em>None</em>) – For UDP: <code class="docutils literal notranslate"><span class="pre">None</span></code> opens the FPGA
+destination port (or behaves as <code class="docutils literal notranslate"><span class="pre">0</span></code> if that port is zero);
+<code class="docutils literal notranslate"><span class="pre">0</span></code> binds a random OS port and programs it into the FPGA;
+non-zero binds that port (raises if already in use). For TCP:
+board listen port (<code class="docutils literal notranslate"><span class="pre">None</span></code> uses the default).</p></li>
+<li><p><strong>tcp</strong> (<em>bool</em><em> or </em><em>None</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, use
+<a class="reference internal" href="pychfpga.common.tcp_packet_receiver.html#pychfpga.common.tcp_packet_receiver.TCPPacketReceiver" title="pychfpga.common.tcp_packet_receiver.TCPPacketReceiver"><code class="xref py py-class docutils literal notranslate"><span class="pre">TCPPacketReceiver</span></code></a>.
+If <code class="docutils literal notranslate"><span class="pre">False</span></code>, use
+<a class="reference internal" href="pychfpga.common.udp_packet_receiver.html#pychfpga.common.udp_packet_receiver.UDPPacketReceiver" title="pychfpga.common.udp_packet_receiver.UDPPacketReceiver"><code class="xref py py-class docutils literal notranslate"><span class="pre">UDPPacketReceiver</span></code></a>.
+If <code class="docutils literal notranslate"><span class="pre">None</span></code> (default), reuse the existing receiver’s
+transport, or UDP if none exists.</p></li>
+<li><p><strong>rcvbuf</strong> (<em>int</em>) – TCP <code class="docutils literal notranslate"><span class="pre">SO_RCVBUF</span></code> when <code class="docutils literal notranslate"><span class="pre">tcp=True</span></code>.</p></li>
+<li><p><strong>force</strong> (<em>bool</em>) – If True, discard the cached receiver (and reconnect
+TCP data sockets). Needed after control TCP drops, which
+closes DATA_TCP on the board.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>UDPPacketReceiver or TCPPacketReceiver</em> – Shared packet receiver.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_raw_data_config">
+<span class="sig-name descname"><span class="pre">get_raw_data_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_raw_data_config" title="Link to this definition"></a></dt>
+<dd><p>Build (or reuse) the array-wide raw-capture config State.</p>
+<p>Aggregates every board’s firmware config. The result is cached and
+returned unchanged until any board’s <code class="docutils literal notranslate"><span class="pre">fpga.config</span></code> has changed
+(<code class="docutils literal notranslate"><span class="pre">has_changed</span></code> / <code class="docutils literal notranslate"><span class="pre">ack</span></code> with context <code class="docutils literal notranslate"><span class="pre">('get_raw_data_config',</span> <span class="pre">self)</span></code>).
+Static fields (sample size, frame length, …) are filled only on first
+build and must be common across the array.</p>
+<p>All boards must use the same capture engine (<code class="docutils literal notranslate"><span class="pre">UCAP</span></code> or <code class="docutils literal notranslate"><span class="pre">PROBER</span></code>).
+Stream IDs across every active channel of every board must be unique
+or this raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> (the host demuxes bursts by stream ID).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>State</em> – Array-wide raw config, including <code class="docutils literal notranslate"><span class="pre">source</span></code>,
+<code class="docutils literal notranslate"><span class="pre">channels</span></code>, <code class="docutils literal notranslate"><span class="pre">stream_ids</span></code>, <code class="docutils literal notranslate"><span class="pre">frames_per_burst</span></code>,
+<code class="docutils literal notranslate"><span class="pre">subframes_per_frame</span></code>, <code class="docutils literal notranslate"><span class="pre">target_mode</span></code>, <code class="docutils literal notranslate"><span class="pre">fft_bin_map</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">capture_format[0/1]</span></code> (funcgen vs scaler).</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>RuntimeError</strong> – No boards in the array.</p></li>
+<li><p><strong>ValueError</strong> – Mixed/unknown capture engine, or duplicate stream IDs.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_stream_id_map">
+<span class="sig-name descname"><span class="pre">get_stream_id_map</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_stream_id_map" title="Link to this definition"></a></dt>
+<dd><p>Return the stream ID of every channel in the array, keyed by channel id.</p>
+<p>Merges each board’s <code class="docutils literal notranslate"><span class="pre">get_stream_id_map()</span></code>. Logs a warning if IDs are
+not unique (raw capture then cannot demux by stream ID).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>dict</em> – <code class="docutils literal notranslate"><span class="pre">{channel_id:</span> <span class="pre">stream_id}</span></code> where <code class="docutils literal notranslate"><span class="pre">channel_id</span></code> is a
+<code class="docutils literal notranslate"><span class="pre">(crate,</span> <span class="pre">slot,</span> <span class="pre">channel)</span></code> tuple.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_sync_method">
+<span class="sig-name descname"><span class="pre">get_sync_method</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_sync_method" title="Link to this definition"></a></dt>
+<dd><p>Return the array sync method last passed to <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_sync_method_async()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>str or None</em> – One of <code class="docutils literal notranslate"><span class="pre">'irig-b'</span></code>, <code class="docutils literal notranslate"><span class="pre">'trig'</span></code>, <code class="docutils literal notranslate"><span class="pre">'local'</span></code> (or an
+alias), or <code class="docutils literal notranslate"><span class="pre">None</span></code> if unset.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_sync_start_time">
+<span class="sig-name descname"><span class="pre">get_sync_start_time</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_sync_start_time" title="Link to this definition"></a></dt>
+<dd><p>Return the IRIG comparator time(s) programmed during the last sync.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The value returned by <code class="docutils literal notranslate"><span class="pre">set_irigb_trigger_time_async</span></code> for the last
+IRIG-B <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a> (a single time, or a per-board list when
+<code class="docutils literal notranslate"><span class="pre">delay</span></code> was a list). <code class="docutils literal notranslate"><span class="pre">None</span></code> until an IRIG-B sync has armed.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_sync_timestamp">
+<span class="sig-name descname"><span class="pre">get_sync_timestamp</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_sync_timestamp" title="Link to this definition"></a></dt>
+<dd><p>Return the Frame-0 IRIG-B time from the last successful array sync.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The first board’s IRIG timestamp (<code class="docutils literal notranslate"><span class="pre">format='raw'</span></code>) after the last
+successful <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a> in an IRIG-B method, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if
+that sync has not run (or used a non-IRIG method).</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_sync_timestamps">
+<span class="sig-name descname"><span class="pre">get_sync_timestamps</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_sync_timestamps" title="Link to this definition"></a></dt>
+<dd><p>Return per-board Frame-0 IRIG timestamps from the last IRIG-B sync.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A collection of per-board IRIG timestamps (<code class="docutils literal notranslate"><span class="pre">format='raw'</span></code>), or
+<code class="docutils literal notranslate"><span class="pre">None</span></code> if an IRIG-B <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a> has not completed.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_system_config_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_system_config_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">basic</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_system_config_async" title="Link to this definition"></a></dt>
+<dd><p>Concurrently get system-configuration info for each FPGA.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>basic</strong> (<em>bool</em>) – Forwarded to each board’s <code class="docutils literal notranslate"><span class="pre">get_system_config_async</span></code>.
+If True, a reduced subset is returned.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>dict</em> – <code class="docutils literal notranslate"><span class="pre">{board_id:</span> <span class="pre">config,</span> <span class="pre">...}</span></code> keyed by <code class="docutils literal notranslate"><span class="pre">mb.get_id()</span></code>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_tcp_data_sockets">
+<span class="sig-name descname"><span class="pre">get_tcp_data_sockets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">port_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rcvbuf</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">8388608</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_tcp_data_sockets" title="Link to this definition"></a></dt>
+<dd><p>Return TCP sockets connected to each board’s data listen port.</p>
+<p>Delegates to each board’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">get_tcp_data_socket()</span></code> (cached there).
+The board listens on a fixed well-known port; no TCPipe register is programmed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>port_number</strong> (<em>int</em><em> or </em><em>None</em>) – Board listen port. <code class="docutils literal notranslate"><span class="pre">None</span></code> uses <code class="xref py py-attr docutils literal notranslate"><span class="pre">TCPipe.DEFAULT_TCP_DATA_PORT</span></code>.</p></li>
+<li><p><strong>rcvbuf</strong> (<em>int</em>) – <code class="docutils literal notranslate"><span class="pre">SO_RCVBUF</span></code> size so the kernel can absorb bursts between
+<code class="docutils literal notranslate"><span class="pre">receive_packets</span></code> / process calls.</p></li>
+<li><p><strong>force</strong> (<em>bool</em>) – If True, discard cached sockets and reconnect (needed after control
+TCP reconnect closes DATA_TCP on the board).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>list[socket.socket]</em> – One connected TCP socket per board in <code class="docutils literal notranslate"><span class="pre">self.ib</span></code> order.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_user_output_state_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_user_output_state_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">board</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bp_sma'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_user_output_state_async" title="Link to this definition"></a></dt>
+<dd><p>Get the current state of a user output and the source driving it.</p>
+<p>Used by fpga_master to report noise-injection PWM status. Resolves
+<code class="docutils literal notranslate"><span class="pre">board</span></code> with <a class="reference internal" href="pychfpga.fpga_array.html#pychfpga.fpga_array.FPGAArray.get_iceboard" title="pychfpga.fpga_array.FPGAArray.get_iceboard"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_iceboard()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>board</strong> (<em>tuple</em><em> or </em><em>list</em><em> or </em><em>str</em><em> or </em><a class="reference internal" href="pychfpga.hardware.motherboard.html#pychfpga.hardware.motherboard.Motherboard" title="pychfpga.hardware.motherboard.Motherboard"><em>Motherboard</em></a>) – Target board:
+<code class="docutils literal notranslate"><span class="pre">(crate,</span> <span class="pre">slot)</span></code>, serial/hostname string, or motherboard
+object. Falsy skips hardware reads and returns only
+<code class="docutils literal notranslate"><span class="pre">board</span></code>, <code class="docutils literal notranslate"><span class="pre">output</span></code>, and <code class="docutils literal notranslate"><span class="pre">output_source=None</span></code>.</p></li>
+<li><p><strong>output</strong> (<em>str</em>) – User-output name the noise-injection hardware is
+wired to (used to check whether PWM is actually routed there).
+Default <code class="docutils literal notranslate"><span class="pre">'bp_sma'</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>dict</em> – Mapping with keys <code class="docutils literal notranslate"><span class="pre">board</span></code>, <code class="docutils literal notranslate"><span class="pre">output</span></code>, <code class="docutils literal notranslate"><span class="pre">output_source</span></code>,
+<code class="docutils literal notranslate"><span class="pre">pwm_offset</span></code>, <code class="docutils literal notranslate"><span class="pre">pwm_high_time</span></code>, <code class="docutils literal notranslate"><span class="pre">pwm_period</span></code>,
+<code class="docutils literal notranslate"><span class="pre">pwm_enabled</span></code>, <code class="docutils literal notranslate"><span class="pre">user_bit0</span></code>, and <code class="docutils literal notranslate"><span class="pre">user_bit1</span></code>. PWM times are
+in frames. <code class="docutils literal notranslate"><span class="pre">pwm_enabled</span></code> is True when the PWM generator is not
+in reset. <code class="docutils literal notranslate"><span class="pre">user_bit0</span></code> / <code class="docutils literal notranslate"><span class="pre">user_bit1</span></code> matter when
+<code class="docutils literal notranslate"><span class="pre">output_source</span></code> is one of those static bits.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.group_gains_per_board_id">
+<span class="sig-name descname"><span class="pre">group_gains_per_board_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channel_based_gains</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.group_gains_per_board_id" title="Link to this definition"></a></dt>
+<dd><p>Convert a channel-id gain table into a board-id gain table.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>channel_based_gains</strong> (<em>dict</em>) – <code class="docutils literal notranslate"><span class="pre">{channel_id:</span> <span class="pre">gains,</span> <span class="pre">...}</span></code> where
+<code class="docutils literal notranslate"><span class="pre">channel_id</span></code> is a 3-element <code class="docutils literal notranslate"><span class="pre">(crate,</span> <span class="pre">slot,</span> <span class="pre">channel)</span></code>
+tuple, or already a board-id table.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>dict</em> – <code class="docutils literal notranslate"><span class="pre">{board_id:</span> <span class="pre">{channel:</span> <span class="pre">gains,</span> <span class="pre">...},</span> <span class="pre">...}</span></code>. Keys that are
+not 3-element tuples/lists are copied unchanged, so a board-id
+table or a mixed dict can be passed through.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.load_gains_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">load_gains_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gain_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/home/chime/ch_acq/gains'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.load_gains_async" title="Link to this definition"></a></dt>
+<dd><p>Load digital-gain files for every board of the array.</p>
+<p>If a board-specific file is missing, <code class="docutils literal notranslate"><span class="pre">default_gains.pkl</span></code> in
+<code class="docutils literal notranslate"><span class="pre">gain_folder</span></code> is used. If that is also missing, that board’s entry
+is <code class="docutils literal notranslate"><span class="pre">None</span></code> and a warning is logged.</p>
+<p>This does not program the FPGAs. Pass the result to
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_gains_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_gains_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_gains_async()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>bank</strong> (<em>int</em>) – Unused. Kept for call-site compatibility.</p></li>
+<li><p><strong>gain_folder</strong> (<em>str</em>) – Directory containing per-board gain pickles and
+optional <code class="docutils literal notranslate"><span class="pre">default_gains.pkl</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>dict</em> – <code class="docutils literal notranslate"><span class="pre">{board_id:</span> <span class="pre">gains}</span></code> where <code class="docutils literal notranslate"><span class="pre">board_id</span></code> is
+<code class="docutils literal notranslate"><span class="pre">mb.get_id()</span></code> (typically <code class="docutils literal notranslate"><span class="pre">(crate,</span> <span class="pre">slot)</span></code>) and <code class="docutils literal notranslate"><span class="pre">gains</span></code> is the
+dict returned by that board’s <code class="docutils literal notranslate"><span class="pre">load_gains</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.plot_crate_temperatures">
+<span class="sig-name descname"><span class="pre">plot_crate_temperatures</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">figure_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.plot_crate_temperatures" title="Link to this definition"></a></dt>
+<dd><p>Plot FPGA-die temperature vs slot for every crate.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>figure_number</strong> (<em>int</em>) – Matplotlib figure number to reuse. Default 1.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_adc_frequencies">
+<span class="sig-name descname"><span class="pre">print_adc_frequencies</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_adc_frequencies" title="Link to this definition"></a></dt>
+<dd><p>Print the frequency of the clocks coming out of ADC chips 0, 4, 8, 12.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_fmc_power">
+<span class="sig-name descname"><span class="pre">print_fmc_power</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_fmc_power" title="Link to this definition"></a></dt>
+<dd><p>Print FMCA/FMCB 12 V, 3.3 V, and VADJ voltage/current/power per board.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_frame_info">
+<span class="sig-name descname"><span class="pre">print_frame_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_frame_info" title="Link to this definition"></a></dt>
+<dd><p>Print shuffle-lane stream ID and frame-LSB captured in HEADER_CAPTURE.</p>
+<p>This is an Ice-era debug helper: it programs <code class="docutils literal notranslate"><span class="pre">HEADER_CAPTURE_*</span></code>
+MMIO on <em>this</em> object (not on each motherboard) and dumps 16 lanes.
+It is not a general array method.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_iceboard_info">
+<span class="sig-name descname"><span class="pre">print_iceboard_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_iceboard_info" title="Link to this definition"></a></dt>
+<dd><p>Gather motherboard metrics and print them as a crate/slot table.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_iceboard_power">
+<span class="sig-name descname"><span class="pre">print_iceboard_power</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_iceboard_power" title="Link to this definition"></a></dt>
+<dd><p>Print total motherboard power (W) for every board as a crate/slot table.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_iceboard_qsfp">
+<span class="sig-name descname"><span class="pre">print_iceboard_qsfp</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_iceboard_qsfp" title="Link to this definition"></a></dt>
+<dd><p>Print QSFP serial numbers for every board as a crate/slot table.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_iceboard_temperatures">
+<span class="sig-name descname"><span class="pre">print_iceboard_temperatures</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_iceboard_temperatures" title="Link to this definition"></a></dt>
+<dd><p>Print FPGA-die temperature for every board as a crate/slot table.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_net_length_map">
+<span class="sig-name descname"><span class="pre">print_net_length_map</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_net_length_map" title="Link to this definition"></a></dt>
+<dd><p>Print per-crate backplane RX net-length matrices in metres.</p>
+<p>For each crate, cells are TX slot (rows) vs RX slot (columns), using
+<code class="docutils literal notranslate"><span class="pre">get_matching_tx</span></code> / <code class="docutils literal notranslate"><span class="pre">get_rx_net_length</span></code>. Requires <code class="docutils literal notranslate"><span class="pre">self.ic</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_temperatures">
+<span class="sig-name descname"><span class="pre">print_temperatures</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_temperatures" title="Link to this definition"></a></dt>
+<dd><p>Print FPGA SYSMON temperature for every board, sorted by slot.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.reset_corr_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">reset_corr_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">delay</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.reset_corr_async" title="Link to this definition"></a></dt>
+<dd><p>Pulse the correlator / corner-turn reset on every board.</p>
+<p>Asserts <code class="docutils literal notranslate"><span class="pre">set_corr_reset(1)</span></code> on the array, waits, then deasserts.
+That GPIO line resets both the corner-turn engine and the correlator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>delay</strong> (<em>float</em>) – Intended pulse width in seconds. Currently unused;
+the wait is always 0.1 s.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.reset_fpga_stats">
+<span class="sig-name descname"><span class="pre">reset_fpga_stats</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.reset_fpga_stats" title="Link to this definition"></a></dt>
+<dd><p>Reset FFT overflow counters on every board.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.reset_gpu_links_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">reset_gpu_links_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">board_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.reset_gpu_links_async" title="Link to this definition"></a></dt>
+<dd><p>Reset the GPU/QSFP links for the boards specified in <code class="docutils literal notranslate"><span class="pre">board_ids</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>board_ids</strong> (<em>list</em><em> of </em><em>tuple/dict</em>) – Board descriptors as
+<code class="docutils literal notranslate"><span class="pre">(crate_number)</span></code> or <code class="docutils literal notranslate"><span class="pre">(crate_number,</span> <span class="pre">slot_number)</span></code> tuples,
+or <code class="docutils literal notranslate"><span class="pre">{crate:</span> <span class="pre">crate_number}</span></code> / <code class="docutils literal notranslate"><span class="pre">{crate:</span> <span class="pre">crate_number,</span>
+<span class="pre">slot:</span> <span class="pre">slot_number}</span></code> dicts. Crate and slot may be <code class="docutils literal notranslate"><span class="pre">'*'</span></code> or
+Null to match every instance. <code class="docutils literal notranslate"><span class="pre">None</span></code> means every board in
+the array.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>list</em> – Board IDs (from <code class="docutils literal notranslate"><span class="pre">mb.get_id()</span></code>) that were actually reset.</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>It is not possible to reset just one QSFP or a specific lane.
+All lanes of both QSFPs on a selected board are reset.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.save_gains_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">save_gains_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">gains</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gain_folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'/home/chime/ch_acq/gains'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.save_gains_async" title="Link to this definition"></a></dt>
+<dd><p>Write digital-gain files for the boards present in <code class="docutils literal notranslate"><span class="pre">gains</span></code>.</p>
+<p>Does not program the FPGAs. Channel-keyed maps are regrouped with
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.group_gains_per_board_id" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.group_gains_per_board_id"><code class="xref py py-meth docutils literal notranslate"><span class="pre">group_gains_per_board_id()</span></code></a> first.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>gains</strong> (<em>dict</em>) – Either <code class="docutils literal notranslate"><span class="pre">{(crate,</span> <span class="pre">slot,</span> <span class="pre">channel):</span> <span class="pre">(glin,</span> <span class="pre">glog),</span> <span class="pre">...}</span></code>
+or <code class="docutils literal notranslate"><span class="pre">{(crate,</span> <span class="pre">slot):</span> <span class="pre">{channel:</span> <span class="pre">(glin,</span> <span class="pre">glog),</span> <span class="pre">...},</span> <span class="pre">...}</span></code>.</p></li>
+<li><p><strong>gain_folder</strong> (<em>str</em>) – Directory in which each board’s <code class="docutils literal notranslate"><span class="pre">save_gains</span></code>
+writes its pickle.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_adc_delays_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_adc_delays_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_adc_delays_async" title="Link to this definition"></a></dt>
+<dd><p>Set ADC delays on every open motherboard in the array.</p>
+<p>Calls each board’s <code class="docutils literal notranslate"><span class="pre">set_adc_delays</span></code> with the same arguments (load
+or compute tap delays, sync delays, optional save-to-file). Boards
+whose FPGA MMI is not open are skipped with a warning.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>**kwargs</strong> – Forwarded to
+<a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.set_adc_delays" title="pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.set_adc_delays"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_adc_delays()</span></code></a>
+(<code class="docutils literal notranslate"><span class="pre">source</span></code>, <code class="docutils literal notranslate"><span class="pre">compute_delays</span></code>, <code class="docutils literal notranslate"><span class="pre">save_delays</span></code>,
+<code class="docutils literal notranslate"><span class="pre">check_adc_delays</span></code>, <code class="docutils literal notranslate"><span class="pre">retry</span></code>, …).</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_adc_mask">
+<span class="sig-name descname"><span class="pre">set_adc_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_adc_mask" title="Link to this definition"></a></dt>
+<dd><p>AND-mask every ADC sample byte on every channel of every board.</p>
+<p>Writes <code class="docutils literal notranslate"><span class="pre">ADCDAQ.BYTE_MASK</span></code> on each channelizer. Used to force bits
+low (e.g. for ramp/pattern tests).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> (<em>int</em>) – 8-bit mask. Each ADC sample byte is ANDed with this
+value.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_channelizers_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_channelizers_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">channels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_sync</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_channelizers_async" title="Link to this definition"></a></dt>
+<dd><p>Configure all channelizers in the array.</p>
+<p>Forwards keyword arguments to each board’s
+<a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.set_channelizer" title="pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.set_channelizer"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_channelizer()</span></code></a>
+(ADC mode, data source, FFT/scaler bypass, gains, …). Array-wide
+<code class="docutils literal notranslate"><span class="pre">local_sync</span></code> is rejected: this method always passes
+<code class="docutils literal notranslate"><span class="pre">local_sync=False</span></code> to each board and optionally runs one array
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a> afterwards so boards stay aligned.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>channels</strong> – Channel subset forwarded to each board’s
+<code class="docutils literal notranslate"><span class="pre">set_channelizer</span></code>. <code class="docutils literal notranslate"><span class="pre">None</span></code> means that board’s default
+channels.</p></li>
+<li><p><strong>local_sync</strong> – Must be <code class="docutils literal notranslate"><span class="pre">None</span></code>. Passing a value raises
+<code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>.</p></li>
+<li><p><strong>sync</strong> (<em>bool</em>) – If True (default), run <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a> after all
+boards are configured. Required for PWM / pipeline state that
+is referenced to Frame 0.</p></li>
+<li><p><strong>**kwargs</strong> – Other <code class="docutils literal notranslate"><span class="pre">set_channelizer</span></code> arguments (<code class="docutils literal notranslate"><span class="pre">data_source</span></code>,
+<code class="docutils literal notranslate"><span class="pre">fft_bypass</span></code>, <code class="docutils literal notranslate"><span class="pre">gains</span></code>, …).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_gains_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_gains_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">gains</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'now'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gain_timestamps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_gains_async" title="Link to this definition"></a></dt>
+<dd><p>Set on-FPGA post-FFT digital gains for the given boards/channels.</p>
+<p>Channel-keyed maps are regrouped with <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.group_gains_per_board_id" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.group_gains_per_board_id"><code class="xref py py-meth docutils literal notranslate"><span class="pre">group_gains_per_board_id()</span></code></a>.
+Gains are written with <code class="docutils literal notranslate"><span class="pre">when=None</span></code> on each board (no per-board bank
+switch). If this method’s <code class="docutils literal notranslate"><span class="pre">when</span></code> is not <code class="docutils literal notranslate"><span class="pre">None</span></code>, one array
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.switch_gains_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.switch_gains_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">switch_gains_async()</span></code></a> then activates the bank.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>gains</strong> (<em>dict</em>) – <p>Either:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">{board_id:</span> <span class="pre">{chan:</span> <span class="pre">(glin,</span> <span class="pre">glog),</span> <span class="pre">...},</span> <span class="pre">...}</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{chan_id:</span> <span class="pre">(glin,</span> <span class="pre">glog),</span> <span class="pre">...}</span></code></p></li>
+</ul>
+<p>where <code class="docutils literal notranslate"><span class="pre">board_id</span></code> is <code class="docutils literal notranslate"><span class="pre">(crate,</span> <span class="pre">slot)</span></code>, <code class="docutils literal notranslate"><span class="pre">chan_id</span></code> is
+<code class="docutils literal notranslate"><span class="pre">(crate,</span> <span class="pre">slot,</span> <span class="pre">channel)</span></code>, <code class="docutils literal notranslate"><span class="pre">glin</span></code> is 1024 complex linear
+gains, and <code class="docutils literal notranslate"><span class="pre">glog</span></code> is the post-scaler (gain <code class="docutils literal notranslate"><span class="pre">2**glog</span></code>).</p>
+</p></li>
+<li><p><strong>bank</strong> (<em>int</em>) – Bank to write. <code class="docutils literal notranslate"><span class="pre">-1</span></code> or <code class="docutils literal notranslate"><span class="pre">None</span></code> writes the inactive
+bank (which can later be activated with
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.switch_gains_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.switch_gains_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">switch_gains_async()</span></code></a>).</p></li>
+<li><p><strong>when</strong> (<em>int</em><em>, </em><em>str</em><em> or </em><em>None</em>) – <p>When to make the new table active:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">'now'</span></code> or a negative integer: activate immediately.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">None</span></code>: write the bank but do not switch.</p></li>
+<li><p>a non-negative integer: activate at that frame number.</p></li>
+</ul>
+</p></li>
+<li><p><strong>gain_timestamps</strong> (<em>dict</em><em> or </em><em>float</em><em> or </em><em>None</em>) – Unix timestamps with the
+same key layout as <code class="docutils literal notranslate"><span class="pre">gains</span></code>, or a single timestamp applied to
+every channel. <code class="docutils literal notranslate"><span class="pre">None</span></code> means “now” on each board.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_noise_injection">
+<span class="sig-name descname"><span class="pre">set_noise_injection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">board</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">high_time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">8388608</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16777216</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">local_sync</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bp_sma'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_noise_injection" title="Link to this definition"></a></dt>
+<dd><p>Configure the noise-injection gating (PWM) signal on one board.</p>
+<p>When <code class="docutils literal notranslate"><span class="pre">enable</span></code> is True, the PWM generator is routed to <code class="docutils literal notranslate"><span class="pre">output</span></code>
+(default backplane SMA). A sync is needed after PWM changes so the
+waveform is referenced to Frame 0; <code class="docutils literal notranslate"><span class="pre">local_sync=True</span></code> does that on
+this board only — use a later array <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a> if other boards
+must stay aligned.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>board</strong> – Target board: serial string (with leading zeros),
+motherboard object, or <code class="docutils literal notranslate"><span class="pre">(crate,</span> <span class="pre">slot)</span></code> id as accepted by
+<a class="reference internal" href="pychfpga.fpga_array.html#pychfpga.fpga_array.FPGAArray.get_iceboard" title="pychfpga.fpga_array.FPGAArray.get_iceboard"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_iceboard()</span></code></a>. Falsy
+(<code class="docutils literal notranslate"><span class="pre">None</span></code>, <code class="docutils literal notranslate"><span class="pre">''</span></code>) skips setup and returns immediately.</p></li>
+<li><p><strong>enable</strong> (<em>bool</em>) – If True, enable PWM and route it to <code class="docutils literal notranslate"><span class="pre">output</span></code>.</p></li>
+<li><p><strong>offset</strong> (<em>int</em>) – Frames to wait after Frame 0 before the first pulse.</p></li>
+<li><p><strong>high_time</strong> (<em>int</em>) – High time of the PWM waveform, in frames.
+Default 8388608.</p></li>
+<li><p><strong>period</strong> (<em>int</em>) – PWM period in frames. Default 16777216
+(so default duty cycle is 50%).</p></li>
+<li><p><strong>local_sync</strong> (<em>bool</em>) – If True, issue a local software sync on the
+target board after programming PWM.</p></li>
+<li><p><strong>output</strong> (<em>str</em>) – User output that drives the noise-injection
+hardware (<code class="docutils literal notranslate"><span class="pre">set_user_output_source</span></code>). Default <code class="docutils literal notranslate"><span class="pre">'bp_sma'</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_offset_binary_encoding_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_offset_binary_encoding_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">offset_encoding_enabled</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_offset_binary_encoding_async" title="Link to this definition"></a></dt>
+<dd><p>Enable or disable offset-binary encoding on every board.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>offset_encoding_enabled</strong> (<em>bool</em>) – Passed to each board’s
+<code class="docutils literal notranslate"><span class="pre">set_offset_binary_encoding</span></code>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_operational_mode_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mode</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frames_per_packet</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">send_flags</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chan8_channel_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0,</span> <span class="pre">1,</span> <span class="pre">2,</span> <span class="pre">3,</span> <span class="pre">4,</span> <span class="pre">5,</span> <span class="pre">6,</span> <span class="pre">7]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tx_power</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">integration_period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16384</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocorr_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corner_turn_bad_links</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corner_turn_bin_priority</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corner_turn_remap_level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async" title="Link to this definition"></a></dt>
+<dd><p>Set the operational mode of the array.</p>
+<p>Configures the corner-turn engine on every board, optionally starts
+firmware correlators, then runs a full array <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a>.</p>
+<p>Prerequisites:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>FPGAs are programmed and opened, and <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_init_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_init_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">array_init_async()</span></code></a>
+(or equivalent <code class="docutils literal notranslate"><span class="pre">init_fpga</span></code>) has run so channelizers and CT
+engines exist.</p></li>
+<li><p>Every board must have the same CT engine class (BCT or UCT).</p></li>
+<li><p>Crate boards must use the backplane clock
+(<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.check_clock_source" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.check_clock_source"><code class="xref py py-meth docutils literal notranslate"><span class="pre">check_clock_source()</span></code></a> raises otherwise).</p></li>
+<li><p>Do not call <code class="docutils literal notranslate"><span class="pre">get_ber()</span></code> before this; it leaves shuffle links
+in a state that breaks mode init.</p></li>
+</ul>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mode</strong> (<em>str</em>) – <p>Operational mode. Platform-specific:</p>
+<p>IceBoard:</p>
+<blockquote>
+<div><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">'chan4'</span></code>: Corner-turn engine is bypassed and raw 4-bit
+data from 4 channelizers is sent directly to the 4 10G
+Ethernet links.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'chan8'</span></code>: Corner-turn engine is bypassed and raw 8-bit
+data from 8 channelizers is sent directly to the 8 10G
+Ethernet links.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'shuffle16'</span></code>: Channelize and shuffle within each
+IceBoard; no inter-board shuffle. For single-board
+operation or independent boards.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'shuffle128'</span></code>: Shuffle within a crate across 8 boards
+(128 channels). Data leaves via IceBoard QSFP+; no
+inter-crate shuffle.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'shuffle256'</span></code>: Shuffle within a crate across 16 boards
+(256 channels).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'shuffle512'</span></code>: Shuffle between crate pairs (crate N
+and N+1, N even) to make a 32-board (512-channel)
+correlator feed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'corr16'</span></code>: Corner-turn engine is hard-wired to feed
+16 channels to the on-FPGA correlator.</p></li>
+</ul>
+</div></blockquote>
+<p>CRS:</p>
+<blockquote>
+<div><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">'shuffle8'</span></code>: Channelize 8 inputs and send through the
+UPACK programmable bin packetizer to the 100G CGE
+offload link.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'corr8'</span></code>: Feed 8 channels to the on-FPGA correlator.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'corr32'</span></code>: Shuffle 4 boards on the same backplane into
+a 32-input correlator.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'corr64'</span></code>: Shuffle 8 boards on two backplanes (SFP
+cables between boards) into a 64-input correlator.</p></li>
+</ul>
+</div></blockquote>
+<p>ZCU111:</p>
+<blockquote>
+<div><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">'corr4'</span></code>: Feed 4 channels to the on-FPGA correlator.</p></li>
+</ul>
+</div></blockquote>
+<p><code class="docutils literal notranslate"><span class="pre">None</span></code> or falsy reuses the mode stored by
+<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_init_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_init_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">array_init_async()</span></code></a>.</p>
+</p></li>
+<li><p><strong>frames_per_packet</strong> (<em>int</em>) – Frames combined into one output packet.
+Limited by FPGA buffering.</p></li>
+<li><p><strong>send_flags</strong> (<em>bool</em>) – If True, scaler and frame flags are appended
+after the data block.</p></li>
+<li><p><strong>chan8_channel_map</strong> (<em>list</em><em> of </em><em>int</em>) – Channel order for <code class="docutils literal notranslate"><span class="pre">chan8</span></code> (and
+related CT setup). Default is <code class="docutils literal notranslate"><span class="pre">list(range(8))</span></code>.</p></li>
+<li><p><strong>tx_power</strong> (<em>dict</em>) – GTX transmit power levels. <code class="docutils literal notranslate"><span class="pre">None</span></code> reuses the
+value stored at array init.</p></li>
+<li><p><strong>integration_period</strong> (<em>int</em>) – For <code class="docutils literal notranslate"><span class="pre">corr4</span></code> / <code class="docutils literal notranslate"><span class="pre">corr8</span></code> / <code class="docutils literal notranslate"><span class="pre">corr16</span></code> /
+<code class="docutils literal notranslate"><span class="pre">corr32</span></code> / <code class="docutils literal notranslate"><span class="pre">corr64</span></code> only: correlator integration length in
+frames. Falsy skips starting the correlator.</p></li>
+<li><p><strong>autocorr_only</strong> (<em>bool</em>) – For correlator modes: if True, only
+autocorrelation products are sent.</p></li>
+<li><p><strong>corner_turn_bad_links</strong> (<em>list</em><em> of </em><em>tuples</em>) – CT outputs
+<code class="docutils literal notranslate"><span class="pre">[(crate,</span> <span class="pre">slot,</span> <span class="pre">links),</span> <span class="pre">...]</span></code> that should preferably not be
+assigned frequency bins.</p></li>
+<li><p><strong>corner_turn_bin_priority</strong> (<em>list</em><em> of </em><em>int</em>) – Frequency bins in
+assignment order (most desirable first). Lowest-priority bins
+are steered toward bad links when the CT engine allows it.</p></li>
+<li><p><strong>corner_turn_remap_level</strong> (<em>int</em>) – How aggressively bins are remapped:
+0 = none, 1 = 3rd crossbar only, 2 = crossbars 2 and 3,
+3 = all crossbars.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_sync_method_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'irig-b'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">master</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">master_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">master_output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async" title="Link to this definition"></a></dt>
+<dd><p>Set the global syncing method and configure every board for it.</p>
+<p>The boards start their sync process on the next rising edge of the
+10 MHz reference after the trigger event. That event should occur
+between two reference-clock edges so every board latches the same
+edge.</p>
+<p>Call this before <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a>. For <code class="docutils literal notranslate"><span class="pre">'bp_gpio_int'</span></code> as
+<code class="docutils literal notranslate"><span class="pre">source</span></code>, a master board is required (GPIO_INT is enabled as an
+output only on that board).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>method</strong> (<em>str</em>) – <p>Synchronization method:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">'irig-b'</span></code> (aliases <code class="docutils literal notranslate"><span class="pre">'irigb'</span></code>, <code class="docutils literal notranslate"><span class="pre">'distributed_time'</span></code>):
+Every board syncs when the target IRIG-B time is reached.
+<code class="docutils literal notranslate"><span class="pre">source</span></code> is the IRIG-B decoder input (see motherboard
+<code class="docutils literal notranslate"><span class="pre">set_irigb_source_async</span></code>). Default source is <code class="docutils literal notranslate"><span class="pre">'bp_time'</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'trig'</span></code> (alias <code class="docutils literal notranslate"><span class="pre">'centralized_soft_trigger'</span></code>): Every
+board syncs on the rising edge of <code class="docutils literal notranslate"><span class="pre">source</span></code> (a REFCLK sync
+source; see <code class="docutils literal notranslate"><span class="pre">set_sync_source</span></code>). Default source is
+<code class="docutils literal notranslate"><span class="pre">'bp_time'</span></code>. The master board’s <code class="docutils literal notranslate"><span class="pre">generate_sync()</span></code> is
+used later by <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">'local'</span></code> (alias <code class="docutils literal notranslate"><span class="pre">'local_soft_trigger'</span></code>): Each board
+generates its own software SYNC when <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a> is
+called. This resets each pipeline but does not align boards
+or support multi-board corner-turn modes.</p></li>
+</ul>
+</p></li>
+<li><p><strong>source</strong> (<em>str</em>) – Sync-signal source. For IRIG-B, an IRIG-B source
+name; for <code class="docutils literal notranslate"><span class="pre">trig</span></code>, a REFCLK source name. Ignored for
+<code class="docutils literal notranslate"><span class="pre">local</span></code>.</p></li>
+<li><p><strong>master</strong> (<a class="reference internal" href="pychfpga.hardware.motherboard.html#pychfpga.hardware.motherboard.Motherboard" title="pychfpga.hardware.motherboard.Motherboard"><em>Motherboard</em></a><em>, </em><em>str</em><em>, </em><em>int</em><em>, or </em><em>None</em>) – <p>Board that generates the
+time or trigger signal:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">None</span></code>: no master is set up.</p></li>
+<li><p>Motherboard object: use that board.</p></li>
+<li><p>str: board with that serial number (include leading zeros).</p></li>
+<li><p>int: board in that slot (1-based).</p></li>
+</ul>
+</p></li>
+<li><p><strong>master_source</strong> (<em>str</em>) – Source routed to the master’s user output
+(<code class="docutils literal notranslate"><span class="pre">set_user_output_source</span></code> on the master).</p></li>
+<li><p><strong>master_output</strong> (<em>int</em>) – User output index on the master that carries
+the sync signal. Default 0.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_test_pattern">
+<span class="sig-name descname"><span class="pre">set_test_pattern</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_test_pattern" title="Link to this definition"></a></dt>
+<dd><p>Drive every crate board with a slot/channel identity test pattern.</p>
+<p>For each board in each crate, channel <code class="docutils literal notranslate"><span class="pre">ch</span></code> is programmed as function
+<code class="docutils literal notranslate"><span class="pre">'ab'</span></code> with <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">=</span> <span class="pre">(slot</span> <span class="pre">-</span> <span class="pre">1)</span> <span class="pre">&lt;&lt;</span> <span class="pre">4</span></code> and <code class="docutils literal notranslate"><span class="pre">b</span> <span class="pre">=</span> <span class="pre">ch</span> <span class="pre">&lt;&lt;</span> <span class="pre">4</span></code>, then the
+data source is set to <code class="docutils literal notranslate"><span class="pre">'funcgen'</span></code>. Ice-style 16-channel layout.
+Requires <code class="docutils literal notranslate"><span class="pre">self.ic</span></code> (crate map).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.start_correlators_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start_correlators_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">integration_period</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocorr_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_accum</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.start_correlators_async" title="Link to this definition"></a></dt>
+<dd><p>Start all firmware correlators in the array.</p>
+<p>Calls each board’s <code class="docutils literal notranslate"><span class="pre">start_correlator</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>integration_period</strong> (<em>int</em>) – Number of frames to integrate before
+sending correlated products.</p></li>
+<li><p><strong>autocorr_only</strong> (<em>bool</em>) – If True, only autocorrelation products are
+sent.</p></li>
+<li><p><strong>no_accum</strong> (<em>bool</em>) – If True, do not accumulate across frames; return
+the product from the last frame of the integration period.</p></li>
+<li><p><strong>verbose</strong> (<em>int</em>) – Verbosity passed to each board’s
+<code class="docutils literal notranslate"><span class="pre">start_correlator</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.start_data_capture_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start_data_capture_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sync</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">send_delay</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">send_delay_per_slot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.start_data_capture_async" title="Link to this definition"></a></dt>
+<dd><p>Start data capture on all channelizers of all boards in the array.</p>
+<p>Forwards arguments to each board’s
+<a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.start_data_capture" title="pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.start_data_capture"><code class="xref py py-meth docutils literal notranslate"><span class="pre">start_data_capture()</span></code></a>.
+This array method captures the <code class="docutils literal notranslate"><span class="pre">sync</span></code> keyword itself, so it is not
+forwarded: each board therefore uses that firmware method’s default
+(a local per-board sync). Prefer not to pass <code class="docutils literal notranslate"><span class="pre">sync=True</span></code> here while
+UCAP is already flooding the host — a full IRIG <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a>
+can time out MMI.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>*args</strong> – Passed through to each board’s <code class="docutils literal notranslate"><span class="pre">start_data_capture</span></code>
+(period, frames_per_burst, channels, source, mode, offset, …).</p></li>
+<li><p><strong>**kwargs</strong> – Same as <code class="docutils literal notranslate"><span class="pre">*args</span></code>. Do not pass <code class="docutils literal notranslate"><span class="pre">sync</span></code> if you intend
+to control the board-local sync; this wrapper steals that name.</p></li>
+<li><p><strong>send_delay_per_slot</strong> (<em>int</em><em> or </em><em>float</em>) – When set, each board’s <code class="docutils literal notranslate"><span class="pre">send_delay</span></code> is
+<code class="docutils literal notranslate"><span class="pre">send_delay</span> <span class="pre">+</span> <span class="pre">int(slot</span> <span class="pre">*</span> <span class="pre">send_delay_per_slot)</span></code> in ADC frames (UCAP clamped to
+65535). When omitted, the same <code class="docutils literal notranslate"><span class="pre">send_delay</span></code> is used on every board.</p></li>
+<li><p><strong>sync</strong> (<em>bool</em>) – If true, run a full array <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">sync_async()</span></code></a> after
+every board has started capture.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.switch_gains_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">switch_gains_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bank</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">when</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'now'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.switch_gains_async" title="Link to this definition"></a></dt>
+<dd><p>Switch every channelizer to gain <code class="docutils literal notranslate"><span class="pre">bank</span></code> at time <code class="docutils literal notranslate"><span class="pre">when</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>bank</strong> (<em>int</em>) – Target bank. <code class="docutils literal notranslate"><span class="pre">-1</span></code> or <code class="docutils literal notranslate"><span class="pre">None</span></code> selects each
+channelizer’s currently unused bank.</p></li>
+<li><p><strong>when</strong> (<em>str</em><em>, </em><em>int</em><em> or </em><em>None</em>) – <code class="docutils literal notranslate"><span class="pre">'now'</span></code> switches immediately; <code class="docutils literal notranslate"><span class="pre">None</span></code>
+does not switch; an integer is the frame number at which the
+switch occurs (synchronized gain switching).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">sync_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">delay</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">align_to_seconds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_trials</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_sync_time_difference</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async" title="Link to this definition"></a></dt>
+<dd><p>Generate a SYNC event across the whole array.</p>
+<p>Uses the method configured by <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_sync_method_async()</span></code></a>. On
+success, scaler overflow flags are cleared on every board.</p>
+<p>IRIG-B path: after FPGA programming the decoder can take ~1 s to see a
+full second. This method refuses to arm if any board has no valid
+IRIG. A dummy arm far in the future
+(<code class="xref py py-data docutils literal notranslate"><span class="pre">IRIG_SYNC_DUMMY_ARM_DELAY_S</span></code>) measures real array arm time
+(RPC, switch, load); slack is <code class="docutils literal notranslate"><span class="pre">max(2</span> <span class="pre">*</span> <span class="pre">t_arm,</span> <span class="pre">IRIG_SYNC_MIN_SLACK_S)</span></code>.
+With <code class="docutils literal notranslate"><span class="pre">align_to_seconds</span></code>, the trigger base is the next integer second
+at least that slack in the future, then
+<code class="xref py py-data docutils literal notranslate"><span class="pre">IRIG_SYNC_PIPELINE_OFFSET_S</span></code> plus <code class="docutils literal notranslate"><span class="pre">delay</span></code> are applied so ADC
+frames start on that second.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>delay</strong> (<em>float</em><em> or </em><em>list</em>) – Extra seconds added after the chosen
+trigger base. With <code class="docutils literal notranslate"><span class="pre">align_to_seconds</span></code> this is applied after
+the next safe integer second (and after
+<code class="xref py py-data docutils literal notranslate"><span class="pre">IRIG_SYNC_PIPELINE_OFFSET_S</span></code>). A list is a per-board
+offset. Default 0: do not skip extra seconds.</p></li>
+<li><p><strong>check</strong> (<em>bool</em>) – If True, read SYNC counters on every board to
+confirm each counter advanced by 1. Automatically disabled
+(with a warning) if any board’s firmware lacks REFCLK sync
+logic.</p></li>
+<li><p><strong>align_to_seconds</strong> (<em>bool</em>) – If True (IRIG-B only), align the trigger
+base to the next safe integer second as described above. If
+False, arm <code class="docutils literal notranslate"><span class="pre">slack</span></code> seconds after the current IRIG time with
+no pipeline offset.</p></li>
+<li><p><strong>max_trials</strong> (<em>int</em>) – Times to retry the whole SYNC on failure.
+Default 3. The last exception is re-raised after the final
+trial.</p></li>
+<li><p><strong>max_sync_time_difference</strong> (<em>float</em><em> or </em><em>None</em>) – For IRIG-B, maximum
+allowed Frame-0 time spread in nanoseconds. <code class="docutils literal notranslate"><span class="pre">None</span></code> uses the
+value stored by <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_init_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_init_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">array_init_async()</span></code></a> (default 100 ns).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.test_sync">
+<span class="sig-name descname"><span class="pre">test_sync</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.test_sync" title="Link to this definition"></a></dt>
+<dd><p>Exercise backplane SYNC from the configured master board.</p>
+<p>Sets every board’s REFCLK sync source to <code class="docutils literal notranslate"><span class="pre">'bp'</span></code>, then ten times
+pulses a local sync on <code class="docutils literal notranslate"><span class="pre">_sync_master</span></code> and checks that each board’s
+SYNC counter advanced by 1. Prints PASS/FAIL per board and overall.</p>
+<p>Prerequisites:</p>
+<blockquote>
+<div><p><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_sync_method_async()</span></code></a> must have set a master
+(<code class="docutils literal notranslate"><span class="pre">self._sync_master</span></code>). Boards must have REFCLK sync logic.</p>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.update_config">
+<span class="sig-name descname"><span class="pre">update_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.update_config" title="Link to this definition"></a></dt>
+<dd><p>Refresh each board’s firmware config tree and return board configs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>list</em> – Each board’s <code class="docutils literal notranslate"><span class="pre">config</span></code> State after <code class="docutils literal notranslate"><span class="pre">chFPGA.update_config</span></code>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.fpga_firmware.chfpga.chfpga.html" class="btn btn-neutral float-left" title="chfpga.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.fpga_firmware.chfpga.chfpga_udp.html" class="btn btn-neutral float-right" title="chfpga_udp.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

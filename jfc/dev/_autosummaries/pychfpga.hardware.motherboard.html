@@ -1,0 +1,891 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>motherboard.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="supported_hardware.py" href="pychfpga.hardware.supported_hardware.html" />
+    <link rel="prev" title="mezzanine.py" href="pychfpga.hardware.mezzanine.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.Agilent_N5764A.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">Agilent_N5764A/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crate.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.crs.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.hardware_map.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware_map.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.i2c_devices.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">i2c_devices/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.ice.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ice/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.interfaces.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">interfaces/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.mezzanine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mezzanine.py</span></code></a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">motherboard.py</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.hardware.motherboard.Motherboard"><code class="docutils literal notranslate"><span class="pre">Motherboard</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.supported_hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">supported_hardware.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.zcu111.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zcu111/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.zuboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zuboard/</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">motherboard.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.hardware.motherboard.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="motherboard-py">
+<h1><a class="reference internal" href="#module-pychfpga.hardware.motherboard" title="pychfpga.hardware.motherboard"><code class="xref py py-mod docutils literal notranslate"><span class="pre">motherboard.py</span></code></a><a class="headerlink" href="#motherboard-py" title="Link to this heading"></a></h1>
+<span class="target" id="module-pychfpga.hardware.motherboard"></span><div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.hardware.motherboard.Motherboard" title="pychfpga.hardware.motherboard.Motherboard"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Motherboard</span></code></a></p></td>
+<td><p>Hardware base class that defines a generic motherboard (Iceboard or others) with hardware map management methods.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.hardware.motherboard.</span></span><span class="sig-name descname"><span class="pre">Motherboard</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="pychfpga.hardware.hardware_map.html#pychfpga.hardware.hardware_map.HardwareMap" title="pychfpga.hardware.hardware_map.HardwareMap"><code class="xref py py-class docutils literal notranslate"><span class="pre">HardwareMap</span></code></a></p>
+<p>Hardware base class that defines a generic motherboard (Iceboard or others) with hardware map
+management methods. All motherboards across all Motherboard subclasses are uniquely identified by its model
+number and serial number, and has a network hostname.</p>
+<p>A motherboard can optinally be connected to one crate and have multiple mezzanines. This class defines the HardWare
+map methods that  create and update Motherboooards while ensuring related Crate and Mezzanines are kept up to date.</p>
+<p>Since this class inherits directly from HardwareMap, it is treated as a hardware base class and will create a
+class and instance registry to track all subsequent Motherboard subclasses.</p>
+<p>A Motherboard class is a generic class that has no part number. It cannot be instantiated with only a serial number,
+but it <em>can</em>  be instantiated with a hostname since that uniquely identifies it. The application can resolve and
+upadte the model and serial number later with update_instance().</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.FMC_MEZZ_NUMBERS">
+<span class="sig-name descname"><span class="pre">FMC_MEZZ_NUMBERS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">()</span></span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.FMC_MEZZ_NUMBERS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.NUMBER_OF_FMC_SLOTS">
+<span class="sig-name descname"><span class="pre">NUMBER_OF_FMC_SLOTS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.NUMBER_OF_FMC_SLOTS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.SERIAL_NUMBER_LENGTH">
+<span class="sig-name descname"><span class="pre">SERIAL_NUMBER_LENGTH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">4</span></span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.SERIAL_NUMBER_LENGTH" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hostname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">serial</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subarray</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.__init__" title="Link to this definition"></a></dt>
+<dd><p>Create a Motherboard object.</p>
+<p>One does not usually instantiate hardware map objects directly. Instead use the
+get_unique_instance(…) class method to ensure that objects with
+matching hostname or serial numbers will be reused if available.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hostname</strong> (<em>str</em>) – host name or IP address of the board.  If <cite>hostname</cite> is ‘None’ but the
+instance has a serial number, then the board hostname can
+potentially be resolved using mDNS discovery.</p></li>
+<li><p><strong>serial</strong> (<em>str</em><em> or </em><em>int</em>) – Serial number of the board, in the exact
+format that is published by the board. For
+convenience, if <cite>serial</cite> is an integer, it is converted into a
+properly formatted string serial.</p></li>
+<li><p><strong>slot</strong> (<em>int</em>) – virtual slot number for use of multiple boards in an
+array. A value of  0 or None (i.e. bool(slot) == False)
+indicates that there is no slot information.</p></li>
+<li><p><strong>subarray</strong> – Arbitrary value that is used to group boards in logical
+categories.</p></li>
+<li><p><strong>kwargs</strong> (<em>dict</em>) – extra arguments stored in the instance to be used
+in future initialization steps.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul>
+<li><dl class="simple">
+<dt>__init__() only sets the object key parameters and manages the</dt><dd><p>hardware map and does not initiate connection with the hardware it
+represents. Indeed, Hardware map objects (and their subclasses) can be
+created and destroyed freely  during the process of hardware map
+creation. __init__() therefore shall not initiate communication with
+the hardware or do complex set-up; this is done by init(), which will
+be called when the hardware map is completed and stable.</p>
+</dd>
+</dl>
+</li>
+<li><p>The Board initialization is done in 4 steps:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>open_platform_async() establishes communication with the
+motherboard’s on-board processor. This enables access to the
+methods provided by the motherboard.</p></li>
+<li><p>set_fpga_bitstream_async(): programs the FPGA with the target
+firmware. The Firmware instance is created in self.fpga, but is not yet
+usable.</p></li>
+<li><p>open_fpga_async() establishes the communication link with
+the FPGA, crete the objects that handle the firmware, and
+provides basic management interfaces and methods.</p></li>
+<li><p>init_fpga_async() initializes the firmware in the desired
+operational state.</p></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.array_method_class">
+<span class="sig-name descname"><span class="pre">array_method_class</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.array_method_class" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.clear_hardware_map">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">clear_hardware_map</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.clear_hardware_map" title="Link to this definition"></a></dt>
+<dd><p>Drop every registered instance from every hardware base class.</p>
+<p>Uses <code class="docutils literal notranslate"><span class="pre">list.clear()</span></code> so the registry list identity is preserved and
+any external reference (notably <code class="docutils literal notranslate"><span class="pre">FPGAArray.motherboards</span></code> /
+<code class="docutils literal notranslate"><span class="pre">FPGAArray.crates</span></code>) keeps pointing at the live, now-empty list.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.cls_logger">
+<span class="sig-name descname"><span class="pre">cls_logger</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;Logger</span> <span class="pre">pychfpga.hardware.motherboard</span> <span class="pre">(WARNING)&gt;</span></span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.cls_logger" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.delete_instance">
+<span class="sig-name descname"><span class="pre">delete_instance</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.delete_instance" title="Link to this definition"></a></dt>
+<dd><p>Remove this instance from its base class instance registry.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.discover_crate_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">discover_crate_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">update</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.discover_crate_async" title="Link to this definition"></a></dt>
+<dd><p>Discover the crate for this board, and update the hardware map accordingly if <cite>update=True</cite></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.discover_serial_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">discover_serial_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">update</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.discover_serial_async" title="Link to this definition"></a></dt>
+<dd><p>Discover the serial number of this board, and update the hardware map accordingly if <cite>update=True</cite></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.discover_slot_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">discover_slot_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">update</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.discover_slot_async" title="Link to this definition"></a></dt>
+<dd><p>Discover the slot number of this board, and update the hardware map accordingly if <cite>update=True</cite></p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.fpga">
+<span class="sig-name descname"><span class="pre">fpga</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.fpga" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_all_registered_classes">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_all_registered_classes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_class_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_all_registered_classes" title="Link to this definition"></a></dt>
+<dd><p>Return a list of all currently-registered classes that have the same
+common hardware base class as <code class="docutils literal notranslate"><span class="pre">cls</span></code> or <code class="docutils literal notranslate"><span class="pre">base_class_name</span></code> (e.g. all
+Motherboard subclasses).</p>
+<p>“Registered” means the class has already been imported and has
+declared itself via <code class="docutils literal notranslate"><span class="pre">__init_subclass__</span></code>. Classes listed only in the
+manifest are not included — use <a class="reference internal" href="#pychfpga.hardware.motherboard.Motherboard.get_all_supported_classes" title="pychfpga.hardware.motherboard.Motherboard.get_all_supported_classes"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_all_supported_classes()</span></code></a> for
+that.</p>
+<p>Used in discover_mezzanine, fpga_array</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_all_registered_instances">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_all_registered_instances</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_class_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_all_registered_instances" title="Link to this definition"></a></dt>
+<dd><p>Returns the live list of all instances of objects that have the
+same common Hardware base class as <cite>cls</cite> (e.g. all Motherboards
+instances). If <cite>base_class_name</cite> is not None, the instance list of
+the base class named <cite>base_class_name</cite> is returned instead.</p>
+<p>The returned list is the actual internal registry, not a copy: it
+will reflect instances created or deleted after this call. This lets
+callers store e.g.
+<code class="docutils literal notranslate"><span class="pre">self.motherboards</span> <span class="pre">=</span> <span class="pre">Motherboard.get_all_registered_instances()</span></code>
+once and iterate the up-to-date set of motherboards without going
+through a property each time. As a consequence, callers must not
+mutate the returned list directly; use the <code class="docutils literal notranslate"><span class="pre">HardwareMap</span></code> API
+(instance creation, <code class="docutils literal notranslate"><span class="pre">delete_instance</span></code>, <code class="docutils literal notranslate"><span class="pre">clear_hardware_map</span></code>)
+instead.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>base_class_name</strong> (<em>str</em><em> or </em><em>None</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_all_supported_classes">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_all_supported_classes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_class_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">package</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_all_supported_classes" title="Link to this definition"></a></dt>
+<dd><p>Import every class declared in the manifest for the hardware base
+class of <code class="docutils literal notranslate"><span class="pre">cls</span></code> (or <code class="docutils literal notranslate"><span class="pre">base_class_name</span></code>) and return the resulting
+class list. Use this when a caller genuinely needs every possible
+class, not just the ones already loaded (e.g. EEPROM decoders that
+must try every mezzanine variant).</p>
+<p>When <code class="docutils literal notranslate"><span class="pre">package</span></code> is given, the result is narrowed to classes declared
+in that subpackage under <code class="docutils literal notranslate"><span class="pre">pychfpga.hardware</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">package='ice'</span></code>
+to return only Ice-platform mezzanines). This is useful when a
+platform-specific routine must iterate over <em>its own</em> hardware
+variants, not every variant in the manifest.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_array_method_classes">
+<span class="sig-name descname"><span class="pre">get_array_method_classes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_array_method_classes" title="Link to this definition"></a></dt>
+<dd><p>Return the cached array-method provider classes for this board.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_backplane_metrics_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_backplane_metrics_async</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_backplane_metrics_async" title="Link to this definition"></a></dt>
+<dd><p>Get the backplane hardware monitoring information.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>a <code class="xref py py-class docutils literal notranslate"><span class="pre">Metrics</span></code> object.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_class_by_ipmi_part_number">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_class_by_ipmi_part_number</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">part_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_class_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_class_by_ipmi_part_number" title="Link to this definition"></a></dt>
+<dd><p>Return the class whose official part number (cls.part_number) or aliases (cls._ipmi_part_numbers) matches the specified <cite>part_number</cite>.</p>
+<p>Searches for the target part number in the <code class="docutils literal notranslate"><span class="pre">_ipmi_part_numbers</span></code>
+lists provided by each registered class. On miss, the manifest is
+consulted and the matching platform package is imported, then the
+lookup is retried — so callers never need to pre-load platforms.</p>
+<p>There shall be only one class that matches the target IPMI. If there
+are multiple matches, a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> will be raised.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>part_number</strong> (<em>str</em>) – target part number</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>matching class, None if there are no matches. Raises a Runtime
+exception if there are multiple matches.</p>
+</dd>
+</dl>
+<p>Used by discover_crate, discover_mezzanine, mdns_discover</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_class_by_name">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_class_by_name</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_class_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_class_by_name" title="Link to this definition"></a></dt>
+<dd><p>Return the class registered under <code class="docutils literal notranslate"><span class="pre">name</span></code> within the hardware base
+class of <code class="docutils literal notranslate"><span class="pre">cls</span></code> (or the one named <code class="docutils literal notranslate"><span class="pre">base_class_name</span></code>). Consults the
+manifest and imports the matching platform package on miss.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The class object, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if neither the registry nor the
+manifest has an entry for <code class="docutils literal notranslate"><span class="pre">name</span></code>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_class_by_part_number">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_class_by_part_number</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">part_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_class_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_class_by_part_number" title="Link to this definition"></a></dt>
+<dd><p>Return the hardware class whose <code class="docutils literal notranslate"><span class="pre">part_number</span></code> ends with
+<code class="docutils literal notranslate"><span class="pre">part_number</span></code> (case-insensitive).</p>
+<p>Searches first the in-memory class registry for every hardware base
+class; if nothing matches, loads the full manifest (which may import
+previously-unseen platform packages) and retries. Used by the hardware
+map string parser to resolve user-supplied suffixes like <code class="docutils literal notranslate"><span class="pre">MGK7MB</span></code> or
+<code class="docutils literal notranslate"><span class="pre">MGK7BP16</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>part_number</strong> (<em>str</em>) – part-number suffix to match. Case-insensitive.</p></li>
+<li><p><strong>base_class_name</strong> (<em>str</em>) – if provided, restrict the search to the
+named hardware base class. Defaults to searching across every
+hardware base class (<code class="docutils literal notranslate"><span class="pre">Motherboard</span></code>, <code class="docutils literal notranslate"><span class="pre">Crate</span></code>, <code class="docutils literal notranslate"><span class="pre">Mezzanine</span></code>,
+…), because a part-number string like <code class="docutils literal notranslate"><span class="pre">MGK7BP16</span></code> does not
+itself indicate which kind of hardware it describes.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Matching class.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>RuntimeError</strong> – if zero or multiple classes match the suffix.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_crate_id">
+<span class="sig-name descname"><span class="pre">get_crate_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">slot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_crate_id" title="Link to this definition"></a></dt>
+<dd><p>Return the crate ID tuple optionally appended by the specified slot number.slot</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>slot</strong> (<em>int</em>) – slot number to append to the tuple. Should be zero-based.slot</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>(crate_id, ) if <cite>slot</cite> is <cite>None</cite>, else (crate_id, slot).
+<code class="docutils literal notranslate"><span class="pre">crate_id</span></code> is the crate number if it exists, otherwise it is a
+string that uniquely defined the crate.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_crate_number">
+<span class="sig-name descname"><span class="pre">get_crate_number</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">default</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_crate_number" title="Link to this definition"></a></dt>
+<dd><p>Return the numeric crate index for this board, or <code class="docutils literal notranslate"><span class="pre">default</span></code> if unknown.</p>
+<p>The value comes from the attached <code class="xref py py-class docutils literal notranslate"><span class="pre">Crate</span></code> instance (<code class="docutils literal notranslate"><span class="pre">self.crate.crate_number</span></code>).
+If there is no crate, or the crate has no assigned number (<code class="docutils literal notranslate"><span class="pre">None</span></code>), this method
+returns <code class="docutils literal notranslate"><span class="pre">default</span></code>. That unifies the two cases so callers do not repeat
+<code class="docutils literal notranslate"><span class="pre">self.crate</span> <span class="pre">and</span> <span class="pre">self.crate.crate_number</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">None</span></code> checks.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>default</strong> – Value to return when there is no <code class="xref py py-attr docutils literal notranslate"><span class="pre">crate</span></code> or when
+<code class="docutils literal notranslate"><span class="pre">crate.crate_number</span></code> is <code class="docutils literal notranslate"><span class="pre">None</span></code>. Common choices are <code class="docutils literal notranslate"><span class="pre">None</span></code> (unknown /
+omit from labels) or <code class="docutils literal notranslate"><span class="pre">0</span></code> (integer stream IDs, sorting keys).</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The configured crate number (typically <code class="docutils literal notranslate"><span class="pre">int</span></code>), or <code class="docutils literal notranslate"><span class="pre">default</span></code>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_id">
+<span class="sig-name descname"><span class="pre">get_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lane</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default_crate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default_slot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">numeric_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_id" title="Link to this definition"></a></dt>
+<dd><p>Returns a (crate, slot) tuple representing a unique IceBoard ID,
+using numeric values whenever possible. A <cite>lane</cite> field can be
+optionally appended to the tuple to create channel/lane IDs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lane</strong> (<em>int</em>) – caller-provided lane number to be appended to the returned tuple. Used to
+create channel or lane ID tuples.</p></li>
+<li><p><strong>default_crate</strong> – Default values to return in the crate field if
+there is no crate, or there is a crate but there is no
+crate_number. If None, either the crate number or crate string
+id is used.</p></li>
+<li><p><strong>slot</strong> (<em>default</em>) – Default values to return in the slot field if there
+is no slot number.</p></li>
+<li><p><strong>numeric_only</strong> (<em>bool</em>) – If true, an exception will be raised if there
+is no valid crate number and slot number. <cite>default_crate</cite> and
+<cite>default_crate</cite> are ignored.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p><em>A (crate_id, slot_or_board_id) tuple, where</em> –</p>
+<ul class="simple">
+<li><dl class="simple">
+<dt>crate_id is the first of the following:</dt><dd><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">numeric_crate_number</span></code> (int) if there is a crate and the crate number is known</p></li>
+<li><p><cite>default_crate</cite> if <cite>default_crate</cite> is not <cite>None</cite></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">crate_model_serial_string</span></code> (str) model and serial number string if those exist</p></li>
+<li><p><cite>None</cite> if none  of the above is true</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>slot_or_board_id is the first of the following:</dt><dd><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">zero_based_slot_number</span></code> (int) zero-based slot number if there is a valid slot
+number (i.e. bool(self.slot) is True), whether or not there is a crate;</p></li>
+<li><p><cite>default_slot</cite> if  <cite>default_slot</cite> is not None;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">board_model_serial_string</span></code> (str) if the board has a valid model and serial number;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">hostname</span></code> (str) hostname if the board has a known hostname;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">None</span></code> if none of the above is true.</p></li>
+</ul>
+</dd>
+</dl>
+</li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>A board is always represented by a 2-element tuple. A crate is always represented by a
+one-element tuple, and a channel/lane is a 3-element tuple.</p></li>
+<li><p>The user is responsible for handling all possible types of crate (int, str, None) or
+slot (int, str) tuple elements</p></li>
+<li><p>crate can be None, but slot can never be None: it will be replaced by the string ID of
+the board so the tuple always refer to a specific board.</p></li>
+<li><p>If the crate provides a numeric slot number, the user must rely on external
+information to infer which board serial number correspond to the specified ID</p></li>
+<li><p>If the crate provides a numeric crate number, the user must rely on external
+information to infer which crate serial number correspond to the specified ID</p></li>
+<li><p>the id must be unique, even if we have multiple stand-alone boards. There should at
+least a non-None crate or slot field (i.e. no (None, None) tuple) Examples:</p></li>
+</ul>
+<p class="rubric">Examples</p>
+<p>Board in a crate/backplane:</p>
+<ul class="simple">
+<li><p>(2, 3): board on 4th slot of backplane with crate number 2</p></li>
+<li><p>(2, 0): board on crate number 2 without slot number, and default_slot=0</p></li>
+<li><p>(2, None): board on crate number 2 without slot information, and default_slot=None</p></li>
+<li><p>(‘MGK7BP16_SN023’, 3): board on 4th slot of backplane without crate number and
+default_crate=None</p></li>
+<li><p>(0, 3): board on 4th slot of backplane without crate number and default_crate=0</p></li>
+<li><p>(‘MGK7BP1_SN001’, None): board on crate without crate_number,  without default_crate,
+without slot number, without default_slot (e.g. unconfigured single-slot test
+backplane)</p></li>
+</ul>
+<p>Stand-alone board (no backplane/crate):</p>
+<ul class="simple">
+<li><p>(0, 0): No backplane, crate number nor slot_number, with default_crate=0 and
+default_slot=0</p></li>
+<li><p>(None, 3): No backplane, but the board slot number was manually set to  self.slot=4
+(not a typical case)</p></li>
+<li><p>(None, ‘MGK7MB_SN0372’): No crate nor slot information, and no default_crate nor
+default_slot</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_metrics_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_metrics_async</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_metrics_async" title="Link to this definition"></a></dt>
+<dd><p>Get the motherboard hardware monitoring information.</p>
+<p>Should be overriden to populate the Metrics object.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>a <code class="xref py py-class docutils literal notranslate"><span class="pre">Metrics</span></code> object.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_network_discovery_function">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_network_discovery_function</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_network_discovery_function" title="Link to this definition"></a></dt>
+<dd><p>Return the function to use for network discovery of CRS backplanes.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_platform_ip_address">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_platform_ip_address</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_platform_ip_address" title="Link to this definition"></a></dt>
+<dd><p>Return the IP address of the motherboard</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_string_id">
+<span class="sig-name descname"><span class="pre">get_string_id</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_string_id" title="Link to this definition"></a></dt>
+<dd><p>Return a string that identifies uniquely the Motherboard in the most convenient representation.</p>
+<p>Preference order:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>(0,3)  # crate 0 , 4th slot (tuples always use zero-based indices)</p></li>
+<li><p>(MGK7BP16_SN025, 3)  # Same, but without crate number info</p></li>
+<li><p>MGK7MB_SN0234 # no crate info at all (even with virtual slot)</p></li>
+<li><p>10.10.10.244 # motherboard serial number not discovered</p></li>
+<li><p>id=140529531550992 # nothing, last resort</p></li>
+</ul>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_supported_class_names">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_supported_class_names</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_class_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_supported_class_names" title="Link to this definition"></a></dt>
+<dd><p>Return a tuple of class names declared in the manifest for the
+hardware base class of <code class="docutils literal notranslate"><span class="pre">cls</span></code> (or <code class="docutils literal notranslate"><span class="pre">base_class_name</span></code>). Used to
+build helpful error messages without forcing the classes to be
+loaded.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_supported_ipmi_part_numbers">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_supported_ipmi_part_numbers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_class_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_supported_ipmi_part_numbers" title="Link to this definition"></a></dt>
+<dd><p>Return a flat tuple of all IPMI part numbers declared in the
+manifest for the hardware base class of <code class="docutils literal notranslate"><span class="pre">cls</span></code> (or
+<code class="docutils literal notranslate"><span class="pre">base_class_name</span></code>). Used to build user-facing error messages that
+list every supported part number regardless of which platforms have
+been loaded yet.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_total_power">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_total_power</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_total_power" title="Link to this definition"></a></dt>
+<dd><p>Return the total power used by this board.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Total power in watts as a float.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.get_unique_instance">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_unique_instance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_class</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">serial</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hostname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subarray</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">crate_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.get_unique_instance" title="Link to this definition"></a></dt>
+<dd><p>Creates a new Motherboard instance if one with matching hostname or
+serial number does not exist, otherwise return an existing one
+augmented with the new serial or hostname information.</p>
+<p>Existing instances are those who match either the specified hostname
+or part_number/serial number. If no board is found, a new instance of
+class <cite>new_class</cite> is created. Otherwise, the existing instance is
+updated with the parameters  that are not <cite>None</cite>.</p>
+<p>All creation and update operations maintain the integrity of the
+references between Motherboards, Crates and Mezzanines.</p>
+<p>Use this method to create Motherboard objects instead of instantiating
+them directly from the target class in order to maintain the hardware
+map integrity.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>new_class</strong> (<a class="reference internal" href="#pychfpga.hardware.motherboard.Motherboard" title="pychfpga.hardware.motherboard.Motherboard"><em>Motherboard</em></a><em> or </em><em>subclass</em>) – class desired for the
+returned instance. If None, the class of an existing object is
+not changed, and a new object is created with the class <cite>cls</cite></p></li>
+<li><p><strong>serial</strong> (<em>str</em>) – serial number of the Motherboard to look for, and to
+assign to a new instance or existing matching instance.</p></li>
+<li><p><strong>hostname</strong> (<em>str</em>) – hostname of the Motherboard to look for, and to
+assign to a new instance or existing matching instance.</p></li>
+<li><p><strong>slot</strong> (<em>int</em>) – <p>slot number in which the board is located in a crate
+or backplane, or virtual slot number if the board is not in a
+crate. Is assigned to the new or existing matching Motherboard.</p>
+<p>If the slot number is changed, the associated Crate slot mapping is updated.</p>
+</p></li>
+<li><p><strong>subarray</strong> – Arbitrary value used to group Motherboards in logical
+arrays. Is assigned to new instance or existing matching instance.</p></li>
+<li><p><strong>crate_number</strong> – For convenience, if <cite>crate_number</cite> is specified, the
+new or existing board is associated with the Crate instance
+that matches the specified crate number, or one is created
+with that crate number to hold the desired crate number value.</p></li>
+<li><p><strong>**kwargs</strong> – Any other argument is stored in the extra_hwm_args
+dictionary, and will be transferred if this instance is
+converted into a new class.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.init_fpga_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">init_fpga_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.init_fpga_async" title="Link to this definition"></a></dt>
+<dd><p>Initializes the FPGA firmware.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.is_fpga_programmed_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">is_fpga_programmed_async</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.is_fpga_programmed_async" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.load_all_classes">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">load_all_classes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">base_class_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">package</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.load_all_classes" title="Link to this definition"></a></dt>
+<dd><p>Import every manifest entry whose <code class="docutils literal notranslate"><span class="pre">type_</span></code> is compatible with
+<code class="docutils literal notranslate"><span class="pre">cls</span></code> (or with the hardware base class named <code class="docutils literal notranslate"><span class="pre">base_class_name</span></code>).
+When <code class="docutils literal notranslate"><span class="pre">package</span></code> is given, only entries from that subpackage under
+<code class="docutils literal notranslate"><span class="pre">pychfpga.hardware</span></code> are imported (e.g. <code class="docutils literal notranslate"><span class="pre">package='ice'</span></code> to load
+only the Ice platform classes).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.load_class">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">load_class</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">part_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ipmi_part_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">base_class_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.load_class" title="Link to this definition"></a></dt>
+<dd><p>Find the manifest entry matching any of the given keys and import
+its class (triggering registration in the class registry).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – class name to match (e.g. <code class="docutils literal notranslate"><span class="pre">'IceBoard'</span></code>).</p></li>
+<li><p><strong>part_number</strong> (<em>str</em>) – official part number to match, case-insensitive.</p></li>
+<li><p><strong>ipmi_part_number</strong> (<em>str</em>) – any IPMI part number alias to match,
+case-insensitive.</p></li>
+<li><p><strong>base_class_name</strong> (<em>str</em>) – restrict the search to a specific hardware
+base class (<code class="docutils literal notranslate"><span class="pre">'Motherboard'</span></code>/<code class="docutils literal notranslate"><span class="pre">'Crate'</span></code>/<code class="docutils literal notranslate"><span class="pre">'Mezzanine'</span></code>).
+Defaults to the caller’s base class.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The imported class, or <code class="docutils literal notranslate"><span class="pre">None</span></code> if no manifest entry matched.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>RuntimeError</strong> – if more than one manifest entry matches the query.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.open_fpga_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">open_fpga_async</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.open_fpga_async" title="Link to this definition"></a></dt>
+<dd><p>Establish a communication link with the FPGA.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.open_platform_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">open_platform_async</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.open_platform_async" title="Link to this definition"></a></dt>
+<dd><p>Establish a communication link with the platform, which enables
+access to functions provided by the local processor</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.part_number">
+<span class="sig-name descname"><span class="pre">part_number</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.part_number" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.ping_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">ping_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.ping_async" title="Link to this definition"></a></dt>
+<dd><p>Returns a boolean indicating whether the motherboard is responding at
+its hostname/address.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.port">
+<span class="sig-name descname"><span class="pre">port</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.port" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.print_registered_classes">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">print_registered_classes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.print_registered_classes" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.set_cache">
+<span class="sig-name descname"><span class="pre">set_cache</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.set_cache" title="Link to this definition"></a></dt>
+<dd><p>Caches key values to accelerate the code.</p>
+<p>The cache is actually cleared, and the next invocatio nof repr() will
+set it to the new value.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.set_fpga_bitsream_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_fpga_bitsream_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">firmware_class</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.set_fpga_bitsream_async" title="Link to this definition"></a></dt>
+<dd><p>Programs the FPGA with the specified bitstream.</p>
+<p>Once the FPGA is programmed, the firmware class is stored in the <cite>fpga</cite> attribute.</p>
+<p>Make sure to call <cite>update_array_method_classes()</cite> after programming the FPGA
+to update the array-method providers used by FPGAArray.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>firmware_class</strong> (<em>FPGAFirmware subclass</em>) – The firmware class to program the FPGA with.</p></li>
+<li><p><strong>force</strong> (<em>bool</em>) – If True, the FPGA will be programmed even if it is already programmed.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.set_fpga_firmware">
+<span class="sig-name descname"><span class="pre">set_fpga_firmware</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fpga_fw</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.set_fpga_firmware" title="Link to this definition"></a></dt>
+<dd><p>Set the FPGA firmware class for this motherboard.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>fpga_fw</strong> (<em>FPGAFirmware subclass</em>) – The firmware class to program the FPGA with.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.set_platform_firmware">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_platform_firmware</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">boards</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">arm_firmware_pathname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.set_platform_firmware" title="Link to this definition"></a></dt>
+<dd><p>Ensure platform ARM firmware is loaded and running before opening connections.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.update_array_method_classes">
+<span class="sig-name descname"><span class="pre">update_array_method_classes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.update_array_method_classes" title="Link to this definition"></a></dt>
+<dd><p>Rebuild the cached frozenset of array-method provider classes.</p>
+<p>Merges this board’s <code class="docutils literal notranslate"><span class="pre">array_method_class</span></code> with the firmware class
+dict <code class="docutils literal notranslate"><span class="pre">fpga._array_method_classes</span></code>. Assigns a new <code class="docutils literal notranslate"><span class="pre">frozenset</span></code> so
+<code class="xref py py-class docutils literal notranslate"><span class="pre">FPGAArray</span></code> can detect provider changes by comparing its tuple
+of per-motherboard sets.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.motherboard.Motherboard.update_instance">
+<span class="sig-name descname"><span class="pre">update_instance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_class</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">serial</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hostname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">slot</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subarray</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">crate_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">crate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.motherboard.Motherboard.update_instance" title="Link to this definition"></a></dt>
+<dd><p>Selectively change the class and/or update the parameters of this Motherboard
+subclass instance.</p>
+<p>If the class is changed, the parameters of the old class are copied
+into the new class, the crate and mezzanines references are updated to
+the new instance, and the old instance is deleted.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>new_class</strong> – Motherboard subclass into which the current instance should be moved. If <cite>None</cite>, the class is unchanged.</p></li>
+<li><p><strong>serial</strong> (<em>str</em>) – New serial number for the instance. Unchanged if <cite>None</cite>.</p></li>
+<li><p><strong>hostname</strong> (<em>str</em>) – New hostname for the instance. Unchanged if <cite>None</cite>.</p></li>
+<li><p><strong>slot</strong> (<em>int</em>) – New slot number for this Motherboard instance in its Crate. Unchanged if <cite>None</cite>.
+If changed, all references from Crate instances to this Motherboards are deleted and a new reference to the attached crate object for the new slot is created.</p></li>
+<li><p><strong>subarray</strong> (<em>str</em><em> or </em><em>int</em>) – New subarray for the instance. Unchanged if <cite>None</cite>.</p></li>
+<li><p><strong>crate</strong> (<em>Crate subclass instance</em>) – New crate object to which this Motherboard subclass instance belongs.
+Unchanged if <cite>None</cite>. If changed, the Motherboard reference of the old crate is deleted.</p></li>
+<li><p><strong>crate_number</strong> (<em>int</em>) – Alternate way of assigning a new crate to the
+the Motherboard instance. If there is no crate with matching crate
+number, a new generic crate is created.</p></li>
+<li><p><strong>kwargs</strong> (<em>dict</em>) – Any extra arguments to be stored in the instance for future use in downstream initializations.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The new and/or updated Motherboard subclass instance.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.hardware.mezzanine.html" class="btn btn-neutral float-left" title="mezzanine.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.hardware.supported_hardware.html" class="btn btn-neutral float-right" title="supported_hardware.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

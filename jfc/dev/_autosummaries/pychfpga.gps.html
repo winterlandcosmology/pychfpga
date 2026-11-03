@@ -1,0 +1,976 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gps.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="hardware/" href="pychfpga.hardware.html" />
+    <link rel="prev" title="fpga_master.py" href="pychfpga.fpga_master.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.gps.main"><code class="docutils literal notranslate"><span class="pre">main()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTClient"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTClient</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTClient.DEFAULT_PORT"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTClient.DEFAULT_PORT</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTClient.__call__"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTClient.__call__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTClient.__init__"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTClient.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTClient.list_names"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTClient.list_names()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTClient.start"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTClient.start()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTClient.stop"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTClient.stop()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTClient.test"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTClient.test()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTServer"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTServer</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTServer.DEFAULT_PORT"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTServer.DEFAULT_PORT</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTServer.__call__"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTServer.__call__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTServer.__init__"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTServer.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTServer.listNames"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTServer.listNames()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTServer.monitoringMetrics"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTServer.monitoringMetrics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTServer.start"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTServer.start()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTServer.stop"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTServer.stop()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTServer.test"><code class="docutils literal notranslate"><span class="pre">GPSAsyncRESTServer.test()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.__call__"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.__call__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.__init__"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.add_metric"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.add_metric()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.command"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.command()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.configure_gps"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.configure_gps()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.enable_ntp_output"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.enable_ntp_output()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_alarm_status"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_alarm_status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_altitude"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_altitude()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_broadcast_metrics"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_broadcast_metrics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_coast_timer"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_coast_timer()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_date_time"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_date_time()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_geometric_quality_and_almanac_status"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_geometric_quality_and_almanac_status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_leap_seconds"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_leap_seconds()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_mask_angle"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_mask_angle()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_method_for"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_method_for()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_mux1_output_source"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_mux1_output_source()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_mux2_output_source"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_mux2_output_source()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_nmea_info"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_nmea_info()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_oscillator_tuning_mode"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_oscillator_tuning_mode()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_phase_lock_status"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_phase_lock_status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_position"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_position()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_serial_time_code_format"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_serial_time_code_format()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_speed_and_heading"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_speed_and_heading()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_timing_mode"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_timing_mode()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_timing_status"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_timing_status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_tracking_channel_status"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_tracking_channel_status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_user_options"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_user_options()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_user_time_bias"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.get_user_time_bias()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.master_reset"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.master_reset()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.poll_metrics"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.poll_metrics()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.query"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.query()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_antenna_alarm_enable"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.set_antenna_alarm_enable()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_bnc_output_source"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.set_bnc_output_source()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_broadcast_output"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.set_broadcast_output()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_mask_angle"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.set_mask_angle()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_multiplexer_output_source"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.set_multiplexer_output_source()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_polling_mode"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.set_polling_mode()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_position"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.set_position()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_pps_output_source"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.set_pps_output_source()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_serial_time_code_format"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.set_serial_time_code_format()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_time_format"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.set_time_format()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_timing_mode"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.set_timing_mode()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_user_time_bias"><code class="docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D.set_user_time_bias()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.gps.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="gps-py">
+<h1><a class="reference internal" href="#module-pychfpga.gps" title="pychfpga.gps"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a><a class="headerlink" href="#gps-py" title="Link to this heading"></a></h1>
+<p id="module-pychfpga.gps">REST Server and clients to operate and monitor Spectrum Instruments TM-4D GPS units.
+The units are accessed through a serial-to-ethernet adapter (e.g. the StarTech NETRS232).</p>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module functions summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.gps.main" title="pychfpga.gps.main"><code class="xref py py-obj docutils literal notranslate"><span class="pre">main</span></code></a></p></td>
+<td><p>Command-line interface to launch and operate the GPS server.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTClient" title="pychfpga.gps.GPSAsyncRESTClient"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GPSAsyncRESTClient</span></code></a></p></td>
+<td><p>Implements an asynchronous client that exposes the functions of the specified remote RawAcq server.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.gps.GPSAsyncRESTServer" title="pychfpga.gps.GPSAsyncRESTServer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GPSAsyncRESTServer</span></code></a></p></td>
+<td><p>REST interface for receiver hut GPS.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.gps.SpectrumInstrumentsTM4D" title="pychfpga.gps.SpectrumInstrumentsTM4D"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SpectrumInstrumentsTM4D</span></code></a></p></td>
+<td><p>A class to communicate with SpectrumInstruments TM4D GPS receiver</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module functions</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.gps.main">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.gps.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.main" title="Link to this definition"></a></dt>
+<dd><p>Command-line interface to launch and operate the GPS server.</p>
+</dd></dl>
+
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTClient">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.gps.</span></span><span class="sig-name descname"><span class="pre">GPSAsyncRESTClient</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTClient" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">AsyncRESTClient</span></code></p>
+<p>Implements an asynchronous client that exposes the functions of the specified remote RawAcq server.</p>
+<p>This client is used by ch_master to start, configure and operate all the RawAcq servers in the array.</p>
+<p>The client is implemented using a Tornado AsyncHTTPClient. It exposes the RawAcq server methods
+(i.e REST endpoints) as local methods. The local methods are Tornado coroutines so requests to
+multiple clients can be made in parallel. This is especially beneficial since the data requests
+from the server are slow IO operations which benefit the mist from co-execution.</p>
+<p>The client will operate only if the IOloop in which is was created is running.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – Name of the client, to be used in logging etc.</p></li>
+<li><p><strong>hostname</strong> (<em>str</em>) – The hostname of the RawAcq REST server. If <cite>host</cite> is None, an (experimental,
+Python-based) RawAcq REST server will be created locally.</p></li>
+<li><p><strong>port</strong> (<em>int</em>) – The port number to which the RawAcq REST server is listening. Default is port 80.</p></li>
+<li><p><strong>ps_names</strong> (<em>list</em><em> of </em><em>str</em>) – list of GPS names on which this client will operate. Other
+supplies will not be affected.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTClient.DEFAULT_PORT">
+<span class="sig-name descname"><span class="pre">DEFAULT_PORT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">54325</span></span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTClient.DEFAULT_PORT" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTClient.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTClient.__call__" title="Link to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTClient.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hostname</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'localhost'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">54325</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTClient.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTClient.list_names">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">list_names</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTClient.list_names" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTClient.start">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">start</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTClient.start" title="Link to this definition"></a></dt>
+<dd><p>If the GPS remote server is not started, start it with the specified configuration</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>config</strong> (<em>str</em><em> or </em><em>dict</em>) – If a string, the configuration is loaded from the specified
+configuration file and name. if a dict, it is passed directly to the server.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTClient.stop">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTClient.stop" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTClient.test">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">test</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTClient.test" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTServer">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.gps.</span></span><span class="sig-name descname"><span class="pre">GPSAsyncRESTServer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTServer" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">AsyncRESTServer</span></code></p>
+<p>REST interface for receiver hut GPS.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTServer.DEFAULT_PORT">
+<span class="sig-name descname"><span class="pre">DEFAULT_PORT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">54325</span></span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTServer.DEFAULT_PORT" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTServer.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTServer.__call__" title="Link to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTServer.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">address</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">54325</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logging_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTServer.__init__" title="Link to this definition"></a></dt>
+<dd><p>Create a GPS Metrics server.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTServer.listNames">
+<span class="sig-name descname"><span class="pre">listNames</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTServer.listNames" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTServer.monitoringMetrics">
+<span class="sig-name descname"><span class="pre">monitoringMetrics</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTServer.monitoringMetrics" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTServer.start">
+<span class="sig-name descname"><span class="pre">start</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTServer.start" title="Link to this definition"></a></dt>
+<dd><p>Start the GPS server with provided config</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTServer.stop">
+<span class="sig-name descname"><span class="pre">stop</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTServer.stop" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.GPSAsyncRESTServer.test">
+<span class="sig-name descname"><span class="pre">test</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.GPSAsyncRESTServer.test" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.gps.</span></span><span class="sig-name descname"><span class="pre">SpectrumInstrumentsTM4D</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">SocketContext</span></code></p>
+<p>A class to communicate with SpectrumInstruments TM4D GPS receiver</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.__call__" title="Link to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hostname</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.add_metric">
+<span class="sig-name descname"><span class="pre">add_metric</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metrics</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'gauge'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">labels</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.add_metric" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.command">
+<span class="sig-name descname"><span class="pre">command</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.command" title="Link to this definition"></a></dt>
+<dd><p>Sends a command to the instrument. The terminator is added automatically.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.configure_gps">
+<span class="sig-name descname"><span class="pre">configure_gps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">location</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'DRAO'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lat</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lon</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.configure_gps" title="Link to this definition"></a></dt>
+<dd><p>Configure the GPS for standard CHIME operations.</p>
+<p>The GPS is put in ‘static’ mode, where it tries only to get time information and not the
+position infromation. This requires less satellites and presumably provides for a more
+stable time signal. In this mode a static position is given to the GPS so it will know what
+satellites to search for.</p>
+<p>The default locations can be passed by name in the <cite>location</cite> parameter, or if <cite>location</cite> is <cite>None</cite>,</p>
+<p>Valid location strings are:</p>
+<blockquote>
+<div><dl class="simple">
+<dt>‘DRAO’: The default position is the center of the CHIME array at</dt><dd><p>DRAO, Penticton, BC, Canada.</p>
+</dd>
+</dl>
+<p>‘McGill’: The location of the GPS antenna at the McGill Rutherford building, Montreal, Canada</p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.enable_ntp_output">
+<span class="sig-name descname"><span class="pre">enable_ntp_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enable</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.enable_ntp_output" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_alarm_status">
+<span class="sig-name descname"><span class="pre">get_alarm_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_alarm_status" title="Link to this definition"></a></dt>
+<dd><p>Return the coast, antenna and 10 MHz alarm status.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>(coast_alarm, antenna_alarm, clk_alarm) tuple where</em> –     coast_alarm (bool): coast alarm
+antenna_alarm (bool): antenna alarm
+clk_alarm (bool): 10 MHz output alarm</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_altitude">
+<span class="sig-name descname"><span class="pre">get_altitude</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_altitude" title="Link to this definition"></a></dt>
+<dd><p>Return the current altitude.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>float</em> – signed altitude in meters</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_broadcast_metrics">
+<span class="sig-name descname"><span class="pre">get_broadcast_metrics</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_broadcast_metrics" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_coast_timer">
+<span class="sig-name descname"><span class="pre">get_coast_timer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_coast_timer" title="Link to this definition"></a></dt>
+<dd><p>Return the  Amount of time that the unit has been in Coast (Mode 3 or Mode 5)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>coast_time (float)</em> – in fractional hours</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_date_time">
+<span class="sig-name descname"><span class="pre">get_date_time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_date_time" title="Link to this definition"></a></dt>
+<dd><p>Return the current date and time.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>datetime</em> – date and time as a Python datetime object</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_geometric_quality_and_almanac_status">
+<span class="sig-name descname"><span class="pre">get_geometric_quality_and_almanac_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_geometric_quality_and_almanac_status" title="Link to this definition"></a></dt>
+<dd><p>Return the geometric quality (GQ) and almanac status.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>(gq, almanac_status) tuple where</em> –     gq (int): geometric quality (0-9)
+almanac_status (int): 0: OK, 1: no almanac, 2: almanac is old</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_leap_seconds">
+<span class="sig-name descname"><span class="pre">get_leap_seconds</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_leap_seconds" title="Link to this definition"></a></dt>
+<dd><p>Return the number of Leap Seconds that have been introduced to UTC Time since the beginning
+of GPS Time.</p>
+<p>The method also receives whether the unit is using GPS or UTC time,
+but the value is not returned (but is added to the metrics).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>valid (bool)</em> – leap seconds info is valid
+leap_seconds(int): number of leap seconds</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_mask_angle">
+<span class="sig-name descname"><span class="pre">get_mask_angle</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_mask_angle" title="Link to this definition"></a></dt>
+<dd><p>Return the current mask_angle.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>int</em> – mask angle code: 0 (5 deg), 1 (15 deg) or 2 (20 deg)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_method_for">
+<span class="sig-name descname"><span class="pre">get_method_for</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_method_for" title="Link to this definition"></a></dt>
+<dd><p>Return the method that can process the specified reply string.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_mux1_output_source">
+<span class="sig-name descname"><span class="pre">get_mux1_output_source</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_mux1_output_source" title="Link to this definition"></a></dt>
+<dd><p>Return the mux output source.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><p><em>mux1 (int)</em> –</p>
+<dl class="simple">
+<dt>Mux 1 source:</dt><dd><p>0 for 10 MHz output
+1 for 5 MHz output
+2 for 1 MHz output
+3 for 100 kHz output
+4 for 10 kHz output
+5 for 1 kHz output
+6 for IRIG output (if installed)
+7 for PPS output
+8 for OFF (newer TM-4’s only)</p>
+</dd>
+</dl>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_mux2_output_source">
+<span class="sig-name descname"><span class="pre">get_mux2_output_source</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_mux2_output_source" title="Link to this definition"></a></dt>
+<dd><p>Return the mux output source.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><p><em>mux2 (int)</em> –</p>
+<dl class="simple">
+<dt>Mux 2 source</dt><dd><p>0 : 10 MHz output
+1 : Mux1 mirror
+2 : PPS
+3 : output option 1
+4 : output option 2
+5 : output option 3
+6 : baseband IRIG (if installed)
+7 : baseband NASA-36 (if installed)
+8 : OFF (newer TM-4’s only)</p>
+</dd>
+</dl>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_nmea_info">
+<span class="sig-name descname"><span class="pre">get_nmea_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_nmea_info" title="Link to this definition"></a></dt>
+<dd><p>Return higher precision position, speed and course.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>NameSpace containing</em> –     lat (float): latitude in fractional degrees
+lon (float): longitude in fractional degrees
+alt (float): altitude in meters
+fix (bool): GPS fix validity (0=not valid, 1=valid)
+n_sat (int): number_of_satellites (0-12)
+h_dilution: horizontal dilution (0 - 99.9)
+speed (float): speed over ground in knots,
+course (float): course in degrees</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_oscillator_tuning_mode">
+<span class="sig-name descname"><span class="pre">get_oscillator_tuning_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_oscillator_tuning_mode" title="Link to this definition"></a></dt>
+<dd><p>Return the oscillator tuning mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>osc_tuning_mode (int)</em> –     1: oscillator warm-up
+2: course adjust
+3: course adjust standby
+4: fine adjust
+5: fine adjust hold)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_phase_lock_status">
+<span class="sig-name descname"><span class="pre">get_phase_lock_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_phase_lock_status" title="Link to this definition"></a></dt>
+<dd><p>Return the current phase lock status.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><p><em>int</em> –</p>
+<dl class="simple">
+<dt>phase lock status:</dt><dd><p>0: OCXO warm-up (OSC mode: 1, Phase lock state: NO)
+1: Coarse OCXO tuning (OSC mode:2, Phase lock state: NO)
+2: Entered Coast condition during Mode 2 tuning (OSC mode:3, Phase lock state: NO)
+3: Fine tuning OCXO, waiting for phase lock. (OSC mode:4, Phase lock state: NO)
+4: Fine tuning OCXO, approaching phase lock (OSC mode:4, Phase lock state: NO)
+5: Entered Coast condition during Mode 4 tuning (OSC mode:5, Phase lock state: NO)
+9: Phase Lock Achieved (OSC mode:4, Phase lock state: YES)</p>
+</dd>
+</dl>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_position">
+<span class="sig-name descname"><span class="pre">get_position</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_position" title="Link to this definition"></a></dt>
+<dd><p>Return the current position, GPS availability and numer of satellites used.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>(lat, lon, avail, n_sat) tuple</em> –     lat (float): latitude in fractional degrees
+lon (float): longitude in fractional degrees
+avail (bool): GPS availability (0=unavailable, 1=available)
+n_sat (int): number_of_satellites (0-12)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_serial_time_code_format">
+<span class="sig-name descname"><span class="pre">get_serial_time_code_format</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_serial_time_code_format" title="Link to this definition"></a></dt>
+<dd><p>Return the current serial time code format.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><p><em>int</em> –</p>
+<dl class="simple">
+<dt>timing mode:</dt><dd><p>0: IRIG-B002/B122 (no BCD year)
+1: NASA-36
+3: IRIG-B007/B127 (with BCD year &amp; SBS)</p>
+</dd>
+</dl>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_speed_and_heading">
+<span class="sig-name descname"><span class="pre">get_speed_and_heading</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_speed_and_heading" title="Link to this definition"></a></dt>
+<dd><p>Return the current speed and heading</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>(speed, heading) tuple</em> –     speed (float): speed in m/s
+heading (float): heading in decimal degrees</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_timing_mode">
+<span class="sig-name descname"><span class="pre">get_timing_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_timing_mode" title="Link to this definition"></a></dt>
+<dd><p>Return the current timing mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><p><em>int</em> –</p>
+<dl class="simple">
+<dt>timing mode:</dt><dd><p>0: Dynamic Timing Mode
+1: Static Timing Mode
+3: Auto Survey Mode</p>
+</dd>
+</dl>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_timing_status">
+<span class="sig-name descname"><span class="pre">get_timing_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_timing_status" title="Link to this definition"></a></dt>
+<dd><p>Return the timing status.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>status (int)</em> – 0: time not valid; 1: time valid</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_tracking_channel_status">
+<span class="sig-name descname"><span class="pre">get_tracking_channel_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_tracking_channel_status" title="Link to this definition"></a></dt>
+<dd><p>Return the status of each satellite.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><p><em>(statellite_status_map ,  receiver_status) tuple where</em> –     satellite_status_map = {satellite_prn: {constellation_status: x, tracking_status: y, signal_quality:v, ephemeris_status: z},…}
+satellite_prn (int): satellite id
+constellation_status (int): constellation status ( 0/1 = not included/included in current constellation)
+tracking_status (str): tracking status (A = acquisition/reacquisition, S = searching, 0-9 = SQ)
+signal_quality (int): tracking status in numeric format: -2: searching, -1: acquisition/reaquisition, 0-9: signal quality
+ephemeris_status (int): 0/1 not collected/collected
+receiver_status (int):</p>
+<blockquote>
+<div><p>2 = search the sky
+3 = Almanac collect
+4 = Ephemeris collect
+5 = acquisition
+6 = position</p>
+</div></blockquote>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_user_options">
+<span class="sig-name descname"><span class="pre">get_user_options</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_user_options" title="Link to this definition"></a></dt>
+<dd><p>Return the current antenna alarm elable status and the PPS source</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><p><em>(antenna_alarm_enable, pps_source) tuple</em> –     antenna_alarm_enable (bool): antenna alarm is enabled
+pps_source (int): PPS source unitl Time valid/Initial phase lock/Beyond lock</p>
+<blockquote>
+<div><p>0: LOW/GPSPPS/FILPPS
+1: LOW/LOW/FILPPS
+2: LOW/GPSPPS/GPSPPS
+4: GPSPPS/GPSPPS/GPSPPS</p>
+</div></blockquote>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.get_user_time_bias">
+<span class="sig-name descname"><span class="pre">get_user_time_bias</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.get_user_time_bias" title="Link to this definition"></a></dt>
+<dd><p>Return the current user time bias.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>int</em> – time bias in ns</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.master_reset">
+<span class="sig-name descname"><span class="pre">master_reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.master_reset" title="Link to this definition"></a></dt>
+<dd><p>Resets the GPS.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.poll_metrics">
+<span class="sig-name descname"><span class="pre">poll_metrics</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.poll_metrics" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.query">
+<span class="sig-name descname"><span class="pre">query</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">command</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reply</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flush</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.query" title="Link to this definition"></a></dt>
+<dd><p>Sends a command to the instrument and returns the reply string without the terminator or trailing spaces.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.set_antenna_alarm_enable">
+<span class="sig-name descname"><span class="pre">set_antenna_alarm_enable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enable</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_antenna_alarm_enable" title="Link to this definition"></a></dt>
+<dd><p>Enables or disables the antenna alarm.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>enable</strong> (<em>bool</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.set_bnc_output_source">
+<span class="sig-name descname"><span class="pre">set_bnc_output_source</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">outa</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outd</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">oute</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outf</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_bnc_output_source" title="Link to this definition"></a></dt>
+<dd><p>Selects the source of the TM4 BNC output.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>outx</strong> (<em>int</em>) – output source.
+0: Mux1
+1: Mux2
+2: 1PP2C or Custom-1
+3: Custom-2
+4: Custom-3
+5: POP
+6: Custom-4
+7: FILPPS
+8: GPSPPS
+9: Reserved
+10: Reserved
+None: OFF</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.set_broadcast_output">
+<span class="sig-name descname"><span class="pre">set_broadcast_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mode</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_broadcast_output" title="Link to this definition"></a></dt>
+<dd><p>Sets the broadcast output mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>mode</strong> (<em>int</em>) – 0= output all messages, 1=Output events and acknowledges only.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.set_mask_angle">
+<span class="sig-name descname"><span class="pre">set_mask_angle</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">angle_code</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_mask_angle" title="Link to this definition"></a></dt>
+<dd><p>Sets mask angle of the GPS.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>angle_code</strong> (<em>int</em>) – 0=5 deg, 1=15 deg, 2=20 deg</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.set_multiplexer_output_source">
+<span class="sig-name descname"><span class="pre">set_multiplexer_output_source</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mux1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mux2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_multiplexer_output_source" title="Link to this definition"></a></dt>
+<dd><p>Selects the output of the multiplexers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mux1</strong> (<em>int</em>) – 0: 10 MHz output
+1: 5 MHz output
+2: 1 MHz output
+3: 100 kHz output
+4: 10 kHz output
+5: 1 kHz output
+6: baseband IRIG output (if installed)
+7: PPS output
+8: OFF (newer TM-4’s only)</p></li>
+<li><p><strong>mux2</strong> (<em>int</em>) – 0: for 10 MHz output
+1: for Mux1 mirror output
+2: for PPS
+3: for optional output 1
+4: for optional output 2
+5: for optional output 3
+6: for baseband IRIG (if installed)
+7: for baseband NASA-36 (if installed)
+8: for OFF (newer TM-4’s only)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.set_polling_mode">
+<span class="sig-name descname"><span class="pre">set_polling_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_polling_mode" title="Link to this definition"></a></dt>
+<dd><p>Sets the polling mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>mode</strong> (<em>int</em>) – <p>0=automatic broadcast,</p>
+<p>1=polling with acknowledge,</p>
+<p>2=polling without acknowledge.</p>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.set_position">
+<span class="sig-name descname"><span class="pre">set_position</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lat</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lon</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alt</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_position" title="Link to this definition"></a></dt>
+<dd><p>Sets the position to use in the static timing mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lat</strong> (<em>float</em>) – latitide in fractional degrees, positive=north, negative=south</p></li>
+<li><p><strong>lon</strong> (<em>float</em>) – longitude in fractional degrees, positive=east, negative=west</p></li>
+<li><p><strong>alt</strong> – altitude in meters</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.set_pps_output_source">
+<span class="sig-name descname"><span class="pre">set_pps_output_source</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_pps_output_source" title="Link to this definition"></a></dt>
+<dd><p>Sets the source of the Pulse-Per-Second (PPS) signal.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>source</strong> (<em>int</em>) – 0 = LOW at power-on/GPSPPS on Time Valid/FILPPS on lock,
+1 = LOW at power-on/FILPPS on lock,
+2 = LOW on power-up/GPSPPS on valid time and Lock,
+3 = GPSPPS always</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.set_serial_time_code_format">
+<span class="sig-name descname"><span class="pre">set_serial_time_code_format</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">format</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_serial_time_code_format" title="Link to this definition"></a></dt>
+<dd><p>Sets the serial time code format.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>format</strong> (<em>int</em>) – 0= IRIG-B002/B122 (no year)
+1= NASA-36
+2= IRIG-B007/B127 (BCD year and SBS)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.set_time_format">
+<span class="sig-name descname"><span class="pre">set_time_format</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fmt</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_time_format" title="Link to this definition"></a></dt>
+<dd><p>Sets the output time format to UTC or GPS time.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>fmt</strong> (<em>int</em>) – 0: GPS time, 1: UTC time</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.set_timing_mode">
+<span class="sig-name descname"><span class="pre">set_timing_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mode</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_timing_mode" title="Link to this definition"></a></dt>
+<dd><p>Sets the timing mode of the GPS.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>mode</strong> (<em>int</em>) – 0=Dynamic, 1=Static, 3=Auto survey</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.gps.SpectrumInstrumentsTM4D.set_user_time_bias">
+<span class="sig-name descname"><span class="pre">set_user_time_bias</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bias</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.gps.SpectrumInstrumentsTM4D.set_user_time_bias" title="Link to this definition"></a></dt>
+<dd><p>Sets the user time bias.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>bias</strong> (<em>int</em>) – time bias in ns (-99999 to 99999). Negative values cause the timing functions to occur later
+in absolute time while positive values cause them to occur earlier.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.fpga_master.html" class="btn btn-neutral float-left" title="fpga_master.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.hardware.html" class="btn btn-neutral float-right" title="hardware/" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,103 @@
+
+
+
+
+
+:py:mod:`util.py <pychfpga.common.util>`
+========================================
+
+
+.. currentmodule:: pychfpga.common
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.common,
+..    | FULLNAME=pychfpga.common.util,
+..    | name==util
+..    | modules = 
+..    | classes = []
+
+.. automodule:: pychfpga.common.util
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         hex
+         reload_modules
+         reverse_dict
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: hex
+
+
+.. autofunction:: reload_modules
+
+
+.. autofunction:: reverse_dict
+
+
+
+
+
+.. *** Insert class descriptions
+
+

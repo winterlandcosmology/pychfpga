@@ -1,0 +1,108 @@
+
+
+
+
+
+:py:mod:`MGT_PLL.py <pychfpga.hardware.ice.MGADC08.MGT_PLL>`
+============================================================
+
+
+.. currentmodule:: pychfpga.hardware.ice.MGADC08
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.ice.MGADC08,
+..    | FULLNAME=pychfpga.hardware.ice.MGADC08.MGT_PLL,
+..    | name==MGT_PLL
+..    | modules = 
+..    | classes = ['MGT_PLL_base', 'Struct']
+
+.. automodule:: pychfpga.hardware.ice.MGADC08.MGT_PLL
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         MGT_PLL_base
+         Struct
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: MGT_PLL_base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: Struct
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

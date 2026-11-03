@@ -1,0 +1,95 @@
+
+
+
+
+
+:py:mod:`raw_acq/ <pychfpga.raw_acq>`
+=====================================
+
+
+.. currentmodule:: pychfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga,
+..    | FULLNAME=pychfpga.raw_acq,
+..    | name==raw_acq
+..    | modules = ['adc_data_processor', 'client', 'corr_data_processor', 'fft_data_processor', 'hdf5_corr_writer', 'hdf5_raw_writer', 'raw_data_processor', 'receiver', 'server', 'ucorr_acq_packet_processor']
+..    | classes = []
+
+.. automodule:: pychfpga.raw_acq
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~adc_data_processor
+         ~client
+         ~corr_data_processor
+         ~fft_data_processor
+         ~hdf5_corr_writer
+         ~hdf5_raw_writer
+         ~raw_data_processor
+         ~receiver
+         ~server
+         ~ucorr_acq_packet_processor
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

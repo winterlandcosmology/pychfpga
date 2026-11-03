@@ -1,0 +1,91 @@
+
+
+
+
+
+:py:mod:`system/ <pychfpga.fpga_firmware.chfpga.system>`
+========================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware.chfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware.chfpga,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga.system,
+..    | name==system
+..    | modules = ['freqctr', 'gpio', 'i2c', 'refclk', 'spi', 'sysmon']
+..    | classes = []
+
+.. automodule:: pychfpga.fpga_firmware.chfpga.system
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~freqctr
+         ~gpio
+         ~i2c
+         ~refclk
+         ~spi
+         ~sysmon
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

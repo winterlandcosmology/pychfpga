@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`i2c_interface.py <pychfpga.hardware.interfaces.i2c_interface>`
+=======================================================================
+
+
+.. currentmodule:: pychfpga.hardware.interfaces
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.interfaces,
+..    | FULLNAME=pychfpga.hardware.interfaces.i2c_interface,
+..    | name==i2c_interface
+..    | modules = 
+..    | classes = ['I2CInterface']
+
+.. automodule:: pychfpga.hardware.interfaces.i2c_interface
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         I2CInterface
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: I2CInterface
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

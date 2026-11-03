@@ -1,0 +1,108 @@
+
+
+
+
+
+:py:mod:`chan.py <pychfpga.fpga_firmware.chfpga.f_engine.chan>`
+===============================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware.chfpga.f_engine
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware.chfpga.f_engine,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga.f_engine.chan,
+..    | name==chan
+..    | modules = 
+..    | classes = ['Chan', 'ChanArray']
+
+.. automodule:: pychfpga.fpga_firmware.chfpga.f_engine.chan
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         Chan
+         ChanArray
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: Chan
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: ChanArray
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

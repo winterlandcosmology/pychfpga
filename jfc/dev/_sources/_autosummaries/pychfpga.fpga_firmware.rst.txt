@@ -1,0 +1,88 @@
+
+
+
+
+
+:py:mod:`fpga_firmware/ <pychfpga.fpga_firmware>`
+=================================================
+
+
+.. currentmodule:: pychfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga,
+..    | FULLNAME=pychfpga.fpga_firmware,
+..    | name==fpga_firmware
+..    | modules = ['chfpga', 'fpga_bitstream', 'fpga_firmware']
+..    | classes = []
+
+.. automodule:: pychfpga.fpga_firmware
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~chfpga
+         ~fpga_bitstream
+         ~fpga_firmware
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

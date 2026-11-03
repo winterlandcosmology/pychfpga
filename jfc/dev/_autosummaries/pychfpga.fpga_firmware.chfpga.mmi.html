@@ -1,0 +1,580 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mmi.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="system/" href="pychfpga.fpga_firmware.chfpga.system.html" />
+    <link rel="prev" title="ucap.py" href="pychfpga.fpga_firmware.chfpga.f_engine.ucap.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga/</span></code></a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.SocketIO.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">SocketIO.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chFPGA_receiver.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chFPGA_receiver.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga_array_methods.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga_udp.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga_udp.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.ct_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ct_engine/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.f_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">f_engine/</span></code></a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mmi.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.system.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">system/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.x_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">x_engine/</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_firmware.fpga_bitstream.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_bitstream.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_firmware.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.fpga_firmware.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mmi.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.fpga_firmware.chfpga.mmi.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="mmi-py">
+<h1><a class="reference internal" href="#module-pychfpga.fpga_firmware.chfpga.mmi" title="pychfpga.fpga_firmware.chfpga.mmi"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mmi.py</span></code></a><a class="headerlink" href="#mmi-py" title="Link to this heading"></a></h1>
+<p id="module-pychfpga.fpga_firmware.chfpga.mmi">Memory Mapped interface</p>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.mmi.BitField" title="pychfpga.fpga_firmware.chfpga.mmi.BitField"><code class="xref py py-obj docutils literal notranslate"><span class="pre">BitField</span></code></a></p></td>
+<td><p>Holds the definition of a memory-mapped variable.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI" title="pychfpga.fpga_firmware.chfpga.mmi.MMI"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MMI</span></code></a></p></td>
+<td><p>Provides access to the memory-mapped resources of a module.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.mmi.MMIRouter" title="pychfpga.fpga_firmware.chfpga.mmi.MMIRouter"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MMIRouter</span></code></a></p></td>
+<td><p>Class representing the function of a BSB router.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.BitField">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_firmware.chfpga.mmi.</span></span><span class="sig-name descname"><span class="pre">BitField</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">page</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">width</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'No</span> <span class="pre">documentation</span> <span class="pre">available'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.BitField" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Holds the definition of a memory-mapped variable.</p>
+<p>It is implemented as a data descriptor that calls the read_bitfield() and
+write_field() properties of the parent object when accessed.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.BitField.CONTROL">
+<span class="sig-name descname"><span class="pre">CONTROL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.BitField.CONTROL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.BitField.DRP">
+<span class="sig-name descname"><span class="pre">DRP</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.BitField.DRP" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.BitField.RAM">
+<span class="sig-name descname"><span class="pre">RAM</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.BitField.RAM" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.BitField.STATUS">
+<span class="sig-name descname"><span class="pre">STATUS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.BitField.STATUS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.BitField.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">page</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">width</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">doc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'No</span> <span class="pre">documentation</span> <span class="pre">available'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.BitField.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.BitField.read">
+<span class="sig-name descname"><span class="pre">read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.BitField.read" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.BitField.write">
+<span class="sig-name descname"><span class="pre">write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.BitField.write" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_firmware.chfpga.mmi.</span></span><span class="sig-name descname"><span class="pre">MMI</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">router</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">router_port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Provides access to the memory-mapped resources of a module.</p>
+<p>It is intended to be inherited by classes of FPGA modules possess a Byte-Serial Bus (BSB) registers/memory/DRP access.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fpga_instance</strong> (<em>FPGA</em>) – Instance of the FPGA object through which the BSB will be accessed</p></li>
+<li><p><strong>base_address</strong> (<em>int</em>) – <p>Base address of the module. Default to 0. It can be modified by the following:</p>
+<ul>
+<li><p>If a parent module is specified, its base address is added to base_address.</p></li>
+<li><p>If router_port is specified, the base address is increased by <code class="docutils literal notranslate"><span class="pre">router_port&lt;&lt;ADDRESS_WIDTH</span></code>.</p></li>
+</ul>
+</p></li>
+<li><p><strong>instance_number</strong> (<em>int</em>) – arbitrary number indicating which module this is in an array.</p></li>
+<li><p><strong>router</strong> (<a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI" title="pychfpga.fpga_firmware.chfpga.mmi.MMI"><em>MMI</em></a>) – Specified a parent module containing a router from which the base_address should be derived from.</p></li>
+<li><p><strong>router_port</strong> (<em>int</em>) – Indicates the port number of the router to which the module is connected.
+Defaults to 0, which can also mean there is no router. Is simply used to offset the base address in combination with the
+router_port_lsb.</p></li>
+<li><p><strong>router_port_lsb</strong> (<em>int</em>) – Position of the LSB of the port number in the address word. Defaults to the modules ADDRESS_WIDTH, i.e. (possibly wrongly) assumes that the routing address sits right on top of the module address space.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>Subclass shall redefine the ADDRESS_WIDTH attribute to match the address space used by the
+FPGA module. This is necessary to compute the proper address increments for each port of
+the router if <code class="docutils literal notranslate"><span class="pre">router_port_lsb</span></code> is not specified, and allows address range verifications.</p></li>
+<li><p>The defaut valaue of <cite>router_port_lsb</cite> makes the dubious assumption that the module
+addressing bits start on bit ADDRESS_WIDTH. It is convenient as we have one more less
+argument to pass to MMI. If the module does not use all the bits immediately below the
+port addessing bits, specify <cite>router_port_lsb</cite>.  The reason this is a dubious default is
+that in theory, the modules know nothing about the upstream router.</p></li>
+</ul>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.ADDRESS_WIDTH">
+<span class="sig-name descname"><span class="pre">ADDRESS_WIDTH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.ADDRESS_WIDTH" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.CONTROL">
+<span class="sig-name descname"><span class="pre">CONTROL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.CONTROL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.DRP">
+<span class="sig-name descname"><span class="pre">DRP</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.DRP" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.STATUS">
+<span class="sig-name descname"><span class="pre">STATUS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.STATUS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">router</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">router_port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_number</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.get_addr">
+<span class="sig-name descname"><span class="pre">get_addr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.get_addr" title="Link to this definition"></a></dt>
+<dd><p>Returns the address of the bitfield relative to the base address,
+including the page offset. To be used directly with the read() and
+write() methods.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>bitfild_name</strong> (<em>str</em>) – name of the bitfield</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>address (int), relative to the current  module base address. The
+address includes the page (CONTROL/STATUS/RAM/DRP) offset.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.get_bitfield">
+<span class="sig-name descname"><span class="pre">get_bitfield</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.get_bitfield" title="Link to this definition"></a></dt>
+<dd><p>Returns the bitfield object with name ‘bitfield_name’.
+This is used to access the attributes and methods of the bitfield objects, since this is a python data descriptor and direct access calls its fget() method instead of returning the object.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.init" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.pulse_bit">
+<span class="sig-name descname"><span class="pre">pulse_bit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.pulse_bit" title="Link to this definition"></a></dt>
+<dd><p>Pulses the bitfield specified by the string <code class="docutils literal notranslate"><span class="pre">bitfield_name</span></code> to ‘1’ then back to ‘0’.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.read">
+<span class="sig-name descname"><span class="pre">read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.read" title="Link to this definition"></a></dt>
+<dd><p>Reads bytes from the FPGA memory-mapped registers according to the specified <cite>type</cite> and <cite>length</cite>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.read_all_fields">
+<span class="sig-name descname"><span class="pre">read_all_fields</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'%(name)-30s</span> <span class="pre">=</span> <span class="pre">%(page_name)7s(0x%(addr)-02X)[%(bit_range)-5s]:</span>&#160; <span class="pre">%(value)5i,</span> <span class="pre">0x%(hex_value)-4s,</span> <span class="pre">0b%(bin_value)s'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['page',</span> <span class="pre">'name']</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.read_all_fields" title="Link to this definition"></a></dt>
+<dd><p>Returns a list of all bitfields and their values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>format</strong> (<em>str</em>) – <p>if None, the method returns a list of dict describing each bitfield. If <cite>format</cite> is a string, the method returns a list
+of strings describing the bitfields, where each string is formatted using the provided string format. The string format can refer to the keys below.</p>
+<ul>
+<li><p>name (str),</p></li>
+<li><p>page (int),</p></li>
+<li><p>page_name (str),</p></li>
+<li><p>addr (int),</p></li>
+<li><p>bit (int),</p></li>
+<li><p>bit_range (str),</p></li>
+<li><p>width (int),</p></li>
+<li><p>doc (str),</p></li>
+<li><p>value (int),</p></li>
+<li><p>bin_value (str)</p></li>
+</ul>
+</p></li>
+<li><p><strong>sort</strong> (<em>list</em>) – list of strings indicateing on which field(s) to sort the bitfield list</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>list</em> – list of strings if  <cite>format</cite> is a string, list of dict if format is None.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.read_bit">
+<span class="sig-name descname"><span class="pre">read_bit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.read_bit" title="Link to this definition"></a></dt>
+<dd><p>Reads a bit from a FPGA memory-mapped register.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.read_bitfield">
+<span class="sig-name descname"><span class="pre">read_bitfield</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.read_bitfield" title="Link to this definition"></a></dt>
+<dd><p>Reads the field identified by the name ‘bit_name’ which is looked
+up in the BITS table to find the bit definition (port, bit position
+etc). Returns a boolean.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.read_control">
+<span class="sig-name descname"><span class="pre">read_control</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.read_control" title="Link to this definition"></a></dt>
+<dd><p>Reads <cite>length</cite> bytes from the CONTROL registers starting at address <cite>addr</cite></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.read_drp">
+<span class="sig-name descname"><span class="pre">read_drp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.read_drp" title="Link to this definition"></a></dt>
+<dd><p>Reads a DRP (Dynamic Reconfigurable Port) from one of the FPGA
+internal devices (PLL, SYSMON, MGT etc). ‘addr’ is the 16-bit DRP
+register address.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.read_ram">
+<span class="sig-name descname"><span class="pre">read_ram</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.read_ram" title="Link to this definition"></a></dt>
+<dd><p>Reads an array of <cite>length</cite> bytes from address <cite>addr</cite> in the RAM space</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.read_status">
+<span class="sig-name descname"><span class="pre">read_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.read_status" title="Link to this definition"></a></dt>
+<dd><p>Reads a <cite>length</cite> bytes from the STATUS registers from address <cite>addr</cite></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.wait_for_bit">
+<span class="sig-name descname"><span class="pre">wait_for_bit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.wait_for_bit" title="Link to this definition"></a></dt>
+<dd><p>Wait for the bitfield specified by the string <code class="docutils literal notranslate"><span class="pre">bitfield_name</span></code> to return the value <code class="docutils literal notranslate"><span class="pre">target_value</span></code>.
+<code class="docutils literal notranslate"><span class="pre">True</span></code> is returned when the value is found before <code class="docutils literal notranslate"><span class="pre">timeout</span></code> seconds, otherwise a RuntimeError exception is raised if <code class="docutils literal notranslate"><span class="pre">no_error</span></code> is False, or <code class="docutils literal notranslate"><span class="pre">False</span></code> is returned if <code class="docutils literal notranslate"><span class="pre">no_error</span></code> is True.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.wait_for_bit_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">wait_for_bit_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">poll_interval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.wait_for_bit_async" title="Link to this definition"></a></dt>
+<dd><p>Async version of <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.wait_for_bit" title="pychfpga.fpga_firmware.chfpga.mmi.MMI.wait_for_bit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">wait_for_bit()</span></code></a>. Yields between MMI polls.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.write">
+<span class="sig-name descname"><span class="pre">write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.write" title="Link to this definition"></a></dt>
+<dd><p>Writes an array of bytes to the FPGA memory-mapped address space. Address <code class="docutils literal notranslate"><span class="pre">addr</span></code> is
+relative to the base address of the current MMI module.</p>
+<p>The MSBs of <code class="docutils literal notranslate"><span class="pre">addr</span></code> determines the page in which data is written
+(control, status, RAM etc.). use <code class="docutils literal notranslate"><span class="pre">write_control(...)</span></code>, <code class="docutils literal notranslate"><span class="pre">write_ram(...)</span></code> etc. to write to specific pages.</p>
+<p>Returns the number of bytes written.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.write_DRP">
+<span class="sig-name descname"><span class="pre">write_DRP</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.write_DRP" title="Link to this definition"></a></dt>
+<dd><p>Writes a 16-bit value <cite>data</cite> to a register of a DRP (Dynamic Reconfigurable Port) of the FPGA internal devices (PLL, SYSMON, MGT etc).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>int</em>) – Address of the 16-bit DRP register word (the address is internally multiplied by 2 to convert it to a byte address)</p></li>
+<li><p><strong>data</strong> (<em>int</em>) – 16-bit value to be written</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>The DRP and RAM pages use the same address space. Either one or the other is connected to the module.</p></li>
+<li><p>The DRP values are stored as little endians</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.write_bit">
+<span class="sig-name descname"><span class="pre">write_bit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.write_bit" title="Link to this definition"></a></dt>
+<dd><p>Sets a bit of the FPGA memory-mapped registers</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.write_bitfield">
+<span class="sig-name descname"><span class="pre">write_bitfield</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.write_bitfield" title="Link to this definition"></a></dt>
+<dd><p>Writes ‘data’ to the bitfield.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>bitfield</strong> (<em>bitfield</em><em> or </em><em>str</em>) – bitfield object to write to. <cite>bitfield</cite> can be either a bitfield object or a string containing the
+name of the bitfield.</p></li>
+<li><p><strong>data</strong> (<em>int</em>) – Value to be written as a zero or positive integer</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.write_control">
+<span class="sig-name descname"><span class="pre">write_control</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.write_control" title="Link to this definition"></a></dt>
+<dd><p>Writes data bytes to control register(s).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>int</em>) – Address of the first control byte relative to the base address of the current module instance</p></li>
+<li><p><strong>data</strong> (<em>bytes</em><em> or </em><em>ndarray</em>) – data bytes to write</p></li>
+<li><p><strong>args</strong> – additional arguments passed to fpga_mmi_write, including mask</p></li>
+<li><p><strong>kwargs</strong> – additional arguments passed to fpga_mmi_write, including mask</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.write_drp">
+<span class="sig-name descname"><span class="pre">write_drp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.write_drp" title="Link to this definition"></a></dt>
+<dd><p>Writes a 16-bit value <cite>data</cite> to a register of a DRP (Dynamic Reconfigurable Port) of the FPGA internal devices (PLL, SYSMON, MGT etc).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>int</em>) – Address of the 16-bit DRP register word (the address is internally multiplied by 2 to convert it to a byte address)</p></li>
+<li><p><strong>data</strong> (<em>int</em>) – 16-bit value to be written</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>The DRP and RAM pages use the same address space. Either one or the other is connected to the module.</p></li>
+<li><p>The DRP values are stored as little endians</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMI.write_ram">
+<span class="sig-name descname"><span class="pre">write_ram</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMI.write_ram" title="Link to this definition"></a></dt>
+<dd><p>Writes within the RAM/FIFO address space of the module. Simply calls the write() function with the appropriate address offset.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMIRouter">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_firmware.chfpga.mmi.</span></span><span class="sig-name descname"><span class="pre">MMIRouter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">router</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">router_port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fpga_instance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMIRouter" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Class representing the function of a BSB router.</p>
+<p>This class represents a BSB router.</p>
+<dl class="simple">
+<dt>In case of a top router (i.e a router that does not have a parent), do not specify <cite>router</cite></dt><dd><p>and <cite>router_port</cite>, but instead have the top router subclass ADDRESS_WIDTH with the BSB full
+address space and specify <cite>fpga_instance</cite> at router instantiation.</p>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMIRouter.ADDRESS_WIDTH">
+<span class="sig-name descname"><span class="pre">ADDRESS_WIDTH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMIRouter.ADDRESS_WIDTH" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMIRouter.ROUTER_PORT_MAP">
+<span class="sig-name descname"><span class="pre">ROUTER_PORT_MAP</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMIRouter.ROUTER_PORT_MAP" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMIRouter.ROUTER_PORT_NUMBER_WIDTH">
+<span class="sig-name descname"><span class="pre">ROUTER_PORT_NUMBER_WIDTH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMIRouter.ROUTER_PORT_NUMBER_WIDTH" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMIRouter.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">router</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">router_port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fpga_instance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMIRouter.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.mmi.MMIRouter.get_port_addr">
+<span class="sig-name descname"><span class="pre">get_port_addr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">router_port</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.mmi.MMIRouter.get_port_addr" title="Link to this definition"></a></dt>
+<dd><p>Return the base address and maximum address width of the specified port.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.fpga_firmware.chfpga.f_engine.ucap.html" class="btn btn-neutral float-left" title="ucap.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.fpga_firmware.chfpga.system.html" class="btn btn-neutral float-right" title="system/" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

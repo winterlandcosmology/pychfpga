@@ -1,0 +1,88 @@
+
+
+
+
+
+:py:mod:`ssd1306/ <pychfpga.hardware.i2c_devices.ssd1306>`
+==========================================================
+
+
+.. currentmodule:: pychfpga.hardware.i2c_devices
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.i2c_devices,
+..    | FULLNAME=pychfpga.hardware.i2c_devices.ssd1306,
+..    | name==ssd1306
+..    | modules = ['display', 'font', 'ssd1306']
+..    | classes = []
+
+.. automodule:: pychfpga.hardware.i2c_devices.ssd1306
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~display
+         ~font
+         ~ssd1306
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

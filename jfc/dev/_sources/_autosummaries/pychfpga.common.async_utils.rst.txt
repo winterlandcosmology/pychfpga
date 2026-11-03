@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`async_utils.py <pychfpga.common.async_utils>`
+======================================================
+
+
+.. currentmodule:: pychfpga.common
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.common,
+..    | FULLNAME=pychfpga.common.async_utils,
+..    | name==async_utils
+..    | modules = 
+..    | classes = []
+
+.. automodule:: pychfpga.common.async_utils
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         async_to_sync
+         run_async
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: async_to_sync
+
+
+.. autofunction:: run_async
+
+
+
+
+
+.. *** Insert class descriptions
+
+

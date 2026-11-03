@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`display.py <pychfpga.hardware.i2c_devices.ssd1306.display>`
+====================================================================
+
+
+.. currentmodule:: pychfpga.hardware.i2c_devices.ssd1306
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.i2c_devices.ssd1306,
+..    | FULLNAME=pychfpga.hardware.i2c_devices.ssd1306.display,
+..    | name==display
+..    | modules = 
+..    | classes = ['Display']
+
+.. automodule:: pychfpga.hardware.i2c_devices.ssd1306.display
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         Display
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: Display
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

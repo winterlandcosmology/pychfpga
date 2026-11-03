@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`fpga_bitstream.py <pychfpga.fpga_firmware.fpga_bitstream>`
+===================================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware,
+..    | FULLNAME=pychfpga.fpga_firmware.fpga_bitstream,
+..    | name==fpga_bitstream
+..    | modules = 
+..    | classes = ['FPGABitstream']
+
+.. automodule:: pychfpga.fpga_firmware.fpga_bitstream
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         FPGABitstream
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: FPGABitstream
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

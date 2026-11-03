@@ -1,0 +1,159 @@
+
+
+
+
+
+:py:mod:`crs_discovery.py <pychfpga.hardware.crs.crs_discovery>`
+================================================================
+
+
+.. currentmodule:: pychfpga.hardware.crs
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.crs,
+..    | FULLNAME=pychfpga.hardware.crs.crs_discovery,
+..    | name==crs_discovery
+..    | modules = 
+..    | classes = ['CRSArmFirmwareUploader', 'CRSDiscovery', 'HTTPFirmwareServer', 'NetConsole']
+
+.. automodule:: pychfpga.hardware.crs.crs_discovery
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         discover_crs
+         serials_equal
+         set_platform_firmware
+         tcpipe_version_from_elf
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         CRSArmFirmwareUploader
+         CRSDiscovery
+         HTTPFirmwareServer
+         NetConsole
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: discover_crs
+
+
+.. autofunction:: serials_equal
+
+
+.. autofunction:: set_platform_firmware
+
+
+.. autofunction:: tcpipe_version_from_elf
+
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: CRSArmFirmwareUploader
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: CRSDiscovery
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: HTTPFirmwareServer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: NetConsole
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

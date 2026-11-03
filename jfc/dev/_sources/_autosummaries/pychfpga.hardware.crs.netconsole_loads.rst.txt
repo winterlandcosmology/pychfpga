@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`netconsole_loads.py <pychfpga.hardware.crs.netconsole_loads>`
+======================================================================
+
+
+.. currentmodule:: pychfpga.hardware.crs
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.crs,
+..    | FULLNAME=pychfpga.hardware.crs.netconsole_loads,
+..    | name==netconsole_loads
+..    | modules = 
+..    | classes = ['Loads']
+
+.. automodule:: pychfpga.hardware.crs.netconsole_loads
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         Loads
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: Loads
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

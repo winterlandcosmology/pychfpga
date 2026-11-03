@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`client.py <pychfpga.raw_acq.client>`
+=============================================
+
+
+.. currentmodule:: pychfpga.raw_acq
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.raw_acq,
+..    | FULLNAME=pychfpga.raw_acq.client,
+..    | name==client
+..    | modules = 
+..    | classes = ['RawAcqAsyncRESTClient']
+
+.. automodule:: pychfpga.raw_acq.client
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         RawAcqAsyncRESTClient
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: RawAcqAsyncRESTClient
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

@@ -1,0 +1,100 @@
+
+
+
+
+
+:py:mod:`common/ <pychfpga.common>`
+===================================
+
+
+.. currentmodule:: pychfpga
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga,
+..    | FULLNAME=pychfpga.common,
+..    | name==common
+..    | modules = ['array_methods', 'async_utils', 'ccoll', 'mdns_discovery', 'packet_processor_base', 'perf', 'pfb_fft', 'raw_data_packet_processor', 'raw_frame_receiver', 'state', 'tcp_packet_receiver', 'ucorr_frame_receiver', 'ucorr_packet_processor', 'udp_packet_receiver', 'util']
+..    | classes = []
+
+.. automodule:: pychfpga.common
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~array_methods
+         ~async_utils
+         ~ccoll
+         ~mdns_discovery
+         ~packet_processor_base
+         ~perf
+         ~pfb_fft
+         ~raw_data_packet_processor
+         ~raw_frame_receiver
+         ~state
+         ~tcp_packet_receiver
+         ~ucorr_frame_receiver
+         ~ucorr_packet_processor
+         ~udp_packet_receiver
+         ~util
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

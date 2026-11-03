@@ -1,0 +1,95 @@
+
+
+
+
+
+:py:mod:`chfpga/ <pychfpga.fpga_firmware.chfpga>`
+=================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga,
+..    | name==chfpga
+..    | modules = ['SocketIO', 'chFPGA_receiver', 'chfpga', 'chfpga_array_methods', 'chfpga_udp', 'ct_engine', 'f_engine', 'mmi', 'system', 'x_engine']
+..    | classes = []
+
+.. automodule:: pychfpga.fpga_firmware.chfpga
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~SocketIO
+         ~chFPGA_receiver
+         ~chfpga
+         ~chfpga_array_methods
+         ~chfpga_udp
+         ~ct_engine
+         ~f_engine
+         ~mmi
+         ~system
+         ~x_engine
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

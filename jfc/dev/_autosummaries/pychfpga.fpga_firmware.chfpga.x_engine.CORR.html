@@ -1,0 +1,865 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CORR.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="UCORR.py" href="pychfpga.fpga_firmware.chfpga.x_engine.UCORR.html" />
+    <link rel="prev" title="x_engine/" href="pychfpga.fpga_firmware.chfpga.x_engine.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga/</span></code></a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.SocketIO.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">SocketIO.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chFPGA_receiver.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chFPGA_receiver.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga_array_methods.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga_udp.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga_udp.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.ct_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ct_engine/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.f_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">f_engine/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.mmi.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mmi.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.system.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">system/</span></code></a></li>
+<li class="toctree-l4 current"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.x_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">x_engine/</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_firmware.fpga_bitstream.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_bitstream.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_firmware.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.fpga_firmware.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.fpga_firmware.chfpga.x_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">x_engine/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">CORR.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.fpga_firmware.chfpga.x_engine.CORR.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="corr-py">
+<h1><a class="reference internal" href="#module-pychfpga.fpga_firmware.chfpga.x_engine.CORR" title="pychfpga.fpga_firmware.chfpga.x_engine.CORR"><code class="xref py py-mod docutils literal notranslate"><span class="pre">CORR.py</span></code></a><a class="headerlink" href="#corr-py" title="Link to this heading"></a></h1>
+<dl id="module-pychfpga.fpga_firmware.chfpga.x_engine.CORR">
+<dt>CORR.py module</dt><dd><p>Implements interface to the correlator blocks</p>
+<p>History:
+2017-05-04 : JFC : Created</p>
+</dd>
+</dl>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module functions summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.get_raw_corr_map" title="pychfpga.fpga_firmware.chfpga.x_engine.CORR.get_raw_corr_map"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_raw_corr_map</span></code></a></p></td>
+<td><p>Creates a map that maps a correlator frame array indexed by (correlator_number, cmac_number, product_number) into a n array index (bin_number, i, j).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.get_raw_to_matrix_map" title="pychfpga.fpga_firmware.chfpga.x_engine.CORR.get_raw_to_matrix_map"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_raw_to_matrix_map</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.get_raw_to_vector_map" title="pychfpga.fpga_firmware.chfpga.x_engine.CORR.get_raw_to_vector_map"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_raw_to_vector_map</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR" title="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CORR</span></code></a></p></td>
+<td><p>Instantiates a container for all correlators blocks</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core" title="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CORR_core</span></code></a></p></td>
+<td><p>Implements interface to one of the correlator</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver" title="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CorrFrameReceiver</span></code></a></p></td>
+<td><p>Pure Python socket receiver to capture the data from the FPGA-based 16-channel full N-square firmware correlator and integrates it in real time.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module functions</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.get_raw_corr_map">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_firmware.chfpga.x_engine.CORR.</span></span><span class="sig-name descname"><span class="pre">get_raw_corr_map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">N</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nbins</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Ncorr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">8</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.get_raw_corr_map" title="Link to this definition"></a></dt>
+<dd><p>Creates a map that maps a correlator frame array indexed by (correlator_number,
+cmac_number, product_number) into a n array index (bin_number, i, j).</p>
+<p>This map can be used to remap the raw correlator packets contents into a more usefully indexed array.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>N</strong> (<em>int</em>) – number of input channels that are being correlated. This must
+match the number of correlators for which the firmware correlator was
+implemented.</p></li>
+<li><p><strong>Nbins</strong> (<em>int</em>) – Number of frequency bins provided to each correlator per frame.</p></li>
+<li><p><strong>Ncorr</strong> – Number of correlator cores, each of which processing a different set of <cite>Nbins</cite> frequency bins.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p>raw_to_matrix_map, raw_to_vector_map</p>
+<p>where</p>
+<blockquote>
+<div><ul>
+<li><p>raw_to_matrix_map is a numpy array of shape (3, NBINS, NCHAN,
+NCHAN) where each element [:, bin_number, i, j] returns the
+tuple <code class="docutils literal notranslate"><span class="pre">(corr_number,</span> <span class="pre">cmac_number,</span> <span class="pre">prod_number)</span></code> so that:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">raw_data</span><span class="p">(</span><span class="n">raw_to_matrix</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">raw_to_matrix</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">raw_to_matrix</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>or equivalently:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">raw_data</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">raw_to_matrix</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>extracts the raw data and reorders it in a matrix that represents (freq_bin_number, i, j)</p>
+</li>
+<li><p>raw_to_matrix_map is a numpy array of shape (3, NBINS, NPROD)
+where each element [:, bin_number, prod] returns the tuple
+<code class="docutils literal notranslate"><span class="pre">(corr_number,</span> <span class="pre">cmac_number,</span> <span class="pre">prod_number)</span></code> and can be used to
+index raw data as above.</p></li>
+</ul>
+</div></blockquote>
+</p>
+</dd>
+</dl>
+<p>The basic correlator structure is made of a fixed array (Y) of N samples
+and a rotating array (X) of also N samples. On each clock, we rotate X,
+but Y is fixed.</p>
+<p>We treat the diagonal products (autocorrelations) separately from the
+upper triangle, with their own multipliers. This way, we can produce only
+autocorrelations if needed.</p>
+<p>The upper triangle consist of N*(N-1)/2 products. We can compute the
+products in N/2 clocks using N-1 multipliers. On the first clock, the N-1
+multipliers compute the N-1 products that have a lag of 1 (e.g ((1,0),
+(2,1) …). On the second clock, we compute the N-2 products with a lag of
+2, and 1 product with a lag of N-1, so we keep all N-1 multipliers busy.
+On clock N/2, we compute the N/2 products with lag N/2 and N/2-1 product
+with lag N/2+1.</p>
+<p>We need two multipliers to also compute the N autocorrelations in N/2
+clocks. One multiplier proguce the products for (0,0), (1,1), … (N/2-1,
+N/2-1), while the second multiplier produce the products of (N/2, N/2) …
+(N-1, N-1).</p>
+<p>In total, we use N-1 multipliers for the upper triangle, and 2 multipliers
+for the diagonal, with a total of N+1 multipliers per correlator.</p>
+<p>CMAC 0 is for the lower channel autocorrelations, CMAC1 for the upper
+channel autocorrelations, and CMAC 2 … N are for the upper triangle
+computations.</p>
+<p>In practice, the data arrives 4 samples at a time (four (4+4) bit complex
+numbers in a 32-bit word). This means that a new data set arrives every
+N/4 clock. The example given above takes N/2 clocks to compute all
+products, which is 2x too slow.  To solve the problem we double the number
+of multipliers to 2*(N+1), and products are computed two at a time. The
+extra set of multipliers is interleaved with th eoriginal ones, meaning
+that the data will come out as if we were computing corr0:clk0,
+corr0:clk1, corr1:clk0, corr1:clk1  etc.</p>
+<p>For the computation below, we assume a non-interleaves correlator that
+compute the products with N+1 multipliers in N/2 clocks, and then apply
+the interleving operation to get the results of a 2*(N+1) multipliers
+computing in N/4 clocks.</p>
+<p>Each multiplier therefore shall store N/4 products per frequency bin (one product per clock). The
+accumulator can store a total of 512 products, or 512/(N/4) frequency bins
+(128 bins for N=16). If the channelizer produce 1024 frequency bins, we
+need 1024/512*N/4=N/2 correlators to process all the products (8 correlators for N=16).</p>
+<p>The corner-turn engine will be typically set-up to distribute 1/8th of the
+bins to each correlator in a round robin fashion, i.e. correlator 0 has
+bins 0, 8, 16, 24 …, while correlator 1 has bins 1, 9, …</p>
+<p>The CMAC products are read out in the reverse order than they were written.</p>
+<p>Data formats:</p>
+<blockquote>
+<div><p>raw: [CORR, CMAC, PROD]
+matrix: [BIN, ch_i, ch_j]
+vector: [bin, product]</p>
+</div></blockquote>
+<p>The <cite>raw</cite> format is as close to the correlator output format, and is
+processed just enough to allow the data to be usable (i.e, complex numbers
+are extracted, and specific bin/product can be indexed directly)</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.get_raw_to_matrix_map">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_firmware.chfpga.x_engine.CORR.</span></span><span class="sig-name descname"><span class="pre">get_raw_to_matrix_map</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.get_raw_to_matrix_map" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.get_raw_to_vector_map">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_firmware.chfpga.x_engine.CORR.</span></span><span class="sig-name descname"><span class="pre">get_raw_to_vector_map</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.get_raw_to_vector_map" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_firmware.chfpga.x_engine.CORR.</span></span><span class="sig-name descname"><span class="pre">CORR</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">router</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">router_port</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="pychfpga.fpga_firmware.chfpga.mmi.html#pychfpga.fpga_firmware.chfpga.mmi.MMIRouter" title="pychfpga.fpga_firmware.chfpga.mmi.MMIRouter"><code class="xref py py-class docutils literal notranslate"><span class="pre">MMIRouter</span></code></a></p>
+<p>Instantiates a container for all correlators blocks</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.ADDRESS_WIDTH">
+<span class="sig-name descname"><span class="pre">ADDRESS_WIDTH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.ADDRESS_WIDTH" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.BIT_WIDTH">
+<span class="sig-name descname"><span class="pre">BIT_WIDTH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">4</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.BIT_WIDTH" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.REQUIRES_OFFSET_BINARY_ENCODING">
+<span class="sig-name descname"><span class="pre">REQUIRES_OFFSET_BINARY_ENCODING</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.REQUIRES_OFFSET_BINARY_ENCODING" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.ROUTER_PORT_MAP">
+<span class="sig-name descname"><span class="pre">ROUTER_PORT_MAP</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.ROUTER_PORT_MAP" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.ROUTER_PORT_NUMBER_WIDTH">
+<span class="sig-name descname"><span class="pre">ROUTER_PORT_NUMBER_WIDTH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">4</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.ROUTER_PORT_NUMBER_WIDTH" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">router</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">router_port</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.get_params">
+<span class="sig-name descname"><span class="pre">get_params</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.get_params" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.get_port_addr">
+<span class="sig-name descname"><span class="pre">get_port_addr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">router_port</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.get_port_addr" title="Link to this definition"></a></dt>
+<dd><p>Return the base address and maximum address width of the specified port.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.init" title="Link to this definition"></a></dt>
+<dd><p>Initializes all correlators</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.start_correlator">
+<span class="sig-name descname"><span class="pre">start_correlator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">integration_period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16384</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autocorr_only</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bins_per_frame</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.start_correlator" title="Link to this definition"></a></dt>
+<dd><p>Start the correlator with specified parameters.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.status">
+<span class="sig-name descname"><span class="pre">status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.status" title="Link to this definition"></a></dt>
+<dd><p>Displays the status of all correlators</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.stop_correlator">
+<span class="sig-name descname"><span class="pre">stop_correlator</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.stop_correlator" title="Link to this definition"></a></dt>
+<dd><p>Stop all correlator cored from sending data.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.update_config">
+<span class="sig-name descname"><span class="pre">update_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR.update_config" title="Link to this definition"></a></dt>
+<dd><p>Refresh CORR config subtree; returns <code class="docutils literal notranslate"><span class="pre">self.config</span></code>.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_firmware.chfpga.x_engine.CORR.</span></span><span class="sig-name descname"><span class="pre">CORR_core</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">router</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">router_port</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="pychfpga.fpga_firmware.chfpga.mmi.html#pychfpga.fpga_firmware.chfpga.mmi.MMI" title="pychfpga.fpga_firmware.chfpga.mmi.MMI"><code class="xref py py-class docutils literal notranslate"><span class="pre">MMI</span></code></a></p>
+<p>Implements interface to one of the correlator</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.ADDRESS_WIDTH">
+<span class="sig-name descname"><span class="pre">ADDRESS_WIDTH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">12</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.ADDRESS_WIDTH" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.AUTOCORR_ONLY">
+<span class="sig-name descname"><span class="pre">AUTOCORR_ONLY</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.AUTOCORR_ONLY" title="Link to this definition"></a></dt>
+<dd><p>Holds the definition of a memory-mapped variable.</p>
+<p>It is implemented as a data descriptor that calls the read_bitfield() and
+write_field() properties of the parent object when accessed.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.BINS_PER_FRAME">
+<span class="sig-name descname"><span class="pre">BINS_PER_FRAME</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.BINS_PER_FRAME" title="Link to this definition"></a></dt>
+<dd><p>Holds the definition of a memory-mapped variable.</p>
+<p>It is implemented as a data descriptor that calls the read_bitfield() and
+write_field() properties of the parent object when accessed.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.CONTROL">
+<span class="sig-name descname"><span class="pre">CONTROL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.CONTROL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.DRP">
+<span class="sig-name descname"><span class="pre">DRP</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.DRP" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.INTEGRATION_PERIOD">
+<span class="sig-name descname"><span class="pre">INTEGRATION_PERIOD</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.INTEGRATION_PERIOD" title="Link to this definition"></a></dt>
+<dd><p>Holds the definition of a memory-mapped variable.</p>
+<p>It is implemented as a data descriptor that calls the read_bitfield() and
+write_field() properties of the parent object when accessed.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.IN_FRAME_CTR">
+<span class="sig-name descname"><span class="pre">IN_FRAME_CTR</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.IN_FRAME_CTR" title="Link to this definition"></a></dt>
+<dd><p>Holds the definition of a memory-mapped variable.</p>
+<p>It is implemented as a data descriptor that calls the read_bitfield() and
+write_field() properties of the parent object when accessed.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.NO_ACCUM">
+<span class="sig-name descname"><span class="pre">NO_ACCUM</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.NO_ACCUM" title="Link to this definition"></a></dt>
+<dd><p>Holds the definition of a memory-mapped variable.</p>
+<p>It is implemented as a data descriptor that calls the read_bitfield() and
+write_field() properties of the parent object when accessed.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.OUT_FRAME_CTR">
+<span class="sig-name descname"><span class="pre">OUT_FRAME_CTR</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.OUT_FRAME_CTR" title="Link to this definition"></a></dt>
+<dd><p>Holds the definition of a memory-mapped variable.</p>
+<p>It is implemented as a data descriptor that calls the read_bitfield() and
+write_field() properties of the parent object when accessed.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.SOFT_RESET">
+<span class="sig-name descname"><span class="pre">SOFT_RESET</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.SOFT_RESET" title="Link to this definition"></a></dt>
+<dd><p>Holds the definition of a memory-mapped variable.</p>
+<p>It is implemented as a data descriptor that calls the read_bitfield() and
+write_field() properties of the parent object when accessed.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.STATUS">
+<span class="sig-name descname"><span class="pre">STATUS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.STATUS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.STATUS_BYTE">
+<span class="sig-name descname"><span class="pre">STATUS_BYTE</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.STATUS_BYTE" title="Link to this definition"></a></dt>
+<dd><p>Holds the definition of a memory-mapped variable.</p>
+<p>It is implemented as a data descriptor that calls the read_bitfield() and
+write_field() properties of the parent object when accessed.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.USER_ID">
+<span class="sig-name descname"><span class="pre">USER_ID</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.USER_ID" title="Link to this definition"></a></dt>
+<dd><p>Holds the definition of a memory-mapped variable.</p>
+<p>It is implemented as a data descriptor that calls the read_bitfield() and
+write_field() properties of the parent object when accessed.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">router</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">router_port</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.get_addr">
+<span class="sig-name descname"><span class="pre">get_addr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.get_addr" title="Link to this definition"></a></dt>
+<dd><p>Returns the address of the bitfield relative to the base address,
+including the page offset. To be used directly with the read() and
+write() methods.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>bitfild_name</strong> (<em>str</em>) – name of the bitfield</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>address (int), relative to the current  module base address. The
+address includes the page (CONTROL/STATUS/RAM/DRP) offset.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.get_bitfield">
+<span class="sig-name descname"><span class="pre">get_bitfield</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.get_bitfield" title="Link to this definition"></a></dt>
+<dd><p>Returns the bitfield object with name ‘bitfield_name’.
+This is used to access the attributes and methods of the bitfield objects, since this is a python data descriptor and direct access calls its fget() method instead of returning the object.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.init">
+<span class="sig-name descname"><span class="pre">init</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.init" title="Link to this definition"></a></dt>
+<dd><p>Inisializes all modules of a correlator block.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.pulse_bit">
+<span class="sig-name descname"><span class="pre">pulse_bit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.pulse_bit" title="Link to this definition"></a></dt>
+<dd><p>Pulses the bitfield specified by the string <code class="docutils literal notranslate"><span class="pre">bitfield_name</span></code> to ‘1’ then back to ‘0’.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read">
+<span class="sig-name descname"><span class="pre">read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read" title="Link to this definition"></a></dt>
+<dd><p>Reads bytes from the FPGA memory-mapped registers according to the specified <cite>type</cite> and <cite>length</cite>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_all_fields">
+<span class="sig-name descname"><span class="pre">read_all_fields</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'%(name)-30s</span> <span class="pre">=</span> <span class="pre">%(page_name)7s(0x%(addr)-02X)[%(bit_range)-5s]:</span>&#160; <span class="pre">%(value)5i,</span> <span class="pre">0x%(hex_value)-4s,</span> <span class="pre">0b%(bin_value)s'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sort</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['page',</span> <span class="pre">'name']</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_all_fields" title="Link to this definition"></a></dt>
+<dd><p>Returns a list of all bitfields and their values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>format</strong> (<em>str</em>) – <p>if None, the method returns a list of dict describing each bitfield. If <cite>format</cite> is a string, the method returns a list
+of strings describing the bitfields, where each string is formatted using the provided string format. The string format can refer to the keys below.</p>
+<ul>
+<li><p>name (str),</p></li>
+<li><p>page (int),</p></li>
+<li><p>page_name (str),</p></li>
+<li><p>addr (int),</p></li>
+<li><p>bit (int),</p></li>
+<li><p>bit_range (str),</p></li>
+<li><p>width (int),</p></li>
+<li><p>doc (str),</p></li>
+<li><p>value (int),</p></li>
+<li><p>bin_value (str)</p></li>
+</ul>
+</p></li>
+<li><p><strong>sort</strong> (<em>list</em>) – list of strings indicateing on which field(s) to sort the bitfield list</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>list</em> – list of strings if  <cite>format</cite> is a string, list of dict if format is None.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_bit">
+<span class="sig-name descname"><span class="pre">read_bit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_bit" title="Link to this definition"></a></dt>
+<dd><p>Reads a bit from a FPGA memory-mapped register.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_bitfield">
+<span class="sig-name descname"><span class="pre">read_bitfield</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_bitfield" title="Link to this definition"></a></dt>
+<dd><p>Reads the field identified by the name ‘bit_name’ which is looked
+up in the BITS table to find the bit definition (port, bit position
+etc). Returns a boolean.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_control">
+<span class="sig-name descname"><span class="pre">read_control</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_control" title="Link to this definition"></a></dt>
+<dd><p>Reads <cite>length</cite> bytes from the CONTROL registers starting at address <cite>addr</cite></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_drp">
+<span class="sig-name descname"><span class="pre">read_drp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_drp" title="Link to this definition"></a></dt>
+<dd><p>Reads a DRP (Dynamic Reconfigurable Port) from one of the FPGA
+internal devices (PLL, SYSMON, MGT etc). ‘addr’ is the 16-bit DRP
+register address.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_ram">
+<span class="sig-name descname"><span class="pre">read_ram</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_ram" title="Link to this definition"></a></dt>
+<dd><p>Reads an array of <cite>length</cite> bytes from address <cite>addr</cite> in the RAM space</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_status">
+<span class="sig-name descname"><span class="pre">read_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.read_status" title="Link to this definition"></a></dt>
+<dd><p>Reads a <cite>length</cite> bytes from the STATUS registers from address <cite>addr</cite></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.status">
+<span class="sig-name descname"><span class="pre">status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.status" title="Link to this definition"></a></dt>
+<dd><p>Displays the status of al the correlator blocks</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.wait_for_bit">
+<span class="sig-name descname"><span class="pre">wait_for_bit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.wait_for_bit" title="Link to this definition"></a></dt>
+<dd><p>Wait for the bitfield specified by the string <code class="docutils literal notranslate"><span class="pre">bitfield_name</span></code> to return the value <code class="docutils literal notranslate"><span class="pre">target_value</span></code>.
+<code class="docutils literal notranslate"><span class="pre">True</span></code> is returned when the value is found before <code class="docutils literal notranslate"><span class="pre">timeout</span></code> seconds, otherwise a RuntimeError exception is raised if <code class="docutils literal notranslate"><span class="pre">no_error</span></code> is False, or <code class="docutils literal notranslate"><span class="pre">False</span></code> is returned if <code class="docutils literal notranslate"><span class="pre">no_error</span></code> is True.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.wait_for_bit_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">wait_for_bit_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">poll_interval</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.wait_for_bit_async" title="Link to this definition"></a></dt>
+<dd><p>Async version of <a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.wait_for_bit" title="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.wait_for_bit"><code class="xref py py-meth docutils literal notranslate"><span class="pre">wait_for_bit()</span></code></a>. Yields between MMI polls.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write">
+<span class="sig-name descname"><span class="pre">write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write" title="Link to this definition"></a></dt>
+<dd><p>Writes an array of bytes to the FPGA memory-mapped address space. Address <code class="docutils literal notranslate"><span class="pre">addr</span></code> is
+relative to the base address of the current MMI module.</p>
+<p>The MSBs of <code class="docutils literal notranslate"><span class="pre">addr</span></code> determines the page in which data is written
+(control, status, RAM etc.). use <code class="docutils literal notranslate"><span class="pre">write_control(...)</span></code>, <code class="docutils literal notranslate"><span class="pre">write_ram(...)</span></code> etc. to write to specific pages.</p>
+<p>Returns the number of bytes written.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write_DRP">
+<span class="sig-name descname"><span class="pre">write_DRP</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write_DRP" title="Link to this definition"></a></dt>
+<dd><p>Writes a 16-bit value <cite>data</cite> to a register of a DRP (Dynamic Reconfigurable Port) of the FPGA internal devices (PLL, SYSMON, MGT etc).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>int</em>) – Address of the 16-bit DRP register word (the address is internally multiplied by 2 to convert it to a byte address)</p></li>
+<li><p><strong>data</strong> (<em>int</em>) – 16-bit value to be written</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>The DRP and RAM pages use the same address space. Either one or the other is connected to the module.</p></li>
+<li><p>The DRP values are stored as little endians</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write_bit">
+<span class="sig-name descname"><span class="pre">write_bit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write_bit" title="Link to this definition"></a></dt>
+<dd><p>Sets a bit of the FPGA memory-mapped registers</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write_bitfield">
+<span class="sig-name descname"><span class="pre">write_bitfield</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bitfield</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write_bitfield" title="Link to this definition"></a></dt>
+<dd><p>Writes ‘data’ to the bitfield.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>bitfield</strong> (<em>bitfield</em><em> or </em><em>str</em>) – bitfield object to write to. <cite>bitfield</cite> can be either a bitfield object or a string containing the
+name of the bitfield.</p></li>
+<li><p><strong>data</strong> (<em>int</em>) – Value to be written as a zero or positive integer</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write_control">
+<span class="sig-name descname"><span class="pre">write_control</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write_control" title="Link to this definition"></a></dt>
+<dd><p>Writes data bytes to control register(s).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>int</em>) – Address of the first control byte relative to the base address of the current module instance</p></li>
+<li><p><strong>data</strong> (<em>bytes</em><em> or </em><em>ndarray</em>) – data bytes to write</p></li>
+<li><p><strong>args</strong> – additional arguments passed to fpga_mmi_write, including mask</p></li>
+<li><p><strong>kwargs</strong> – additional arguments passed to fpga_mmi_write, including mask</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write_drp">
+<span class="sig-name descname"><span class="pre">write_drp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write_drp" title="Link to this definition"></a></dt>
+<dd><p>Writes a 16-bit value <cite>data</cite> to a register of a DRP (Dynamic Reconfigurable Port) of the FPGA internal devices (PLL, SYSMON, MGT etc).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>int</em>) – Address of the 16-bit DRP register word (the address is internally multiplied by 2 to convert it to a byte address)</p></li>
+<li><p><strong>data</strong> (<em>int</em>) – 16-bit value to be written</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<ul class="simple">
+<li><p>The DRP and RAM pages use the same address space. Either one or the other is connected to the module.</p></li>
+<li><p>The DRP values are stored as little endians</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write_ram">
+<span class="sig-name descname"><span class="pre">write_ram</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.write_ram" title="Link to this definition"></a></dt>
+<dd><p>Writes within the RAM/FIFO address space of the module. Simply calls the write() function with the appropriate address offset.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_firmware.chfpga.x_engine.CORR.</span></span><span class="sig-name descname"><span class="pre">CorrFrameReceiver</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">socket</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">N</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nbins</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Ncorr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">packets_per_chunk</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">272</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignore_packet_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Pure Python socket receiver to capture the data from the FPGA-based
+16-channel full N-square firmware correlator and integrates it in real
+time.</p>
+<p>Note that the packets are larger than 1500 bytes, which requires the
+networking equipment and the computer interface to be configured to
+receive Jumbo frames.</p>
+<p>The receiver is fast enough to capture data that is integrated in firmware
+down to a rate of about 10 ms/integrated frame, that is, exceeding 500
+Mbits/s, provided the system provides a sufficiently big UDP buffer to hold
+the data until the receiver method is called to process it (see below).</p>
+<p>The receiver can perform real-time software integration of the data. A
+specific number of software-integrated frames can be returned, or data can
+be saved to disk indefinitely until stopped.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>socket</strong> (<em>socket.socket</em>) – An opened and bound UDP socket to which the
+FPGA correlator data will be sent. The socket will not be closed
+when the call is completed.</p>
+</dd>
+</dl>
+<p>System Requirements:</p>
+<p>The transmit rate must be fast enough to accommodate the desired bandwidth
+by setting <code class="docutils literal notranslate"><span class="pre">ib.GPIO.HOST_FRAME_READ_RATE</span> <span class="pre">=</span> <span class="pre">rate</span></code>. <code class="docutils literal notranslate"><span class="pre">rate</span></code> =16 limits to about
+260 Mbps but is slow enough to allow python to process the data with a
+small standard UDP buffer. <code class="docutils literal notranslate"><span class="pre">rate</span></code> =15 is good for about 500 Mbps, and
+<code class="docutils literal notranslate"><span class="pre">rate</span></code> =16 is good for the full Gigabit bandwidth. The latetr two require
+bigger UDP buffers. See below:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ib</span><span class="o">.</span><span class="n">GPIO</span><span class="o">.</span><span class="n">HOST_FRAME_READ_RATE</span> <span class="o">=</span> <span class="mi">14</span>
+</pre></div>
+</div>
+<p>The Ethernet interface must be set to receive Jumbo frames:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">ifconfig</span> <span class="n">eno1</span> <span class="n">mtu</span> <span class="mi">9000</span>
+</pre></div>
+</div>
+<p>The UDP buffers shall be increased to reduce packet loss to a minimum:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">sysctl</span> <span class="o">-</span><span class="n">w</span> <span class="n">net</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">rmem_max</span><span class="o">=</span><span class="mi">26214400</span>
+<span class="n">sudo</span> <span class="n">sysctl</span> <span class="o">-</span><span class="n">w</span> <span class="n">net</span><span class="o">.</span><span class="n">core</span><span class="o">.</span><span class="n">rmem_default</span><span class="o">=</span><span class="mi">26214400</span>
+<span class="n">sudo</span> <span class="n">sysctl</span> <span class="o">-</span><span class="n">w</span> <span class="n">net</span><span class="o">.</span><span class="n">ipv4</span><span class="o">.</span><span class="n">udp_mem</span><span class="o">=</span><span class="s1">'26214400 26214400 26214400'</span>
+<span class="n">sudo</span> <span class="n">sysctl</span> <span class="o">-</span><span class="n">w</span> <span class="n">net</span><span class="o">.</span><span class="n">ipv4</span><span class="o">.</span><span class="n">udp_rmem_min</span><span class="o">=</span><span class="mi">26214400</span>
+</pre></div>
+</div>
+<p>Check udp buffers:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sysctl</span> <span class="o">-</span><span class="n">a</span> <span class="o">|</span> <span class="n">grep</span> <span class="n">mem</span>
+</pre></div>
+</div>
+<p>Monitor UDP buffer:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">watch</span> <span class="o">-</span><span class="n">cd</span> <span class="o">-</span><span class="n">n</span> <span class="mf">.5</span> <span class="s2">"grep :A6  /proc/net/udp"</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">socket</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">N</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Nbins</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Ncorr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">packets_per_chunk</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">272</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignore_packet_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver.accumulate_data">
+<span class="sig-name descname"><span class="pre">accumulate_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">number_of_packets</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">integ_number</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver.accumulate_data" title="Link to this definition"></a></dt>
+<dd><p>Add the data from the packets 0 to <cite>number_of_packets</cite> in to the
+software accumulator array for software integration number
+<cite>integ_number</cite>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver.align">
+<span class="sig-name descname"><span class="pre">align</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver.align" title="Link to this definition"></a></dt>
+<dd><p>Flush packets until we receive the packet that is part of the first
+frame of the specified integration period.</p>
+<p>This first packet is left in the buffer.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver.flush">
+<span class="sig-name descname"><span class="pre">flush</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timestamp_jump_threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver.flush" title="Link to this definition"></a></dt>
+<dd><p>Flush the UDP buffer until the timout occurs or the packet timestamp jumps by more <cite>threshold</cite> or more.</p>
+<p>This function clears the local software buffer.</p>
+<p>If a timestamp jump is detected, we assume that we are now reading the
+part of a frame that could fit in the UDP buffer because we started
+flushing it. The frame is likely partial. For this reason, onece we
+detect a large jump, we continue flushing until the next timestamp
+arrives. This assumes that the packets will arrive grouped by timestamps number.</p>
+<p>The first packet with a new timestamp following a timestamp jump is left on top of the buffer.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver.plot_corr_frames">
+<span class="sig-name descname"><span class="pre">plot_corr_frames</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">soft_integ_period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flush</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">align</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flush_timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver.plot_corr_frames" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver.read_corr_frames">
+<span class="sig-name descname"><span class="pre">read_corr_frames</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">soft_integ_period</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_results</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flush</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">align</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flush_timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'raw'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver.read_corr_frames" title="Link to this definition"></a></dt>
+<dd><p>Read correlator frames</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>number_of_results</strong> (<em>int</em>) – Number of software-integrated frames to
+acquire and return. If a <cite>filename</cite> is specified, only the
+last frame is returned. Also only if <cite>filename</cite> is specified,
+a <cite>number_of_results</cite> =None will result in indefinite data
+capture until the capture is stopped.</p></li>
+<li><p><strong>soft_integ_period</strong> (<em>int</em>) – Number of correlator frames to
+accumulate in software. A software frame will always be
+aligned to a multiple of soft_integ_period.</p></li>
+</ul>
+</dd>
+</dl>
+<p>The receiver can do software integration for unlimited time at a firmware integration period of 5000 frames (12.8 ms).</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.fpga_firmware.chfpga.x_engine.html" class="btn btn-neutral float-left" title="x_engine/" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.fpga_firmware.chfpga.x_engine.UCORR.html" class="btn btn-neutral float-right" title="UCORR.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,334 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>qsfp_ber_tests.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="state.py" href="pychfpga.apps.ber_dashboard.state.html" />
+    <link rel="prev" title="paths.py" href="pychfpga.apps.ber_dashboard.paths.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="pychfpga.apps.ber_dashboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ber_dashboard/</span></code></a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.apps.ber_dashboard.paths.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">paths.py</span></code></a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qsfp_ber_tests.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.apps.ber_dashboard.state.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">state.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.apps.ber_dashboard.ui.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ui/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.apps.ber_dashboard.workers.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">workers/</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.apps.ber_dashboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ber_dashboard/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qsfp_ber_tests.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="qsfp-ber-tests-py">
+<h1><a class="reference internal" href="#module-pychfpga.apps.ber_dashboard.qsfp_ber_tests" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qsfp_ber_tests.py</span></code></a><a class="headerlink" href="#qsfp-ber-tests-py" title="Link to this heading"></a></h1>
+<p id="module-pychfpga.apps.ber_dashboard.qsfp_ber_tests">QSFP (CGE 100G) loopback BER tests: every board tests its own QSFP lanes at the same time.</p>
+<p>Each board sends PRBS-31 on QSFP TX lane n and checks it on its own RX lane n through a loopback plug
+(passive copper, or an optical module with a loopback fibre). Needs the crs_ct bitstream
+(FPGAArray mode=’shuffle8’) with the CGE TX drive control bytes.</p>
+<p>Results are keyed by (slot, lane). Long functions take optional callbacks: log(str), progress(done, total),
+partial(obj) for live display, and stop() -&gt; bool to abort.</p>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module functions summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.best_index" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests.best_index"><code class="xref py py-obj docutils literal notranslate"><span class="pre">best_index</span></code></a></p></td>
+<td><p>Index of the best grid point.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.check_loopback" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests.check_loopback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">check_loopback</span></code></a></p></td>
+<td><p>Check that TX lane n reaches RX lane n of the same board.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.lpm_by_plug" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests.lpm_by_plug"><code class="xref py py-obj docutils literal notranslate"><span class="pre">lpm_by_plug</span></code></a></p></td>
+<td><p>'Auto' receiver mode: LPM behind an optical module, DFE behind a copper plug (measured on CRS rev5: passive copper loopbacks fail in LPM, optical SR4 modules are best in LPM).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.measure" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests.measure"><code class="xref py py-obj docutils literal notranslate"><span class="pre">measure</span></code></a></p></td>
+<td><p>Retrain the RX equalizers, wait <cite>train</cite> s, clear the counters, count PRBS-31 errors for <cite>dwell</cite> s.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.qsfp_boards" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests.qsfp_boards"><code class="xref py py-obj docutils literal notranslate"><span class="pre">qsfp_boards</span></code></a></p></td>
+<td><p>Boards with a CGE that has the TX drive control bytes, sorted by slot.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.read_plugs" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests.read_plugs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">read_plugs</span></code></a></p></td>
+<td><p>Identify what is in each QSFP cage: {slot: dict(serial, vendor, part, kind, si...)}.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.rearm" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests.rearm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rearm</span></code></a></p></td>
+<td><p>Reset the PRBS error counters.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.scan_eyes" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests.scan_eyes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">scan_eyes</span></code></a></p></td>
+<td><p>Eye diagram of every lane at the present TX / RX settings (DFE or LPM from RXLPMEN).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_prbs" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_prbs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_prbs</span></code></a></p></td>
+<td><p>PRBS-31 checker on all lanes; PRBS-31 (tx=5) or no pattern (tx=0) from all transmitters.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_rx_lpm" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_rx_lpm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_rx_lpm</span></code></a></p></td>
+<td><p>lpm: True (LPM), False (DFE), or {slot: bool} per board.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_tx" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_tx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_tx</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.summarize" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests.summarize"><code class="xref py py-obj docutils literal notranslate"><span class="pre">summarize</span></code></a></p></td>
+<td><p>Per (slot, lane): number of 0-error settings and the best setting (swing, pre, post codes).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.sweep_tx" title="pychfpga.apps.ber_dashboard.qsfp_ber_tests.sweep_tx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sweep_tx</span></code></a></p></td>
+<td><p>FPGA TX grid on every board at once.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module functions</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.apps.ber_dashboard.qsfp_ber_tests.best_index">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.apps.ber_dashboard.qsfp_ber_tests.</span></span><span class="sig-name descname"><span class="pre">best_index</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">zero</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ber</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.best_index" title="Link to this definition"></a></dt>
+<dd><p>Index of the best grid point. Among 0-error points: the one farthest (in grid steps, same swing) from any
+point with errors; ties go to the point nearest the centre of the pre/post grid. Without any 0-error point:
+the lowest BER.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.apps.ber_dashboard.qsfp_ber_tests.check_loopback">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.apps.ber_dashboard.qsfp_ber_tests.</span></span><span class="sig-name descname"><span class="pre">check_loopback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">boards</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swing</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pre</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">post</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">21</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lpm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;function</span> <span class="pre">_noop&gt;</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.check_loopback" title="Link to this definition"></a></dt>
+<dd><p>Check that TX lane n reaches RX lane n of the same board. The pattern of one TX lane at a time is stopped
+(on every board at once); an RX lane is hit if its BER during the stop is above 0.1 (a stopped pattern gives
+about 0.5). Lanes without lock or with a BER above 0.05 at this setting are reported, not judged.
+Returns {(slot, lane): dict(rx_lanes_hit, background_ber, ok)}.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.apps.ber_dashboard.qsfp_ber_tests.lpm_by_plug">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.apps.ber_dashboard.qsfp_ber_tests.</span></span><span class="sig-name descname"><span class="pre">lpm_by_plug</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">plugs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.lpm_by_plug" title="Link to this definition"></a></dt>
+<dd><p>‘Auto’ receiver mode: LPM behind an optical module, DFE behind a copper plug (measured on CRS rev5:
+passive copper loopbacks fail in LPM, optical SR4 modules are best in LPM). {slot: bool}.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.apps.ber_dashboard.qsfp_ber_tests.measure">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.apps.ber_dashboard.qsfp_ber_tests.</span></span><span class="sig-name descname"><span class="pre">measure</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">boards</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dwell</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lock_proof</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.measure" title="Link to this definition"></a></dt>
+<dd><p>Retrain the RX equalizers, wait <cite>train</cite> s, clear the counters, count PRBS-31 errors for <cite>dwell</cite> s.
+Lock proof: stop the transmitted pattern for 0.3 s; a locked checker must count errors.
+Returns {(slot, lane): dict(errors, ber, locked)}; ber of 0 errors is the 1/bits floor.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.apps.ber_dashboard.qsfp_ber_tests.qsfp_boards">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.apps.ber_dashboard.qsfp_ber_tests.</span></span><span class="sig-name descname"><span class="pre">qsfp_boards</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ca</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.qsfp_boards" title="Link to this definition"></a></dt>
+<dd><p>Boards with a CGE that has the TX drive control bytes, sorted by slot.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.apps.ber_dashboard.qsfp_ber_tests.read_plugs">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.apps.ber_dashboard.qsfp_ber_tests.</span></span><span class="sig-name descname"><span class="pre">read_plugs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ca</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;function</span> <span class="pre">_noop&gt;</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.read_plugs" title="Link to this definition"></a></dt>
+<dd><p>Identify what is in each QSFP cage: {slot: dict(serial, vendor, part, kind, si…)}. Never raises.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.apps.ber_dashboard.qsfp_ber_tests.rearm">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.apps.ber_dashboard.qsfp_ber_tests.</span></span><span class="sig-name descname"><span class="pre">rearm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">boards</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.rearm" title="Link to this definition"></a></dt>
+<dd><p>Reset the PRBS error counters. A checker that lost the pattern (lock proof, stopped lane) only locks again
+after this reset.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.apps.ber_dashboard.qsfp_ber_tests.scan_eyes">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.apps.ber_dashboard.qsfp_ber_tests.</span></span><span class="sig-name descname"><span class="pre">scan_eyes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">boards</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">h</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">range(-32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">33</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">4)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">v</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">range(-50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">51</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">5)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_prescale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;function</span> <span class="pre">_noop&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;function</span> <span class="pre">_noop&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;function</span> <span class="pre">_noop&gt;</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.scan_eyes" title="Link to this definition"></a></dt>
+<dd><p>Eye diagram of every lane at the present TX / RX settings (DFE or LPM from RXLPMEN).
+Returns {(slot, lane): ber_map[len(h), len(v)]}.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_prbs">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.apps.ber_dashboard.qsfp_ber_tests.</span></span><span class="sig-name descname"><span class="pre">set_prbs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">boards</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_prbs" title="Link to this definition"></a></dt>
+<dd><p>PRBS-31 checker on all lanes; PRBS-31 (tx=5) or no pattern (tx=0) from all transmitters.
+Control byte 7 is copied to the selected lane, so every lane gets the same value.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_rx_lpm">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.apps.ber_dashboard.qsfp_ber_tests.</span></span><span class="sig-name descname"><span class="pre">set_rx_lpm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">boards</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lpm</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_rx_lpm" title="Link to this definition"></a></dt>
+<dd><p>lpm: True (LPM), False (DFE), or {slot: bool} per board.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_tx">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.apps.ber_dashboard.qsfp_ber_tests.</span></span><span class="sig-name descname"><span class="pre">set_tx</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">boards</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swing</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pre</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">post</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_tx" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.apps.ber_dashboard.qsfp_ber_tests.summarize">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.apps.ber_dashboard.qsfp_ber_tests.</span></span><span class="sig-name descname"><span class="pre">summarize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">res</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.summarize" title="Link to this definition"></a></dt>
+<dd><p>Per (slot, lane): number of 0-error settings and the best setting (swing, pre, post codes).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pychfpga.apps.ber_dashboard.qsfp_ber_tests.sweep_tx">
+<span class="sig-prename descclassname"><span class="pre">pychfpga.apps.ber_dashboard.qsfp_ber_tests.</span></span><span class="sig-name descname"><span class="pre">sweep_tx</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">boards</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swings</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pres</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">posts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dwell</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lpm</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;function</span> <span class="pre">_noop&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;function</span> <span class="pre">_noop&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">partial</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;function</span> <span class="pre">_noop&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;function</span> <span class="pre">_noop&gt;</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.apps.ber_dashboard.qsfp_ber_tests.sweep_tx" title="Link to this definition"></a></dt>
+<dd><p>FPGA TX grid on every board at once. Returns dict(swings, pres, posts, lpm, dwell,
+ber={(slot, lane): array[len(swings), len(pres), len(posts)]}, zero=…, locked=…, temps=[…]).
+partial(result) is called after each TX pre-cursor row.</p>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.apps.ber_dashboard.paths.html" class="btn btn-neutral float-left" title="paths.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.apps.ber_dashboard.state.html" class="btn btn-neutral float-right" title="state.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

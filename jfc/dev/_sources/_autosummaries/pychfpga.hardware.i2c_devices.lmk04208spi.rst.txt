@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`lmk04208spi.py <pychfpga.hardware.i2c_devices.lmk04208spi>`
+====================================================================
+
+
+.. currentmodule:: pychfpga.hardware.i2c_devices
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.i2c_devices,
+..    | FULLNAME=pychfpga.hardware.i2c_devices.lmk04208spi,
+..    | name==lmk04208spi
+..    | modules = 
+..    | classes = ['lmk04208spi']
+
+.. automodule:: pychfpga.hardware.i2c_devices.lmk04208spi
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         lmk04208spi
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: lmk04208spi
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

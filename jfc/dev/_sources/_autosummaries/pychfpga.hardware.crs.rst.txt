@@ -1,0 +1,92 @@
+
+
+
+
+
+:py:mod:`crs/ <pychfpga.hardware.crs>`
+======================================
+
+
+.. currentmodule:: pychfpga.hardware
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware,
+..    | FULLNAME=pychfpga.hardware.crs,
+..    | name==crs
+..    | modules = ['crs', 'crs_beacon', 'crs_bp', 'crs_discovery', 'discover', 'netconsole_loads', 'netconsole_xmodem']
+..    | classes = []
+
+.. automodule:: pychfpga.hardware.crs
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~crs
+         ~crs_beacon
+         ~crs_bp
+         ~crs_discovery
+         ~discover
+         ~netconsole_loads
+         ~netconsole_xmodem
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

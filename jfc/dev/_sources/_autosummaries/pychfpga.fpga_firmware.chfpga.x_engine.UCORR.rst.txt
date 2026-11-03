@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`UCORR.py <pychfpga.fpga_firmware.chfpga.x_engine.UCORR>`
+=================================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware.chfpga.x_engine
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware.chfpga.x_engine,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga.x_engine.UCORR,
+..    | name==UCORR
+..    | modules = 
+..    | classes = ['UCORR']
+
+.. automodule:: pychfpga.fpga_firmware.chfpga.x_engine.UCORR
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         UCORR
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: UCORR
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

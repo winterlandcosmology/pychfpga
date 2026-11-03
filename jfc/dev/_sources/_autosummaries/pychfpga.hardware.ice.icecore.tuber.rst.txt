@@ -1,0 +1,187 @@
+
+
+
+
+
+:py:mod:`tuber.py <pychfpga.hardware.ice.icecore.tuber>`
+========================================================
+
+
+.. currentmodule:: pychfpga.hardware.ice.icecore
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.ice.icecore,
+..    | FULLNAME=pychfpga.hardware.ice.icecore.tuber,
+..    | name==tuber
+..    | modules = 
+..    | classes = ['Context', 'TuberCategory', 'TuberObject', 'TuberResult']
+
+.. automodule:: pychfpga.hardware.ice.icecore.tuber
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Module exceptions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         TuberError
+         TuberNetworkError
+         TuberRemoteError
+         TuberStateError
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         run_async
+         sync_wrap
+         valid_dynamic_attr
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         Context
+         TuberCategory
+         TuberObject
+         TuberResult
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+----
+
+.. rubric:: Exceptions
+
+
+.. autoexception:: TuberError
+
+
+.. autoexception:: TuberNetworkError
+
+
+.. autoexception:: TuberRemoteError
+
+
+.. autoexception:: TuberStateError
+
+
+----
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: run_async
+
+
+.. autofunction:: sync_wrap
+
+
+.. autofunction:: valid_dynamic_attr
+
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: Context
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: TuberCategory
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: TuberObject
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
+.. autoclass:: TuberResult
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

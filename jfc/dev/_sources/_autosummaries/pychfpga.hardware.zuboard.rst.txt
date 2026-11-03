@@ -1,0 +1,86 @@
+
+
+
+
+
+:py:mod:`zuboard/ <pychfpga.hardware.zuboard>`
+==============================================
+
+
+.. currentmodule:: pychfpga.hardware
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware,
+..    | FULLNAME=pychfpga.hardware.zuboard,
+..    | name==zuboard
+..    | modules = ['zuboard']
+..    | classes = []
+
+.. automodule:: pychfpga.hardware.zuboard
+
+   .. *** Insert submodule summary
+
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~zuboard
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

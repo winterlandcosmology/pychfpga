@@ -1,0 +1,124 @@
+
+
+
+
+
+:py:mod:`crs_beacon.py <pychfpga.hardware.crs.crs_beacon>`
+==========================================================
+
+
+.. currentmodule:: pychfpga.hardware.crs
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.crs,
+..    | FULLNAME=pychfpga.hardware.crs.crs_beacon,
+..    | name==crs_beacon
+..    | modules = 
+..    | classes = ['CRSBeacon']
+
+.. automodule:: pychfpga.hardware.crs.crs_beacon
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         parse_fwreq_datagram
+         request_beacon
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         CRSBeacon
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: parse_fwreq_datagram
+
+
+.. autofunction:: request_beacon
+
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: CRSBeacon
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

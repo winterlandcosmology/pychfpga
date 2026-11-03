@@ -1,0 +1,1672 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>tcpipe.py &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="udp.py" href="pychfpga.hardware.interfaces.udp.html" />
+    <link rel="prev" title="ipmi_fru.py" href="pychfpga.hardware.interfaces.ipmi_fru.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../howto/quick_start.html">Quick start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ssh_keys.html">SSH keys</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/setup_python.html">Setup Python for pychfpga</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/networking.html">Accessing remote servers via ssh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/hardware_setup.html">Configuring FPGA hardware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/ber_dashboard.html">BER test dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/takeData.html">Take Primative Data from IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/server_operation.html">Server-based operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/pocket_correlator.html">Pocket correlator guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/chfpga_state.html">chFPGA State Tree</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/scaler_test.html">Scaler firmware tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/testing.html">Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/deploy.html">Code development and versioning guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../howto/common_issues.html">Common errors</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/arm_firmware.html">Arm Firmware</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.Agilent_N5764A.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">Agilent_N5764A/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crate.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.crs.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.hardware_map.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware_map.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.i2c_devices.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">i2c_devices/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.ice.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ice/</span></code></a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="pychfpga.hardware.interfaces.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">interfaces/</span></code></a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.interfaces.bsb_mmi.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">bsb_mmi.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.interfaces.fpga_mmi.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_mmi.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.interfaces.i2c_interface.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">i2c_interface.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.interfaces.ipmi_fru.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ipmi_fru.py</span></code></a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tcpipe.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.interfaces.udp.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">udp.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.mezzanine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mezzanine.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.motherboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">motherboard.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.supported_hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">supported_hardware.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.zcu111.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zcu111/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.zuboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zuboard/</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/networking_configuration.html">Networking configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="pychfpga.hardware.interfaces.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">interfaces/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tcpipe.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/pychfpga.hardware.interfaces.tcpipe.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="tcpipe-py">
+<h1><a class="reference internal" href="#module-pychfpga.hardware.interfaces.tcpipe" title="pychfpga.hardware.interfaces.tcpipe"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tcpipe.py</span></code></a><a class="headerlink" href="#tcpipe-py" title="Link to this heading"></a></h1>
+<span class="target" id="module-pychfpga.hardware.interfaces.tcpipe"></span><div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe" title="pychfpga.hardware.interfaces.tcpipe.TCPipe"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TCPipe</span></code></a></p></td>
+<td><p>Interface to the TCP-based command and control protocol to the FPGA board.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI" title="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI</span></code></a></p></td>
+<td><p>Provides read/write functions for accessing the FPGA's memory-map registers through a Byte-serial Bus interface through the TCPipe interface.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C" title="pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TCPipe_I2C</span></code></a></p></td>
+<td><p>Provides an I2C-over-TCPIPE interface using the standardized I2C object API.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI" title="pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TCPipe_SPI</span></code></a></p></td>
+<td><p>Provides an SPI-over-TCPIPE interface using the standardized SPI object API.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.hardware.interfaces.tcpipe.</span></span><span class="sig-name descname"><span class="pre">TCPipe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hostname</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_performance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Interface to the TCP-based command and control protocol to the FPGA board.</p>
+<dl class="simple">
+<dt>This interface is meant to be very simple and lightweight. It provides :</dt><dd><ul class="simple">
+<li><p>FPGA bitstream programming</p></li>
+<li><p>Access to the ARM and FPGA firmware via AXI memory-mapped read/writes</p></li>
+<li><p>Access to the FPGA firmware using a lightweight Byte-serial Bus protocol</p></li>
+<li><p>Basic I2C read-write commands to access the board’s hardware</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.ADC_TILE">
+<span class="sig-name descname"><span class="pre">ADC_TILE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.ADC_TILE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.BACKPLANE_IPMI_FLAG_PRESENT">
+<span class="sig-name descname"><span class="pre">BACKPLANE_IPMI_FLAG_PRESENT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.BACKPLANE_IPMI_FLAG_PRESENT" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.BACKPLANE_IPMI_REPLY_LEN">
+<span class="sig-name descname"><span class="pre">BACKPLANE_IPMI_REPLY_LEN</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">324</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.BACKPLANE_IPMI_REPLY_LEN" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.CONNECT_RETRY_INTERVAL_S">
+<span class="sig-name descname"><span class="pre">CONNECT_RETRY_INTERVAL_S</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1.0</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.CONNECT_RETRY_INTERVAL_S" title="Link to this definition"></a></dt>
+<dd><p>Retry TCP connect while the board is still booting (port 7 comes up early).</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.CONNECT_RETRY_MAX_S">
+<span class="sig-name descname"><span class="pre">CONNECT_RETRY_MAX_S</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">60.0</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.CONNECT_RETRY_MAX_S" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.CORE_REG_UDP_DATA_PORT">
+<span class="sig-name descname"><span class="pre">CORE_REG_UDP_DATA_PORT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.CORE_REG_UDP_DATA_PORT" title="Link to this definition"></a></dt>
+<dd><p>Deprecated alias for <cite>_UDP_DATA_PORT_REG</cite> (prefer <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.set_local_data_port_number" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.set_local_data_port_number"><code class="xref py py-meth docutils literal notranslate"><span class="pre">set_local_data_port_number()</span></code></a>).</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.DAC_TILE">
+<span class="sig-name descname"><span class="pre">DAC_TILE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.DAC_TILE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.DEFAULT_TCP_DATA_PORT">
+<span class="sig-name descname"><span class="pre">DEFAULT_TCP_DATA_PORT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">41002</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.DEFAULT_TCP_DATA_PORT" title="Link to this definition"></a></dt>
+<dd><p>Fixed board-side TCP data listen port (matches firmware <code class="docutils literal notranslate"><span class="pre">DATA_TCP_DEFAULT_PORT</span></code>).</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.FWDISCOVER_PORT">
+<span class="sig-name descname"><span class="pre">FWDISCOVER_PORT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">9875</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.FWDISCOVER_PORT" title="Link to this definition"></a></dt>
+<dd><p>UDP discovery / REBOOT port (matches firmware <code class="docutils literal notranslate"><span class="pre">TCPIPE_FWDISCOVER_PORT</span></code>).</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.I2C_ERROR_CODES">
+<span class="sig-name descname"><span class="pre">I2C_ERROR_CODES</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{1:</span> <span class="pre">'DONE',</span> <span class="pre">2:</span> <span class="pre">'Not</span> <span class="pre">started',</span> <span class="pre">4:</span> <span class="pre">'Timeout',</span> <span class="pre">8:</span> <span class="pre">'Arb</span> <span class="pre">Lost',</span> <span class="pre">16:</span> <span class="pre">'Nack',</span> <span class="pre">32:</span> <span class="pre">'Rx</span> <span class="pre">Overflow',</span> <span class="pre">64:</span> <span class="pre">'Tx</span> <span class="pre">Overflow',</span> <span class="pre">128:</span> <span class="pre">'Rx</span> <span class="pre">Underflow'}</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.I2C_ERROR_CODES" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.IPMI_FIELD_WIRE_LEN">
+<span class="sig-name descname"><span class="pre">IPMI_FIELD_WIRE_LEN</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">32</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.IPMI_FIELD_WIRE_LEN" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.IPMI_RPC_VERSION">
+<span class="sig-name descname"><span class="pre">IPMI_RPC_VERSION</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.IPMI_RPC_VERSION" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.MOTHERBOARD_IPMI_REPLY_LEN">
+<span class="sig-name descname"><span class="pre">MOTHERBOARD_IPMI_REPLY_LEN</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">161</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.MOTHERBOARD_IPMI_REPLY_LEN" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.OLED_DRAW_TEXT_STATUS">
+<span class="sig-name descname"><span class="pre">OLED_DRAW_TEXT_STATUS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{0:</span> <span class="pre">'Success',</span> <span class="pre">1:</span> <span class="pre">'Bad</span> <span class="pre">arguments',</span> <span class="pre">2:</span> <span class="pre">'OLED</span> <span class="pre">not</span> <span class="pre">initialized',</span> <span class="pre">3:</span> <span class="pre">'I2C/mux</span> <span class="pre">error'}</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.OLED_DRAW_TEXT_STATUS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.OLED_SET_FIRMWARE_LABEL_STATUS">
+<span class="sig-name descname"><span class="pre">OLED_SET_FIRMWARE_LABEL_STATUS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{0:</span> <span class="pre">'Success',</span> <span class="pre">1:</span> <span class="pre">'Argument</span> <span class="pre">too</span> <span class="pre">long'}</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.OLED_SET_FIRMWARE_LABEL_STATUS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.REBOOT_PAYLOAD">
+<span class="sig-name descname"><span class="pre">REBOOT_PAYLOAD</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">b'REBOOT'</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.REBOOT_PAYLOAD" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_CAL">
+<span class="sig-name descname"><span class="pre">RFDC_STATE_CAL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">11</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_CAL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_CLK_DET">
+<span class="sig-name descname"><span class="pre">RFDC_STATE_CLK_DET</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">6</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_CLK_DET" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_FULL">
+<span class="sig-name descname"><span class="pre">RFDC_STATE_FULL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">15</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_FULL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_OFF">
+<span class="sig-name descname"><span class="pre">RFDC_STATE_OFF</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_OFF" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_PWRUP">
+<span class="sig-name descname"><span class="pre">RFDC_STATE_PWRUP</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_PWRUP" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_SHUTDOWN">
+<span class="sig-name descname"><span class="pre">RFDC_STATE_SHUTDOWN</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_SHUTDOWN" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_DYNAMIC_PLL_CONFIG">
+<span class="sig-name descname"><span class="pre">RPC_ADC_DYNAMIC_PLL_CONFIG</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">40</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_DYNAMIC_PLL_CONFIG" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_BLOCK_STATUS">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_BLOCK_STATUS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">18</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_BLOCK_STATUS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CALIBRATION_MODE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_CALIBRATION_MODE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">42</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CALIBRATION_MODE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CAL_COEFFICIENTS">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_CAL_COEFFICIENTS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">46</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CAL_COEFFICIENTS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CAL_FREEZE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_CAL_FREEZE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">44</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CAL_FREEZE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CLK_DISTRIBUTION">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_CLK_DISTRIBUTION</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">50</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CLK_DISTRIBUTION" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CLOCK_SOURCE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_CLOCK_SOURCE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">37</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CLOCK_SOURCE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_COARSE_DELAY">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_COARSE_DELAY</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">34</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_COARSE_DELAY" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_DATAPATH_MODE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_DATAPATH_MODE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">56</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_DATAPATH_MODE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_DECIMATION_FACTOR">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_DECIMATION_FACTOR</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">26</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_DECIMATION_FACTOR" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_DITHER">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_DITHER</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">36</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_DITHER" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_DSA">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_DSA</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">30</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_DSA" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_FIFO_STATUS">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_FIFO_STATUS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">20</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_FIFO_STATUS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_IMR_PASS_MODE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_IMR_PASS_MODE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">58</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_IMR_PASS_MODE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_IP_STATUS">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_IP_STATUS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">17</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_IP_STATUS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_MIXER_SETTINGS">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_MIXER_SETTINGS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">22</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_MIXER_SETTINGS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_NYQUIST_ZONE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_NYQUIST_ZONE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">28</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_NYQUIST_ZONE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_PLL_CONFIG">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_PLL_CONFIG</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">39</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_PLL_CONFIG" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_PLL_LOCK_STATUS">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_PLL_LOCK_STATUS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">38</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_PLL_LOCK_STATUS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_PWR_MODE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_PWR_MODE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">60</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_PWR_MODE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_QMC_SETTINGS">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_QMC_SETTINGS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">32</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_QMC_SETTINGS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_SIGNAL_DETECTOR">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_SIGNAL_DETECTOR</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">48</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_SIGNAL_DETECTOR" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_SIGNAL_DETECTOR_STATUS">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_SIGNAL_DETECTOR_STATUS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">61</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_SIGNAL_DETECTOR_STATUS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_THRESHOLD_SETTINGS">
+<span class="sig-name descname"><span class="pre">RPC_ADC_GET_THRESHOLD_SETTINGS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">52</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_THRESHOLD_SETTINGS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_RERUN_FG_CAL">
+<span class="sig-name descname"><span class="pre">RPC_ADC_RERUN_FG_CAL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">64</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_RERUN_FG_CAL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_RESET">
+<span class="sig-name descname"><span class="pre">RPC_ADC_RESET</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">15</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_RESET" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_RESET_NCO_PHASE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_RESET_NCO_PHASE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">23</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_RESET_NCO_PHASE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SETUP_FIFO">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SETUP_FIFO</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">19</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SETUP_FIFO" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_CALIBRATION_MODE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_CALIBRATION_MODE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">41</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_CALIBRATION_MODE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_CAL_COEFFICIENTS">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_CAL_COEFFICIENTS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">45</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_CAL_COEFFICIENTS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_CAL_FREEZE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_CAL_FREEZE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">43</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_CAL_FREEZE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_CLK_DISTRIBUTION">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_CLK_DISTRIBUTION</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">49</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_CLK_DISTRIBUTION" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_COARSE_DELAY">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_COARSE_DELAY</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">33</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_COARSE_DELAY" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_DATAPATH_MODE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_DATAPATH_MODE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">55</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_DATAPATH_MODE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_DECIMATION_FACTOR">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_DECIMATION_FACTOR</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">25</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_DECIMATION_FACTOR" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_DITHER">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_DITHER</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">35</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_DITHER" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_DSA">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_DSA</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">29</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_DSA" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_IMR_PASS_MODE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_IMR_PASS_MODE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">57</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_IMR_PASS_MODE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_MIXER_SETTINGS">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_MIXER_SETTINGS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">21</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_MIXER_SETTINGS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_NYQUIST_ZONE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_NYQUIST_ZONE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">27</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_NYQUIST_ZONE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_PWR_MODE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_PWR_MODE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">59</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_PWR_MODE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_QMC_SETTINGS">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_QMC_SETTINGS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">31</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_QMC_SETTINGS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_SIGNAL_DETECTOR">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_SIGNAL_DETECTOR</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">47</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_SIGNAL_DETECTOR" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_THRESHOLD_CLR_MODE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_THRESHOLD_CLR_MODE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">53</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_THRESHOLD_CLR_MODE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_THRESHOLD_SETTINGS">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SET_THRESHOLD_SETTINGS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">51</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_THRESHOLD_SETTINGS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SHUTDOWN">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SHUTDOWN</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">14</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SHUTDOWN" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_STARTUP">
+<span class="sig-name descname"><span class="pre">RPC_ADC_STARTUP</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">13</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_STARTUP" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SYNC">
+<span class="sig-name descname"><span class="pre">RPC_ADC_SYNC</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">7</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SYNC" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_THRESHOLD_STICKY_CLEAR">
+<span class="sig-name descname"><span class="pre">RPC_ADC_THRESHOLD_STICKY_CLEAR</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">54</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_THRESHOLD_STICKY_CLEAR" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_UPDATE_EVENT">
+<span class="sig-name descname"><span class="pre">RPC_ADC_UPDATE_EVENT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">24</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_UPDATE_EVENT" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_WAIT_FOR_STATE">
+<span class="sig-name descname"><span class="pre">RPC_ADC_WAIT_FOR_STATE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">16</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_WAIT_FOR_STATE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_BSB_BATCH_WRITE">
+<span class="sig-name descname"><span class="pre">RPC_BSB_BATCH_WRITE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">11</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_BSB_BATCH_WRITE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_BSB_WRITE_READ">
+<span class="sig-name descname"><span class="pre">RPC_BSB_WRITE_READ</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_BSB_WRITE_READ" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_CORE_REG_READ">
+<span class="sig-name descname"><span class="pre">RPC_CORE_REG_READ</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">5</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_CORE_REG_READ" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_CORE_REG_WRITE">
+<span class="sig-name descname"><span class="pre">RPC_CORE_REG_WRITE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">6</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_CORE_REG_WRITE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_DRAIN_MAX_S">
+<span class="sig-name descname"><span class="pre">RPC_DRAIN_MAX_S</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1.0</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_DRAIN_MAX_S" title="Link to this definition"></a></dt>
+<dd><p>Cap on post-timeout drain time (late replies plus quiet period).</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_DRAIN_QUIET_S">
+<span class="sig-name descname"><span class="pre">RPC_DRAIN_QUIET_S</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.2</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_DRAIN_QUIET_S" title="Link to this definition"></a></dt>
+<dd><p>After an RPC timeout, wait this long with no RX before treating the stream as idle.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_GET_BACKPLANE_IPMI_INFO">
+<span class="sig-name descname"><span class="pre">RPC_GET_BACKPLANE_IPMI_INFO</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">63</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_GET_BACKPLANE_IPMI_INFO" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_GET_MOTHERBOARD_IPMI_INFO">
+<span class="sig-name descname"><span class="pre">RPC_GET_MOTHERBOARD_IPMI_INFO</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">62</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_GET_MOTHERBOARD_IPMI_INFO" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_GET_RPC_FUNCTIONS">
+<span class="sig-name descname"><span class="pre">RPC_GET_RPC_FUNCTIONS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_GET_RPC_FUNCTIONS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_IIC_WRITE_READ">
+<span class="sig-name descname"><span class="pre">RPC_IIC_WRITE_READ</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_IIC_WRITE_READ" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_NAMES">
+<span class="sig-name descname"><span class="pre">RPC_NAMES</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{0:</span> <span class="pre">'bsb_write_read',</span> <span class="pre">1:</span> <span class="pre">'get_rpc_functions',</span> <span class="pre">2:</span> <span class="pre">'iic_write_read',</span> <span class="pre">4:</span> <span class="pre">'spi_write_read',</span> <span class="pre">5:</span> <span class="pre">'read_reg',</span> <span class="pre">6:</span> <span class="pre">'write_reg',</span> <span class="pre">7:</span> <span class="pre">'adc_sync',</span> <span class="pre">8:</span> <span class="pre">'oled_draw_xbm',</span> <span class="pre">9:</span> <span class="pre">'oled_set_firmware_label',</span> <span class="pre">10:</span> <span class="pre">'oled_draw_text',</span> <span class="pre">11:</span> <span class="pre">'bsb_batch_write',</span> <span class="pre">12:</span> <span class="pre">'spi_batch_write',</span> <span class="pre">13:</span> <span class="pre">'adc_startup',</span> <span class="pre">14:</span> <span class="pre">'adc_shutdown',</span> <span class="pre">15:</span> <span class="pre">'adc_reset',</span> <span class="pre">16:</span> <span class="pre">'adc_wait_for_state',</span> <span class="pre">17:</span> <span class="pre">'adc_get_ip_status',</span> <span class="pre">18:</span> <span class="pre">'adc_get_block_status',</span> <span class="pre">19:</span> <span class="pre">'adc_setup_fifo',</span> <span class="pre">20:</span> <span class="pre">'adc_get_fifo_status',</span> <span class="pre">21:</span> <span class="pre">'adc_set_mixer_settings',</span> <span class="pre">22:</span> <span class="pre">'adc_get_mixer_settings',</span> <span class="pre">23:</span> <span class="pre">'adc_reset_nco_phase',</span> <span class="pre">24:</span> <span class="pre">'adc_update_event',</span> <span class="pre">25:</span> <span class="pre">'adc_set_decimation_factor',</span> <span class="pre">26:</span> <span class="pre">'adc_get_decimation_factor',</span> <span class="pre">27:</span> <span class="pre">'adc_set_nyquist_zone',</span> <span class="pre">28:</span> <span class="pre">'adc_get_nyquist_zone',</span> <span class="pre">29:</span> <span class="pre">'adc_set_dsa',</span> <span class="pre">30:</span> <span class="pre">'adc_get_dsa',</span> <span class="pre">31:</span> <span class="pre">'adc_set_qmc_settings',</span> <span class="pre">32:</span> <span class="pre">'adc_get_qmc_settings',</span> <span class="pre">33:</span> <span class="pre">'adc_set_coarse_delay',</span> <span class="pre">34:</span> <span class="pre">'adc_get_coarse_delay',</span> <span class="pre">35:</span> <span class="pre">'adc_set_dither',</span> <span class="pre">36:</span> <span class="pre">'adc_get_dither',</span> <span class="pre">37:</span> <span class="pre">'adc_get_clock_source',</span> <span class="pre">38:</span> <span class="pre">'adc_get_pll_lock_status',</span> <span class="pre">39:</span> <span class="pre">'adc_get_pll_config',</span> <span class="pre">40:</span> <span class="pre">'adc_dynamic_pll_config',</span> <span class="pre">41:</span> <span class="pre">'adc_set_calibration_mode',</span> <span class="pre">42:</span> <span class="pre">'adc_get_calibration_mode',</span> <span class="pre">43:</span> <span class="pre">'adc_set_cal_freeze',</span> <span class="pre">44:</span> <span class="pre">'adc_get_cal_freeze',</span> <span class="pre">45:</span> <span class="pre">'adc_set_cal_coefficients',</span> <span class="pre">46:</span> <span class="pre">'adc_get_cal_coefficients',</span> <span class="pre">47:</span> <span class="pre">'adc_set_signal_detector',</span> <span class="pre">48:</span> <span class="pre">'adc_get_signal_detector',</span> <span class="pre">49:</span> <span class="pre">'adc_set_clk_distribution',</span> <span class="pre">50:</span> <span class="pre">'adc_get_clk_distribution',</span> <span class="pre">51:</span> <span class="pre">'adc_set_threshold_settings',</span> <span class="pre">52:</span> <span class="pre">'adc_get_threshold_settings',</span> <span class="pre">53:</span> <span class="pre">'adc_set_threshold_clr_mode',</span> <span class="pre">54:</span> <span class="pre">'adc_threshold_sticky_clear',</span> <span class="pre">55:</span> <span class="pre">'adc_set_datapath_mode',</span> <span class="pre">56:</span> <span class="pre">'adc_get_datapath_mode',</span> <span class="pre">57:</span> <span class="pre">'adc_set_imr_pass_mode',</span> <span class="pre">58:</span> <span class="pre">'adc_get_imr_pass_mode',</span> <span class="pre">59:</span> <span class="pre">'adc_set_pwr_mode',</span> <span class="pre">60:</span> <span class="pre">'adc_get_pwr_mode',</span> <span class="pre">61:</span> <span class="pre">'adc_get_signal_detector_status',</span> <span class="pre">62:</span> <span class="pre">'get_motherboard_ipmi_info',</span> <span class="pre">63:</span> <span class="pre">'get_backplane_ipmi_info',</span> <span class="pre">64:</span> <span class="pre">'adc_rerun_fg_cal'}</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_NAMES" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_OLED_DRAW_TEXT">
+<span class="sig-name descname"><span class="pre">RPC_OLED_DRAW_TEXT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">10</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_OLED_DRAW_TEXT" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_OLED_DRAW_XBM">
+<span class="sig-name descname"><span class="pre">RPC_OLED_DRAW_XBM</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">8</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_OLED_DRAW_XBM" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_OLED_SET_FIRMWARE_LABEL">
+<span class="sig-name descname"><span class="pre">RPC_OLED_SET_FIRMWARE_LABEL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">9</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_OLED_SET_FIRMWARE_LABEL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_PERF_LOG_INTERVAL">
+<span class="sig-name descname"><span class="pre">RPC_PERF_LOG_INTERVAL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">500</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_PERF_LOG_INTERVAL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_PREFIX">
+<span class="sig-name descname"><span class="pre">RPC_PREFIX</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">204</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_PREFIX" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_SPI_BATCH_WRITE">
+<span class="sig-name descname"><span class="pre">RPC_SPI_BATCH_WRITE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">12</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_SPI_BATCH_WRITE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_SPI_WRITE_READ">
+<span class="sig-name descname"><span class="pre">RPC_SPI_WRITE_READ</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">4</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_SPI_WRITE_READ" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hostname</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log_performance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_dynamic_pll_config">
+<span class="sig-name descname"><span class="pre">adc_dynamic_pll_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">source</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ref_clk_freq</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sampling_rate</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tile_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_dynamic_pll_config" title="Link to this definition"></a></dt>
+<dd><p>Configure a tile PLL dynamically.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_block_status">
+<span class="sig-name descname"><span class="pre">adc_get_block_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_block_status" title="Link to this definition"></a></dt>
+<dd><p>Return RFDC block status.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_cal_coefficients">
+<span class="sig-name descname"><span class="pre">adc_get_cal_coefficients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">calibration_block</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_cal_coefficients" title="Link to this definition"></a></dt>
+<dd><p>Return ADC calibration coefficients.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_cal_freeze">
+<span class="sig-name descname"><span class="pre">adc_get_cal_freeze</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_cal_freeze" title="Link to this definition"></a></dt>
+<dd><p>Return ADC calibration freeze settings.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_calibration_mode">
+<span class="sig-name descname"><span class="pre">adc_get_calibration_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_calibration_mode" title="Link to this definition"></a></dt>
+<dd><p>Return ADC calibration mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_clk_distribution">
+<span class="sig-name descname"><span class="pre">adc_get_clk_distribution</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_clk_distribution" title="Link to this definition"></a></dt>
+<dd><p>Return the eight RFDC clock-distribution entries (Gen3+).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_clock_source">
+<span class="sig-name descname"><span class="pre">adc_get_clock_source</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tile_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_clock_source" title="Link to this definition"></a></dt>
+<dd><p>Return tile clock source.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_coarse_delay">
+<span class="sig-name descname"><span class="pre">adc_get_coarse_delay</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_coarse_delay" title="Link to this definition"></a></dt>
+<dd><p>Return coarse delay settings.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_datapath_mode">
+<span class="sig-name descname"><span class="pre">adc_get_datapath_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_datapath_mode" title="Link to this definition"></a></dt>
+<dd><p>Return DAC datapath mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_decimation_factor">
+<span class="sig-name descname"><span class="pre">adc_get_decimation_factor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_decimation_factor" title="Link to this definition"></a></dt>
+<dd><p>Return ADC decimation factor.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_dither">
+<span class="sig-name descname"><span class="pre">adc_get_dither</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_dither" title="Link to this definition"></a></dt>
+<dd><p>Return ADC dither mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_dsa">
+<span class="sig-name descname"><span class="pre">adc_get_dsa</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_dsa" title="Link to this definition"></a></dt>
+<dd><p>Return ADC DSA settings.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_fifo_status">
+<span class="sig-name descname"><span class="pre">adc_get_fifo_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tile_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_fifo_status" title="Link to this definition"></a></dt>
+<dd><p>Return whether the RFDC FIFO is enabled.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_imr_pass_mode">
+<span class="sig-name descname"><span class="pre">adc_get_imr_pass_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_imr_pass_mode" title="Link to this definition"></a></dt>
+<dd><p>Return DAC IMR pass mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_ip_status">
+<span class="sig-name descname"><span class="pre">adc_get_ip_status</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_ip_status" title="Link to this definition"></a></dt>
+<dd><p>Return RFDC IP and per-tile status.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_mixer_settings">
+<span class="sig-name descname"><span class="pre">adc_get_mixer_settings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_mixer_settings" title="Link to this definition"></a></dt>
+<dd><p>Return mixer / NCO settings.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_nyquist_zone">
+<span class="sig-name descname"><span class="pre">adc_get_nyquist_zone</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_nyquist_zone" title="Link to this definition"></a></dt>
+<dd><p>Return Nyquist zone.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_pll_config">
+<span class="sig-name descname"><span class="pre">adc_get_pll_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tile_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_pll_config" title="Link to this definition"></a></dt>
+<dd><p>Return tile PLL configuration.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_pll_lock_status">
+<span class="sig-name descname"><span class="pre">adc_get_pll_lock_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tile_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_pll_lock_status" title="Link to this definition"></a></dt>
+<dd><p>Return tile PLL lock status.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_pwr_mode">
+<span class="sig-name descname"><span class="pre">adc_get_pwr_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_pwr_mode" title="Link to this definition"></a></dt>
+<dd><p>Return RFDC power mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_qmc_settings">
+<span class="sig-name descname"><span class="pre">adc_get_qmc_settings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_qmc_settings" title="Link to this definition"></a></dt>
+<dd><p>Return QMC settings.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_signal_detector">
+<span class="sig-name descname"><span class="pre">adc_get_signal_detector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_signal_detector" title="Link to this definition"></a></dt>
+<dd><p>Return ADC signal detector settings (Gen3+).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_signal_detector_status">
+<span class="sig-name descname"><span class="pre">adc_get_signal_detector_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_signal_detector_status" title="Link to this definition"></a></dt>
+<dd><p>Return live ADC signal detector magnitude and threshold compare (Gen3+).</p>
+<p>On Dual/HS ADCs the PL <code class="docutils literal notranslate"><span class="pre">signal_detect</span></code> pin is the AND of both interleaved
+slices. <code class="docutils literal notranslate"><span class="pre">magnitude</span></code> is this user block; <code class="docutils literal notranslate"><span class="pre">pair_magnitude</span></code> is the companion
+slice. <code class="docutils literal notranslate"><span class="pre">pl_signal_detect</span></code> matches that AND (instant compare, not debounce).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_threshold_settings">
+<span class="sig-name descname"><span class="pre">adc_get_threshold_settings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_threshold_settings" title="Link to this definition"></a></dt>
+<dd><p>Return ADC threshold settings.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_rerun_fg_cal">
+<span class="sig-name descname"><span class="pre">adc_rerun_fg_cal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_rerun_fg_cal" title="Link to this definition"></a></dt>
+<dd><p>Rerun ADC foreground calibration (<code class="docutils literal notranslate"><span class="pre">XRFdc_CustomStartUp</span></code> CAL → FULL).</p>
+<p><code class="docutils literal notranslate"><span class="pre">tile_id=-1</span></code> runs all ADC tiles 0–3. Default states match Xilinx FG cal rerun.</p>
+<p>Call only after RFDC tiles are running (e.g. after <code class="docutils literal notranslate"><span class="pre">adc_sync()</span></code>), not at
+bitstream load.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_reset">
+<span class="sig-name descname"><span class="pre">adc_reset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tile_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_reset" title="Link to this definition"></a></dt>
+<dd><p>Reset an RFDC tile. <code class="docutils literal notranslate"><span class="pre">tile_id=-1</span></code> selects all tiles.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_reset_nco_phase">
+<span class="sig-name descname"><span class="pre">adc_reset_nco_phase</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_reset_nco_phase" title="Link to this definition"></a></dt>
+<dd><p>Reset NCO phase.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_cal_coefficients">
+<span class="sig-name descname"><span class="pre">adc_set_cal_coefficients</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">calibration_block</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">coeff</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_cal_coefficients" title="Link to this definition"></a></dt>
+<dd><p>Set ADC calibration coefficients (8 uint32 values).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_cal_freeze">
+<span class="sig-name descname"><span class="pre">adc_set_cal_freeze</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cal_frozen</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">disable_freeze_pin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">freeze_calibration</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_cal_freeze" title="Link to this definition"></a></dt>
+<dd><p>Set ADC calibration freeze settings.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_calibration_mode">
+<span class="sig-name descname"><span class="pre">adc_set_calibration_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_calibration_mode" title="Link to this definition"></a></dt>
+<dd><p>Set ADC calibration mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_clk_distribution">
+<span class="sig-name descname"><span class="pre">adc_set_clk_distribution</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">settings</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_clk_distribution" title="Link to this definition"></a></dt>
+<dd><p>Set RFDC clock distribution (Gen3+). <code class="docutils literal notranslate"><span class="pre">settings</span></code> matches <code class="docutils literal notranslate"><span class="pre">adc_get_clk_distribution</span></code> entries.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_coarse_delay">
+<span class="sig-name descname"><span class="pre">adc_set_coarse_delay</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">coarse_delay</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event_source</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_coarse_delay" title="Link to this definition"></a></dt>
+<dd><p>Set coarse delay.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_datapath_mode">
+<span class="sig-name descname"><span class="pre">adc_set_datapath_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_datapath_mode" title="Link to this definition"></a></dt>
+<dd><p>Set DAC datapath mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_decimation_factor">
+<span class="sig-name descname"><span class="pre">adc_set_decimation_factor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">factor</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_decimation_factor" title="Link to this definition"></a></dt>
+<dd><p>Set ADC decimation factor.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_dither">
+<span class="sig-name descname"><span class="pre">adc_set_dither</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_dither" title="Link to this definition"></a></dt>
+<dd><p>Set ADC dither mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_dsa">
+<span class="sig-name descname"><span class="pre">adc_set_dsa</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">disable_rts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attenuation</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_dsa" title="Link to this definition"></a></dt>
+<dd><p>Set ADC DSA attenuation.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_imr_pass_mode">
+<span class="sig-name descname"><span class="pre">adc_set_imr_pass_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_imr_pass_mode" title="Link to this definition"></a></dt>
+<dd><p>Set DAC IMR pass mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_mixer_settings">
+<span class="sig-name descname"><span class="pre">adc_set_mixer_settings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">freq</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phase_offset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event_source</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">coarse_mix_freq</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mixer_mode</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fine_mixer_scale</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mixer_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_mixer_settings" title="Link to this definition"></a></dt>
+<dd><p>Set mixer / NCO settings.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_nyquist_zone">
+<span class="sig-name descname"><span class="pre">adc_set_nyquist_zone</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">zone</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_nyquist_zone" title="Link to this definition"></a></dt>
+<dd><p>Set Nyquist zone.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_pwr_mode">
+<span class="sig-name descname"><span class="pre">adc_set_pwr_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">disable_ip_control</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pwr_mode</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_pwr_mode" title="Link to this definition"></a></dt>
+<dd><p>Set RFDC power mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_qmc_settings">
+<span class="sig-name descname"><span class="pre">adc_set_qmc_settings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable_phase</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable_gain</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gain_correction_factor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">phase_correction_factor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset_correction_factor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event_source</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_qmc_settings" title="Link to this definition"></a></dt>
+<dd><p>Set QMC settings.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_signal_detector">
+<span class="sig-name descname"><span class="pre">adc_set_signal_detector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_constant</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flush</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable_integrator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thresh_on_trigger_cnt</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thresh_off_trigger_cnt</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hysteresis_enable</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_signal_detector" title="Link to this definition"></a></dt>
+<dd><p>Set ADC signal detector (Gen3+).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_threshold_clr_mode">
+<span class="sig-name descname"><span class="pre">adc_set_threshold_clr_mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold_to_update</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clr_mode</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_threshold_clr_mode" title="Link to this definition"></a></dt>
+<dd><p>Set ADC threshold clear mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_threshold_settings">
+<span class="sig-name descname"><span class="pre">adc_set_threshold_settings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">update_threshold</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold_mode</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold_avg_val</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold_under_val</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold_over_val</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_threshold_settings" title="Link to this definition"></a></dt>
+<dd><p>Set ADC threshold settings. Mode/avg/under/over are two-element sequences.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_setup_fifo">
+<span class="sig-name descname"><span class="pre">adc_setup_fifo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tile_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_setup_fifo" title="Link to this definition"></a></dt>
+<dd><p>Enable or disable the RFDC FIFO. <code class="docutils literal notranslate"><span class="pre">tile_id=-1</span></code> selects all tiles.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_shutdown">
+<span class="sig-name descname"><span class="pre">adc_shutdown</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tile_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_shutdown" title="Link to this definition"></a></dt>
+<dd><p>Shut down an RFDC tile. <code class="docutils literal notranslate"><span class="pre">tile_id=-1</span></code> selects all tiles.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_startup">
+<span class="sig-name descname"><span class="pre">adc_startup</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tile_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_startup" title="Link to this definition"></a></dt>
+<dd><p>Start up an RFDC tile. <code class="docutils literal notranslate"><span class="pre">tile_id=-1</span></code> selects all tiles.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_sync">
+<span class="sig-name descname"><span class="pre">adc_sync</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_sync" title="Link to this definition"></a></dt>
+<dd><p>Synchronizes the ADCs.</p>
+<p>Parameters: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_threshold_sticky_clear">
+<span class="sig-name descname"><span class="pre">adc_threshold_sticky_clear</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold_to_update</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_threshold_sticky_clear" title="Link to this definition"></a></dt>
+<dd><p>Clear a sticky ADC threshold.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_update_event">
+<span class="sig-name descname"><span class="pre">adc_update_event</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tile_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">event</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_update_event" title="Link to this definition"></a></dt>
+<dd><p>Trigger an RFDC update event.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_wait_for_state">
+<span class="sig-name descname"><span class="pre">adc_wait_for_state</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tile_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_wait_for_state" title="Link to this definition"></a></dt>
+<dd><p>Wait until an RFDC tile reaches <code class="docutils literal notranslate"><span class="pre">state</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.aggregate_commands">
+<span class="sig-name descname"><span class="pre">aggregate_commands</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.aggregate_commands" title="Link to this definition"></a></dt>
+<dd><p>Coalesce write-only BSB MMI transactions until exit, then flush.</p>
+<p>Aggregation is off by default so a lone control write (for example
+<code class="docutils literal notranslate"><span class="pre">UCAP.USER_RESET</span> <span class="pre">=</span> <span class="pre">1</span></code>) is sent immediately. Nesting is counted;
+the queued writes flush when the outermost context exits.</p>
+<p>Application code should use <code class="docutils literal notranslate"><span class="pre">fpga.mmi.aggregate_commands()</span></code> (see
+<a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI" title="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI"><code class="xref py py-class docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI</span></code></a>) rather than calling this on TCPipe directly.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_batch_write">
+<span class="sig-name descname"><span class="pre">bsb_batch_write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">commands</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_batch_write" title="Link to this definition"></a></dt>
+<dd><p>Execute multiple write-only BSB transfers in one <code class="docutils literal notranslate"><span class="pre">bsb_batch_write</span></code> RPC.</p>
+<p>Each command is the same payload as <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_write_read" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_write_read"><code class="xref py py-meth docutils literal notranslate"><span class="pre">bsb_write_read()</span></code></a>. For write-only commands,
+reply bytes are the single RPC status/sequence byte per command (see <code class="docutils literal notranslate"><span class="pre">bsb_write_read</span></code>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>bytes</em> – <code class="docutils literal notranslate"><span class="pre">n</span></code> status bytes (equivalent to the first byte of each individual RPC reply).</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_batch_write_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">bsb_batch_write_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">commands</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_batch_write_async" title="Link to this definition"></a></dt>
+<dd><p>Async variant of <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_batch_write" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_batch_write"><code class="xref py py-meth docutils literal notranslate"><span class="pre">bsb_batch_write()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_write_read">
+<span class="sig-name descname"><span class="pre">bsb_write_read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_write_read" title="Link to this definition"></a></dt>
+<dd><p>Writes <cite>data</cite> to the FPGA firmware Byte-serial bus and return reply.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>bytes</em>) – data to write prior to the read operation</p></li>
+<li><p><strong>read_length</strong> (<em>int</em>) – expected reply size in bytes, including the
+1-byte BSB sequence header. <code class="docutils literal notranslate"><span class="pre">None</span></code> derives it from the
+3-byte BSB command header (reads: <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">+</span> <span class="pre">2**length_code</span></code>;
+writes: <code class="docutils literal notranslate"><span class="pre">1</span></code>) so a split TCP segment cannot desynchronise
+the command stream.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_write_read_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">bsb_write_read_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_write_read_async" title="Link to this definition"></a></dt>
+<dd><p>Async variant of <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_write_read" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_write_read"><code class="xref py py-meth docutils literal notranslate"><span class="pre">bsb_write_read()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.check_tcpipe_version">
+<span class="sig-name descname"><span class="pre">check_tcpipe_version</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.check_tcpipe_version" title="Link to this definition"></a></dt>
+<dd><p>Require RTOS firmware that provides the write-only BSB batch RPC.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.close" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.get_backplane_ipmi_info">
+<span class="sig-name descname"><span class="pre">get_backplane_ipmi_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_backplane_ipmi_info" title="Link to this definition"></a></dt>
+<dd><p>Return segment backplane / crate IPMI cached by TCPipe at boot.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.get_backplane_ipmi_info_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_backplane_ipmi_info_async</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_backplane_ipmi_info_async" title="Link to this definition"></a></dt>
+<dd><p>Async variant of <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_backplane_ipmi_info" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.get_backplane_ipmi_info"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_backplane_ipmi_info()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.get_fpga_bitstream_crc">
+<span class="sig-name descname"><span class="pre">get_fpga_bitstream_crc</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_fpga_bitstream_crc" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.get_local_data_port_number">
+<span class="sig-name descname"><span class="pre">get_local_data_port_number</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_local_data_port_number" title="Link to this definition"></a></dt>
+<dd><p>Return the UDP data-channel destination port (TCPipe processor register, not FPGA core map).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.get_motherboard_ipmi_info">
+<span class="sig-name descname"><span class="pre">get_motherboard_ipmi_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_motherboard_ipmi_info" title="Link to this definition"></a></dt>
+<dd><p>Return motherboard IPMI fields cached by TCPipe at boot (no EEPROM re-read).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.get_motherboard_ipmi_info_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_motherboard_ipmi_info_async</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_motherboard_ipmi_info_async" title="Link to this definition"></a></dt>
+<dd><p>Async variant of <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_motherboard_ipmi_info" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.get_motherboard_ipmi_info"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_motherboard_ipmi_info()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.get_rpc_functions">
+<span class="sig-name descname"><span class="pre">get_rpc_functions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_rpc_functions" title="Link to this definition"></a></dt>
+<dd><p>Fetches the list of functions provided by the platform processor.</p>
+<p>Parameters: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_polled_read">
+<span class="sig-name descname"><span class="pre">i2c_polled_read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_polled_read" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_polled_read_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">i2c_polled_read_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_polled_read_async" title="Link to this definition"></a></dt>
+<dd><p>Async variant of <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_polled_read" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_polled_read"><code class="xref py py-meth docutils literal notranslate"><span class="pre">i2c_polled_read()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_read">
+<span class="sig-name descname"><span class="pre">i2c_read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_read" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_read_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">i2c_read_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_read_async" title="Link to this definition"></a></dt>
+<dd><p>Async variant of <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_read" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_read"><code class="xref py py-meth docutils literal notranslate"><span class="pre">i2c_read()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write">
+<span class="sig-name descname"><span class="pre">i2c_write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write" title="Link to this definition"></a></dt>
+<dd><p>Writes <cite>data</cite> to I2C address <cite>addr</cite>.</p>
+<p>Used for accessing devices such as EEPROMs that require a command or addres be sent in the same transaction before reading from the device.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>int</em>) – bits 6:0 is the I2C address. Bit 7 indiates whether we access IIC bus 0 or 1.</p></li>
+<li><p><strong>data</strong> (<em>bytes</em>) – data to write prior to the read operation</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">i2c_write_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write_async" title="Link to this definition"></a></dt>
+<dd><p>Async variant of <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write"><code class="xref py py-meth docutils literal notranslate"><span class="pre">i2c_write()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write_read">
+<span class="sig-name descname"><span class="pre">i2c_write_read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write_read" title="Link to this definition"></a></dt>
+<dd><p>Writes <cite>data</cite> to I2C address <cite>addr</cite>, perform a restart, and read <cite>read_length</cite> from the same device.</p>
+<p>Used for accessing devices such as EEPROMs that require a command or addres be sent in the same transaction before reading from the device.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>int</em>) – bits 6:0 is the I2C address. Bit 7 indiates whether we access IIC bus 0 or 1.</p></li>
+<li><p><strong>data</strong> (<em>bytes</em>) – data to write prior to the read operation</p></li>
+<li><p><strong>read_length</strong> (<em>int</em>) – number of bytes to read (1-255)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write_read_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">i2c_write_read_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">no_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write_read_async" title="Link to this definition"></a></dt>
+<dd><p>Async variant of <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write_read" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write_read"><code class="xref py py-meth docutils literal notranslate"><span class="pre">i2c_write_read()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.is_fpga_programmed">
+<span class="sig-name descname"><span class="pre">is_fpga_programmed</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.is_fpga_programmed" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_draw_text">
+<span class="sig-name descname"><span class="pre">oled_draw_text</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">text</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rotation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_draw_text" title="Link to this definition"></a></dt>
+<dd><p>Draw text on the RTOS-managed OLED display.</p>
+<p>Coordinates are SSD1306/u8g2 coordinates. <code class="docutils literal notranslate"><span class="pre">rotation</span></code> follows u8g2:
+0 = horizontal, 1 = 90 degrees clockwise, 2 = 180 degrees, 3 = 90 degrees counter-clockwise.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_draw_text_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">oled_draw_text_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">text</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rotation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_draw_text_async" title="Link to this definition"></a></dt>
+<dd><p>Async variant of <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_draw_text" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_draw_text"><code class="xref py py-meth docutils literal notranslate"><span class="pre">oled_draw_text()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_set_firmware_label">
+<span class="sig-name descname"><span class="pre">oled_set_firmware_label</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_set_firmware_label" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_set_firmware_label_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">oled_set_firmware_label_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">label</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_set_firmware_label_async" title="Link to this definition"></a></dt>
+<dd><p>Async variant of <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_set_firmware_label" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_set_firmware_label"><code class="xref py py-meth docutils literal notranslate"><span class="pre">oled_set_firmware_label()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.open_tcpipe_mmi_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">open_tcpipe_mmi_async</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.open_tcpipe_mmi_async" title="Link to this definition"></a></dt>
+<dd><p>Return the TCPipe-backed BSB memory-mapped interface (<code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI</span></code>) for the FPGA.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>TCPipe_BSB_MMI</em> – The TCPipe-backed BSB memory-mapped interface instance.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.opened_sockets">
+<span class="sig-name descname"><span class="pre">opened_sockets</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.opened_sockets" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.print_rpc_functions">
+<span class="sig-name descname"><span class="pre">print_rpc_functions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.print_rpc_functions" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.read_reg">
+<span class="sig-name descname"><span class="pre">read_reg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reg</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.read_reg" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.reboot">
+<span class="sig-name descname"><span class="pre">reboot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.reboot" title="Link to this definition"></a></dt>
+<dd><p>Reboot the board by sending the UDP <code class="docutils literal notranslate"><span class="pre">REBOOT</span></code> command.</p>
+<p>Drops the TCP session without flushing pending RPCs; the peer is
+resetting and will not complete them.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.send_reboot">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">send_reboot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hostname</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.send_reboot" title="Link to this definition"></a></dt>
+<dd><p>Send a UDP <code class="docutils literal notranslate"><span class="pre">REBOOT</span></code> datagram to <code class="docutils literal notranslate"><span class="pre">hostname</span></code>.</p>
+<p>TCPipe listens on the discovery port for a payload whose first token is
+<code class="docutils literal notranslate"><span class="pre">REBOOT</span></code> and then issues PSCI SYSTEM_RESET. There is no reply.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.set_fpga_bitstream_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">set_fpga_bitstream_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">crc</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">40</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.set_fpga_bitstream_async" title="Link to this definition"></a></dt>
+<dd><p>Programs the FPGA with the provided bitstream.</p>
+<p>Uses a non-blocking <code class="docutils literal notranslate"><span class="pre">sock_sendall</span></code> so other boards’ bitstream
+uploads can run concurrently on the same event loop. The socket is
+restored to blocking mode before return so subsequent RPCs are
+unchanged.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> (<em>bytes</em>) – bitstream, without header, uncompressed. Should be 34437356 bytes long for the ZU28.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.set_local_data_port_number">
+<span class="sig-name descname"><span class="pre">set_local_data_port_number</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">port</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.set_local_data_port_number" title="Link to this definition"></a></dt>
+<dd><p>Set the UDP data-channel destination port (TCPipe processor register, not FPGA core map).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_batch_write">
+<span class="sig-name descname"><span class="pre">spi_batch_write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spi_device</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">writes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_batch_write" title="Link to this definition"></a></dt>
+<dd><p>Run multiple SPI write-only segments in one <code class="docutils literal notranslate"><span class="pre">spi_batch_write</span></code> RPC.</p>
+<p>Each element of <code class="docutils literal notranslate"><span class="pre">writes</span></code> is clocked out in a separate chip-select
+assertion (CS deasserts between segments), which is required by devices
+such as the HMC7044.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>spi_device</strong> (<em>int</em>) – SPI port index on the board processor.</p></li>
+<li><p><strong>writes</strong> (<em>list</em><em> of </em><em>bytes</em>) – segments to send, each at most 255 bytes.</p></li>
+<li><p><strong>timeout</strong> (<em>float</em>) – RPC socket timeout in seconds.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ValueError</strong> – if segment count or length limits are exceeded.</p></li>
+<li><p><strong>IOError</strong> – if the board reports a parse error or a failing segment.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_batch_write_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">spi_batch_write_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spi_device</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">writes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_batch_write_async" title="Link to this definition"></a></dt>
+<dd><p>Async variant of <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_batch_write" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_batch_write"><code class="xref py py-meth docutils literal notranslate"><span class="pre">spi_batch_write()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_write_read">
+<span class="sig-name descname"><span class="pre">spi_write_read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spi_device</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_write_read" title="Link to this definition"></a></dt>
+<dd><p>Writes <cite>data</cite> to SPI address <cite>spi_device</cite> while reading the same number of bytes, and return  the last <cite>read_length</cite> bytes transaction.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>spi_device</strong> (<em>int</em>) – SPI device to enable (not implemented).</p></li>
+<li><p><strong>data</strong> (<em>bytes</em>) – data to write during the write phase. <cite>read_length</cite> null bytes will be appended for the read phase.</p></li>
+<li><p><strong>read_length</strong> (<em>int</em>) – number of bytes to read (1-255)</p></li>
+<li><p><strong>timeout</strong> (<em>float</em>) – time before timeout</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>(bytearray)</em> – bytes that have been read</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_write_read_async">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">spi_write_read_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spi_device</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_write_read_async" title="Link to this definition"></a></dt>
+<dd><p>Async variant of <a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_write_read" title="pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_write_read"><code class="xref py py-meth docutils literal notranslate"><span class="pre">spi_write_read()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe.write_reg">
+<span class="sig-name descname"><span class="pre">write_reg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.write_reg" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.hardware.interfaces.tcpipe.</span></span><span class="sig-name descname"><span class="pre">TCPipe_BSB_MMI</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tcpipe</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="pychfpga.hardware.interfaces.bsb_mmi.html#pychfpga.hardware.interfaces.bsb_mmi.BSB_MMI" title="pychfpga.hardware.interfaces.bsb_mmi.BSB_MMI"><code class="xref py py-class docutils literal notranslate"><span class="pre">BSB_MMI</span></code></a></p>
+<p>Provides read/write functions for accessing the FPGA’s memory-map registers through a
+Byte-serial Bus interface through the TCPipe interface.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>tcpipe</strong> (<a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe" title="pychfpga.hardware.interfaces.tcpipe.TCPipe"><em>TCPipe</em></a>) – The TCPipe object, which will be used to access the FPGA core registers.</p>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.MASKED_WRITE_OPCODES">
+<span class="sig-name descname"><span class="pre">MASKED_WRITE_OPCODES</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">(5,</span> <span class="pre">None,</span> <span class="pre">None,</span> <span class="pre">None)</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.MASKED_WRITE_OPCODES" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.MAX_BSB_COMMAND_PACKET_LENGTH">
+<span class="sig-name descname"><span class="pre">MAX_BSB_COMMAND_PACKET_LENGTH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">4096</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.MAX_BSB_COMMAND_PACKET_LENGTH" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.MAX_BSB_REPLY_PACKET_LENGTH">
+<span class="sig-name descname"><span class="pre">MAX_BSB_REPLY_PACKET_LENGTH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">16384</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.MAX_BSB_REPLY_PACKET_LENGTH" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_READ_CONTROL">
+<span class="sig-name descname"><span class="pre">OPCODE_READ_CONTROL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_READ_CONTROL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_READ_NOP">
+<span class="sig-name descname"><span class="pre">OPCODE_READ_NOP</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_READ_NOP" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_READ_RAM">
+<span class="sig-name descname"><span class="pre">OPCODE_READ_RAM</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_READ_RAM" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_READ_STATUS">
+<span class="sig-name descname"><span class="pre">OPCODE_READ_STATUS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_READ_STATUS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_WRITE_CONTROL">
+<span class="sig-name descname"><span class="pre">OPCODE_WRITE_CONTROL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">4</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_WRITE_CONTROL" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_WRITE_CONTROL_MASK">
+<span class="sig-name descname"><span class="pre">OPCODE_WRITE_CONTROL_MASK</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">5</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_WRITE_CONTROL_MASK" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_WRITE_NOP">
+<span class="sig-name descname"><span class="pre">OPCODE_WRITE_NOP</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">6</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_WRITE_NOP" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_WRITE_RAM">
+<span class="sig-name descname"><span class="pre">OPCODE_WRITE_RAM</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">7</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_WRITE_RAM" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.READ_OPCODES">
+<span class="sig-name descname"><span class="pre">READ_OPCODES</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">(0,</span> <span class="pre">2,</span> <span class="pre">3,</span> <span class="pre">None)</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.READ_OPCODES" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.WRITE_OPCODES">
+<span class="sig-name descname"><span class="pre">WRITE_OPCODES</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">(4,</span> <span class="pre">None,</span> <span class="pre">7,</span> <span class="pre">None)</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.WRITE_OPCODES" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tcpipe</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.aggregate_commands">
+<span class="sig-name descname"><span class="pre">aggregate_commands</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.aggregate_commands" title="Link to this definition"></a></dt>
+<dd><p>Coalesce write-only BSB MMI transactions via the TCPipe batch RPC.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.close" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.flush">
+<span class="sig-name descname"><span class="pre">flush</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.flush" title="Link to this definition"></a></dt>
+<dd><p>Flushes the reply channel of any remaining data.
+This is typically  used to ensure future replies will be synchronized with their commands</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.read">
+<span class="sig-name descname"><span class="pre">read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">retry</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">resync</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.read" title="Link to this definition"></a></dt>
+<dd><p>Reads memory-mapped byte(s) from the FPGA through the Ethernet
+interface.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>int</em>) – Address from which to read within the BSB address
+space. The control/status/RAM pages are determined from the high
+bits of the address.</p></li>
+<li><p><strong>type</strong> (<code class="docutils literal notranslate"><span class="pre">int</span></code>, str or dtype) – <p>Selects the type of returned object</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">int</span></code> object: a single integer of <cite>length</cite> bytes is read as a <strong>big endian</strong> and is returned.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bytes</span></code> or <code class="docutils literal notranslate"><span class="pre">bytearray</span></code> object: A <code class="docutils literal notranslate"><span class="pre">bytearray</span></code> is returned.</p></li>
+<li><p>dtype or string representing a dtype: Returns a numpy array of <cite>length</cite> numpy objects of dtype <cite>type</cite>.</p></li>
+</ul>
+</p></li>
+<li><p><strong>length</strong> (<em>int</em>) – Indicates the number of bytes (if type==int) or the number of numpy elements of dtype==type to read.
+Multiple transactions will be performed if the requested number of bytes cannot be obtained in a single one.</p></li>
+<li><p><strong>timeout</strong> (<em>float</em>) – If not None, sets the timeout period for the read transaction.</p></li>
+<li><p><strong>retry</strong> (<em>int</em>) – Number times the read is retried. If None, the default is used.</p></li>
+<li><p><strong>resync</strong> (<em>bool</em>) – If True, the receiver will ignore command sequence number
+mismatches and will resynchronize the local counter with the value
+that was received. This is normally done only once when the system is
+initialized.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>If <cite>type</cite> = <code class="docutils literal notranslate"><span class="pre">int</span></code>, returns an integer. Otherwise, returns a numpy array.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>2014-02-06 JFC: Now reads multiple bytes at a time to improve</dt><dd><p>efficiency by using the length field in the command word.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.write">
+<span class="sig-name descname"><span class="pre">write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">retry</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">resync</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.write" title="Link to this definition"></a></dt>
+<dd><p>Writes byte(s) to memory-mapped registers in the FPGA.</p>
+<dl class="simple">
+<dt>‘data’ can be:</dt><dd><ul class="simple">
+<li><p>String</p></li>
+<li><p>list of integers between 0 and 255</p></li>
+<li><p>numpy array of integers between 0 and 255</p></li>
+<li><p>4 bytes in a numpy uint32. MSB is transmitted first</p></li>
+<li><p>2 bytes in a numpy uint16. MSB is transmitted first</p></li>
+<li><p>1 byte in a numpy uint8.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.hardware.interfaces.tcpipe.</span></span><span class="sig-name descname"><span class="pre">TCPipe_I2C</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tcpipe</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Provides an I2C-over-TCPIPE interface using the standardized I2C object API.</p>
+<p>An instance of this object is passed to the I2C drivers to provide them the methods to access their hardware.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.I2CException">
+<span class="sig-name descname"><span class="pre">I2CException</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.I2CException" title="Link to this definition"></a></dt>
+<dd><p>alias of <code class="xref py py-class docutils literal notranslate"><span class="pre">OSError</span></code></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tcpipe</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.is_present">
+<span class="sig-name descname"><span class="pre">is_present</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bus_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.is_present" title="Link to this definition"></a></dt>
+<dd><p>Test the presence of an I2C device at the specified address.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>int</em>) – I2C address of the device to query</p></li>
+<li><p><strong>bus_name</strong> (<em>str</em><em>, </em><em>int</em><em>, or </em><em>list</em><em> of </em><em>str</em><em> or </em><em>int</em>) – I2C bus(es) to activate.
+Required unless <code class="docutils literal notranslate"><span class="pre">select_bus()</span></code> was already called. Pass <code class="docutils literal notranslate"><span class="pre">0</span></code>
+for PS I2C0 (truthy check would skip it).</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.select_bus">
+<span class="sig-name descname"><span class="pre">select_bus</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bus_info</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">retry</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.select_bus" title="Link to this definition"></a></dt>
+<dd><p>Configure the I2C port and I2C switches so the following communications will access the
+desired I2C bus. ‘bus_id’ can be a bus name or bus number, or a list of those if multiple
+buses are to be accessed at the same time. An error will be provided if all the buses are
+not accessible through the same FPGA I2C port. This function assumes that each FPGA I2C port
+has an identical I2C switch.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>bus_info</strong> (<em>int</em><em>, </em><em>dict</em><em>, </em><em>tuple</em>) – <p>Describes the port, switch and switch parameter
+It can be either a</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">i2c_port</span></code> integer,</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">(switch_obj,</span> <span class="pre">switch_params)</span></code> tuple, or <code class="docutils literal notranslate"><span class="pre">{&quot;port&quot;:i2c_port,</span> <span class="pre">&quot;switch&quot;:switch_obj,</span>
+<span class="pre">&quot;switch_params&quot;:</span> <span class="pre">switch_params&quot;}</span></code> dict</p></li>
+</ul>
+<p>where</p>
+<ul>
+<li><p>i2c_port (int): I2C port (aka bus number) to use. If not specified, we’ll use the I2C port of the specified switch, if any.</p></li>
+<li><p>switch (instance): switch object instance</p></li>
+<li><p>switch_params (int or dict): arguments to pass to the switch instance</p></li>
+</ul>
+</p></li>
+<li><p><strong>args</strong> – passed to the bus select function</p></li>
+<li><p><strong>kwargs</strong> – passed to the bus select function</p></li>
+</ul>
+</dd>
+</dl>
+<p>Exceptions:</p>
+<blockquote>
+<div><p>IOError: Raised by an FPGA-based I2C controller in case of transaction errors</p>
+</div></blockquote>
+<p class="rubric">Example</p>
+<ul class="simple">
+<li><p>select_bus(1)  # activate I2C port 1</p></li>
+<li><p>select_bus((some_i2c_switch, 3)) # select bus from specified switch, and enable I2C port 3 of the switch</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.write_read">
+<span class="sig-name descname"><span class="pre">write_read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">addr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noerror</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">retry</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.write_read" title="Link to this definition"></a></dt>
+<dd><p>Writes and read to/from I2C device at address <cite>addr</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>addr</strong> (<em>int</em>) – I2C address</p></li>
+<li><p><strong>data</strong> (<em>list</em><em> of </em><em>int</em>) – list of bytes to write before the read operation. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, no write is performed.</p></li>
+<li><p><strong>read_length</strong> (<em>int</em>) – Number of bytes to read. Can be 0-4 after the a
+preceding write operation, or 0-3 without a write operation.</p></li>
+<li><p><strong>verbose</strong> (<em>int</em>) – verbosity level</p></li>
+<li><p><strong>noerror</strong> (<em>bool</em>) – if True, no exception will be raised</p></li>
+<li><p><strong>retry</strong> (<em>int</em>) – Number of times to retry a transfer before raising an exception</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>bytearray containing the read bytes</p>
+</dd>
+</dl>
+<p>Exceptions:</p>
+<blockquote>
+<div><p>IOError: Raised by an FPGA-based I2C controller in case of transaction errors
+ValueError: Is raised when <cite>addr</cite>, <cite>read&gt;_length</cite> or <cite>write_length</cite> are out of range.</p>
+</div></blockquote>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.hardware.interfaces.tcpipe.</span></span><span class="sig-name descname"><span class="pre">TCPipe_SPI</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tcpipe</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Provides an SPI-over-TCPIPE interface using the standardized SPI object API.</p>
+<p>An instance of this object is passed to the SPI devices to provide them the methods to access their hardware.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI.SPIException">
+<span class="sig-name descname"><span class="pre">SPIException</span></span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI.SPIException" title="Link to this definition"></a></dt>
+<dd><p>alias of <code class="xref py py-class docutils literal notranslate"><span class="pre">OSError</span></code></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tcpipe</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI.batch_write">
+<span class="sig-name descname"><span class="pre">batch_write</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spi_device</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">writes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI.batch_write" title="Link to this definition"></a></dt>
+<dd><p>Write multiple SPI segments with CS deasserted between each.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>spi_device</strong> (<em>int</em>) – SPI port index.</p></li>
+<li><p><strong>writes</strong> (<em>list</em><em> of </em><em>bytes</em>) – one segment per list element (max 255 bytes each).</p></li>
+<li><p><strong>timeout</strong> (<em>float</em>) – RPC socket timeout in seconds.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI.write_read">
+<span class="sig-name descname"><span class="pre">write_read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spi_device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">noerror</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">retry</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI.write_read" title="Link to this definition"></a></dt>
+<dd><p>Writes and read to/from SPI device <cite>spi_device</cite>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>spi_device</strong> (<em>int</em>) – Number of the SPI device to access, which corresponde to the index of the chip select line to activate.</p></li>
+<li><p><strong>data</strong> (<em>bytes</em><em> or </em><em>list</em><em> of </em><em>int</em>) – list of bytes to write before the read operation. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, no write is performed.</p></li>
+<li><p><strong>read_length</strong> (<em>int</em>) – Number of bytes to read.</p></li>
+<li><p><strong>verbose</strong> (<em>int</em>) – verbosity level</p></li>
+<li><p><strong>noerror</strong> (<em>bool</em>) – if True, no exception will be raised</p></li>
+<li><p><strong>retry</strong> (<em>int</em>) – Number of times to retry a transfer before raising an exception</p></li>
+<li><p><strong>timeout</strong> (<em>float</em>) – Time to wait (in seconds) before timeout exception</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>bytearray containing the read bytes</p>
+</dd>
+</dl>
+<p>Exceptions:</p>
+<blockquote>
+<div><p>IOError: Raised by an FPGA-based I2C controller in case of transaction errors
+ValueError: Is raised when <cite>addr</cite>, <cite>read&gt;_length</cite> or <cite>write_length</cite> are out of range.</p>
+</div></blockquote>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="pychfpga.hardware.interfaces.ipmi_fru.html" class="btn btn-neutral float-left" title="ipmi_fru.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="pychfpga.hardware.interfaces.udp.html" class="btn btn-neutral float-right" title="udp.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

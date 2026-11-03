@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`MGADC08.py <pychfpga.hardware.ice.MGADC08.MGADC08>`
+============================================================
+
+
+.. currentmodule:: pychfpga.hardware.ice.MGADC08
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.hardware.ice.MGADC08,
+..    | FULLNAME=pychfpga.hardware.ice.MGADC08.MGADC08,
+..    | name==MGADC08
+..    | modules = 
+..    | classes = ['FMCMezzanine_MGADC08']
+
+.. automodule:: pychfpga.hardware.ice.MGADC08.MGADC08
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         FMCMezzanine_MGADC08
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: FMCMezzanine_MGADC08
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

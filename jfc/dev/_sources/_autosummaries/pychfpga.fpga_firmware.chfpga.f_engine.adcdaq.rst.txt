@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`adcdaq.py <pychfpga.fpga_firmware.chfpga.f_engine.adcdaq>`
+===================================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware.chfpga.f_engine
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware.chfpga.f_engine,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga.f_engine.adcdaq,
+..    | name==adcdaq
+..    | modules = 
+..    | classes = ['ADCDAQ']
+
+.. automodule:: pychfpga.fpga_firmware.chfpga.f_engine.adcdaq
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         ADCDAQ
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: ADCDAQ
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

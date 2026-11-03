@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`bct_array_methods.py <pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods>`
+==========================================================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware.chfpga.ct_engine
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware.chfpga.ct_engine,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods,
+..    | name==bct_array_methods
+..    | modules = 
+..    | classes = ['BCTArrayMethods']
+
+.. automodule:: pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         BCTArrayMethods
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: BCTArrayMethods
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

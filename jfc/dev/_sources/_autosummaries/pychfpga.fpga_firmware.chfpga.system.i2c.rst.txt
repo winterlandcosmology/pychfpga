@@ -1,0 +1,99 @@
+
+
+
+
+
+:py:mod:`i2c.py <pychfpga.fpga_firmware.chfpga.system.i2c>`
+===========================================================
+
+
+.. currentmodule:: pychfpga.fpga_firmware.chfpga.system
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=pychfpga.fpga_firmware.chfpga.system,
+..    | FULLNAME=pychfpga.fpga_firmware.chfpga.system.i2c,
+..    | name==i2c
+..    | modules = 
+..    | classes = ['I2C']
+
+.. automodule:: pychfpga.fpga_firmware.chfpga.system.i2c
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         I2C
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: I2C
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+
