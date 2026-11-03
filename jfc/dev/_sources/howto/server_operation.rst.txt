@@ -51,4 +51,4 @@ Alternatively, pass a private key path::
 
     docker build -f Dockerfile -t chimefrb/pychfpga:latest --ssh github_ssh_key=/path/to/id_rsa .
 
-See :doc:`ssh_keys` for loading the Bitbucket key into the agent.
+See :doc:`ssh_keys` for loading the SSH key into the agent.

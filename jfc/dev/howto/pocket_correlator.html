@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pocket correlator guide &mdash; pychfpga User Manual (jfc/dev @ 88e45a16) 1.3.4.dev807+ice.co.g88e45a161 documentation</title>
+  <title>Pocket correlator guide &mdash; pychfpga User Manual (jfc/dev @ a4bc9e50) 1.3.4.dev809+ice.co.ga4bc9e501 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
@@ -15,7 +15,7 @@
     <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
       <script src="../_static/jquery.js?v=5d32c60e"></script>
       <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../_static/documentation_options.js?v=edf3f89f"></script>
+      <script src="../_static/documentation_options.js?v=ebe112ec"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/js/theme.js"></script>
@@ -117,7 +117,7 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../index.html">pychfpga User Manual (jfc/dev @ 88e45a16)</a>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ a4bc9e50)</a>
       </nav>
 
       <div class="wy-nav-content">
@@ -179,25 +179,27 @@
 on Ubuntu 22.04.</p>
 <section id="getting-access-to-pychfpga">
 <h3>Getting access to <code class="code highlight bash docutils literal highlight-bash">pychfpga</code><a class="headerlink" href="#getting-access-to-pychfpga" title="Link to this heading"></a></h3>
-<p>First, create a BitBucket account if you don’t have one. Then, contact Jean-Francois Cliche at <a class="reference external" href="mailto:jfcliche&#37;&#52;&#48;jfcliche&#46;com">jfcliche<span>&#64;</span>jfcliche<span>&#46;</span>com</a> to
-request access to the repository and other winterland dependencies and include the email for which your
-BitBucket account is registered. After getting access, it is necessary to add your ssh key to your BitBucket account.</p>
+<p>First, create a GitHub account if you don’t have one (and a Bitbucket account
+if you need private winterland dependencies). Then contact Jean-Francois
+Cliche at <a class="reference external" href="mailto:jfcliche&#37;&#52;&#48;jfcliche&#46;com">jfcliche<span>&#64;</span>jfcliche<span>&#46;</span>com</a> to request access, and include the email for
+the accounts you registered. After getting access, add your SSH public key to
+GitHub (and Bitbucket if required). See <a class="reference internal" href="ssh_keys.html"><span class="doc">SSH keys</span></a>.</p>
 <p>Create a new ssh key by typing in a terminal:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span>
 mkdir<span class="w"> </span>.ssh
-ssh-keygen<span class="w"> </span>-t<span class="w"> </span>ed25519<span class="w"> </span>-b<span class="w"> </span><span class="m">4096</span><span class="w"> </span>.ssh/bitbucket_key
+ssh-keygen<span class="w"> </span>-t<span class="w"> </span>ed25519<span class="w"> </span>-f<span class="w"> </span>.ssh/github_key
 </pre></div>
 </div>
 <p>Leave the passphrase field empty (press Enter twice). Type:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>.ssh/bitbucket_key_test.pub
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>.ssh/github_key.pub
 </pre></div>
 </div>
-<p>and copy the output. Now you need to add the copied key to BitBucket. To do that, on BitBucket go <cite>Gear icon -&gt; Personal
-BitBuket settings -&gt; Security -&gt; SSH keys -&gt; Add key</cite>. You can put any label in the respective field. Paste the key copied
-from the terminal in the “Key” field.</p>
-<p>Finally, add a created key to the ssh client. Run in terminal window:</p>
+<p>and copy the output. Add the key in GitHub under
+<cite>Settings -&gt; SSH and GPG keys -&gt; New SSH key</cite>. Paste the key copied from the
+terminal in the “Key” field.</p>
+<p>Finally, add the key to the ssh client. Run in a terminal window:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">eval</span><span class="w"> </span><span class="sb">`</span>ssh-agent<span class="sb">`</span>
-ssh-add<span class="w"> </span>.ssh/bitbucket_key
+ssh-add<span class="w"> </span>.ssh/github_key
 </pre></div>
 </div>
 </section>
@@ -233,11 +235,11 @@ python3.8<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> 
 <section id="installing-pychfpga">
 <h3>Installing <code class="code highlight bash docutils literal highlight-bash">pychfpga</code><a class="headerlink" href="#installing-pychfpga" title="Link to this heading"></a></h3>
 <p>First, download the software by running the following in terminal:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>git@bitbucket.org:winterlandcosmology/pychfpga.git<span class="w"> </span>-b<span class="w"> </span>deploy
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>git@github.com:winterlandcosmology/pychfpga.git<span class="w"> </span>-b<span class="w"> </span>deploy
 </pre></div>
 </div>
 <p>If you had issues with this step, you probably don’t have access to the repository. Check if you properly set up your
-BitBucket key an if you have permissions. If the command succeeded, go to the cloned repo:</p>
+GitHub SSH key and if you have permissions. If the command succeeded, go to the cloned repo:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>pychfpga
 </pre></div>
 </div>
