@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Select documentation branch for pychfpga</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --background: #f3f4f6;
+      --surface: #fff;
+      --surface-alt: #f9fafb;
+      --border: #e5e7eb;
+      --radius: 12px;
+      --shadow: 0 4px 32px rgba(37,99,235,0.07);
+    }
+    body {
+      font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+      background: var(--background);
+      margin: 0;
+      min-height: 100vh;
+      color: #222;
+    }
+    .frame {
+      max-width: 1200px;
+      margin: 2em auto 0 auto;
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 0 0 2em 0;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .frame-title {
+      margin: 0;
+      padding: 2em 1em 1.5em 1em;
+      text-align: center;
+      font-size: 1.7em;
+      font-weight: 700;
+      color: var(--primary);
+      letter-spacing: 0.5px;
+      background: linear-gradient(to bottom, var(--surface-alt) 50%, var(--surface) 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    #loading, #error {
+      color: #888;
+      margin: 1.5em 0 0 0;
+      text-align: center;
+      font-size: 1.1em;
+    }
+    #error {
+      color: #d00;
+    }
+    .table-container {
+      overflow-x: auto;
+      margin: 1.5em 1em 0 1em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95em;
+    }
+    thead {
+      background: var(--surface-alt);
+      border-bottom: 2px solid var(--border);
+    }
+    th {
+      padding: 0.9em 1em;
+      text-align: left;
+      font-weight: 600;
+      color: var(--primary);
+      font-size: 0.9em;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+    tbody tr:hover {
+      background: var(--surface-alt);
+    }
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+    td {
+      padding: 1em;
+      vertical-align: top;
+    }
+    .branch-cell {
+      font-family: monospace;
+      font-weight: 600;
+    }
+    .branch-link {
+      color: var(--primary);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .branch-link:hover, .branch-link:focus {
+      color: #1d4ed8;
+      text-decoration: underline;
+      outline: none;
+    }
+    .version-cell {
+      font-family: monospace;
+      font-size: 0.9em;
+      color: #555;
+    }
+    .committer-cell {
+      font-size: 0.9em;
+      color: #666;
+    }
+    .date-cell {
+      font-size: 0.9em;
+      color: #666;
+      white-space: nowrap;
+    }
+    .no-data {
+      color: #999;
+      font-style: italic;
+    }
+    @media (max-width: 700px) {
+      .frame { max-width: 99vw; margin: 1em auto 0 auto; }
+      .frame-title { font-size: 1.2em; padding: 2em 0.5em 1em 0.5em; }
+      th, td { padding: 0.7em 0.5em; font-size: 0.85em; }
+      .table-container { margin: 1.5em 0.5em 0 0.5em; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <h1 class="frame-title" id="page-title">Select documentation branch for pychfpga</h1>
+    <div id="loading">Loading...</div>
+    <div id="error"></div>
+    <div class="table-container">
+      <table id="branches-table">
+        <thead>
+          <tr>
+            <th>Branch</th>
+            <th>Version</th>
+            <th>Committer</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="file-list"></tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    // Same layout as winterlandcosmology.bitbucket.io/pychfpga/index.html, but
+    // branch folders are listed in branches.json (written by the docs deploy job)
+    // instead of calling the Bitbucket API.
+
+    const loadingDiv = document.getElementById('loading');
+    const errorDiv = document.getElementById('error');
+    const fileList = document.getElementById('file-list');
+
+    function extractDateFromVersion(version) {
+      const dateMatch = version.match(/d(\d{8})/);
+      if (dateMatch) {
+        const dateStr = dateMatch[1];
+        const year = parseInt(dateStr.substring(0, 4));
+        const month = parseInt(dateStr.substring(4, 6)) - 1;
+        const day = parseInt(dateStr.substring(6, 8));
+        return new Date(year, month, day);
+      }
+      return null;
+    }
+
+    function parseDate(dateStr) {
+      if (!dateStr || dateStr === "Unknown") return null;
+      const date = new Date(dateStr);
+      return isNaN(date.getTime()) ? null : date;
+    }
+
+    function daysAgo(date) {
+      if (!date) return null;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dateCopy = new Date(date);
+      dateCopy.setHours(0, 0, 0, 0);
+      return Math.floor((today - dateCopy) / (1000 * 60 * 60 * 24));
+    }
+
+    function formatDate(date, includeDaysAgo = true) {
+      if (!date) return null;
+      const formatted = date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+      if (includeDaysAgo) {
+        const days = daysAgo(date);
+        if (days !== null && days >= 0 && days < 365) {
+          if (days === 0) return `${formatted} (today)`;
+          if (days === 1) return `${formatted} (1 day ago)`;
+          return `${formatted} (${days} days ago)`;
+        }
+      }
+      return formatted;
+    }
+
+    async function fetchBuildInfo(branch) {
+      try {
+        const resp = await fetch(`./${branch}/build_info.json`);
+        if (!resp.ok) return null;
+        return await resp.json();
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function getBranches() {
+      const resp = await fetch('./branches.json');
+      if (!resp.ok) throw new Error('Failed to load branches.json: ' + resp.status);
+      const data = await resp.json();
+      if (!Array.isArray(data)) throw new Error('branches.json must be a JSON array');
+      return data;
+    }
+
+    async function loadFiles() {
+      loadingDiv.textContent = "Loading...";
+      errorDiv.textContent = "";
+      fileList.innerHTML = "";
+
+      try {
+        const branches = await getBranches();
+        if (branches.length === 0) {
+          fileList.innerHTML = "<tr><td colspan='4' style='color:#aaa;padding:1em;text-align:center;'>No branch documentation published yet.</td></tr>";
+          loadingDiv.textContent = "";
+          return;
+        }
+
+        loadingDiv.textContent = "Loading build information...";
+        const entriesWithInfo = await Promise.all(
+          branches.map(async (branch) => {
+            const buildInfo = await fetchBuildInfo(branch);
+            let buildDate = null;
+            if (buildInfo) {
+              buildDate = parseDate(buildInfo.commit_date);
+              if (!buildDate && buildInfo.version) {
+                buildDate = extractDateFromVersion(buildInfo.version);
+              }
+            }
+            return { branch, buildInfo, buildDate };
+          })
+        );
+
+        entriesWithInfo.sort((a, b) => {
+          let dateA = a.buildDate;
+          let dateB = b.buildDate;
+          if (a.buildInfo && a.buildInfo.commit_date && a.buildInfo.commit_date !== "Unknown") {
+            dateA = parseDate(a.buildInfo.commit_date) || dateA;
+          }
+          if (b.buildInfo && b.buildInfo.commit_date && b.buildInfo.commit_date !== "Unknown") {
+            dateB = parseDate(b.buildInfo.commit_date) || dateB;
+          }
+          if (dateA && dateB) return dateB - dateA;
+          if (dateA) return -1;
+          if (dateB) return 1;
+          return a.branch.localeCompare(b.branch);
+        });
+
+        for (const { branch, buildInfo, buildDate } of entriesWithInfo) {
+          const tr = document.createElement('tr');
+
+          const branchCell = document.createElement('td');
+          branchCell.className = 'branch-cell';
+          const branchLink = document.createElement('a');
+          branchLink.className = 'branch-link';
+          branchLink.href = `./${branch}/index.html`;
+          branchLink.target = "_blank";
+          branchLink.rel = "noopener";
+          branchLink.textContent = branch;
+          branchCell.appendChild(branchLink);
+          tr.appendChild(branchCell);
+
+          const versionCell = document.createElement('td');
+          versionCell.className = 'version-cell';
+          if (buildInfo && buildInfo.version) {
+            versionCell.textContent = buildInfo.version;
+          } else {
+            versionCell.textContent = '—';
+            versionCell.className += ' no-data';
+          }
+          tr.appendChild(versionCell);
+
+          const committerCell = document.createElement('td');
+          committerCell.className = 'committer-cell';
+          if (buildInfo && buildInfo.committer_name && buildInfo.committer_name !== "Unknown") {
+            committerCell.textContent = buildInfo.committer_name;
+          } else {
+            committerCell.textContent = '—';
+            committerCell.className += ' no-data';
+          }
+          tr.appendChild(committerCell);
+
+          const dateCell = document.createElement('td');
+          dateCell.className = 'date-cell';
+          let dateToDisplay = buildDate;
+          if (!dateToDisplay && buildInfo && buildInfo.commit_date && buildInfo.commit_date !== "Unknown") {
+            const parsedDate = parseDate(buildInfo.commit_date);
+            if (parsedDate) {
+              dateToDisplay = parsedDate;
+            } else {
+              dateCell.textContent = buildInfo.commit_date;
+            }
+          }
+          if (dateToDisplay) {
+            dateCell.textContent = formatDate(dateToDisplay, true);
+          } else if (!dateCell.textContent) {
+            dateCell.textContent = '—';
+            dateCell.className += ' no-data';
+          }
+          tr.appendChild(dateCell);
+
+          fileList.appendChild(tr);
+        }
+        loadingDiv.textContent = "";
+      } catch (e) {
+        loadingDiv.textContent = "";
+        errorDiv.textContent = e.message;
+      }
+    }
+
+    window.onload = loadFiles;
+  </script>
+</body>
+</html>

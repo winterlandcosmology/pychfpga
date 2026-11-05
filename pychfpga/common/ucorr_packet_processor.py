@@ -71,6 +71,7 @@ class UCorrPacketProcessor(PacketProcessorBase):
         self.NCLK = None
         self.bin_map = None
         self.prod_map = None
+        self.conj_map = None  # products the firmware delivers conjugated (CT3 channel order), un-conjugated on receive
         self.firmware_integ_period = None
         self.soft_integ_period = 1
         self._applied_soft_integ_period = 1
@@ -163,6 +164,8 @@ class UCorrPacketProcessor(PacketProcessorBase):
 
         self.bin_map = np.asarray(config.bin_map)
         self.prod_map = np.asarray(config.prod_map)
+        conj_map = getattr(config, 'conj_map', None)  # absent in hand-built configs: nothing to un-conjugate
+        self.conj_map = None if conj_map is None else np.asarray(conj_map, dtype=bool)
         self.NDECIM = config.NDECIM
         self.NCORRS = config.NCORRS
         self.NPROD_PER_CMAC = config.NPROD_PER_CMAC
@@ -521,6 +524,9 @@ class UCorrPacketProcessor(PacketProcessorBase):
 
         np.left_shift(self.buf_data_l[p_idx, s_idx], 14, out=temp32)
         np.right_shift(temp32, 14, out=temp32)
+        # Firmware products flagged in conj_map are X_j conj(X_i): negate imag to the V_ij = X_i conj(X_j) convention
+        if self.conj_map is not None:
+            np.negative(temp32, out=temp32, where=self.conj_map[corr, bin_])
         self.acc_im[tix, bin_set, corr, bin_] += temp32
 
         # Sat counters: bit 0x20 = real saturation, bit 0x10 = imag saturation.

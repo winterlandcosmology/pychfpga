@@ -15,6 +15,12 @@ import asyncio
 from ..mmi import MMI, MMIRouter, BitField, CONTROL, STATUS, DRP
 from wtl.metrics import Metrics
 
+# Backplane QSFP lanes (GTY 7, 9, 11, one per backplane zQSFP port) and their single TX drive: swing field (GTY code 2n+1),
+# pre-cursor, post-cursor codes, receivers in DFE. Copper only (1 m DACs, loopback plugs): 33 of 33 legs clean in 10 s on crate
+# SN008, 2026-10-26; the firmware powers these fields up at 0/0/0 and nothing else sets them. Optical modules are not supported.
+BP_QSFP_LANES = (7, 9, 11)
+BP_QSFP_TX = (13, 6, 8)
+
 class QPLL(MMI):
     """ Implements interface to one of the COMMON """
 

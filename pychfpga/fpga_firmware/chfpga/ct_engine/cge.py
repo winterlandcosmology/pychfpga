@@ -15,6 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from ..mmi import MMI, BitField, CONTROL, STATUS, DRP
+from .cge_array_methods import CGEArrayMethods
 
 
 class _CGEDrpPort:
@@ -164,18 +165,13 @@ class CGEChannel(_CGEDrpPort):
         self.instance_number = lane
         self.config = cge.config
         self.logger = logging.getLogger(__name__)
+        self.es_cal = 0
 
     def get_prbs_error_ctr(self):
         """UG578 RX_PRBS_ERR_CNT: read low half (0x25E) then high (0x25F). Port must be selected."""
         lo = int(self.RX_PRBS_ERR_CNT_LO)
         hi = int(self.RX_PRBS_ERR_CNT_HI)
         return lo | (hi << 16)
-
-    def _set_es_vert_offset(self, v_offset, ut_sign=0):
-        """Map legacy 9-bit ES_VERT_OFFSET packing to RX_EYESCAN_VS_* (DRP 0x097). Port must be selected."""
-        self.RX_EYESCAN_VS_CODE = abs(v_offset) & 0x7F
-        self.RX_EYESCAN_VS_NEG_DIR = int(v_offset < 0)
-        self.RX_EYESCAN_VS_UT_SIGN = int(bool(ut_sign))
 
     def set_txdiffctrl(self, txdiffctrl):
         """Set TXDIFFCTRL[3:0] via DRP TX_MARGIN_FULL_0 (UG578 0x07F[15:9]). Port must be selected."""
@@ -228,112 +224,82 @@ class CGEChannel(_CGEDrpPort):
             print(f'{self!r} BER = {err:1.1e} ({cnt} errors, BER<{err_max:1.1e})')
         return err
 
-    def get_eye_diagram(
-            self,
-            horiz_offset=list(range(-32, 32, 4)),
-            vert_offset=list(range(-127, 127, 16)),
-            max_scaler=12,
-            ut_sign=0,
-            prescale_step=6):
-        """
-        Return a (M x N) matrix of BER values for M horizontal and N vertical offsets.
-        Horiz_offset : -32 to 32
-        Vert offset: : -127 to 127
-        """
-        prescale_step = 4
+    ES_WIDTH = 80           # Sdata bits per sample cycle: RX_DATA_WIDTH=80, RX_INT_DATAWIDTH=2 (UG578 Table 4-20)
+    ES_H_RANGE = 32         # +/-0.5 UI at full rate
+    ES_CAL_STEP = 128       # after an RX reset the eye-scan phase comes up at offset 0 or 128 codes, at random (measured on CRS)
+
+    def es_measure(self, h, v, ut_sign=0, max_prescale=9, min_errors=100, timeout=60, cal=None):
+        """One eye-scan accumulation at horizontal offset ``h`` (-32..32 = -0.5..0.5 UI) and vertical
+        offset ``v`` (-127..127 counts). The prescale rises until ``min_errors`` or ``max_prescale``.
+        Returns (errors, bits). Port must be selected; eye scan must be enabled (:meth:`CGE.enable_eye_scan`)."""
+        assert -self.ES_H_RANGE <= h <= self.ES_H_RANGE and -127 <= v <= 127, (h, v)
+        cal = self.es_cal if cal is None else cal
+        self.ES_HORZ_OFFSET = 0x800 | ((h + cal) & 0x7FF)     # [11]=1: phase unification for > 10 Gb/s
+        self.RX_EYESCAN_VS_CODE = abs(v)
+        self.RX_EYESCAN_VS_NEG_DIR = int(v < 0)
+        self.RX_EYESCAN_VS_UT_SIGN = ut_sign
+        prescale = 0
+        while True:
+            self.ES_PRESCALE = prescale
+            self.ES_CONTROL = 1                                  # RUN: WAIT -> RESET -> COUNT -> END
+            t0 = time.time()
+            while int(self.ES_CONTROL_STATUS) != 0b0101:          # END with DONE
+                if time.time() - t0 > timeout:
+                    self.ES_CONTROL = 0
+                    raise TimeoutError(f'{self!r}: eye scan stuck, ES_CONTROL_STATUS={int(self.ES_CONTROL_STATUS):#x}')
+                time.sleep(0.01)
+            err, samp = int(self.ES_ERROR_COUNT), int(self.ES_SAMPLE_COUNT)
+            self.ES_CONTROL = 0                                  # back to WAIT
+            if err >= min_errors or prescale >= max_prescale:
+                return err, samp * 2 ** (1 + prescale) * self.ES_WIDTH
+            prescale = min(max_prescale, prescale + 3)
+
+    def es_ber(self, h, v, lpm=False, **kwargs):
+        """BER at (h, v). DFE: sum of the UT sign 0 and 1 accumulations (UG578). LPM: one accumulation.
+        Returns (ber, floor); floor = 1/bits, the BER resolution when there are no errors. Port must be selected."""
+        runs = [self.es_measure(h, v, ut, **kwargs) for ut in ((0,) if lpm else (0, 1))]
+        if any(bits == 0 for _, bits in runs):
+            raise RuntimeError(f'{self!r}: sample counter did not advance (eye scan not enabled?)')
+        return sum(e / b for e, b in runs), 1 / min(b for _, b in runs)
+
+    def es_calibrate(self, strict=True):
+        """Find this lane's eye-scan phase offset (0 or ES_CAL_STEP). Required after every RX reset. Selects the port."""
+        frac = {}
         self.select()
         try:
-            return self._eye_diagram_scan(
-                horiz_offset, vert_offset, max_scaler, ut_sign, prescale_step)
+            for cal in (0, self.ES_CAL_STEP):
+                e, bits = self.es_measure(0, 0, 0, max_prescale=0, cal=cal)
+                frac[cal] = e / bits
         finally:
             self.unselect()
+        self.es_cal = min(frac, key=frac.get)
+        if strict and frac[self.es_cal] > 1e-3:
+            raise RuntimeError(f'{self!r}: no open eye at horizontal code 0 or {self.ES_CAL_STEP}: {frac}')
+        return self.es_cal
 
-    def _eye_diagram_scan(
-            self,
-            horiz_offset,
-            vert_offset,
-            max_scaler,
-            ut_sign,
-            prescale_step):
-        self.ES_EYE_SCAN_EN = 1
-        self.ES_ERRDET_EN = 1
-        self.ES_SDATA_MASK0 = 0x00ff
-        self.ES_SDATA_MASK1 = 0x0000
-        self.ES_SDATA_MASK2 = 0xFF00
-        self.ES_SDATA_MASK3 = 0xFFFF
-        self.ES_SDATA_MASK4 = 0xFFFF
-        self.ES_QUAL_MASK0 = 0xFFFF
-        self.ES_QUAL_MASK1 = 0xFFFF
-        self.ES_QUAL_MASK2 = 0xFFFF
-        self.ES_QUAL_MASK3 = 0xFFFF
-        self.ES_QUAL_MASK4 = 0xFFFF
+    def get_eye_diagram(self, horiz_offset=list(range(-32, 33, 4)), vert_offset=list(range(-50, 51, 5)),
+                        max_prescale=5, min_errors=100, lpm=None):
+        """
+        Return the BER at every (horizontal, vertical) offset as an EyeDiag; ber_map has shape (len(horiz), len(vert)).
+        A point with no errors reads as the BER floor of that point.
 
-        if np.isscalar(horiz_offset):
-            horiz_offset = [horiz_offset]
-        if np.isscalar(vert_offset):
-            vert_offset = [vert_offset]
-
+        horiz_offset: -32 to 32 (-0.5 to 0.5 UI). vert_offset: -127 to 127 counts (2.4 mV per count at the default range).
+        lpm: receiver equalizer mode; None reads it from the parent CGE (RXLPMEN), DFE on firmware without it.
+        Eye scan must be enabled first (:meth:`CGE.enable_eye_scan`). The lane is re-calibrated here.
+        """
+        if lpm is None:
+            lpm = self._cge.get_rx_lpm(self._lane)
+        horiz_offset = [horiz_offset] if np.isscalar(horiz_offset) else list(horiz_offset)
+        vert_offset = [vert_offset] if np.isscalar(vert_offset) else list(vert_offset)
+        self.es_calibrate(strict=False)
         ber = np.zeros((len(horiz_offset), len(vert_offset)))
-        prescale = 0
-        nh = len(horiz_offset)
-        nv = len(vert_offset)
-
-        for (iv, v_offset) in enumerate(vert_offset):
-            ih = 0
-            processed_ih = []
-            dir = 1
-            while True:
-                h_offset = horiz_offset[ih]
-                self._set_es_vert_offset(v_offset, ut_sign)
-                self.ES_HORZ_OFFSET = h_offset & 0xFFF
-                progress = (iv * nh + len(set(processed_ih))) / float(nh * nv - 1) * 100
-                print(f'{progress:3.0f}% Vert offset {int(iv):2}/{int(nv - 1):2}= {int(v_offset):3}, '
-                      f'Horiz offset {int(ih):3}/{int(nh - 1):3}= {int(h_offset):3}: ', end=' ')
-
-                while True:
-                    self.ES_PRESCALE = prescale
-                    self.ES_CONTROL = 0
-                    self.ES_CONTROL = 1
-                    while (int(self.ES_CONTROL_STATUS) & 1) == 0:
-                        time.sleep(0.2)
-                    error_count = int(self.ES_ERROR_COUNT)
-                    sample_count = int(self.ES_SAMPLE_COUNT)
-
-                    print(f'(Prescale={int(prescale)} => {int(error_count)} err / {int(sample_count)} samples) ', end=' ')
-                    if sample_count < 100:
-                        if prescale == 0:
-                            break
-                        prescale = max(0, prescale - prescale_step)
-                    elif error_count < 100:
-                        if prescale == max_scaler:
-                            break
-                        prescale = min(max_scaler, prescale + prescale_step)
-                    else:
-                        break
-                if sample_count == 0:
-                    sample_count = 1
-
-                sample_count *= 2 ** (1 + prescale)
-                e = float(error_count) / float(sample_count)
-                print(f' --- Got {int(sample_count)} samples, {int(error_count)} errors, BER={e:1.1e}')
-                ber[ih, iv] = e
-                processed_ih.append(ih)
-                if dir == -1 and (ih == old_ih or ih == 0):
-                    break
-                elif dir == 1 and ih == len(horiz_offset) - 1:
-                    break
-
-                if error_count == 0:
-                    if dir == 1:
-                        print('Swapping direction!')
-                        old_ih = ih
-                        dir = -1
-                        ih = len(horiz_offset) - 1
-                    else:
-                        break
-                else:
-                    ih = ih + dir
-
+        self.select()
+        try:
+            for iv, v in enumerate(vert_offset):
+                for ih, h in enumerate(horiz_offset):
+                    ber[ih, iv] = max(*self.es_ber(h, v, lpm=lpm, max_prescale=max_prescale, min_errors=min_errors))
+        finally:
+            self.unselect()
         EyeDiag = collections.namedtuple('EyeDiag', ['gty', 'horiz_offsets', 'vert_offsets', 'ber_map'])
         return EyeDiag(gty=self, horiz_offsets=horiz_offset, vert_offsets=vert_offset, ber_map=ber)
 
@@ -345,9 +311,10 @@ class CGEChannel(_CGEDrpPort):
             max(eye_diag.horiz_offsets),
             min(eye_diag.vert_offsets),
             max(eye_diag.vert_offsets))
-        plt.imshow(np.log10(eye_diag.ber_map + 1e-12), origin='lower', extent=extent, aspect=0.1, vmin=-12, vmax=1)
-        plt.xlabel('Horizontal sampling offset')
-        plt.ylabel('Vertical sampling offset')
+        plt.imshow(np.log10(eye_diag.ber_map.T + 1e-12), origin='lower', extent=extent, aspect='auto', vmin=-12, vmax=0)
+        plt.colorbar(label='log10 BER')
+        plt.xlabel('Horizontal sampling offset (1/64 UI)')
+        plt.ylabel('Vertical sampling offset (counts)')
         iceboard = eye_diag.gty.fpga
         plt.title(
             f'Eye diagram for IceBoard SN{iceboard.serial} '
@@ -408,6 +375,18 @@ class CGE(MMI):
     TXPRBSSEL = BitField(CONTROL, 7, 3, width=3, doc='TX PRBS pattern select (muxed lane)')
     RXPRBSSEL = BitField(CONTROL, 7, 0, width=3, doc='RX PRBS pattern select (muxed lane)')
 
+    # Control bytes 8-20 need chfpgalite jm/cge-tx-drive-ctrl. On older firmware they alias bytes 0-12 (byte 8 = byte 0 resets
+    # the CMAC): check tx_drive_supported() first. Bytes 8+3n..10+3n: lane n TXDIFFCTRL, TXPRECURSOR, TXPOSTCURSOR.
+    RXLPMEN = BitField(CONTROL, 20, 0, width=4, doc='RX equalizer per lane, bit n = lane n: 0 = DFE (default), 1 = LPM')
+
+    # GTY TX driver code -> value (UG578 Tables 3-34, 3-35, 3-36)
+    TXDIFF_MV = [390, 430, 450, 470, 490, 530, 550, 570, 590, 630, 650, 670, 690, 730, 740, 760,
+                 780, 820, 840, 850, 870, 900, 920, 930, 950, 970, 980, 990, 1000, 1020, 1030, 1040]
+    TXPRE_DB = [0.01, 0.20, 0.32, 0.73, 0.81, 1.17, 1.30, 1.74, 1.87, 2.24, 2.28, 2.93, 3.08, 3.55, 3.66, 3.90,
+                4.07, 4.66, 4.94, 5.44] + [5.67] * 12
+    TXPOST_DB = [0.00, 0.20, 0.32, 0.74, 0.82, 1.19, 1.32, 1.77, 1.91, 2.28, 2.32, 2.98, 3.14, 3.62, 3.73, 3.99,
+                 4.16, 4.76, 5.05, 5.57, 5.81, 6.69, 7.07, 7.43, 7.84, 8.77, 9.14, 10.08, 10.51, 11.63, 12.29, 13.67]
+
     # Add DRP registers here...
 
     def __init__(self, *, router, router_port, config, verbose=1):
@@ -415,6 +394,7 @@ class CGE(MMI):
         self.verbose = verbose
         super().__init__(router=router, router_port=router_port)
         self.config = config
+        self.fpga.register_array_methods(CGEArrayMethods, key='CGE')   # ca.set_fpga_tx(), ca.read_optical(), ...
         self.core = CGECore(self, self.PORT_CORE_DRP)
         self.gt_common = CGECommon(self, self.PORT_GT_CMN_DRP)
         # Per-lane GT access (same API as xxvglink array GTX instances)
@@ -440,6 +420,74 @@ class CGE(MMI):
         """Select GT channel DRP port and lane (CONFIG_PORT_SEL + GT_LANE_SEL)."""
         self.CONFIG_PORT_SEL = self.PORT_GT_CH_DRP
         self.GT_LANE_SEL = lane
+
+    def tx_drive_supported(self):
+        """True if the firmware has the TX drive and RXLPMEN control bytes (chfpgalite jm/cge-tx-drive-ctrl).
+        Read-only: on older firmware byte 9 aliases byte 1 (TEST_PACKET_WORDS), so the two read the same."""
+        return int(self.read_control(9, type=int, length=1)) != int(self.read_control(1, type=int, length=1))
+
+    def _check_tx_drive(self):
+        if not self.tx_drive_supported():
+            raise RuntimeError(f'{self!r}: firmware has no TX drive / RXLPMEN control bytes (needs chfpgalite jm/cge-tx-drive-ctrl)')
+
+    def set_tx_drive(self, lane, swing=0, pre=0, post=0):
+        """Set GT lane TX swing (TXDIFFCTRL), pre-cursor (TXPRECURSOR) and post-cursor (TXPOSTCURSOR) codes, 0-31 each.
+        0/0/0 = 390 mV, 0.01 dB, 0 dB. Firmware reset value: 24/0/15 = 950 mV, 0.01 dB, 3.99 dB (chfpgalite 07c6572 on; 24/0/0 in ea4d20c, 0/0/0 before).
+        Values: TXDIFF_MV, TXPRE_DB, TXPOST_DB."""
+        self._check_tx_drive()
+        assert lane in range(4) and all(0 <= c <= 31 for c in (swing, pre, post)), (lane, swing, pre, post)
+        self.write_control(8 + 3 * lane, bytes([swing, pre, post]))
+
+    def get_tx_drive(self, lane):
+        """(swing, pre, post) codes of GT lane ``lane``."""
+        self._check_tx_drive()
+        return tuple(int(self.read_control(8 + 3 * lane + i, type=int, length=1)) for i in range(3))
+
+    def set_rx_lpm(self, enable, lanes=range(4)):
+        """Select the RX equalizer of ``lanes``: LPM if ``enable``, else DFE. Pulses RXDFELPMRESET on each lane.
+        RXDFELPMRESET is in control byte 7, which is copied to the selected lane: keep byte 7 the same on all lanes."""
+        self._check_tx_drive()
+        mask = sum(1 << l for l in lanes)
+        self.RXLPMEN = (int(self.RXLPMEN) | mask) if enable else (int(self.RXLPMEN) & ~mask)
+        saved = int(self.GT_LANE_SEL)
+        try:
+            for l in lanes:
+                self.select_gt_lane(l)
+                self.RXDFELPMRESET = 1
+                time.sleep(0.01)
+                self.RXDFELPMRESET = 0
+        finally:
+            self.GT_LANE_SEL = saved
+
+    def get_rx_lpm(self, lane):
+        """True if GT lane ``lane`` uses the LPM equalizer, False for DFE (also on firmware without RXLPMEN)."""
+        return self.tx_drive_supported() and bool(int(self.RXLPMEN) >> lane & 1)
+
+    def enable_eye_scan(self, lanes=range(4)):
+        """Set the eye-scan masks (UG578: 160-bit, all 80 current bits counted) and ES_EYE_SCAN_EN on ``lanes``,
+        reset the RX datapath (needed for ES_EYE_SCAN_EN), then calibrate each lane's phase. The RX reset
+        restarts the PRBS checkers: reset the error counters afterwards."""
+        for l in lanes:
+            ch = self.gtx[l]
+            ch.select()
+            try:
+                for a in range(0x049, 0x04E):
+                    ch.write_drp(a, 0x0000)           # ES_SDATA_MASK0-4: current cycle counted
+                for a in range(0x0F1, 0x0F6):
+                    ch.write_drp(a, 0xFFFF)           # ES_SDATA_MASK5-9: previous cycle masked
+                for a in list(range(0x044, 0x049)) + list(range(0x0EC, 0x0F1)):
+                    ch.write_drp(a, 0xFFFF)           # ES_QUAL_MASK0-9: no qualifier
+                ch.ES_CONTROL = 0
+                ch.ES_EYE_SCAN_EN = 1
+                ch.ES_ERRDET_EN = 1
+            finally:
+                ch.unselect()
+        self.RESET_RX_DATAPATH = 1
+        time.sleep(0.1)
+        self.RESET_RX_DATAPATH = 0
+        time.sleep(1)
+        for l in lanes:
+            self.gtx[l].es_calibrate(strict=False)
 
     def set_fec(self, state):
         """Enable or disable IEEE 802.3bj RS-FEC on TX (and RX where applicable).

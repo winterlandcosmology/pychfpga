@@ -80,6 +80,7 @@ class UCORR(MMI):
             fft_bin_map=None,
             bin_map=None,
             prod_map=None,
+            conj_map=None,
             autocorr_only=None
             )
 
@@ -121,6 +122,7 @@ class UCORR(MMI):
         The following parameters are then updated:
         - bin_map: (bin_set, corr, clkbin, prod) = bin
         - prod_map: (corr, clkbin, prod) = pix
+        - conj_map: (corr, clkbin, prod) = True where the firmware product is conj(V_ij)
         - NDECIM: number of decimation bins
         - NCORRS: number of correlators
         - NPROD_PER_CMAC: number of products per CMAC
@@ -160,7 +162,14 @@ class UCORR(MMI):
     def compute_bin_prod_maps(cls, ct_level, NDECIM, NCHAN, NCLK, fft_bin_map, autocorr_only=False):
         """Return derived correlator maps for one set of primary parameters."""
 
-        cache_key = (ct_level, NDECIM, NCHAN, NCLK, fft_bin_map.shape, id(fft_bin_map))
+        # Key the cache on the bin map's *content*, not on id(fft_bin_map). id() is the object's memory address,
+        # and Python reuses the address of a freed array for new arrays, so an id() key can return the maps that
+        # were computed for a different, earlier array. That shows up intermittently as one board's bin_map
+        # differing from the others ("Attribute 'bin_map' differs across states" in get_corr_data_config), or
+        # silently as products filed under the wrong bins. Keying on the bytes makes equal maps share an entry
+        # and different maps never collide.
+        fbm = np.ascontiguousarray(fft_bin_map, dtype=np.int64)
+        cache_key = (ct_level, NDECIM, NCHAN, NCLK, fbm.shape, fbm.tobytes())
         if cache_key not in cls._MAP_CACHE:
  
             NPROD = NCHAN * (NCHAN + 1) // 2
@@ -178,7 +187,6 @@ class UCORR(MMI):
                                 for i in range(NCHAN+1) for j in range(NCHAN//2//NCLK*clk, NCHAN//2//NCLK*(clk+1)) ]
                                 for clk in range(NCLK) ])
 
-            fft_bin_map = np.asarray(fft_bin_map)
             if not ct_level:
                 raise RuntimeError(f'Invalid CT_LEVEL with value {ct_level}')
 
@@ -186,7 +194,7 @@ class UCORR(MMI):
             if ct_level >= 1:
                 # In CT_LEVEL=1, there are 4 parallel bin streams coming from the FFT. We need to process all of them locally, so we need 4 parallel correlators on a single board.
                 # ct_bin_map[corr, bix] = bin
-                ct_bin_map = fft_bin_map
+                ct_bin_map = fbm
                 chan_map = np.arange(NCHAN)
 
             # Get CT Level 2 bin map
@@ -255,6 +263,11 @@ class UCORR(MMI):
             # cmac_out_pix[clk, prod] = pix
             # print(f'{cmac_out_ij.shape=}, {chan_map=}')
             cmac_out_pix = ij_to_prod_map[chan_map[cmac_out_ij[...,0]], chan_map[cmac_out_ij[...,1]]]
+            # The CMAC computes X[iv] * conj(X[jv]) with iv < jv in *vector position* (UCORR44.vhd xy_swap keeps
+            # it upper-triangular). ij_to_prod_map is symmetric, so when chan_map reverses the channel order of a
+            # pair (CT3: channels 16-31 x 32-47) the firmware product is conj of the convention V_ij = X_i conj(X_j),
+            # i < j. cmac_out_conj[clk, prod] flags those products; the packet processor un-conjugates them.
+            cmac_out_conj = chan_map[cmac_out_ij[...,0]] > chan_map[cmac_out_ij[...,1]]
 
             # Compute the linearized product index for each (corr, clkbin, prod) data sent by the correlator
             #   prod_map[corr, clkbin, prod] where:
@@ -270,6 +283,15 @@ class UCORR(MMI):
                 dtype=np.intp,
             )
 
+            # conj_map[corr, clkbin, prod]: True where the firmware product is conj(V_ij) (same layout as prod_map)
+            conj_map = np.ascontiguousarray(
+                np.broadcast_to(
+                    cmac_out_conj[None, None, :, :],
+                    (n_corrs, n_bins, NCLK, NPROD_PER_BINCLK),
+                ).reshape(n_corrs, n_bins * NCLK, NPROD_PER_BINCLK),
+                dtype=bool,
+            )
+
             ndecim, ncorrs, nprod_per_cmac, ncmac = bin_map.shape
 
 
@@ -277,6 +299,7 @@ class UCORR(MMI):
                 ij_to_prod_map=ij_to_prod_map,
                 bin_map=bin_map,
                 prod_map=prod_map,
+                conj_map=conj_map,
                 NDECIM=ndecim,
                 NCORRS=ncorrs,
                 NPROD_PER_CMAC=nprod_per_cmac,
@@ -295,6 +318,7 @@ class UCORR(MMI):
             ac_ix = np.arange(NCHAN) * (NCHAN // 2 // NCLK)
             maps['bin_map'] = np.ascontiguousarray(maps['bin_map'][..., ac_ix])
             maps['prod_map'] = np.ascontiguousarray(maps['prod_map'][..., ac_ix])
+            maps['conj_map'] = np.ascontiguousarray(maps['conj_map'][..., ac_ix])
             maps['NCMAC'] = NCHAN
 
         return maps

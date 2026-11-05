@@ -27,6 +27,8 @@
    howto/networking
    howto/hardware_setup
    howto/fpga_array
+   howto/cge_signal_integrity
+   howto/ber_dashboard
    howto/takeData
    howto/server_operation
    howto/pocket_correlator

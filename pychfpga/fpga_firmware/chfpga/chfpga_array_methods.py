@@ -1935,6 +1935,7 @@ class chFPGAArrayMethods(ArrayMethods):
             "firmware_integ_period",
             "bin_map",
             "prod_map",
+            "conj_map",
         )
         # Update config with the common attributes
         self._corr_data_config.update(**{
