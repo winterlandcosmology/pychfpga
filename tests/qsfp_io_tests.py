@@ -152,6 +152,87 @@ def test_si_registers_by_name():
     assert q._qsfp_eeprom.page == 0
 
 
+def media_qsfp(ext=0, eth=0, tech=0, wavelength_nm=0, power_class_ext=0):
+    """QSFP whose EEPROM holds the given media bytes (byte 192, byte 131, byte 147[7:4], bytes 186-187, byte 129)."""
+    q = make_qsfp()
+    m0 = q._qsfp_eeprom.mem[0]
+    m0[129], m0[131], m0[147], m0[192] = power_class_ext, eth, tech << 4, ext
+    m0[186:188] = (wavelength_nm * 20).to_bytes(2, 'big')
+    return q
+
+
+def test_fiber_type_sr4_is_multi_mode():
+    q = media_qsfp(ext=0x02, tech=0x0, wavelength_nm=850)
+    q._qsfp_eeprom.mem[0][130] = 0x0C  # MPO
+    assert q.get_fiber_type() == 'multi-mode'
+
+
+def test_fiber_type_lr4_is_single_mode():
+    assert media_qsfp(ext=0x03, tech=0x4, wavelength_nm=1310).get_fiber_type() == 'single-mode'
+
+
+def test_fiber_type_ignores_power_class():
+    q = media_qsfp(ext=0x03, tech=0x4, wavelength_nm=1310, power_class_ext=0xC0)
+    assert q.get_power_class() == 4 and q.get_fiber_type() == 'single-mode'
+    q = media_qsfp(ext=0x02, wavelength_nm=850, power_class_ext=0xC0)
+    assert q.get_power_class() == 4 and q.get_fiber_type() == 'multi-mode'
+
+
+def test_fiber_type_falls_back_to_ethernet_code():
+    assert media_qsfp(eth=1 << 1).get_fiber_type() == 'single-mode'  # 40G LR4
+    assert media_qsfp(eth=1 << 2).get_fiber_type() == 'multi-mode'   # 40G SR4
+
+
+def test_fiber_type_falls_back_to_laser_type():
+    assert media_qsfp(tech=0x4).get_fiber_type() == 'single-mode'    # 1310 nm DFB, compliance bytes zero
+
+
+def test_fiber_type_falls_back_to_wavelength():
+    assert media_qsfp(wavelength_nm=850).get_fiber_type() == 'multi-mode'
+    assert media_qsfp(wavelength_nm=1310).get_fiber_type() == 'single-mode'
+
+
+def test_fiber_type_copper():
+    assert media_qsfp(tech=0xA).get_fiber_type() == 'copper'         # DAC, as read on hardware (0xA0)
+
+
+def test_fiber_type_blank_eeprom_is_unknown():
+    assert media_qsfp().get_fiber_type() == 'unknown'
+
+
+def test_fiber_type_unlisted_code_gives_no_answer():
+    assert media_qsfp(ext=0x01).get_fiber_type() == 'unknown'                     # AOC: no fiber type in the code
+    assert media_qsfp(ext=0xFE, wavelength_nm=1310).get_fiber_type() == 'single-mode'
+    assert media_qsfp(ext=0x21, wavelength_nm=850).get_fiber_type() == 'multi-mode'  # BiDi: left to the wavelength
+
+
+def test_fiber_type_ext_code_sets_do_not_overlap():
+    assert not QSFP.SINGLE_MODE_EXT_CODES & QSFP.MULTI_MODE_EXT_CODES
+
+
+def test_fiber_type_warns_when_bytes_disagree():
+    msgs = []
+    q = media_qsfp(ext=0x02, tech=0x4, wavelength_nm=1310)
+    q._logger = type('L', (), dict(info=lambda *a: None, warning=lambda self, m, *a: msgs.append(m % a)))()
+    assert q.get_fiber_type() == 'multi-mode' and 'disagree' in msgs[0]
+
+
+def test_fiber_type_empty_cage():
+    q = make_qsfp([OSError('must not touch the EEPROM')])
+    q.is_present = lambda: False
+    assert q.get_fiber_type() is None and len(q._qsfp_eeprom.faults) == 1
+
+
+def test_expects_host_fec():
+    assert media_qsfp(ext=0x06).expects_host_fec() and media_qsfp(ext=0x07).expects_host_fec()
+    assert not media_qsfp(ext=0x03).expects_host_fec()
+
+
+def test_power_class_is_none_when_eeprom_never_answers():
+    q = make_qsfp([OSError('Nack')] * 99)
+    assert q.get_power_class(retries=2) is None
+
+
 if __name__ == '__main__':
     for name, fn in list(globals().items()):
         if name.startswith('test_'):
