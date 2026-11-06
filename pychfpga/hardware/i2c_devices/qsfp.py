@@ -56,6 +56,7 @@ class QSFP(object):
          'MaxCaseTemp':('bin', 190, 1, 0),
          'CCBase':('bin', 191, 1, 0),
          'ExtOptions':('bin', 192, 4, 0),
+         'ExtCompliance':('bin', 192, 1, 0),      # extended compliance code (SFF-8024), first byte of ExtOptions
          'SIOptions':('bin', 193, 1, 0),          # signal-integrity controls implemented
          'VenSN': ('str', 196, 16, 0),
          'DateCode':('str', 212, 8, 0),
@@ -72,6 +73,44 @@ class QSFP(object):
          'TxAdaptEqEnable':('bin', 241, 1, 3),    # bits 3-0
     }
     PAGE_SELECT = QSFP_EEPROM_MAP['PageSelect'][1]
+
+    # Evidence used by get_fiber_type().
+    #
+    # References:
+    #   [1] SFF-8024, "Module Management Reference Code Tables", Table 4-4 (extended compliance codes, byte 192).
+    #       https://members.snia.org/document/dl/26423 (Rev 4.14)
+    #   [2] SFF-8636, "Management Interface for 4-lane Modules and Cables" (byte layout of upper page 00h).
+    #       https://members.snia.org/document/dl/26418 (Rev 2.12)
+    #   [3] SONiC EXT_SPEC_COMPLIANCE table, which the byte 192 codes below were checked against (it lists them in decimal).
+    #       https://github.com/sonic-net/sonic-platform-common/blob/master/sonic_platform_base/sonic_xcvr/codes/public/sff8024.py
+    #   [4] SONiC parser, which the byte 131 bits below were checked against.
+    #       https://github.com/sonic-net/sonic-platform-common/blob/master/sonic_platform_base/sonic_sfp/sff8436.py
+    #
+    # The byte 192 sets are not exhaustive: SFF-8024 keeps adding codes, and codes that do not name a fiber (AOC, active
+    # copper, BiDi, vendor codes) are left out on purpose. A code in neither set gives no answer, and the later checks
+    # decide. Single-mode or multi-mode is inferred from each code's name in [1], [3]: the tables do not state it.
+    SINGLE_MODE_EXT_CODES = {
+        0x03, 0x04, 0x06, 0x07, 0x09,        # 100G LR4, ER4, CWDM4, PSM4, CWDM4 without FEC (obsolete)
+        0x10, 0x12,                          # 40G ER4, PSM4
+        0x13, 0x14, 0x15,                    # G.959.1 single-mode profiles
+        0x17, 0x1A, 0x1B,                    # 100G CLR4, DWDM2, 1550 nm WDM
+        0x22, 0x23, 0x24,                    # 4WDM-10, -20, -40
+        0x25, 0x26, 0x27, 0x2A, 0x2B,        # 100G DR, FR, LR, FR1, LR1
+        0x42, 0x43, 0x44, 0x45, 0x46,        # 50G FR/200G DR4, 200G FR4, 200G PSM4, 50G LR, 200G LR4
+        0x47, 0x48, 0x49, 0x4B,              # 400G DR4, FR4, LR4-6, LR4-10
+    }
+    MULTI_MODE_EXT_CODES = {
+        0x02, 0x05,                          # 100G SR4, SR10
+        0x11, 0x1F, 0x20,                    # 4x10G SR, 40G SWDM4, 100G SWDM4
+        0x28, 0x29, 0x41,                    # 100G-SR1, 100G SR1/200G SR2/400G SR4, 50G SR/100G SR2/200G SR4
+    }
+    # Host FEC: CWDM4 per the note on code 0x09 in [3] (and the CWDM4 MSA); 4WDM per [1]. PSM4 is not confirmed from a
+    # source: check the module datasheet. These codes only trigger a warning in chFPGA init.
+    HOST_FEC_EXT_CODES = {0x06, 0x07, 0x22, 0x23, 0x24}                 # CWDM4, PSM4, 4WDM-10, -20, -40
+    SINGLE_MODE_ETH_BITS = (1 << 1) | (1 << 5)                          # byte 131, see [4]: 40G LR4, 10G LR
+    MULTI_MODE_ETH_BITS = (1 << 2) | (1 << 4) | (1 << 6)                # byte 131, see [4]: 40G SR4, 10G SR, 10G LRM
+    # Byte 147[7:4], see [2] and tech_table in get_info(): FP, DFB and EML lasers.
+    SINGLE_MODE_TECHS = {0x3, 0x4, 0x5, 0x6, 0x7, 0x9}
 
     def __init__(self, i2c, bus_name, gpio_prefix, gpio, address=0x50, parent=None):
         """ Create a QSFP object that allows read/write of the QSFP's hardware control lines and internal registers.
@@ -259,6 +298,7 @@ class QSFP(object):
         if not self.is_present():
             self._logger.debug(f'{self!r}: QSFP module not detected when calling get_power_class()')
             return None
+        ext = None
         trial = 0
         while trial < retries:
             self._logger.debug(f'{self!r}: Attempting to read power class byte on the QSFP... trial {trial}')
@@ -269,6 +309,8 @@ class QSFP(object):
                 self._logger.exception('%r: Failed to read ExtIdentifier', self)
                 trial += 1
                 pass
+        if ext is None:
+            return None
         # bit 5: Power Class 8 implemented (max power encoded in byte 107)
         if ext & (1 << 5):
             return 8
@@ -311,6 +353,56 @@ class QSFP(object):
                 trial += 1
                 pass
         return value
+
+    def get_fiber_type(self):
+        """Return the fiber the module is built for, from SFF-8636 upper page 00h, independently of its Power Class.
+
+        Returns 'single-mode', 'multi-mode', 'copper' or 'unknown'. Returns None if no module is present.
+
+        The first of these that gives an answer wins: byte 147[7:4] for copper, then byte 192 (extended compliance),
+        byte 131 (Ethernet compliance), byte 147[7:4] (laser type) and bytes 186-187 (wavelength). A warning is logged
+        if they disagree, since third-party modules can carry wrong compliance codes.
+
+        Technology 0x0 (850 nm VCSEL) is not used as evidence on its own, because a blank EEPROM reads the same.
+        """
+        if not self.is_present():
+            return None
+        ext = self.read_byte('ExtCompliance')
+        eth = self.read('CompCodes')[0]
+        tech = self.read_byte('DeviceTech') >> 4
+        wavelength_nm = self.read_word('WaveLength') / 20.
+        self._logger.info(
+            '%r: Media bytes: ExtCompliance=0x%02X, EthCompliance=0x%02X, Technology=0x%X, Wavelength=%.1f nm',
+            self, ext, eth, tech, wavelength_nm)
+
+        if tech >= 0xA:  # the wavelength field holds cable attenuation on copper modules
+            return 'copper'
+
+        votes = []
+        if ext in self.SINGLE_MODE_EXT_CODES:
+            votes.append('single-mode')
+        elif ext in self.MULTI_MODE_EXT_CODES:
+            votes.append('multi-mode')
+        if eth & self.SINGLE_MODE_ETH_BITS:
+            votes.append('single-mode')
+        elif eth & self.MULTI_MODE_ETH_BITS:
+            votes.append('multi-mode')
+        if tech in self.SINGLE_MODE_TECHS:
+            votes.append('single-mode')
+        if wavelength_nm >= 1260:
+            votes.append('single-mode')
+        elif 840 <= wavelength_nm <= 950:
+            votes.append('multi-mode')
+
+        if not votes:
+            return 'unknown'
+        if len(set(votes)) > 1:
+            self._logger.warning('%r: EEPROM media bytes disagree (%s); using %s', self, votes, votes[0])
+        return votes[0]
+
+    def expects_host_fec(self):
+        """Return True if the module's compliance code (CWDM4, PSM4, 4WDM) normally relies on RS-FEC from the host."""
+        return self.read_byte('ExtCompliance') in self.HOST_FEC_EXT_CODES
 
     def __getattr__(self, name):
         """Resolve dynamic attributes through device accessors.
