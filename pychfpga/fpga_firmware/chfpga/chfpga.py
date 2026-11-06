@@ -1163,23 +1163,39 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 self.GPU.set_enable(enable_gpu_link)
                 self.logger.debug(f"{self!r}: Data offload links are currently {('Disabled', 'Enabled')[bool(enable_gpu_link)]}")
 
-                # Enable high-power mode if transceiver declares Power Class 5-8
+                # Enable high-power mode and disable FEC on single-mode transceivers
                 if hasattr(self.mb, 'i2c1_qsfp'):
+                    qsfp = self.mb.i2c1_qsfp
+                    qsfp_present = qsfp.is_present()
+                    self.logger.debug(f'{self!r}: QSFP module is present: {qsfp_present}')
 
-                    self.logger.debug(f'{self!r}: QSFP module is present: {self.mb.i2c1_qsfp.is_present()}')
-
-                    # Enable high-power mode if transceiver declares Power Class 5-8,
-                    # and disable forward error correction (FEC)
+                    # Use the fiber type from the EEPROM: Power Class does not separate single-mode from multi-mode.
+                    # enable_high_power_class() still uses the Power Class to choose which power bits to set.
                     try:
-                        if self.mb.i2c1_qsfp.get_power_class() >= 5:
-                            self.mb.enable_qsfp_high_power_mode() # Enable high-power mode
-                            self.mb.GPU.set_fec(False) # Disable FEC
+                        if qsfp_present:
+                            fiber_type = qsfp.get_fiber_type()
+                            self.logger.info(f'{self!r}: QSFP fiber type: {fiber_type}')
+                            use_high_power = fiber_type == 'single-mode'
+                            if fiber_type == 'unknown':
+                                power_class = qsfp.get_power_class()
+                                use_high_power = power_class is not None and power_class >= 5
+                                self.logger.warning(
+                                    f'{self!r}: Could not determine QSFP fiber type from its EEPROM. Using its '
+                                    f'Power Class ({power_class}): high-power mode and FEC off = {use_high_power}.')
 
-                            # Double-check that high-power mode is enabled and FEC disabled
-                            if self.mb.i2c1_qsfp.get_power_mode != 1:
-                                self.logger.warning(f'{self!r}: Attempted to enable high-power mode on {self.mb}, but it is still enabled.')
-                            if self.mb.GPU.CTL_TX_RSFEC_ENABLE != 0:
-                                self.logger.warning(f'{self!r}: Attempted to disable FEC on {self.mb}, but it is still enabled.')
+                            if use_high_power:
+                                if qsfp.expects_host_fec():
+                                    self.logger.warning(
+                                        f'{self!r}: Disabling FEC, but this QSFP (CWDM4, PSM4 or 4WDM) normally relies on '
+                                        f'host RS-FEC. The link may be out of spec.')
+                                self.mb.enable_qsfp_high_power_mode() # Enable high-power mode
+                                self.mb.GPU.set_fec(False) # Disable FEC
+
+                                # Double-check that high-power mode is enabled and FEC disabled
+                                if qsfp.get_power_mode() != 1:
+                                    self.logger.warning(f'{self!r}: Attempted to enable high-power mode on {self.mb}, but it is not enabled.')
+                                if self.mb.GPU.CTL_TX_RSFEC_ENABLE != 0:
+                                    self.logger.warning(f'{self!r}: Attempted to disable FEC on {self.mb}, but it is still enabled.')
                     except Exception as e:
                         raise Exception(f'Attempted to set high-power mode and disable FEC on QSFP link for {self.mb}, but high-power mode was not enabled. The error is {e}.')
 
