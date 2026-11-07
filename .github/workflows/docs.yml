@@ -57,7 +57,9 @@ jobs:
           path: www
 
       - name: Publish branch docs
-        run: rsync -a --delete docs/build/html/ "www/${GITHUB_REF_NAME}/"
+        run: |
+          mkdir -p "www/${GITHUB_REF_NAME}"
+          rsync -a --delete docs/build/html/ "www/${GITHUB_REF_NAME}/"
 
       - name: Update branch selector
         run: python3 docs/update_branch_selector.py www
