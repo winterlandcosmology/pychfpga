@@ -1,0 +1,199 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Requirements &mdash; pychfpga User Manual (jfc/dev @ ffec1078) 1.3.4.dev814+ice.co.gffec10782 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=d3e2754b"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Installation" href="installation.html" />
+    <link rel="prev" title="Introduction" href="../introduction.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Requirements</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#host-computer">Host computer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#network">Network</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#clock-and-timing">Clock and timing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#platform-hardware">Platform hardware</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ ffec1078)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Requirements</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/getting_started/requirements.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="requirements">
+<h1>Requirements<a class="headerlink" href="#requirements" title="Link to this heading"></a></h1>
+<section id="host-computer">
+<h2>Host computer<a class="headerlink" href="#host-computer" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>Linux (development and testing are done on Ubuntu)</p></li>
+<li><p>Python 3.12</p></li>
+<li><p>git and git-lfs (bitstreams and ARM firmware are stored with LFS)</p></li>
+<li><p>Build tools (<code class="docutils literal notranslate"><span class="pre">make</span></code>, a C compiler) and <code class="docutils literal notranslate"><span class="pre">python3.12-dev</span></code>, needed to compile <code class="docutils literal notranslate"><span class="pre">netifaces</span></code></p></li>
+</ul>
+<p>Optional requirements:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><a class="reference external" href="https://docs.astral.sh/uv/">uv</a>, used by the Makefile and recommended to manage</p></li>
+</ul>
+<p>the environment
+- avahi-daemon, for mDNS support (for IceBoard only)</p>
+</div></blockquote>
+</section>
+<section id="network">
+<h2>Network<a class="headerlink" href="#network" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p>A 1G Ethernet switch between the host and the control port of every board</p></li>
+<li><p>Jumbo frames (MTU 9000) on the host interface and on every switch in the data path</p></li>
+<li><p>Enlarged UDP receive buffers on the host</p></li>
+<li><p>A host firewall that accepts UDP from the boards and TCP on the server ports</p></li>
+<li><p>IceBoard only: a /22 or larger subnet whose DHCP pool does not assign <code class="docutils literal notranslate"><span class="pre">*.*.3.*</span></code>, and mDNS
+between the host and the boards</p></li>
+<li><p>Corner-turn modes: dedicated 40G/100G links or switches to the external X-engine</p></li>
+</ul>
+<p>Details are in <a class="reference internal" href="../user_guide/networking.html"><span class="doc">Networking</span></a>.</p>
+</section>
+<section id="clock-and-timing">
+<h2>Clock and timing<a class="headerlink" href="#clock-and-timing" title="Link to this heading"></a></h2>
+<p>Multi-board arrays that must be coherent need:</p>
+<ul class="simple">
+<li><p>a 10 MHz reference clock to synchronize sampling</p></li>
+<li><p>an IRIG-B time signal or a trigger to synchronize data framing</p></li>
+</ul>
+<p>A GPS receiver can provide both. Crates can distribute them to every board through the backplane.</p>
+</section>
+<section id="platform-hardware">
+<h2>Platform hardware<a class="headerlink" href="#platform-hardware" title="Link to this heading"></a></h2>
+<p>Board-specific requirements (power, cooling, cabling, firmware) are in <a class="reference internal" href="../platforms/index.html"><span class="doc">Platforms</span></a>.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../introduction.html" class="btn btn-neutral float-left" title="Introduction" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="installation.html" class="btn btn-neutral float-right" title="Installation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

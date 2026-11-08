@@ -1,0 +1,227 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRS &mdash; pychfpga User Manual (jfc/dev @ ffec1078) 1.3.4.dev814+ice.co.gffec10782 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../../_static/chime_favicon.png"/>
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=d3e2754b"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="100G link signal integrity" href="cge_signal_integrity.html" />
+    <link rel="prev" title="Troubleshooting" href="../../user_guide/troubleshooting.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html">
+            
+              <img src="../../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">CRS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#boot-and-arm-firmware">Boot and ARM firmware</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#discovery">Discovery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#upgrading-u-boot">Upgrading U-Boot</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#over-the-network">Over the network</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#over-jtag">Over JTAG</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#tools">Tools</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cge_signal_integrity.html">100G link signal integrity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ber_dashboard.html">BER test dashboard</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">pychfpga User Manual (jfc/dev @ ffec1078)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CRS</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/platforms/crs/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="crs">
+<h1>CRS<a class="headerlink" href="#crs" title="Link to this heading"></a></h1>
+<p>The CRS is an Ultrascale+ RFSoC board by <a class="reference external" href="https://www.t0.technology">t0 technology</a>. Its ARM
+processor runs U-Boot from flash; <code class="docutils literal notranslate"><span class="pre">pychfpga</span></code> supplies the rest of the software.</p>
+<section id="boot-and-arm-firmware">
+<h2>Boot and ARM firmware<a class="headerlink" href="#boot-and-arm-firmware" title="Link to this heading"></a></h2>
+<p>At power-up the board boots U-Boot and broadcasts discovery beacons. When an array is created,
+<code class="docutils literal notranslate"><span class="pre">pychfpga</span></code> uploads the TCPipe ARM firmware (<code class="docutils literal notranslate"><span class="pre">tcpipe_crs.elf</span></code>) to each board through U-Boot,
+then programs the FPGA. There is nothing to flash for normal operation.</p>
+<p>The firmware files are in <code class="docutils literal notranslate"><span class="pre">pychfpga/hardware/crs/arm_firmware/</span></code>. Use
+<code class="docutils literal notranslate"><span class="pre">--arm_firmware_pathname</span></code> (or the <code class="docutils literal notranslate"><span class="pre">platform_firmware_pathname</span></code> argument of
+<a class="reference internal" href="../../_autosummaries/pychfpga.fpga_array.html#pychfpga.fpga_array.FPGAArray" title="pychfpga.fpga_array.FPGAArray"><code class="xref py py-class docutils literal notranslate"><span class="pre">FPGAArray</span></code></a>) to upload a different TCPipe image.</p>
+</section>
+<section id="discovery">
+<h2>Discovery<a class="headerlink" href="#discovery" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>crs_discovery<span class="w">            </span><span class="c1"># live table of boards, refreshed continuously</span>
+crs_discovery<span class="w"> </span>--dump<span class="w">     </span><span class="c1"># print the table once and exit</span>
+</pre></div>
+</div>
+<p>The table shows each board’s serial number, crate, slot, IP address, and whether it is in U-Boot
+or running TCPipe. See <a class="reference internal" href="../../user_guide/networking.html"><span class="doc">Networking</span></a> for the network requirements.</p>
+</section>
+<section id="upgrading-u-boot">
+<h2>Upgrading U-Boot<a class="headerlink" href="#upgrading-u-boot" title="Link to this heading"></a></h2>
+<section id="over-the-network">
+<h3>Over the network<a class="headerlink" href="#over-the-network" title="Link to this heading"></a></h3>
+<p>Recent U-Boot builds can be reflashed over the network with <code class="docutils literal notranslate"><span class="pre">fwupgrade.py</span></code>. Targets must be
+listed explicitly; use <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> first to check which boards match.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>pychfpga/hardware/crs/arm_firmware
+uv<span class="w"> </span>run<span class="w"> </span>fwupgrade.py<span class="w"> </span>--help
+uv<span class="w"> </span>run<span class="w"> </span>fwupgrade.py<span class="w"> </span><span class="m">37</span><span class="w"> </span><span class="m">55</span><span class="w">                 </span><span class="c1"># CRS serials 0037 and 0055</span>
+uv<span class="w"> </span>run<span class="w"> </span>fwupgrade.py<span class="w"> </span><span class="s2">"*"</span><span class="w"> </span>--dry-run<span class="w">         </span><span class="c1"># every CRS on the network: check first</span>
+uv<span class="w"> </span>run<span class="w"> </span>fwupgrade.py<span class="w"> </span><span class="s2">"CRC4 11"</span><span class="w">             </span><span class="c1"># every board in crate 11</span>
+uv<span class="w"> </span>run<span class="w"> </span>fwupgrade.py<span class="w"> </span><span class="s2">"CRC? *"</span><span class="w">              </span><span class="c1"># every board in any crate</span>
+uv<span class="w"> </span>run<span class="w"> </span>fwupgrade.py<span class="w"> </span><span class="s2">"* 1"</span><span class="w">                 </span><span class="c1"># board, crate or backplane serial 1</span>
+uv<span class="w"> </span>run<span class="w"> </span>fwupgrade.py<span class="w"> </span><span class="m">37</span><span class="w"> </span>--firmware<span class="w"> </span>uboot.bin
+</pre></div>
+</div>
+<p>Without uv, activate the <code class="docutils literal notranslate"><span class="pre">pychfpga</span></code> environment and run <code class="docutils literal notranslate"><span class="pre">./fwupgrade.py</span></code>. Turn off or
+disconnect boards you do not want to upgrade.</p>
+</section>
+<section id="over-jtag">
+<h3>Over JTAG<a class="headerlink" href="#over-jtag" title="Link to this heading"></a></h3>
+<p>Boards with a very old U-Boot, or none, are programmed over JTAG with Vitis, using the micro-USB
+cable:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">source</span><span class="w"> </span>/tools/Xilinx/Vitis/2022.2/settings64.sh
+<span class="nb">cd</span><span class="w"> </span>pychfpga/hardware/crs/arm_firmware
+program_flash<span class="w"> </span>-f<span class="w"> </span>uboot.bin<span class="w"> </span>-offset<span class="w"> </span><span class="m">0</span><span class="w"> </span>-flash_type<span class="w"> </span>qspi-x8-dual_parallel<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>-fsbl<span class="w"> </span>fsbl-t0-crs.elf<span class="w"> </span>-blank_check<span class="w"> </span>-verify
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">-blank_check</span></code> and <code class="docutils literal notranslate"><span class="pre">-verify</span></code> can be omitted to save time. Watch the boot on the serial
+console (<code class="docutils literal notranslate"><span class="pre">minicom</span> <span class="pre">-D</span> <span class="pre">/dev/ttyUSB1</span></code>). Full instructions are in
+<code class="docutils literal notranslate"><span class="pre">CRS_arm_firmware_README.txt</span></code> in the same folder.</p>
+</section>
+</section>
+<section id="tools">
+<h2>Tools<a class="headerlink" href="#tools" title="Link to this heading"></a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="cge_signal_integrity.html">100G link signal integrity</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ber_dashboard.html">BER test dashboard</a></li>
+</ul>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../../user_guide/troubleshooting.html" class="btn btn-neutral float-left" title="Troubleshooting" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="cge_signal_integrity.html" class="btn btn-neutral float-right" title="100G link signal integrity" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

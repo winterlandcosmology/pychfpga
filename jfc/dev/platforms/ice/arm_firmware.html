@@ -1,0 +1,222 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ARM firmware &mdash; pychfpga User Manual (jfc/dev @ ffec1078) 1.3.4.dev814+ice.co.gffec10782 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../../_static/chime_favicon.png"/>
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=d3e2754b"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Boot and ARM shell" href="boot_and_ssh.html" />
+    <link rel="prev" title="Hardware setup" href="setup.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html">
+            
+              <img src="../../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../crs/index.html">CRS</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">IceBoard</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="setup.html">Hardware setup</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ARM firmware</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#writing-an-sd-card">Writing an SD card</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#linux">Linux</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#macos">macOS</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#windows">Windows</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#updating-boards-remotely">Updating boards remotely</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="boot_and_ssh.html">Boot and ARM shell</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tuber_methods.html">IceBoard ARM Tuber methods</a></li>
+<li class="toctree-l2"><a class="reference internal" href="index.html#schematics">Schematics</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">pychfpga User Manual (jfc/dev @ ffec1078)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">IceBoard</a></li>
+      <li class="breadcrumb-item active">ARM firmware</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/platforms/ice/arm_firmware.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="arm-firmware">
+<h1>ARM firmware<a class="headerlink" href="#arm-firmware" title="Link to this heading"></a></h1>
+<p>The IceBoard ARM processor boots Linux from its SD card. The image contains the operating system,
+the web server, and the IceBoard software that exposes the hardware over HTTP (Tuber).</p>
+<p>The images are bzip2-compressed files in <code class="docutils literal notranslate"><span class="pre">pychfpga/hardware/ice/arm_firmware/</span></code>
+(<code class="docutils literal notranslate"><span class="pre">Chime_R11.3i.img.bz2</span></code> and older releases), stored with git-lfs. A valid image is about
+100 MB; if it is a few kilobytes, run <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">lfs</span> <span class="pre">pull</span></code>.</p>
+<section id="writing-an-sd-card">
+<h2>Writing an SD card<a class="headerlink" href="#writing-an-sd-card" title="Link to this heading"></a></h2>
+<p>Writing a card takes about 45 seconds with a fast reader.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Make sure you use the correct target device name. If you are mistaken, you could wipe your hard drive by mistake. The tools might not ask for confirmation before it’s too late.</p>
+</div>
+<section id="linux">
+<h3>Linux<a class="headerlink" href="#linux" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bunzip2<span class="w"> </span>-k<span class="w"> </span>Chime_R11.3i.img.bz2
+lsblk<span class="w">                                  </span><span class="c1"># find the SD card, e.g. /dev/sdb</span>
+sudo<span class="w"> </span>umount<span class="w"> </span>/dev/sdb1<span class="w"> </span>/dev/sdb2<span class="w">        </span><span class="c1"># unmount every partition of the card (replace with the actual device names)</span>
+sudo<span class="w"> </span>dd<span class="w"> </span><span class="k">if</span><span class="o">=</span>Chime_R11.3i.img<span class="w"> </span><span class="nv">of</span><span class="o">=</span>/dev/sdb<span class="w"> </span><span class="nv">bs</span><span class="o">=</span>10M<span class="w"> </span><span class="nv">status</span><span class="o">=</span>progress<span class="w">  </span><span class="c1"># replace with the actual device name!</span>
+sync
+sudo<span class="w"> </span>eject<span class="w"> </span>/dev/sdb<span class="w">  </span><span class="c1"># replace with the actual device name</span>
+</pre></div>
+</div>
+</section>
+<section id="macos">
+<h3>macOS<a class="headerlink" href="#macos" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bunzip2<span class="w"> </span>-k<span class="w"> </span>Chime_R11.3i.img.bz2
+diskutil<span class="w"> </span>list<span class="w">                          </span><span class="c1"># find the SD card, e.g. /dev/disk3</span>
+sudo<span class="w"> </span>diskutil<span class="w"> </span>unmountDisk<span class="w"> </span>/dev/disk3
+sudo<span class="w"> </span>dd<span class="w"> </span><span class="k">if</span><span class="o">=</span>Chime_R11.3i.img<span class="w"> </span><span class="nv">of</span><span class="o">=</span>/dev/rdisk3<span class="w"> </span><span class="nv">bs</span><span class="o">=</span>10m
+sudo<span class="w"> </span>diskutil<span class="w"> </span>eject<span class="w"> </span>/dev/disk3
+</pre></div>
+</div>
+</section>
+<section id="windows">
+<h3>Windows<a class="headerlink" href="#windows" title="Link to this heading"></a></h3>
+<p>Decompress the file (for example with 7-zip) and write the <code class="docutils literal notranslate"><span class="pre">.img</span></code> file with Win32 Disk Imager.
+Eject the card before removing it.</p>
+</section>
+</section>
+<section id="updating-boards-remotely">
+<h2>Updating boards remotely<a class="headerlink" href="#updating-boards-remotely" title="Link to this heading"></a></h2>
+<p>All the SD cards of an array can be rewritten in parallel over the network. The board copies the
+image to a RAM disk, writes it to the SD card while still running from it, and waits 120 seconds
+for the writes to finish.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ca</span> <span class="o">=</span> <span class="k">await</span> <span class="n">FPGAArray</span><span class="p">(</span><span class="s2">"bp16 12"</span><span class="p">)</span>    <span class="c1"># no mode: connect to the ARMs only</span>
+<span class="k">await</span> <span class="n">ca</span><span class="o">.</span><span class="n">ib</span><span class="o">.</span><span class="n">_update_arm_firmware</span><span class="p">(</span><span class="s2">"pychfpga/hardware/ice/arm_firmware/Chime_R11.3i.img.bz2"</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The image must be bzip2-compressed. Power-cycle the boards afterwards.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Do not interrupt the update: an interrupted write corrupts the SD card and the board no longer
+boots. Keep a spare card and an SD card writer at hand.</p>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="setup.html" class="btn btn-neutral float-left" title="Hardware setup" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="boot_and_ssh.html" class="btn btn-neutral float-right" title="Boot and ARM shell" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

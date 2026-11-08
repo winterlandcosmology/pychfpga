@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Index &mdash; pychfpga User Manual (jfc/dev @ 7451fd75) 1.3.4.dev810+ice.co.g7451fd758 documentation</title>
+  <title>Index &mdash; pychfpga User Manual (jfc/dev @ ffec1078) 1.3.4.dev814+ice.co.gffec10782 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="_static/custom.css?v=79dfdd86" />
@@ -14,7 +14,7 @@
     <link rel="shortcut icon" href="_static/chime_favicon.png"/>
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="_static/documentation_options.js?v=717d7a51"></script>
+      <script src="_static/documentation_options.js?v=d3e2754b"></script>
       <script src="_static/doctools.js?v=fd6eb6e6"></script>
       <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/js/theme.js"></script>
@@ -42,57 +42,47 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started/installation.html">Installation</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Operation and Development</span></p>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="howto/quick_start.html">Quick start</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/ssh_keys.html">SSH keys</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/setup_python.html">Setup Python for pychfpga</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/networking.html">Accessing remote servers via ssh</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/hardware_setup.html">Configuring FPGA hardware</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/fpga_array.html">Manual operation with <code class="docutils literal notranslate"><span class="pre">fpga_array</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/cge_signal_integrity.html">100G link signal integrity (CRS)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/ber_dashboard.html">BER test dashboard</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/takeData.html">Take Primative Data from IceBoard</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/server_operation.html">Server-based operation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/pocket_correlator.html">Pocket correlator guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/chfpga_state.html">chFPGA State Tree</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/scaler_test.html">Scaler firmware tests</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/testing.html">Testing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/deploy.html">Code development and versioning guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="howto/common_issues.html">Common errors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="user_guide/troubleshooting.html">Troubleshooting</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Hardware</span></p>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="hardware/ice/arm_firmware.html">Arm Firmware</a></li>
-<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_hardware_howto.html">ICE hardware description</a></li>
-<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_hardware_howto.html#boot-process">Boot process</a></li>
-<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_hardware_howto.html#boot-mode-configuration">Boot mode configuration</a></li>
-<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_software_howto.html">iceboard_software_howto</a></li>
-<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_software_howto.html#ssh-into-an-iceboard">SSH into an Iceboard</a></li>
-<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_software_howto.html#see-content-of-spi-flash">See content of SPI flash</a></li>
-<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceboard_software_howto.html#program-spi-flash-bootloader">Program SPI flash bootloader</a></li>
-<li class="toctree-l1"><a class="reference internal" href="hardware/ice/iceqc.html">Hardware Testing (QC)</a></li>
-<li class="toctree-l1"><a class="reference internal" href="hardware/gps/gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps</span></code> module: GPS server and client</a></li>
-<li class="toctree-l1"><a class="reference internal" href="hardware/ps/ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps</span></code> module: Power supply server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="platforms/aux/index.html">Auxiliary instruments</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="_autosummaries/pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="development/firmware_state.html">chFPGA state tree</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">CHIME-specific docs</span></p>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="chime/overview.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga</span></code>:  CHIME telescope control package</a></li>
-<li class="toctree-l1"><a class="reference internal" href="chime/kotekan.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan</span></code> module: GPU node correlator control process</a></li>
-<li class="toctree-l1"><a class="reference internal" href="chime/kotekan_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kotekan_master</span></code> module: GPU node array master controller</a></li>
-<li class="toctree-l1"><a class="reference internal" href="chime/networking_configuration.html">Networking configuration</a></li>
-<li class="toctree-l1"><a class="reference internal" href="chime/nexus_3132q_configuration.html">nexus 3132q configuration</a></li>
-<li class="toctree-l1"><a class="reference internal" href="chime/NPort_configuration.html">Moxa NPort5110 Setup</a></li>
-<li class="toctree-l1"><a class="reference internal" href="chime/weather.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">weather</span></code> module: Weather data scraper/server and client</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="py-modindex.html">Module Index</a></li>
 </ul>
 
         </div>
@@ -101,7 +91,7 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="index.html">pychfpga User Manual (jfc/dev @ 7451fd75)</a>
+          <a href="index.html">pychfpga User Manual (jfc/dev @ ffec1078)</a>
       </nav>
 
       <div class="wy-nav-content">
@@ -185,11 +175,9 @@
         <li><a href="_autosummaries/pychfpga.raw_acq.server.html#pychfpga.raw_acq.server.RawAcqAsyncRESTServer.__call__">(pychfpga.raw_acq.server.RawAcqAsyncRESTServer method)</a>
 </li>
       </ul></li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.state.html#pychfpga.apps.ber_dashboard.state.AppState.__init__">__init__() (pychfpga.apps.ber_dashboard.state.AppState method)</a>
+      <li><a href="_autosummaries/pychfpga.calculate_gains.html#pychfpga.calculate_gains.DirectGainCalc.__init__">__init__() (pychfpga.calculate_gains.DirectGainCalc method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.calculate_gains.html#pychfpga.calculate_gains.DirectGainCalc.__init__">(pychfpga.calculate_gains.DirectGainCalc method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.calculate_gains.html#pychfpga.calculate_gains.GainCalc.__init__">(pychfpga.calculate_gains.GainCalc method)</a>
 </li>
         <li><a href="_autosummaries/pychfpga.common.array_methods.html#pychfpga.common.array_methods.ArrayMethods.__init__">(pychfpga.common.array_methods.ArrayMethods method)</a>
@@ -560,6 +548,76 @@
 </li>
       </ul></li>
   </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._backplane_eeprom_write_base64">_backplane_eeprom_write_base64() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._bp_qsfp_eeprom_read_base64">_bp_qsfp_eeprom_read_base64() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._bp_qsfp_eeprom_write_base64">_bp_qsfp_eeprom_write_base64() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._cache_bp_frui">_cache_bp_frui() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._fpga_spi_peek">_fpga_spi_peek() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._fpga_spi_poke">_fpga_spi_poke() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_arm_ip">_get_arm_ip() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_arm_mac">_get_arm_mac() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_backplane_ipmi">_get_backplane_ipmi() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_backplane_serial">_get_backplane_serial() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_backplane_type">_get_backplane_type() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_backplane_version">_get_backplane_version() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_mezzanine_ipmi">_get_mezzanine_ipmi() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_mezzanine_serial">_get_mezzanine_serial() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_mezzanine_type">_get_mezzanine_type() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_mezzanine_version">_get_mezzanine_version() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_motherboard_ipmi">_get_motherboard_ipmi() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_personality">_get_personality() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_syslog_buffer">_get_syslog_buffer() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._get_syslog_mask">_get_syslog_mask() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._initialize_backplane">_initialize_backplane() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._mezzanine_eeprom_read_base64">_mezzanine_eeprom_read_base64() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._mezzanine_eeprom_write_base64">_mezzanine_eeprom_write_base64() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._motherboard_eeprom_write_base64">_motherboard_eeprom_write_base64() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._motherboard_spi_flash_write_base64">_motherboard_spi_flash_write_base64() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._qsfp_eeprom_read_base64">_qsfp_eeprom_read_base64() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._qsfp_eeprom_write_base64">_qsfp_eeprom_write_base64() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._reset_all_fpgas">_reset_all_fpgas() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._reset_all_power">_reset_all_power() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._set_fpga_bitstream_base64">_set_fpga_bitstream_base64() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._set_personality">_set_personality() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._set_syslog_mask">_set_syslog_mask() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._sleep">_sleep() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods._syslog_test">_syslog_test() (tuber_methods.TuberMethods method)</a>
+</li>
+  </ul></td>
 </tr></table>
 
 <h2 id="A">A</h2>
@@ -871,12 +929,8 @@
       </ul></li>
       <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700">agilent_N5700 (class in pychfpga.hardware.Agilent_N5764A.agilent_N5700)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700">AgilentN5700 (class in ps)</a>
-
-      <ul>
-        <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700">(class in pychfpga.ps)</a>
+      <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700">AgilentN5700 (class in pychfpga.ps)</a>
 </li>
-      </ul></li>
       <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_n5764A.html#pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A">AgilentN5764A (class in pychfpga.hardware.Agilent_N5764A.agilent_n5764A)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.x_engine.CORR.html#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver.align">align() (pychfpga.fpga_firmware.chfpga.x_engine.CORR.CorrFrameReceiver method)</a>
@@ -932,8 +986,6 @@
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.amc6821.html#pychfpga.hardware.i2c_devices.amc6821.AMC6821">AMC6821 (class in pychfpga.hardware.i2c_devices.amc6821)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.system.gpio.html#pychfpga.fpga_firmware.chfpga.system.gpio.GPIO.ANT_RESET">ANT_RESET (pychfpga.fpga_firmware.chfpga.system.gpio.GPIO attribute)</a>
-</li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.state.html#pychfpga.apps.ber_dashboard.state.AppState">AppState (class in pychfpga.apps.ber_dashboard.state)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.eeprom.html#pychfpga.hardware.i2c_devices.eeprom.eeprom.EEPROMException.args">args (pychfpga.hardware.i2c_devices.eeprom.eeprom.EEPROMException attribute)</a>
 
@@ -1057,8 +1109,6 @@
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.bct_engine.html#pychfpga.fpga_firmware.chfpga.ct_engine.bct_engine.BCTEngine">BCTEngine (class in pychfpga.fpga_firmware.chfpga.ct_engine.bct_engine)</a>
 </li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#pychfpga.apps.ber_dashboard.qsfp_ber_tests.best_index">best_index() (in module pychfpga.apps.ber_dashboard.qsfp_ber_tests)</a>
-</li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.cge.html#pychfpga.fpga_firmware.chfpga.ct_engine.cge.CGECommon.BIAS_CFG0">BIAS_CFG0 (pychfpga.fpga_firmware.chfpga.ct_engine.cge.CGECommon attribute)</a>
 
       <ul>
@@ -1131,14 +1181,14 @@
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.crs.netconsole_xmodem.html#pychfpga.hardware.crs.netconsole_xmodem.XMODEM.block_1k">block_1k() (pychfpga.hardware.crs.netconsole_xmodem.XMODEM static method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.xglink.html#pychfpga.fpga_firmware.chfpga.ct_engine.xglink.GTX.BLOCK_LOCK">BLOCK_LOCK (pychfpga.fpga_firmware.chfpga.ct_engine.xglink.GTX attribute)</a>
 
       <ul>
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.xxvglink.html#pychfpga.fpga_firmware.chfpga.ct_engine.xxvglink.GTY.BLOCK_LOCK">(pychfpga.fpga_firmware.chfpga.ct_engine.xxvglink.GTY attribute)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.xglink.html#pychfpga.fpga_firmware.chfpga.ct_engine.xglink.GTX.BLOCK_LOCK_RESET">BLOCK_LOCK_RESET (pychfpga.fpga_firmware.chfpga.ct_engine.xglink.GTX attribute)</a>
 
       <ul>
@@ -1413,8 +1463,6 @@
 </li>
       <li><a href="_autosummaries/pychfpga.raw_acq.receiver.html#pychfpga.raw_acq.receiver.RawAcqReceiver.check_ioloop_response_time_async">check_ioloop_response_time_async() (pychfpga.raw_acq.receiver.RawAcqReceiver method)</a>
 </li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#pychfpga.apps.ber_dashboard.qsfp_ber_tests.check_loopback">check_loopback() (in module pychfpga.apps.ber_dashboard.qsfp_ber_tests)</a>
-</li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.check_ramp_errors">check_ramp_errors() (pychfpga.fpga_firmware.chfpga.chfpga.chFPGA method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.check_sync_delays">check_sync_delays() (pychfpga.fpga_firmware.chfpga.chfpga.chFPGA method)</a>
@@ -1445,11 +1493,9 @@
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.ice.MGADC08.ADC.html#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.chip_id">chip_id (pychfpga.hardware.ice.MGADC08.ADC.ADC_chip property)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700.clear">clear() (ps.AgilentN5700 method)</a>
+      <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.clear">clear() (pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.clear">(pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.ssd1306.display.html#pychfpga.hardware.i2c_devices.ssd1306.display.Display.clear">(pychfpga.hardware.i2c_devices.ssd1306.display.Display method)</a>
 </li>
         <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.ssd1306.ssd1306.html#pychfpga.hardware.i2c_devices.ssd1306.ssd1306.SSD1306.clear">(pychfpga.hardware.i2c_devices.ssd1306.ssd1306.SSD1306 method)</a>
@@ -1458,6 +1504,8 @@
 </li>
       </ul></li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.f_engine.adcdaq.html#pychfpga.fpga_firmware.chfpga.f_engine.adcdaq.ADCDAQ.CLEAR_FIFO_FLAGS">CLEAR_FIFO_FLAGS (pychfpga.fpga_firmware.chfpga.f_engine.adcdaq.ADCDAQ attribute)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.clear_fpga_bitstream">clear_fpga_bitstream() (tuber_methods.TuberMethods method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.clear_fpga_udp_errors">clear_fpga_udp_errors() (pychfpga.fpga_firmware.chfpga.chfpga.chFPGA method)</a>
 
@@ -1615,11 +1663,9 @@
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.SHUFFLE_BIN_SEL.html#pychfpga.fpga_firmware.chfpga.ct_engine.SHUFFLE_BIN_SEL.SHUFFLE_BIN_SEL_base.COMBINE_DATA_FLAGS">(pychfpga.fpga_firmware.chfpga.ct_engine.SHUFFLE_BIN_SEL.SHUFFLE_BIN_SEL_base attribute)</a>
 </li>
       </ul></li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700.command">command() (ps.AgilentN5700 method)</a>
+      <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.SpectrumInstrumentsTM4D.command">command() (pychfpga.gps.SpectrumInstrumentsTM4D method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.SpectrumInstrumentsTM4D.command">(pychfpga.gps.SpectrumInstrumentsTM4D method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.command">(pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
 </li>
         <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.GPIB.html#pychfpga.hardware.Agilent_N5764A.GPIB.GPIB.command">(pychfpga.hardware.Agilent_N5764A.GPIB.GPIB method)</a>
@@ -1727,12 +1773,8 @@
 </li>
       <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.SpectrumInstrumentsTM4D.configure_gps">configure_gps() (pychfpga.gps.SpectrumInstrumentsTM4D method)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700.configure_power_on_state">configure_power_on_state() (ps.AgilentN5700 method)</a>
-
-      <ul>
-        <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.configure_power_on_state">(pychfpga.ps.AgilentN5700 method)</a>
+      <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.configure_power_on_state">configure_power_on_state() (pychfpga.ps.AgilentN5700 method)</a>
 </li>
-      </ul></li>
       <li><a href="_autosummaries/pychfpga.hardware.interfaces.tcpipe.html#pychfpga.hardware.interfaces.tcpipe.TCPipe.CONNECT_RETRY_INTERVAL_S">CONNECT_RETRY_INTERVAL_S (pychfpga.hardware.interfaces.tcpipe.TCPipe attribute)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.interfaces.tcpipe.html#pychfpga.hardware.interfaces.tcpipe.TCPipe.CONNECT_RETRY_MAX_S">CONNECT_RETRY_MAX_S (pychfpga.hardware.interfaces.tcpipe.TCPipe attribute)</a>
@@ -2091,11 +2133,9 @@
         <li><a href="_autosummaries/pychfpga.fpga_master.html#pychfpga.fpga_master.FPGAMaster.DEFAULT_LOGGING">(pychfpga.fpga_master.FPGAMaster attribute)</a>
 </li>
       </ul></li>
-      <li><a href="hardware/ps/ps.html#ps.PowerSupplyAsyncRESTClient.DEFAULT_PORT">DEFAULT_PORT (ps.PowerSupplyAsyncRESTClient attribute)</a>
+      <li><a href="_autosummaries/pychfpga.fpga_master.html#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.DEFAULT_PORT">DEFAULT_PORT (pychfpga.fpga_master.FPGAMasterAsyncRESTClient attribute)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.fpga_master.html#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.DEFAULT_PORT">(pychfpga.fpga_master.FPGAMasterAsyncRESTClient attribute)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.fpga_master.html#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.DEFAULT_PORT">(pychfpga.fpga_master.FPGAMasterAsyncRESTServer attribute)</a>
 </li>
         <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.GPSAsyncRESTClient.DEFAULT_PORT">(pychfpga.gps.GPSAsyncRESTClient attribute)</a>
@@ -3317,6 +3357,8 @@
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.uct_array_methods.html#pychfpga.fpga_firmware.chfpga.ct_engine.uct_array_methods.UCTArrayMethods.get_array_methods">(pychfpga.fpga_firmware.chfpga.ct_engine.uct_array_methods.UCTArrayMethods method)</a>
 </li>
       </ul></li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_backplane_current">get_backplane_current() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.hardware.ice.icecrate.html#pychfpga.hardware.ice.icecrate.IceCrate_MGK7BP16.get_backplane_eeprom_serial_number">get_backplane_eeprom_serial_number() (pychfpga.hardware.ice.icecrate.IceCrate_MGK7BP16 method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.interfaces.tcpipe.html#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_backplane_ipmi_info">get_backplane_ipmi_info() (pychfpga.hardware.interfaces.tcpipe.TCPipe method)</a>
@@ -3337,9 +3379,17 @@
       </ul></li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.html#pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.BCTArrayMethods.get_backplane_pcb_link_map">get_backplane_pcb_link_map() (pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.BCTArrayMethods method)</a>
 </li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_backplane_power">get_backplane_power() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.html#pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.BCTArrayMethods.get_backplane_qsfp_link_map">get_backplane_qsfp_link_map() (pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.BCTArrayMethods method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.html#pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.BCTArrayMethods.get_backplane_qsfp_links">get_backplane_qsfp_links() (pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.BCTArrayMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_backplane_slot">get_backplane_slot() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_backplane_temperature">get_backplane_temperature() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_backplane_voltage">get_backplane_voltage() (tuber_methods.TuberMethods method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.cge.html#pychfpga.fpga_firmware.chfpga.ct_engine.cge.CGEChannel.get_ber">get_ber() (pychfpga.fpga_firmware.chfpga.ct_engine.cge.CGEChannel method)</a>
 
@@ -3433,6 +3483,10 @@
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.system.gpio.html#pychfpga.fpga_firmware.chfpga.system.gpio.GPIO.get_bitstream_date">get_bitstream_date() (pychfpga.fpga_firmware.chfpga.system.gpio.GPIO method)</a>
 </li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_bp_qsfp_gpio">get_bp_qsfp_gpio() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_bp_qsfp_led">get_bp_qsfp_led() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.shuffle.html#pychfpga.fpga_firmware.chfpga.ct_engine.shuffle.Shuffle.get_bp_rx_status">get_bp_rx_status() (pychfpga.fpga_firmware.chfpga.ct_engine.shuffle.Shuffle method)</a>
 
       <ul>
@@ -3450,6 +3504,8 @@
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.f_engine.funcgen.html#pychfpga.fpga_firmware.chfpga.f_engine.funcgen.FUNCGEN.get_buffer">get_buffer() (pychfpga.fpga_firmware.chfpga.f_engine.funcgen.FUNCGEN method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.f_engine.funcgen.html#pychfpga.fpga_firmware.chfpga.f_engine.funcgen.FUNCGEN.get_buffer_info">get_buffer_info() (pychfpga.fpga_firmware.chfpga.f_engine.funcgen.FUNCGEN method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_build_info">get_build_info() (tuber_methods.TuberMethods method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.f_engine.prober.html#pychfpga.fpga_firmware.chfpga.f_engine.prober.PROBER.get_burst_period">get_burst_period() (pychfpga.fpga_firmware.chfpga.f_engine.prober.PROBER method)</a>
 </li>
@@ -3581,6 +3637,8 @@
       </ul></li>
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.hmc7044.html#pychfpga.hardware.i2c_devices.hmc7044.hmc7044.get_clkin_status">get_clkin_status() (pychfpga.hardware.i2c_devices.hmc7044.hmc7044 method)</a>
 </li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_clock_source">get_clock_source() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.SpectrumInstrumentsTM4D.get_coast_timer">get_coast_timer() (pychfpga.gps.SpectrumInstrumentsTM4D method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.system.gpio.html#pychfpga.fpga_firmware.chfpga.system.gpio.GPIO.get_command_count">get_command_count() (pychfpga.fpga_firmware.chfpga.system.gpio.GPIO method)</a>
@@ -3639,11 +3697,9 @@
         <li><a href="_autosummaries/pychfpga.fpga_master.html#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_current_gain_filename">(pychfpga.fpga_master.FPGAMasterAsyncRESTServer method)</a>
 </li>
       </ul></li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700.get_current_limit">get_current_limit() (ps.AgilentN5700 method)</a>
+      <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.get_current_limit">get_current_limit() (pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.get_current_limit">(pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.get_current_limit">(pychfpga.ps.AgilentN5700 method)</a>
 </li>
       </ul></li>
@@ -4036,6 +4092,8 @@
 </li>
         <li><a href="_autosummaries/pychfpga.hardware.ice.icecrate.html#pychfpga.hardware.ice.icecrate.IceCrate_MGK7BP16.get_led">(pychfpga.hardware.ice.icecrate.IceCrate_MGK7BP16 method)</a>
 </li>
+        <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_led">(tuber_methods.TuberMethods method)</a>
+</li>
       </ul></li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.html#pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.BCTArrayMethods.get_link_map">get_link_map() (pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.BCTArrayMethods method)</a>
 
@@ -4081,11 +4139,9 @@
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_master.html#pychfpga.fpga_master.FPGAMasterAsyncRESTClient.get_methods">get_methods() (pychfpga.fpga_master.FPGAMasterAsyncRESTClient method)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.PowerSupplyAsyncRESTClient.get_metrics">get_metrics() (ps.PowerSupplyAsyncRESTClient method)</a>
+      <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.chan_crossbar.html#pychfpga.fpga_firmware.chfpga.ct_engine.chan_crossbar.ChanCrossbar.get_metrics">get_metrics() (pychfpga.fpga_firmware.chfpga.ct_engine.chan_crossbar.ChanCrossbar method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.chan_crossbar.html#pychfpga.fpga_firmware.chfpga.ct_engine.chan_crossbar.ChanCrossbar.get_metrics">(pychfpga.fpga_firmware.chfpga.ct_engine.chan_crossbar.ChanCrossbar method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.shuffle.html#pychfpga.fpga_firmware.chfpga.ct_engine.shuffle.Shuffle.get_metrics">(pychfpga.fpga_firmware.chfpga.ct_engine.shuffle.Shuffle method)</a>
 </li>
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.shuffle_crossbar.html#pychfpga.fpga_firmware.chfpga.ct_engine.shuffle_crossbar.ShuffleCrossbar.get_metrics">(pychfpga.fpga_firmware.chfpga.ct_engine.shuffle_crossbar.ShuffleCrossbar method)</a>
@@ -4123,12 +4179,18 @@
         <li><a href="_autosummaries/pychfpga.raw_acq.ucorr_acq_packet_processor.html#pychfpga.raw_acq.ucorr_acq_packet_processor.CorrDataProcessor.get_metrics_async">(pychfpga.raw_acq.ucorr_acq_packet_processor.CorrDataProcessor method)</a>
 </li>
       </ul></li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_mezzanine_current">get_mezzanine_current() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_mezzanine_power">get_mezzanine_power() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.hardware.ice.icemezz.html#pychfpga.hardware.ice.icemezz.FMCMezzanine.get_mezzanine_power_async">get_mezzanine_power_async() (pychfpga.hardware.ice.icemezz.FMCMezzanine method)</a>
 
       <ul>
         <li><a href="_autosummaries/pychfpga.hardware.ice.MGADC08.MGADC08.html#pychfpga.hardware.ice.MGADC08.MGADC08.FMCMezzanine_MGADC08.get_mezzanine_power_async">(pychfpga.hardware.ice.MGADC08.MGADC08.FMCMezzanine_MGADC08 method)</a>
 </li>
       </ul></li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_mezzanine_voltage">get_mezzanine_voltage() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.fpga_array.html#pychfpga.fpga_array.FPGAArray.get_mode">get_mode() (pychfpga.fpga_array.FPGAArray method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_master.html#pychfpga.fpga_master.FPGAMasterAsyncRESTServer.get_monitoring_data">get_monitoring_data() (pychfpga.fpga_master.FPGAMasterAsyncRESTServer method)</a>
@@ -4137,11 +4199,17 @@
         <li><a href="_autosummaries/pychfpga.raw_acq.server.html#pychfpga.raw_acq.server.RawAcqAsyncRESTServer.get_monitoring_data">(pychfpga.raw_acq.server.RawAcqAsyncRESTServer method)</a>
 </li>
       </ul></li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_motherboard_current">get_motherboard_current() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.hardware.ice.iceboard.html#pychfpga.hardware.ice.iceboard.IceBoard.get_motherboard_ip_address">get_motherboard_ip_address() (pychfpga.hardware.ice.iceboard.IceBoard method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.interfaces.tcpipe.html#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_motherboard_ipmi_info">get_motherboard_ipmi_info() (pychfpga.hardware.interfaces.tcpipe.TCPipe method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.interfaces.tcpipe.html#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_motherboard_ipmi_info_async">get_motherboard_ipmi_info_async() (pychfpga.hardware.interfaces.tcpipe.TCPipe method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_motherboard_power">get_motherboard_power() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_motherboard_serial">get_motherboard_serial() (tuber_methods.TuberMethods method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.crs.crs.html#pychfpga.hardware.crs.crs.CRS.get_motherboard_temperature">get_motherboard_temperature() (pychfpga.hardware.crs.crs.CRS method)</a>
 
@@ -4152,7 +4220,11 @@
 </li>
         <li><a href="_autosummaries/pychfpga.hardware.zuboard.zuboard.html#pychfpga.hardware.zuboard.zuboard.ZUBoard.get_motherboard_temperature">(pychfpga.hardware.zuboard.zuboard.ZUBoard method)</a>
 </li>
+        <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_motherboard_temperature">(tuber_methods.TuberMethods method)</a>
+</li>
       </ul></li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_motherboard_voltage">get_motherboard_voltage() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.SpectrumInstrumentsTM4D.get_mux1_output_source">get_mux1_output_source() (pychfpga.gps.SpectrumInstrumentsTM4D method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.SpectrumInstrumentsTM4D.get_mux2_output_source">get_mux2_output_source() (pychfpga.gps.SpectrumInstrumentsTM4D method)</a>
@@ -4307,6 +4379,8 @@
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.qsfp.html#pychfpga.hardware.i2c_devices.qsfp.QSFP.get_power_mode">get_power_mode() (pychfpga.hardware.i2c_devices.qsfp.QSFP method)</a>
 </li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_power_on_slot">get_power_on_slot() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.get_power_on_state">get_power_on_state() (pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
 
       <ul>
@@ -4339,6 +4413,8 @@
         <li><a href="_autosummaries/pychfpga.hardware.ice.icecrate.html#pychfpga.hardware.ice.icecrate.IceCrate_MGK7BP16.get_qsfp_cable_map">(pychfpga.hardware.ice.icecrate.IceCrate_MGK7BP16 method)</a>
 </li>
       </ul></li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.get_qsfp_gpio">get_qsfp_gpio() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.hardware.ice.icecrate.html#pychfpga.hardware.ice.icecrate.IceCrate_MGK7BP1.get_qsfp_links">get_qsfp_links() (pychfpga.hardware.ice.icecrate.IceCrate_MGK7BP1 method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.x_engine.CORR.html#pychfpga.fpga_firmware.chfpga.x_engine.CORR.get_raw_corr_map">get_raw_corr_map() (in module pychfpga.fpga_firmware.chfpga.x_engine.CORR)</a>
@@ -4461,11 +4537,9 @@
       </ul></li>
       <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.SpectrumInstrumentsTM4D.get_speed_and_heading">get_speed_and_heading() (pychfpga.gps.SpectrumInstrumentsTM4D method)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700.get_state">get_state() (ps.AgilentN5700 method)</a>
+      <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.get_state">get_state() (pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.get_state">(pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.get_state">(pychfpga.ps.AgilentN5700 method)</a>
 </li>
       </ul></li>
@@ -4725,11 +4799,9 @@
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.get_version">get_version() (pychfpga.fpga_firmware.chfpga.chfpga.chFPGA method)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700.get_voltage_setting">get_voltage_setting() (ps.AgilentN5700 method)</a>
+      <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.get_voltage_setting">get_voltage_setting() (pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.get_voltage_setting">(pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.get_voltage_setting">(pychfpga.ps.AgilentN5700 method)</a>
 </li>
       </ul></li>
@@ -5213,6 +5285,8 @@
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chFPGA_receiver.html#pychfpga.fpga_firmware.chfpga.chFPGA_receiver.ReceiverThread.is_alive">is_alive() (pychfpga.fpga_firmware.chfpga.chFPGA_receiver.ReceiverThread method)</a>
 </li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.is_backplane_present">is_backplane_present() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.hardware.crs.crs.html#pychfpga.hardware.crs.crs.CRS.is_backplane_present_async">is_backplane_present_async() (pychfpga.hardware.crs.crs.CRS method)</a>
 
       <ul>
@@ -5223,6 +5297,8 @@
         <li><a href="_autosummaries/pychfpga.hardware.zuboard.zuboard.html#pychfpga.hardware.zuboard.zuboard.ZUBoard.is_backplane_present_async">(pychfpga.hardware.zuboard.zuboard.ZUBoard method)</a>
 </li>
       </ul></li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.is_bp_qsfp_present">is_bp_qsfp_present() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.hardware.interfaces.udp.html#pychfpga.hardware.interfaces.udp.Udp.is_broadcast">is_broadcast() (pychfpga.hardware.interfaces.udp.Udp method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.common.state.html#pychfpga.common.state.State.is_changed">is_changed() (pychfpga.common.state.State method)</a>
@@ -5233,11 +5309,9 @@
         <li><a href="_autosummaries/pychfpga.calculate_gains.html#pychfpga.calculate_gains.GainCalc.is_done">(pychfpga.calculate_gains.GainCalc method)</a>
 </li>
       </ul></li>
-      <li><a href="hardware/ps/ps.html#ps.PowerSupplyAsyncRESTClient.is_enabled">is_enabled() (ps.PowerSupplyAsyncRESTClient method)</a>
+      <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_n5764A.html#pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A.is_enabled">is_enabled() (pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_n5764A.html#pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A.is_enabled">(pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.is_enabled">(pychfpga.ps.AgilentN5700 method)</a>
 </li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTClient.is_enabled">(pychfpga.ps.PowerSupplyAsyncRESTClient method)</a>
@@ -5258,7 +5332,11 @@
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.is_fmc_present_for_channel">is_fmc_present_for_channel() (pychfpga.fpga_firmware.chfpga.chfpga.chFPGA method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.interfaces.tcpipe.html#pychfpga.hardware.interfaces.tcpipe.TCPipe.is_fpga_programmed">is_fpga_programmed() (pychfpga.hardware.interfaces.tcpipe.TCPipe method)</a>
+
+      <ul>
+        <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.is_fpga_programmed">(tuber_methods.TuberMethods method)</a>
 </li>
+      </ul></li>
       <li><a href="_autosummaries/pychfpga.hardware.crs.crs.html#pychfpga.hardware.crs.crs.CRS.is_fpga_programmed_async">is_fpga_programmed_async() (pychfpga.hardware.crs.crs.CRS method)</a>
 
       <ul>
@@ -5292,6 +5370,8 @@
       <ul>
         <li><a href="_autosummaries/pychfpga.hardware.ice.MGADC08.MGADC08.html#pychfpga.hardware.ice.MGADC08.MGADC08.FMCMezzanine_MGADC08.is_mezzanine_present">(pychfpga.hardware.ice.MGADC08.MGADC08.FMCMezzanine_MGADC08 method)</a>
 </li>
+        <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.is_mezzanine_present">(tuber_methods.TuberMethods method)</a>
+</li>
       </ul></li>
       <li><a href="_autosummaries/pychfpga.hardware.ice.icemezz.html#pychfpga.hardware.ice.icemezz.FMCMezzanine.is_mezzanine_present_async">is_mezzanine_present_async() (pychfpga.hardware.ice.icemezz.FMCMezzanine method)</a>
 
@@ -5299,11 +5379,9 @@
         <li><a href="_autosummaries/pychfpga.hardware.ice.MGADC08.MGADC08.html#pychfpga.hardware.ice.MGADC08.MGADC08.FMCMezzanine_MGADC08.is_mezzanine_present_async">(pychfpga.hardware.ice.MGADC08.MGADC08.FMCMezzanine_MGADC08 method)</a>
 </li>
       </ul></li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700.is_ok">is_ok() (ps.AgilentN5700 method)</a>
+      <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_n5764A.html#pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A.is_ok">is_ok() (pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_n5764A.html#pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A.is_ok">(pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.is_ok">(pychfpga.ps.AgilentN5700 method)</a>
 </li>
       </ul></li>
@@ -5331,12 +5409,10 @@
         <li><a href="_autosummaries/pychfpga.hardware.interfaces.tcpipe.html#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.is_present">(pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C method)</a>
 </li>
       </ul></li>
-      <li><a href="hardware/ps/ps.html#ps.PowerSupplyAsyncRESTClient.is_ready">is_ready() (ps.PowerSupplyAsyncRESTClient method)</a>
-
-      <ul>
-        <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTClient.is_ready">(pychfpga.ps.PowerSupplyAsyncRESTClient method)</a>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.is_qsfp_present">is_qsfp_present() (tuber_methods.TuberMethods method)</a>
 </li>
-      </ul></li>
+      <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTClient.is_ready">is_ready() (pychfpga.ps.PowerSupplyAsyncRESTClient method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.chan_bin_sel.html#pychfpga.fpga_firmware.chfpga.ct_engine.chan_bin_sel.ChanBinSel.IS_RESET">IS_RESET (pychfpga.fpga_firmware.chfpga.ct_engine.chan_bin_sel.ChanBinSel attribute)</a>
 
       <ul>
@@ -5363,15 +5439,15 @@
       </ul></li>
       <li><a href="_autosummaries/pychfpga.raw_acq.receiver.html#pychfpga.raw_acq.receiver.RawAcqReceiver.is_running">is_running() (pychfpga.raw_acq.receiver.RawAcqReceiver method)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.PowerSupplyAsyncRESTClient.is_started">is_started() (ps.PowerSupplyAsyncRESTClient method)</a>
+      <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTClient.is_started">is_started() (pychfpga.ps.PowerSupplyAsyncRESTClient method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTClient.is_started">(pychfpga.ps.PowerSupplyAsyncRESTClient method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTServer.is_started">(pychfpga.ps.PowerSupplyAsyncRESTServer method)</a>
 </li>
       </ul></li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chFPGA_receiver.html#pychfpga.fpga_firmware.chfpga.chFPGA_receiver.ReceiverThread.is_stopped">is_stopped() (pychfpga.fpga_firmware.chfpga.chFPGA_receiver.ReceiverThread method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.is_voltage_nominal">is_voltage_nominal() (tuber_methods.TuberMethods method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chFPGA_receiver.html#pychfpga.fpga_firmware.chfpga.chFPGA_receiver.ReceiverThread.isDaemon">isDaemon() (pychfpga.fpga_firmware.chfpga.chFPGA_receiver.ReceiverThread method)</a>
 </li>
@@ -5493,11 +5569,9 @@
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chFPGA_receiver.html#pychfpga.fpga_firmware.chfpga.chFPGA_receiver.chFPGA_receiver.length">length() (pychfpga.fpga_firmware.chfpga.chFPGA_receiver.chFPGA_receiver method)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.PowerSupplyAsyncRESTClient.list_names">list_names() (ps.PowerSupplyAsyncRESTClient method)</a>
+      <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.GPSAsyncRESTClient.list_names">list_names() (pychfpga.gps.GPSAsyncRESTClient method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.GPSAsyncRESTClient.list_names">(pychfpga.gps.GPSAsyncRESTClient method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTClient.list_names">(pychfpga.ps.PowerSupplyAsyncRESTClient method)</a>
 </li>
       </ul></li>
@@ -5641,8 +5715,6 @@
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.gpu.html#pychfpga.fpga_firmware.chfpga.ct_engine.gpu.GPU.LOOPBACK_LANE_MAP">(pychfpga.fpga_firmware.chfpga.ct_engine.gpu.GPU attribute)</a>
 </li>
       </ul></li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#pychfpga.apps.ber_dashboard.qsfp_ber_tests.lpm_by_plug">lpm_by_plug() (in module pychfpga.apps.ber_dashboard.qsfp_ber_tests)</a>
-</li>
   </ul></td>
 </tr></table>
 
@@ -5735,12 +5807,8 @@
 </li>
       <li><a href="_autosummaries/pychfpga.common.mdns_discovery.html#pychfpga.common.mdns_discovery.mdns_resolve">mdns_resolve() (in module pychfpga.common.mdns_discovery)</a>
 </li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#pychfpga.apps.ber_dashboard.qsfp_ber_tests.measure">measure() (in module pychfpga.apps.ber_dashboard.qsfp_ber_tests)</a>
-
-      <ul>
-        <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.measure">(pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
+      <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.measure">measure() (pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
 </li>
-      </ul></li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.f_engine.fft.html#pychfpga.fpga_firmware.chfpga.f_engine.fft.FFT.MEASURED_PIPELINE_DELAY">MEASURED_PIPELINE_DELAY (pychfpga.fpga_firmware.chfpga.f_engine.fft.FFT attribute)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.mezzanine.html#pychfpga.hardware.mezzanine.Mezzanine">Mezzanine (class in pychfpga.hardware.mezzanine)</a>
@@ -5806,16 +5874,6 @@
         <li><a href="_autosummaries/pychfpga.apps.html#module-pychfpga.apps">pychfpga.apps</a>
 </li>
         <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.html#module-pychfpga.apps.ber_dashboard">pychfpga.apps.ber_dashboard</a>
-</li>
-        <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.paths.html#module-pychfpga.apps.ber_dashboard.paths">pychfpga.apps.ber_dashboard.paths</a>
-</li>
-        <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#module-pychfpga.apps.ber_dashboard.qsfp_ber_tests">pychfpga.apps.ber_dashboard.qsfp_ber_tests</a>
-</li>
-        <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.state.html#module-pychfpga.apps.ber_dashboard.state">pychfpga.apps.ber_dashboard.state</a>
-</li>
-        <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.ui.html#module-pychfpga.apps.ber_dashboard.ui">pychfpga.apps.ber_dashboard.ui</a>
-</li>
-        <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.workers.html#module-pychfpga.apps.ber_dashboard.workers">pychfpga.apps.ber_dashboard.workers</a>
 </li>
         <li><a href="_autosummaries/pychfpga.calculate_gains.html#module-pychfpga.calculate_gains">pychfpga.calculate_gains</a>
 </li>
@@ -6820,11 +6878,9 @@
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.system.freqctr.html#pychfpga.fpga_firmware.chfpga.system.freqctr.FreqCtr.PORTS">PORTS (pychfpga.fpga_firmware.chfpga.system.freqctr.FreqCtr attribute)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.PowerSupplyAsyncRESTClient.power_cycle">power_cycle() (ps.PowerSupplyAsyncRESTClient method)</a>
+      <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_n5764A.html#pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A.power_cycle">power_cycle() (pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_n5764A.html#pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A.power_cycle">(pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.power_cycle">(pychfpga.ps.AgilentN5700 method)</a>
 </li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTClient.power_cycle">(pychfpga.ps.PowerSupplyAsyncRESTClient method)</a>
@@ -6836,11 +6892,9 @@
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.power_enable">(pychfpga.ps.AgilentN5700 method)</a>
 </li>
       </ul></li>
-      <li><a href="hardware/ps/ps.html#ps.PowerSupplyAsyncRESTClient.power_off">power_off() (ps.PowerSupplyAsyncRESTClient method)</a>
+      <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_n5764A.html#pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A.power_off">power_off() (pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_n5764A.html#pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A.power_off">(pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.power_off">(pychfpga.ps.AgilentN5700 method)</a>
 </li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTClient.power_off">(pychfpga.ps.PowerSupplyAsyncRESTClient method)</a>
@@ -6848,11 +6902,9 @@
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTServer.power_off">(pychfpga.ps.PowerSupplyAsyncRESTServer method)</a>
 </li>
       </ul></li>
-      <li><a href="hardware/ps/ps.html#ps.PowerSupplyAsyncRESTClient.power_on">power_on() (ps.PowerSupplyAsyncRESTClient method)</a>
+      <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_n5764A.html#pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A.power_on">power_on() (pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_n5764A.html#pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A.power_on">(pychfpga.hardware.Agilent_N5764A.agilent_n5764A.AgilentN5764A method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.power_on">(pychfpga.ps.AgilentN5700 method)</a>
 </li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTClient.power_on">(pychfpga.ps.PowerSupplyAsyncRESTClient method)</a>
@@ -6862,12 +6914,8 @@
       </ul></li>
       <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTServer.POWER_SUPPLY_CLASSES">POWER_SUPPLY_CLASSES (pychfpga.ps.PowerSupplyAsyncRESTServer attribute)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.PowerSupplyAsyncRESTClient">PowerSupplyAsyncRESTClient (class in ps)</a>
-
-      <ul>
-        <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTClient">(class in pychfpga.ps)</a>
+      <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTClient">PowerSupplyAsyncRESTClient (class in pychfpga.ps)</a>
 </li>
-      </ul></li>
       <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.PowerSupplyAsyncRESTServer">PowerSupplyAsyncRESTServer (class in pychfpga.ps)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chFPGA_receiver.html#pychfpga.fpga_firmware.chfpga.chFPGA_receiver.chFPGA_receiver.pp">pp() (pychfpga.fpga_firmware.chfpga.chFPGA_receiver.chFPGA_receiver method)</a>
@@ -7116,41 +7164,6 @@
 </li>
       </ul></li>
       <li>
-    pychfpga.apps.ber_dashboard.paths
-
-      <ul>
-        <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.paths.html#module-pychfpga.apps.ber_dashboard.paths">module</a>
-</li>
-      </ul></li>
-      <li>
-    pychfpga.apps.ber_dashboard.qsfp_ber_tests
-
-      <ul>
-        <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#module-pychfpga.apps.ber_dashboard.qsfp_ber_tests">module</a>
-</li>
-      </ul></li>
-      <li>
-    pychfpga.apps.ber_dashboard.state
-
-      <ul>
-        <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.state.html#module-pychfpga.apps.ber_dashboard.state">module</a>
-</li>
-      </ul></li>
-      <li>
-    pychfpga.apps.ber_dashboard.ui
-
-      <ul>
-        <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.ui.html#module-pychfpga.apps.ber_dashboard.ui">module</a>
-</li>
-      </ul></li>
-      <li>
-    pychfpga.apps.ber_dashboard.workers
-
-      <ul>
-        <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.workers.html#module-pychfpga.apps.ber_dashboard.workers">module</a>
-</li>
-      </ul></li>
-      <li>
     pychfpga.calculate_gains
 
       <ul>
@@ -7269,8 +7282,6 @@
         <li><a href="_autosummaries/pychfpga.common.util.html#module-pychfpga.common.util">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     pychfpga.digital_gain
 
@@ -7292,6 +7303,8 @@
         <li><a href="_autosummaries/pychfpga.fpga_firmware.html#module-pychfpga.fpga_firmware">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     pychfpga.fpga_firmware.chfpga
 
@@ -8363,17 +8376,13 @@
       </ul></li>
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.qsfp.html#pychfpga.hardware.i2c_devices.qsfp.QSFP">QSFP (class in pychfpga.hardware.i2c_devices.qsfp)</a>
 </li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#pychfpga.apps.ber_dashboard.qsfp_ber_tests.qsfp_boards">qsfp_boards() (in module pychfpga.apps.ber_dashboard.qsfp_ber_tests)</a>
-</li>
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.qsfp.html#pychfpga.hardware.i2c_devices.qsfp.QSFP.QSFP_EEPROM_MAP">QSFP_EEPROM_MAP (pychfpga.hardware.i2c_devices.qsfp.QSFP attribute)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.crs.crs.html#pychfpga.hardware.crs.crs.CRS.qsfp_media">qsfp_media() (pychfpga.hardware.crs.crs.CRS static method)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700.query">query() (ps.AgilentN5700 method)</a>
+      <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.SpectrumInstrumentsTM4D.query">query() (pychfpga.gps.SpectrumInstrumentsTM4D method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.SpectrumInstrumentsTM4D.query">(pychfpga.gps.SpectrumInstrumentsTM4D method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.query">(pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
 </li>
         <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.GPIB.html#pychfpga.hardware.Agilent_N5764A.GPIB.GPIB.query">(pychfpga.hardware.Agilent_N5764A.GPIB.GPIB method)</a>
@@ -8979,8 +8988,6 @@
       </ul></li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.cge_array_methods.html#pychfpga.fpga_firmware.chfpga.ct_engine.cge_array_methods.CGEArrayMethods.read_optical">read_optical() (pychfpga.fpga_firmware.chfpga.ct_engine.cge_array_methods.CGEArrayMethods method)</a>
 </li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#pychfpga.apps.ber_dashboard.qsfp_ber_tests.read_plugs">read_plugs() (in module pychfpga.apps.ber_dashboard.qsfp_ber_tests)</a>
-</li>
       <li><a href="_autosummaries/pychfpga.pocket_correlator.html#pychfpga.pocket_correlator.POCKET_CORRELATOR.read_post_gain_frames">read_post_gain_frames() (pychfpga.pocket_correlator.POCKET_CORRELATOR method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.bct_engine.html#pychfpga.fpga_firmware.chfpga.ct_engine.bct_engine.WiredCrossbar.read_ram">read_ram() (pychfpga.fpga_firmware.chfpga.ct_engine.bct_engine.WiredCrossbar method)</a>
@@ -9173,12 +9180,12 @@
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_master.html#pychfpga.fpga_master.reap_cached_sockets">reap_cached_sockets() (in module pychfpga.fpga_master)</a>
 </li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#pychfpga.apps.ber_dashboard.qsfp_ber_tests.rearm">rearm() (in module pychfpga.apps.ber_dashboard.qsfp_ber_tests)</a>
-</li>
       <li><a href="_autosummaries/pychfpga.hardware.crs.crs.html#pychfpga.hardware.crs.crs.CRS.reboot">reboot() (pychfpga.hardware.crs.crs.CRS method)</a>
 
       <ul>
         <li><a href="_autosummaries/pychfpga.hardware.interfaces.tcpipe.html#pychfpga.hardware.interfaces.tcpipe.TCPipe.reboot">(pychfpga.hardware.interfaces.tcpipe.TCPipe method)</a>
+</li>
+        <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.reboot">(tuber_methods.TuberMethods method)</a>
 </li>
       </ul></li>
       <li><a href="_autosummaries/pychfpga.hardware.interfaces.tcpipe.html#pychfpga.hardware.interfaces.tcpipe.TCPipe.REBOOT_PAYLOAD">REBOOT_PAYLOAD (pychfpga.hardware.interfaces.tcpipe.TCPipe attribute)</a>
@@ -9209,10 +9216,10 @@
       </ul></li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.system.refclk.html#pychfpga.fpga_firmware.chfpga.system.refclk.REFCLK">REFCLK (class in pychfpga.fpga_firmware.chfpga.system.refclk)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.system.refclk.html#pychfpga.fpga_firmware.chfpga.system.refclk.REFCLK.REFCLK0_DELAY">REFCLK0_DELAY (pychfpga.fpga_firmware.chfpga.system.refclk.REFCLK attribute)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.system.refclk.html#pychfpga.fpga_firmware.chfpga.system.refclk.REFCLK.REFCLK1_DELAY">REFCLK1_DELAY (pychfpga.fpga_firmware.chfpga.system.refclk.REFCLK attribute)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.crs.crs.html#pychfpga.hardware.crs.crs.CRS.REFCLK_BP">REFCLK_BP (pychfpga.hardware.crs.crs.CRS attribute)</a>
@@ -9389,6 +9396,8 @@
         <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.qsfp.html#pychfpga.hardware.i2c_devices.qsfp.QSFP.reset">(pychfpga.hardware.i2c_devices.qsfp.QSFP method)</a>
 </li>
       </ul></li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.reset_arm_on_slot">reset_arm_on_slot() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.html#pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.BCTArrayMethods.reset_bp_shuffle_stats">reset_bp_shuffle_stats() (pychfpga.fpga_firmware.chfpga.ct_engine.bct_array_methods.BCTArrayMethods method)</a>
 
       <ul>
@@ -9460,8 +9469,6 @@
 </li>
       </ul></li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga_array_methods.html#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.reset_gpu_links_async">reset_gpu_links_async() (pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods method)</a>
-</li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.state.html#pychfpga.apps.ber_dashboard.state.AppState.reset_mapping">reset_mapping() (pychfpga.apps.ber_dashboard.state.AppState method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.chan_crossbar.html#pychfpga.fpga_firmware.chfpga.ct_engine.chan_crossbar.ChanCrossbar.RESET_MON">RESET_MON (pychfpga.fpga_firmware.chfpga.ct_engine.chan_crossbar.ChanCrossbar attribute)</a>
 
@@ -10137,8 +10144,6 @@
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.f_engine.scaler.html#pychfpga.fpga_firmware.chfpga.f_engine.scaler.SCALER">SCALER (class in pychfpga.fpga_firmware.chfpga.f_engine.scaler)</a>
 </li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#pychfpga.apps.ber_dashboard.qsfp_ber_tests.scan_eyes">scan_eyes() (in module pychfpga.apps.ber_dashboard.qsfp_ber_tests)</a>
-</li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.shuffle_crossbar.html#pychfpga.fpga_firmware.chfpga.ct_engine.shuffle_crossbar.SCBRouter">SCBRouter (class in pychfpga.fpga_firmware.chfpga.ct_engine.shuffle_crossbar)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.system.i2c.html#pychfpga.fpga_firmware.chfpga.system.i2c.I2C.SCK">SCK (pychfpga.fpga_firmware.chfpga.system.i2c.I2C attribute)</a>
@@ -10355,6 +10360,10 @@
 </li>
       <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.SpectrumInstrumentsTM4D.set_bnc_output_source">set_bnc_output_source() (pychfpga.gps.SpectrumInstrumentsTM4D method)</a>
 </li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.set_bp_qsfp_gpio">set_bp_qsfp_gpio() (tuber_methods.TuberMethods method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.set_bp_qsfp_led">set_bp_qsfp_led() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.uct_engine.html#pychfpga.fpga_firmware.chfpga.ct_engine.uct_engine.UCTEngine.set_bp_qsfp_tx">set_bp_qsfp_tx() (pychfpga.fpga_firmware.chfpga.ct_engine.uct_engine.UCTEngine method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.ssd1306.display.html#pychfpga.hardware.i2c_devices.ssd1306.display.Display.set_brightness">set_brightness() (pychfpga.hardware.i2c_devices.ssd1306.display.Display method)</a>
@@ -10409,11 +10418,9 @@
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.set_corr_reset">set_corr_reset() (pychfpga.fpga_firmware.chfpga.chfpga.chFPGA method)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700.set_current_limit">set_current_limit() (ps.AgilentN5700 method)</a>
+      <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.set_current_limit">set_current_limit() (pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.set_current_limit">(pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.set_current_limit">(pychfpga.ps.AgilentN5700 method)</a>
 </li>
       </ul></li>
@@ -10644,12 +10651,16 @@
 </li>
         <li><a href="_autosummaries/pychfpga.hardware.ice.icecrate.html#pychfpga.hardware.ice.icecrate.IceCrate_MGK7BP16.set_led">(pychfpga.hardware.ice.icecrate.IceCrate_MGK7BP16 method)</a>
 </li>
+        <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.set_led">(tuber_methods.TuberMethods method)</a>
+</li>
       </ul></li>
       <li><a href="_autosummaries/pychfpga.hardware.interfaces.tcpipe.html#pychfpga.hardware.interfaces.tcpipe.TCPipe.set_local_data_port_number">set_local_data_port_number() (pychfpga.hardware.interfaces.tcpipe.TCPipe method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.set_local_data_port_number_async">set_local_data_port_number_async() (pychfpga.fpga_firmware.chfpga.chfpga.chFPGA method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.SpectrumInstrumentsTM4D.set_mask_angle">set_mask_angle() (pychfpga.gps.SpectrumInstrumentsTM4D method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.set_mezzanine_power">set_mezzanine_power() (tuber_methods.TuberMethods method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.ice.iceboard.html#pychfpga.hardware.ice.iceboard.IceBoard.set_mezzanine_power_async">set_mezzanine_power_async() (pychfpga.hardware.ice.iceboard.IceBoard method)</a>
 
@@ -10687,11 +10698,9 @@
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.hmc7044.html#pychfpga.hardware.i2c_devices.hmc7044.hmc7044.set_oscout">set_oscout() (pychfpga.hardware.i2c_devices.hmc7044.hmc7044 method)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700.set_output">set_output() (ps.AgilentN5700 method)</a>
+      <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.hmc7044.html#pychfpga.hardware.i2c_devices.hmc7044.hmc7044.set_output">set_output() (pychfpga.hardware.i2c_devices.hmc7044.hmc7044 method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.hmc7044.html#pychfpga.hardware.i2c_devices.hmc7044.hmc7044.set_output">(pychfpga.hardware.i2c_devices.hmc7044.hmc7044 method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.set_output">(pychfpga.ps.AgilentN5700 method)</a>
 </li>
       </ul></li>
@@ -10700,6 +10709,8 @@
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.f_engine.funcgen.html#pychfpga.fpga_firmware.chfpga.f_engine.funcgen.FUNCGEN.set_output_shifting">set_output_shifting() (pychfpga.fpga_firmware.chfpga.f_engine.funcgen.FUNCGEN method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.f_engine.scaler.html#pychfpga.fpga_firmware.chfpga.f_engine.scaler.SCALER.set_page">set_page() (pychfpga.fpga_firmware.chfpga.f_engine.scaler.SCALER method)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.set_pci_switch_direction">set_pci_switch_direction() (tuber_methods.TuberMethods method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.ssd1306.display.html#pychfpga.hardware.i2c_devices.ssd1306.display.Display.set_pixel">set_pixel() (pychfpga.hardware.i2c_devices.ssd1306.display.Display method)</a>
 
@@ -10745,6 +10756,8 @@
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.qsfp.html#pychfpga.hardware.i2c_devices.qsfp.QSFP.set_power_mode">set_power_mode() (pychfpga.hardware.i2c_devices.qsfp.QSFP method)</a>
 </li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.set_power_on_slot">set_power_on_slot() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.set_power_on_state">set_power_on_state() (pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
 
       <ul>
@@ -10753,20 +10766,16 @@
       </ul></li>
       <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.SpectrumInstrumentsTM4D.set_pps_output_source">set_pps_output_source() (pychfpga.gps.SpectrumInstrumentsTM4D method)</a>
 </li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_prbs">set_prbs() (in module pychfpga.apps.ber_dashboard.qsfp_ber_tests)</a>
+      <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.set_protection">set_protection() (pychfpga.ps.AgilentN5700 method)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700.set_protection">set_protection() (ps.AgilentN5700 method)</a>
-
-      <ul>
-        <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.set_protection">(pychfpga.ps.AgilentN5700 method)</a>
-</li>
-      </ul></li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.set_pwm">set_pwm() (pychfpga.fpga_firmware.chfpga.chfpga.chFPGA method)</a>
 
       <ul>
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.system.gpio.html#pychfpga.fpga_firmware.chfpga.system.gpio.GPIO.set_pwm">(pychfpga.fpga_firmware.chfpga.system.gpio.GPIO method)</a>
 </li>
       </ul></li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods.set_qsfp_gpio">set_qsfp_gpio() (tuber_methods.TuberMethods method)</a>
+</li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.f_engine.funcgen.html#pychfpga.fpga_firmware.chfpga.f_engine.funcgen.FUNCGEN.set_ram_page">set_ram_page() (pychfpga.fpga_firmware.chfpga.f_engine.funcgen.FUNCGEN method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.f_engine.ucap.html#pychfpga.fpga_firmware.chfpga.f_engine.ucap.UCAP.set_readout_delay">set_readout_delay() (pychfpga.fpga_firmware.chfpga.f_engine.ucap.UCAP method)</a>
@@ -10775,12 +10784,8 @@
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.ice.MGADC08.MGADC08.html#pychfpga.hardware.ice.MGADC08.MGADC08.FMCMezzanine_MGADC08.set_refclk_source">set_refclk_source() (pychfpga.hardware.ice.MGADC08.MGADC08.FMCMezzanine_MGADC08 method)</a>
 </li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_rx_lpm">set_rx_lpm() (in module pychfpga.apps.ber_dashboard.qsfp_ber_tests)</a>
-
-      <ul>
-        <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.cge.html#pychfpga.fpga_firmware.chfpga.ct_engine.cge.CGE.set_rx_lpm">(pychfpga.fpga_firmware.chfpga.ct_engine.cge.CGE method)</a>
+      <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.cge.html#pychfpga.fpga_firmware.chfpga.ct_engine.cge.CGE.set_rx_lpm">set_rx_lpm() (pychfpga.fpga_firmware.chfpga.ct_engine.cge.CGE method)</a>
 </li>
-      </ul></li>
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.qsfp.html#pychfpga.hardware.i2c_devices.qsfp.QSFP.set_rx_output_amplitude">set_rx_output_amplitude() (pychfpga.hardware.i2c_devices.qsfp.QSFP method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.qsfp.html#pychfpga.hardware.i2c_devices.qsfp.QSFP.set_rx_output_emphasis">set_rx_output_emphasis() (pychfpga.hardware.i2c_devices.qsfp.QSFP method)</a>
@@ -10843,6 +10848,8 @@
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.system.refclk.html#pychfpga.fpga_firmware.chfpga.system.refclk.REFCLK.set_sync_delays">(pychfpga.fpga_firmware.chfpga.system.refclk.REFCLK method)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga_array_methods.html#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async">set_sync_method_async() (pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.set_sync_source">set_sync_source() (pychfpga.fpga_firmware.chfpga.chfpga.chFPGA method)</a>
@@ -10853,8 +10860,6 @@
       </ul></li>
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.hmc7044.html#pychfpga.hardware.i2c_devices.hmc7044.hmc7044.set_sysref_timer">set_sysref_timer() (pychfpga.hardware.i2c_devices.hmc7044.hmc7044 method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="_autosummaries/pychfpga.hardware.ice.MGADC08.ADC.html#pychfpga.hardware.ice.MGADC08.ADC.ADC_base.set_test_mode">set_test_mode() (pychfpga.hardware.ice.MGADC08.ADC.ADC_base method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga_array_methods.html#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_test_pattern">set_test_pattern() (pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods method)</a>
@@ -10876,8 +10881,6 @@
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.set_trig">set_trig() (pychfpga.fpga_firmware.chfpga.chfpga.chFPGA method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.ice.MGADC08.ADC.html#pychfpga.hardware.ice.MGADC08.ADC.ADC_chip.set_trim">set_trim() (pychfpga.hardware.ice.MGADC08.ADC.ADC_chip method)</a>
-</li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#pychfpga.apps.ber_dashboard.qsfp_ber_tests.set_tx">set_tx() (in module pychfpga.apps.ber_dashboard.qsfp_ber_tests)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.i2c_devices.qsfp.html#pychfpga.hardware.i2c_devices.qsfp.QSFP.set_tx_adaptive_eq">set_tx_adaptive_eq() (pychfpga.hardware.i2c_devices.qsfp.QSFP method)</a>
 </li>
@@ -10921,11 +10924,9 @@
       </ul></li>
       <li><a href="_autosummaries/pychfpga.gps.html#pychfpga.gps.SpectrumInstrumentsTM4D.set_user_time_bias">set_user_time_bias() (pychfpga.gps.SpectrumInstrumentsTM4D method)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700.set_voltage">set_voltage() (ps.AgilentN5700 method)</a>
+      <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.set_voltage">set_voltage() (pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.hardware.Agilent_N5764A.agilent_N5700.html#pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700.set_voltage">(pychfpga.hardware.Agilent_N5764A.agilent_N5700.agilent_N5700 method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.set_voltage">(pychfpga.ps.AgilentN5700 method)</a>
 </li>
       </ul></li>
@@ -11081,11 +11082,9 @@
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.system.spi.html#pychfpga.fpga_firmware.chfpga.system.spi.SPI.START">(pychfpga.fpga_firmware.chfpga.system.spi.SPI attribute)</a>
 </li>
       </ul></li>
-      <li><a href="hardware/ps/ps.html#ps.PowerSupplyAsyncRESTClient.start">start() (ps.PowerSupplyAsyncRESTClient method)</a>
+      <li><a href="_autosummaries/pychfpga.common.perf.html#pychfpga.common.perf.Perf.start">start() (pychfpga.common.perf.Perf method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.common.perf.html#pychfpga.common.perf.Perf.start">(pychfpga.common.perf.Perf method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chFPGA_receiver.html#pychfpga.fpga_firmware.chfpga.chFPGA_receiver.ReceiverThread.start">(pychfpga.fpga_firmware.chfpga.chFPGA_receiver.ReceiverThread method)</a>
 </li>
         <li><a href="_autosummaries/pychfpga.fpga_master.html#pychfpga.fpga_master.DummyFPGAMaster.start">(pychfpga.fpga_master.DummyFPGAMaster method)</a>
@@ -11283,13 +11282,9 @@
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.x_engine.UCORR.html#pychfpga.fpga_firmware.chfpga.x_engine.UCORR.UCORR.STATUS">(pychfpga.fpga_firmware.chfpga.x_engine.UCORR.UCORR attribute)</a>
 </li>
       </ul></li>
-      <li><a href="hardware/ps/ps.html#ps.AgilentN5700.status">status() (ps.AgilentN5700 method)</a>
+      <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.status">status() (pychfpga.fpga_firmware.chfpga.chfpga.chFPGA method)</a>
 
       <ul>
-        <li><a href="hardware/ps/ps.html#ps.PowerSupplyAsyncRESTClient.status">(ps.PowerSupplyAsyncRESTClient method)</a>
-</li>
-        <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.status">(pychfpga.fpga_firmware.chfpga.chfpga.chFPGA method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chFPGA_receiver.html#pychfpga.fpga_firmware.chfpga.chFPGA_receiver.ReceiverThread.status">(pychfpga.fpga_firmware.chfpga.chFPGA_receiver.ReceiverThread method)</a>
 </li>
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.ct_engine.chan_bin_sel.html#pychfpga.fpga_firmware.chfpga.ct_engine.chan_bin_sel.ChanBinSel.status">(pychfpga.fpga_firmware.chfpga.ct_engine.chan_bin_sel.ChanBinSel method)</a>
@@ -11397,11 +11392,9 @@
       </ul></li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.x_engine.CORR.html#pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core.STATUS_BYTE">STATUS_BYTE (pychfpga.fpga_firmware.chfpga.x_engine.CORR.CORR_core attribute)</a>
 </li>
-      <li><a href="hardware/ps/ps.html#ps.PowerSupplyAsyncRESTClient.stop">stop() (ps.PowerSupplyAsyncRESTClient method)</a>
+      <li><a href="_autosummaries/pychfpga.common.perf.html#pychfpga.common.perf.Perf.stop">stop() (pychfpga.common.perf.Perf method)</a>
 
       <ul>
-        <li><a href="_autosummaries/pychfpga.common.perf.html#pychfpga.common.perf.Perf.stop">(pychfpga.common.perf.Perf method)</a>
-</li>
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chFPGA_receiver.html#pychfpga.fpga_firmware.chfpga.chFPGA_receiver.ReceiverThread.stop">(pychfpga.fpga_firmware.chfpga.chFPGA_receiver.ReceiverThread method)</a>
 </li>
         <li><a href="_autosummaries/pychfpga.fpga_master.html#pychfpga.fpga_master.DummyFPGAMaster.stop">(pychfpga.fpga_master.DummyFPGAMaster method)</a>
@@ -11523,13 +11516,9 @@
         <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.f_engine.ucap.html#pychfpga.fpga_firmware.chfpga.f_engine.ucap.UCAP.SUB_PERIOD">(pychfpga.fpga_firmware.chfpga.f_engine.ucap.UCAP attribute)</a>
 </li>
       </ul></li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#pychfpga.apps.ber_dashboard.qsfp_ber_tests.summarize">summarize() (in module pychfpga.apps.ber_dashboard.qsfp_ber_tests)</a>
-</li>
       <li><a href="_autosummaries/pychfpga.common.perf.html#pychfpga.common.perf.Perf.summary">summary() (pychfpga.common.perf.Perf method)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.ps.html#pychfpga.ps.AgilentN5700.SUPPORTED_PS">SUPPORTED_PS (pychfpga.ps.AgilentN5700 attribute)</a>
-</li>
-      <li><a href="_autosummaries/pychfpga.apps.ber_dashboard.qsfp_ber_tests.html#pychfpga.apps.ber_dashboard.qsfp_ber_tests.sweep_tx">sweep_tx() (in module pychfpga.apps.ber_dashboard.qsfp_ber_tests)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.switch_gains">switch_gains() (pychfpga.fpga_firmware.chfpga.chfpga.chFPGA method)</a>
 </li>
@@ -11726,6 +11715,8 @@
       <li><a href="_autosummaries/pychfpga.hardware.ice.icecore.tuber.html#pychfpga.hardware.ice.icecore.tuber.TuberError">TuberError</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.ice.icecore.hardware_assets.html#pychfpga.hardware.ice.icecore.hardware_assets.TuberIceBoardBase">TuberIceBoardBase (class in pychfpga.hardware.ice.icecore.hardware_assets)</a>
+</li>
+      <li><a href="platforms/ice/tuber_methods.html#tuber_methods.TuberMethods">TuberMethods (class in tuber_methods)</a>
 </li>
       <li><a href="_autosummaries/pychfpga.hardware.ice.icecore.tuber.html#pychfpga.hardware.ice.icecore.tuber.TuberNetworkError">TuberNetworkError</a>
 </li>

@@ -1,0 +1,193 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data capture &mdash; pychfpga User Manual (jfc/dev @ ffec1078) 1.3.4.dev814+ice.co.gffec10782 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=d3e2754b"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Server operation" href="server_operation.html" />
+    <link rel="prev" title="Interactive operation" href="interactive_operation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Data capture</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#start-the-capture">Start the capture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#read-the-frames">Read the frames</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#stop-the-capture">Stop the capture</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ ffec1078)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Data capture</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/user_guide/data_capture.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="data-capture">
+<h1>Data capture<a class="headerlink" href="#data-capture" title="Link to this heading"></a></h1>
+<p>The firmware can periodically send snapshots of the raw ADC samples or of the channelized data to
+the host over the 1G control link. This page assumes an initialized array <code class="docutils literal notranslate"><span class="pre">ca</span></code> (see
+<a class="reference internal" href="interactive_operation.html"><span class="doc">Interactive operation</span></a>) and a host configured for jumbo frames (see <a class="reference internal" href="networking.html"><span class="doc">Networking</span></a>).</p>
+<section id="start-the-capture">
+<h2>Start the capture<a class="headerlink" href="#start-the-capture" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">await</span> <span class="n">ca</span><span class="o">.</span><span class="n">start_data_capture_async</span><span class="p">(</span><span class="n">source</span><span class="o">=</span><span class="s2">"funcgen"</span><span class="p">,</span> <span class="n">period</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">source</span></code> selects what is captured:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;funcgen&quot;</span></code> (or <code class="docutils literal notranslate"><span class="pre">0</span></code>): data after the function generator, i.e. ADC samples or an injected
+waveform</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;scaler&quot;</span></code> (or <code class="docutils literal notranslate"><span class="pre">1</span></code>): channelized data at the scaler output</p></li>
+</ul>
+<p>Other arguments are passed to each board’s
+<a class="reference internal" href="../_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.start_data_capture" title="pychfpga.fpga_firmware.chfpga.chfpga.chFPGA.start_data_capture"><code class="xref py py-meth docutils literal notranslate"><span class="pre">start_data_capture()</span></code></a>: <code class="docutils literal notranslate"><span class="pre">period</span></code> (seconds
+between bursts), <code class="docutils literal notranslate"><span class="pre">channels</span></code>, <code class="docutils literal notranslate"><span class="pre">data_type</span></code>, <code class="docutils literal notranslate"><span class="pre">mode</span></code> (UCAP capture mode on RFSoC platforms) and
+<code class="docutils literal notranslate"><span class="pre">send_delay</span></code>. <code class="docutils literal notranslate"><span class="pre">send_delay_per_slot</span></code> staggers the boards in a crate so their bursts do not
+collide in the switch.</p>
+</section>
+<section id="read-the-frames">
+<h2>Read the frames<a class="headerlink" href="#read-the-frames" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">r</span> <span class="o">=</span> <span class="k">await</span> <span class="n">ca</span><span class="o">.</span><span class="n">get_data_receiver_async</span><span class="p">()</span>
+<span class="n">ts</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">counts</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">read_raw_frames</span><span class="p">(</span><span class="n">ncap</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="../_autosummaries/pychfpga.common.raw_frame_receiver.html#pychfpga.common.raw_frame_receiver.RawFrameReceiver.read_raw_frames" title="pychfpga.common.raw_frame_receiver.RawFrameReceiver.read_raw_frames"><code class="xref py py-meth docutils literal notranslate"><span class="pre">read_raw_frames()</span></code></a> returns timestamps,
+data and per-frame counts as NumPy arrays. With the default <code class="docutils literal notranslate"><span class="pre">chan_first=True</span></code>, <code class="docutils literal notranslate"><span class="pre">data</span></code> has
+shape <code class="docutils literal notranslate"><span class="pre">(channels,</span> <span class="pre">bursts,</span> <span class="pre">samples)</span></code>.</p>
+</section>
+<section id="stop-the-capture">
+<h2>Stop the capture<a class="headerlink" href="#stop-the-capture" title="Link to this heading"></a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ca</span><span class="o">.</span><span class="n">ib</span><span class="o">.</span><span class="n">stop_data_capture</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>For continuous capture and storage to HDF5, run the <code class="docutils literal notranslate"><span class="pre">raw_acq</span></code> server instead (see
+<a class="reference internal" href="server_operation.html"><span class="doc">Server operation</span></a>).</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="interactive_operation.html" class="btn btn-neutral float-left" title="Interactive operation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="server_operation.html" class="btn btn-neutral float-right" title="Server operation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,245 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Branches, releases and tags &mdash; pychfpga User Manual (jfc/dev @ ffec1078) 1.3.4.dev814+ice.co.gffec10782 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=d3e2754b"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="chFPGA state tree" href="firmware_state.html" />
+    <link rel="prev" title="GPS" href="../platforms/aux/gps.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Branches, releases and tags</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#branches">Branches</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#development-process">Development process</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#release-tags">Release tags</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#package-version">Package version</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#installing-for-an-application">Installing for an application</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ ffec1078)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Branches, releases and tags</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/development/workflow.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="branches-releases-and-tags">
+<h1>Branches, releases and tags<a class="headerlink" href="#branches-releases-and-tags" title="Link to this heading"></a></h1>
+<p>One commit of <code class="docutils literal notranslate"><span class="pre">pychfpga</span></code> rarely works on every platform and firmware configuration at once.
+Branches and release tags therefore name the platform and configuration they were validated for,
+using the chFPGA names: <code class="docutils literal notranslate"><span class="pre">ice_ct</span></code>, <code class="docutils literal notranslate"><span class="pre">ice_corr16</span></code>, <code class="docutils literal notranslate"><span class="pre">crs_ct</span></code>, <code class="docutils literal notranslate"><span class="pre">crs_corr8</span></code>, <code class="docutils literal notranslate"><span class="pre">crs_corr32</span></code>,
+<code class="docutils literal notranslate"><span class="pre">crs_corr64</span></code>, <code class="docutils literal notranslate"><span class="pre">zcu111_ct</span></code>, <code class="docutils literal notranslate"><span class="pre">kc705_corr8</span></code>.</p>
+<section id="branches">
+<h2>Branches<a class="headerlink" href="#branches" title="Link to this heading"></a></h2>
+<p>A branch that is known to work for one platform and configuration is named
+<code class="docutils literal notranslate"><span class="pre">&lt;prefix&gt;/&lt;platform&gt;_&lt;config&gt;</span></code>, for example <code class="docutils literal notranslate"><span class="pre">jfc/crs_ct</span></code>, <code class="docutils literal notranslate"><span class="pre">jfc/dev/crs_ct</span></code> or
+<code class="docutils literal notranslate"><span class="pre">develop/crs_ct</span></code>.</p>
+<p>The prefix must not itself be a branch. Git stores branches as files, so a name cannot be both a
+branch and a folder: <code class="docutils literal notranslate"><span class="pre">develop/crs_ct</span></code> cannot be created while a branch <code class="docutils literal notranslate"><span class="pre">develop</span></code> exists, and
+<code class="docutils literal notranslate"><span class="pre">jfc/dev/crs_ct</span></code> cannot coexist with <code class="docutils literal notranslate"><span class="pre">jfc/dev</span></code>. Use prefixes only as folders, or rename the
+base branch first.</p>
+<p>Releases are made from <code class="docutils literal notranslate"><span class="pre">main</span></code>, <code class="docutils literal notranslate"><span class="pre">master</span></code> or <code class="docutils literal notranslate"><span class="pre">deploy</span></code>.</p>
+<section id="development-process">
+<h3>Development process<a class="headerlink" href="#development-process" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Branch from the latest release branch.</p></li>
+<li><p>Make the changes. Commit often, with concise messages.</p></li>
+<li><p>Run the tests for the target platform (see <a class="reference internal" href="../testing/firmware.html"><span class="doc">Firmware testing</span></a>).</p></li>
+<li><p>Merge the latest release branch into yours if it has moved, and test again.</p></li>
+<li><p>Merge into the release branch and push it.</p></li>
+<li><p>Tag the release commit (see below) and push the tag.</p></li>
+</ol>
+</section>
+</section>
+<section id="release-tags">
+<h2>Release tags<a class="headerlink" href="#release-tags" title="Link to this heading"></a></h2>
+<p>Every release is tagged <code class="docutils literal notranslate"><span class="pre">x.y.z+&lt;platform&gt;_&lt;config&gt;</span></code>, for example <code class="docutils literal notranslate"><span class="pre">2.2.0+crs_ct</span></code> or
+<code class="docutils literal notranslate"><span class="pre">2.2.0+ice_corr16</span></code>.</p>
+<ul class="simple">
+<li><p>The tag is a valid PEP 440 version with a <em>local</em> part. Python normalizes <code class="docutils literal notranslate"><span class="pre">_</span></code> to <code class="docutils literal notranslate"><span class="pre">.</span></code>, so
+the installed package reports <code class="docutils literal notranslate"><span class="pre">2.2.0+crs.ct</span></code>.</p></li>
+<li><p>No <code class="docutils literal notranslate"><span class="pre">v</span></code> prefix, and never a plain <code class="docutils literal notranslate"><span class="pre">x.y.z</span></code> tag: a plain tag could be installed without naming
+a platform.</p></li>
+<li><p>The version number increases across all platforms and configurations. After
+<code class="docutils literal notranslate"><span class="pre">1.2.3+ice_ct</span></code>, a CRS release is <code class="docutils literal notranslate"><span class="pre">1.2.4+crs_ct</span></code> (patch) or <code class="docutils literal notranslate"><span class="pre">1.3.0+crs_ct</span></code>.</p></li>
+<li><p>A commit validated for several platforms gets one tag per platform (<code class="docutils literal notranslate"><span class="pre">1.2.3+crs_ct</span></code> and
+<code class="docutils literal notranslate"><span class="pre">1.2.3+ice_ct</span></code>).</p></li>
+<li><p>Release candidates, e.g. tags on a work branch, are <code class="docutils literal notranslate"><span class="pre">x.y.zrc1+&lt;platform&gt;_&lt;config&gt;</span></code>, then
+<code class="docutils literal notranslate"><span class="pre">rc2</span></code>, and so on.</p></li>
+<li><p>No telescope or application names in tags.</p></li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>tag<span class="w"> </span><span class="m">2</span>.2.0+crs_ct
+git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span><span class="m">2</span>.2.0+crs_ct
+</pre></div>
+</div>
+<p>Older tags such as <code class="docutils literal notranslate"><span class="pre">2.1.0+ice.co</span></code> follow a previous convention and are kept as they are.</p>
+<section id="package-version">
+<h3>Package version<a class="headerlink" href="#package-version" title="Link to this heading"></a></h3>
+<p>The package version is computed by setuptools-scm from the nearest tag. Version 9 or newer is
+required: older versions drop the <code class="docutils literal notranslate"><span class="pre">+&lt;platform&gt;_&lt;config&gt;</span></code> part and warn
+<code class="docutils literal notranslate"><span class="pre">tag</span> <span class="pre">'...'</span> <span class="pre">will</span> <span class="pre">be</span> <span class="pre">stripped</span> <span class="pre">of</span> <span class="pre">its</span> <span class="pre">suffix</span></code>.</p>
+<p>The nearest tag can belong to any platform. A commit on <code class="docutils literal notranslate"><span class="pre">develop/crs_ct</span></code> whose nearest tag is
+<code class="docutils literal notranslate"><span class="pre">1.3.3+ice_co</span></code> reports an <code class="docutils literal notranslate"><span class="pre">ice.co</span></code> development version: the branch selects the code, it
+does not change the reported version. On a commit with several tags, the version names only one
+of the platforms; the tag used to install selects the commit.</p>
+</section>
+</section>
+<section id="installing-for-an-application">
+<h2>Installing for an application<a class="headerlink" href="#installing-for-an-application" title="Link to this heading"></a></h2>
+<p>Always name the platform and configuration, with a tag or branch in a git URL:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>add<span class="w"> </span><span class="s2">"pychfpga @ git+https://github.com/winterlandcosmology/pychfpga@2.2.0+crs_ct"</span>
+pip<span class="w"> </span>install<span class="w"> </span><span class="s2">"pychfpga @ git+https://github.com/winterlandcosmology/pychfpga@2.2.0+crs_ct"</span>
+</pre></div>
+</div>
+<p>or in <code class="docutils literal notranslate"><span class="pre">pyproject.toml</span></code>:</p>
+<div class="highlight-toml notranslate"><div class="highlight"><pre><span></span><span class="k">[tool.uv.sources]</span>
+<span class="n">pychfpga</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"https://github.com/winterlandcosmology/pychfpga"</span><span class="p">,</span><span class="w"> </span><span class="n">tag</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">"2.2.0+crs_ct"</span><span class="p">,</span><span class="w"> </span><span class="n">lfs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
+</pre></div>
+</div>
+<p>For a development snapshot, use the branch instead of the tag (<code class="docutils literal notranslate"><span class="pre">&#64;develop/crs_ct</span></code>). From a
+package index, pin the full version: <code class="docutils literal notranslate"><span class="pre">pychfpga==2.2.0+crs.ct</span></code>.</p>
+<p>A bare version number is not enough:</p>
+<ul class="simple">
+<li><p>pip and uv see package versions, not git tags.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">==1.2.3</span></code> matches every <code class="docutils literal notranslate"><span class="pre">1.2.3+...</span></code> variant and the resolver takes the greatest one:
+<code class="docutils literal notranslate"><span class="pre">1.2.3+ice.ct</span></code> beats <code class="docutils literal notranslate"><span class="pre">1.2.3+crs.ct</span></code> because <code class="docutils literal notranslate"><span class="pre">ice</span></code> sorts after <code class="docutils literal notranslate"><span class="pre">crs</span></code>, whatever platform
+you use. <code class="docutils literal notranslate"><span class="pre">&gt;=1.2.3</span></code> has the same problem.</p></li>
+<li><p>A git URL without <code class="docutils literal notranslate"><span class="pre">&#64;ref</span></code> installs the default branch and ignores the tags.</p></li>
+</ul>
+<p>git-lfs must be installed on the machine that installs the package, otherwise the bitstreams and
+ARM firmware are installed as small pointer files.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../platforms/aux/gps.html" class="btn btn-neutral float-left" title="GPS" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="firmware_state.html" class="btn btn-neutral float-right" title="chFPGA state tree" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

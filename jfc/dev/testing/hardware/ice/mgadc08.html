@@ -1,0 +1,371 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MGADC08 ADC Mezzanine &mdash; pychfpga User Manual (jfc/dev @ ffec1078) 1.3.4.dev814+ice.co.gffec10782 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../../../_static/chime_favicon.png"/>
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=d3e2754b"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link rel="next" title="MGK7MB IceBoard Motherboard" href="mgk7mb.html" />
+    <link rel="prev" title="ICE tests" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html">
+            
+              <img src="../../../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">Hardware testing</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../index.html#installation">Installation</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../index.html#test-suites">Test suites</a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="index.html">ICE tests</a><ul class="current">
+<li class="toctree-l4 current"><a class="current reference internal" href="#">MGADC08 ADC Mezzanine</a><ul>
+<li class="toctree-l5"><a class="reference internal" href="#descriptions">Descriptions</a><ul>
+<li class="toctree-l6"><a class="reference internal" href="#bench-tests">Bench tests</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#iceboard-tests">IceBoard tests</a></li>
+</ul>
+</li>
+<li class="toctree-l5"><a class="reference internal" href="#running-the-tests">Running the tests</a></li>
+<li class="toctree-l5"><a class="reference internal" href="#testing-instructions">Testing Instructions</a><ul>
+<li class="toctree-l6"><a class="reference internal" href="#impedance">Impedance</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#smoke-test">Smoke test</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#on-an-iceboard">On an IceBoard</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#eeprom">EEPROM</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#power">Power</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#spi-and-pll">SPI and PLL</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#ramp">Ramp</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#s11">S11</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l4"><a class="reference internal" href="mgk7mb.html">MGK7MB IceBoard Motherboard</a></li>
+<li class="toctree-l4"><a class="reference internal" href="mgk7bp16.html">MGK7BP16 16-slot ICE backplane</a></li>
+<li class="toctree-l4"><a class="reference internal" href="ice_crate.html">Pre-deployment ICE crate-level tests</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../crs/index.html">CRS tests</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../index.html#running-the-tests">Running the tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../index.html#additional-documentation">Additional documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">pychfpga User Manual (jfc/dev @ ffec1078)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Hardware testing</a></li>
+          <li class="breadcrumb-item"><a href="index.html">ICE tests</a></li>
+      <li class="breadcrumb-item active">MGADC08 ADC Mezzanine</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/testing/hardware/ice/mgadc08.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="mgadc08-adc-mezzanine">
+<h1>MGADC08 ADC Mezzanine<a class="headerlink" href="#mgadc08-adc-mezzanine" title="Link to this heading"></a></h1>
+<section id="descriptions">
+<h2>Descriptions<a class="headerlink" href="#descriptions" title="Link to this heading"></a></h2>
+<p>The test are divided in two phase: bench tests and IceBoard tests.</p>
+<section id="bench-tests">
+<h3>Bench tests<a class="headerlink" href="#bench-tests" title="Link to this heading"></a></h3>
+<p>These tests are performed on a standalone board, before it is mounted on a carrier, to make sure a defective test will not damage our carrier. The tests are:</p>
+<ul class="simple">
+<li><p>Power-supply impedance, to catch shorts</p></li>
+<li><p>Smoke test: the supply is enabled and the current and voltage are measured; the output is turned off immediately if something is wrong</p></li>
+</ul>
+</section>
+<section id="iceboard-tests">
+<h3>IceBoard tests<a class="headerlink" href="#iceboard-tests" title="Link to this heading"></a></h3>
+<p>These tests are performed on an IceBoard after the mezzanine is mounted on it. The tests are:</p>
+<ul class="simple">
+<li><p>EEPROM programming</p></li>
+<li><p>Power rails</p></li>
+<li><p>SPI: the I/O expander (including the user LEDs) and the PLL</p></li>
+<li><p>Ramp on the high-speed data lines</p></li>
+<li><p>S11 return loss of each ADC input</p></li>
+</ul>
+</section>
+</section>
+<section id="running-the-tests">
+<h2>Running the tests<a class="headerlink" href="#running-the-tests" title="Link to this heading"></a></h2>
+<p>Bench tests of the MGADC08 ADC mezzanine, in <code class="docutils literal notranslate"><span class="pre">qc/MGADC08/mgadc08_bench_tests.py</span></code>.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>qc/MGADC08
+python<span class="w"> </span>mgadc08_bench_tests.py
+</pre></div>
+</div>
+</section>
+<section id="testing-instructions">
+<h2>Testing Instructions<a class="headerlink" href="#testing-instructions" title="Link to this heading"></a></h2>
+<figure class="align-center" id="id1">
+<a class="reference internal image-reference" href="../../../_images/MezzCover.jpeg"><img alt="MGADC08 mezzanine" src="../../../_images/MezzCover.jpeg" style="width: 70%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">MGADC08 mezzanine</span><a class="headerlink" href="#id1" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<section id="impedance">
+<h3>Impedance<a class="headerlink" href="#impedance" title="Link to this heading"></a></h3>
+<p>Connect the SMA quick-connect cable to one SMA port on the mezzanine to provide ground.</p>
+<figure class="align-center" id="id2">
+<a class="reference internal image-reference" href="../../../_images/ImpedanceSetup.jpeg"><img alt="SMA ground connection" src="../../../_images/ImpedanceSetup.jpeg" style="width: 50%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Quick-connect SMA ground location</span><a class="headerlink" href="#id2" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p>Use the red probe to measure impedance at the test points below.</p>
+<figure class="align-center" id="id3">
+<a class="reference internal image-reference" href="../../../_images/Red_Probe.jpeg"><img alt="Red probe" src="../../../_images/Red_Probe.jpeg" style="width: 30%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Red probe</span><a class="headerlink" href="#id3" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id4">
+<a class="reference internal image-reference" href="../../../_images/Impedance_12V.jpeg"><img alt="12 V probe spot" src="../../../_images/Impedance_12V.jpeg" style="width: 45%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">12 V probe spot, J7 pin 2</span><a class="headerlink" href="#id4" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id5">
+<a class="reference internal image-reference" href="../../../_images/Impedance_2V5.jpeg"><img alt="2.5 V probe spot" src="../../../_images/Impedance_2V5.jpeg" style="width: 45%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">2.5 V probe spot, J7 pin 3</span><a class="headerlink" href="#id5" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id6">
+<a class="reference internal image-reference" href="../../../_images/Impedance_3V3.jpeg"><img alt="3.3 V probe spot" src="../../../_images/Impedance_3V3.jpeg" style="width: 45%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">3.3 V probe spot, J7 pin 4</span><a class="headerlink" href="#id6" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id7">
+<a class="reference internal image-reference" href="../../../_images/Buck_3V3.jpeg"><img alt="3.3 V buck test point" src="../../../_images/Buck_3V3.jpeg" style="width: 45%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">3.3 V buck test point</span><a class="headerlink" href="#id7" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id8">
+<a class="reference internal image-reference" href="../../../_images/Buck_1V8.jpeg"><img alt="1.8 V buck test point" src="../../../_images/Buck_1V8.jpeg" style="width: 45%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">1.8 V buck test point</span><a class="headerlink" href="#id8" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="smoke-test">
+<h3>Smoke test<a class="headerlink" href="#smoke-test" title="Link to this heading"></a></h3>
+<p>Connect the SMA quick-connect cable to one SMA port to provide ground, then connect the power cable.</p>
+<figure class="align-center" id="id9">
+<a class="reference internal image-reference" href="../../../_images/SmokeSetup.jpeg"><img alt="Smoke-test ground connection" src="../../../_images/SmokeSetup.jpeg" style="width: 50%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Quick-connect SMA ground location</span><a class="headerlink" href="#id9" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id10">
+<a class="reference internal image-reference" href="../../../_images/Smoke_Step1.jpeg"><img alt="Mezzanine power cable" src="../../../_images/Smoke_Step1.jpeg" style="width: 50%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Powering the mezzanine</span><a class="headerlink" href="#id10" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p>Check the power LED on the back of the mezzanine, then measure the buck voltages with the red probe.</p>
+<figure class="align-center" id="id11">
+<a class="reference internal image-reference" href="../../../_images/Power_Light.jpeg"><img alt="Mezzanine power LED" src="../../../_images/Power_Light.jpeg" style="width: 50%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Power LED</span><a class="headerlink" href="#id11" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id12">
+<a class="reference internal image-reference" href="../../../_images/Smoke_3V3.jpeg"><img alt="3.3 V buck during the smoke test" src="../../../_images/Smoke_3V3.jpeg" style="width: 45%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">3.3 V buck test point</span><a class="headerlink" href="#id12" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id13">
+<a class="reference internal image-reference" href="../../../_images/Smoke_1V8.jpeg"><img alt="1.8 V buck during the smoke test" src="../../../_images/Smoke_1V8.jpeg" style="width: 45%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">1.8 V buck test point</span><a class="headerlink" href="#id13" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="on-an-iceboard">
+<h3>On an IceBoard<a class="headerlink" href="#on-an-iceboard" title="Link to this heading"></a></h3>
+<p>The remaining tests need the mezzanine on an IceBoard that can talk to the test computer: both
+Ethernet cables, a valid SD card, the FPGA fan, and the backplane with its power cord. An FMC
+extender cable keeps the mezzanine off the motherboard connector; changing mezzanines directly
+on that connector wears it out.</p>
+<figure class="align-center" id="id14">
+<a class="reference internal image-reference" href="../../../_images/Carrier_tests.jpeg"><img alt="Mezzanine on a carrier" src="../../../_images/Carrier_tests.jpeg" style="width: 55%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Setup when a carrier board is needed</span><a class="headerlink" href="#id14" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="eeprom">
+<h3>EEPROM<a class="headerlink" href="#eeprom" title="Link to this heading"></a></h3>
+<p>Use the carrier setup above.</p>
+</section>
+<section id="power">
+<h3>Power<a class="headerlink" href="#power" title="Link to this heading"></a></h3>
+<p>Use the carrier setup above.</p>
+</section>
+<section id="spi-and-pll">
+<h3>SPI and PLL<a class="headerlink" href="#spi-and-pll" title="Link to this heading"></a></h3>
+<p>Use the carrier setup above. Confirm that the user LEDs blink.</p>
+<figure class="align-center" id="id15">
+<a class="reference internal image-reference" href="../../../_images/SPI_PLL.jpeg"><img alt="User LED locations" src="../../../_images/SPI_PLL.jpeg" style="width: 70%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Blinking LED locations</span><a class="headerlink" href="#id15" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="ramp">
+<h3>Ramp<a class="headerlink" href="#ramp" title="Link to this heading"></a></h3>
+<p>Use the carrier setup above.</p>
+</section>
+<section id="s11">
+<h3>S11<a class="headerlink" href="#s11" title="Link to this heading"></a></h3>
+<p>Connect the SMA quick-connect cable to the front SMA ports in channel order 1 through 8. On the
+mezzanine the connectors run 4, 3, 2, 1 and then 8, 7, 6, 5.</p>
+<figure class="align-center" id="id16">
+<a class="reference internal image-reference" href="../../../_images/S11.jpeg"><img alt="Mezzanine channel order" src="../../../_images/S11.jpeg" style="width: 70%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Channel ordering</span><a class="headerlink" href="#id16" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="ICE tests" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="mgk7mb.html" class="btn btn-neutral float-right" title="MGK7MB IceBoard Motherboard" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

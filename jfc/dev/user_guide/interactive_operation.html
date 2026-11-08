@@ -1,0 +1,238 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interactive operation &mdash; pychfpga User Manual (jfc/dev @ ffec1078) 1.3.4.dev814+ice.co.gffec10782 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=d3e2754b"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Data capture" href="data_capture.html" />
+    <link rel="prev" title="Installation" href="../getting_started/installation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Interactive operation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#from-python-or-jupyter">From Python or Jupyter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#from-the-command-line">From the command line</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#hardware-map">Hardware map</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#common-options">Common options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ ffec1078)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Interactive operation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/user_guide/interactive_operation.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="interactive-operation">
+<h1>Interactive operation<a class="headerlink" href="#interactive-operation" title="Link to this heading"></a></h1>
+<p><a class="reference internal" href="../_autosummaries/pychfpga.fpga_array.html#pychfpga.fpga_array.FPGAArray" title="pychfpga.fpga_array.FPGAArray"><code class="xref py py-class docutils literal notranslate"><span class="pre">FPGAArray</span></code></a> represents any number of boards and crates. It discovers
+them, programs the FPGAs and initializes the firmware, then hands control back to you. For
+unattended operation, see <a class="reference internal" href="server_operation.html"><span class="doc">Server operation</span></a>.</p>
+<section id="from-python-or-jupyter">
+<h2>From Python or Jupyter<a class="headerlink" href="#from-python-or-jupyter" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">FPGAArray</span></code> is awaitable. In IPython or Jupyter, which allow top-level <code class="docutils literal notranslate"><span class="pre">await</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pychfpga.fpga_array</span><span class="w"> </span><span class="kn">import</span> <span class="n">FPGAArray</span>
+
+<span class="n">ca</span> <span class="o">=</span> <span class="k">await</span> <span class="n">FPGAArray</span><span class="p">(</span><span class="s2">"crs 77:1 123:2"</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"corr8"</span><span class="p">)</span>
+<span class="n">ca</span><span class="o">.</span><span class="n">ib</span>          <span class="c1"># collection of all boards in the array</span>
+</pre></div>
+</div>
+<p>Operations on <code class="docutils literal notranslate"><span class="pre">ca.ib</span></code> are applied to every board.</p>
+</section>
+<section id="from-the-command-line">
+<h2>From the command line<a class="headerlink" href="#from-the-command-line" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">fpga_array.py</span></code> can be run as a script in IPython. It creates the array and leaves these
+variables in the session: <code class="docutils literal notranslate"><span class="pre">ca</span></code> (the array), <code class="docutils literal notranslate"><span class="pre">mb</span></code> (<code class="docutils literal notranslate"><span class="pre">ca.ib</span></code>), <code class="docutils literal notranslate"><span class="pre">cr</span></code> (<code class="docutils literal notranslate"><span class="pre">ca.ic</span></code>, the crates)
+and <code class="docutils literal notranslate"><span class="pre">ps</span></code> (power supplies, if any).</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ipython
+run<span class="w"> </span>-i<span class="w"> </span>pychfpga/fpga_array.py<span class="w"> </span>&lt;hardware<span class="w"> </span>map&gt;<span class="w"> </span>--mode<span class="w"> </span>&lt;mode&gt;<span class="w"> </span><span class="o">[</span>options<span class="o">]</span>
+</pre></div>
+</div>
+</section>
+<section id="hardware-map">
+<h2>Hardware map<a class="headerlink" href="#hardware-map" title="Link to this heading"></a></h2>
+<p>The hardware map lists the boards and crates to operate. It is a space-separated string:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;board</span> <span class="pre">part</span> <span class="pre">number&gt;</span> <span class="pre">&lt;serial&gt;</span> <span class="pre">[&lt;serial&gt;</span> <span class="pre">...]</span></code>: boards by serial number</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&lt;crate</span> <span class="pre">part</span> <span class="pre">number&gt;</span> <span class="pre">&lt;serial&gt;[:&lt;crate</span> <span class="pre">number&gt;]</span> <span class="pre">...</span></code>: all boards in the given crates</p></li>
+<li><p>an IP address or hostname</p></li>
+</ul>
+<p>Part numbers match case-insensitively on their ending, so <code class="docutils literal notranslate"><span class="pre">mb</span></code> means MGK7MB, <code class="docutils literal notranslate"><span class="pre">bp16</span></code> means
+MGK7BP16 and <code class="docutils literal notranslate"><span class="pre">crs</span></code> means CRS. Boards given by serial number are found by discovery (mDNS for
+IceBoard, beacons for CRS).</p>
+<p>Examples: <code class="docutils literal notranslate"><span class="pre">&quot;crs</span> <span class="pre">247</span> <span class="pre">224&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;mb</span> <span class="pre">123&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;bp16</span> <span class="pre">12:0</span> <span class="pre">13:1&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;10.10.3.7&quot;</span></code>.</p>
+</section>
+<section id="common-options">
+<h2>Common options<a class="headerlink" href="#common-options" title="Link to this heading"></a></h2>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">--mode</span></code></dt><dd><p>Operational mode. It selects the bitstream and the initialization. See
+<a class="reference internal" href="../introduction.html"><span class="doc">Introduction</span></a> for the modes of each platform.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">--prog</span></code></dt><dd><p>FPGA programming: <code class="docutils literal notranslate"><span class="pre">0</span></code> never, <code class="docutils literal notranslate"><span class="pre">1</span></code> only if not already programmed with the same
+firmware, <code class="docutils literal notranslate"><span class="pre">2</span></code> always (default when <code class="docutils literal notranslate"><span class="pre">--mode</span></code> is given).</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">--init</span></code></dt><dd><p>Initialization level: <code class="docutils literal notranslate"><span class="pre">0</span></code> connect to the platform only, <code class="docutils literal notranslate"><span class="pre">1</span></code> also program the FPGA,
+<code class="docutils literal notranslate"><span class="pre">2</span></code> also connect to the firmware, <code class="docutils literal notranslate"><span class="pre">3</span></code> also initialize the mode (default when
+<code class="docutils literal notranslate"><span class="pre">--mode</span></code> is given).</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">--sync_method</span></code></dt><dd><p><code class="docutils literal notranslate"><span class="pre">distributed_time</span></code>, <code class="docutils literal notranslate"><span class="pre">centralized_time_trigger</span></code>, <code class="docutils literal notranslate"><span class="pre">centralized_soft_trigger</span></code> or
+<code class="docutils literal notranslate"><span class="pre">local_soft_trigger</span></code>.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">--ignore_missing_boards</span></code></dt><dd><p>Do not fail if some boards are not found.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">-y</span> <span class="pre">&lt;file.yaml&gt;</span> <span class="pre">&lt;section&gt;</span></code></dt><dd><p>Load array parameters from a YAML configuration (<code class="docutils literal notranslate"><span class="pre">fpga_array_params</span></code>). Command-line
+options override it.</p>
+</dd>
+</dl>
+<p>Run <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">pychfpga/fpga_array.py</span> <span class="pre">--help</span></code> for the full list.</p>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading"></a></h2>
+<p>Single IceBoard by IP address, on-board correlator:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>run<span class="w"> </span>-i<span class="w"> </span>pychfpga/fpga_array.py<span class="w"> </span><span class="m">10</span>.10.10.7<span class="w"> </span>--mode<span class="w"> </span>corr16<span class="w"> </span>--sync_method<span class="w"> </span>local_soft_trigger
+</pre></div>
+</div>
+<p>Two IceBoard crates (serials 12 and 13 become crate numbers 0 and 1), 512 inputs corner-turned
+to an external X-engine, synchronized with IRIG-B:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>run<span class="w"> </span>-i<span class="w"> </span>pychfpga/fpga_array.py<span class="w"> </span>bp16<span class="w"> </span><span class="m">12</span>:0<span class="w"> </span><span class="m">13</span>:1<span class="w"> </span>--mode<span class="w"> </span>shuffle512<span class="w"> </span>--sync_method<span class="w"> </span>distributed_time
+</pre></div>
+</div>
+<p>Two CRS boards, corner-turn with 100G offload, from Python:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ca</span> <span class="o">=</span> <span class="k">await</span> <span class="n">FPGAArray</span><span class="p">(</span><span class="s2">"crs 247 224"</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"shuffle8"</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>One CRS board, on-board correlator:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ca</span> <span class="o">=</span> <span class="k">await</span> <span class="n">FPGAArray</span><span class="p">(</span><span class="s2">"crs 77"</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"corr8"</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../getting_started/installation.html" class="btn btn-neutral float-left" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="data_capture.html" class="btn btn-neutral float-right" title="Data capture" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

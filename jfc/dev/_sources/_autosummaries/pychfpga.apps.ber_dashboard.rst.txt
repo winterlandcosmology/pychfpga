@@ -24,24 +24,9 @@
 
    
    
-   .. container:: autosummary_block
-
-      .. rubric:: Package sub-modules
-
-      .. autosummary::
-         :toctree:
-         :template: custom-module-template.rst
-         :recursive:
-
-         
-         ~main
-         ~paths
-         ~qsfp_ber_tests
-         ~sfp_ber_tests
-         ~state
-         ~ui
-         ~utils
-         ~workers
+   
+   
+   
    
    
 

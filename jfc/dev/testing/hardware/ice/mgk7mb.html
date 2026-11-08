@@ -1,0 +1,474 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MGK7MB IceBoard Motherboard &mdash; pychfpga User Manual (jfc/dev @ ffec1078) 1.3.4.dev814+ice.co.gffec10782 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../../../_static/chime_favicon.png"/>
+      <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../../_static/documentation_options.js?v=d3e2754b"></script>
+      <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link rel="next" title="MGK7BP16 16-slot ICE backplane" href="mgk7bp16.html" />
+    <link rel="prev" title="MGADC08 ADC Mezzanine" href="mgadc08.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html">
+            
+              <img src="../../../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">Hardware testing</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../index.html#installation">Installation</a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="../index.html#test-suites">Test suites</a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="index.html">ICE tests</a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="mgadc08.html">MGADC08 ADC Mezzanine</a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#">MGK7MB IceBoard Motherboard</a><ul>
+<li class="toctree-l5"><a class="reference internal" href="#descriptions">Descriptions</a><ul>
+<li class="toctree-l6"><a class="reference internal" href="#bench-tests">Bench tests</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#networked-tests">Networked tests</a></li>
+</ul>
+</li>
+<li class="toctree-l5"><a class="reference internal" href="#running-the-tests">Running the tests</a></li>
+<li class="toctree-l5"><a class="reference internal" href="#testing-instructions">Testing Instructions</a><ul>
+<li class="toctree-l6"><a class="reference internal" href="#inspection">Inspection</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#impedance">Impedance</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#power-up">Power-up</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pll-programming">PLL programming</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#memory">Memory</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#on-the-network">On the network</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#sensors">Sensors</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#serial-number">Serial number</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#i2c">I2C</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#backplane-clock">Backplane clock</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#fpga">FPGA</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#mezzanine">Mezzanine</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#ramp">Ramp</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#qsfp">QSFP</a></li>
+<li class="toctree-l6"><a class="reference internal" href="#gtx">GTX</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l4"><a class="reference internal" href="mgk7bp16.html">MGK7BP16 16-slot ICE backplane</a></li>
+<li class="toctree-l4"><a class="reference internal" href="ice_crate.html">Pre-deployment ICE crate-level tests</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../crs/index.html">CRS tests</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../index.html#running-the-tests">Running the tests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../index.html#additional-documentation">Additional documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">pychfpga User Manual (jfc/dev @ ffec1078)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Hardware testing</a></li>
+          <li class="breadcrumb-item"><a href="index.html">ICE tests</a></li>
+      <li class="breadcrumb-item active">MGK7MB IceBoard Motherboard</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/testing/hardware/ice/mgk7mb.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="mgk7mb-iceboard-motherboard">
+<h1>MGK7MB IceBoard Motherboard<a class="headerlink" href="#mgk7mb-iceboard-motherboard" title="Link to this heading"></a></h1>
+<section id="descriptions">
+<h2>Descriptions<a class="headerlink" href="#descriptions" title="Link to this heading"></a></h2>
+<p>The tests are divided in two phases: bench tests and networked tests.</p>
+<section id="bench-tests">
+<h3>Bench tests<a class="headerlink" href="#bench-tests" title="Link to this heading"></a></h3>
+<p>These tests are performed on a standalone board, with no network, to make sure a defective board
+will not damage the rest of the setup. The tests are:</p>
+<ul class="simple">
+<li><p>Visual inspection</p></li>
+<li><p>Resistance at the test points</p></li>
+<li><p>Power-up current</p></li>
+<li><p>PLL programming</p></li>
+<li><p>ARM memory, over RS-232</p></li>
+</ul>
+</section>
+<section id="networked-tests">
+<h3>Networked tests<a class="headerlink" href="#networked-tests" title="Link to this heading"></a></h3>
+<p>These tests are performed after the board is on the network. The tests are:</p>
+<ul class="simple">
+<li><p>Power and temperature sensors</p></li>
+<li><p>Serial number programmed into the EEPROM and flash</p></li>
+<li><p>Presence of every I2C device</p></li>
+<li><p>Boot from the backplane clock</p></li>
+<li><p>FPGA programming</p></li>
+<li><p>Basic mezzanine operation, then a ramp on its high-speed data lines</p></li>
+<li><p>QSFP: the cable is detected over I2C and its EEPROM can be read</p></li>
+<li><p>High-speed links (GTX), on a single-slot backplane</p></li>
+</ul>
+</section>
+</section>
+<section id="running-the-tests">
+<h2>Running the tests<a class="headerlink" href="#running-the-tests" title="Link to this heading"></a></h2>
+<p>Tests of the MGK7MB IceBoard motherboard, in <code class="docutils literal notranslate"><span class="pre">qc/MGK7MB/mgk7mb_test.py</span></code>.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>qc/MGK7MB
+python<span class="w"> </span>mgk7mb_test.py
+</pre></div>
+</div>
+</section>
+<section id="testing-instructions">
+<h2>Testing Instructions<a class="headerlink" href="#testing-instructions" title="Link to this heading"></a></h2>
+<figure class="align-center" id="id1">
+<a class="reference internal image-reference" href="../../../_images/main_view.jpg"><img alt="Motherboard" src="../../../_images/main_view.jpg" style="width: 75%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Motherboard</span><a class="headerlink" href="#id1" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<section id="inspection">
+<h3>Inspection<a class="headerlink" href="#inspection" title="Link to this heading"></a></h3>
+<p><strong>Step 1:</strong> Is the FPGA heatsink securely attached?</p>
+<p><strong>Step 2:</strong> Are the FPGA heatsink pins cut near the stiffener?</p>
+<figure class="align-center" id="id2">
+<a class="reference internal image-reference" href="../../../_images/inspection_step12.jpeg"><img alt="Inspection steps 1 and 2" src="../../../_images/inspection_step12.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Points of interest for steps 1 and 2</span><a class="headerlink" href="#id2" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p><strong>Step 3:</strong> Is the board stiffener installed, and the board reasonably flat?</p>
+<p><strong>Step 4:</strong> Are the PLL heatsinks attached?</p>
+<p><strong>Step 5:</strong> Does the arm shield fence look straight?</p>
+<figure class="align-center" id="id3">
+<a class="reference internal image-reference" href="../../../_images/inspection_step345.jpeg"><img alt="Inspection steps 3, 4 and 5" src="../../../_images/inspection_step345.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Points of interest for steps 3, 4 and 5</span><a class="headerlink" href="#id3" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p><strong>Step 6:</strong> Are the dipswitches set correctly?</p>
+<p><strong>Step 7:</strong> Are the jumpers set correctly?</p>
+<figure class="align-center" id="id4">
+<a class="reference internal image-reference" href="../../../_images/inspection_step67.jpeg"><img alt="Inspection steps 6 and 7" src="../../../_images/inspection_step67.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Points of interest for steps 6 and 7</span><a class="headerlink" href="#id4" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p><strong>Step 8:</strong> Are the 90-pin Molex backplane connectors screwed down? (backside)</p>
+<p><strong>Step 9:</strong> Are the QSFP and SFP connectors soldered in place? (backside)</p>
+<p><strong>Step 10:</strong> Do all the buck converters have the additional hand-soldered capacitor? (backside)</p>
+<figure class="align-center" id="id5">
+<a class="reference internal image-reference" href="../../../_images/inspection_step8910.jpeg"><img alt="Inspection steps 8, 9 and 10" src="../../../_images/inspection_step8910.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Points of interest for steps 8, 9 and 10</span><a class="headerlink" href="#id5" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p><strong>Step 11:</strong> Do all the FMC power switches look well soldered?</p>
+<p><strong>Step 12:</strong> Is the blue patch wire in place and secured?</p>
+<figure class="align-center" id="id6">
+<a class="reference internal image-reference" href="../../../_images/inspection_step1112.jpeg"><img alt="Inspection steps 11 and 12" src="../../../_images/inspection_step1112.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Points of interest for steps 11 and 12</span><a class="headerlink" href="#id6" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="impedance">
+<h3>Impedance<a class="headerlink" href="#impedance" title="Link to this heading"></a></h3>
+<p>Set the board up as shown before measuring.</p>
+<figure class="align-center" id="id7">
+<a class="reference internal image-reference" href="../../../_images/CroppedIceboard.jpeg"><img alt="Impedance-test setup" src="../../../_images/CroppedIceboard.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">IceBoard with ground connection and one-slot backplane</span><a class="headerlink" href="#id7" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p>Apply the red probe in this order: the +V supply, then the buck converters counter-clockwise.
+Probe location 10 in the diagram is the point used for every buck converter.</p>
+<figure class="align-center" id="id8">
+<a class="reference internal image-reference" href="../../../_images/Impedance_test-points.jpeg"><img alt="Impedance test points" src="../../../_images/Impedance_test-points.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Impedance measurement test locations</span><a class="headerlink" href="#id8" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="power-up">
+<h3>Power-up<a class="headerlink" href="#power-up" title="Link to this heading"></a></h3>
+<p>Connect the power cable to the backplane as shown, and check that all 9 power LEDs are on.</p>
+<figure class="align-center" id="id9">
+<a class="reference internal image-reference" href="../../../_images/power_cable.jpeg"><img alt="Power cable on the one-slot backplane" src="../../../_images/power_cable.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Power cable attached to the one-slot backplane</span><a class="headerlink" href="#id9" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id10">
+<a class="reference internal image-reference" href="../../../_images/power_leds.jpeg"><img alt="Motherboard power LEDs" src="../../../_images/power_leds.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">The nine power LEDs</span><a class="headerlink" href="#id10" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="pll-programming">
+<h3>PLL programming<a class="headerlink" href="#pll-programming" title="Link to this heading"></a></h3>
+<p>Connect the PLL programming cable with the black marked side facing the SFP connectors. Both PLL
+lock lights must be on (green and yellow, on the right).</p>
+<figure class="align-center" id="id11">
+<a class="reference internal image-reference" href="../../../_images/PLLDongle.jpeg"><img alt="PLL programming dongle" src="../../../_images/PLLDongle.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">PLL programming dongle</span><a class="headerlink" href="#id11" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id12">
+<a class="reference internal image-reference" href="../../../_images/PLLLock.jpeg"><img alt="PLL lock LEDs" src="../../../_images/PLLLock.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">PLL lock LEDs</span><a class="headerlink" href="#id12" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="memory">
+<h3>Memory<a class="headerlink" href="#memory" title="Link to this heading"></a></h3>
+<p>Insert a valid SD card in the front slot. Connect the RS-232 dongle to the bottom pins on the
+front of the board, and the other end to a USB port on the test computer.</p>
+<figure class="align-center" id="id13">
+<a class="reference internal image-reference" href="../../../_images/SD_card.jpeg"><img alt="SD card in the motherboard" src="../../../_images/SD_card.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">SD card plugged into the motherboard</span><a class="headerlink" href="#id13" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id14">
+<a class="reference internal image-reference" href="../../../_images/RS232_dongle.jpeg"><img alt="RS-232 dongle" src="../../../_images/RS232_dongle.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">RS-232 dongle attached to the motherboard</span><a class="headerlink" href="#id14" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="on-the-network">
+<h3>On the network<a class="headerlink" href="#on-the-network" title="Link to this heading"></a></h3>
+<p>The remaining tests need an Ethernet cable in the second port from the edge, and a valid SD card
+in the front slot.</p>
+<figure class="align-center" id="id15">
+<a class="reference internal image-reference" href="../../../_images/ethernet.jpeg"><img alt="Ethernet cable on the ARM port" src="../../../_images/ethernet.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Ethernet cable attached to the ARM processor</span><a class="headerlink" href="#id15" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id16">
+<a class="reference internal image-reference" href="../../../_images/SD_card1.jpeg"><img alt="SD card for the networked tests" src="../../../_images/SD_card1.jpeg" style="width: 60%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">SD card plugged into the motherboard</span><a class="headerlink" href="#id16" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="sensors">
+<h3>Sensors<a class="headerlink" href="#sensors" title="Link to this heading"></a></h3>
+<p>No extra setup. Leave the mezzanines off the board.</p>
+</section>
+<section id="serial-number">
+<h3>Serial number<a class="headerlink" href="#serial-number" title="Link to this heading"></a></h3>
+<p>No extra setup.</p>
+</section>
+<section id="i2c">
+<h3>I2C<a class="headerlink" href="#i2c" title="Link to this heading"></a></h3>
+<p>No extra setup.</p>
+</section>
+<section id="backplane-clock">
+<h3>Backplane clock<a class="headerlink" href="#backplane-clock" title="Link to this heading"></a></h3>
+<p>Terminate the SMA clock jumper whenever it is not in use. That termination matters for step 3.</p>
+<p><strong>Step 1.</strong> Onboard crystal. Set the jumper to the crystal position (left).</p>
+<figure class="align-center" id="id17">
+<a class="reference internal image-reference" href="../../../_images/clock_jumper.jpeg"><img alt="Clock jumper in the crystal position" src="../../../_images/clock_jumper.jpeg" style="width: 70%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Clock-select jumper in the onboard-crystal position</span><a class="headerlink" href="#id17" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p><strong>Step 2.</strong> Front-panel SMA. Set the jumper to the front SMA position (middle) and connect the SMA
+cable to the front-panel connector. The other end goes to the backplane.</p>
+<p><strong>Step 3.</strong> Backplane clock. Set the jumper back to its original position (right), and terminate
+the front-panel SMA cable.</p>
+<figure class="align-center" id="id18">
+<a class="reference internal image-reference" href="../../../_images/front_sma.jpeg"><img alt="Front-panel SMA clock" src="../../../_images/front_sma.jpeg" style="width: 70%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Jumper in front-panel SMA mode, clock cable attached</span><a class="headerlink" href="#id18" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id19">
+<a class="reference internal image-reference" href="../../../_images/backplane_clock.jpeg"><img alt="Clock cable on the backplane" src="../../../_images/backplane_clock.jpeg" style="width: 70%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Clock cable attached to the backplane</span><a class="headerlink" href="#id19" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="fpga">
+<h3>FPGA<a class="headerlink" href="#fpga" title="Link to this heading"></a></h3>
+<p>This setup is also used for the mezzanine, ramp, QSFP and GTX tests. With the earlier setups
+already done, the menu can run this group in order and stop at the first failure.</p>
+<p>Plug an SFP adapter into the motherboard and an Ethernet cable into the adapter. Mount the FPGA
+fan on the heatsink and attach its cable.</p>
+<figure class="align-center" id="id20">
+<a class="reference internal image-reference" href="../../../_images/fpga_ethernet.jpeg"><img alt="SFP adapter and Ethernet cable" src="../../../_images/fpga_ethernet.jpeg" style="width: 70%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Ethernet cable and SFP adapter</span><a class="headerlink" href="#id20" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id21">
+<a class="reference internal image-reference" href="../../../_images/fpga_fan.jpeg"><img alt="FPGA fan" src="../../../_images/fpga_fan.jpeg" style="width: 70%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Fan on the FPGA heatsink</span><a class="headerlink" href="#id21" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="mezzanine">
+<h3>Mezzanine<a class="headerlink" href="#mezzanine" title="Link to this heading"></a></h3>
+<p>Mount both mezzanines. Use the extender cables so the mezzanine connectors are not mated and
+unmated on every board.</p>
+</section>
+<section id="ramp">
+<h3>Ramp<a class="headerlink" href="#ramp" title="Link to this heading"></a></h3>
+<p>Both mezzanines stay mounted, on the extender cables.</p>
+</section>
+<section id="qsfp">
+<h3>QSFP<a class="headerlink" href="#qsfp" title="Link to this heading"></a></h3>
+<p>Complete the FPGA setup first. Connect the QSFP cable in a loop. The GTX test uses the same loop.</p>
+<figure class="align-center" id="id22">
+<a class="reference internal image-reference" href="../../../_images/qsfp_loop.jpeg"><img alt="QSFP loopback cable" src="../../../_images/qsfp_loop.jpeg" style="width: 70%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">QSFP cable in a loopback</span><a class="headerlink" href="#id22" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+</section>
+<section id="gtx">
+<h3>GTX<a class="headerlink" href="#gtx" title="Link to this heading"></a></h3>
+<p>Complete the FPGA setup and the QSFP loop first. Mezzanines may be loaded or left off.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="mgadc08.html" class="btn btn-neutral float-left" title="MGADC08 ADC Mezzanine" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="mgk7bp16.html" class="btn btn-neutral float-right" title="MGK7BP16 16-slot ICE backplane" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

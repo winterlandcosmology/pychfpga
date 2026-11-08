@@ -1,6 +1,12 @@
-This file is processed by Sphinx so the ``autosummary`` directive can generate
-API stub pages. The master :file:`index.rst` toctree includes this page under
-API Reference.
+-------------
+API reference
+-------------
+
+..
+   Sphinx processes this page so the ``autosummary`` directive generates the API stub pages in
+   ``_autosummaries``.
+
+Reference for all ``pychfpga`` modules, generated from the docstrings.
 
 .. autosummary::
    :recursive:
