@@ -9,7 +9,7 @@
     description = "Documentation builder for pychfpga"
     requires-python = "==3.12.*"
     dependencies = [
-        "setuptools-scm>=8.0",
+        "setuptools-scm>=9",
         "sphinx",
         "sphinx_rtd_theme",
         "sphinxcontrib.restbuilder",

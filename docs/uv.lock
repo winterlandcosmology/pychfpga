@@ -554,7 +554,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "psutil" },
     { name = "pyyaml" },
-    { name = "setuptools-scm", specifier = ">=8.0" },
+    { name = "setuptools-scm", specifier = ">=9" },
     { name = "sphinx" },
     { name = "sphinx-rtd-theme" },
     { name = "sphinxcontrib-restbuilder" },

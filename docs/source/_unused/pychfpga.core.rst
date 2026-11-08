@@ -1,4 +1,0 @@
-pychfpga core
-=============
-
-No contents

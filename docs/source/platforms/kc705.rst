@@ -1,0 +1,27 @@
+-----
+KC705
+-----
+
+The Xilinx KC705 (Kintex-7 evaluation board) was the first prototyping platform for chFPGA. chFPGA
+still has a ``kc705_corr8`` configuration (see the `chFPGA documentation
+<https://winterlandcosmology.github.io/chfpga>`_), but ``pychfpga`` does not support the board
+out of the box.
+
+Limitations
+===========
+
+- The KC705 has no on-board processor: there is no ARM, Tuber or TCPipe server. Boards cannot be
+  discovered, and the FPGA cannot be programmed remotely. Program the bitstream manually over JTAG
+  (Vivado Hardware Manager) before connecting.
+- ``pychfpga`` has no KC705 platform class.
+
+Adding support
+==============
+
+Adding the platform is left to the user. It needs:
+
+- a ``pychfpga/hardware/kc705/kc705.py`` platform class that talks to the firmware directly over
+  its Ethernet link. ``pychfpga/hardware/zcu111/`` is the closest template.
+- an entry in ``pychfpga/hardware/supported_hardware.py``
+- an entry in ``PLATFORM_SUPPORT`` in ``pychfpga/fpga_firmware/chfpga/chfpga.py`` mapping the
+  modes to the bitstream
