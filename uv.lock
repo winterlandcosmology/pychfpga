@@ -782,7 +782,7 @@ requires-dist = [
     { name = "pytest-html", marker = "extra == 'qc'", specifier = ">=4.0" },
     { name = "pyyaml" },
     { name = "setuptools", specifier = ">=64,<82" },
-    { name = "setuptools-scm", specifier = ">=8.0" },
+    { name = "setuptools-scm", specifier = ">=9" },
     { name = "sphinx", marker = "extra == 'docs'" },
     { name = "sphinx-rtd-theme", marker = "extra == 'docs'" },
     { name = "sphinxcontrib-restbuilder", marker = "extra == 'docs'" },
