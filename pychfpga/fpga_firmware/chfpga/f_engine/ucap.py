@@ -38,8 +38,10 @@ class UCAP(MMI):
     OVERRUN          = BitField(STATUS, 0, 1, doc='1 when data transmission request was performed before the previous transmission was completed. Sticky flag.')
     RST_MON          = BitField(STATUS, 0, 2, doc='debug')
     USER_RST_MON     = BitField(STATUS, 0, 3, doc='debug')
-    SINK_TREADY      = BitField(STATUS, 0, 4, doc='debug')
-    FIFO_FULL        = BitField(STATUS, 0, 4, doc='debug')
+    SINK_TREADY      = BitField(STATUS, 0, 4, doc='m_axis_tready')
+    FIFO_FULL        = BitField(STATUS, 0, 5, doc='FIFO full')
+    FIFO_WR_RST_BUSY = BitField(STATUS, 0, 6, doc='FIFO write-side reset busy')
+    FIFO_RD_RST_BUSY = BitField(STATUS, 0, 7, doc='FIFO read-side reset busy')
 
 
     IN_FRAME_CTR     = BitField(STATUS, 1, 0, width=8, doc='debug')

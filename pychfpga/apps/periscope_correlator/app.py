@@ -2987,10 +2987,7 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             self.config.waterfall_len = self.waterfall_len_spinner.value()
             
             self.pocket_correlator.configure_corr(autocorr_only=0, no_accum=0, n_firmware_frames=self.config.n_firmware_frames - 1)
-            if self.pocket_correlator.ucap.OUTPUT_SOURCE_SEL != 1:
-                print("Setting UCAP output source to Correlator (1)...")
-                self.pocket_correlator.ucap.OUTPUT_SOURCE_SEL = 1
-            
+
             sock = self.pocket_correlator.corr_receiver.socket
             sock.settimeout(0.1)
             

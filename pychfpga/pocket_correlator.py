@@ -309,10 +309,6 @@ class POCKET_CORRELATOR:
         # get the number of captures needed    
         ncap = int(n_frames/n_frames_per_capture)
 
-        # Ensure UCAP is configured to receive channelizer data, not correlated data:
-        if self.ucap.OUTPUT_SOURCE_SEL != 0:
-            self.ucap.OUTPUT_SOURCE_SEL = 0
-
         # Configure the channelizers
         self.i.set_channelizer(data_source = data_source,
                                function = None,
@@ -503,10 +499,6 @@ class POCKET_CORRELATOR:
         # Divide the number of captures by the number of frames per capture to
         # get the number of captures needed    
         ncap = int(n_frames/n_frames_per_capture)
-
-        # Ensure UCAP is configured to receive channelizer data, not correlated data:
-        if self.ucap.OUTPUT_SOURCE_SEL != 0:
-            self.ucap.OUTPUT_SOURCE_SEL = 0
 
         if fft_bit_res == '16+16':
 
@@ -976,10 +968,6 @@ class POCKET_CORRELATOR:
         # Divide the number of captures by the number of frames per capture to
         # get the number of captures needed    
         ncap = int(n_frames/n_frames_per_capture)
-        
-        # Ensure UCAP is configured to receive channelizer data, not correlated data:
-        if self.ucap.OUTPUT_SOURCE_SEL != 0:
-            self.ucap.OUTPUT_SOURCE_SEL = 0
 
         # Configure the channelizers
         self.i.set_channelizer(data_source = data_source,
@@ -1107,10 +1095,6 @@ class POCKET_CORRELATOR:
         # Divide the number of captures by the number of frames per capture to
         # get the number of captures needed    
         ncap = int(n_frames/n_frames_per_capture)
-
-        # Ensure UCAP is configured to receive channelizer data, not correlated data:
-        if self.ucap.OUTPUT_SOURCE_SEL != 0:
-            self.ucap.OUTPUT_SOURCE_SEL = 0
 
         # Configure the channelizers
         self.i.set_channelizer(data_source = data_source,
@@ -1379,10 +1363,6 @@ class POCKET_CORRELATOR:
         is (number_of_results, n_bins, NCORR_PROD).
 
         """
-        
-        # Ensure UCAP is configured to receive correlated data, not channelizer data:
-        if self.ucap.OUTPUT_SOURCE_SEL != 1:
-            self.ucap.OUTPUT_SOURCE_SEL = 1
 
         # Configure the channelizers
         self.i.set_channelizer(data_source = data_source,

@@ -39,6 +39,7 @@ class SCALER(MMI):
     SYNCHRONIZE_GAIN_BANK = BitField(CONTROL, 0x02, 4, doc="When '1', The target bank number will be enabled at the target frame number.")
     # FORCE_GAIN_TO_ONE     = BitField(CONTROL, 0x02, 2, doc="Force gain to (1+0j) (complex gain) or 1 (real gain). Gain table is ignored, but post-scaler (SHIFT_LEFT) still applies. ")
     CHAN_FIFO_OVERFLOW_RESET = BitField(CONTROL, 0x02, 3, doc="Resets the Channel FIFO overflow flag")
+    STATS_SINGLE_BIN      = BitField(CONTROL, 0x02, 2, doc="When '1', overflow stats operate only on the bin in STATS_BIN_NUMBER.")
     ROUNDING_MODE         = BitField(CONTROL, 0x02, 0, width=2, doc="Set rounding mode.  0: Truncate, 1: Round, 2: Convergent Rounding")
     STATS_FRAME_COUNT     = BitField(CONTROL, 0x05, 0, width=24, doc="Number of frames to inclue in stats results.")
 
@@ -46,21 +47,22 @@ class SCALER(MMI):
     USE_FLOAT_GAINS       = BitField(CONTROL, 0x0A, 7, doc="When '1', floating point gains are used. Works only if USE_COMPLEX_GAINS=0")
     MON_RESET_STATS       = BitField(CONTROL, 0x0A, 6, doc="When '1', MON stats are reset")
     MON_CTRL              = BitField(CONTROL, 10, 5, doc="When '1', Disable FIFO write")
-    DATA_TYPE             = BitField(CONTROL, 0x0A, 3, width=2, doc=" Selects the main output data in conjunction with BYPASS.\n"
-                                "   BYPASS=0, DATA_TYPE=X: Send normal scaled data in 4 or 8 bit mode\n"
-                                "   BYPASS=1, DATA_TYPE=0: Send the most significant bits of the raw FFT values\n"
-                                "   BYPASS=1, DATA_TYPE=1: Send (1+0j) if there is a saturation on either Re or Im\n"
-                                "   BYPASS=1, DATA_TYPE=2: Send (1+0j) if Re has a positive saturation and (0+1j) if it has a negative saturation\n"
-                                "   BYPASS=1, DATA_TYPE=3: Send (1+0j) if Im has a positive saturation and (0+1j) if it has a negative saturation\n"
+    DATA_TYPE             = BitField(CONTROL, 0x0A, 3, width=2, doc="Main output when BYPASS=1 (bypass_data_type).\n"
+                                "   0: input\n"
+                                "   1: 1+0j if any saturation\n"
+                                "   2: 1+0j or 0+1j if positive or negative saturation respectively\n"
                                 )
-    CAP_DATA_TYPE         = BitField(CONTROL, 0x0A, 0, width=3, doc=" Selects the source of the capture data port.\n"
-                                "   0, Same as main data output\n"
-                                "   1: MSB of the raw FFT values\n"
-                                "   2: MSB of post-gain FFT value with saturation\n"
-                                "   3: 4+4 bit scaled values\n"
-                                "   4: Dual resolution FFT with automatic switching between even and odd bins. Odd bins are send on odd frames, even bins on even frames\n"
-                                "   5: Quad resolution FFT with automatic switching between even and odd bins. Odd bins are send on odd frames, even bins on even frames\n"
+    CAP_DATA_TYPE         = BitField(CONTROL, 0x0A, 0, width=3, doc="Capture data port source.\n"
+                                "   0: main scaler output\n"
+                                "   1: raw FFT MSBs\n"
+                                "   2: post-gain MSBs\n"
+                                "   3: 4+4 scaled\n"
+                                "   4: dual-resolution raw FFT\n"
+                                "   5: full-resolution raw FFT\n"
+                                "   6: saturation flags\n"
+                                "   7: reserved\n"
                                 )
+    STATS_BIN_NUMBER      = BitField(CONTROL, 0x0C, 0, width=16, doc="Bin number for overflow stats when STATS_SINGLE_BIN is set.")
     SHIFT_LEFT_BANK1      = BitField(CONTROL, 0x0D, 0, width=5, doc="Post-scaler left shift for gain bank 1. Use get_shift_left/set_shift_left.")
 
     STATS_READY            = BitField(STATUS, 0x00, 7, doc="Indicates that new stats results are ready")
@@ -69,6 +71,7 @@ class SCALER(MMI):
 
     CHAN_FIFO_OVERFLOW      = BitField(STATUS, 0x00, 4, doc="'Channel FIFO overflow flag, sticky")
     USE_COMPLEX_GAINS      = BitField(STATUS, 0x00, 3, doc="1 if (16+16) bits complex gains are used, otherwise 16-bits real gains are used.")
+    COEFF_PAGE_WIDTH       = BitField(STATUS, 0x00, 0, width=3, doc="Width of the page register for bytewise access to both gain banks.")
 
     STATS_SCALER_OVERFLOWS = BitField(STATUS, 0x02, 0, width=16, doc="Stats result: number of scaler overflows")
     STATS_ADC_OVERFLOWS    = BitField(STATUS, 0x04, 0, width=16, doc="Stats result: number of ADC overflows")

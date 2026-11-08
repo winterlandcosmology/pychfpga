@@ -25,7 +25,6 @@ class PROBER(MMI):
 
     # Memory-mapped control registers
     RESET = BitField(CONTROL, 0, 7, doc="Resets the module (including the FIFO)")
-    FIFO_RESET = BitField(CONTROL, 0, 6, doc="When '1', resets the data FIFO")
     SOURCE_SEL = BitField(CONTROL, 0, 5, doc="0 = source selector output (timestream), 1 = scaler output (spectrum)")
     PROBER_USER_FLAGS = BitField(CONTROL, 0, 2,
                                  doc="If True, returns user flags in last 4 bits captured from scaler")
@@ -49,7 +48,7 @@ class PROBER(MMI):
     _DATA_FIFO_EMPTY = BitField(STATUS, 0x00, 4, doc="State of the DATA_FIFO_EMPTY signal (for debugging)")
     _DATA_FIFO_OVERFLOW = BitField(STATUS, 0x00, 3, doc="State of the DATA_FIFO_OVERFLOW signal (for debugging)")
     _DATA_FIFO_OVERFLOW_STICKY = BitField(STATUS, 0x00, 2, doc="State of the DATA_FIFO_OVERFLOW signal, stick to '1' when there us en aeeror until RESET=1 (for debugging)")
-    _DATA_FIFO_OVERFLOW = BitField(STATUS, 0x00, 1, doc="State of the header_FIFO_OVERFLOW signal (for debugging)")
+    _OVERRUN = BitField(STATUS, 0x00, 1, doc="High if a new burst was requested before the previous burst finished readout")
 
     TRIG_CTR = BitField(STATUS, 0x01, 0, width=8, doc="Number of frames")
 
@@ -67,8 +66,8 @@ class PROBER(MMI):
         self.pulse_bit('RESET')
 
     def reset_fifo(self):
-        """ Clears the data FIFO"""
-        self.pulse_bit('FIFO_RESET')
+        """Deprecated. RTL has no separate FIFO reset; a module RESET would have side effects."""
+        self.logger.warning(f'{self!r}: reset_fifo() is deprecated and has no effect (no separate FIFO reset in firmware)')
 
     DATA_SOURCE_TABLE = {
         'funcgen': 0,

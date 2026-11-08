@@ -259,7 +259,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
     _PLATFORM_ID_MGK7MB_REV0 = 2  #: ID number for the McGill MGK7MB Rev 0 motherboard (a.k.a Iceboard Rev 0). Works for All subsequent revs.
     _PLATFORM_ID_MGK7MB_REV2 = 3  #: ID number for the McGill MGK7MB Rev 2 motherboard (a.k.a Iceboard Rev 2). Works for All subsequent revs.
     _PLATFORM_ID_ZCU111 = 4  #: ID number for Xilinx ZCU111 evaluation board.
-    _PLATFORM_ID_CRS = 5  #: ID number for Xilinx ZCU111 evaluation board.
+    _PLATFORM_ID_CRS = 5  #: ID number for t0 CRS board.
 
     #: Map of all supported platform indexed by the `PLATFORM_ID` returned by the FPGA
     _PLATFORM_ID_LIST = {
@@ -647,7 +647,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                     self.HAS_ADCDAQ = False
                     self.HAS_FMC = False
                     self.MAX_BSB_COMMAND_LENGTH = 512
-                    self.HAS_UPACK = self.mode == 'shuffle8' # Hacky method until we can read it back.
+                    self.HAS_UPACK = self.mode == 'shuffle8'  # Host-only until GPIO exports a UPACK capability bit.
                     self.CROSSBAR1_TYPE = "URAM"
                     self.GPU_LINK_TYPE = "100GE"
                     self.CAPTURE_TYPE = "UCAP"
@@ -822,7 +822,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 else:
                     raise RuntimeError(f'Unknown CT-Engine type {self.CT_TYPE}')
 
-                if self.HAS_UPACK:  # ***JFC temp hack to determine if we have UPACK. Not in capability reg yet.
+                if self.HAS_UPACK:  # Host-only (mode == shuffle8); GPIO has no UPACK capability bit yet.
                     self.UPACK = upack.UPACK(
                         router=self.top_router,
                         router_port = 'UPACK',

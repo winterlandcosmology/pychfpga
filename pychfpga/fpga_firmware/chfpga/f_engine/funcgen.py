@@ -25,7 +25,7 @@ class FUNCGEN(MMI):
     FUNCTION         = BitField(CONTROL, 0x00, 0, width=3, doc="Selects the source of the signal to be generated")
     BYTE_A           = BitField(CONTROL, 0x01, 0, width=8, doc="Byte A to be used by the function generator")
     BYTE_B           = BitField(CONTROL, 0x02, 0, width=8, doc="Byte B to be used by the function generator")
-    STATS_PERIOD     = BitField(CONTROL, 0x04, 0, width=16, doc="Number of frames to send. If 0, send continuously")
+    STATS_PERIOD     = BitField(CONTROL, 0x04, 0, width=16, doc="Overflow integration length minus one. OVERFLOW_CTR accumulates for STATS_PERIOD+1 frames.")
     RST_LFSR         = BitField(CONTROL, 0x06, 6, width=1, doc="Reset the noise generator to inject seed for LFSR")
     RIGHT_SHIFT      = BitField(CONTROL, 0x05, 0, width=4, doc="Number of bits to right-shift the output of the FUNCGEN. Performed after the left shift.")
     RAM_PAGE_MSB     = BitField(CONTROL, 0x05, 4, width=4, doc="MSB of the 512-byte RAM page we want to access")
@@ -39,7 +39,7 @@ class FUNCGEN(MMI):
     STATS_DONE = BitField(STATUS, 0x02, 1, doc="overflow_ctr ready with new value for new integration period")
     SEND_FRAME = BitField(STATUS, 0x02, 0, doc="debug")
     DELAY_CTR = BitField(STATUS, 0x04, 0, width=16, doc="Debug: Delay counter")
-    OVERFLOW_CTR = BitField(STATUS, 0x08, 0, width=32, doc="Number of ADC overflows since the counter was last cleared")
+    OVERFLOW_CTR = BitField(STATUS, 0x08, 0, width=32, doc="Per-sample overflow bits over the last completed STATS_PERIOD window (ADC flags, RAM-injected overflow bits, and left-shift saturation).")
 
     FN_ADC = 0 # Sends the ADC data
     FN_BUFFER = 1 # Sends the data stored in the buffer

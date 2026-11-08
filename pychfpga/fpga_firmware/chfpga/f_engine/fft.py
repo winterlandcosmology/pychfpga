@@ -31,7 +31,7 @@ class FFT(MMI):
     ADDRESS_WIDTH = 9
 
     # Control registers
-    SOFT_RESET     = BitField(CONTROL, 0x00, 7, doc="Resets the module (also performs a DLY_RESET).")
+    SOFT_RESET     = BitField(CONTROL, 0x00, 7, doc="Resets the module, including pipeline-delay measurement.")
     OVERFLOW_RESET = BitField(CONTROL, 0x00, 2, doc="Resets the overflow counter.")
     OVERFLOW_FORCE = BitField(CONTROL, 0x00, 3, doc="Force the overflow counter to count (for debugging).")
     # DLY_RESET      = BitField(CONTROL, 0x00, 1, doc="Reset the computation of the CASPER block pipelining delay. When released, the block will re-learn the block latency once a CASPER SYNC has passed through the block.")

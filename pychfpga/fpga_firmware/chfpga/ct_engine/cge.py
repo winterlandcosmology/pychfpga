@@ -86,12 +86,12 @@ class CGECore(_CGEDrpPort):
 class CGECommon(_CGEDrpPort):
     """GT common (QPLL) DRP on a CGE block. Call :meth:`select` before access."""
 
-    QPLL_INIT_CFG = BitField(DRP, 0x0030, 0, width=16, doc="0-65535")
+    QPLL_INIT_CFG0 = BitField(DRP, 0x0030, 0, width=16, doc="QPLL_INIT_CFG[23:8]")
     QPLL_LPF = BitField(DRP, 0x0031, 11, width=4, doc="0-15")
-    QPLL_INIT_CFG = BitField(DRP, 0x0031, 0, width=8, doc="0-255")
-    QPLL_CFG = BitField(DRP, 0x0032, 0, width=16, doc="0-65535")
+    QPLL_INIT_CFG1 = BitField(DRP, 0x0031, 0, width=8, doc="QPLL_INIT_CFG[7:0]")
+    QPLL_CFG0 = BitField(DRP, 0x0032, 0, width=16, doc="QPLL_CFG[26:11]")
     QPLL_REFCLK_DIV = BitField(DRP, 0x0033, 11, width=5, doc="1: 16, 2: 0, 3: 1, 4: 2, 5: 3, 6: 5, 8: 6, 10: 7, 12: 13, 16: 14, 20: 15")
-    QPLL_CFG = BitField(DRP, 0x0033, 0, width=11, doc="0-2047")
+    QPLL_CFG1 = BitField(DRP, 0x0033, 0, width=11, doc="QPLL_CFG[10:0]")
     QPLL_LOCK_CFG = BitField(DRP, 0x0034, 0, width=16, doc="0-65535")
     QPLL_COARSE_FREQ_OVRD = BitField(DRP, 0x0035, 10, width=6, doc="0-63")
     QPLL_CP = BitField(DRP, 0x0035, 0, width=10, doc="0-1023")
@@ -377,6 +377,19 @@ class CGE(MMI):
 
     # Control bytes 8-20 need chfpgalite jm/cge-tx-drive-ctrl. On older firmware they alias bytes 0-12 (byte 8 = byte 0 resets
     # the CMAC): check tx_drive_supported() first. Bytes 8+3n..10+3n: lane n TXDIFFCTRL, TXPRECURSOR, TXPOSTCURSOR.
+    # Firmware reset: swing 24 = 950 mV, pre-cursor 8 = 1.87 dB, post-cursor 15 = 3.99 dB.
+    TXDIFFCTRL0 = BitField(CONTROL, 8, 0, width=5, doc='Lane 0 TX swing (TXDIFFCTRL)')
+    TXPRECURSOR0 = BitField(CONTROL, 9, 0, width=5, doc='Lane 0 TX pre-cursor')
+    TXPOSTCURSOR0 = BitField(CONTROL, 10, 0, width=5, doc='Lane 0 TX post-cursor')
+    TXDIFFCTRL1 = BitField(CONTROL, 11, 0, width=5, doc='Lane 1 TX swing (TXDIFFCTRL)')
+    TXPRECURSOR1 = BitField(CONTROL, 12, 0, width=5, doc='Lane 1 TX pre-cursor')
+    TXPOSTCURSOR1 = BitField(CONTROL, 13, 0, width=5, doc='Lane 1 TX post-cursor')
+    TXDIFFCTRL2 = BitField(CONTROL, 14, 0, width=5, doc='Lane 2 TX swing (TXDIFFCTRL)')
+    TXPRECURSOR2 = BitField(CONTROL, 15, 0, width=5, doc='Lane 2 TX pre-cursor')
+    TXPOSTCURSOR2 = BitField(CONTROL, 16, 0, width=5, doc='Lane 2 TX post-cursor')
+    TXDIFFCTRL3 = BitField(CONTROL, 17, 0, width=5, doc='Lane 3 TX swing (TXDIFFCTRL)')
+    TXPRECURSOR3 = BitField(CONTROL, 18, 0, width=5, doc='Lane 3 TX pre-cursor')
+    TXPOSTCURSOR3 = BitField(CONTROL, 19, 0, width=5, doc='Lane 3 TX post-cursor')
     RXLPMEN = BitField(CONTROL, 20, 0, width=4, doc='RX equalizer per lane, bit n = lane n: 0 = DFE (default), 1 = LPM')
 
     # GTY TX driver code -> value (UG578 Tables 3-34, 3-35, 3-36)
@@ -432,7 +445,7 @@ class CGE(MMI):
 
     def set_tx_drive(self, lane, swing=0, pre=0, post=0):
         """Set GT lane TX swing (TXDIFFCTRL), pre-cursor (TXPRECURSOR) and post-cursor (TXPOSTCURSOR) codes, 0-31 each.
-        0/0/0 = 390 mV, 0.01 dB, 0 dB. Firmware reset value: 24/0/15 = 950 mV, 0.01 dB, 3.99 dB (chfpgalite 07c6572 on; 24/0/0 in ea4d20c, 0/0/0 before).
+        0/0/0 = 390 mV, 0.01 dB, 0 dB. Firmware reset value: 24/8/15 = 950 mV, 1.87 dB, 3.99 dB.
         Values: TXDIFF_MV, TXPRE_DB, TXPOST_DB."""
         self._check_tx_drive()
         assert lane in range(4) and all(0 <= c <= 31 for c in (swing, pre, post)), (lane, swing, pre, post)

@@ -343,9 +343,8 @@ class UCORR(MMI):
 
 
     def select(self):
-        """ Configures UCAP to stream the correlator data instead of raw data.
-        """
-        self.fpga.UCAP.OUTPUT_SOURCE_SEL = 1
+        """No-op: UCAP and CORR are merged; both always stream."""
+        pass
 
     def start_correlator(self,
                          integration_period,

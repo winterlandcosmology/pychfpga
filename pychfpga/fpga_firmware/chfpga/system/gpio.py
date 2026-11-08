@@ -66,6 +66,7 @@ class GPIO(MMI):
     PWM_HIGH_TIME              = BitField(CONTROL, 41, 0, width=32, doc='Number of events (frames) to keep the PWM output at High')
     PWM_PERIOD                 = BitField(CONTROL, 45, 0, width=32, doc='Number of events (frames) between PWM High (i.e PWM period)')
     PWM_RESET                  = BitField(CONTROL, 46, 7, width=1, doc='Resets the PWM generator')
+    BP_GPIO_INT_OUT            = BitField(CONTROL, 46, 5, doc="Value driven on Backplane GPIO_INT when BP_GPIO_INT_EN is '1'.")
     BP_GPIO_INT_EN             = BitField(CONTROL, 46, 4, doc="When '1', the Backplane GPIO_INT is driven by this board. WARNING: Only one board should be enabled at a time.")
     USER_MUX_SOURCE0           = BitField(CONTROL, 46, 0, width=4, doc='Selects which signal is sent to the Motherboard SMA-A output.')
 
@@ -121,6 +122,14 @@ class GPIO(MMI):
     ADC_PLL_LOCK1              = BitField(STATUS, 33, 7,  doc='Lock status of the ADC PLL in FMC1')
     CMD_RPLY_PACKET_COUNTERS   = BitField(STATUS, 35, 0, width=16, doc='Number of reply packets received since last FPGA configuration. MSB=Commands, LSB=Replies')
     EXTRA_IO                   = BitField(STATUS, 37, 0, width=8, doc='Various input IO signals provided by the platform. Used to QC the board.')
+    SERIAL_MATCH               = BitField(STATUS, 37, 7, doc='1 when writing to the core registers is allowed (FPGA serial matches the target, or NETWORK_CONFIG_SOURCE is 00).')
+    BP_GPIO_INT_IN             = BitField(STATUS, 37, 6, doc="FPGA I/O line")
+    GPIO_IRQ_IN                = BitField(STATUS, 37, 5, doc="FPGA I/O line")
+    FLASH_CS_IN                = BitField(STATUS, 37, 4, doc="FPGA I/O line")
+    UART_TX_IN                 = BitField(STATUS, 37, 3, doc="FPGA I/O line")
+    UART_RX_IN                 = BitField(STATUS, 37, 2, doc="FPGA I/O line")
+    GPIO_RST_IN                = BitField(STATUS, 37, 1, doc="FPGA I/O line")
+    ARM_IRQ_IN                 = BitField(STATUS, 37, 0, doc="FPGA I/O line")
     ADC_CM_OV                  = BitField(STATUS, 38, 0, width=8, doc='ADC common-mode overvoltage flag')
     ADC_CM_UV                  = BitField(STATUS, 39, 0, width=8, doc='ADC common-mode undervoltage flag')
     ADC_CM_OT1                 = BitField(STATUS, 40, 0, width=8, doc='ADC over thresold1 flag')
@@ -128,16 +137,6 @@ class GPIO(MMI):
     CT_TYPE                    = BitField(STATUS, 42, 0, width=4, doc='Type of Corner-Turn engine used. 0=None, 1=BCT, 2=UCT')
     CT_LEVEL                   = BitField(STATUS, 42, 4, width=4, doc='Level of corner-turning implemented in the CT Engine. CT_LEVEL=1 Means internal CT only, which is hardwired for BCT and UCT')
     FFT_TYPE                   = BitField(STATUS, 43, 0, width=4, doc='Type of FFT implemented in the channelizers')
-
-
-    SERIAL_MATCH               = BitField(CONTROL, 37, 7, doc='1 when the programmable target serial number matches the FPGA serial number. This means that the core register can be writtten if  ')
-    BP_GPIO_INT_IN             = BitField(CONTROL, 37, 6, doc="FPGA I/O line")
-    GPIO_IRQ_IN                = BitField(CONTROL, 37, 5, doc="FPGA I/O line")
-    FLASH_CS_IN                = BitField(CONTROL, 37, 4, doc="FPGA I/O line")
-    UART_TX_IN                 = BitField(CONTROL, 37, 3, doc="FPGA I/O line")
-    UART_RX_IN                 = BitField(CONTROL, 37, 2, doc="FPGA I/O line")
-    GPIO_RST_IN                = BitField(CONTROL, 37, 1, doc="FPGA I/O line")
-    ARM_IRQ_IN                 = BitField(CONTROL, 37, 0, doc="FPGA I/O line")
 
     def __init__(self, *,  router,  router_port, config):
         super().__init__(router=router, router_port=router_port)
