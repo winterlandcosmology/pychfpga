@@ -1,0 +1,139 @@
+﻿
+
+
+
+
+:py:mod:`qc/ <qc>`
+==================
+
+
+.. currentmodule:: qc
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=qc,
+..    | FULLNAME=qc,
+..    | name==qc
+..    | modules = ['CRS_crate', 'ICE_crate', 'MGADC08', 'MGK7BP16', 'MGK7MB', 'run_qcengine', 'utils']
+..    | classes = []
+
+.. automodule:: qc
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+   
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~CRS_crate
+         ~ICE_crate
+         ~MGADC08
+         ~MGK7BP16
+         ~MGK7MB
+         ~run_qcengine
+         ~utils
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

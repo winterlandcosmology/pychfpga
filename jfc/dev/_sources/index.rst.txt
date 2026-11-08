@@ -57,7 +57,7 @@
 .. toctree::
    :hidden:
    :maxdepth: 3
-   :caption: Reference
+   :caption: Code Documentation
 
    api
 

@@ -1,0 +1,129 @@
+
+
+
+
+
+:py:mod:`cdce620005_pll_QC.py <qc.MGK7MB.cdce620005_pll_QC>`
+============================================================
+
+
+.. currentmodule:: qc.MGK7MB
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=qc.MGK7MB,
+..    | FULLNAME=qc.MGK7MB.cdce620005_pll_QC,
+..    | name==cdce620005_pll_QC
+..    | modules = 
+..    | classes = ['CDCE620005']
+
+.. automodule:: qc.MGK7MB.cdce620005_pll_QC
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+   
+   
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         comp_reg
+         print_reg
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         CDCE620005
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: comp_reg
+
+
+.. autofunction:: print_reg
+
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: CDCE620005
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

@@ -1,0 +1,146 @@
+﻿
+
+
+
+
+:py:mod:`firmware_tests/ <firmware_tests>`
+==========================================
+
+
+.. currentmodule:: firmware_tests
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=firmware_tests,
+..    | FULLNAME=firmware_tests,
+..    | name==firmware_tests
+..    | modules = ['corr_test', 'fft_test', 'fp_fft', 'funcgen_test', 'module_test', 'scaler_test', 'test_setup', 'utils']
+..    | classes = []
+
+.. automodule:: firmware_tests
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+   
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~corr_test
+         ~fft_test
+         ~fp_fft
+         ~funcgen_test
+         ~module_test
+         ~scaler_test
+         ~test_setup
+         ~utils
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

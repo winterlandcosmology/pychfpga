@@ -1,0 +1,97 @@
+
+
+
+
+
+:py:mod:`ICE_crate/ <qc.ICE_crate>`
+===================================
+
+
+.. currentmodule:: qc
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=qc,
+..    | FULLNAME=qc.ICE_crate,
+..    | name==ICE_crate
+..    | modules = ['f_engine_tests']
+..    | classes = []
+
+.. automodule:: qc.ICE_crate
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+   
+   
+      
+      
+      
+      
+      
+   
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~f_engine_tests
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

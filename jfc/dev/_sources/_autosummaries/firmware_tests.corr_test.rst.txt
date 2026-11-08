@@ -1,0 +1,104 @@
+
+
+
+
+
+:py:mod:`corr_test.py <firmware_tests.corr_test>`
+=================================================
+
+
+.. currentmodule:: firmware_tests
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=firmware_tests,
+..    | FULLNAME=firmware_tests.corr_test,
+..    | name==corr_test
+..    | modules = 
+..    | classes = ['TestCorr']
+
+.. automodule:: firmware_tests.corr_test
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+   
+   
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         TestCorr
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: TestCorr
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

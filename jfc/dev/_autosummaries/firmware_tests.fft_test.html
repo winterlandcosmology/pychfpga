@@ -1,0 +1,429 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fft_test.py &mdash; pychfpga User Manual (jfc/dev @ 53a6898b) 1.3.4.dev819+ice.co.g53a6898bd documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=50c405aa"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="fp_fft/" href="firmware_tests.fp_fft.html" />
+    <link rel="prev" title="corr_test.py" href="firmware_tests.corr_test.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Code Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.corr_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">corr_test.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fft_test.py</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT"><code class="docutils literal notranslate"><span class="pre">TestFFT</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.FFT_COMPLEX_CAPTURE_MODE"><code class="docutils literal notranslate"><span class="pre">TestFFT.FFT_COMPLEX_CAPTURE_MODE</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.SCALER_COMPLEX_GAIN"><code class="docutils literal notranslate"><span class="pre">TestFFT.SCALER_COMPLEX_GAIN</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.SCALER_COMPLEX_POSTSCALER"><code class="docutils literal notranslate"><span class="pre">TestFFT.SCALER_COMPLEX_POSTSCALER</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.SIM_COMPARE_CONFIGS"><code class="docutils literal notranslate"><span class="pre">TestFFT.SIM_COMPARE_CONFIGS</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.SIM_COMPARE_DATA_ROOT"><code class="docutils literal notranslate"><span class="pre">TestFFT.SIM_COMPARE_DATA_ROOT</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.assert_fft_matches_simulation"><code class="docutils literal notranslate"><span class="pre">TestFFT.assert_fft_matches_simulation()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.assert_spectrum_peaks"><code class="docutils literal notranslate"><span class="pre">TestFFT.assert_spectrum_peaks()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.assert_spectrum_rtol"><code class="docutils literal notranslate"><span class="pre">TestFFT.assert_spectrum_rtol()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.assert_spectrum_shape"><code class="docutils literal notranslate"><span class="pre">TestFFT.assert_spectrum_shape()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.assert_yaml_constants"><code class="docutils literal notranslate"><span class="pre">TestFFT.assert_yaml_constants()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.board_conn"><code class="docutils literal notranslate"><span class="pre">TestFFT.board_conn()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.capture_fft_complex"><code class="docutils literal notranslate"><span class="pre">TestFFT.capture_fft_complex()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.capture_fft_simulation_frame"><code class="docutils literal notranslate"><span class="pre">TestFFT.capture_fft_simulation_frame()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.close_figures"><code class="docutils literal notranslate"><span class="pre">TestFFT.close_figures()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.collection_constants"><code class="docutils literal notranslate"><span class="pre">TestFFT.collection_constants()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.gen_waveform"><code class="docutils literal notranslate"><span class="pre">TestFFT.gen_waveform()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.get_constants"><code class="docutils literal notranslate"><span class="pre">TestFFT.get_constants()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.get_corr_receiver"><code class="docutils literal notranslate"><span class="pre">TestFFT.get_corr_receiver()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.get_data_receiver"><code class="docutils literal notranslate"><span class="pre">TestFFT.get_data_receiver()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.get_logger"><code class="docutils literal notranslate"><span class="pre">TestFFT.get_logger()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.integer_parts"><code class="docutils literal notranslate"><span class="pre">TestFFT.integer_parts()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.load_fft_simulation_case"><code class="docutils literal notranslate"><span class="pre">TestFFT.load_fft_simulation_case()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.numpy_fft_reference"><code class="docutils literal notranslate"><span class="pre">TestFFT.numpy_fft_reference()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.pack_funcgen_adc_lanes"><code class="docutils literal notranslate"><span class="pre">TestFFT.pack_funcgen_adc_lanes()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.pack_scalar_waveform_for_funcgen"><code class="docutils literal notranslate"><span class="pre">TestFFT.pack_scalar_waveform_for_funcgen()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.plot_and_test"><code class="docutils literal notranslate"><span class="pre">TestFFT.plot_and_test()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.plot_simulation_comparison"><code class="docutils literal notranslate"><span class="pre">TestFFT.plot_simulation_comparison()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.plot_spectrum_comparison"><code class="docutils literal notranslate"><span class="pre">TestFFT.plot_spectrum_comparison()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.pytest_generate_tests"><code class="docutils literal notranslate"><span class="pre">TestFFT.pytest_generate_tests()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.rtol"><code class="docutils literal notranslate"><span class="pre">TestFFT.rtol()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.setup"><code class="docutils literal notranslate"><span class="pre">TestFFT.setup()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.setup_fft"><code class="docutils literal notranslate"><span class="pre">TestFFT.setup_fft()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fft_test.TestFFT.setup_fft_simulation_compare"><code class="docutils literal notranslate"><span class="pre">TestFFT.setup_fft_simulation_compare()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.fp_fft.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fp_fft/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.funcgen_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">funcgen_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.module_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">module_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.scaler_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">scaler_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.test_setup.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">test_setup.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">utils.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 53a6898b)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fft_test.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/firmware_tests.fft_test.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="fft-test-py">
+<h1><a class="reference internal" href="#module-firmware_tests.fft_test" title="firmware_tests.fft_test"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fft_test.py</span></code></a><a class="headerlink" href="#fft-test-py" title="Link to this heading"></a></h1>
+<span class="target" id="module-firmware_tests.fft_test"></span><div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#firmware_tests.fft_test.TestFFT" title="firmware_tests.fft_test.TestFFT"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TestFFT</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">firmware_tests.fft_test.</span></span><span class="sig-name descname"><span class="pre">TestFFT</span></span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="firmware_tests.module_test.html#firmware_tests.module_test.TestModule" title="firmware_tests.module_test.TestModule"><code class="xref py py-class docutils literal notranslate"><span class="pre">TestModule</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.FFT_COMPLEX_CAPTURE_MODE">
+<span class="sig-name descname"><span class="pre">FFT_COMPLEX_CAPTURE_MODE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'fft_2x'</span></span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.FFT_COMPLEX_CAPTURE_MODE" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.SCALER_COMPLEX_GAIN">
+<span class="sig-name descname"><span class="pre">SCALER_COMPLEX_GAIN</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.SCALER_COMPLEX_GAIN" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.SCALER_COMPLEX_POSTSCALER">
+<span class="sig-name descname"><span class="pre">SCALER_COMPLEX_POSTSCALER</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">20</span></span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.SCALER_COMPLEX_POSTSCALER" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.SIM_COMPARE_CONFIGS">
+<span class="sig-name descname"><span class="pre">SIM_COMPARE_CONFIGS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'CRS':</span> <span class="pre">{'adc_bits':</span> <span class="pre">12,</span> <span class="pre">'capture_mode':</span> <span class="pre">'fft_2x',</span> <span class="pre">'capture_period':</span> <span class="pre">0.01,</span> <span class="pre">'capture_right_shift':</span> <span class="pre">0,</span> <span class="pre">'compare_atol':</span> <span class="pre">128,</span> <span class="pre">'fft_shift':</span> <span class="pre">0,</span> <span class="pre">'frames_per_burst':</span> <span class="pre">2,</span> <span class="pre">'instrument':</span> <span class="pre">'crs',</span> <span class="pre">'n_inputs':</span> <span class="pre">8,</span> <span class="pre">'output_dtype':</span> <span class="pre">&lt;class</span> <span class="pre">'numpy.int32'&gt;,</span> <span class="pre">'prober_user_flags':</span> <span class="pre">None,</span> <span class="pre">'scaler_eight_bit':</span> <span class="pre">False},</span> <span class="pre">'ICE':</span> <span class="pre">{'adc_bits':</span> <span class="pre">8,</span> <span class="pre">'capture_mode':</span> <span class="pre">'fft_full',</span> <span class="pre">'capture_period':</span> <span class="pre">0.01,</span> <span class="pre">'capture_right_shift':</span> <span class="pre">5,</span> <span class="pre">'compare_atol':</span> <span class="pre">0,</span> <span class="pre">'fft_shift':</span> <span class="pre">1984,</span> <span class="pre">'frames_per_burst':</span> <span class="pre">'full',</span> <span class="pre">'instrument':</span> <span class="pre">'ice',</span> <span class="pre">'n_inputs':</span> <span class="pre">4,</span> <span class="pre">'output_dtype':</span> <span class="pre">&lt;class</span> <span class="pre">'numpy.int32'&gt;,</span> <span class="pre">'prober_user_flags':</span> <span class="pre">False,</span> <span class="pre">'scaler_eight_bit':</span> <span class="pre">True}}</span></span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.SIM_COMPARE_CONFIGS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.SIM_COMPARE_DATA_ROOT">
+<span class="sig-name descname"><span class="pre">SIM_COMPARE_DATA_ROOT</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">PosixPath('/home/runner/work/pychfpga/pychfpga/firmware_tests/casper_simulations/sim_data')</span></span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.SIM_COMPARE_DATA_ROOT" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.assert_fft_matches_simulation">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">assert_fft_matches_simulation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stem</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">ch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.assert_fft_matches_simulation" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.assert_spectrum_peaks">
+<span class="sig-name descname"><span class="pre">assert_spectrum_peaks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hardware_fft</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">numpy_fft</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expected_bins</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.assert_spectrum_peaks" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.assert_spectrum_rtol">
+<span class="sig-name descname"><span class="pre">assert_spectrum_rtol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hardware_fft</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">numpy_fft</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.assert_spectrum_rtol" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.assert_spectrum_shape">
+<span class="sig-name descname"><span class="pre">assert_spectrum_shape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hardware_fft</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">numpy_fft</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.assert_spectrum_shape" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.assert_yaml_constants">
+<span class="sig-name descname"><span class="pre">assert_yaml_constants</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">board</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">live</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.assert_yaml_constants" title="Link to this definition"></a></dt>
+<dd><p>Fail setup if yaml constants disagree with GPIO or live get_constants.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.board_conn">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">board_conn</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.board_conn" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.capture_fft_complex">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">capture_fft_complex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">waveform</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">ch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ncap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.capture_fft_complex" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.capture_fft_simulation_frame">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">capture_fft_simulation_frame</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">funcgen_input</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">ch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ncap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sim_config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.capture_fft_simulation_frame" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.close_figures">
+<span class="sig-name descname"><span class="pre">close_figures</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.close_figures" title="Link to this definition"></a></dt>
+<dd><p>Close pyplot figures left open by the test.</p>
+<p><code class="docutils literal notranslate"><span class="pre">insert_plot</span></code> saves the current figure and leaves it active, so a
+test can keep drawing on it. Figures are discarded once the test returns.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.collection_constants">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">collection_constants</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">test_config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.collection_constants" title="Link to this definition"></a></dt>
+<dd><p>Yaml constants plus aliases and scaler derives for collection-time eval.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.gen_waveform">
+<span class="sig-name descname"><span class="pre">gen_waveform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kind</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">amplitude</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bins</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.gen_waveform" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.get_constants">
+<span class="sig-name descname"><span class="pre">get_constants</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">board</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.get_constants" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.get_corr_receiver">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_corr_receiver</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.get_corr_receiver" title="Link to this definition"></a></dt>
+<dd><p>Return the array correlator receiver (one-board FPGAArray).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.get_data_receiver">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_data_receiver</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.get_data_receiver" title="Link to this definition"></a></dt>
+<dd><p>Return the array raw-data receiver (one-board FPGAArray).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.get_logger">
+<span class="sig-name descname"><span class="pre">get_logger</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.get_logger" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.integer_parts">
+<span class="sig-name descname"><span class="pre">integer_parts</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">label</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.integer_parts" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.load_fft_simulation_case">
+<span class="sig-name descname"><span class="pre">load_fft_simulation_case</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">stem</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sim_config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.load_fft_simulation_case" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.numpy_fft_reference">
+<span class="sig-name descname"><span class="pre">numpy_fft_reference</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">waveform</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.numpy_fft_reference" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.pack_funcgen_adc_lanes">
+<span class="sig-name descname"><span class="pre">pack_funcgen_adc_lanes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">adc_lanes</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.pack_funcgen_adc_lanes" title="Link to this definition"></a></dt>
+<dd><p>Pack parallel ADC lane streams into the FUNCGEN RAM layout.</p>
+<p>The arbitrary FUNCGEN API accepts a single one-dimensional buffer, but
+that buffer is not conceptually a serial scalar waveform when it feeds
+the channelizer. It is the RAM image consumed by the firmware’s
+parallel ADC/F-engine input interface. One channelizer clock contains
+<code class="docutils literal notranslate"><span class="pre">SAMPLES_PER_WORD</span></code> ADC samples, and the host buffer must therefore be
+interleaved by lane:</p>
+<blockquote>
+<div><p>buffer[0::N] -&gt; ADC/F-engine input lane 0
+buffer[1::N] -&gt; ADC/F-engine input lane 1
+…
+buffer[N-1::N] -&gt; ADC/F-engine input lane N-1</p>
+</div></blockquote>
+<p>This is the same convention shown in <code class="docutils literal notranslate"><span class="pre">fft_sim_test_example.py</span></code> for
+replaying CASPER simulation inputs: take 512 samples from each of the
+four parallel ADC input signals and interleave them into one 2048-sample
+FUNCGEN buffer. Keeping that packing in a named helper is deliberate:
+FFT tests should construct the signal at the parallel input boundary
+and let this function create the write image. Writing a generated NumPy
+waveform directly to <code class="docutils literal notranslate"><span class="pre">set_funcgen(data=...)</span></code> hides that boundary and
+makes it easy to accidentally compare a scalar serial ordering against
+a four-lane firmware datapath.</p>
+<p>The helper only performs input packing. It does not rename or fold FFT
+output bins, and it does not compensate a failing result by changing the
+NumPy reference. If a tone still lands in a different captured bin after
+this packing, the mismatch is exposed in the test output and should be
+investigated as an FFT/capture convention issue rather than concealed in
+the reference spectrum.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.pack_scalar_waveform_for_funcgen">
+<span class="sig-name descname"><span class="pre">pack_scalar_waveform_for_funcgen</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">waveform</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.pack_scalar_waveform_for_funcgen" title="Link to this definition"></a></dt>
+<dd><p>Convert a scalar time-series frame into FUNCGEN lane-interleaved RAM.</p>
+<p>Tests often start from a convenient scalar sequence because NumPy FFT
+references are naturally written that way. Before programming FUNCGEN,
+split that scalar sequence at the parallel ADC boundary and call
+<code class="docutils literal notranslate"><span class="pre">pack_funcgen_adc_lanes</span></code>. For a correctly ordered scalar waveform this
+gives lane 0 samples <code class="docutils literal notranslate"><span class="pre">0,</span> <span class="pre">N,</span> <span class="pre">2N,</span> <span class="pre">...</span></code>, lane 1 samples <code class="docutils literal notranslate"><span class="pre">1,</span> <span class="pre">N+1,</span> <span class="pre">...</span></code>,
+and so on, then writes the explicit lane-interleaved RAM image.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.plot_and_test">
+<span class="sig-name descname"><span class="pre">plot_and_test</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ref_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.plot_and_test" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.plot_simulation_comparison">
+<span class="sig-name descname"><span class="pre">plot_simulation_comparison</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stem</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">captured_real</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">captured_imag</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sim_real</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sim_imag</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">real_residual</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imag_residual</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sim_config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.plot_simulation_comparison" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.plot_spectrum_comparison">
+<span class="sig-name descname"><span class="pre">plot_spectrum_comparison</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hardware_fft</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">numpy_fft</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.plot_spectrum_comparison" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.pytest_generate_tests">
+<span class="sig-name descname"><span class="pre">pytest_generate_tests</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metafunc</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.pytest_generate_tests" title="Link to this definition"></a></dt>
+<dd><p>This pytest hook is called before each test to allow dynamic generation of test parameters.</p>
+<p>It parameterises each argument corresponding to a parameter in the config file with an arbitrary python expression from that file</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.rtol">
+<span class="sig-name descname"><span class="pre">rtol</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.rtol" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.setup">
+<span class="sig-name descname"><span class="pre">setup</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.setup" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.setup_fft">
+<span class="sig-name descname"><span class="pre">setup_fft</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">setup</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.setup_fft" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fft_test.TestFFT.setup_fft_simulation_compare">
+<span class="sig-name descname"><span class="pre">setup_fft_simulation_compare</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sim_config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fft_test.TestFFT.setup_fft_simulation_compare" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="firmware_tests.corr_test.html" class="btn btn-neutral float-left" title="corr_test.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="firmware_tests.fp_fft.html" class="btn btn-neutral float-right" title="fp_fft/" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

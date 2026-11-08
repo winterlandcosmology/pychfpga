@@ -1,0 +1,79 @@
+
+
+
+
+
+:py:mod:`test_setup.py <firmware_tests.test_setup>`
+===================================================
+
+
+.. currentmodule:: firmware_tests
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=firmware_tests,
+..    | FULLNAME=firmware_tests.test_setup,
+..    | name==test_setup
+..    | modules = 
+..    | classes = []
+
+.. automodule:: firmware_tests.test_setup
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+   
+   
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

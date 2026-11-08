@@ -1,0 +1,100 @@
+
+
+
+
+
+:py:mod:`mgk7mb_test.py <qc.MGK7MB.mgk7mb_test>`
+================================================
+
+
+.. currentmodule:: qc.MGK7MB
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=qc.MGK7MB,
+..    | FULLNAME=qc.MGK7MB.mgk7mb_test,
+..    | name==mgk7mb_test
+..    | modules = 
+..    | classes = []
+
+.. automodule:: qc.MGK7MB.mgk7mb_test
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+   
+   
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         in_range
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: in_range
+
+
+
+
+
+.. *** Insert class descriptions
+
+

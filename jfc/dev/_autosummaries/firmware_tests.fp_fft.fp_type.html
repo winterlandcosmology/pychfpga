@@ -1,0 +1,282 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fp_type.py &mdash; pychfpga User Manual (jfc/dev @ 53a6898b) 1.3.4.dev819+ice.co.g53a6898bd documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=50c405aa"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="test_fp_type.py" href="firmware_tests.fp_fft.test_fp_type.html" />
+    <link rel="prev" title="fp_fft.py" href="firmware_tests.fp_fft.fp_fft.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Code Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.corr_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">corr_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.fft_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fft_test.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="firmware_tests.fp_fft.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fp_fft/</span></code></a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="firmware_tests.fp_fft.fp_fft.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fp_fft.py</span></code></a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fp_type.py</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fp_fft.fp_type.FixedPointType"><code class="docutils literal notranslate"><span class="pre">FixedPointType</span></code></a><ul>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.fp_type.FixedPointType.__init__"><code class="docutils literal notranslate"><span class="pre">FixedPointType.__init__()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.fp_type.FixedPointType.cast"><code class="docutils literal notranslate"><span class="pre">FixedPointType.cast()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.fp_type.FixedPointType.cast_lsb"><code class="docutils literal notranslate"><span class="pre">FixedPointType.cast_lsb()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.fp_type.FixedPointType.cast_safe"><code class="docutils literal notranslate"><span class="pre">FixedPointType.cast_safe()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.fp_type.FixedPointType.from_float"><code class="docutils literal notranslate"><span class="pre">FixedPointType.from_float()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.fp_type.FixedPointType.promote"><code class="docutils literal notranslate"><span class="pre">FixedPointType.promote()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.fp_type.FixedPointType.reinterpret"><code class="docutils literal notranslate"><span class="pre">FixedPointType.reinterpret()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.fp_type.FixedPointType.round"><code class="docutils literal notranslate"><span class="pre">FixedPointType.round()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.fp_type.FixedPointType.round_to_even"><code class="docutils literal notranslate"><span class="pre">FixedPointType.round_to_even()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.fp_type.FixedPointType.to_float"><code class="docutils literal notranslate"><span class="pre">FixedPointType.to_float()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="firmware_tests.fp_fft.test_fp_type.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">test_fp_type.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.funcgen_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">funcgen_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.module_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">module_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.scaler_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">scaler_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.test_setup.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">test_setup.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">utils.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 53a6898b)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="firmware_tests.fp_fft.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fp_fft/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fp_type.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/firmware_tests.fp_fft.fp_type.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="fp-type-py">
+<h1><a class="reference internal" href="#module-firmware_tests.fp_fft.fp_type" title="firmware_tests.fp_fft.fp_type"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fp_type.py</span></code></a><a class="headerlink" href="#fp-type-py" title="Link to this heading"></a></h1>
+<span class="target" id="module-firmware_tests.fp_fft.fp_type"></span><div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#firmware_tests.fp_fft.fp_type.FixedPointType" title="firmware_tests.fp_fft.fp_type.FixedPointType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FixedPointType</span></code></a></p></td>
+<td><p>Data type for fixed-point binary arithmetic.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.fp_type.FixedPointType">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">firmware_tests.fp_fft.fp_type.</span></span><span class="sig-name descname"><span class="pre">FixedPointType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bit_width</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bin_point</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.fp_type.FixedPointType" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Data type for fixed-point binary arithmetic.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.fp_type.FixedPointType.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">bit_width</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bin_point</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.fp_type.FixedPointType.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.fp_type.FixedPointType.cast">
+<span class="sig-name descname"><span class="pre">cast</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fpt_in</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.fp_type.FixedPointType.cast" title="Link to this definition"></a></dt>
+<dd><p>Cast the provided integer or numpy integer array into
+the fixed-point representation corresponding to this data type.
+Optionally provide the fixed-point data type of the orignal array
+to get the binary point right.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.fp_type.FixedPointType.cast_lsb">
+<span class="sig-name descname"><span class="pre">cast_lsb</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fpt_in</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.fp_type.FixedPointType.cast_lsb" title="Link to this definition"></a></dt>
+<dd><p>Cast the provided integer or numpy integer array into
+the fixed-point representation corresponding to this data type,
+but keeps only N least significant bits.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.fp_type.FixedPointType.cast_safe">
+<span class="sig-name descname"><span class="pre">cast_safe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fpt_in</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.fp_type.FixedPointType.cast_safe" title="Link to this definition"></a></dt>
+<dd><p>Cast the provided integer or numpy integer array into
+the fixed-point representation corresponding to this data type.
+Optionally provide the fixed-point data type of the orignal array
+to get the binary point right.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.fp_type.FixedPointType.from_float">
+<span class="sig-name descname"><span class="pre">from_float</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.fp_type.FixedPointType.from_float" title="Link to this definition"></a></dt>
+<dd><p>Convert the provided floating point number or numpy array into
+the its fixed-point representation according to the bit width and
+binary point of this data type.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.fp_type.FixedPointType.promote">
+<span class="sig-name descname"><span class="pre">promote</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fpt</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.fp_type.FixedPointType.promote" title="Link to this definition"></a></dt>
+<dd><p>Return a new FixedPointType that can losslessly represent both
+the current and the provided FixedPointTypes.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.fp_type.FixedPointType.reinterpret">
+<span class="sig-name descname"><span class="pre">reinterpret</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fpt_in</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#firmware_tests.fp_fft.fp_type.FixedPointType" title="firmware_tests.fp_fft.fp_type.FixedPointType"><span class="pre">FixedPointType</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.fp_type.FixedPointType.reinterpret" title="Link to this definition"></a></dt>
+<dd><p>Reinterprets existing FixedPointType data to fpt_in type without truncating.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.fp_type.FixedPointType.round">
+<span class="sig-name descname"><span class="pre">round</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fpt_in</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.fp_type.FixedPointType.round" title="Link to this definition"></a></dt>
+<dd><p>Cast the provided integer or numpy integer array into
+the fixed-point representation corresponding to this data type.
+Optionally provide the fixed-point data type of the orignal array
+to get the binary point right.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.fp_type.FixedPointType.round_to_even">
+<span class="sig-name descname"><span class="pre">round_to_even</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fpt_in</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.fp_type.FixedPointType.round_to_even" title="Link to this definition"></a></dt>
+<dd><p>Cast the provided integer or numpy integer array into
+the fixed-point representation corresponding to this data type.
+Optionally provide the fixed-point data type of the orignal array
+to get the binary point right.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.fp_type.FixedPointType.to_float">
+<span class="sig-name descname"><span class="pre">to_float</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.fp_type.FixedPointType.to_float" title="Link to this definition"></a></dt>
+<dd><p>Convert the provided integer or numpy integer array into
+the its floating-point value according to the bit width and
+binary point of this data type.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="firmware_tests.fp_fft.fp_fft.html" class="btn btn-neutral float-left" title="fp_fft.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="firmware_tests.fp_fft.test_fp_type.html" class="btn btn-neutral float-right" title="test_fp_type.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

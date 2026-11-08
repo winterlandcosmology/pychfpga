@@ -1,0 +1,118 @@
+
+
+
+
+
+:py:mod:`fp_fft/ <firmware_tests.fp_fft>`
+=========================================
+
+
+.. currentmodule:: firmware_tests
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=firmware_tests,
+..    | FULLNAME=firmware_tests.fp_fft,
+..    | name==fp_fft
+..    | modules = ['fp_fft', 'fp_type', 'test_fp_fft', 'test_fp_type']
+..    | classes = []
+
+.. automodule:: firmware_tests.fp_fft
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+   
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+      
+      
+   
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~fp_fft
+         ~fp_type
+         ~test_fp_fft
+         ~test_fp_type
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

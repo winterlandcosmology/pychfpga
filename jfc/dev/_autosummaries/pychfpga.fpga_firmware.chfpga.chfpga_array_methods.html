@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>chfpga_array_methods.py &mdash; pychfpga User Manual (jfc/dev @ ffec1078) 1.3.4.dev814+ice.co.gffec10782 documentation</title>
+  <title>chfpga_array_methods.py &mdash; pychfpga User Manual (jfc/dev @ 53a6898b) 1.3.4.dev819+ice.co.g53a6898bd documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
@@ -15,7 +15,7 @@
     <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
       <script src="../_static/jquery.js?v=5d32c60e"></script>
       <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../_static/documentation_options.js?v=d3e2754b"></script>
+      <script src="../_static/documentation_options.js?v=50c405aa"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/js/theme.js"></script>
@@ -78,48 +78,109 @@
 <li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<p class="caption" role="heading"><span class="caption-text">Code Documentation</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="reference internal" href="../api.html">API reference</a><ul class="current">
-<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
-<li class="toctree-l3 current"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a><ul class="current">
-<li class="toctree-l4 current"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga/</span></code></a><ul class="current">
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.SocketIO.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">SocketIO.py</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chFPGA_receiver.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chFPGA_receiver.py</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga.py</span></code></a></li>
-<li class="toctree-l5 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga_array_methods.py</span></code></a><ul>
-<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods</span></code></a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a><ul class="current">
+<li class="toctree-l3 current"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga/</span></code></a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.SocketIO.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">SocketIO.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chFPGA_receiver.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chFPGA_receiver.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga.py</span></code></a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga_array_methods.py</span></code></a><ul>
+<li class="toctree-l5"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods</span></code></a><ul>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.IRIGB_SYNC_METHODS"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.IRIGB_SYNC_METHODS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.LOCAL_SYNC_METHODS"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.LOCAL_SYNC_METHODS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.TRIG_SYNC_METHODS"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.TRIG_SYNC_METHODS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.__init__"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.__init__()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_init_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.array_init_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.array_method_names"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.array_method_names</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.check_clock_source"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.check_clock_source()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_arm_metrics_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_arm_metrics_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_array_methods"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_array_methods()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_corr_data_config"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_corr_data_config()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_corr_receiver_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_corr_receiver_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_data_receiver_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_data_receiver_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_data_socket_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_data_socket_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_fpga_metrics_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_fpga_metrics_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_funcgen_buffer_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_funcgen_buffer_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_gain_timestamps_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_gain_timestamps_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_gains_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_gains_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_next_gain_bank"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_next_gain_bank()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_operational_mode"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_operational_mode()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_packet_receiver_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_packet_receiver_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_raw_data_config"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_raw_data_config()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_stream_id_map"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_stream_id_map()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_sync_method"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_sync_method()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_sync_start_time"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_sync_start_time()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_sync_timestamp"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_sync_timestamp()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_sync_timestamps"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_sync_timestamps()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_system_config_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_system_config_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_tcp_data_sockets"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_tcp_data_sockets()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.get_user_output_state_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.get_user_output_state_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.group_gains_per_board_id"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.group_gains_per_board_id()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.load_gains_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.load_gains_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.plot_crate_temperatures"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.plot_crate_temperatures()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_adc_frequencies"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.print_adc_frequencies()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_fmc_power"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.print_fmc_power()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_frame_info"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.print_frame_info()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_iceboard_info"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.print_iceboard_info()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_iceboard_power"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.print_iceboard_power()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_iceboard_qsfp"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.print_iceboard_qsfp()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_iceboard_temperatures"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.print_iceboard_temperatures()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_net_length_map"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.print_net_length_map()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.print_temperatures"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.print_temperatures()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.reset_corr_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.reset_corr_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.reset_fpga_stats"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.reset_fpga_stats()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.reset_gpu_links_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.reset_gpu_links_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.save_gains_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.save_gains_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_adc_delays_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.set_adc_delays_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_adc_mask"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.set_adc_mask()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_channelizers_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.set_channelizers_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_gains_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.set_gains_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_noise_injection"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.set_noise_injection()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_offset_binary_encoding_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.set_offset_binary_encoding_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_operational_mode_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.set_operational_mode_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_sync_method_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.set_sync_method_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.set_test_pattern"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.set_test_pattern()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.start_correlators_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.start_correlators_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.start_data_capture_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.start_data_capture_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.switch_gains_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.switch_gains_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.sync_async"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.sync_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.test_sync"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.test_sync()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods.update_config"><code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods.update_config()</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga_udp.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga_udp.py</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.ct_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ct_engine/</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.f_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">f_engine/</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.mmi.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mmi.py</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.system.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">system/</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.x_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">x_engine/</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.fpga_bitstream.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_bitstream.py</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.chfpga_udp.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga_udp.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.ct_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ct_engine/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.f_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">f_engine/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.mmi.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mmi.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.system.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">system/</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.fpga_firmware.chfpga.x_engine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">x_engine/</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_firmware.fpga_bitstream.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_bitstream.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_firmware.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware.py</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Indices</span></p>
 <ul>
@@ -133,7 +194,7 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../index.html">pychfpga User Manual (jfc/dev @ ffec1078)</a>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 53a6898b)</a>
       </nav>
 
       <div class="wy-nav-content">
@@ -141,7 +202,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
-          <li class="breadcrumb-item"><a href="../api.html">API reference</a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
           <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
           <li class="breadcrumb-item"><a href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
           <li class="breadcrumb-item"><a href="pychfpga.fpga_firmware.chfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">chfpga/</span></code></a></li>

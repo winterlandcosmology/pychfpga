@@ -1,0 +1,101 @@
+
+
+
+
+
+:py:mod:`MGK7BP16/ <qc.MGK7BP16>`
+=================================
+
+
+.. currentmodule:: qc
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=qc,
+..    | FULLNAME=qc.MGK7BP16,
+..    | name==MGK7BP16
+..    | modules = ['mgk7bp16_tests', 'util']
+..    | classes = []
+
+.. automodule:: qc.MGK7BP16
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+   
+   
+      
+      
+      
+      
+      
+   
+      
+      
+      
+   
+   
+   
+   .. container:: autosummary_block
+
+      .. rubric:: Package sub-modules
+
+      .. autosummary::
+         :toctree:
+         :template: custom-module-template.rst
+         :recursive:
+
+         
+         ~mgk7bp16_tests
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+

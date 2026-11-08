@@ -1,0 +1,333 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mgk7bp16_tests.py &mdash; pychfpga User Manual (jfc/dev @ 53a6898b) 1.3.4.dev819+ice.co.g53a6898bd documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=50c405aa"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="MGK7MB/" href="qc.MGK7MB.html" />
+    <link rel="prev" title="MGK7BP16/" href="qc.MGK7BP16.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Code Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="qc.CRS_crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">CRS_crate/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="qc.ICE_crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ICE_crate/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="qc.MGADC08.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">MGADC08/</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="qc.MGK7BP16.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">MGK7BP16/</span></code></a><ul class="current">
+<li class="toctree-l3 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mgk7bp16_tests.py</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate</span></code></a><ul>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.open_dmm"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.open_dmm()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.open_instrument"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.open_instrument()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.open_scope"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.open_scope()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.open_wfg"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.open_wfg()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.setup"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.setup()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_bitErrorRate"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.test_bitErrorRate()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_clk_time_trig"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.test_clk_time_trig()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_clock_output"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.test_clock_output()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_impedance"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.test_impedance()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_insp"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.test_insp()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_mezzRamp"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.test_mezzRamp()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_power"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.test_power()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_qsfp"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.test_qsfp()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_reset"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.test_reset()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_reset_LEDs"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.test_reset_LEDs()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_sensor"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.test_sensor()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_sync"><code class="docutils literal notranslate"><span class="pre">TestMGK7BP16Crate.test_sync()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="qc.MGK7MB.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">MGK7MB/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="qc.run_qcengine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">run_qcengine.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="qc.utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">utils.py</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 53a6898b)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="qc.MGK7BP16.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">MGK7BP16/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mgk7bp16_tests.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/qc.MGK7BP16.mgk7bp16_tests.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="mgk7bp16-tests-py">
+<h1><a class="reference internal" href="#module-qc.MGK7BP16.mgk7bp16_tests" title="qc.MGK7BP16.mgk7bp16_tests"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mgk7bp16_tests.py</span></code></a><a class="headerlink" href="#mgk7bp16-tests-py" title="Link to this heading"></a></h1>
+<p id="module-qc.MGK7BP16.mgk7bp16_tests">Performs tests on the full crate setup.</p>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate" title="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TestMGK7BP16Crate</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">qc.MGK7BP16.mgk7bp16_tests.</span></span><span class="sig-name descname"><span class="pre">TestMGK7BP16Crate</span></span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.open_dmm">
+<span class="sig-name descname"><span class="pre">open_dmm</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.open_dmm" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.open_instrument">
+<span class="sig-name descname"><span class="pre">open_instrument</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.open_instrument" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.open_scope">
+<span class="sig-name descname"><span class="pre">open_scope</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.open_scope" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.open_wfg">
+<span class="sig-name descname"><span class="pre">open_wfg</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.open_wfg" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.setup">
+<span class="sig-name descname"><span class="pre">setup</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.setup" title="Link to this definition"></a></dt>
+<dd><p>Prepare the test for execution.</p>
+<p>This is called before every tests in this class.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_bitErrorRate">
+<span class="sig-name descname"><span class="pre">test_bitErrorRate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_bitErrorRate" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_clk_time_trig">
+<span class="sig-name descname"><span class="pre">test_clk_time_trig</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_clk_time_trig" title="Link to this definition"></a></dt>
+<dd><p>test the Clock, Trig &amp; Time signal path</p>
+<p>Covers: SMAs, fanout chips, fanout chip supplies, backplane connector</p>
+<p>Uses the function generator as a source for the SMA inputs, and scope
+to capture the waveform on the backplane connector using a custom-made
+dongle.</p>
+<p class="rubric">Notes</p>
+<dl class="simple">
+<dt>Clock:</dt><dd><p># dongle needs to be bottom
+# LVPECL
+# must be greater than 0.5V</p>
+</dd>
+<dt>Trig:</dt><dd><p># dongle needs to be top
+# LVDS</p>
+</dd>
+<dt>Time:</dt><dd><p># dongle needs to be top
+# LVDS</p>
+</dd>
+<dt>LVDS:</dt><dd><p># between 0.25V and 0.45V (peak-to-peak)</p>
+</dd>
+<dt>LVPECL:</dt><dd><p># between 0.65V and 1.35V (peak-to-peak)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_clock_output">
+<span class="sig-name descname"><span class="pre">test_clock_output</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_clock_output" title="Link to this definition"></a></dt>
+<dd><p>Test the backplane on-board 10 MHz clock generator output.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_impedance">
+<span class="sig-name descname"><span class="pre">test_impedance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_impedance" title="Link to this definition"></a></dt>
+<dd><p>Impedance test of various components</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_insp">
+<span class="sig-name descname"><span class="pre">test_insp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_insp" title="Link to this definition"></a></dt>
+<dd><p>QC001: Inspection test: visual check of the backplane</p>
+<p>Procedure:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Start the inspection test on the computer</p></li>
+<li><p>Type in serial number of tested board.</p></li>
+<li><p>Visually inspect specific points mentioned in test</p></li>
+</ul>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_mezzRamp">
+<span class="sig-name descname"><span class="pre">test_mezzRamp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_mezzRamp" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_power">
+<span class="sig-name descname"><span class="pre">test_power</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_power" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_qsfp">
+<span class="sig-name descname"><span class="pre">test_qsfp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_qsfp" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_reset">
+<span class="sig-name descname"><span class="pre">test_reset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_reset" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_reset_LEDs">
+<span class="sig-name descname"><span class="pre">test_reset_LEDs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_reset_LEDs" title="Link to this definition"></a></dt>
+<dd><p>Test if the various reset LEDs turn on when the corresponding pushbuttons are activated</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_sensor">
+<span class="sig-name descname"><span class="pre">test_sensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_sensor" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_sync">
+<span class="sig-name descname"><span class="pre">test_sync</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7BP16.mgk7bp16_tests.TestMGK7BP16Crate.test_sync" title="Link to this definition"></a></dt>
+<dd><p>Test the SYNC signal fanout
+Measurements are made on the chip output with a Hi-Z probe.</p>
+<p>Sync voltage on the output of the chip should be &gt;2V because there is no termination on the LVPECL driver.</p>
+<p>i.e. the pins of U2 (1-4) should have &gt;2V</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="qc.MGK7BP16.html" class="btn btn-neutral float-left" title="MGK7BP16/" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="qc.MGK7MB.html" class="btn btn-neutral float-right" title="MGK7MB/" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

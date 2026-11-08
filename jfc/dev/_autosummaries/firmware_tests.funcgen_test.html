@@ -1,0 +1,450 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>funcgen_test.py &mdash; pychfpga User Manual (jfc/dev @ 53a6898b) 1.3.4.dev819+ice.co.g53a6898bd documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=50c405aa"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="module_test.py" href="firmware_tests.module_test.html" />
+    <link rel="prev" title="test_fp_type.py" href="firmware_tests.fp_fft.test_fp_type.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Code Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.corr_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">corr_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.fft_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fft_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.fp_fft.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fp_fft/</span></code></a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">funcgen_test.py</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen"><code class="docutils literal notranslate"><span class="pre">TestFuncgen</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.assert_yaml_constants"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.assert_yaml_constants()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.board_conn"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.board_conn()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.close_figures"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.close_figures()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.collection_constants"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.collection_constants()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.get_constants"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.get_constants()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.get_corr_receiver"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.get_corr_receiver()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.get_data_receiver"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.get_data_receiver()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.get_logger"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.get_logger()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.plot_and_test"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.plot_and_test()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.pytest_generate_tests"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.pytest_generate_tests()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.setup"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.setup()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.sim_random_gen"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.sim_random_gen()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_delay_capture"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_delay_capture()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_ab"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_funcgen_ab()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_arb"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_funcgen_arb()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_const"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_funcgen_const()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_deterministic"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_funcgen_deterministic()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_noise_histogram"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_funcgen_noise_histogram()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_noise_min_max"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_funcgen_noise_min_max()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_noise_psd"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_funcgen_noise_psd()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_ramp"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_funcgen_ramp()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_random_pval"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_funcgen_random_pval()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_real_ramp"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_funcgen_real_ramp()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_sin"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_funcgen_sin()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_packets_number"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_packets_number()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_reset"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_reset()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_shift_clip_width"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_shift_clip_width()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen.test_word_and_frame_ctr"><code class="docutils literal notranslate"><span class="pre">TestFuncgen.test_word_and_frame_ctr()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.module_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">module_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.scaler_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">scaler_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.test_setup.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">test_setup.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">utils.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 53a6898b)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">funcgen_test.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/firmware_tests.funcgen_test.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="funcgen-test-py">
+<h1><a class="reference internal" href="#module-firmware_tests.funcgen_test" title="firmware_tests.funcgen_test"><code class="xref py py-mod docutils literal notranslate"><span class="pre">funcgen_test.py</span></code></a><a class="headerlink" href="#funcgen-test-py" title="Link to this heading"></a></h1>
+<span class="target" id="module-firmware_tests.funcgen_test"></span><div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#firmware_tests.funcgen_test.TestFuncgen" title="firmware_tests.funcgen_test.TestFuncgen"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TestFuncgen</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">firmware_tests.funcgen_test.</span></span><span class="sig-name descname"><span class="pre">TestFuncgen</span></span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference internal" href="firmware_tests.module_test.html#firmware_tests.module_test.TestModule" title="firmware_tests.module_test.TestModule"><code class="xref py py-class docutils literal notranslate"><span class="pre">TestModule</span></code></a></p>
+<ol class="arabic">
+<li><p>When pytest is run on the command line, the pytest.ini file provides the config file as a command-line argument</p></li>
+<li><p>In a session start hook, xr parses this config file and converts it to a namespace in xr.config</p></li>
+<li><dl>
+<dt>The pytest-generate-tests hook is called on each test (with a new instance of TestFuncgen each time)</dt><dd><ol class="loweralpha simple">
+<li><p>The xr object is extracted from the metafunc passed to this function, from which the config data can be accessed</p></li>
+<li><p>the config data is used to connect to and then cache the board, from which various constants and parameters are accessed and stored</p></li>
+</ol>
+<p>c. Any candidate fixtures in the metafunc are paramatrised according to an arbitrary user-provided python expression in the config file,
+optionally using the constants set in the previous board.
+All fixtures which are present in the argument list of the function as well as in the config file (either as global or test-specific parameters) are parameterized.</p>
+</dd>
+</dl>
+</li>
+</ol>
+<p>4. Before each test, the function-level setup fixture is called. Via the xr fixture, it gains access to the xr object and thus all the parameters contained therein.
+It then either connects to the board or extracts the cached board object from the xr object, as needed.
+Finally, it transfers important parameters, including the board object, from xr to the namespace of self.
+5. The test is run.</p>
+<dl class="simple">
+<dt>TODO: 1. Import pytest_generate_tests into .utils so that both funcgen, scaler and future test modules use the same hook.</dt><dd><ol class="arabic simple" start="2">
+<li><p>Separate config files for each module if config.yaml becomes too convoluted.</p></li>
+</ol>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.assert_yaml_constants">
+<span class="sig-name descname"><span class="pre">assert_yaml_constants</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">board</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">live</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.assert_yaml_constants" title="Link to this definition"></a></dt>
+<dd><p>Fail setup if yaml constants disagree with GPIO or live get_constants.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.board_conn">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">board_conn</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.board_conn" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.close_figures">
+<span class="sig-name descname"><span class="pre">close_figures</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.close_figures" title="Link to this definition"></a></dt>
+<dd><p>Close pyplot figures left open by the test.</p>
+<p><code class="docutils literal notranslate"><span class="pre">insert_plot</span></code> saves the current figure and leaves it active, so a
+test can keep drawing on it. Figures are discarded once the test returns.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.collection_constants">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">collection_constants</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">test_config</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.collection_constants" title="Link to this definition"></a></dt>
+<dd><p>Yaml constants plus aliases and scaler derives for collection-time eval.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.get_constants">
+<span class="sig-name descname"><span class="pre">get_constants</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">board</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.get_constants" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.get_corr_receiver">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_corr_receiver</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.get_corr_receiver" title="Link to this definition"></a></dt>
+<dd><p>Return the array correlator receiver (one-board FPGAArray).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.get_data_receiver">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_data_receiver</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.get_data_receiver" title="Link to this definition"></a></dt>
+<dd><p>Return the array raw-data receiver (one-board FPGAArray).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.get_logger">
+<span class="sig-name descname"><span class="pre">get_logger</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.get_logger" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.plot_and_test">
+<span class="sig-name descname"><span class="pre">plot_and_test</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expected_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xlabel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Number</span> <span class="pre">of</span> <span class="pre">samples'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylabel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'Sample</span> <span class="pre">value'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">test</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.plot_and_test" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.pytest_generate_tests">
+<span class="sig-name descname"><span class="pre">pytest_generate_tests</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metafunc</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.pytest_generate_tests" title="Link to this definition"></a></dt>
+<dd><p>This pytest hook is called before each test to allow dynamic generation of test parameters.</p>
+<p>It parameterises each argument corresponding to a parameter in the config file with an arbitrary python expression from that file</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.setup">
+<span class="sig-name descname"><span class="pre">setup</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.setup" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.sim_random_gen">
+<span class="sig-name descname"><span class="pre">sim_random_gen</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">number_of_frames</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.sim_random_gen" title="Link to this definition"></a></dt>
+<dd><p>Python simulation of noise generator</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_delay_capture">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">test_delay_capture</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_delay_capture" title="Link to this definition"></a></dt>
+<dd><p>Tests that all channelizers count the same delay</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_funcgen_ab">
+<span class="sig-name descname"><span class="pre">test_funcgen_ab</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_ab" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_funcgen_arb">
+<span class="sig-name descname"><span class="pre">test_funcgen_arb</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_arb" title="Link to this definition"></a></dt>
+<dd><p>Tests arb function generation mode with constant data equal to 1.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_funcgen_const">
+<span class="sig-name descname"><span class="pre">test_funcgen_const</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_const" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_funcgen_deterministic">
+<span class="sig-name descname"><span class="pre">test_funcgen_deterministic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_deterministic" title="Link to this definition"></a></dt>
+<dd><p>Tests that channels programmed with the same noise seed match, and that
+different seeds produce different streams.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_funcgen_noise_histogram">
+<span class="sig-name descname"><span class="pre">test_funcgen_noise_histogram</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_bursts</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_noise_histogram" title="Link to this definition"></a></dt>
+<dd><p>Plots a histogram indicating, for each number, how many values appear this many times in both the noise generator stream and a numpy pseudorandom stream.</p>
+<blockquote>
+<div><dl class="simple">
+<dt>Parameters:</dt><dd><p>number_of_bursts (int): Number of 4-frame bursts to capture as part of a run</p>
+</dd>
+</dl>
+</div></blockquote>
+<p class="rubric">Notes</p>
+<p>As of yet does not actually perform a test and thus cannot fail; this test is solely useful for naked-eye inspection of results.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_funcgen_noise_min_max">
+<span class="sig-name descname"><span class="pre">test_funcgen_noise_min_max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_bursts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_noise_min_max" title="Link to this definition"></a></dt>
+<dd><p>Plot the noise values that appear most and least frequently in the noise generator stream and a numpy pseudorandom stream.</p>
+<blockquote>
+<div><dl class="simple">
+<dt>Parameters:</dt><dd><p>number_of_bursts (int): Number of 4-frame bursts to capture as part of a run
+n (int): how many of the least and most frequent values to plot (n = 10 means 20 values will be plotted)</p>
+</dd>
+</dl>
+</div></blockquote>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This does not yet perform a test and thus cannot fail. It is useful to manually identify any suspicious patterns</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_funcgen_noise_psd">
+<span class="sig-name descname"><span class="pre">test_funcgen_noise_psd</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_bursts</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_noise_psd" title="Link to this definition"></a></dt>
+<dd><p>Plots the spectrum of a noise generator stream and a numpy pseudorandom stream with plt.psd.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>number_of_bursts</strong> (<em>int</em>) – Number of 4-frame bursts to capture as part of a run</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_funcgen_ramp">
+<span class="sig-name descname"><span class="pre">test_funcgen_ramp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_ramp" title="Link to this definition"></a></dt>
+<dd><p>Tests function generation with simple ramp over all possible values.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_funcgen_random_pval">
+<span class="sig-name descname"><span class="pre">test_funcgen_random_pval</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_bursts</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_random_pval" title="Link to this definition"></a></dt>
+<dd><p>Tests noise generator with the monobit test (from NIST’s Statistical Test Suite for Random and Pseudorandom Number Generators)
+Counts the ratio of generated 1 bits to generated 0 bits in a long run and generates the p-value corresponding to the probability this would arise randomly
+Ensures the number of p-values below a certain threshold is small.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>number_of_bursts</strong> (<em>int</em>) – Number of 4-frame bursts to capture as part of a run</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_funcgen_real_ramp">
+<span class="sig-name descname"><span class="pre">test_funcgen_real_ramp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_real_ramp" title="Link to this definition"></a></dt>
+<dd><p>Tests function generation with ramp from 0 to 255 only in real components.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_funcgen_sin">
+<span class="sig-name descname"><span class="pre">test_funcgen_sin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_funcgen_sin" title="Link to this definition"></a></dt>
+<dd><p>Tests function generation with sine wave with amplitude 127 and frequency 1.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_packets_number">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">test_packets_number</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_packets_number" title="Link to this definition"></a></dt>
+<dd><p>Ensures that all packets sent by the motherboard are received.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_reset">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">test_reset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_reset" title="Link to this definition"></a></dt>
+<dd><p>Tests that all counters are reset after toggling funcgen reset</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_shift_clip_width">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">test_shift_clip_width</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">shift</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clip_width</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_shift_clip_width" title="Link to this definition"></a></dt>
+<dd><p>Tests shifting and saturation.
+Hardware behavior is: left shift, clip to full-width, then right shift.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>clip_width</strong> (<em>int</em>) – amount to clip (shift left by)</p></li>
+<li><p><strong>shift</strong> (<em>int</em>) – amount to shift right by</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.funcgen_test.TestFuncgen.test_word_and_frame_ctr">
+<span class="sig-name descname"><span class="pre">test_word_and_frame_ctr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">number_of_bursts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">burst_period_in_frames</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.funcgen_test.TestFuncgen.test_word_and_frame_ctr" title="Link to this definition"></a></dt>
+<dd><p>Tests that frame counter and word counter have the correct count for each received word and frame in the word_ctr_buffer_flags mode</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>number_of_bursts</strong> (<em>int</em>) – Number of 4-frame bursts to capture as part of a run</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="firmware_tests.fp_fft.test_fp_type.html" class="btn btn-neutral float-left" title="test_fp_type.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="firmware_tests.module_test.html" class="btn btn-neutral float-right" title="module_test.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

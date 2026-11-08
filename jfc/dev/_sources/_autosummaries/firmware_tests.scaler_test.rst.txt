@@ -1,0 +1,104 @@
+
+
+
+
+
+:py:mod:`scaler_test.py <firmware_tests.scaler_test>`
+=====================================================
+
+
+.. currentmodule:: firmware_tests
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=firmware_tests,
+..    | FULLNAME=firmware_tests.scaler_test,
+..    | name==scaler_test
+..    | modules = 
+..    | classes = ['TestScaler']
+
+.. automodule:: firmware_tests.scaler_test
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+   
+   
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module classes summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         TestScaler
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+
+
+.. *** Insert class descriptions
+
+
+
+----
+
+.. rubric:: Module classes
+
+
+.. autoclass:: TestScaler
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:
+   :special-members: __call__, __init__
+
+

@@ -1,0 +1,867 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>test_fp_type.py &mdash; pychfpga User Manual (jfc/dev @ 53a6898b) 1.3.4.dev819+ice.co.g53a6898bd documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=50c405aa"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="funcgen_test.py" href="firmware_tests.funcgen_test.html" />
+    <link rel="prev" title="fp_type.py" href="firmware_tests.fp_fft.fp_type.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Code Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.corr_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">corr_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.fft_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fft_test.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="firmware_tests.fp_fft.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fp_fft/</span></code></a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="firmware_tests.fp_fft.fp_fft.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fp_fft.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="firmware_tests.fp_fft.fp_type.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fp_type.py</span></code></a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">test_fp_type.py</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType</span></code></a><ul>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.__call__"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.__call__()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.__init__"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.__init__()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.addClassCleanup"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.addClassCleanup()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.addCleanup"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.addCleanup()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.addTypeEqualityFunc"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.addTypeEqualityFunc()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertAlmostEqual"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertAlmostEqual()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertCountEqual"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertCountEqual()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertDictEqual"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertDictEqual()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertEqual"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertEqual()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertFalse"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertFalse()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertGreater"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertGreater()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertGreaterEqual"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertGreaterEqual()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIn"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertIn()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIs"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertIs()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIsInstance"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertIsInstance()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIsNone"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertIsNone()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIsNot"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertIsNot()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIsNotNone"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertIsNotNone()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertLess"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertLess()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertLessEqual"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertLessEqual()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertListEqual"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertListEqual()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertLogs"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertLogs()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertMultiLineEqual"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertMultiLineEqual()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNoLogs"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertNoLogs()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotAlmostEqual"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertNotAlmostEqual()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotEqual"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertNotEqual()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotIn"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertNotIn()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotIsInstance"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertNotIsInstance()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotRegex"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertNotRegex()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertRaises"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertRaises()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertRaisesRegex"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertRaisesRegex()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertRegex"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertRegex()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertSequenceEqual"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertSequenceEqual()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertSetEqual"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertSetEqual()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertTrue"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertTrue()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertTupleEqual"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertTupleEqual()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertWarns"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertWarns()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertWarnsRegex"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.assertWarnsRegex()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.countTestCases"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.countTestCases()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.debug"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.debug()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.defaultTestResult"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.defaultTestResult()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.doClassCleanups"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.doClassCleanups()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.doCleanups"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.doCleanups()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.enterClassContext"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.enterClassContext()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.enterContext"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.enterContext()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.fail"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.fail()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.failureException"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.failureException</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.id"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.id()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.longMessage"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.longMessage</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.maxDiff"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.maxDiff</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.run"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.run()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.setUp"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.setUp()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.setUpClass"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.setUpClass()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.shortDescription"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.shortDescription()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.skipTest"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.skipTest()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.subTest"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.subTest()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.tearDown"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.tearDown()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.tearDownClass"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.tearDownClass()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_add"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.test_add()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_cast"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.test_cast()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_cast_bigger_than_int"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.test_cast_bigger_than_int()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_from_float"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.test_from_float()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_init"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.test_init()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_mask_bitwidth"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.test_mask_bitwidth()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_mult"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.test_mult()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_promote"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.test_promote()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_round"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.test_round()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_round_big"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.test_round_big()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_round_to_even"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.test_round_to_even()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_to_float"><code class="docutils literal notranslate"><span class="pre">TestFixedPointType.test_to_float()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.funcgen_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">funcgen_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.module_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">module_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.scaler_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">scaler_test.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.test_setup.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">test_setup.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="firmware_tests.utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">utils.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 53a6898b)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="firmware_tests.fp_fft.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fp_fft/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">test_fp_type.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/firmware_tests.fp_fft.test_fp_type.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="test-fp-type-py">
+<h1><a class="reference internal" href="#module-firmware_tests.fp_fft.test_fp_type" title="firmware_tests.fp_fft.test_fp_type"><code class="xref py py-mod docutils literal notranslate"><span class="pre">test_fp_type.py</span></code></a><a class="headerlink" href="#test-fp-type-py" title="Link to this heading"></a></h1>
+<span class="target" id="module-firmware_tests.fp_fft.test_fp_type"></span><div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType" title="firmware_tests.fp_fft.test_fp_type.TestFixedPointType"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TestFixedPointType</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">firmware_tests.fp_fft.test_fp_type.</span></span><span class="sig-name descname"><span class="pre">TestFixedPointType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">methodName</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'runTest'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">TestCase</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.__call__">
+<span class="sig-name descname"><span class="pre">__call__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwds</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.__call__" title="Link to this definition"></a></dt>
+<dd><p>Call self as a function.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">methodName</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'runTest'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.__init__" title="Link to this definition"></a></dt>
+<dd><p>Create an instance of the class that will use the named test
+method when executed. Raises a ValueError if the instance does
+not have a method with the specified name.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.addClassCleanup">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">addClassCleanup</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">function</span></span></em>, <em class="sig-param"><span class="positional-only-separator o"><abbr title="Positional-only parameter separator (PEP 570)"><span class="pre">/</span></abbr></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.addClassCleanup" title="Link to this definition"></a></dt>
+<dd><p>Same as addCleanup, except the cleanup items are called even if
+setUpClass fails (unlike tearDownClass).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.addCleanup">
+<span class="sig-name descname"><span class="pre">addCleanup</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">function</span></span></em>, <em class="sig-param"><span class="positional-only-separator o"><abbr title="Positional-only parameter separator (PEP 570)"><span class="pre">/</span></abbr></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.addCleanup" title="Link to this definition"></a></dt>
+<dd><p>Add a function, with arguments, to be called when the test is
+completed. Functions added are called on a LIFO basis and are
+called after tearDown on test failure or success.</p>
+<p>Cleanup items are called even if setUp fails (unlike tearDown).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.addTypeEqualityFunc">
+<span class="sig-name descname"><span class="pre">addTypeEqualityFunc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">typeobj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">function</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.addTypeEqualityFunc" title="Link to this definition"></a></dt>
+<dd><p>Add a type specific assertEqual style function to compare a type.</p>
+<p>This method is for use by TestCase subclasses that need to register
+their own type equality functions to provide nicer error messages.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>typeobj</strong> – The data type to call this function on when both values
+are of the same type in assertEqual().</p></li>
+<li><p><strong>function</strong> – The callable taking two arguments and an optional
+msg= argument that raises self.failureException with a
+useful error message when the two arguments are not equal.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertAlmostEqual">
+<span class="sig-name descname"><span class="pre">assertAlmostEqual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">first</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">second</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">places</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertAlmostEqual" title="Link to this definition"></a></dt>
+<dd><p>Fail if the two objects are unequal as determined by their
+difference rounded to the given number of decimal places
+(default 7) and comparing to zero, or by comparing that the
+difference between the two objects is more than the given
+delta.</p>
+<p>Note that decimal places (from zero) are usually not the same
+as significant digits (measured from the most significant digit).</p>
+<p>If the two objects compare equal then they will automatically
+compare almost equal.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertCountEqual">
+<span class="sig-name descname"><span class="pre">assertCountEqual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">first</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">second</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertCountEqual" title="Link to this definition"></a></dt>
+<dd><p>Asserts that two iterables have the same elements, the same number of
+times, without regard to order.</p>
+<blockquote>
+<div><blockquote>
+<div><dl class="simple">
+<dt>self.assertEqual(Counter(list(first)),</dt><dd><p>Counter(list(second)))</p>
+</dd>
+</dl>
+</div></blockquote>
+<dl class="simple">
+<dt>Example:</dt><dd><ul class="simple">
+<li><p>[0, 1, 1] and [1, 0, 1] compare equal.</p></li>
+<li><p>[0, 0, 1] and [0, 1] compare unequal.</p></li>
+</ul>
+</dd>
+</dl>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertDictEqual">
+<span class="sig-name descname"><span class="pre">assertDictEqual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">d1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertDictEqual" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertEqual">
+<span class="sig-name descname"><span class="pre">assertEqual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">first</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">second</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertEqual" title="Link to this definition"></a></dt>
+<dd><p>Fail if the two objects are unequal as determined by the ‘==’
+operator.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertFalse">
+<span class="sig-name descname"><span class="pre">assertFalse</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertFalse" title="Link to this definition"></a></dt>
+<dd><p>Check that the expression is false.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertGreater">
+<span class="sig-name descname"><span class="pre">assertGreater</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertGreater" title="Link to this definition"></a></dt>
+<dd><p>Just like self.assertTrue(a &gt; b), but with a nicer default message.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertGreaterEqual">
+<span class="sig-name descname"><span class="pre">assertGreaterEqual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertGreaterEqual" title="Link to this definition"></a></dt>
+<dd><p>Just like self.assertTrue(a &gt;= b), but with a nicer default message.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIn">
+<span class="sig-name descname"><span class="pre">assertIn</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">member</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">container</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIn" title="Link to this definition"></a></dt>
+<dd><p>Just like self.assertTrue(a in b), but with a nicer default message.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIs">
+<span class="sig-name descname"><span class="pre">assertIs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expr1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expr2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIs" title="Link to this definition"></a></dt>
+<dd><p>Just like self.assertTrue(a is b), but with a nicer default message.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIsInstance">
+<span class="sig-name descname"><span class="pre">assertIsInstance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cls</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIsInstance" title="Link to this definition"></a></dt>
+<dd><p>Same as self.assertTrue(isinstance(obj, cls)), with a nicer
+default message.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIsNone">
+<span class="sig-name descname"><span class="pre">assertIsNone</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIsNone" title="Link to this definition"></a></dt>
+<dd><p>Same as self.assertTrue(obj is None), with a nicer default message.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIsNot">
+<span class="sig-name descname"><span class="pre">assertIsNot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expr1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expr2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIsNot" title="Link to this definition"></a></dt>
+<dd><p>Just like self.assertTrue(a is not b), but with a nicer default message.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIsNotNone">
+<span class="sig-name descname"><span class="pre">assertIsNotNone</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertIsNotNone" title="Link to this definition"></a></dt>
+<dd><p>Included for symmetry with assertIsNone.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertLess">
+<span class="sig-name descname"><span class="pre">assertLess</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertLess" title="Link to this definition"></a></dt>
+<dd><p>Just like self.assertTrue(a &lt; b), but with a nicer default message.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertLessEqual">
+<span class="sig-name descname"><span class="pre">assertLessEqual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">b</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertLessEqual" title="Link to this definition"></a></dt>
+<dd><p>Just like self.assertTrue(a &lt;= b), but with a nicer default message.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertListEqual">
+<span class="sig-name descname"><span class="pre">assertListEqual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">list1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">list2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertListEqual" title="Link to this definition"></a></dt>
+<dd><p>A list-specific equality assertion.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>list1</strong> – The first list to compare.</p></li>
+<li><p><strong>list2</strong> – The second list to compare.</p></li>
+<li><p><strong>msg</strong> – Optional message to use on failure instead of a list of
+differences.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertLogs">
+<span class="sig-name descname"><span class="pre">assertLogs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">logger</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertLogs" title="Link to this definition"></a></dt>
+<dd><p>Fail unless a log message of level <em>level</em> or higher is emitted
+on <em>logger_name</em> or its children.  If omitted, <em>level</em> defaults to
+INFO and <em>logger</em> defaults to the root logger.</p>
+<p>This method must be used as a context manager, and will yield
+a recording object with two attributes: <cite>output</cite> and <cite>records</cite>.
+At the end of the context manager, the <cite>output</cite> attribute will
+be a list of the matching formatted log messages and the
+<cite>records</cite> attribute will be a list of the corresponding LogRecord
+objects.</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">assertLogs</span><span class="p">(</span><span class="s1">'foo'</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="s1">'INFO'</span><span class="p">)</span> <span class="k">as</span> <span class="n">cm</span><span class="p">:</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">'foo'</span><span class="p">)</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">'first message'</span><span class="p">)</span>
+    <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">'foo.bar'</span><span class="p">)</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s1">'second message'</span><span class="p">)</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">cm</span><span class="o">.</span><span class="n">output</span><span class="p">,</span> <span class="p">[</span><span class="s1">'INFO:foo:first message'</span><span class="p">,</span>
+                             <span class="s1">'ERROR:foo.bar:second message'</span><span class="p">])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertMultiLineEqual">
+<span class="sig-name descname"><span class="pre">assertMultiLineEqual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">first</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">second</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertMultiLineEqual" title="Link to this definition"></a></dt>
+<dd><p>Assert that two multi-line strings are equal.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNoLogs">
+<span class="sig-name descname"><span class="pre">assertNoLogs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">logger</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNoLogs" title="Link to this definition"></a></dt>
+<dd><p>Fail unless no log messages of level <em>level</em> or higher are emitted
+on <em>logger_name</em> or its children.</p>
+<p>This method must be used as a context manager.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotAlmostEqual">
+<span class="sig-name descname"><span class="pre">assertNotAlmostEqual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">first</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">second</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">places</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotAlmostEqual" title="Link to this definition"></a></dt>
+<dd><p>Fail if the two objects are equal as determined by their
+difference rounded to the given number of decimal places
+(default 7) and comparing to zero, or by comparing that the
+difference between the two objects is less than the given delta.</p>
+<p>Note that decimal places (from zero) are usually not the same
+as significant digits (measured from the most significant digit).</p>
+<p>Objects that are equal automatically fail.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotEqual">
+<span class="sig-name descname"><span class="pre">assertNotEqual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">first</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">second</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotEqual" title="Link to this definition"></a></dt>
+<dd><p>Fail if the two objects are equal as determined by the ‘!=’
+operator.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotIn">
+<span class="sig-name descname"><span class="pre">assertNotIn</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">member</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">container</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotIn" title="Link to this definition"></a></dt>
+<dd><p>Just like self.assertTrue(a not in b), but with a nicer default message.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotIsInstance">
+<span class="sig-name descname"><span class="pre">assertNotIsInstance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cls</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotIsInstance" title="Link to this definition"></a></dt>
+<dd><p>Included for symmetry with assertIsInstance.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotRegex">
+<span class="sig-name descname"><span class="pre">assertNotRegex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unexpected_regex</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertNotRegex" title="Link to this definition"></a></dt>
+<dd><p>Fail the test if the text matches the regular expression.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertRaises">
+<span class="sig-name descname"><span class="pre">assertRaises</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expected_exception</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertRaises" title="Link to this definition"></a></dt>
+<dd><p>Fail unless an exception of class expected_exception is raised
+by the callable when invoked with specified positional and
+keyword arguments. If a different type of exception is
+raised, it will not be caught, and the test case will be
+deemed to have suffered an error, exactly as for an
+unexpected exception.</p>
+<p>If called with the callable and arguments omitted, will return a
+context object used like this:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">assertRaises</span><span class="p">(</span><span class="n">SomeException</span><span class="p">):</span>
+    <span class="n">do_something</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>An optional keyword argument ‘msg’ can be provided when assertRaises
+is used as a context object.</p>
+<p>The context manager keeps a reference to the exception as
+the ‘exception’ attribute. This allows you to inspect the
+exception after the assertion:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">assertRaises</span><span class="p">(</span><span class="n">SomeException</span><span class="p">)</span> <span class="k">as</span> <span class="n">cm</span><span class="p">:</span>
+    <span class="n">do_something</span><span class="p">()</span>
+<span class="n">the_exception</span> <span class="o">=</span> <span class="n">cm</span><span class="o">.</span><span class="n">exception</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">the_exception</span><span class="o">.</span><span class="n">error_code</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertRaisesRegex">
+<span class="sig-name descname"><span class="pre">assertRaisesRegex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expected_exception</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expected_regex</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertRaisesRegex" title="Link to this definition"></a></dt>
+<dd><p>Asserts that the message in a raised exception matches a regex.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>expected_exception</strong> – Exception class expected to be raised.</p></li>
+<li><p><strong>expected_regex</strong> – Regex (re.Pattern object or string) expected
+to be found in error message.</p></li>
+<li><p><strong>args</strong> – Function to be called and extra positional args.</p></li>
+<li><p><strong>kwargs</strong> – Extra kwargs.</p></li>
+<li><p><strong>msg</strong> – Optional message used in case of failure. Can only be used
+when assertRaisesRegex is used as a context manager.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertRegex">
+<span class="sig-name descname"><span class="pre">assertRegex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expected_regex</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertRegex" title="Link to this definition"></a></dt>
+<dd><p>Fail the test unless the text matches the regular expression.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertSequenceEqual">
+<span class="sig-name descname"><span class="pre">assertSequenceEqual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seq1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seq2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seq_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertSequenceEqual" title="Link to this definition"></a></dt>
+<dd><p>An equality assertion for ordered sequences (like lists and tuples).</p>
+<p>For the purposes of this function, a valid ordered sequence type is one
+which can be indexed, has a length, and has an equality operator.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seq1</strong> – The first sequence to compare.</p></li>
+<li><p><strong>seq2</strong> – The second sequence to compare.</p></li>
+<li><p><strong>seq_type</strong> – The expected datatype of the sequences, or None if no
+datatype should be enforced.</p></li>
+<li><p><strong>msg</strong> – Optional message to use on failure instead of a list of
+differences.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertSetEqual">
+<span class="sig-name descname"><span class="pre">assertSetEqual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">set1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">set2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertSetEqual" title="Link to this definition"></a></dt>
+<dd><p>A set-specific equality assertion.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>set1</strong> – The first set to compare.</p></li>
+<li><p><strong>set2</strong> – The second set to compare.</p></li>
+<li><p><strong>msg</strong> – Optional message to use on failure instead of a list of
+differences.</p></li>
+</ul>
+</dd>
+</dl>
+<p>assertSetEqual uses ducktyping to support different types of sets, and
+is optimized for sets specifically (parameters must support a
+difference method).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertTrue">
+<span class="sig-name descname"><span class="pre">assertTrue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertTrue" title="Link to this definition"></a></dt>
+<dd><p>Check that the expression is true.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertTupleEqual">
+<span class="sig-name descname"><span class="pre">assertTupleEqual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tuple1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tuple2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertTupleEqual" title="Link to this definition"></a></dt>
+<dd><p>A tuple-specific equality assertion.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tuple1</strong> – The first tuple to compare.</p></li>
+<li><p><strong>tuple2</strong> – The second tuple to compare.</p></li>
+<li><p><strong>msg</strong> – Optional message to use on failure instead of a list of
+differences.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertWarns">
+<span class="sig-name descname"><span class="pre">assertWarns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expected_warning</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertWarns" title="Link to this definition"></a></dt>
+<dd><p>Fail unless a warning of class warnClass is triggered
+by the callable when invoked with specified positional and
+keyword arguments.  If a different type of warning is
+triggered, it will not be handled: depending on the other
+warning filtering rules in effect, it might be silenced, printed
+out, or raised as an exception.</p>
+<p>If called with the callable and arguments omitted, will return a
+context object used like this:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">assertWarns</span><span class="p">(</span><span class="n">SomeWarning</span><span class="p">):</span>
+    <span class="n">do_something</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>An optional keyword argument ‘msg’ can be provided when assertWarns
+is used as a context object.</p>
+<p>The context manager keeps a reference to the first matching
+warning as the ‘warning’ attribute; similarly, the ‘filename’
+and ‘lineno’ attributes give you information about the line
+of Python code from which the warning was triggered.
+This allows you to inspect the warning after the assertion:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">assertWarns</span><span class="p">(</span><span class="n">SomeWarning</span><span class="p">)</span> <span class="k">as</span> <span class="n">cm</span><span class="p">:</span>
+    <span class="n">do_something</span><span class="p">()</span>
+<span class="n">the_warning</span> <span class="o">=</span> <span class="n">cm</span><span class="o">.</span><span class="n">warning</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">the_warning</span><span class="o">.</span><span class="n">some_attribute</span><span class="p">,</span> <span class="mi">147</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertWarnsRegex">
+<span class="sig-name descname"><span class="pre">assertWarnsRegex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expected_warning</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expected_regex</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.assertWarnsRegex" title="Link to this definition"></a></dt>
+<dd><p>Asserts that the message in a triggered warning matches a regexp.
+Basic functioning is similar to assertWarns() with the addition
+that only warnings whose messages also match the regular expression
+are considered successful matches.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>expected_warning</strong> – Warning class expected to be triggered.</p></li>
+<li><p><strong>expected_regex</strong> – Regex (re.Pattern object or string) expected
+to be found in error message.</p></li>
+<li><p><strong>args</strong> – Function to be called and extra positional args.</p></li>
+<li><p><strong>kwargs</strong> – Extra kwargs.</p></li>
+<li><p><strong>msg</strong> – Optional message used in case of failure. Can only be used
+when assertWarnsRegex is used as a context manager.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.countTestCases">
+<span class="sig-name descname"><span class="pre">countTestCases</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.countTestCases" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.debug">
+<span class="sig-name descname"><span class="pre">debug</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.debug" title="Link to this definition"></a></dt>
+<dd><p>Run the test without collecting errors in a TestResult</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.defaultTestResult">
+<span class="sig-name descname"><span class="pre">defaultTestResult</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.defaultTestResult" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.doClassCleanups">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">doClassCleanups</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.doClassCleanups" title="Link to this definition"></a></dt>
+<dd><p>Execute all class cleanup functions. Normally called for you after
+tearDownClass.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.doCleanups">
+<span class="sig-name descname"><span class="pre">doCleanups</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.doCleanups" title="Link to this definition"></a></dt>
+<dd><p>Execute all cleanup functions. Normally called for you after
+tearDown.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.enterClassContext">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">enterClassContext</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cm</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.enterClassContext" title="Link to this definition"></a></dt>
+<dd><p>Same as enterContext, but class-wide.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.enterContext">
+<span class="sig-name descname"><span class="pre">enterContext</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cm</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.enterContext" title="Link to this definition"></a></dt>
+<dd><p>Enters the supplied context manager.</p>
+<p>If successful, also adds its __exit__ method as a cleanup
+function and returns the result of the __enter__ method.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.fail">
+<span class="sig-name descname"><span class="pre">fail</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.fail" title="Link to this definition"></a></dt>
+<dd><p>Fail immediately, with the given message.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.failureException">
+<span class="sig-name descname"><span class="pre">failureException</span></span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.failureException" title="Link to this definition"></a></dt>
+<dd><p>alias of <code class="xref py py-class docutils literal notranslate"><span class="pre">AssertionError</span></code></p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.id">
+<span class="sig-name descname"><span class="pre">id</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.id" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.longMessage">
+<span class="sig-name descname"><span class="pre">longMessage</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.longMessage" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.maxDiff">
+<span class="sig-name descname"><span class="pre">maxDiff</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">640</span></span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.maxDiff" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">result</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.run" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.setUp">
+<span class="sig-name descname"><span class="pre">setUp</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.setUp" title="Link to this definition"></a></dt>
+<dd><p>Hook method for setting up the test fixture before exercising it.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.setUpClass">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">setUpClass</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.setUpClass" title="Link to this definition"></a></dt>
+<dd><p>Hook method for setting up class fixture before running tests in the class.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.shortDescription">
+<span class="sig-name descname"><span class="pre">shortDescription</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.shortDescription" title="Link to this definition"></a></dt>
+<dd><p>Returns a one-line description of the test, or None if no
+description has been provided.</p>
+<p>The default implementation of this method returns the first line of
+the specified test method’s docstring.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.skipTest">
+<span class="sig-name descname"><span class="pre">skipTest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reason</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.skipTest" title="Link to this definition"></a></dt>
+<dd><p>Skip this test.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.subTest">
+<span class="sig-name descname"><span class="pre">subTest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">msg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;object</span> <span class="pre">object&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">**params</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.subTest" title="Link to this definition"></a></dt>
+<dd><p>Return a context manager that will return the enclosed block
+of code in a subtest identified by the optional message and
+keyword parameters.  A failure in the subtest marks the test
+case as failed but resumes execution at the end of the enclosed
+block, allowing further test code to be executed.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.tearDown">
+<span class="sig-name descname"><span class="pre">tearDown</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.tearDown" title="Link to this definition"></a></dt>
+<dd><p>Hook method for deconstructing the test fixture after testing it.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.tearDownClass">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">tearDownClass</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.tearDownClass" title="Link to this definition"></a></dt>
+<dd><p>Hook method for deconstructing the class fixture after running all tests in the class.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_add">
+<span class="sig-name descname"><span class="pre">test_add</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_add" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_cast">
+<span class="sig-name descname"><span class="pre">test_cast</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_cast" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_cast_bigger_than_int">
+<span class="sig-name descname"><span class="pre">test_cast_bigger_than_int</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_cast_bigger_than_int" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_from_float">
+<span class="sig-name descname"><span class="pre">test_from_float</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_from_float" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_init">
+<span class="sig-name descname"><span class="pre">test_init</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_init" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_mask_bitwidth">
+<span class="sig-name descname"><span class="pre">test_mask_bitwidth</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_mask_bitwidth" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_mult">
+<span class="sig-name descname"><span class="pre">test_mult</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_mult" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_promote">
+<span class="sig-name descname"><span class="pre">test_promote</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_promote" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_round">
+<span class="sig-name descname"><span class="pre">test_round</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_round" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_round_big">
+<span class="sig-name descname"><span class="pre">test_round_big</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_round_big" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_round_to_even">
+<span class="sig-name descname"><span class="pre">test_round_to_even</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_round_to_even" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_to_float">
+<span class="sig-name descname"><span class="pre">test_to_float</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#firmware_tests.fp_fft.test_fp_type.TestFixedPointType.test_to_float" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="firmware_tests.fp_fft.fp_type.html" class="btn btn-neutral float-left" title="fp_type.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="firmware_tests.funcgen_test.html" class="btn btn-neutral float-right" title="funcgen_test.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,342 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cdce620005_pll_QC.py &mdash; pychfpga User Manual (jfc/dev @ 53a6898b) 1.3.4.dev819+ice.co.g53a6898bd documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=50c405aa"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="memtest_rs232.py" href="qc.MGK7MB.memtest_rs232.html" />
+    <link rel="prev" title="MGK7MB/" href="qc.MGK7MB.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Code Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="qc.CRS_crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">CRS_crate/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="qc.ICE_crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ICE_crate/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="qc.MGADC08.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">MGADC08/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="qc.MGK7BP16.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">MGK7BP16/</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="qc.MGK7MB.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">MGK7MB/</span></code></a><ul class="current">
+<li class="toctree-l3 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">cdce620005_pll_QC.py</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#qc.MGK7MB.cdce620005_pll_QC.comp_reg"><code class="docutils literal notranslate"><span class="pre">comp_reg()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#qc.MGK7MB.cdce620005_pll_QC.print_reg"><code class="docutils literal notranslate"><span class="pre">print_reg()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005"><code class="docutils literal notranslate"><span class="pre">CDCE620005</span></code></a><ul>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.__init__"><code class="docutils literal notranslate"><span class="pre">CDCE620005.__init__()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.opened_controllers"><code class="docutils literal notranslate"><span class="pre">CDCE620005.opened_controllers</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.program_pll"><code class="docutils literal notranslate"><span class="pre">CDCE620005.program_pll()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.read_pll"><code class="docutils literal notranslate"><span class="pre">CDCE620005.read_pll()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.read_pll_reg"><code class="docutils literal notranslate"><span class="pre">CDCE620005.read_pll_reg()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.write_pll_reg"><code class="docutils literal notranslate"><span class="pre">CDCE620005.write_pll_reg()</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.write_read_word"><code class="docutils literal notranslate"><span class="pre">CDCE620005.write_read_word()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="qc.MGK7MB.memtest_rs232.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">memtest_rs232.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="qc.MGK7MB.mgk7mb_test.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mgk7mb_test.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="qc.run_qcengine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">run_qcengine.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="qc.utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">utils.py</span></code></a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 53a6898b)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a></li>
+          <li class="breadcrumb-item"><a href="qc.MGK7MB.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">MGK7MB/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">cdce620005_pll_QC.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/qc.MGK7MB.cdce620005_pll_QC.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="cdce620005-pll-qc-py">
+<h1><a class="reference internal" href="#module-qc.MGK7MB.cdce620005_pll_QC" title="qc.MGK7MB.cdce620005_pll_QC"><code class="xref py py-mod docutils literal notranslate"><span class="pre">cdce620005_pll_QC.py</span></code></a><a class="headerlink" href="#cdce620005-pll-qc-py" title="Link to this heading"></a></h1>
+<p id="module-qc.MGK7MB.cdce620005_pll_QC">read/write IceBoard PLL using the FTDI cable.</p>
+<p>Requirements:</p>
+<blockquote>
+<div><p>Cable: FTDI 3.3V USB-MPSSE (Multi-Protocol Synchronous Serial Engine) cable model C232HM-DDHSL-0
+Python modules:</p>
+<blockquote>
+<div><p>pip2 install pyftdi   # (this was tested with ==0.53.3. Previous version used with Py2.7 was ==0.13.4)</p>
+</div></blockquote>
+<dl>
+<dt>Driver:</dt><dd><p>Linux: libusb (<a class="reference external" href="http://www.libusb.org/">http://www.libusb.org/</a>)
+Windows: libusb-win32 (<a class="reference external" href="http://www.libusb.org/wiki/libusb-win32">http://www.libusb.org/wiki/libusb-win32</a>)</p>
+</dd>
+<dt>For Ubuntu:</dt><dd><p>You have to create a udef rule and add the user to the correct group to give access to the FTDI device. Instructions are here:</p>
+<blockquote>
+<div><p><a class="reference external" href="https://eblot.github.io/pyftdi/installation.html">https://eblot.github.io/pyftdi/installation.html</a></p>
+</div></blockquote>
+<p>Essentially:</p>
+<p>create file /etc/udev/rules.d/11-ftdi.rules containing:</p>
+<blockquote>
+<div><p>SUBSYSTEM==”usb”, ATTR{idVendor}==”0403”, ATTR{idProduct}==”6014”, GROUP=”plugdev”, MODE=”0664”</p>
+</div></blockquote>
+<p>Update the rules. Either plug-unplug the devide or:</p>
+<blockquote>
+<div><p>sudo udevadm control –reload-rules
+sudo udevadm trigger</p>
+</div></blockquote>
+<p>Add current user to group:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>sudo adduser $USER plugdev
+</pre></div>
+</div>
+</dd>
+</dl>
+</div></blockquote>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>The ARM must NOT be initialized: It drives the clock line to zero.</p></li>
+</ul>
+</div>
+<dl class="simple">
+<dt>Troubleshooting:</dt><dd><ul class="simple">
+<li><p>no permission to access USB device: The udev rule listed above must be created.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition-todo admonition" id="id1">
+<p class="admonition-title">Todo</p>
+<ul class="simple">
+<li><p>Write config from file</p></li>
+<li><p>get config</p></li>
+</ul>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Default PLL config for the IceBoard
+#pll1_regs = [ 0x01260320,
+#              0xEB060301,
+#              0x011E0302,
+#              0xEB040303,
+#              0xEB860314,
+#              0x101C1E75,
+#              0x849F4FE6,
+#              0xBDB23BE7,
+#              0x20009CF8 ]</p>
+<p>#pll2_regs = [ 0xEB840320,
+#              0xEB840301,
+#              0xEB840302,
+#              0xEB860303,
+#              0xEB400014,
+#              0x101C1E75,
+#              0x84BF49A6,
+#              0xBDB23BE7,
+#              0x20009DD8 ]</p>
+</div>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module functions summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#qc.MGK7MB.cdce620005_pll_QC.comp_reg" title="qc.MGK7MB.cdce620005_pll_QC.comp_reg"><code class="xref py py-obj docutils literal notranslate"><span class="pre">comp_reg</span></code></a></p></td>
+<td><p>Check if the desired register values <cite>desreg</cite> match the measured register values <cite>measreg</cite></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#qc.MGK7MB.cdce620005_pll_QC.print_reg" title="qc.MGK7MB.cdce620005_pll_QC.print_reg"><code class="xref py py-obj docutils literal notranslate"><span class="pre">print_reg</span></code></a></p></td>
+<td><p>Prints the PLL register values provided in <cite>reg</cite></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005" title="qc.MGK7MB.cdce620005_pll_QC.CDCE620005"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CDCE620005</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module functions</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="qc.MGK7MB.cdce620005_pll_QC.comp_reg">
+<span class="sig-prename descclassname"><span class="pre">qc.MGK7MB.cdce620005_pll_QC.</span></span><span class="sig-name descname"><span class="pre">comp_reg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">desreg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">measreg</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7MB.cdce620005_pll_QC.comp_reg" title="Link to this definition"></a></dt>
+<dd><p>Check if the desired register values <cite>desreg</cite> match the measured register values <cite>measreg</cite></p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="qc.MGK7MB.cdce620005_pll_QC.print_reg">
+<span class="sig-prename descclassname"><span class="pre">qc.MGK7MB.cdce620005_pll_QC.</span></span><span class="sig-name descname"><span class="pre">print_reg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reg</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7MB.cdce620005_pll_QC.print_reg" title="Link to this definition"></a></dt>
+<dd><p>Prints the PLL register values provided in <cite>reg</cite></p>
+</dd></dl>
+
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="qc.MGK7MB.cdce620005_pll_QC.CDCE620005">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">qc.MGK7MB.cdce620005_pll_QC.</span></span><span class="sig-name descname"><span class="pre">CDCE620005</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ftdi_url</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ftdi://ftdi:232h/1'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7MB.cdce620005_pll_QC.CDCE620005.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ftdi_url</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ftdi://ftdi:232h/1'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">port</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">freq</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.__init__" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>port</strong> – configured FTDI SPI port object obtained by calling get_port(…) on a SPiController object.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="qc.MGK7MB.cdce620005_pll_QC.CDCE620005.opened_controllers">
+<span class="sig-name descname"><span class="pre">opened_controllers</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></span><a class="headerlink" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.opened_controllers" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7MB.cdce620005_pll_QC.CDCE620005.program_pll">
+<span class="sig-name descname"><span class="pre">program_pll</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">regs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">write_eeprom</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.program_pll" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7MB.cdce620005_pll_QC.CDCE620005.read_pll">
+<span class="sig-name descname"><span class="pre">read_pll</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.read_pll" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7MB.cdce620005_pll_QC.CDCE620005.read_pll_reg">
+<span class="sig-name descname"><span class="pre">read_pll_reg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reg</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.read_pll_reg" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7MB.cdce620005_pll_QC.CDCE620005.write_pll_reg">
+<span class="sig-name descname"><span class="pre">write_pll_reg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reg</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.write_pll_reg" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.MGK7MB.cdce620005_pll_QC.CDCE620005.write_read_word">
+<span class="sig-name descname"><span class="pre">write_read_word</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">word</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.MGK7MB.cdce620005_pll_QC.CDCE620005.write_read_word" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="qc.MGK7MB.html" class="btn btn-neutral float-left" title="MGK7MB/" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="qc.MGK7MB.memtest_rs232.html" class="btn btn-neutral float-right" title="memtest_rs232.py" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

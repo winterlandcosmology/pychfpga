@@ -1,0 +1,120 @@
+
+
+
+
+
+:py:mod:`fp_fft.py <firmware_tests.fp_fft.fp_fft>`
+==================================================
+
+
+.. currentmodule:: firmware_tests.fp_fft
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=firmware_tests.fp_fft,
+..    | FULLNAME=firmware_tests.fp_fft.fp_fft,
+..    | name==fp_fft
+..    | modules = 
+..    | classes = []
+
+.. automodule:: firmware_tests.fp_fft.fp_fft
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+   
+   
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         bit_reverse
+         butterfly_r2
+         fft_r2
+         reshape_r2
+         twiddle_r2
+         unreshape_r2
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: bit_reverse
+
+
+.. autofunction:: butterfly_r2
+
+
+.. autofunction:: fft_r2
+
+
+.. autofunction:: reshape_r2
+
+
+.. autofunction:: twiddle_r2
+
+
+.. autofunction:: unreshape_r2
+
+
+
+
+
+.. *** Insert class descriptions
+
+

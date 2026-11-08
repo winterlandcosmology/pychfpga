@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>tcpipe.py &mdash; pychfpga User Manual (jfc/dev @ ffec1078) 1.3.4.dev814+ice.co.gffec10782 documentation</title>
+  <title>tcpipe.py &mdash; pychfpga User Manual (jfc/dev @ 53a6898b) 1.3.4.dev819+ice.co.g53a6898bd documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
@@ -15,7 +15,7 @@
     <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
       <script src="../_static/jquery.js?v=5d32c60e"></script>
       <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../_static/documentation_options.js?v=d3e2754b"></script>
+      <script src="../_static/documentation_options.js?v=50c405aa"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/js/theme.js"></script>
@@ -78,56 +78,274 @@
 <li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<p class="caption" role="heading"><span class="caption-text">Code Documentation</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="reference internal" href="../api.html">API reference</a><ul class="current">
-<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
-<li class="toctree-l3 current"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a><ul class="current">
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.Agilent_N5764A.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">Agilent_N5764A/</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crate.py</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.crs.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs/</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.hardware_map.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware_map.py</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">i2c_devices/</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.ice.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ice/</span></code></a></li>
-<li class="toctree-l4 current"><a class="reference internal" href="pychfpga.hardware.interfaces.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">interfaces/</span></code></a><ul class="current">
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.hardware.interfaces.bsb_mmi.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">bsb_mmi.py</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.hardware.interfaces.fpga_mmi.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_mmi.py</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.hardware.interfaces.i2c_interface.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">i2c_interface.py</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.hardware.interfaces.ipmi_fru.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ipmi_fru.py</span></code></a></li>
-<li class="toctree-l5 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tcpipe.py</span></code></a><ul>
-<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe"><code class="docutils literal notranslate"><span class="pre">TCPipe</span></code></a></li>
-<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI</span></code></a></li>
-<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C"><code class="docutils literal notranslate"><span class="pre">TCPipe_I2C</span></code></a></li>
-<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI"><code class="docutils literal notranslate"><span class="pre">TCPipe_SPI</span></code></a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.Agilent_N5764A.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">Agilent_N5764A/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crate.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.crs.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.hardware_map.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware_map.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.i2c_devices.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">i2c_devices/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.ice.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ice/</span></code></a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="pychfpga.hardware.interfaces.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">interfaces/</span></code></a><ul class="current">
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.interfaces.bsb_mmi.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">bsb_mmi.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.interfaces.fpga_mmi.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_mmi.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.interfaces.i2c_interface.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">i2c_interface.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.interfaces.ipmi_fru.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ipmi_fru.py</span></code></a></li>
+<li class="toctree-l4 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">tcpipe.py</span></code></a><ul>
+<li class="toctree-l5"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe"><code class="docutils literal notranslate"><span class="pre">TCPipe</span></code></a><ul>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.ADC_TILE"><code class="docutils literal notranslate"><span class="pre">TCPipe.ADC_TILE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.BACKPLANE_IPMI_FLAG_PRESENT"><code class="docutils literal notranslate"><span class="pre">TCPipe.BACKPLANE_IPMI_FLAG_PRESENT</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.BACKPLANE_IPMI_REPLY_LEN"><code class="docutils literal notranslate"><span class="pre">TCPipe.BACKPLANE_IPMI_REPLY_LEN</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.CONNECT_RETRY_INTERVAL_S"><code class="docutils literal notranslate"><span class="pre">TCPipe.CONNECT_RETRY_INTERVAL_S</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.CONNECT_RETRY_MAX_S"><code class="docutils literal notranslate"><span class="pre">TCPipe.CONNECT_RETRY_MAX_S</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.CORE_REG_UDP_DATA_PORT"><code class="docutils literal notranslate"><span class="pre">TCPipe.CORE_REG_UDP_DATA_PORT</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.DAC_TILE"><code class="docutils literal notranslate"><span class="pre">TCPipe.DAC_TILE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.DEFAULT_TCP_DATA_PORT"><code class="docutils literal notranslate"><span class="pre">TCPipe.DEFAULT_TCP_DATA_PORT</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.FWDISCOVER_PORT"><code class="docutils literal notranslate"><span class="pre">TCPipe.FWDISCOVER_PORT</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.I2C_ERROR_CODES"><code class="docutils literal notranslate"><span class="pre">TCPipe.I2C_ERROR_CODES</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.IPMI_FIELD_WIRE_LEN"><code class="docutils literal notranslate"><span class="pre">TCPipe.IPMI_FIELD_WIRE_LEN</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.IPMI_RPC_VERSION"><code class="docutils literal notranslate"><span class="pre">TCPipe.IPMI_RPC_VERSION</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.MOTHERBOARD_IPMI_REPLY_LEN"><code class="docutils literal notranslate"><span class="pre">TCPipe.MOTHERBOARD_IPMI_REPLY_LEN</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.OLED_DRAW_TEXT_STATUS"><code class="docutils literal notranslate"><span class="pre">TCPipe.OLED_DRAW_TEXT_STATUS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.OLED_SET_FIRMWARE_LABEL_STATUS"><code class="docutils literal notranslate"><span class="pre">TCPipe.OLED_SET_FIRMWARE_LABEL_STATUS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.REBOOT_PAYLOAD"><code class="docutils literal notranslate"><span class="pre">TCPipe.REBOOT_PAYLOAD</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_CAL"><code class="docutils literal notranslate"><span class="pre">TCPipe.RFDC_STATE_CAL</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_CLK_DET"><code class="docutils literal notranslate"><span class="pre">TCPipe.RFDC_STATE_CLK_DET</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_FULL"><code class="docutils literal notranslate"><span class="pre">TCPipe.RFDC_STATE_FULL</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_OFF"><code class="docutils literal notranslate"><span class="pre">TCPipe.RFDC_STATE_OFF</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_PWRUP"><code class="docutils literal notranslate"><span class="pre">TCPipe.RFDC_STATE_PWRUP</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RFDC_STATE_SHUTDOWN"><code class="docutils literal notranslate"><span class="pre">TCPipe.RFDC_STATE_SHUTDOWN</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_DYNAMIC_PLL_CONFIG"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_DYNAMIC_PLL_CONFIG</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_BLOCK_STATUS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_BLOCK_STATUS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CALIBRATION_MODE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_CALIBRATION_MODE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CAL_COEFFICIENTS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_CAL_COEFFICIENTS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CAL_FREEZE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_CAL_FREEZE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CLK_DISTRIBUTION"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_CLK_DISTRIBUTION</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_CLOCK_SOURCE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_CLOCK_SOURCE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_COARSE_DELAY"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_COARSE_DELAY</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_DATAPATH_MODE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_DATAPATH_MODE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_DECIMATION_FACTOR"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_DECIMATION_FACTOR</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_DITHER"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_DITHER</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_DSA"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_DSA</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_FIFO_STATUS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_FIFO_STATUS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_IMR_PASS_MODE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_IMR_PASS_MODE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_IP_STATUS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_IP_STATUS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_MIXER_SETTINGS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_MIXER_SETTINGS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_NYQUIST_ZONE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_NYQUIST_ZONE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_PLL_CONFIG"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_PLL_CONFIG</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_PLL_LOCK_STATUS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_PLL_LOCK_STATUS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_PWR_MODE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_PWR_MODE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_QMC_SETTINGS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_QMC_SETTINGS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_SIGNAL_DETECTOR"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_SIGNAL_DETECTOR</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_SIGNAL_DETECTOR_STATUS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_SIGNAL_DETECTOR_STATUS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_GET_THRESHOLD_SETTINGS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_GET_THRESHOLD_SETTINGS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_RERUN_FG_CAL"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_RERUN_FG_CAL</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_RESET"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_RESET</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_RESET_NCO_PHASE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_RESET_NCO_PHASE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SETUP_FIFO"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SETUP_FIFO</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_CALIBRATION_MODE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_CALIBRATION_MODE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_CAL_COEFFICIENTS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_CAL_COEFFICIENTS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_CAL_FREEZE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_CAL_FREEZE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_CLK_DISTRIBUTION"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_CLK_DISTRIBUTION</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_COARSE_DELAY"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_COARSE_DELAY</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_DATAPATH_MODE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_DATAPATH_MODE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_DECIMATION_FACTOR"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_DECIMATION_FACTOR</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_DITHER"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_DITHER</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_DSA"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_DSA</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_IMR_PASS_MODE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_IMR_PASS_MODE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_MIXER_SETTINGS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_MIXER_SETTINGS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_NYQUIST_ZONE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_NYQUIST_ZONE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_PWR_MODE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_PWR_MODE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_QMC_SETTINGS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_QMC_SETTINGS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_SIGNAL_DETECTOR"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_SIGNAL_DETECTOR</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_THRESHOLD_CLR_MODE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_THRESHOLD_CLR_MODE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SET_THRESHOLD_SETTINGS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SET_THRESHOLD_SETTINGS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SHUTDOWN"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SHUTDOWN</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_STARTUP"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_STARTUP</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_SYNC"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_SYNC</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_THRESHOLD_STICKY_CLEAR"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_THRESHOLD_STICKY_CLEAR</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_UPDATE_EVENT"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_UPDATE_EVENT</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_ADC_WAIT_FOR_STATE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_ADC_WAIT_FOR_STATE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_BSB_BATCH_WRITE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_BSB_BATCH_WRITE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_BSB_WRITE_READ"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_BSB_WRITE_READ</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_CORE_REG_READ"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_CORE_REG_READ</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_CORE_REG_WRITE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_CORE_REG_WRITE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_DRAIN_MAX_S"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_DRAIN_MAX_S</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_DRAIN_QUIET_S"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_DRAIN_QUIET_S</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_GET_BACKPLANE_IPMI_INFO"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_GET_BACKPLANE_IPMI_INFO</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_GET_MOTHERBOARD_IPMI_INFO"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_GET_MOTHERBOARD_IPMI_INFO</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_GET_RPC_FUNCTIONS"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_GET_RPC_FUNCTIONS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_IIC_WRITE_READ"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_IIC_WRITE_READ</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_NAMES"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_NAMES</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_OLED_DRAW_TEXT"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_OLED_DRAW_TEXT</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_OLED_DRAW_XBM"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_OLED_DRAW_XBM</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_OLED_SET_FIRMWARE_LABEL"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_OLED_SET_FIRMWARE_LABEL</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_PERF_LOG_INTERVAL"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_PERF_LOG_INTERVAL</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_PREFIX"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_PREFIX</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_SPI_BATCH_WRITE"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_SPI_BATCH_WRITE</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.RPC_SPI_WRITE_READ"><code class="docutils literal notranslate"><span class="pre">TCPipe.RPC_SPI_WRITE_READ</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.__init__"><code class="docutils literal notranslate"><span class="pre">TCPipe.__init__()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_dynamic_pll_config"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_dynamic_pll_config()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_block_status"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_block_status()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_cal_coefficients"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_cal_coefficients()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_cal_freeze"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_cal_freeze()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_calibration_mode"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_calibration_mode()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_clk_distribution"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_clk_distribution()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_clock_source"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_clock_source()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_coarse_delay"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_coarse_delay()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_datapath_mode"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_datapath_mode()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_decimation_factor"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_decimation_factor()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_dither"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_dither()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_dsa"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_dsa()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_fifo_status"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_fifo_status()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_imr_pass_mode"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_imr_pass_mode()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_ip_status"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_ip_status()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_mixer_settings"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_mixer_settings()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_nyquist_zone"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_nyquist_zone()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_pll_config"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_pll_config()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_pll_lock_status"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_pll_lock_status()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_pwr_mode"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_pwr_mode()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_qmc_settings"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_qmc_settings()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_signal_detector"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_signal_detector()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_signal_detector_status"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_signal_detector_status()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_get_threshold_settings"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_get_threshold_settings()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_rerun_fg_cal"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_rerun_fg_cal()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_reset"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_reset()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_reset_nco_phase"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_reset_nco_phase()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_cal_coefficients"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_cal_coefficients()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_cal_freeze"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_cal_freeze()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_calibration_mode"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_calibration_mode()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_clk_distribution"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_clk_distribution()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_coarse_delay"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_coarse_delay()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_datapath_mode"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_datapath_mode()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_decimation_factor"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_decimation_factor()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_dither"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_dither()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_dsa"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_dsa()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_imr_pass_mode"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_imr_pass_mode()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_mixer_settings"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_mixer_settings()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_nyquist_zone"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_nyquist_zone()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_pwr_mode"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_pwr_mode()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_qmc_settings"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_qmc_settings()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_signal_detector"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_signal_detector()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_threshold_clr_mode"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_threshold_clr_mode()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_set_threshold_settings"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_set_threshold_settings()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_setup_fifo"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_setup_fifo()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_shutdown"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_shutdown()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_startup"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_startup()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_sync"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_sync()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_threshold_sticky_clear"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_threshold_sticky_clear()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_update_event"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_update_event()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.adc_wait_for_state"><code class="docutils literal notranslate"><span class="pre">TCPipe.adc_wait_for_state()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.aggregate_commands"><code class="docutils literal notranslate"><span class="pre">TCPipe.aggregate_commands()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_batch_write"><code class="docutils literal notranslate"><span class="pre">TCPipe.bsb_batch_write()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_batch_write_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.bsb_batch_write_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_write_read"><code class="docutils literal notranslate"><span class="pre">TCPipe.bsb_write_read()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.bsb_write_read_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.bsb_write_read_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.check_tcpipe_version"><code class="docutils literal notranslate"><span class="pre">TCPipe.check_tcpipe_version()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.close"><code class="docutils literal notranslate"><span class="pre">TCPipe.close()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_backplane_ipmi_info"><code class="docutils literal notranslate"><span class="pre">TCPipe.get_backplane_ipmi_info()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_backplane_ipmi_info_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.get_backplane_ipmi_info_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_fpga_bitstream_crc"><code class="docutils literal notranslate"><span class="pre">TCPipe.get_fpga_bitstream_crc()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_local_data_port_number"><code class="docutils literal notranslate"><span class="pre">TCPipe.get_local_data_port_number()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_motherboard_ipmi_info"><code class="docutils literal notranslate"><span class="pre">TCPipe.get_motherboard_ipmi_info()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_motherboard_ipmi_info_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.get_motherboard_ipmi_info_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.get_rpc_functions"><code class="docutils literal notranslate"><span class="pre">TCPipe.get_rpc_functions()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_polled_read"><code class="docutils literal notranslate"><span class="pre">TCPipe.i2c_polled_read()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_polled_read_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.i2c_polled_read_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_read"><code class="docutils literal notranslate"><span class="pre">TCPipe.i2c_read()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_read_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.i2c_read_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write"><code class="docutils literal notranslate"><span class="pre">TCPipe.i2c_write()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.i2c_write_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write_read"><code class="docutils literal notranslate"><span class="pre">TCPipe.i2c_write_read()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.i2c_write_read_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.i2c_write_read_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.is_fpga_programmed"><code class="docutils literal notranslate"><span class="pre">TCPipe.is_fpga_programmed()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_draw_text"><code class="docutils literal notranslate"><span class="pre">TCPipe.oled_draw_text()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_draw_text_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.oled_draw_text_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_set_firmware_label"><code class="docutils literal notranslate"><span class="pre">TCPipe.oled_set_firmware_label()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.oled_set_firmware_label_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.oled_set_firmware_label_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.open_tcpipe_mmi_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.open_tcpipe_mmi_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.opened_sockets"><code class="docutils literal notranslate"><span class="pre">TCPipe.opened_sockets</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.print_rpc_functions"><code class="docutils literal notranslate"><span class="pre">TCPipe.print_rpc_functions()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.read_reg"><code class="docutils literal notranslate"><span class="pre">TCPipe.read_reg()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.reboot"><code class="docutils literal notranslate"><span class="pre">TCPipe.reboot()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.send_reboot"><code class="docutils literal notranslate"><span class="pre">TCPipe.send_reboot()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.set_fpga_bitstream_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.set_fpga_bitstream_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.set_local_data_port_number"><code class="docutils literal notranslate"><span class="pre">TCPipe.set_local_data_port_number()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_batch_write"><code class="docutils literal notranslate"><span class="pre">TCPipe.spi_batch_write()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_batch_write_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.spi_batch_write_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_write_read"><code class="docutils literal notranslate"><span class="pre">TCPipe.spi_write_read()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.spi_write_read_async"><code class="docutils literal notranslate"><span class="pre">TCPipe.spi_write_read_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe.write_reg"><code class="docutils literal notranslate"><span class="pre">TCPipe.write_reg()</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.hardware.interfaces.udp.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">udp.py</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI</span></code></a><ul>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.MASKED_WRITE_OPCODES"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.MASKED_WRITE_OPCODES</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.MAX_BSB_COMMAND_PACKET_LENGTH"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.MAX_BSB_COMMAND_PACKET_LENGTH</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.MAX_BSB_REPLY_PACKET_LENGTH"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.MAX_BSB_REPLY_PACKET_LENGTH</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_READ_CONTROL"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.OPCODE_READ_CONTROL</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_READ_NOP"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.OPCODE_READ_NOP</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_READ_RAM"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.OPCODE_READ_RAM</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_READ_STATUS"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.OPCODE_READ_STATUS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_WRITE_CONTROL"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.OPCODE_WRITE_CONTROL</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_WRITE_CONTROL_MASK"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.OPCODE_WRITE_CONTROL_MASK</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_WRITE_NOP"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.OPCODE_WRITE_NOP</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.OPCODE_WRITE_RAM"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.OPCODE_WRITE_RAM</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.READ_OPCODES"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.READ_OPCODES</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.WRITE_OPCODES"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.WRITE_OPCODES</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.__init__"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.__init__()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.aggregate_commands"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.aggregate_commands()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.close"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.close()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.flush"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.flush()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.read"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.read()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_BSB_MMI.write"><code class="docutils literal notranslate"><span class="pre">TCPipe_BSB_MMI.write()</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.mezzanine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mezzanine.py</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.motherboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">motherboard.py</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.supported_hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">supported_hardware.py</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.zcu111.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zcu111/</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.zuboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zuboard/</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C"><code class="docutils literal notranslate"><span class="pre">TCPipe_I2C</span></code></a><ul>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.I2CException"><code class="docutils literal notranslate"><span class="pre">TCPipe_I2C.I2CException</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.__init__"><code class="docutils literal notranslate"><span class="pre">TCPipe_I2C.__init__()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.is_present"><code class="docutils literal notranslate"><span class="pre">TCPipe_I2C.is_present()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.select_bus"><code class="docutils literal notranslate"><span class="pre">TCPipe_I2C.select_bus()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_I2C.write_read"><code class="docutils literal notranslate"><span class="pre">TCPipe_I2C.write_read()</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI"><code class="docutils literal notranslate"><span class="pre">TCPipe_SPI</span></code></a><ul>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI.SPIException"><code class="docutils literal notranslate"><span class="pre">TCPipe_SPI.SPIException</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI.__init__"><code class="docutils literal notranslate"><span class="pre">TCPipe_SPI.__init__()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI.batch_write"><code class="docutils literal notranslate"><span class="pre">TCPipe_SPI.batch_write()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.interfaces.tcpipe.TCPipe_SPI.write_read"><code class="docutils literal notranslate"><span class="pre">TCPipe_SPI.write_read()</span></code></a></li>
 </ul>
 </li>
 </ul>
 </li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.interfaces.udp.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">udp.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.mezzanine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mezzanine.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.motherboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">motherboard.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.supported_hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">supported_hardware.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.zcu111.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zcu111/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.zuboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zuboard/</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Indices</span></p>
 <ul>
@@ -141,7 +359,7 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../index.html">pychfpga User Manual (jfc/dev @ ffec1078)</a>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 53a6898b)</a>
       </nav>
 
       <div class="wy-nav-content">
@@ -149,7 +367,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
-          <li class="breadcrumb-item"><a href="../api.html">API reference</a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
           <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
           <li class="breadcrumb-item"><a href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
           <li class="breadcrumb-item"><a href="pychfpga.hardware.interfaces.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">interfaces/</span></code></a></li>

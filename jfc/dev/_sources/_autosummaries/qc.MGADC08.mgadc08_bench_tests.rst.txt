@@ -1,0 +1,100 @@
+
+
+
+
+
+:py:mod:`mgadc08_bench_tests.py <qc.MGADC08.mgadc08_bench_tests>`
+=================================================================
+
+
+.. currentmodule:: qc.MGADC08
+
+.. .. note::
+
+..    | template = custom_module-template.rst
+..    | Module=qc.MGADC08,
+..    | FULLNAME=qc.MGADC08.mgadc08_bench_tests,
+..    | name==mgadc08_bench_tests
+..    | modules = 
+..    | classes = []
+
+.. automodule:: qc.MGADC08.mgadc08_bench_tests
+
+   .. *** Insert submodule summary
+
+   
+   
+   
+   
+   
+   
+   
+   
+
+   .. *** Insert attribute summary
+
+   
+   
+   
+
+   .. *** Insert exception summary
+
+   
+   
+   
+
+
+   .. *** Insert function summary
+
+   
+   
+
+   .. container:: autosummary_block
+
+      .. rubric:: Module functions summary
+
+      .. autosummary::
+         :nosignatures:
+
+         
+         wrap
+
+   
+   
+
+   .. *** Insert class summary
+
+   
+   
+   
+
+
+
+.. *** Insert attribute descriptions
+
+
+
+
+
+.. *** Insert exceptions descriptions
+
+
+
+
+.. *** Insert function descriptions
+
+
+----
+
+.. rubric:: Module functions
+
+
+.. autofunction:: wrap
+
+
+
+
+
+.. *** Insert class descriptions
+
+

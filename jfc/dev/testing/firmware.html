@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Firmware testing &mdash; pychfpga User Manual (jfc/dev @ ffec1078) 1.3.4.dev814+ice.co.gffec10782 documentation</title>
+  <title>Firmware testing &mdash; pychfpga User Manual (jfc/dev @ 53a6898b) 1.3.4.dev819+ice.co.g53a6898bd documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
@@ -15,13 +15,13 @@
     <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
       <script src="../_static/jquery.js?v=5d32c60e"></script>
       <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../_static/documentation_options.js?v=d3e2754b"></script>
+      <script src="../_static/documentation_options.js?v=50c405aa"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="API reference" href="../api.html" />
+    <link rel="next" title="&lt;no title&gt;" href="../api.html" />
     <link rel="prev" title="Pre-deployment CRS crate-level tests" href="hardware/crs/crs_crate.html" /> 
 </head>
 
@@ -78,15 +78,38 @@
 <li class="toctree-l1"><a class="reference internal" href="hardware/index.html">Hardware testing</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Firmware testing</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#test-suites">Test suites</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#running-the-tests">Running the tests</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#additional-documentation">Additional documentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#function-generator">Function generator</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#waveforms-fn-ram">Waveforms (<code class="docutils literal notranslate"><span class="pre">FN_RAM</span></code>)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#noise-fn-noise">Noise (<code class="docutils literal notranslate"><span class="pre">FN_NOISE</span></code>)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#counters-shift-and-overflow">Counters, shift, and overflow</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#fft">FFT</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#peak-and-shape-against-numpy-fft">Peak and shape (against <code class="docutils literal notranslate"><span class="pre">numpy.fft</span></code>)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#bit-exact-comparison-with-the-casper-simulation">Bit-exact comparison with the CASPER simulation</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#scaler">Scaler</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#gains">Gains</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#rounding-saturation-encoding">Rounding, saturation, encoding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#capture-path">Capture path</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#correlator">Correlator</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#spectrum-injection">Spectrum injection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#autocorrelation">Autocorrelation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#cross-correlation">Cross-correlation</a></li>
 </ul>
 </li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Code Documentation</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../api.html">API reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../_autosummaries/pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../_autosummaries/firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../_autosummaries/qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Indices</span></p>
 <ul>
@@ -100,7 +123,7 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../index.html">pychfpga User Manual (jfc/dev @ ffec1078)</a>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 53a6898b)</a>
       </nav>
 
       <div class="wy-nav-content">
@@ -120,32 +143,17 @@
              
   <section id="firmware-testing">
 <h1>Firmware testing<a class="headerlink" href="#firmware-testing" title="Link to this heading"></a></h1>
-<p>A number of test suites are available for checking the proper operation of the chFPGA firmware on
-a live board. The tests program the board, inject known waveforms with the function generator
-(FUNCGEN), and compare the captured scaler, FFT and correlator output with a host model.</p>
-<p>The tests are located under the <code class="docutils literal notranslate"><span class="pre">firmware_tests/</span></code> directory.</p>
-<p>The test suites are written as <code class="docutils literal notranslate"><span class="pre">pytest</span></code> unit tests. The <code class="docutils literal notranslate"><span class="pre">wtl.pytest_xreport</span></code> plugin provides
-additional functionality such as test selection, interactive prompts, test result aggregation and
-summarization, and HTML and PDF reports.</p>
+<p>Tests of the chFPGA firmware on a live board, under <code class="docutils literal notranslate"><span class="pre">firmware_tests/</span></code>. A test programs the
+board, injects a known waveform with the function generator (FUNCGEN) or reads a status register,
+and compares the captured output with a host model.</p>
+<p>They are pytest tests. The <code class="docutils literal notranslate"><span class="pre">wtl.pytest_xreport</span></code> plugin adds the menu, the prompts, and the HTML
+and PDF reports.</p>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h2>
-<p>The dependencies for the test suites are not part of the base <code class="docutils literal notranslate"><span class="pre">pychfpga</span></code> installation. They must
-be installed separately using the following extra:</p>
+<p>The test dependencies are not in the base install:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>qc<span class="w">          </span><span class="c1"># or: pip install -e ".[qc]"</span>
 </pre></div>
 </div>
-</section>
-<section id="test-suites">
-<h2>Test suites<a class="headerlink" href="#test-suites" title="Link to this heading"></a></h2>
-<p>The test suites cover the following firmware modules:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">funcgen_test.py</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">fft_test.py</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">scaler_test.py</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">corr_test.py</span></code> (needs a correlator mode such as <code class="docutils literal notranslate"><span class="pre">corr8</span></code>)</p></li>
-</ul>
-<p>The simulation helpers in <code class="docutils literal notranslate"><span class="pre">firmware_tests/fp_fft/</span></code> and <code class="docutils literal notranslate"><span class="pre">firmware_tests/casper_simulations/</span></code>
-are not part of the pytest collection.</p>
 </section>
 <section id="running-the-tests">
 <h2>Running the tests<a class="headerlink" href="#running-the-tests" title="Link to this heading"></a></h2>
@@ -155,41 +163,201 @@ pytest<span class="w"> </span>-v<span class="w">                                
 pytest<span class="w"> </span>--xreport-config<span class="o">=</span>config_ice.yaml<span class="w"> </span>-v<span class="w">     </span><span class="c1"># IceBoard</span>
 </pre></div>
 </div>
-<p>A single module or test can be selected:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pytest<span class="w"> </span>funcgen_test.py<span class="w"> </span>-v
 pytest<span class="w"> </span>scaler_test.py::TestScaler::test_flags<span class="w"> </span>-v
 pytest<span class="w"> </span>corr_test.py<span class="w"> </span>-m<span class="w"> </span>corr<span class="w"> </span>-v
 </pre></div>
 </div>
+<p><code class="docutils literal notranslate"><span class="pre">-k</span></code> selects tests by name. It is a substring match, not a shell glob: the word
+<code class="docutils literal notranslate"><span class="pre">ramp</span></code> runs every test whose name contains <code class="docutils literal notranslate"><span class="pre">ramp</span></code>, with no <code class="docutils literal notranslate"><span class="pre">*</span></code>. Matching is
+case-insensitive. <code class="docutils literal notranslate"><span class="pre">and</span></code>, <code class="docutils literal notranslate"><span class="pre">or</span></code>, and <code class="docutils literal notranslate"><span class="pre">not</span></code> combine words. Quote the expression
+when it contains those words:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pytest<span class="w"> </span>-k<span class="w"> </span>ramp<span class="w">                              </span><span class="c1"># test_funcgen_ramp, test_ramp_gains, ...</span>
+pytest<span class="w"> </span>-k<span class="w"> </span><span class="s2">"funcgen and not noise"</span><span class="w">           </span><span class="c1"># FUNCGEN tests except the noise ones</span>
+pytest<span class="w"> </span>-k<span class="w"> </span><span class="s2">"not simulation"</span><span class="w">                  </span><span class="c1"># skip the CASPER simulation comparisons</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">-m</span></code> selects by marker instead of by name. The markers are listed in
+<code class="docutils literal notranslate"><span class="pre">firmware_tests/pytest.ini</span></code> (<code class="docutils literal notranslate"><span class="pre">funcgen</span></code>, <code class="docutils literal notranslate"><span class="pre">funcgen_patterns</span></code>, <code class="docutils literal notranslate"><span class="pre">funcgen_noise_gen</span></code>,
+<code class="docutils literal notranslate"><span class="pre">funcgen_counters</span></code>, <code class="docutils literal notranslate"><span class="pre">fft</span></code>, <code class="docutils literal notranslate"><span class="pre">scaler</span></code>, <code class="docutils literal notranslate"><span class="pre">complex</span></code>, <code class="docutils literal notranslate"><span class="pre">floating</span></code>, <code class="docutils literal notranslate"><span class="pre">statistical</span></code>,
+<code class="docutils literal notranslate"><span class="pre">corr</span></code>):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pytest<span class="w"> </span>-m<span class="w"> </span>funcgen_patterns
+pytest<span class="w"> </span>-m<span class="w"> </span><span class="s2">"scaler and not floating"</span>
+</pre></div>
+</div>
 <p>Plots and XML results go to <code class="docutils literal notranslate"><span class="pre">fw_test_results/</span></code> (see <code class="docutils literal notranslate"><span class="pre">--xreport-path</span></code>).</p>
-<p>Each suite uses a YAML configuration file. Edit it before a run:</p>
-<dl class="simple">
-<dt><code class="docutils literal notranslate"><span class="pre">connection_config.hwm</span></code></dt><dd><p>Board to test, e.g. <code class="docutils literal notranslate"><span class="pre">crs</span> <span class="pre">55</span></code>.</p>
-</dd>
-<dt><code class="docutils literal notranslate"><span class="pre">connection_config.mode</span></code></dt><dd><p>Firmware mode, e.g. <code class="docutils literal notranslate"><span class="pre">corr8</span></code> or <code class="docutils literal notranslate"><span class="pre">shuffle8</span></code>.</p>
-</dd>
-<dt><code class="docutils literal notranslate"><span class="pre">connection_config.prog</span></code></dt><dd><p><code class="docutils literal notranslate"><span class="pre">0</span></code>: do not program; <code class="docutils literal notranslate"><span class="pre">1</span></code>: program if outdated; <code class="docutils literal notranslate"><span class="pre">2</span></code>: always program.</p>
-</dd>
-<dt><code class="docutils literal notranslate"><span class="pre">test_config.supported_modes</span></code></dt><dd><p>Modules that can run in each mode. Tests of other modules are skipped.</p>
-</dd>
-</dl>
-</section>
-<section id="additional-documentation">
-<h2>Additional documentation<a class="headerlink" href="#additional-documentation" title="Link to this heading"></a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">scaler_test.py</span></code> feeds FUNCGEN ramps with the FFT bypassed, applies gains, and compares the
-captured scaler stream with an integer model. <code class="docutils literal notranslate"><span class="pre">connection_config.mode</span></code> must be listed in
-<code class="docutils literal notranslate"><span class="pre">test_config.supported_modes.scaler_test</span></code> (typically <code class="docutils literal notranslate"><span class="pre">shuffle8</span></code> or <code class="docutils literal notranslate"><span class="pre">corr8</span></code>).</p>
-<p>Coverage:</p>
+<p>Edit the YAML file before a run:</p>
 <ul class="simple">
-<li><p>unity, zero and ramped digital gains, and the postscaler</p></li>
-<li><p>4-bit capture, and capture mode 3 when the science output is in another mode</p></li>
-<li><p>rounding, symmetric saturation, and bypass data types</p></li>
-<li><p>overflow statistics</p></li>
-<li><p>saturation flags. CRS: scaler capture type 6 (<code class="docutils literal notranslate"><span class="pre">sat_flags</span></code>), with +1 / -1 / 0 per real and
-imaginary field. IceBoard: PROBER low-nibble flags on capture type 0.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">connection_config.hwm</span></code>: Board to test, e.g. <code class="docutils literal notranslate"><span class="pre">crs</span> <span class="pre">55</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">connection_config.mode</span></code>: Firmware mode, e.g. <code class="docutils literal notranslate"><span class="pre">corr8</span></code> or <code class="docutils literal notranslate"><span class="pre">shuffle8</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">connection_config.prog</span></code>: <code class="docutils literal notranslate"><span class="pre">0</span></code>: do not program; <code class="docutils literal notranslate"><span class="pre">1</span></code>: program if outdated; <code class="docutils literal notranslate"><span class="pre">2</span></code>: always program.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_config.supported_modes</span></code>: Modules that may run in each mode. Tests of other modules are skipped.</p></li>
 </ul>
-<p>ADC overflow counts on the CRS are checked by the FUNCGEN and scaler statistics tests.
-Platform-specific skips are in the test module.</p>
+<p>The helpers in <code class="docutils literal notranslate"><span class="pre">firmware_tests/fp_fft/</span></code> and <code class="docutils literal notranslate"><span class="pre">firmware_tests/casper_simulations/</span></code> are not part
+of the pytest collection. <code class="docutils literal notranslate"><span class="pre">casper_simulations/</span></code> supplies the reference spectra used by the FFT
+simulation comparisons.</p>
+</section>
+<section id="function-generator">
+<h2>Function generator<a class="headerlink" href="#function-generator" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">funcgen_test.py</span></code>. The FFT and the scaler are bypassed, so the captured samples are the
+FUNCGEN output. Pattern tests compare one frame with the waveform the host programmed. Noise
+tests check the LFSR statistically. A few tests read FUNCGEN status registers instead of the
+sample stream.</p>
+<p><code class="docutils literal notranslate"><span class="pre">test_packets_number</span></code> does not exercise the FUNCGEN. It captures one period and checks that
+every expected packet arrived.</p>
+<section id="waveforms-fn-ram">
+<h3>Waveforms (<code class="docutils literal notranslate"><span class="pre">FN_RAM</span></code>)<a class="headerlink" href="#waveforms-fn-ram" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_funcgen_ramp</span></code>: A ramp across the sample range.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_funcgen_sin</span></code>: One cycle of a sine wave, amplitude 127.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_funcgen_arb</span></code>: An arbitrary buffer, here a constant 1.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_funcgen_const</span></code>: A constant value (13).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_funcgen_ab</span></code>: The two-value pattern <code class="docutils literal notranslate"><span class="pre">a,</span> <span class="pre">b,</span> <span class="pre">a,</span> <span class="pre">b,</span> <span class="pre">...</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_funcgen_real_ramp</span></code>: A ramp on the real samples, with the imaginary samples held at 0.</p></li>
+</ul>
+</section>
+<section id="noise-fn-noise">
+<h3>Noise (<code class="docutils literal notranslate"><span class="pre">FN_NOISE</span></code>)<a class="headerlink" href="#noise-fn-noise" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_funcgen_deterministic</span></code>: Channels programmed with the same seed produce the same sequence. <code class="docutils literal notranslate"><span class="pre">reset_noise()</span></code> restarts it.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_funcgen_random_pval</span></code>: The fraction of set bits matches a fair random source.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_funcgen_noise_histogram</span></code>: The sample histogram matches the expected distribution.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_funcgen_noise_min_max</span></code>: The extreme samples stay inside the ADC range and reach both ends.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_funcgen_noise_psd</span></code>: The spectrum of the noise is flat.</p></li>
+</ul>
+</section>
+<section id="counters-shift-and-overflow">
+<h3>Counters, shift, and overflow<a class="headerlink" href="#counters-shift-and-overflow" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_word_and_frame_ctr</span></code>: <code class="docutils literal notranslate"><span class="pre">word_ctr_buffer_flags</span></code> mode: the captured words carry the expected frame and word counts. The low 8 bits of the <code class="docutils literal notranslate"><span class="pre">FRAME_CTR</span></code> register are not checked on their own.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_frame_counter_byte</span></code>: <code class="docutils literal notranslate"><span class="pre">frame8</span></code> and <code class="docutils literal notranslate"><span class="pre">frame4</span></code> modes: the frame number is in the expected sample bits. Skipped when the PROBER burst is longer than 4 frames.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_frame_counter_nibble</span></code>: <code class="docutils literal notranslate"><span class="pre">nibble4</span></code> mode: the frame number is in the high nibble, including the even/odd swap.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_reset</span></code>: After <code class="docutils literal notranslate"><span class="pre">FUNCGEN.reset()</span></code>, <code class="docutils literal notranslate"><span class="pre">SEND_FRAME</span></code> follows <code class="docutils literal notranslate"><span class="pre">ENABLE</span></code> and <code class="docutils literal notranslate"><span class="pre">OVERFLOW_CTR</span></code> is 0.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_shift_clip_width</span></code>: A programmed left shift (with saturation) and right shift matches the host model. The host model can disagree with the RTL saturation rule, so a failure here is not always a firmware fault.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_overflow_ctr</span></code>: <code class="docutils literal notranslate"><span class="pre">OVERFLOW_CTR</span></code>, latched when <code class="docutils literal notranslate"><span class="pre">STATS_DONE</span></code> is set, equals the injected overflows over <code class="docutils literal notranslate"><span class="pre">STATS_PERIOD</span></code> frames. Clearing <code class="docutils literal notranslate"><span class="pre">STATS_ENABLE</span></code> and re-arming is not tested.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_delay_capture</span></code>: Reads <code class="docutils literal notranslate"><span class="pre">DELAY_CTR</span></code>. The channel build leaves <code class="docutils literal notranslate"><span class="pre">IMPLEMENT_DELAY_CAPTURE</span></code> false, so this counter is not generated and the test result does not mean the delay measurement works.</p></li>
+</ul>
+<p>Not covered:</p>
+<ul class="simple">
+<li><p>ADC passthrough (<code class="docutils literal notranslate"><span class="pre">FN_ADC</span></code>) and the unused function select.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">FRAME_OVERFLOW_FLAG</span></code>.</p></li>
+<li><p>An isolated check that RAM paging crosses a 512-byte page boundary.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_udp_buffers_size</span></code>, <code class="docutils literal notranslate"><span class="pre">test_mtu_size</span></code>, and <code class="docutils literal notranslate"><span class="pre">test_lfsr_output</span></code> are commented out.</p></li>
+</ul>
+</section>
+</section>
+<section id="fft">
+<h2>FFT<a class="headerlink" href="#fft" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">fft_test.py</span></code>. FUNCGEN plays a known time series into the FFT. The scaler uses a fixed complex
+gain so the captured bins can be compared with a reference. Every test runs on channel 0 only.</p>
+<section id="peak-and-shape-against-numpy-fft">
+<h3>Peak and shape (against <code class="docutils literal notranslate"><span class="pre">numpy.fft</span></code>)<a class="headerlink" href="#peak-and-shape-against-numpy-fft" title="Link to this heading"></a></h3>
+<p>These check which bins are occupied and the shape of the spectrum. They are not a bit-exact
+comparison.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_fft_dc_peak</span></code>: A constant input. The energy is in bin 0.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_fft_single_tone_peak</span></code>: A tone in bin 8, 11, or 37. The peak is in that bin.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_fft_two_tone_peaks</span></code>: Tones in bins 11 and 53. Both peaks are present.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_fft_ramp_spectrum_shape</span></code>: A large ramp. The spectral envelope matches NumPy. The amplitude is high so quantization does not dominate after the FFT shift.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_fft_noise_spectrum_shape</span></code>: Seeded noise, same shape comparison.</p></li>
+</ul>
+</section>
+<section id="bit-exact-comparison-with-the-casper-simulation">
+<h3>Bit-exact comparison with the CASPER simulation<a class="headerlink" href="#bit-exact-comparison-with-the-casper-simulation" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">test_compare_to_simulation_ramp</span></code>, <code class="docutils literal notranslate"><span class="pre">test_compare_to_simulation_two_tone</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">test_compare_to_simulation_noise</span></code> capture one frame and compare it with a stored simulation
+(<code class="docutils literal notranslate"><span class="pre">casper_simulations/sim_data</span></code>). The tolerance is 0 for the configurations that are defined.
+The capture must report no overflows.</p>
+<p>The comparison is defined for IceBoard (<code class="docutils literal notranslate"><span class="pre">fft_full</span></code>, 8-bit ADC, 4 inputs) and CRS
+(<code class="docutils literal notranslate"><span class="pre">fft_2x</span></code>, 12-bit ADC, 8 inputs). Other platforms are skipped. A board whose firmware reports
+no FFT is skipped.</p>
+<p>Not covered: channels other than 0, FFT shift schedules other than the ones in
+<code class="docutils literal notranslate"><span class="pre">SIM_COMPARE_CONFIGS</span></code>, and a sweep of the scaler gain in front of the FFT.</p>
+</section>
+</section>
+<section id="scaler">
+<h2>Scaler<a class="headerlink" href="#scaler" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">scaler_test.py</span></code>. FUNCGEN feeds a ramp (or another waveform) with the FFT bypassed, so the
+scaler sees the samples directly. The test computes the same gain, shift, rounding, and
+saturation in integers and compares the captured stream with that result.
+<code class="docutils literal notranslate"><span class="pre">connection_config.mode</span></code> must be listed under <code class="docutils literal notranslate"><span class="pre">test_config.supported_modes.scaler_test</span></code>
+(typically <code class="docutils literal notranslate"><span class="pre">shuffle8</span></code> or <code class="docutils literal notranslate"><span class="pre">corr8</span></code>).</p>
+<section id="gains">
+<h3>Gains<a class="headerlink" href="#gains" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_all_zeroes</span></code>: A gain of 0 forces every output sample to 0 over the full input range.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_all_ones</span></code>: Unity gain reproduces a full-range ramp.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_constant_gain</span></code>: One real gain, with a chosen postscaler. Skipped when the platform has no floating-point gains and the test asks for them.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_alternating_gain</span></code>: The gain alternates with a programmed period.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_ramp_gains</span></code>: The gain changes from bin to bin as a ramp.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_alternating_complex_gains</span></code>, <code class="docutils literal notranslate"><span class="pre">test_periodic_complex_gains</span></code>: Complex gains. Skipped on a platform without them.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_uniform_common_log_gain</span></code>, <code class="docutils literal notranslate"><span class="pre">test_common_log_gain</span></code>, <code class="docutils literal notranslate"><span class="pre">test_ramp_float_gains</span></code>: The common logarithmic gain and floating-point gains. Skipped when the platform has no floating-point gains, and when the requested log gain is outside 0–31.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_gain_bank_switching</span></code>: Banks 0 and 1 hold different gains. After the switch, the captured data and the bank-status register follow the new bank.</p></li>
+</ul>
+</section>
+<section id="rounding-saturation-encoding">
+<h3>Rounding, saturation, encoding<a class="headerlink" href="#rounding-saturation-encoding" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_rounding_modes</span></code>: Truncation, normal rounding, and convergent rounding, for several fractional-bit widths.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_post_rounding_saturation</span></code>: Values that overflow after rounding saturate. Both symmetric and asymmetric saturation.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_zero_on_sat</span></code>: With zero-on-saturation enabled, an overflow of either the real or the imaginary part zeros both.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_offset_encoding</span></code>: Offset-binary output. Skipped in a correlator mode that requires two’s complement.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_overflow_detection</span></code>: The overflow indication follows the samples that actually saturate.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_flags</span></code>: Saturation flags in the captured word. CRS uses scaler capture type 6 (<code class="docutils literal notranslate"><span class="pre">sat_flags</span></code>): +1, −1, or 0 per real and imaginary field. IceBoard uses the PROBER low nibble on capture type 0. Skipped when the output word is too wide to carry flags.</p></li>
+</ul>
+</section>
+<section id="capture-path">
+<h3>Capture path<a class="headerlink" href="#capture-path" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_bypass</span></code>: With the scaler bypassed, the FFT data is forwarded unchanged, either onto the science output or into the capture path.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_mult_resolution_capture</span></code>: Capture of several data types in one setup. Skipped in 4-bit capture mode.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_scaler_overflow_stats</span></code>, <code class="docutils literal notranslate"><span class="pre">test_adc_overflow_stats</span></code>: The scaler and ADC overflow counters match the number of overflowing samples. On the CRS the ADC overflow count is checked here, not by stuffing the overflow bit into the captured sample.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_delay_counter</span></code>: After a reset, <code class="docutils literal notranslate"><span class="pre">DELAY_CTR</span></code> is the same on every channelizer: they all see the first sample on the same clock.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_counter_reset</span></code>: While <code class="docutils literal notranslate"><span class="pre">SCALER.RESET</span></code> is held, the monitor counters stay at 0. After it is released they move.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_averages</span></code>: Integrated scaler output matches the host sum over <code class="docutils literal notranslate"><span class="pre">num_frames</span></code>, for a range of postscalers and rounding modes.</p></li>
+</ul>
+<p>Not covered: 8-bit capture is fixed at 4 bits in the test constants (there is a TODO). The
+complex-gain and floating-point-gain tests do not run on a platform that lacks those features.</p>
+</section>
+</section>
+<section id="correlator">
+<h2>Correlator<a class="headerlink" href="#correlator" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">corr_test.py</span></code>. Requires a correlator mode such as <code class="docutils literal notranslate"><span class="pre">corr8</span></code>. The FFT is bypassed and FUNCGEN
+writes a complex spectrum straight into the bins (“spectrum injection”). The test integrates
+that spectrum in the correlator and compares the products with <code class="docutils literal notranslate"><span class="pre">spectrum</span> <span class="pre">*</span> <span class="pre">conjugate(spectrum)</span></code>
+summed on the host. Only bins the firmware marks as valid are compared.</p>
+<p>The first three tests check the injection itself, by reading the spectrum back. The rest fail
+if that path is wrong.</p>
+<section id="spectrum-injection">
+<h3>Spectrum injection<a class="headerlink" href="#spectrum-injection" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_constant_spectrum_injection</span></code>: Every bin is a constant (1, −1, or 2). Read back in capture modes 0 and 4. No shift is applied.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_complex_ramp_spectrum_injection</span></code>: A complex ramp. Adjacent bins differ, so a swapped bin order fails.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_periodic_ramp_spectrum_injection</span></code>: A ramp from −8 to 7 that repeats across the band.</p></li>
+</ul>
+</section>
+<section id="autocorrelation">
+<h3>Autocorrelation<a class="headerlink" href="#autocorrelation" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_constant_autocorr</span></code>: Every channel is one complex value. The autocorrelation is its squared magnitude times the number of frames.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_alternating_autocorr</span></code>: Each channel alternates between two values. The power lands in the bins those values occupy.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_periodic_autocorr</span></code>: A 1 every <code class="docutils literal notranslate"><span class="pre">period</span></code> bins, among zeros. Checks that bin order survives the correlation.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_full_range_autocorr</span></code>: The spectrum uses the full sample range.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_zero_except_one_autocorr</span></code>: One channel is non-zero. Only that channel’s autocorrelation is non-zero.</p></li>
+</ul>
+</section>
+<section id="cross-correlation">
+<h3>Cross-correlation<a class="headerlink" href="#cross-correlation" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">test_zero_except_two_crosscorr</span></code>: Two channels are non-zero. Checks the auto products and, unless <code class="docutils literal notranslate"><span class="pre">autocorr_only</span></code> is set, the cross product. The other products stay zero.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_crosscorr_conjugation</span></code>: Channels hold <code class="docutils literal notranslate"><span class="pre">2</span></code> and <code class="docutils literal notranslate"><span class="pre">1+1j</span></code>. The cross product must be <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">*</span> <span class="pre">conjugate(b)</span></code>, not <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">*</span> <span class="pre">b</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_sat_detection</span></code>: A large complex ramp is integrated until the 18-bit accumulator overflows. The saturation field is set on those bins. On the CRS this field is a count, not a one-bit flag.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">test_software_integration</span></code>: <code class="docutils literal notranslate"><span class="pre">raw_acq</span></code> sums 1, 2, or 4 firmware integrations. The result scales with the number of frames.</p></li>
+</ul>
+<p>Not covered: the check that the number of received correlator packets equals the number expected
+is commented out. Injection through a real FFT (instead of the bypass) is not part of this file;
+that is what the FFT tests do.</p>
+</section>
 </section>
 </section>
 
@@ -198,7 +366,7 @@ Platform-specific skips are in the test module.</p>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="hardware/crs/crs_crate.html" class="btn btn-neutral float-left" title="Pre-deployment CRS crate-level tests" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="../api.html" class="btn btn-neutral float-right" title="API reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="../api.html" class="btn btn-neutral float-right" title="&lt;no title&gt;" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

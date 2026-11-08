@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>crs.py &mdash; pychfpga User Manual (jfc/dev @ ffec1078) 1.3.4.dev814+ice.co.gffec10782 documentation</title>
+  <title>crs.py &mdash; pychfpga User Manual (jfc/dev @ 53a6898b) 1.3.4.dev819+ice.co.g53a6898bd documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
@@ -15,7 +15,7 @@
     <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
       <script src="../_static/jquery.js?v=5d32c60e"></script>
       <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../_static/documentation_options.js?v=d3e2754b"></script>
+      <script src="../_static/documentation_options.js?v=50c405aa"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/js/theme.js"></script>
@@ -78,55 +78,148 @@
 <li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<p class="caption" role="heading"><span class="caption-text">Code Documentation</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="reference internal" href="../api.html">API reference</a><ul class="current">
-<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
-<li class="toctree-l3 current"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a><ul class="current">
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.Agilent_N5764A.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">Agilent_N5764A/</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crate.py</span></code></a></li>
-<li class="toctree-l4 current"><a class="reference internal" href="pychfpga.hardware.crs.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs/</span></code></a><ul class="current">
-<li class="toctree-l5 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs.py</span></code></a><ul>
-<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS"><code class="docutils literal notranslate"><span class="pre">CRS</span></code></a></li>
-<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.iic_dummy"><code class="docutils literal notranslate"><span class="pre">iic_dummy</span></code></a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.apps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">apps/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.calculate_gains.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">calculate_gains.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.common.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">common/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.digital_gain.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">digital_gain.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_array.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_array.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_firmware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_firmware/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.fpga_master.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">fpga_master.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.gps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gps.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.Agilent_N5764A.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">Agilent_N5764A/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crate.py</span></code></a></li>
+<li class="toctree-l3 current"><a class="reference internal" href="pychfpga.hardware.crs.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs/</span></code></a><ul class="current">
+<li class="toctree-l4 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs.py</span></code></a><ul>
+<li class="toctree-l5"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS"><code class="docutils literal notranslate"><span class="pre">CRS</span></code></a><ul>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.BP_QSFP_PINS"><code class="docutils literal notranslate"><span class="pre">CRS.BP_QSFP_PINS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.DEFAULT_ARM_FIRMWARE_NAME"><code class="docutils literal notranslate"><span class="pre">CRS.DEFAULT_ARM_FIRMWARE_NAME</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.DEFAULT_ARM_FIRMWARE_PATHNAME"><code class="docutils literal notranslate"><span class="pre">CRS.DEFAULT_ARM_FIRMWARE_PATHNAME</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.FMC_MEZZ_NUMBERS"><code class="docutils literal notranslate"><span class="pre">CRS.FMC_MEZZ_NUMBERS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.NO_I2C"><code class="docutils literal notranslate"><span class="pre">CRS.NO_I2C</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.NUMBER_OF_FMC_SLOTS"><code class="docutils literal notranslate"><span class="pre">CRS.NUMBER_OF_FMC_SLOTS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.OLED_CONFIG_NAME_X"><code class="docutils literal notranslate"><span class="pre">CRS.OLED_CONFIG_NAME_X</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.OLED_CONFIG_NAME_Y"><code class="docutils literal notranslate"><span class="pre">CRS.OLED_CONFIG_NAME_Y</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.OLED_ROTATED_CLOCKWISE_TEXT_ROTATION"><code class="docutils literal notranslate"><span class="pre">CRS.OLED_ROTATED_CLOCKWISE_TEXT_ROTATION</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.PLL_INPUT_BP_CLK_10MHZ"><code class="docutils literal notranslate"><span class="pre">CRS.PLL_INPUT_BP_CLK_10MHZ</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.PLL_INPUT_ETH_REG_125MHZ"><code class="docutils literal notranslate"><span class="pre">CRS.PLL_INPUT_ETH_REG_125MHZ</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.PLL_INPUT_NAMES"><code class="docutils literal notranslate"><span class="pre">CRS.PLL_INPUT_NAMES</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.PLL_INPUT_PL_RECCLK"><code class="docutils literal notranslate"><span class="pre">CRS.PLL_INPUT_PL_RECCLK</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.PLL_INPUT_SMA_CLK_10MHZ"><code class="docutils literal notranslate"><span class="pre">CRS.PLL_INPUT_SMA_CLK_10MHZ</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.REFCLK_BP"><code class="docutils literal notranslate"><span class="pre">CRS.REFCLK_BP</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.REFCLK_MB_SMA"><code class="docutils literal notranslate"><span class="pre">CRS.REFCLK_MB_SMA</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.REQUIRED_TCPIPE_VERSION"><code class="docutils literal notranslate"><span class="pre">CRS.REQUIRED_TCPIPE_VERSION</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.REV0_SERIALS"><code class="docutils literal notranslate"><span class="pre">CRS.REV0_SERIALS</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.RX_TO_TX_LANE_MAP"><code class="docutils literal notranslate"><span class="pre">CRS.RX_TO_TX_LANE_MAP</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.SERIAL_NUMBER_LENGTH"><code class="docutils literal notranslate"><span class="pre">CRS.SERIAL_NUMBER_LENGTH</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.SLOT_TO_LANE_MAP"><code class="docutils literal notranslate"><span class="pre">CRS.SLOT_TO_LANE_MAP</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.TX_TO_RX_LANE_MAP"><code class="docutils literal notranslate"><span class="pre">CRS.TX_TO_RX_LANE_MAP</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.__init__"><code class="docutils literal notranslate"><span class="pre">CRS.__init__()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.array_method_class"><code class="docutils literal notranslate"><span class="pre">CRS.array_method_class</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.bp_qsfp_gpio_table"><code class="docutils literal notranslate"><span class="pre">CRS.bp_qsfp_gpio_table()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.bp_qsfp_media"><code class="docutils literal notranslate"><span class="pre">CRS.bp_qsfp_media()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.clear_hardware_map"><code class="docutils literal notranslate"><span class="pre">CRS.clear_hardware_map()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.close_fpga_async"><code class="docutils literal notranslate"><span class="pre">CRS.close_fpga_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.close_platform"><code class="docutils literal notranslate"><span class="pre">CRS.close_platform()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.cls_logger"><code class="docutils literal notranslate"><span class="pre">CRS.cls_logger</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.delete_instance"><code class="docutils literal notranslate"><span class="pre">CRS.delete_instance()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.discover_crate_async"><code class="docutils literal notranslate"><span class="pre">CRS.discover_crate_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.discover_mezzanines_async"><code class="docutils literal notranslate"><span class="pre">CRS.discover_mezzanines_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.discover_serial_async"><code class="docutils literal notranslate"><span class="pre">CRS.discover_serial_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.discover_slot_async"><code class="docutils literal notranslate"><span class="pre">CRS.discover_slot_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.enable_qsfp_high_power_mode"><code class="docutils literal notranslate"><span class="pre">CRS.enable_qsfp_high_power_mode()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.fpga"><code class="docutils literal notranslate"><span class="pre">CRS.fpga</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_all_registered_classes"><code class="docutils literal notranslate"><span class="pre">CRS.get_all_registered_classes()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_all_registered_instances"><code class="docutils literal notranslate"><span class="pre">CRS.get_all_registered_instances()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_all_supported_classes"><code class="docutils literal notranslate"><span class="pre">CRS.get_all_supported_classes()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_array_method_classes"><code class="docutils literal notranslate"><span class="pre">CRS.get_array_method_classes()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_backplane_metrics_async"><code class="docutils literal notranslate"><span class="pre">CRS.get_backplane_metrics_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_class_by_ipmi_part_number"><code class="docutils literal notranslate"><span class="pre">CRS.get_class_by_ipmi_part_number()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_class_by_name"><code class="docutils literal notranslate"><span class="pre">CRS.get_class_by_name()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_class_by_part_number"><code class="docutils literal notranslate"><span class="pre">CRS.get_class_by_part_number()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_crate_id"><code class="docutils literal notranslate"><span class="pre">CRS.get_crate_id()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_crate_number"><code class="docutils literal notranslate"><span class="pre">CRS.get_crate_number()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_fpga_bitstream_crc_async"><code class="docutils literal notranslate"><span class="pre">CRS.get_fpga_bitstream_crc_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_iceboard_clock_source_async"><code class="docutils literal notranslate"><span class="pre">CRS.get_iceboard_clock_source_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_iceboard_clock_source_sync"><code class="docutils literal notranslate"><span class="pre">CRS.get_iceboard_clock_source_sync()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_id"><code class="docutils literal notranslate"><span class="pre">CRS.get_id()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_metrics_async"><code class="docutils literal notranslate"><span class="pre">CRS.get_metrics_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_motherboard_temperature"><code class="docutils literal notranslate"><span class="pre">CRS.get_motherboard_temperature()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_network_discovery_function"><code class="docutils literal notranslate"><span class="pre">CRS.get_network_discovery_function()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_platform_ip_address"><code class="docutils literal notranslate"><span class="pre">CRS.get_platform_ip_address()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_power_supply_status"><code class="docutils literal notranslate"><span class="pre">CRS.get_power_supply_status()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_slot_number"><code class="docutils literal notranslate"><span class="pre">CRS.get_slot_number()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_string_id"><code class="docutils literal notranslate"><span class="pre">CRS.get_string_id()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_supported_class_names"><code class="docutils literal notranslate"><span class="pre">CRS.get_supported_class_names()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_supported_ipmi_part_numbers"><code class="docutils literal notranslate"><span class="pre">CRS.get_supported_ipmi_part_numbers()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_total_power"><code class="docutils literal notranslate"><span class="pre">CRS.get_total_power()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_total_power_async"><code class="docutils literal notranslate"><span class="pre">CRS.get_total_power_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.get_unique_instance"><code class="docutils literal notranslate"><span class="pre">CRS.get_unique_instance()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.init_fpga_async"><code class="docutils literal notranslate"><span class="pre">CRS.init_fpga_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.is_backplane_present_async"><code class="docutils literal notranslate"><span class="pre">CRS.is_backplane_present_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.is_fmc_present"><code class="docutils literal notranslate"><span class="pre">CRS.is_fmc_present()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.is_fpga_programmed_async"><code class="docutils literal notranslate"><span class="pre">CRS.is_fpga_programmed_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.is_open"><code class="docutils literal notranslate"><span class="pre">CRS.is_open()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.load_all_classes"><code class="docutils literal notranslate"><span class="pre">CRS.load_all_classes()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.load_class"><code class="docutils literal notranslate"><span class="pre">CRS.load_class()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.open"><code class="docutils literal notranslate"><span class="pre">CRS.open()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.open_fpga_async"><code class="docutils literal notranslate"><span class="pre">CRS.open_fpga_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.open_platform_async"><code class="docutils literal notranslate"><span class="pre">CRS.open_platform_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.part_number"><code class="docutils literal notranslate"><span class="pre">CRS.part_number</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.ping_async"><code class="docutils literal notranslate"><span class="pre">CRS.ping_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.pll_init_async"><code class="docutils literal notranslate"><span class="pre">CRS.pll_init_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.port"><code class="docutils literal notranslate"><span class="pre">CRS.port</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.print_registered_classes"><code class="docutils literal notranslate"><span class="pre">CRS.print_registered_classes()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.qsfp_media"><code class="docutils literal notranslate"><span class="pre">CRS.qsfp_media()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.reboot"><code class="docutils literal notranslate"><span class="pre">CRS.reboot()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.set_backplane_eeprom"><code class="docutils literal notranslate"><span class="pre">CRS.set_backplane_eeprom()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.set_cache"><code class="docutils literal notranslate"><span class="pre">CRS.set_cache()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.set_fpga_bitsream_async"><code class="docutils literal notranslate"><span class="pre">CRS.set_fpga_bitsream_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.set_fpga_bitstream_async"><code class="docutils literal notranslate"><span class="pre">CRS.set_fpga_bitstream_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.set_fpga_bitstream_crc_async"><code class="docutils literal notranslate"><span class="pre">CRS.set_fpga_bitstream_crc_async()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.set_fpga_firmware"><code class="docutils literal notranslate"><span class="pre">CRS.set_fpga_firmware()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.set_platform_firmware"><code class="docutils literal notranslate"><span class="pre">CRS.set_platform_firmware()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.update_array_method_classes"><code class="docutils literal notranslate"><span class="pre">CRS.update_array_method_classes()</span></code></a></li>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.CRS.update_instance"><code class="docutils literal notranslate"><span class="pre">CRS.update_instance()</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.hardware.crs.crs_beacon.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs_beacon.py</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.hardware.crs.crs_bp.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs_bp.py</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.hardware.crs.crs_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs_discovery.py</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.hardware.crs.discover.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">discover.py</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.hardware.crs.netconsole_loads.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">netconsole_loads.py</span></code></a></li>
-<li class="toctree-l5"><a class="reference internal" href="pychfpga.hardware.crs.netconsole_xmodem.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">netconsole_xmodem.py</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.hardware_map.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware_map.py</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.i2c_devices.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">i2c_devices/</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.ice.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ice/</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.interfaces.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">interfaces/</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.mezzanine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mezzanine.py</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.motherboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">motherboard.py</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.supported_hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">supported_hardware.py</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.zcu111.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zcu111/</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.zuboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zuboard/</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="#pychfpga.hardware.crs.crs.iic_dummy"><code class="docutils literal notranslate"><span class="pre">iic_dummy</span></code></a><ul>
+<li class="toctree-l6"><a class="reference internal" href="#pychfpga.hardware.crs.crs.iic_dummy.__init__"><code class="docutils literal notranslate"><span class="pre">iic_dummy.__init__()</span></code></a></li>
 </ul>
 </li>
 </ul>
 </li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.crs.crs_beacon.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs_beacon.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.crs.crs_bp.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs_bp.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.crs.crs_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs_discovery.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.crs.discover.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">discover.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.crs.netconsole_loads.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">netconsole_loads.py</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="pychfpga.hardware.crs.netconsole_xmodem.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">netconsole_xmodem.py</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.hardware_map.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware_map.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.i2c_devices.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">i2c_devices/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.ice.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ice/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.interfaces.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">interfaces/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.mezzanine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mezzanine.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.motherboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">motherboard.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.supported_hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">supported_hardware.py</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.zcu111.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zcu111/</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="pychfpga.hardware.zuboard.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zuboard/</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.mdns_discovery.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">mdns_discovery.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.network_utils.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">network_utils.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.pocket_correlator.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pocket_correlator.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.ps.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ps.py</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="pychfpga.raw_acq.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">raw_acq/</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Indices</span></p>
 <ul>
@@ -140,7 +233,7 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../index.html">pychfpga User Manual (jfc/dev @ ffec1078)</a>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 53a6898b)</a>
       </nav>
 
       <div class="wy-nav-content">
@@ -148,7 +241,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
-          <li class="breadcrumb-item"><a href="../api.html">API reference</a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
           <li class="breadcrumb-item"><a href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
           <li class="breadcrumb-item"><a href="pychfpga.hardware.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">hardware/</span></code></a></li>
           <li class="breadcrumb-item"><a href="pychfpga.hardware.crs.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">crs/</span></code></a></li>

@@ -1,0 +1,358 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>utils.py &mdash; pychfpga User Manual (jfc/dev @ 53a6898b) 1.3.4.dev819+ice.co.g53a6898bd documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=50c405aa"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="prev" title="run_qcengine.py" href="qc.run_qcengine.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../development/firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Code Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="qc.CRS_crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">CRS_crate/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="qc.ICE_crate.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ICE_crate/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="qc.MGADC08.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">MGADC08/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="qc.MGK7BP16.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">MGK7BP16/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="qc.MGK7MB.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">MGK7MB/</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="qc.run_qcengine.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">run_qcengine.py</span></code></a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">utils.py</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#qc.utils.Maybe"><code class="docutils literal notranslate"><span class="pre">Maybe</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#qc.utils.Maybe.__init__"><code class="docutils literal notranslate"><span class="pre">Maybe.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#qc.utils.Maybe.orElse"><code class="docutils literal notranslate"><span class="pre">Maybe.orElse()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#qc.utils.Maybe.run"><code class="docutils literal notranslate"><span class="pre">Maybe.run()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#qc.utils.Maybe.run_no_input"><code class="docutils literal notranslate"><span class="pre">Maybe.run_no_input()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#qc.utils.Maybe.unwrap"><code class="docutils literal notranslate"><span class="pre">Maybe.unwrap()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#qc.utils.TestUtils"><code class="docutils literal notranslate"><span class="pre">TestUtils</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#qc.utils.TestUtils.SharedInstruments"><code class="docutils literal notranslate"><span class="pre">TestUtils.SharedInstruments</span></code></a><ul>
+<li class="toctree-l5"><a class="reference internal" href="#qc.utils.TestUtils.SharedInstruments.__init__"><code class="docutils literal notranslate"><span class="pre">TestUtils.SharedInstruments.__init__()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l4"><a class="reference internal" href="#qc.utils.TestUtils.instruments"><code class="docutils literal notranslate"><span class="pre">TestUtils.instruments()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#qc.utils.TestUtils.load_config"><code class="docutils literal notranslate"><span class="pre">TestUtils.load_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#qc.utils.TestUtils.open_instrument"><code class="docutils literal notranslate"><span class="pre">TestUtils.open_instrument()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#qc.utils.TestUtils.open_ps"><code class="docutils literal notranslate"><span class="pre">TestUtils.open_ps()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#qc.utils.TestUtils.sub_test"><code class="docutils literal notranslate"><span class="pre">TestUtils.sub_test()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ 53a6898b)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../api.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a></li>
+      <li class="breadcrumb-item active"><code class="xref py py-mod docutils literal notranslate"><span class="pre">utils.py</span></code></li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/_autosummaries/qc.utils.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="utils-py">
+<h1><a class="reference internal" href="#module-qc.utils" title="qc.utils"><code class="xref py py-mod docutils literal notranslate"><span class="pre">utils.py</span></code></a><a class="headerlink" href="#utils-py" title="Link to this heading"></a></h1>
+<span class="target" id="module-qc.utils"></span><div class="autosummary-block docutils container">
+<p class="rubric">Module classes summary</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#qc.utils.Maybe" title="qc.utils.Maybe"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Maybe</span></code></a></p></td>
+<td><p>General monad class for uncertain operation handling, (harware request, file opening, etc.).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#qc.utils.TestUtils" title="qc.utils.TestUtils"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TestUtils</span></code></a></p></td>
+<td><p>Some utility methods common to all tests.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<hr class="docutils" />
+<p class="rubric">Module classes</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="qc.utils.Maybe">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">qc.utils.</span></span><span class="sig-name descname"><span class="pre">Maybe</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fn_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.utils.Maybe" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>General monad class for uncertain operation handling, (harware request, file opening, etc.). Maybe&lt;T&gt; objects can
+contain a value of unknown type T and can be given through run() a function of type T -&gt; K and will return a Maybe&lt;K&gt;. If
+the function encounters some problem and returns a None value, this None will propagate down the chain without crash, allowing
+the user to handle the failure.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.utils.Maybe.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fn_memory</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.utils.Maybe.__init__" title="Link to this definition"></a></dt>
+<dd><p>Constructor method</p>
+<dl class="field-list simple">
+<dt class="field-odd">Params value<span class="colon">:</span></dt>
+<dd class="field-odd"><p>value wrapped by Maybe class</p>
+</dd>
+<dt class="field-even">Params fn_memory<span class="colon">:</span></dt>
+<dd class="field-even"><p>memory of the function which generated the maybe’s value, None if it didn’t come from another maybe object</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.utils.Maybe.orElse">
+<span class="sig-name descname"><span class="pre">orElse</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">default</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.utils.Maybe.orElse" title="Link to this definition"></a></dt>
+<dd><p>Set a default value for Maybe&lt;T&gt; object when it is None</p>
+<dl class="field-list simple">
+<dt class="field-odd">Params default<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Default value</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.utils.Maybe.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">errhandle</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_errlog</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'default'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.utils.Maybe.run" title="Link to this definition"></a></dt>
+<dd><p>Returns Maybe&lt;K&gt; when given a func: T -&gt; K applied on Maybe&lt;T&gt;</p>
+<dl class="field-list simple">
+<dt class="field-odd">Params func<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Function T -&gt; K to be applied to Maybe&lt;T&gt;</p>
+</dd>
+<dt class="field-even">Params errhandle<span class="colon">:</span></dt>
+<dd class="field-even"><p>Function () -&gt; K that allows the error handling to be specified by the user, default to unused</p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Output of the function wrapped in the Maybe class</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>Maybe&lt;K&gt;</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.utils.Maybe.run_no_input">
+<span class="sig-name descname"><span class="pre">run_no_input</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check_none</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">errhandle</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_errlog</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'default'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.utils.Maybe.run_no_input" title="Link to this definition"></a></dt>
+<dd><p>Returns Maybe&lt;K&gt; when given an IO func with no inputs: () -&gt; K applied on Maybe&lt;T&gt;</p>
+<dl class="field-list simple">
+<dt class="field-odd">Params func<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Function () -&gt; K with no inputs, used mainly to interact with IO or console</p>
+</dd>
+<dt class="field-even">Params check_none<span class="colon">:</span></dt>
+<dd class="field-even"><p>Bool specifies if the function should check if the Maybe object has a value of None before proceding with the func, defaults to True</p>
+</dd>
+<dt class="field-odd">Params errhandle<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Function () -&gt; K that allows the error handling to be specified by the user, default to unused, doens’t take input, use partial evaluation to give it input</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Output of the function wrapped in a Maybe class</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Maybe&lt;K&gt;</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.utils.Maybe.unwrap">
+<span class="sig-name descname"><span class="pre">unwrap</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#qc.utils.Maybe.unwrap" title="Link to this definition"></a></dt>
+<dd><p>Removes the Maybe wrapper from object and returns its reference</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="qc.utils.TestUtils">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">qc.utils.</span></span><span class="sig-name descname"><span class="pre">TestUtils</span></span><a class="headerlink" href="#qc.utils.TestUtils" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Some utility methods common to all tests.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="qc.utils.TestUtils.SharedInstruments">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">SharedInstruments</span></span><a class="headerlink" href="#qc.utils.TestUtils.SharedInstruments" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.utils.TestUtils.SharedInstruments.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#qc.utils.TestUtils.SharedInstruments.__init__" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.utils.TestUtils.instruments">
+<span class="sig-name descname"><span class="pre">instruments</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#qc.utils.TestUtils.instruments" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.utils.TestUtils.load_config">
+<span class="sig-name descname"><span class="pre">load_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.utils.TestUtils.load_config" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.utils.TestUtils.open_instrument">
+<span class="sig-name descname"><span class="pre">open_instrument</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.utils.TestUtils.open_instrument" title="Link to this definition"></a></dt>
+<dd><p>Looks up the instrument name in the instrument table in configuration file and open it with the parameters specified in the table.
+Open instrument will return a specific instrument object, if the instrument is already in the dictionnary it’ll get it from there
+if it’s not it’ll try to open it then add it to the dict for</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> – str, name of the instrument requested as specified in the config file (not the labpy driver name)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.utils.TestUtils.open_ps">
+<span class="sig-name descname"><span class="pre">open_ps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'ps16v'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">voltage</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">current</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#qc.utils.TestUtils.open_ps" title="Link to this definition"></a></dt>
+<dd><p>Opens a power supply and configures it</p>
+<p>The <cite>voltage</cite> and <cite>current</cite> to be programmed can be specified. If <cite>None</cite>, the global values from
+the config file in <code class="docutils literal notranslate"><span class="pre">motherboard_tests.global_settings</span></code> will be
+used.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="qc.utils.TestUtils.sub_test">
+<span class="sig-name descname"><span class="pre">sub_test</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">setup_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">bool</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">get_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parse_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">teardown_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">bool</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#qc.utils.TestUtils.sub_test" title="Link to this definition"></a></dt>
+<dd><p>Self contained sub test function, allows for new tests to be constructed from different functions, returns True if passed, False otherwise</p>
+<dl class="field-list simple">
+<dt class="field-odd">Params setup_fn<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Function () -&gt; bool, function intended to setup test systems, (ex: open the board, open power supply), expected to return a True if setup is successfull</p>
+</dd>
+<dt class="field-even">Params get_fn<span class="colon">:</span></dt>
+<dd class="field-even"><p>Function () -&gt; dict, generic getter function, should contain test process and return a dict with matching keys to the expected machine output, ingested by parse_fn</p>
+</dd>
+<dt class="field-odd">Params parse_fn<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Function dict -&gt; list(str), parsing function applied to the output of get_fn, should return human readable error messages as a list of strings</p>
+</dd>
+<dt class="field-even">Params teardown_fn<span class="colon">:</span></dt>
+<dd class="field-even"><p>Function () -&gt; bool, tear down tests and ready for the following test, expected to return True if teardown is successfull</p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Did the subtest pass</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>Bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="qc.run_qcengine.html" class="btn btn-neutral float-left" title="run_qcengine.py" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
