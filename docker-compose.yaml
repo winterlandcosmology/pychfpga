@@ -24,8 +24,6 @@ services:
           context: .
           dockerfile: Dockerfile
           target: deploy
-          # args:
-          #   github_ssh_key: $SSH_AUTH_SOCK
 
 
     fpga_master:
@@ -57,7 +55,7 @@ services:
     #     image: *_pychfpga_image
     #     volumes:
     #         - data:/data
-    #     command: ["chime_raw_acq"]
+    #     command: ["raw_acq"]
     #     network_mode: "host"
     #     # ports:
     #     #   - "54322:54322"
@@ -79,7 +77,7 @@ services:
     #     volumes:
     #         - config:/config
     #         - data:/data
-    #     command: ["chime_rx_ps", *_container_config_path_name_ ]
+    #     command: ["pychfpga_ps", *_container_config_path_name_ ]
     #     ports:
     #       - "54324:54324"
     #     deploy:
@@ -100,7 +98,7 @@ services:
     #         - data:/data
     #         - config:/config
     #     # command: ["ls", "/data/config"]
-    #     command: ["chime_gps", *_container_config_path_name_ ]
+    #     command: ["pychfpga_gps", *_container_config_path_name_ ]
     #     ports:
     #       - "54325:54325"
     #     deploy:

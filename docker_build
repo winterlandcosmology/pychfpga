@@ -14,7 +14,11 @@ if ! GIT_VERSION=$(git describe --tags --exact-match 2>/dev/null); then
 fi
 echo Version is $GIT_VERSION
 
-IMAGE_NAME_TAG="wtlpychfpga/pychfpga:$GIT_VERSION"
+# The image contains the bitstreams and CRS ARM firmware, which are git-lfs files.
+git lfs pull
+
+# Docker tags cannot contain '+': 2.2.0+crs_ct is pushed as 2.2.0-crs_ct
+IMAGE_NAME_TAG="wtlpychfpga/pychfpga:${GIT_VERSION/+/-}"
 echo Image name is $IMAGE_NAME_TAG
 
 # Push requires an existing Docker Hub login for this account. Do not store the token here.
@@ -27,5 +31,5 @@ fi
 
 export BUILDKIT_PROGRESS=plain # optional, for more verbose output
 export DOCKER_BUILDKIT=1
-docker build --target deploy -t $IMAGE_NAME_TAG --ssh default .
+docker build --target deploy -t $IMAGE_NAME_TAG --build-arg PYCHFPGA_VERSION="$GIT_VERSION" .
 docker image push $IMAGE_NAME_TAG

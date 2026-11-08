@@ -5,7 +5,8 @@
 /tests
 /unused
 /ice-qc
-**/arm_firmware
+pychfpga/hardware/ice/arm_firmware
+pychfpga/hardware/zcu111/arm_firmware
 Dockerfile
 docker-compose.yaml
 .dockerignore
