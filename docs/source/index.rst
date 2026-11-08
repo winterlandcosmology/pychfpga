@@ -32,7 +32,11 @@
    :maxdepth: 3
    :caption: Platforms
 
-   platforms/index
+   platforms/crs/index
+   platforms/ice/index
+   platforms/kc705
+   platforms/aux/index
+
 
 .. toctree::
    :hidden:
@@ -40,8 +44,15 @@
    :caption: Development
 
    development/workflow
-   development/testing
    development/firmware_state
+
+.. toctree::
+   :hidden:
+   :maxdepth: 4
+   :caption: Testing
+
+   testing/hardware/index
+   testing/firmware
 
 .. toctree::
    :hidden:
@@ -49,13 +60,6 @@
    :caption: Reference
 
    api
-
-.. toctree::
-   :hidden:
-   :maxdepth: 1
-   :caption: Site notes
-
-   site_notes/chime_drao
 
 .. toctree::
    :hidden:

@@ -15,7 +15,6 @@ Hardware documentation: https://icecore-docs.readthedocs.io
    arm_firmware
    boot_and_ssh
    tuber_methods
-   qc_handbook
 
 Schematics
 ==========

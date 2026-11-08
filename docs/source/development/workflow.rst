@@ -26,7 +26,7 @@ Development process
 
 #. Branch from the latest release branch.
 #. Make the changes. Commit often, with concise messages.
-#. Run the tests for the target platform (see :doc:`testing`).
+#. Run the tests for the target platform (see :doc:`../testing/firmware`).
 #. Merge the latest release branch into yours if it has moved, and test again.
 #. Merge into the release branch and push it.
 #. Tag the release commit (see below) and push the tag.

@@ -23,6 +23,15 @@
 		},
 		{
 			"path": "../t0/u-boot"
+		},
+		{
+			"path": "../temp/github"
+		},
+		{
+			"path": "../wtl.pytest-xreport"
+		},
+		{
+			"path": "../pychfpga-chime"
 		}
 	],
 	"settings": {}

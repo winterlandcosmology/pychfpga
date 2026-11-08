@@ -18,37 +18,6 @@ mode, and initializes every firmware subsystem:
 Source code: https://github.com/winterlandcosmology/pychfpga
 
 
-Supported platforms and modes
-=============================
-
-The operational mode (the ``mode`` argument) selects the chFPGA firmware configuration that is
-loaded on the FPGA. Platform and configuration names follow chFPGA.
-
-- **CRS** (`t0 technology <https://www.t0.technology>`_, Ultrascale+ RFSoC), with CRS backplanes
-
-  - ``corr8``, ``corr32``, ``corr64``: on-board correlator (``crs_corr8``, ``crs_corr32``,
-    ``crs_corr64``)
-  - ``chan8``, ``shuffle8``: channelizer and corner-turn with 100G offload (``crs_ct``)
-
-- **IceBoard** (MGK7MB, Kintex-7), standalone or in MGK7BP16 and MGK7BP1 crates
-
-  - ``shuffle16``, ``shuffle128``, ``shuffle256``, ``shuffle512``, ``chan8``, ``chan4``:
-    channelizer and corner-turn (``ice_ct``)
-  - ``corr16``: on-board correlator (``ice_corr16``)
-
-- **ZCU111** (Xilinx Ultrascale+ RFSoC evaluation board)
-
-  - ``corr4``, ``corr8``, ``chan8``
-
-- **KC705** (Xilinx Kintex-7 evaluation board): potentially supported. chFPGA has a
-  ``kc705_corr8`` configuration, but ``pychfpga`` has no KC705 platform class yet. See
-  :doc:`platforms/kc705`.
-
-- **ZUBoard**: platform discovery only, no chFPGA mode.
-
-Some bitstreams may not be included in the current release.
-
-
 Features
 ========
 
@@ -62,6 +31,109 @@ Features
   uploaded and initialized automatically.
 - **Servers**: ``fpga_master`` and ``raw_acq`` run the array from a YAML configuration, accept
   REST commands, and publish Prometheus metrics.
+
+
+Supported platforms and modes
+=============================
+
+The operational mode (the ``mode`` argument) selects the chFPGA firmware configuration that is
+loaded on the FPGA. Platform and configuration names follow chFPGA convention ``<platform>_<config>``.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 5 5 5 5
+   :stub-columns: 1
+
+   * - Platform
+     - Config
+     - Bitstream
+     - Description
+   * - CRS
+     -
+     -
+     - `t0 technology <https://www.t0.technology>`_, Ultrascale+ RFSoC, CRS backplanes
+   * -
+     - ``corr8``
+     - ``chfpga_crs_corr8.bit``
+     - 8-input, 1-board :math:`N^2` correlator
+   * -
+     - ``corr32``
+     - ``chfpga_crs_corr32.bit``
+     - 32-input, 4-board :math:`N^2` correlator
+   * -
+     - ``corr64``
+     - ``chfpga_crs_corr64.bit``
+     - 64-input, 8-board :math:`N^2` correlator
+   * -
+     - ``shuffle8``
+     - ``chfpga_crs_ct.bit``
+     - Single-board channelizer and corner-turn with 100G offload
+   * - IceBoard
+     -
+     -
+     - MGK7MB, Kintex-7, standalone or in MGK7BP16 and MGK7BP1 crates
+   * -
+     - ``shuffle16``
+     - ``chfpga_ice_ct.bit``
+     - Sincle-board channelizer and corner-turn with 8x10G offload
+   * -
+     - ``shuffle128``
+     - ``chfpga_ice_ct.bit``
+     - Half-crate (128 inputs) and corner-turn with 8x10G offload
+   * -
+     - ``shuffle256``
+     - ``chfpga_ice_ct.bit``
+     - Single crate (256 inputs) channelizer and corner-turn with 8x10G offload
+   * -
+     - ``shuffle512``
+     - ``chfpga_ice_ct.bit``
+     - Dual-crate (512 inputs) channelizer and corner-turn with 8x10G offload
+   * -
+     - ``chan8``
+     - ``chfpga_ice_ct.bit``
+     - 8-input 8-bit ADC or (8+8i)-bit FFT data  streaming on 8x10G links
+   * -
+     - ``chan4``
+     - ``chfpga_ice_ct.bit``
+     - 16-input 4-bit ADC (high nibble) or (4+4i)-bit FFT data streaming 8 8x10G links
+   * -
+     - ``corr16``
+     - ``chfpga_ice_corr16_pbg_jun16.bit``
+     - 16-input, 1-board :math:`N^2` correlator
+   * - ZCU111
+     -
+     -
+     - Xilinx Ultrascale+ RFSoC evaluation board
+   * -
+     - ``corr4``
+     - ``sifpga_zcu111_wrapper.bit``
+     - 4-input, 1-board :math:`N^2` correlator
+   * -
+     - ``corr8``
+     - ``sifpga_zcu111_wrapper.bit``
+     - 8-input, 1-board :math:`N^2` correlator
+   * -
+     - ``chan8``
+     - ``chfpga_zcu111.bit``
+     - 8-input 8-bit ADC or (8+8i)-bit FFT data  streaming on 8x10G links
+   * - KC705
+     -
+     -
+     - Xilinx Kintex-7 evaluation board. Potentially supported; ``pychfpga`` has no KC705
+       platform class yet. See :doc:`platforms/kc705`.
+   * -
+     - ``corr8``
+     - ``chfpga_kc705_corr8.bit``
+     - 8-input, 1-board :math:`N^2` correlator
+   * - ZUBoard
+     -
+     -
+     - platform discovery only, no chFPGA mode
+
+
+
+Some bitstreams may not be included in the current release.
+
 
 
 Where to go next

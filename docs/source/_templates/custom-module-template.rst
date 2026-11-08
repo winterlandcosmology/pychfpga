@@ -26,7 +26,13 @@
    .. *** Insert submodule summary
 
    {% block modules %}
-   {% if modules %}
+   {# GUI app: list the package, but do not walk its Qt modules. #}
+   {% if fullname.startswith('pychfpga.apps.ber_dashboard') %}
+   {% set visible_modules = [] %}
+   {% else %}
+   {% set visible_modules = modules %}
+   {% endif %}
+   {% if visible_modules %}
    .. container:: autosummary_block
 
       .. rubric:: {{ objtype }} sub-modules
@@ -36,7 +42,7 @@
          :template: custom-module-template.rst
          :recursive:
 
-         {% for item in modules %}
+         {% for item in visible_modules %}
          ~{{ item }}
          {%- endfor %}
    {% endif %}

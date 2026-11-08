@@ -14,6 +14,10 @@ Writing an SD card
 
 Writing a card takes about 45 seconds with a fast reader.
 
+.. warning::
+
+    Make sure you use the correct target device name. If you are mistaken, you could wipe your hard drive by mistake. The tools might not ask for confirmation before it's too late.
+
 Linux
 -----
 
@@ -21,12 +25,11 @@ Linux
 
     bunzip2 -k Chime_R11.3i.img.bz2
     lsblk                                  # find the SD card, e.g. /dev/sdb
-    sudo umount /dev/sdb1 /dev/sdb2        # unmount every partition of the card
-    sudo dd if=Chime_R11.3i.img of=/dev/sdb bs=10M status=progress
+    sudo umount /dev/sdb1 /dev/sdb2        # unmount every partition of the card (replace with the actual device names)
+    sudo dd if=Chime_R11.3i.img of=/dev/sdb bs=10M status=progress  # replace with the actual device name!
     sync
-    sudo eject /dev/sdb
+    sudo eject /dev/sdb  # replace with the actual device name
 
-**Be sure of the device name: ``dd`` overwrites it without confirmation.**
 
 macOS
 -----

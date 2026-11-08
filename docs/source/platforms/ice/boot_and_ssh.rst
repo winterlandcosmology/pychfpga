@@ -79,3 +79,40 @@ programming one:
 .. code-block:: bash
 
     /usr/bin/flashcp /tmp/u-boot.min.spieth.spi /dev/mtd0
+
+Resetting a single board
+========================
+
+If a board does not answer pings when the array is initialized, and the network is sound, its ARM
+did not boot. The crate can be power-cycled, or that slot can be power-cycled from another board
+in the same crate.
+
+``FPGAArray`` and ``fpga_master`` list missing boards with whatever identity they have: hostname
+or IP address, serial number, and ``(crate, slot)``. Slot numbers in that list are zero-based.
+
+Create an array that includes the crate, talking to ARM only so the FPGAs are not programmed.
+``--ignore_missing_boards`` is required so the missing board does not abort the call:
+
+.. code-block:: bash
+
+    ipython
+    run -i pychfpga/fpga_array.py bp16 <crate serial> --init 0 --prog 0 --ignore_missing_boards
+
+A working board in the crate, by IP, serial or crate, also works. See
+:doc:`../../user_guide/interactive_operation`.
+
+Pick a board that did boot:
+
+.. code-block:: python
+
+    i = ib[0]
+
+``ib`` is the list of boards in the array. Slot ``N`` for ``set_power_on_slot`` is one-based
+(crate slot 1–16). If the missing board was reported as zero-based slot ``s``, use ``N = s + 1``:
+
+.. code-block:: python
+
+    i.set_power_on_slot(N, False)  # power off slot N
+    i.set_power_on_slot(N, True)   # power on slot N
+
+After up to about 60 seconds the ARM should boot and answer pings.

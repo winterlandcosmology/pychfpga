@@ -7,7 +7,7 @@ A PyQt6 application for bit-error-rate tests of a CRS crate: the backplane links
 
 .. code-block:: bash
 
-    pip install -e ".[ber_dashboard]"          # PyQt6, matplotlib
+    pip install -e ".[ber_dashboard]"          # PyQt6, pyqtgraph, matplotlib
     python -m pychfpga.apps.ber_dashboard
 
 Plots, saved crate lists and results go to ``~/ber_dashboard`` (set ``BER_DASHBOARD_DIR`` to change it).

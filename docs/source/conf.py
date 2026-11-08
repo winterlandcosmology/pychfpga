@@ -73,7 +73,12 @@ source_suffix = '.rst'
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = ['_build', '**/.ipynb_checkpoints']
+exclude_patterns = [
+    '_build',
+    '**/.ipynb_checkpoints',
+    # GUI app: keep the package page, skip its Qt submodules.
+    '_autosummaries/pychfpga.apps.ber_dashboard.*.rst',
+]
 
 # The master toctree document.
 master_doc = 'index'
@@ -170,7 +175,7 @@ html_theme = 'sphinx_rtd_theme'
 # html_theme_options = {'collapsiblesidebar': True}
 html_theme_options = {
     'logo_only': True,
-    'navigation_depth': 4,
+    'navigation_depth': 6,
     }
 
 # Add any paths that contain custom static files (such as style sheets) here,

@@ -9,8 +9,14 @@ Host computer
 - Python 3.12
 - git and git-lfs (bitstreams and ARM firmware are stored with LFS)
 - Build tools (``make``, a C compiler) and ``python3.12-dev``, needed to compile ``netifaces``
-- Optional: `uv <https://docs.astral.sh/uv/>`_, used by the Makefile and recommended to manage
+
+
+Optional requirements: 
+
+  - `uv <https://docs.astral.sh/uv/>`_, used by the Makefile and recommended to manage
   the environment
+  - avahi-daemon, for mDNS support (for IceBoard only)
+
 
 Network
 =======

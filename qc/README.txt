@@ -1,9 +1,13 @@
-This folder contains the code used to perform hardware Quality Control (QC) on the Ice Hardware, including:
+This folder contains the code used to perform hardware Quality Control (QC) on the ICE and CRS Hardware, including:
 
-- Motherboard: IceBoard (Model MGK7MB) 
-- CHIME ADC Mezzanine (Model MGADC08)
-- 16-slot backplane (Model MGK7BP16)
-- Single-crate F-Engine for pre-deployment
+- ICE Hardware:
+  - ICE Motherboard: IceBoard (Model MGK7MB) 
+  - ICE ADC Mezzanine (Model MGADC08)
+  - ICE 16-slot backplane (Model MGK7BP16)
+  - ICE F-Engine pre-deployment Crate-level tests
+
+- CRS Hardware:
+    - CRS F-Engine pre-deployment Crate-level tests
 
 
 This code is used on the Quality control test setup at the board manufacturer for acceptance tests, and is further used at McGill for in depth system tests.
