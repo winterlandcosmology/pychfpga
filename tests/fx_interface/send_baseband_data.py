@@ -42,9 +42,6 @@ ucap = i.UCAP
 u_receiver = ucap.get_data_receiver()
 # u_receiver = i.get_data_receiver(port_number = 0, verbose = 1)
 
-# Check to make sure we're configured to receive channelizer data, not correlated data:
-ucap.OUTPUT_SOURCE_SEL = 0
-
 # Make sure we can get data from all channels:
 ucap.MODE = 0 
 
