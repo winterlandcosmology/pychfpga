@@ -510,6 +510,6 @@ class QsfpPage(QWidget):
         def job(log, **_):
             boards = self._boards()
             qt.set_rx_lpm(boards, False)
-            qt.set_tx(boards, 24, 0, 15)
+            qt.set_tx(boards, 24, 0, 15)  # Note: defaults are now 24,8,15
             log('FPGA TX 950 mV / 0.01 / 3.99 dB (codes 24, 0, 15: the firmware reset value), RX DFE on all boards')
         self._start(job, lambda _: None, 'Restore defaults')

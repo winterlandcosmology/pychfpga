@@ -147,9 +147,8 @@ class CGEArrayMethods(ArrayMethods):
         print(f'retrain ({method}) done; state after:')
         return self.read_optical(serials=serials)
 
-    def restore_si_defaults(self, tx=(24, 0, 15), serials=None):
-        """FPGA TX codes `tx` (default 24/0/15 = 950 mV, 0.01 dB, 3.99 dB: the chfpgalite reset value from 07c6572 on;
-        older bitstreams reset to 24/0/0 or 0/0/0), FPGA RX DFE, optical module reset."""
+    def restore_si_defaults(self, tx=(24, 8, 15), serials=None):
+        """FPGA TX codes `tx` (default 24/8/15 = 950 mV, 1.87 dB, 3.99 dB, the firmware reset value), FPGA RX DFE, optical module reset."""
         for ib in self._boards(serials):
             if self._rpc(ib.GPU.tx_drive_supported):
                 for lane in range(4):
