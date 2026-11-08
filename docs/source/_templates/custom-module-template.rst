@@ -30,7 +30,14 @@
    {% if fullname.startswith('pychfpga.apps.ber_dashboard') %}
    {% set visible_modules = [] %}
    {% else %}
-   {% set visible_modules = modules %}
+   {% set visible_modules = [] %}
+   {% for item in modules %}
+      {% if 'old_test_scripts' not in item and item.split('.')[-1] not in ('conftest',) %}
+      {% if not (fullname in ('qc.MGADC08', 'qc.MGK7BP16') and item.split('.')[-1] == 'util') %}
+      {% set _ = visible_modules.append(item) %}
+      {% endif %}
+      {% endif %}
+   {% endfor %}
    {% endif %}
    {% if visible_modules %}
    .. container:: autosummary_block

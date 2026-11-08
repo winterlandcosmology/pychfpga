@@ -9,6 +9,11 @@ sys.path.insert(0, os.path.abspath("../../")) # pychfpga
 sys.path.insert(1, os.path.abspath("../../pychfpga/"))  # pychfpga/pychfpga
 sys.path.insert(2, os.path.abspath("platforms/ice"))  # tuber_methods.py (IceBoard ARM Tuber methods)
 
+# QC suites import sibling modules as top-level names (`from memtest_rs232 import ...`).
+_qc_root = os.path.abspath("../../qc")
+for _suite in ("CRS_crate", "ICE_crate", "MGK7MB", "MGK7BP16", "MGADC08"):
+    sys.path.append(os.path.join(_qc_root, _suite))
+
 # Version without importing pychfpga (its __init__ pulls in private wtl.* packages).
 try:
     import setuptools_scm
@@ -39,7 +44,20 @@ autodoc_mock_imports = [
     "_pytest",
     "pytest_html",
     "py",
+    "labpy",
+    "prettytable",
+    "pyftdi",
+    "usb",
+    "serial",
+    "icecore",
+    "nose",
+    "pylab",
 ]
+
+# QC IceBoard tests: `__import__('ice-qc.utils')` (dash is not a valid autodoc_mock_imports name).
+from unittest.mock import MagicMock as _MagicMock
+sys.modules.setdefault("ice-qc", _MagicMock())
+sys.modules.setdefault("ice-qc.utils", _MagicMock())
 
 # -- General configuration ------------------------------------------------
 
@@ -78,6 +96,11 @@ exclude_patterns = [
     '**/.ipynb_checkpoints',
     # GUI app: keep the package page, skip its Qt submodules.
     '_autosummaries/pychfpga.apps.ber_dashboard.*.rst',
+    # Retired QC scripts (Python 2, local imports).
+    '_autosummaries/qc.*.old_test_scripts*.rst',
+    '_autosummaries/qc.MGADC08.util.rst',
+    '_autosummaries/qc.MGK7BP16.util.rst',
+    '_autosummaries/qc.*.conftest.rst',
 ]
 
 # The master toctree document.
