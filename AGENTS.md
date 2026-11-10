@@ -88,6 +88,35 @@ three-way `if CAPTURE_TYPE == 'PROBER' ... elif 'UCAP' ... else raise` idiom.
   crate's ARM boot takes 2-3 minutes). A boot wait shorter than that races the
   boot and manufactures init failures; do not shorten it to speed a run up.
 
+## Deployment scripts
+
+- Only `ps_power_on.py`/`ps_power_off.py` are tracked (their `power_on()`/
+  `power_off()` are tested in `tests/test_ps_power.py`). The crate scripts
+  (`crate_common.py`, `crate_start_shuffle256.py`, `crate_watchdog.py`),
+  their `README.md` runbook and `tests/test_deployment_scripts.py` are
+  site-local and gitignored: they exist only in the site's working tree.
+- Site crate: MGK7BP16 SN012, ARMs at fixed addresses (slot N at
+  10.10.2.(N-1)), bench supply at 10.10.5.1. The correlator host
+  (hirax-corr-00) reaches 10.10.2.x through a router, so mDNS never sees the
+  boards: the crate scripts list the ARMs by IP (`crate_common.DEFAULT_HWM`),
+  and an hwm by backplane serial ('bp16 012:0') does not work from there.
+- Boards given by IP without a known crate go through
+  `FPGAArray.init()`'s `discover_crate_async` gather, where all 16 ARMs read
+  the backplane IPMI at once. On SN012 that call ended in "Server
+  disconnected" twice, killing the Tuber servers of 2 and then 12 ARMs (only
+  a power cycle recovers them); reading it one board at a time was harmless.
+  `DEFAULT_HWM` therefore names the crate and attaches every board to it
+  (`MGK7BP16 012:0 MGK7MB 10.10.2.0:1:0 ...`), which skips that step. Do not
+  drop the crate or the `:0` crate fields from it.
+- `deployment_scripts/ps_power_*.py` stay stdlib-only (system `python3`);
+  the crate scripts (`crate_start_shuffle256.py`, `crate_watchdog.py`)
+  re-exec themselves under the repo `.venv` via `crate_common.ensure_venv()`.
+- `crate_watchdog.py` reads only the ARMs (Tuber `MB_FPGA_DIE`) and opens
+  the array with no `mode` (init 0). Keep it that way: opening the FPGA link
+  writes networking/GPIO/reset registers on a live crate. Tuber calls have no
+  timeout (a hung ARM blocks for aiohttp's 300 s default), so every poll is
+  wrapped in `asyncio.wait_for`.
+
 ## Corner-turn crate (shuffle256) notes
 
 - `CTProber.get_packet_geometry` derives the geometry from the CROSSBAR3
