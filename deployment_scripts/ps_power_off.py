@@ -24,17 +24,16 @@ def describe(status):
     return f"{status['status']}, {status['voltage']:.2f} V, {status['current']:.2f} A"
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Turn off the crate bench supply (Agilent N5764A).')
-    parser.add_argument('--host', default=DEFAULT_HOST,
-                        help=f'supply IP address or hostname (default: {DEFAULT_HOST})')
-    args = parser.parse_args()
+def power_off(host, dwell=True):
+    """Turn the supply at `host` off and, if `dwell`, wait out the off-dwell.
 
-    ps = AgilentN5764A(hostname=args.host)
+    Raises RuntimeError if the output cannot be confirmed off.
+    """
+    ps = AgilentN5764A(hostname=host)
     try:
         ps.open()
     except OSError as e:
-        sys.exit(f'Cannot connect to the supply at {args.host}:{ps.port}: {e}')
+        raise RuntimeError(f'Cannot connect to the supply at {host}:{ps.port}: {e}') from e
     print(f'Connected to {ps}')
 
     if not ps.is_enabled():
@@ -46,11 +45,24 @@ def main():
     ps.power_off()
     status = ps.status()
     if ps.is_enabled():
-        sys.exit(f'Supply still reports its output enabled after being told to turn off: {describe(status)}')
+        raise RuntimeError(f'Supply still reports its output enabled after being told to turn off: {describe(status)}')
     print(f'Supply is off: {describe(status)}')
 
-    print(f'Waiting the {OFF_DWELL} s off-dwell so the crate can be powered on again right away')
-    time.sleep(OFF_DWELL)
+    if dwell:
+        print(f'Waiting the {OFF_DWELL} s off-dwell so the crate can be powered on again right away')
+        time.sleep(OFF_DWELL)
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Turn off the crate bench supply (Agilent N5764A).')
+    parser.add_argument('--host', default=DEFAULT_HOST,
+                        help=f'supply IP address or hostname (default: {DEFAULT_HOST})')
+    args = parser.parse_args()
+
+    try:
+        power_off(args.host)
+    except RuntimeError as e:
+        sys.exit(str(e))
 
 
 if __name__ == '__main__':

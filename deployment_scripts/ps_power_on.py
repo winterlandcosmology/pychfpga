@@ -31,17 +31,17 @@ def describe(status):
     return f"{status['status']}, {status['voltage']:.2f} V, {status['current']:.2f} A"
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Turn on the crate bench supply (Agilent N5764A).')
-    parser.add_argument('--host', default=DEFAULT_HOST,
-                        help=f'supply IP address or hostname (default: {DEFAULT_HOST})')
-    args = parser.parse_args()
+def power_on(host):
+    """Turn the supply at `host` on.
 
-    ps = AgilentN5764A(hostname=args.host)
+    Returns True if the output was turned on, False if it was already on and
+    was left unchanged. Raises RuntimeError if the crate cannot be powered.
+    """
+    ps = AgilentN5764A(hostname=host)
     try:
         ps.open()
     except OSError as e:
-        sys.exit(f'Cannot connect to the supply at {args.host}:{ps.port}: {e}')
+        raise RuntimeError(f'Cannot connect to the supply at {host}:{ps.port}: {e}') from e
     print(f'Connected to {ps}')
 
     # Validate the current state before changing anything: an enabled output is
@@ -50,9 +50,9 @@ def main():
     if ps.is_enabled():
         if status['status'] in ('OK', 'ILIMIT'):
             print(f'Output is already on, leaving it unchanged: {describe(status)}')
-            return
-        sys.exit(f'Output is enabled but the supply reports {describe(status)}. '
-                 f'Run ps_power_off.py, then retry.')
+            return False
+        raise RuntimeError(f'Output is enabled but the supply reports {describe(status)}. '
+                           f'Run ps_power_off.py, then retry.')
 
     ps.unlock()  # the driver starts locked and refuses state changes
     if status['status'] == 'FAULT':
@@ -66,9 +66,22 @@ def main():
     time.sleep(2)  # let the output ramp up before judging its state
     status = ps.status()
     if status['status'] not in ('OK', 'ILIMIT'):
-        sys.exit(f'Supply is {describe(status)} after being told to turn on: the crate has no power.')
+        raise RuntimeError(f'Supply is {describe(status)} after being told to turn on: the crate has no power.')
     print(f'Supply is on: {describe(status)}')
-    print('The boards take 2-3 minutes to boot before the crate can be connected to.')
+    return True
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Turn on the crate bench supply (Agilent N5764A).')
+    parser.add_argument('--host', default=DEFAULT_HOST,
+                        help=f'supply IP address or hostname (default: {DEFAULT_HOST})')
+    args = parser.parse_args()
+
+    try:
+        if power_on(args.host):
+            print('The boards take 2-3 minutes to boot before the crate can be connected to.')
+    except RuntimeError as e:
+        sys.exit(str(e))
 
 
 if __name__ == '__main__':
