@@ -35,3 +35,9 @@ xreport.xml
 fw_test_results/
 firmware_tests/fft_of_data
 tmp_*
+# Site-local crate deployment kit (crate SN012 at hirax-corr-00); not part of the repository
+/deployment_scripts/README.md
+/deployment_scripts/crate_common.py
+/deployment_scripts/crate_start_shuffle256.py
+/deployment_scripts/crate_watchdog.py
+/tests/test_deployment_scripts.py
