@@ -1218,7 +1218,7 @@ class CRS(Motherboard):
         try:
             _, metrics = await self._get_motherboard_metrics_async()
         except Exception as e:
-            self.logger.error('%r: Error getting CRS hardware metrics. Error is %r' % (self, e))
+            self.logger.error('%r: Error getting CRS hardware metrics. Error is %r', self, e)
             metrics = Metrics()
         return metrics
 

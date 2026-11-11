@@ -238,7 +238,7 @@ class ADCDAQ(MMI):
         print(f'   OVERFLOW    {bool(self.FIFO_OVERFLOW):>5}     {bool(self.FIFO_OVERFLOW_STICKY):>5}')
         print(f'   UNDERFLOW   {bool(self.FIFO_UNDERFLOW):>5}     {bool(self.FIFO_UNDERFLOW_STICKY):>5}')
         print(f'   EMPTY       {bool(self.FIFO_EMPTY):>5}     {bool(self.FIFO_EMPTY_STICKY):>5}')
-        print('Number of ramp errors: %i', self.RAMP_ERR_CTR)
+        print(f'Number of ramp errors: {self.RAMP_ERR_CTR}')
 
         # fin=200
         # input_div=1 if self.MMCM_CLKIN_BYPASS else (self.MMCM_CLKIN_HIGH + self.MMCM_CLKIN_LOW)

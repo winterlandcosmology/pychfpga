@@ -822,6 +822,7 @@ def _board_for_beacon(pending, beacon_ip, beacon_serial):
 
 
 class CRSDiscovery:
+    """Discover CRS boards and crates via U-Boot and tcpipe beacons, and load ARM firmware."""
     discovery_port = DEFAULT_DISCOVERY_PORT
     bind = DEFAULT_BIND
 

@@ -156,7 +156,7 @@ class TestMGK7BP16Crate:
             test_results.test_points = NameSpace()
             for tp_name, limits in cfg.test_points:
                 limits = NameSpace(limits)
-                dmm.display('','Measure %s' % tp_name)
+                dmm.display('',f'Measure {tp_name}')
                 dmm.select_resistance_measurement()
                 while True:
                     dmm.local()
@@ -174,8 +174,8 @@ class TestMGK7BP16Crate:
                     dmm.beep()
                     time.sleep(0.1)
                     dmm.beep()
-                print('   %s : %.0f ohms (must be %.0f < impedance < %.0f) ==> %s' % (tp_name, result, limits.zmin, limits.zmax, xr.pass_fail(passed)))
-            assert not len(failed_test_points), 'Low impedance on %s' % ','.join(failed_test_points)
+                print(f'   {tp_name} : {result:.0f} ohms (must be {limits.zmin:.0f} < impedance < {limits.zmax:.0f}) ==> {xr.pass_fail(passed)}')
+            assert not len(failed_test_points), f"Low impedance on {','.join(failed_test_points)}"
             passed = True
 
         finally:
@@ -619,7 +619,7 @@ class TestMGK7BP16Crate:
         xr.header('Begin Reset Test')
         try:
             for i in range(0, 16, 2):
-                print("Resetting arm on board %d." % (i+2))
+                print(f'Resetting arm on board {i+2}.')
                 ca.ib[i].reset_arm_on_slot(i+2)
                 result.res.off[i+1] = not ca.ib[i+1].ping()
 
@@ -630,7 +630,7 @@ class TestMGK7BP16Crate:
                 result.res.on[i+1] = ca.ib[i+1].ping()
 
             for i in range(1, 16, 2):
-                print("Resetting arm on board %d." % i)
+                print(f'Resetting arm on board {i}.')
                 ca.ib[i].reset_arm_on_slot(i)
                 result.res.off[i-1] = not ca.ib[i-1].ping()
 
@@ -656,10 +656,10 @@ class TestMGK7BP16Crate:
 
         try:
             for i in range(0, 16, 2):
-                print("Turning board %d off." % (i+2))
+                print(f'Turning board {i+2} off.')
                 ca.ib[i].set_power_on_slot(i+2, False)
                 result.onoff.off[i+1] = not ca.ib[i+1].ping()
-                print("Turning board %d on." % (i+2))
+                print(f'Turning board {i+2} on.')
                 ca.ib[i].set_power_on_slot(i+2, True)
 
             print("Waiting ...")
@@ -669,10 +669,10 @@ class TestMGK7BP16Crate:
                 result.onoff.on[i+1] = ca.ib[i+1].ping()
 
             for i in range(1, 16, 2):
-                print("Turning board %d off." % i)
+                print(f'Turning board {i} off.')
                 ca.ib[i].set_power_on_slot(i, False)
                 result.onoff.off[i-1] = not ca.ib[i-1].ping()
-                print("Turning board %d on." % i)
+                print(f'Turning board {i} on.')
                 ca.ib[i].set_power_on_slot(i, True)
 
             print("Waiting ...")
@@ -823,13 +823,13 @@ class TestMGK7BP16Crate:
                     for ch in range(8):
                         plt.clf()
                         plt.plot(data[ch])
-                        xr.insert_plot('Ramp capture for %s SN%s CHANNEL %02i' % (xr.params.model, xr.params.serial, ch))
+                        xr.insert_plot(f'Ramp capture for {xr.params.model} SN{xr.params.serial} CHANNEL {ch:02d}')
                         ok = np.all(data[ch] == ideal_ramp)
                         ramp_ok.append(ok)
                         if ok:
-                            print('Channel %02i: OK' % (ch+1))
+                            print(f'Channel {ch+1:02d}: OK')
                         else:
-                            print('Channel %02i: ERROR!' % (ch+1))
+                            print(f'Channel {ch+1:02d}: ERROR!')
 
                     result[board].ramp_ok.append(ramp_ok)
 

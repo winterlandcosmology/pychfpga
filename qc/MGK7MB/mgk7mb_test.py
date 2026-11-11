@@ -218,12 +218,12 @@ class TestMGK7MBBench(TestUtils):
             test_results.test_points = NameSpace()
             for tp_name, limits in cfg.test_points:
                 limits = NameSpace(limits)
-                dmm.display('','Measure %s' % tp_name)
+                dmm.display('',f'Measure {tp_name}')
                 dmm.select_resistance_measurement()
                 while True:
                     dmm.local()
                     print('Optional: Press the blue (SHIFT/Local) button on the multimeter so see real-time resistance measurements')
-                    xr.input("Apply probe to test point '%s' and press ENTER to measure (Q=Exit):" % tp_name)
+                    xr.input(f"Apply probe to test point '{tp_name}' and press ENTER to measure (Q=Exit):")
                     if limits.delay:
                         time.sleep(limits.delay)
                     result = dmm.get_resistance()
@@ -237,8 +237,8 @@ class TestMGK7MBBench(TestUtils):
                     dmm.beep()
                     time.sleep(0.1)
                     dmm.beep()
-                print('   %s : %.0f ohms (must be more than %.0f ohms) ==> %s' % (tp_name, result, limits.zmin, xr.pass_fail(passed)))
-            assert not len(failed_test_points), 'Low impedance on %s' % ','.join(failed_test_points)
+                print(f'   {tp_name} : {result:.0f} ohms (must be more than {limits.zmin:.0f} ohms) ==> {xr.pass_fail(passed)}')
+            assert not len(failed_test_points), f"Low impedance on {','.join(failed_test_points)}"
             passed = True
         finally:
             test_results.passed = passed
@@ -808,7 +808,7 @@ class TestMGK7MBNetwork(TestUtils):
             ib.set_mezzanine_power(True,2)
             time.sleep(0.1)
             p1, p2 = ib.get_mezzanine_power(1), ib.get_mezzanine_power(2)
-            assert (p1 and p2), "Mezzanines did not turn on properly! Slot 1: %s, Slot 2: %s" % (p1, p2)
+            assert (p1 and p2), f'Mezzanines did not turn on properly! Slot 1: {p1}, Slot 2: {p2}'
 
             print("Reading FMC Slot Current & Voltage Sensors")
             mcurrent, mvoltage = {}, {}
@@ -835,7 +835,7 @@ class TestMGK7MBNetwork(TestUtils):
             ib.set_mezzanine_power(False,2)
             time.sleep(0.1)
             p1, p2 = ib.get_mezzanine_power(1), ib.get_mezzanine_power(2)
-            assert not (p1 or p2), "Mezzanines did not turn off properly! Slot 1: %s, Slot 2: %s" % (p1, p2)
+            assert not (p1 or p2), f'Mezzanines did not turn off properly! Slot 1: {p1}, Slot 2: {p2}'
 
             #assert max( [x for v in moffvoltage.values() for x in v]) < 0.2, "Mezzanines did not turn off properly!  When 'off' voltage measured is greater than 0.2V"
 
@@ -843,35 +843,35 @@ class TestMGK7MBNetwork(TestUtils):
             for x in current:
                 values_ok.append(in_range(current[x], cfg.current[x]['nom'],cfg.current[x]['pmargin'], cfg.current[x]['amargin'] ))
                 if (values_ok[-1]==False):
-                    print("The current on %s is out of range - measured current is: %.3f" %(x, current[x]))
+                    print(f'The current on {x} is out of range - measured current is: {current[x]:.3f}')
 
             for x in voltage:
                 values_ok.append(in_range(voltage[x], cfg.voltage[x]['nom'],cfg.voltage[x]['pmargin'], cfg.voltage[x]['amargin']))
                 if (values_ok[-1]==False):
-                    print("The voltage on %s is out of range - measured voltage is: %.3f" %(x, voltage[x]))
+                    print(f'The voltage on {x} is out of range - measured voltage is: {voltage[x]:.3f}')
 
             for x in temp:
                 values_ok.append(in_range(temp[x], cfg.temp[x]['nom'],cfg.temp[x]['pmargin'], cfg.temp[x]['amargin']))
                 if (values_ok[-1]==False):
-                    print("The temperature on %s is out of range - measured temp is: %.3f" %(x, temp[x]))
+                    print(f'The temperature on {x} is out of range - measured temp is: {temp[x]:.3f}')
 
             for x in mcurrent:
                 for i in range(2):
                     values_ok.append(in_range(mcurrent[x][i], cfg.fmccurrent[x]['nom'],cfg.fmccurrent[x]['pmargin'], cfg.fmccurrent[x]['amargin']))
                     if (values_ok[-1]==False):
-                        print("The mezzanine current on %s is out of range - measured current is: %.3f" %(x, mcurrent[x][i]))
+                        print(f'The mezzanine current on {x} is out of range - measured current is: {mcurrent[x][i]:.3f}')
 
             for x in mvoltage:
                 for i in range(2):
                     values_ok.append(in_range(mvoltage[x][i], cfg.fmcvoltage[x]['nom'],cfg.fmcvoltage[x]['pmargin'], cfg.fmcvoltage[x]['amargin']))
                     if (values_ok[-1]==False):
-                        print("The mezzanine voltage on %s is out of range - measured voltage is: %.3f" %(x, mvoltage[x][i]))
+                        print(f'The mezzanine voltage on {x} is out of range - measured voltage is: {mvoltage[x][i]:.3f}')
 
             for x in moffvoltage:
                 for i in range(2):
                     values_ok.append(in_range(moffvoltage[x][i], cfg.fmcoffvoltage[x]['nom'],cfg.fmcoffvoltage[x]['pmargin'], cfg.fmcoffvoltage[x]['amargin'] ))
                     if (values_ok[-1]==False):
-                        print("The turn off mezzanine voltage on %s is out of range - measured voltage is: %.3f" %(x, moffvoltage[x][i]))
+                        print(f'The turn off mezzanine voltage on {x} is out of range - measured voltage is: {moffvoltage[x][i]:.3f}')
 
             assert min(values_ok), "Sensor Values out of bound!"
             passed = True
@@ -905,15 +905,15 @@ class TestMGK7MBNetwork(TestUtils):
 
         ib, _ = self.connect_to_board(questions=True, without_serial=True) # include boards without serial number in search
 
-        question = "Is this a Rev %d board? [Y/N]" %cfg.rev
+        question = f'Is this a Rev {cfg.rev} board? [Y/N]'
         if(self.cfg.ready_check):
             if (xr.input_yes_no(question, additional_answers=[])==True):
-                rev = "%d" %cfg.rev
+                rev = f'{cfg.rev}'
             else:
                 rev = xr.input("What is the revision of this board? e.g 4 ?")
         else:
             print("Taking board rev from config file since ready_check is 0")
-            rev = "%d" %cfg.rev
+            rev = f'{cfg.rev}'
         serial_number = self.params.serial
         #serial_number = '0398'
         ipmi = ipmi_fru.FRU(
@@ -951,7 +951,7 @@ class TestMGK7MBNetwork(TestUtils):
             print("\nThe board has the correct serial number programmed")
             passed = True
         else:
-            print("\nThe motherboard reports the following serial: %s which isn't correct" %ib.get_motherboard_serial())
+            print(f"\nThe motherboard reports the following serial: {ib.get_motherboard_serial()} which isn't correct")
             passed = False
             assert False, "Serial programmed incorrectly"
         #self.instr.ps.set_output(state=False) # Turn power off
@@ -1102,7 +1102,7 @@ class TestMGK7MBNetwork(TestUtils):
         if (clock_source == ib.CLOCK_SOURCE.XTAL):
             print("Clock source is Crystal")
         else :
-            print("Looks like the board booted but the board reported a different clock source to that specified: %s" %clock_source)
+            print(f'Looks like the board booted but the board reported a different clock source to that specified: {clock_source}')
             assert False, "Wrong clock selection detected"
 
 
@@ -1117,7 +1117,7 @@ class TestMGK7MBNetwork(TestUtils):
             passed = True
             print("Board successfully booted and board reported that the SMA clock was used")
         else:
-            print("Looks like the board booted but the board reported a different clock source to that specified: %s" %clock_source)
+            print(f'Looks like the board booted but the board reported a different clock source to that specified: {clock_source}')
             passed = False
             assert False, "Wrong clock source detected."
 
@@ -1132,7 +1132,7 @@ class TestMGK7MBNetwork(TestUtils):
             passed = True
             print("Board successfully booted and board reported that the backplane clock was in use")
         else:
-            print("Looks like the board booted but the board reported a different clock source to that specified: %s" %clock_source)
+            print(f'Looks like the board booted but the board reported a different clock source to that specified: {clock_source}')
             passed = False
             assert False, "Wrong clock source detected."
 
@@ -1174,9 +1174,9 @@ class TestMGK7MBNetwork(TestUtils):
         
 
         
-        print('Before programming the FPGA die temperature is: %.3f C' % ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE))
+        print(f'Before programming the FPGA die temperature is: {ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE):.3f} C')
         pre_prog_power = ib.get_motherboard_power(ib.RAIL.MB_VCC3V3) + ib.get_motherboard_power(ib.RAIL.MB_VCC12V0) + ib.get_motherboard_power(ib.RAIL.MB_VCC5V5)
-        print('Before programming the boards power consumption is: %.3f W' % pre_prog_power)
+        print(f'Before programming the boards power consumption is: {pre_prog_power:.3f} W')
 
         self.prog_fpga(ib)
 
@@ -1197,7 +1197,7 @@ class TestMGK7MBNetwork(TestUtils):
             for x in voltage:
                 values_ok.append(in_range(voltage[x], cfg2.voltage[x]['nom'],cfg2.voltage[x]['pmargin'], cfg2.voltage[x]['amargin']))
                 if (values_ok[-1]==False):
-                    print("The voltage on %s is out of range - measured voltage is: %.3f" %(x, voltage[x]))
+                    print(f'The voltage on {x} is out of range - measured voltage is: {voltage[x]:.3f}')
 
             passed = False
             print("Check that all the hand soldered buck caps are in place")
@@ -1205,7 +1205,7 @@ class TestMGK7MBNetwork(TestUtils):
 
         #possible name change 
         cookie = hex(ib.fpga_mmi_read(ib.FPGA_CORE_FIRMWARE_COOKIE_ADDR))
-        print("\nThe FPGA memory map cookie (address 0) is: %s" % cookie)
+        print(f'\nThe FPGA memory map cookie (address 0) is: {cookie}')
 
         if (cookie == '0xbeefface'):
             print("Correct cookie detected - memory map read back looks good")
@@ -1216,8 +1216,8 @@ class TestMGK7MBNetwork(TestUtils):
             passed = False
 
         after_prog_power =  ib.get_motherboard_power(ib.RAIL.MB_VCC3V3) + ib.get_motherboard_power(ib.RAIL.MB_VCC12V0) + ib.get_motherboard_power(ib.RAIL.MB_VCC5V5)
-        print('\nAfter programming the FPGA die temperature is: %.3f C' % ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE))
-        print('After programming the boards power consumption is: %.3f W' % after_prog_power)
+        print(f'\nAfter programming the FPGA die temperature is: {ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE):.3f} C')
+        print(f'After programming the boards power consumption is: {after_prog_power:.3f} W')
 
         try:
             self.open_fpga(ib)
@@ -1300,7 +1300,7 @@ class TestMGK7MBNetwork(TestUtils):
 
         time.sleep(0.1)
         p1, p2 = ib.get_mezzanine_power(1), ib.get_mezzanine_power(2)
-        assert (p1 and p2), "Mezzanines did not turn on properly! Slot 1: %s, Slot 2: %s" % (p1, p2)
+        assert (p1 and p2), f'Mezzanines did not turn on properly! Slot 1: {p1}, Slot 2: {p2}'
 
         print("Reading FMC Slot Current & Voltage Sensors")
         mcurrent, mvoltage = {}, {}
@@ -1327,13 +1327,13 @@ class TestMGK7MBNetwork(TestUtils):
                 for i in range(2):
                     values_ok.append(in_range(mcurrent[x][i], cfg.fmccurrent[x]['nom'],cfg.fmccurrent[x]['pmargin'], cfg.fmccurrent[x]['amargin']))
                     if (values_ok[-1]==False):
-                        print("The mezzanine current on %s is out of range - measured current is: %.3f" %(x, mcurrent[x][i]))
+                        print(f'The mezzanine current on {x} is out of range - measured current is: {mcurrent[x][i]:.3f}')
 
         for x in mvoltage:
             for i in range(2):
                 values_ok.append(in_range(mvoltage[x][i], cfg.fmcvoltage[x]['nom'],cfg.fmcvoltage[x]['pmargin'], cfg.fmcvoltage[x]['amargin']))
                 if (values_ok[-1]==False):
-                    print("The mezzanine voltage on %s is out of range - measured voltage is: %.3f" %(x, mvoltage[x][i]))
+                    print(f'The mezzanine voltage on {x} is out of range - measured voltage is: {mvoltage[x][i]:.3f}')
 
         assert min(values_ok), "Sensor Values out of bound!"
 
@@ -1495,13 +1495,13 @@ class TestMGK7MBNetwork(TestUtils):
             for ch in range(16):
                 plt.clf()
                 plt.plot(data[framenum][ch])
-                xr.insert_plot('Ramp capture for %s SN%s CHANNEL %02i' % (self.params.model, self.params.serial, ch))
+                xr.insert_plot(f'Ramp capture for {self.params.model} SN{self.params.serial} CHANNEL {ch:02d}')
                 ok = np.all(data[framenum][ch] == ideal_ramp)
                 ramp_ok.append(ok)
                 if ok:
-                    print('Channel %02i: OK' % (ch+1))
+                    print(f'Channel {ch+1:02d}: OK')
                 else:
-                    print('Channel %02i: ERROR!' % (ch+1))
+                    print(f'Channel {ch+1:02d}: ERROR!')
                 test_results.ramp_ok.append(ramp_ok)
 
             assert all(test_results.ramp_ok), 'One or more channels have ramp errors'

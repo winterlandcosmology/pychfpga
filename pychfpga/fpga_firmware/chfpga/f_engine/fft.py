@@ -26,7 +26,7 @@ FFT_INFO = {
 }
 
 class FFT(MMI):
-    """ Implements interface to the FR_DIST within a procecessor pipeline"""
+    """Implements interface to the PFB/FFT block within a processor pipeline."""
 
     ADDRESS_WIDTH = 9
 

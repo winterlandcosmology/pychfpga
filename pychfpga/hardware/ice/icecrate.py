@@ -1,4 +1,4 @@
-"""icecrate_handler.py module: Provides a class to access the hardware of ICE backplane (McGill Model MGK7BP).
+"""icecrate.py module: Provides a class to access the hardware of ICE backplane (McGill Model MGK7BP).
 """
 
 import logging

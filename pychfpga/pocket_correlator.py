@@ -52,6 +52,7 @@ from pychfpga.common import run_async
 from pychfpga.network_utils import verify_network_settings
 
 class POCKET_CORRELATOR:
+    """Capture and write correlated data from a CRS board (on-FPGA correlator)."""
     # Include a super parent class?
     # Maybe logging needs to be inherited?
 

@@ -1,3 +1,5 @@
+"""Hardware base class for FPGA motherboards (IceBoard, CRS, and others)."""
+
 # standard Python packages
 import logging
 import asyncio
@@ -137,7 +139,7 @@ class Motherboard(HardwareMap):
 
         # Normalize the serial number
         if isinstance(serial, int):  # make sure serial is a string
-            serial = f'{{:0{self.SERIAL_NUMBER_LENGTH}d}}'.format(serial)  # Convert integer serial number to N digits with 0 prefixes
+            serial = f'{serial:0{self.SERIAL_NUMBER_LENGTH}d}'  # Convert integer serial number to N digits with 0 prefixes
 
         if not (serial or hostname):
             raise ValueError(f'Must specify either a serial number or hostname for {self.__class__.__name__}')

@@ -1,6 +1,6 @@
 """
-CORR.py module
- Implements interface to the correlator blocks
+UCORR.py module
+ Implements interface to the ultrascale correlator (UCORR) blocks
 
  History:
  2017-05-04 : JFC : Created

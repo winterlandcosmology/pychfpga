@@ -1,3 +1,5 @@
+"""TCP command-and-control protocol to the FPGA board (bitstream, MMI, I2C, SPI)."""
+
 # Standard Python packages
 import asyncio
 import logging

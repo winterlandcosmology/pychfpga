@@ -2033,7 +2033,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         if not (ts.nano == ts.nano2 and
             ts.time == ts.time2 and
             ts.time_struct == ts.time_struct2):
-            self.logger.error("%r: IRIGB time computation error" % self)
+            self.logger.error("%r: IRIGB time computation error", self)
 
         # # Last thing: apply an offset to correct for GPS rollover time
         # # if a given GPS receiver has not had its firmware updated.
@@ -4989,7 +4989,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         if hasattr(self, 'mezzanine') and self.mezzanine:
             for mezz_number, mezz in self.mezzanine.items():
                 for (adc_number, adc) in enumerate(mezz.ADC):
-                    res['FMC%i ADC%i' % (mezz_number - 1, adc_number)] = adc.get_temperature()
+                    res[f'FMC{mezz_number - 1} ADC{adc_number}'] = adc.get_temperature()
         return res
 
     async def get_fpga_core_temperature_metrics_async(self):
@@ -5057,7 +5057,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 if reset:
                     chan.FFT.reset_fft_overflow_count()
         except IOError as e:
-            self.logger.error('%r: Error getting FPGA channelizer metrics. Error is %r' % (self, e))
+            self.logger.error('%r: Error getting FPGA channelizer metrics. Error is %r', self, e)
         return metrics
 
     def get_channel_metrics(self, ch, frame_cnt=300_000, polling_interval=0.0001):

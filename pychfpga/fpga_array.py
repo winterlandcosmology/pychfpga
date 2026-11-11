@@ -60,6 +60,7 @@ from pychfpga.hardware import HardwareMap, Motherboard, Crate
 
 
 class FPGAArray(object):
+    """Represents and operates on an array of FPGA motherboards."""
 
     # Map the string to the function that computes the FPGA IP address from the ARM IP address
     FPGA_IP_ADDR_FN_TABLE = {

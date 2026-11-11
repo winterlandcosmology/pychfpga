@@ -1,6 +1,6 @@
 """
-cge.py module
-    Implements interface to the 100G Ethernet FPGA module
+uct_engine.py module
+    Implements the Ultrascale Corner-Turn (UCT) FPGA engine.
 """
 import logging
 import time
@@ -96,9 +96,7 @@ class CT3Regs(MMI):
         self.ZERO_DATA_ON_LANE_ERROR = 1
 
 class UCTEngine(MMIRouter):
-    """
-
-    """
+    """Ultrascale corner-turn engine: CT1/CT2/CT3 registers and backplane 25G links."""
 
     ROUTER_PORT_NUMBER_WIDTH = 2
     ROUTER_PORT_MAP = {

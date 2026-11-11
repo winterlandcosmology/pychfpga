@@ -59,7 +59,7 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
             self.log.info(f"Successfully pinged raw_acq server at {self.hostname}:{self.port}")
         except Exception as e:
             self.log.debug(repr(e))
-            self.log.error("Can't ping raw_acq server at {self.hostname}:{self.port}")
+            self.log.error(f"Can't ping raw_acq server at {self.hostname}:{self.port}")
             return False
         return True  # return raises an exception: we don't want it in the try block
 

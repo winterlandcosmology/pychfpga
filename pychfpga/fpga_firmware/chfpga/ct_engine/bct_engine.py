@@ -1,6 +1,6 @@
 """
-UCT.py module
-    Implements the Ultrascale Corner-Turn Engine
+bct_engine.py module
+    Implements the BRAM-based Corner-Turn Engine.
 """
 import logging
 import time
@@ -2147,8 +2147,8 @@ class BCTEngine(MMIRouter):
             # Configure CRATE (inter-crate) shuffle
             self.BP_SHUFFLE.BYPASS_QSFP_SHUFFLE = crate_shuffle_bypass
         elif not bp_shuffle_bypass:
-            raise RuntimeError("The FPGA firmware implement BP_SHUFFLE in the '%s' operational mode "
-                               "(shuffle bypass flag is not set in that mode)", mode)
+            raise RuntimeError(f"The FPGA firmware implement BP_SHUFFLE in the '{mode}' operational mode "
+                               "(shuffle bypass flag is not set in that mode)")
         ###########################
         # Configure CROSSBAR 2
         ###########################
@@ -2178,7 +2178,7 @@ class BCTEngine(MMIRouter):
                     bs.LAST_LANE = cb2_lanes[cb2_bin_sel][1]
                     bs.select_bins(cb2_bin_select_map[cb2_bin_sel])
         elif not cb2_bypass:
-            raise RuntimeError("The FPGA firmware must have a CROSSBAR2 in the '%s' operational mode", mode)
+            raise RuntimeError(f"The FPGA firmware must have a CROSSBAR2 in the '{mode}' operational mode")
 
         ###########################
         # Configure CROSSBAR 3
@@ -2211,7 +2211,7 @@ class BCTEngine(MMIRouter):
                     # bs.SEND_FLAGS = 0  # JFC debug. Does not affect data.
             # print("cb3 input frame flags words=%i" %cb3_input_frame_flags_words_per_frame)
         elif not cb3_bypass:
-            raise RuntimeError("The FPGA firmware must implement CROSSBAR3 in the '%s' operational mode", mode)
+            raise RuntimeError(f"The FPGA firmware must implement CROSSBAR3 in the '{mode}' operational mode")
 
         def print_packet_size(
                 crossbar_name,

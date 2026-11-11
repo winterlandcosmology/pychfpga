@@ -2879,6 +2879,7 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
 
 
 class FPGAMasterAsyncRESTClient(AsyncRESTClient):
+    """REST client for a running FPGAMaster server."""
 
     DEFAULT_PORT = FPGAMasterAsyncRESTServer.DEFAULT_PORT
 

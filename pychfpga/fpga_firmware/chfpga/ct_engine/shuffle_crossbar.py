@@ -37,7 +37,7 @@ class SCBRouter(MMIRouter):
 
 
 class ShuffleCrossbar(MMI):
-    """ Instantiates a container for all correlators blocks"""
+    """Shuffle crossbar: aligns packets, remaps lanes, and hosts bin selectors."""
 
     HEADER_CAPTURE_EN  = BitField(CONTROL, 0, 7, doc="Enables capture of header info on all lanes simultaneously.")
     # FRAME_CLK_SEL      = BitField(CONTROL, 0, 7, doc='')

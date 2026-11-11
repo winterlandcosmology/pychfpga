@@ -1,8 +1,16 @@
+"""FPGA firmware base class: bitstream lookup, platform/mode support, and array-method registration."""
+
 import os
 
 from .fpga_bitstream import FPGABitstream
 
 class FPGAFirmware():
+    """Base class for FPGA firmware implementations.
+
+    Subclasses declare ``PLATFORM_SUPPORT`` (bitstream files and modes per motherboard)
+    and ``_array_method_classes``. ``get_firmware()`` selects the matching subclass
+    for a platform and operational mode.
+    """
     # FIRMWARE_URL = None
     # PLATFORM_MODEL = None
     # _bitstream_cache = {}

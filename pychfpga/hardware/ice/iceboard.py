@@ -603,15 +603,15 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         ####################################
 
         mezz_power_sensors = [
-            ('Mezz %i VCC12V'    , 'VCC12V'    , self.RAIL.MEZZ_VCC12V0),
-            ('Mezz %i VCC3V3'    , 'VCC3V3'    , self.RAIL.MEZZ_VCC3V3),
-            ('Mezz %i VADJ'      , 'VADJ'      , self.RAIL.MEZZ_VADJ)]
+            ('VCC12V'    , self.RAIL.MEZZ_VCC12V0),
+            ('VCC3V3'    , self.RAIL.MEZZ_VCC3V3),
+            ('VADJ'      , self.RAIL.MEZZ_VADJ)]
 
         for mezz_number in self.FMC_MEZZ_NUMBERS:
-            for display_name, sensor, sensor_name in mezz_power_sensors:
+            for sensor, sensor_name in mezz_power_sensors:
                 voltage = await self.tuber_get_mezzanine_voltage_async(sensor_name, mezz_number)
                 current = await self.tuber_get_mezzanine_current_async(sensor_name, mezz_number)
-                info[display_name % mezz_number] = f'{voltage:0.1f}V@{current:0.3f}A'
+                info[f'Mezz {mezz_number} {sensor}'] = f'{voltage:0.1f}V@{current:0.3f}A'
                 metrics.add('fpga_mezzanine_voltage', value=voltage, sensor=sensor, mezzanine=mezz_number)
                 metrics.add('fpga_mezzanine_current', value=current, sensor=sensor, mezzanine=mezz_number)
 

@@ -31,7 +31,7 @@ class FixedPointType:
         return FixedPointType(bit_width, bin_point)
 
     def __repr__(self):
-        return 'FixedPointType(%d,%d)' % (self.bit_width, self.bin_point)
+        return f'FixedPointType({self.bit_width},{self.bin_point})'
 
     def _mask_bitwidth(self, data, bit_width=None):
         if bit_width is None:

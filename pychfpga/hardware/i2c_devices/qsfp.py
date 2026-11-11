@@ -589,7 +589,7 @@ class QSFP(object):
         """
         if not self.is_present():
             return None
-        return '{}_{}_SN{}'.format(self.read_str('VendName'), self.read_str('VenPN'), self.read_str('VenSN'))
+        return f"{self.read_str('VendName')}_{self.read_str('VenPN')}_SN{self.read_str('VenSN')}"
 
     def get_serial_number(self):
         """Return serial number value.
@@ -672,7 +672,7 @@ class QSFP(object):
         print('--------------')
         print(f'Module is Present: {bool(self.is_present())}')
         print(f'Module I2C is Responding: {bool(self._qsfp_eeprom.is_present())}')
-        print('Module type: {}'.format(['Low power', 'High power'][self.get_power_mode() or 0]))
+        print(f"Module type: {['Low power', 'High power'][self.get_power_mode() or 0]}")
         print('I2C info')
         print('--------------')
         print(f'   Module temperature: {self.get_temperature():0.1f} C')
@@ -684,13 +684,13 @@ class QSFP(object):
                 f'Ch{i + 1}={rx_pow / 1e-3:0.3f} mW' for i, rx_pow in enumerate(rx_powers)
             )
         )
-        print('   Manufacturer: {}'.format(self.read_str('VendName')))
-        print('   Model: {} Revision {}'.format(self.read_str('VenPN'), self.read_str('VenRev')))
-        print('   Serial Number: {}'.format(self.read_str('VenSN')))
+        print(f"   Manufacturer: {self.read_str('VendName')}")
+        print(f"   Model: {self.read_str('VenPN')} Revision {self.read_str('VenRev')}")
+        print(f"   Serial Number: {self.read_str('VenSN')}")
         print(f'   Cable length (if copper): {self.read_byte("CopperLength")}m')
-        print('   Device Technology: {}'.format(tech_table[self.read_byte('DeviceTech') >> 4]))
-        print('   Connector type: {}, {}'.format(identifier_table.get(self.read_byte('Identifier2', 'Unknown')),
-                                             connector_types.get(self.read_byte('Connector', 'Unknown'))))
+        print(f"   Device Technology: {tech_table[self.read_byte('DeviceTech') >> 4]}")
+        print(f"   Connector type: {identifier_table.get(self.read_byte('Identifier2', 'Unknown'))}, "
+              f"{connector_types.get(self.read_byte('Connector', 'Unknown'))}")
 
         data = {}
         for (key, (datatype, addr, length, page)) in list(self.QSFP_EEPROM_MAP.items()):

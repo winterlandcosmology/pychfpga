@@ -50,20 +50,20 @@ def run_tests(config_file):
             test = test_list[menu_item.test_tag]
             if not menu_item.get('description', None):  # Take description from the tets list if there is none
                 menu_item.description = test.description
-            menu_item.regex = '(%s|%s)' % (test.path, menu_item.test_tag) # have the menu recognize the test path or key as an other way to select the test
+            menu_item.regex = f'({test.path}|{menu_item.test_tag})' # have the menu recognize the test path or key as an other way to select the test
 
     while True:
         print()
         print()
         print('---------------------------------------------')
         if current_model and current_serial:
-            print('Currently testing  %s SN%s (Scanned=%s)' % (current_model, current_serial, is_serial_scanned))
+            print(f'Currently testing  {current_model} SN{current_serial} (Scanned={is_serial_scanned})')
         else:
             print(' !!! NO SERIAL NUMBER CURRENTLY SELECTED !!!')
         print('---------------------------------------------')
         print()
         # Get a summary of all tests run so far
-        test_folder = os.path.join(test_results_folder, '%s_SN%s' % (current_model, current_serial))
+        test_folder = os.path.join(test_results_folder, f'{current_model}_SN{current_serial}')
         summary = XReport.generate_test_summary(input_folder=test_folder, required_tests=cfg.test_list)
 
         # Update the menu to indicate which tests have passed.
@@ -107,7 +107,7 @@ def run_tests(config_file):
         elif selection.type == 'push':
             commit_repo(test_results_folder)
         elif selection.type == 'summary':
-            test_folders = os.path.join(test_results_folder, '%s_SN*/' % (current_model))
+            test_folders = os.path.join(test_results_folder, f'{current_model}_SN*/')
             f = input('Enter destination filename (optional, no extension):')
             summary_filename = os.path.join(test_results_folder, f+'.csv')
             XReport.generate_combined_summary(test_folders, cfg.test_list, output_filename=summary_filename)
@@ -125,7 +125,7 @@ def run_tests(config_file):
 
 
             print()
-            print('Running test %s' % nose_test_path)
+            print(f'Running test {nose_test_path}')
             print()
 
             if test.require_serial_number:
@@ -141,18 +141,18 @@ def run_tests(config_file):
 
             if params.serial != current_serial:
                 print('**********************************************')
-                print(' **** Serial number is now %s' % (params.serial))
+                print(f' **** Serial number is now {params.serial}')
                 print('**********************************************')
                 current_serial = params.serial
                 is_serial_scanned = False
 
-            test_folder = os.path.join(test_results_folder, '%s_SN%s' % (current_model, current_serial))
+            test_folder = os.path.join(test_results_folder, f'{current_model}_SN{current_serial}')
             test_data_folder = os.path.join(test_folder, 'data')
-            test_file_name = '%s%s.pdf' %  (test_date, nose_test_path.replace(':', '.'))
+            test_file_name = f"{test_date}{nose_test_path.replace(':', '.')}.pdf"
             full_test_filename = os.path.join(test_data_folder, test_file_name)
 
             if not os.path.exists(test_folder):
-                print('Creating folder %s' % test_data_folder)
+                print(f'Creating folder {test_data_folder}')
                 os.makedirs(test_data_folder)
 
             # print 'Test data will be stored in %s' % full_test_filename
@@ -162,8 +162,8 @@ def run_tests(config_file):
             # else:
             #     default_choice = 'Q'
             print('Generating summary report...')
-            summary_file_name = os.path.join(test_folder, '%s_SN%s_summary.pdf' %  (current_model, current_serial))
-            t = XReport.generate_test_summary(input_folder=test_data_folder, required_tests=cfg.test_list, output_filename=summary_file_name, title='%s_SN%s Summary Test Report' % (current_model, current_serial))
+            summary_file_name = os.path.join(test_folder, f'{current_model}_SN{current_serial}_summary.pdf')
+            t = XReport.generate_test_summary(input_folder=test_data_folder, required_tests=cfg.test_list, output_filename=summary_file_name, title=f'{current_model}_SN{current_serial} Summary Test Report')
     return locals()  # return a dict of all local variables to help interactive debugging
 
 
@@ -200,7 +200,7 @@ def select_menu_item(menu, default=''):
     for menu_item in menu:
         key_width = max(key_width, len(menu_item.get('key', '')))
         status_width = max(status_width, len(menu_item.get('status', '')))
-    fmt = ('%%-%is  ' % status_width)  + ('%%-%is. ' % key_width) + '%s'
+    fmt = (f'%-{status_width}s  ')  + (f'%-{key_width}s. ') + '%s'
     for item in menu:
         if 'description' in item:
             # if 'key' in item:
@@ -209,11 +209,11 @@ def select_menu_item(menu, default=''):
             #     print "    %s" % item['description']
 
     while True:
-        choice = input("Enter choice%s: " % (' [%s]' % default if default else '')).strip()
+        choice = input(f"Enter choice{f' [{default}]' if default else ''}: ").strip()
         pattern_match = find_menu_item(choice or default, menu)
         if pattern_match:
             return pattern_match
-        print("Choice is not valid. Valid choices are %s. Please try again." % (', '.join(item['key'] for item in menu if item.get('key', None))))
+        print(f"Choice is not valid. Valid choices are {', '.join(item['key'] for item in menu if item.get('key', None))}. Please try again.")
 
 def find_menu_item(text, pattern_list):
     """ Finds the menu item whose 'key' or 'regex' pattern matches the specified text.
@@ -256,7 +256,7 @@ def find_menu_item(text, pattern_list):
 
 
 def load_config(filename):
-        print('Loading config file %s' % filename)
+        print(f'Loading config file {filename}')
         with open(filename, 'rb') as yamlfile:
             cfg = NameSpace(icecore.load_yaml(yamlfile))
         return cfg
@@ -290,9 +290,9 @@ def parse_dut_id(string, dut_id_patterns):
             sn = s[0]
             cn = int(s[1])
         except ValueError:
-            raise ValueError('crate number is not an integer in entry %s' % string)
+            raise ValueError(f'crate number is not an integer in entry {string}')
     else:
-            raise RuntimeError('Multiple crate numbers were specified in entry:' % string)
+            raise RuntimeError(f'Multiple crate numbers were specified in entry: {string}')
     # Check if a model number is specified
     s = sn.split('_')
     if len(s) == 1:
@@ -304,7 +304,7 @@ def parse_dut_id(string, dut_id_patterns):
         if sn.startswith('SN'):
             sn = sn[2:]
     else:
-        raise RuntimeError("Crates model and serial number must be separated by one (and only one) underscore (e.g. MGK7BP16_023). Got '%s'" % sn)
+        raise RuntimeError(f"Crates model and serial number must be separated by one (and only one) underscore (e.g. MGK7BP16_023). Got '{sn}'")
 
     try:
         sn = int(sn)

@@ -323,9 +323,7 @@ class CGEChannel(_CGEDrpPort):
 
 
 class CGE(MMI):
-    """
-
-    """
+    """Interface to the 100G Ethernet FPGA module (CMAC, GT lanes, and DRP)."""
 
     # Map of loopback lanes for the 4-lane 100G link
     # This assumes we use a QSFP loopback dongle that loops each lane unto itself.

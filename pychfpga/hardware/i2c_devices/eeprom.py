@@ -137,7 +137,7 @@ class eeprom(object):
                 # self.logger.warning('I2C Error while reading EEPROM at memory address %i. Retrying...' % addr)
                 # trial +=1
                 # if trial>retry:
-                self.logger.error(f'{self!r}: Failed to read EEPROM at memory address {int(addr)} after {int(retry)} retries.')
+                self.logger.error(f'{self!r}: Failed to read EEPROM at memory address {addr} after {int(retry)} retries.')
                 raise
             data += block_data
             # print 'data=', data
