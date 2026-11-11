@@ -143,6 +143,7 @@ Where to go next
 - :doc:`getting_started/installation`
 - :doc:`user_guide/interactive_operation`
 - :doc:`user_guide/server_operation`
+- :doc:`development/principles`
 
 
 Documentation

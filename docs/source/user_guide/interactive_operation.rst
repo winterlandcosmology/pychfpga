@@ -47,6 +47,9 @@ IceBoard, beacons for CRS).
 
 Examples: ``"crs 247 224"``, ``"mb 123"``, ``"bp16 12:0 13:1"``, ``"10.10.3.7"``.
 
+How the map is built, kept consistent, and completed by discovery is described
+in :doc:`../development/principles`.
+
 Common options
 ==============
 

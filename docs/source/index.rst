@@ -43,6 +43,7 @@
    :maxdepth: 2
    :caption: Development
 
+   development/principles
    development/workflow
    development/firmware_state
 

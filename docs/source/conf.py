@@ -43,7 +43,6 @@ autodoc_mock_imports = [
     "pytest",
     "_pytest",
     "pytest_html",
-    "py",
     "labpy",
     "prettytable",
     "pyftdi",
