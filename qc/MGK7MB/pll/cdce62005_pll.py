@@ -129,13 +129,13 @@ p.set_frequency(1000)
 p1=s.get_port(1)
 p1.set_frequency(1000)
 
-print 'PLL1 contents is:'
+print('PLL1 contents is:')
 for i in range(9):
-    print 'Register %i: %08X' % (i, read_pll_reg(p,i))
+    print(f'Register {i}: {read_pll_reg(p,i):08X}')
 
-print 'PLL2 contents is:'
+print('PLL2 contents is:')
 for i in range(9):
-    print 'Register %i: %08X' % (i, read_pll_reg(p1,i))
+    print(f'Register {i}: {read_pll_reg(p1,i):08X}')
 
 
 
