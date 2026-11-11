@@ -129,7 +129,7 @@ class ChanBinSel(MMI):
         if use_cache and self.cached_bin_select_table is not None:
             mask = self.cached_bin_select_table
         else:
-            mask = self.read_ram(0x00, length=self.fpga.FRAME_LENGTH // 2 // 8)
+            mask = self.read_ram(0x00, type=np.dtype('u1'), length=self.fpga.FRAME_LENGTH // 2 // 8)
 
         bin_map = np.unpackbits(mask[::-1])[::-1]
         return np.where(bin_map)[0]

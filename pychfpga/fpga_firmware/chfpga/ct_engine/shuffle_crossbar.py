@@ -210,12 +210,16 @@ class ShuffleCrossbar(MMI):
         output lanes each bin selected its data, i.e.
         shuffle_output_lane = lane_map[bin_sel_input_lane]
         """
-        map_bytes = self.read(self.get_addr('LANE_MAP_BYTE0'), type=np.dtype('<u2'), length=self.NUMBER_OF_CROSSBAR_INPUTS // 2)
+        # Each control byte packs two 4-bit lane entries (low nibble = even
+        # index, high nibble = odd index), mirroring set_lane_map. `length`
+        # counts elements of `type`, so read the map as bytes.
+        map_bytes = self.read(self.get_addr('LANE_MAP_BYTE0'), type=np.dtype('u1'),
+                              length=self.NUMBER_OF_CROSSBAR_INPUTS // 2)
 
         lane_map = []
-        for i, byte in enumerate(map_bytes):
-            lane_map.append(byte & 0x0F)
-            lane_map.append((byte >> 4) & 0x0F)
+        for byte in map_bytes:
+            lane_map.append(int(byte) & 0x0F)
+            lane_map.append((int(byte) >> 4) & 0x0F)
         return lane_map
 
     def get_reverse_lane_map(self):
