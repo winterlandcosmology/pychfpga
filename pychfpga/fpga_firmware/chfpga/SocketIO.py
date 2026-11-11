@@ -128,12 +128,12 @@ def get_host_addr(dest_addr, netmask='255.255.0.0', only_one=True):
         host_addr_list = [netifaces.ifaddresses(iface)[netifaces.AF_INET][0]['addr'] for iface in netifaces.interfaces()] # This method to get all the host ip addresses works both on Linux and Windows
     except: # If netifaces not installed, try the old way (Works on Windows but may not work on Linux)
         host_addr_list = host_data[2] # get the list of IP addresses associated with this computer
-    dest_addr_vect = np.array(map(ord, socket.inet_aton(dest_addr))) # convert the target IP into a vector
-    netmask_vect = np.array(map(ord, socket.inet_aton(netmask))) # convert the net mask into a vector
+    dest_addr_vect = np.frombuffer(socket.inet_aton(dest_addr), dtype=np.uint8) # convert the target IP into a vector
+    netmask_vect = np.frombuffer(socket.inet_aton(netmask), dtype=np.uint8) # convert the net mask into a vector
 
     matched_addr = []
     for host_addr in host_addr_list:
-        host_addr_vect = np.array(map(ord, socket.inet_aton(host_addr))) # convert the host address into a vector
+        host_addr_vect = np.frombuffer(socket.inet_aton(host_addr), dtype=np.uint8) # convert the host address into a vector
         if all((host_addr_vect & netmask_vect) == (dest_addr_vect & netmask_vect)):
             matched_addr.append(host_addr)
     if only_one and len(matched_addr) != 1:
