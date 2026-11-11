@@ -418,7 +418,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
                 raise ValueError(
                     f"No capture format is configured for source {source}. "
                     f"Source 2 (CT, cookie 0xA2) requires an active "
-                    f"start_data_capture(source='ct') on an ICE corner-turn "
+                    f"start_ct_capture() on an ICE corner-turn "
                     f"firmware; this configuration has {len(formats)} source(s).")
             cf = formats[source]
             if not isinstance(cf, State):

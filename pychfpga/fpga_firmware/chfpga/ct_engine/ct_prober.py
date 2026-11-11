@@ -101,7 +101,7 @@ class CTProber(PROBER):
     def set_data_source(self, source):
         raise RuntimeError(
             "The CT prober always captures the corner-turn output; select a lane instead "
-            "with LANE_SEL or start_data_capture(source='ct', lane=n)")
+            "with LANE_SEL or start_ct_capture(lane=n)")
 
     def set_burst_period(self, burst_period0=390625, burst_period1=None):
         """ Sets the interval between data capture bursts. The period is specified in number of CT packets.
@@ -209,6 +209,114 @@ class CTProber(PROBER):
             send_flags=send_flags,
             geometry_source=geometry_source)
 
+    def stop_capture(self):
+        """Park the probe.
+
+        ``GLOBAL_TRIG`` does not gate this probe, so capture is stopped by
+        clearing ``CAPTURE_EN`` and holding the probe in reset.
+        """
+        self.CAPTURE_EN = 0
+        self.RESET = 1
+
+    def start_capture(
+            self,
+            period=None,
+            frames_per_burst=1,
+            lane=0,
+            verbose=1,
+            burst_period_in_seconds=None,
+            burst_period_in_frames=None,
+            burst_period_frame_rounding=4,
+            offset=0,
+            send_delay=0,
+            read_rate=None):
+        """Capture one corner-turn output lane and send it to the host.
+
+        The period is counted in CT packets: one packet spans
+        ``frames_per_packet`` FPGA frames. The channelizer reset is not
+        toggled. On a crate board that restart shifts the frame phase and
+        breaks corner-turn alignment until the next array sync.
+        Stop with :meth:`stop_capture`.
+
+        Parameters:
+
+            period (float): time in seconds between captured bursts.
+
+            burst_period_in_seconds (float): same as ``period``.
+
+            burst_period_in_frames (int): FPGA frames between bursts. Converted
+                to CT packets using the selected lane's packet geometry.
+
+            burst_period_frame_rounding (int): round the frame period down to
+                a multiple of this value before converting to CT packets.
+
+            frames_per_burst (int): consecutive CT packets in one burst (1-4).
+
+            lane (int): corner-turn output lane, 0-7.
+
+            offset (int): CT packets skipped after the probe reset before the
+                first burst.
+
+            send_delay (int): probe ``SEND_DELAY`` units (524.288 us each).
+
+            read_rate (int): host frame read rate written to GPIO.HOST_FRAME_READ_RATE if not None. Affects all capture engines (data and correlator)
+        """
+        fpga = self.fpga
+        if burst_period_in_seconds is not None:
+            period = burst_period_in_seconds
+        if ((burst_period_in_frames is None) and (period is None)) \
+           or ((burst_period_in_frames is not None) and (period is not None)):
+            raise ValueError("You must specify either 'period' or 'burst_period_in_frames'")
+        if period is not None:
+            burst_period_in_frames = max(float(period) / fpga.FRAME_PERIOD, 1)
+        burst_period_in_frames = (
+            int(burst_period_in_frames) // burst_period_frame_rounding
+        ) * burst_period_frame_rounding
+
+        lane = int(lane)
+        if not 0 <= lane <= 7:
+            raise ValueError(f"lane must be between zero and seven, got {lane}")
+
+        geometry = self.get_packet_geometry(lane)
+        frames_per_packet = int(geometry["frames_per_packet"])
+        if frames_per_packet < 1 or int(geometry["data_words"]) == 0:
+            raise RuntimeError(
+                "The corner-turn crossbars do not appear to be initialized "
+                "(the selected lane reports an empty packet); run init_corner_turn "
+                "before capturing from the corner turn")
+        burst_period_in_packets = max(
+            int(burst_period_in_frames) // frames_per_packet,
+            int(frames_per_burst))
+
+        if verbose:
+            packet_bytes = 4 * int(geometry["words_per_packet"]) + 10 + 42
+            packets_per_second = (
+                frames_per_burst / fpga.FRAME_PERIOD
+                / frames_per_packet
+                / burst_period_in_packets)
+            self.logger.debug(
+                f"{fpga!r}: CT capture on lane {lane}: "
+                f"{packets_per_second * packet_bytes * 8 / 1e6:.3f} Mbits/s "
+                f"({packet_bytes - 52}-byte CT packets)")
+
+        if read_rate is not None:
+            fpga.GPIO.HOST_FRAME_READ_RATE = read_rate
+        self.RESET = 1
+        self.LANE_SEL = lane
+        self.SUB_PERIOD = 23
+        self.set_stream_id(fpga.get_id(lane))
+        self.config_capture(
+            frames_per_burst=frames_per_burst,
+            burst_period=burst_period_in_packets,
+            offset=offset,
+            send_delay=send_delay,
+            words_per_packet=geometry["words_per_packet"])
+        self.RESET = 0
+        self.CAPTURE_EN = 1
+        self.update_config()
+        fpga.set_trig(1)
+        self.logger.debug(f"{fpga!r}: Enabling corner-turn capture on lane {lane}")
+
     def config_capture(self, frames_per_burst=1, burst_period=100, offset=0, send_delay=0, words_per_packet=None):
         """
         Configure the capture of corner-turn packets for transmission over the ethernet link.
@@ -285,7 +393,7 @@ class CTProber(PROBER):
 
         Not called during board init: the power-on defaults already park the
         probe, and touching BSB port 6 on a firmware without the probe would
-        stall the MMI. Call this (or start_data_capture(source='ct')) only on
+        stall the MMI. Call this (or start_ct_capture) only on
         a corner-turn bitstream.
         """
         self.logger.debug(f'{self!r}: Initializing corner-turn capture probe')

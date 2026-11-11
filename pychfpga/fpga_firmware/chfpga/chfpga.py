@@ -141,7 +141,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
     # IceBoard, it's both fs/4. (fs=sampling frequency)
     PLATFORM_SUPPORT = ( # [ {"platform":<platform_model>, "modes":<supported_modes>, "firmware_url":<firmware filename_or_url>, <other platform key-value parameters>}, ...]
         dict(platform="MGK7MB", modes=("shuffle16", "shuffle128", "shuffle256", "shuffle512","chan8", "chan4"),    
-            firmware_url='chfpga_ice_ct.bit',         
+            firmware_url='chfpga_ice_ct_pbg_sep24.bit',         
             bsb_transport=BSB_TRANSPORT_UDP,    
             sampling_frequency=800e6,  processing_frequency=200e6, adc_clock_divider=4,
             corr_readout_bins=None),
@@ -3452,6 +3452,18 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 f'{self!r}: set_data_capture() is not supported for '
                 f'capture engine {self.CAPTURE_TYPE!r}')
         self.config.channels = tuple(self._normalize_channels(channels))
+
+    def stop_ct_capture(self):
+        """Park the corner-turn capture probe. See :meth:`CTProber.stop_capture`."""
+        if self.CT_PROBER is None:
+            raise RuntimeError(f"{self!r}: Firmware has no corner-turn capture engine")
+        self.CT_PROBER.stop_capture()
+
+    def start_ct_capture(self, *args, **kwargs):
+        """Capture one corner-turn output lane. See :meth:`CTProber.start_capture`."""
+        if self.CT_PROBER is None:
+            raise RuntimeError(f"{self!r}: Firmware has no corner-turn capture engine")
+        self.CT_PROBER.start_capture(*args, **kwargs)
 
     def set_fft_bypass(self, bypass_mode, channels=None):
         """
