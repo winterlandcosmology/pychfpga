@@ -19,6 +19,52 @@ from ..mmi import MMI, BitField
 import logging
 
 
+def combine_data_flag_words(word_lists, bins):
+    """ Pack input-lane data-flags words pairwise into combined output words.
+
+    Pure layout model of the shuffle bin selector's COMBINE_DATA_FLAGS=1
+    readout (crossbar 2): for each selected incoming bin, consecutive pairs
+    of forwarded input lanes are packed into single words - low half from
+    the even lane of the pair, high half from the odd lane.
+
+    Parameters:
+        word_lists: one sequence per forwarded input lane (in lane order) of
+            uint32 data-flags words indexed by incoming bin position.
+
+        bins: selected incoming bin positions in transmission order.
+
+    Returns:
+        np.uint32 array of len(bins) * len(word_lists)//2 words, bins outer.
+    """
+    if len(word_lists) % 2:
+        raise ValueError('combined data flags need an even number of forwarded lanes')
+    out = []
+    for bin_number in bins:
+        for i in range(0, len(word_lists), 2):
+            low = int(word_lists[i][bin_number]) & 0xFFFF
+            high = int(word_lists[i + 1][bin_number]) & 0xFFFF
+            out.append(low | (high << 16))
+    return np.asarray(out, np.uint32)
+
+
+def passthrough_data_flag_words(word_lists, bins, words_per_bin=1):
+    """ Concatenate input-lane data-flags words without combining.
+
+    Pure layout model of the COMBINE_DATA_FLAGS=0 readout (crossbar 3):
+    bins outer, forwarded lanes inner, each lane contributing its
+    `words_per_bin` flag words for the selected bin.
+
+    Returns:
+        np.uint32 array of len(bins) * len(word_lists) * words_per_bin words.
+    """
+    out = []
+    for bin_number in bins:
+        for lane_words in word_lists:
+            for w in range(words_per_bin):
+                out.append(int(lane_words[bin_number * words_per_bin + w]) & 0xFFFFFFFF)
+    return np.asarray(out, np.uint32)
+
+
 class SHUFFLE_BIN_SEL_base(MMI):
     """ Implements an interface to the SHUFFLE_BIN_SEL FPGA module"""
 
@@ -141,9 +187,70 @@ class SHUFFLE_BIN_SEL_base(MMI):
         bin_map = np.unpackbits(mask[::-1])[::-1]
         return np.where(bin_map)[0]
 
-    def map(self, input_data, header=False):
+    def map_flags(self, input_flags):
+        """ Model the layout of the flags blocks this bin selector re-emits.
+
+        Pure permutation/packing model of the flag path, mirroring what
+        map() does for the data section: the caller supplies the incoming
+        per-lane flag words and this method re-slices them exactly as the
+        firmware does (combined pair-packing on crossbar 2, pass-through
+        concatenation on crossbar 3; frame-flags words are concatenated in
+        forwarded-lane order on both).
+
+        Parameters:
+            input_flags: {input_lane: dict-like with 'data_flags' (sequence
+                of uint32 words indexed by incoming bin position x
+                words-per-bin) and 'frame_flags' (a single word or a list of
+                words per frame)}. Missing lanes/entries contribute zeros.
+
+        Returns:
+            {sublane: dict(data_flags=<uint32 array>,
+                           frame_flags=<list of int words>,
+                           packet_flags=0)}
+        """
+        if self.BYPASS:
+            raise RuntimeError(f'{self!r}: SHUFFLE_BIN_SEL cannot provide flag maps in BYPASS mode')
+
+        N = self.NUMBER_OF_INPUTS // self.NUMBER_OF_OUTPUTS
+        bins = self.get_selected_bins()
+        combine = bool(self.COMBINE_DATA_FLAGS)
+        words_per_bin = max(int(self.NUMBER_OF_DATA_FLAGS_WORDS_PER_BIN), 1)
+        incoming_bins = int(self.NUMBER_OF_BINS_PER_FRAME)
+        frame_flag_words = max(int(self.NUMBER_OF_FRAME_FLAGS_WORDS_PER_FRAME), 1)
+
+        def lane_entry(lane, key, default):
+            entry = input_flags.get(lane)
+            value = entry.get(key) if entry is not None else None
+            if value is None:
+                return default
+            if key == 'frame_flags' and isinstance(value, (int, np.integer)):
+                return [int(value)]  # single-word producers (chan_bin_sel) emit an int
+            return value
+
+        out = OrderedDict()
+        for sublane in range(self.NUMBER_OF_OUTPUTS):
+            lanes = list(range(N * sublane + self.FIRST_LANE, N * sublane + self.LAST_LANE + 1))
+            zero_df = [0] * (incoming_bins * words_per_bin)
+            word_lists = [lane_entry(lane, 'data_flags', zero_df) for lane in lanes]
+            if combine:
+                data_flags = combine_data_flag_words(word_lists, bins)
+            else:
+                data_flags = passthrough_data_flag_words(word_lists, bins, words_per_bin)
+            frame_flags = []
+            for lane in lanes:
+                frame_flags.extend(int(v) & 0xFFFFFFFF
+                                   for v in lane_entry(lane, 'frame_flags', [0] * frame_flag_words))
+            out[sublane] = dict(data_flags=data_flags, frame_flags=frame_flags, packet_flags=0)
+        return out
+
+    def map(self, input_data, header=False, flags=False):
         """ Return a bin selector frequency map, which describes the structure and contents of the
         bin selector output stream.
+
+        Parameters:
+            flags (bool): when True, the incoming lane dicts' 'data_flags'
+                and 'frame_flags' entries are re-sliced through map_flags()
+                and returned in place of the None placeholders.
         """
 
         N = self.NUMBER_OF_INPUTS // self.NUMBER_OF_OUTPUTS  # number of input lanes per output
@@ -151,6 +258,7 @@ class SHUFFLE_BIN_SEL_base(MMI):
         bs_out = OrderedDict()
         bins = self.get_selected_bins()
         bypass = self.BYPASS
+        mapped_flags = self.map_flags(input_data) if flags else None
         # if self.BYPASS:
         #     raise RuntimeError('%r: CHAN_BIN_SEL cannot yet provide maps in BYPASS mode', self)
 
@@ -188,13 +296,22 @@ class SHUFFLE_BIN_SEL_base(MMI):
                 header = static_header.copy()
                 header['stream_id'] = static_stream_id + sublane
 
-            bs_out[sublane] = dict(
-                header=header,
-                data=data,
-                data_flags=None,
-                frame_flags=None,
-                packet_flags=None
-                )
+            if mapped_flags is not None:
+                bs_out[sublane] = dict(
+                    header=header,
+                    data=data,
+                    data_flags=mapped_flags[sublane]['data_flags'],
+                    frame_flags=mapped_flags[sublane]['frame_flags'],
+                    packet_flags=mapped_flags[sublane]['packet_flags']
+                    )
+            else:
+                bs_out[sublane] = dict(
+                    header=header,
+                    data=data,
+                    data_flags=None,
+                    frame_flags=None,
+                    packet_flags=None
+                    )
         return bs_out
 
     def status(self):

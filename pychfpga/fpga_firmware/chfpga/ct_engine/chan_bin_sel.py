@@ -17,6 +17,68 @@ import logging
 from ..mmi import MMI, BitField, CONTROL, STATUS
 
 
+def pack_data_flags_words(bins, channels, data_flags, combine):
+    """ Pack per-channel, per-bin flag bits into one frame's data-flags words.
+
+    Pure layout model (no hardware access) shared by the driver's map_flags
+    methods and the offline unit tests.
+
+    Parameters:
+        bins: selected bin numbers in transmission order (ascending).
+
+        channels: channel numbers, one per flag bit position (bit c carries
+            channels[c]).
+
+        data_flags: {channel: sequence of 0/1 indexed by bin number}.
+            Channels not listed contribute zeros. None means all zeros.
+
+        combine (bool): the hardware COMBINE_DATA_FLAGS setting. When True,
+            two consecutive selected bins share one word (even index in the
+            low half, odd index in the high half). When False, each selected
+            bin gets its own word with the channel flags in the low half and
+            the high half zeroed.
+
+    Returns:
+        np.uint32 array of len(bins)//2 (combine) or len(bins) words.
+    """
+    data_flags = data_flags or {}
+    if combine:
+        if len(bins) % 2:
+            raise NotImplementedError('combined data flags need an even number of selected bins')
+        words = np.zeros(len(bins) // 2, np.uint32)
+        for c, ch in enumerate(channels):
+            ch_flags = data_flags.get(ch)
+            if ch_flags is None:
+                continue
+            for m in range(len(bins) // 2):
+                words[m] |= (int(ch_flags[bins[2 * m]]) & 1) << c
+                words[m] |= (int(ch_flags[bins[2 * m + 1]]) & 1) << (16 + c)
+    else:
+        words = np.zeros(len(bins), np.uint32)
+        for c, ch in enumerate(channels):
+            ch_flags = data_flags.get(ch)
+            if ch_flags is None:
+                continue
+            for m, bin_number in enumerate(bins):
+                words[m] |= (int(ch_flags[bin_number]) & 1) << c
+    return words
+
+
+def pack_frame_flags_word(channels, frame_flags):
+    """ Pack per-channel (adc, fft) overflow bits into one frame-flags word.
+
+    Pure layout model: bit c = ADC overflow of channels[c], bit 16+c = FFT
+    overflow. Channels not listed in `frame_flags` contribute zeros.
+    """
+    frame_flags = frame_flags or {}
+    word = 0
+    for c, ch in enumerate(channels):
+        adc, fft = frame_flags.get(ch, (0, 0))
+        word |= (int(adc) & 1) << c
+        word |= (int(fft) & 1) << (16 + c)
+    return word
+
+
 class ChanBinSel(MMI):
     """ Implements interface to the FR_DIST within a processor pipeline"""
 
@@ -145,13 +207,53 @@ class ChanBinSel(MMI):
         self.logger.debug(f'   FIFO EMPTY: {self.FIFO_EMPTY}')
         self.logger.debug(f'   FIFO OVERFLOW: {self.FIFO_OVERFLOW}')
 
-    def map(self, input_data, header=False):
+    def map_flags(self, data_flags=None, frame_flags=None):
+        """ Models the layout of the flags block appended to one output frame.
+
+        This is a pure permutation/packing model, mirroring what map() does
+        for the data section: the caller supplies the flag bit the hardware
+        samples for each channel and bin, and this method packs them into
+        flag words exactly as the firmware does. Which physical TUSER bit
+        the firmware actually samples is the caller's concern, not this
+        model's.
+
+        Both COMBINE_DATA_FLAGS layouts are modelled: combined (one word per
+        pair of selected bins - shuffle16) and uncombined (one word per
+        selected bin, high half zero - shuffle256).
+
+        Parameters:
+            data_flags: {channel_number: [flag, ...]} indexed by frequency
+                bin, like map()'s input_data. Channels not listed contribute
+                zeros.
+
+            frame_flags: {channel_number: (adc_overflow, fft_overflow)}.
+                Channels not listed contribute zeros.
+
+        Returns:
+            dict(data_flags_words=<uint32 array>, frame_flags_word=int)
+        """
+
+        if self.BYPASS:
+            raise RuntimeError(f'{self!r}: CHAN_BIN_SEL cannot provide flag maps in BYPASS mode (no flags are sent)')
+
+        channels = list(range(self.FIRST_FIFO_NUMBER * 4, self.LAST_FIFO_NUMBER * 4 + 3 + 1))
+        bins = self.get_selected_bins()
+        return dict(
+            data_flags_words=pack_data_flags_words(
+                bins, channels, data_flags, combine=bool(self.COMBINE_DATA_FLAGS)),
+            frame_flags_word=pack_frame_flags_word(channels, frame_flags))
+
+    def map(self, input_data, header=False, data_flags=None, frame_flags=None):
         """ Reorders the data based on the configuration of the bin selector.
 
         Parameters:
             input data: {channel_number: [data, ...]}
 
             header (bool): if True, includes header information in the returned data
+
+            data_flags, frame_flags: optional flag inputs passed to
+                map_flags(); when given, the corresponding entries of the
+                returned dict are populated instead of None.
 
         Returns:
             output_data: [data, data]
@@ -183,13 +285,23 @@ class ChanBinSel(MMI):
             header = None
 
         output_data = [input_data[ch][bin_number] for bin_number in bins for ch in channels]
-        output_dict = dict(
-            header=header,
-            data=output_data,
-            data_flags=None,
-            frame_flags=None,
-            packet_flags=None
-        )
+        if data_flags is not None or frame_flags is not None:
+            flags = self.map_flags(data_flags=data_flags, frame_flags=frame_flags)
+            output_dict = dict(
+                header=header,
+                data=output_data,
+                data_flags=flags['data_flags_words'],
+                frame_flags=flags['frame_flags_word'],
+                packet_flags=0  # the packet-flags trailer word is always zero
+            )
+        else:
+            output_dict = dict(
+                header=header,
+                data=output_data,
+                data_flags=None,
+                frame_flags=None,
+                packet_flags=None
+            )
         return output_dict
 
     def get_sim_output(self, input_lanes):
