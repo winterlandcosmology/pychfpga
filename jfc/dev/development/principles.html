@@ -1,0 +1,537 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Principles of operation &mdash; pychfpga User Manual (jfc/dev @ c6d8416c) 1.3.4.dev828+ice.co.gc6d8416cb documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+      <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
+
+  
+    <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=95768dbe"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Branches, releases and tags" href="workflow.html" />
+    <link rel="prev" title="GPS" href="../platforms/aux/gps.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/pychfpga_logo_v3.svg" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/requirements.html">Requirements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started/installation.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/interactive_operation.html">Interactive operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/data_capture.html">Data capture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/server_operation.html">Server operation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/docker.html">Docker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/networking.html">Networking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/pocket_correlator.html">Single-board correlator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user_guide/troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Platforms</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/crs/index.html">CRS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/ice/index.html">IceBoard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/kc705.html">KC705</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../platforms/aux/index.html">Auxiliary instruments</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Principles of operation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#hardware-map">Hardware map</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#identity">Identity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gradual-construction-and-class-changes">Gradual construction and class changes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#consistency">Consistency</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#object-graph">Object graph</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#specifying-the-map">Specifying the map</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#populating-the-map">Populating the map</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#network-discovery">Network discovery</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#self-discovery">Self-discovery</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#initialization">Initialization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#role-of-the-platform">Role of the platform</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#role-of-the-firmware">Role of the firmware</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#firmware-management">Firmware management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#method-visibility">Method visibility</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#platform-methods">Platform methods</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#firmware-methods">Firmware methods</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#array-methods">Array methods</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ccoll-fan-out">Ccoll fan-out</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#state-management">State management</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="workflow.html">Branches, releases and tags</a></li>
+<li class="toctree-l1"><a class="reference internal" href="firmware_state.html">chFPGA state tree</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../testing/hardware/index.html">Hardware testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../testing/firmware.html">Firmware testing</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Code Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../_autosummaries/pychfpga.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pychfpga/</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../_autosummaries/firmware_tests.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">firmware_tests/</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="../_autosummaries/qc.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">qc/</span></code></a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Indices</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../genindex.html">Index</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../py-modindex.html">Module Index</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ c6d8416c)</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Principles of operation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/development/principles.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="principles-of-operation">
+<h1>Principles of operation<a class="headerlink" href="#principles-of-operation" title="Link to this heading"></a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">pychfpga</span></code> is an in-process Python control plane for arrays of FPGA boards.
+The <strong>hardware map</strong> is a first-class object: an in-memory registry of boards,
+crates and mezzanines. It is not a database — there is no SQLAlchemy session
+and no persistence layer.</p>
+<p><a class="reference internal" href="../_autosummaries/pychfpga.fpga_array.html#pychfpga.fpga_array.FPGAArray" title="pychfpga.fpga_array.FPGAArray"><code class="xref py py-class docutils literal notranslate"><span class="pre">FPGAArray</span></code></a> populates that map, opens each board’s
+on-board processor, programs the FPGA, then exposes platform, firmware and
+array-wide methods. Three layers sit on top of one another:</p>
+<ul class="simple">
+<li><p><strong>Array</strong> — <a class="reference internal" href="../_autosummaries/pychfpga.fpga_array.html#pychfpga.fpga_array.FPGAArray" title="pychfpga.fpga_array.FPGAArray"><code class="xref py py-class docutils literal notranslate"><span class="pre">FPGAArray</span></code></a></p></li>
+<li><p><strong>Platform</strong> — <a class="reference internal" href="../_autosummaries/pychfpga.hardware.motherboard.html#pychfpga.hardware.motherboard.Motherboard" title="pychfpga.hardware.motherboard.Motherboard"><code class="xref py py-class docutils literal notranslate"><span class="pre">Motherboard</span></code></a> subclasses
+(<a class="reference internal" href="../_autosummaries/pychfpga.hardware.ice.iceboard.html#pychfpga.hardware.ice.iceboard.IceBoard" title="pychfpga.hardware.ice.iceboard.IceBoard"><code class="xref py py-class docutils literal notranslate"><span class="pre">IceBoard</span></code></a>,
+<a class="reference internal" href="../_autosummaries/pychfpga.hardware.crs.crs.html#pychfpga.hardware.crs.crs.CRS" title="pychfpga.hardware.crs.crs.CRS"><code class="xref py py-class docutils literal notranslate"><span class="pre">CRS</span></code></a>, …)</p></li>
+<li><p><strong>Firmware</strong> — <a class="reference internal" href="../_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA" title="pychfpga.fpga_firmware.chfpga.chfpga.chFPGA"><code class="xref py py-class docutils literal notranslate"><span class="pre">chFPGA</span></code></a>, stored as
+<code class="docutils literal notranslate"><span class="pre">mb.fpga</span></code></p></li>
+</ul>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>HWM string or list of dicts
+    -&gt; HardwareMap (Motherboard / Crate / Mezzanine objects)
+    -&gt; network discovery + self-discovery
+    -&gt; open platform (Tuber / TCPipe)
+    -&gt; program FPGA + instantiate chFPGA
+    -&gt; open MMI + array_init
+</pre></div>
+</div>
+<p>For interactive use of <code class="docutils literal notranslate"><span class="pre">FPGAArray</span></code>, see
+<a class="reference internal" href="../user_guide/interactive_operation.html"><span class="doc">Interactive operation</span></a>.</p>
+<section id="hardware-map">
+<h2>Hardware map<a class="headerlink" href="#hardware-map" title="Link to this heading"></a></h2>
+<p>The live map is <a class="reference internal" href="../_autosummaries/pychfpga.hardware.hardware_map.html#pychfpga.hardware.hardware_map.HardwareMap" title="pychfpga.hardware.hardware_map.HardwareMap"><code class="xref py py-class docutils literal notranslate"><span class="pre">HardwareMap</span></code></a>: one
+process-global Python list per hardware kind
+(<a class="reference internal" href="../_autosummaries/pychfpga.hardware.motherboard.html#pychfpga.hardware.motherboard.Motherboard" title="pychfpga.hardware.motherboard.Motherboard"><code class="xref py py-class docutils literal notranslate"><span class="pre">Motherboard</span></code></a>,
+<a class="reference internal" href="../_autosummaries/pychfpga.hardware.crate.html#pychfpga.hardware.crate.Crate" title="pychfpga.hardware.crate.Crate"><code class="xref py py-class docutils literal notranslate"><span class="pre">Crate</span></code></a>,
+<a class="reference internal" href="../_autosummaries/pychfpga.hardware.mezzanine.html#pychfpga.hardware.mezzanine.Mezzanine" title="pychfpga.hardware.mezzanine.Mezzanine"><code class="xref py py-class docutils literal notranslate"><span class="pre">Mezzanine</span></code></a>). Instances register themselves
+in <code class="docutils literal notranslate"><span class="pre">__new__</span></code>. <a class="reference internal" href="../_autosummaries/pychfpga.hardware.hardware_map.html#pychfpga.hardware.hardware_map.HardwareMap.clear_hardware_map" title="pychfpga.hardware.hardware_map.HardwareMap.clear_hardware_map"><code class="xref py py-meth docutils literal notranslate"><span class="pre">clear_hardware_map()</span></code></a>
+empties the lists in place so existing <code class="docutils literal notranslate"><span class="pre">FPGAArray</span></code> bindings stay live.</p>
+<p>Platform classes are declared in
+<code class="docutils literal notranslate"><span class="pre">pychfpga/hardware/supported_hardware.py</span></code> and loaded lazily from that
+manifest. An older SQLAlchemy <code class="docutils literal notranslate"><span class="pre">!HardwareMap</span></code> YAML loader existed and is
+unused.</p>
+<p><code class="docutils literal notranslate"><span class="pre">__init__</span></code> on hardware objects must not talk to the hardware. Objects are
+created, updated and replaced while the map is still fluid.</p>
+<section id="identity">
+<h3>Identity<a class="headerlink" href="#identity" title="Link to this heading"></a></h3>
+<p>A board matches an existing instance if <strong>either</strong> its hostname matches <strong>or</strong>
+its <code class="docutils literal notranslate"><span class="pre">(part_number,</span> <span class="pre">serial)</span></code> pair matches. A crate matches on <code class="docutils literal notranslate"><span class="pre">crate_number</span></code>
+<strong>or</strong> <code class="docutils literal notranslate"><span class="pre">(part_number,</span> <span class="pre">serial)</span></code>. <code class="docutils literal notranslate"><span class="pre">part_number</span> <span class="pre">is</span> <span class="pre">None</span></code> means a generic
+placeholder, not real hardware.</p>
+<p>Always create objects with
+<a class="reference internal" href="../_autosummaries/pychfpga.hardware.motherboard.html#pychfpga.hardware.motherboard.Motherboard.get_unique_instance" title="pychfpga.hardware.motherboard.Motherboard.get_unique_instance"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_unique_instance()</span></code></a> (or the
+crate equivalent), never by calling <code class="docutils literal notranslate"><span class="pre">IceBoard(...)</span></code> / <code class="docutils literal notranslate"><span class="pre">CRS(...)</span></code> directly.
+Direct construction cannot keep identity unique or rewrite crate and mezzanine
+links.</p>
+<p>After <code class="docutils literal notranslate"><span class="pre">FPGAArray</span></code> finishes, select boards from the snapshot collections
+<code class="docutils literal notranslate"><span class="pre">ca.ib</span></code> / <code class="docutils literal notranslate"><span class="pre">ca.ic</span></code> by serial, hostname, <code class="docutils literal notranslate"><span class="pre">(crate,</span> <span class="pre">slot)</span></code> tuple, or the
+object itself (<a class="reference internal" href="../_autosummaries/pychfpga.fpga_array.html#pychfpga.fpga_array.FPGAArray.get_iceboard" title="pychfpga.fpga_array.FPGAArray.get_iceboard"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_iceboard()</span></code></a>).</p>
+</section>
+<section id="gradual-construction-and-class-changes">
+<h3>Gradual construction and class changes<a class="headerlink" href="#gradual-construction-and-class-changes" title="Link to this heading"></a></h3>
+<p>Class change is how the map is built gradually. The user often names hardware
+incompletely — an IP, a serial, a crate number, or a generic
+<code class="docutils literal notranslate"><span class="pre">Motherboard</span></code>. That creates a placeholder.</p>
+<p>Discovery then fills in what the hardware actually is (hostname, serial, slot,
+crate). <a class="reference internal" href="../_autosummaries/pychfpga.hardware.motherboard.html#pychfpga.hardware.motherboard.Motherboard.update_instance" title="pychfpga.hardware.motherboard.Motherboard.update_instance"><code class="xref py py-meth docutils literal notranslate"><span class="pre">update_instance()</span></code></a> with
+<code class="docutils literal notranslate"><span class="pre">new_class=...</span></code> replaces the Python class of the existing object: a generic
+<code class="docutils literal notranslate"><span class="pre">Motherboard</span></code> becomes <code class="docutils literal notranslate"><span class="pre">IceBoard</span></code> or <code class="docutils literal notranslate"><span class="pre">CRS</span></code>; a generic crate becomes
+<code class="docutils literal notranslate"><span class="pre">IceCrate_MGK7BP16</span></code> or <code class="docutils literal notranslate"><span class="pre">CRSBackplane</span></code>. The old instance is deleted; crate
+slot dictionaries and mezzanine back-references are rewritten to the new
+object.</p>
+<p>Same-class updates fill missing hostname, serial or slot without replacing the
+object. <code class="docutils literal notranslate"><span class="pre">FPGAArray</span></code> refuses to finish while any board or crate still has
+<code class="docutils literal notranslate"><span class="pre">part_number</span> <span class="pre">is</span> <span class="pre">None</span></code>.</p>
+</section>
+<section id="consistency">
+<h3>Consistency<a class="headerlink" href="#consistency" title="Link to this heading"></a></h3>
+<p>Consistency is enforced <strong>procedurally</strong>, not by a separate validator or
+schema. Each <code class="docutils literal notranslate"><span class="pre">get_unique_instance</span></code> / <code class="docutils literal notranslate"><span class="pre">update_instance</span></code> call runs
+hardware-specific bookkeeping so the map stays coherent:</p>
+<ul class="simple">
+<li><p>bidirectional <code class="docutils literal notranslate"><span class="pre">crate.slot[n]</span></code> ↔ <code class="docutils literal notranslate"><span class="pre">motherboard.crate</span></code></p></li>
+<li><p>mezzanine <code class="docutils literal notranslate"><span class="pre">iceboard</span></code> pointers rewritten on class change</p></li>
+<li><p>duplicate identity keys raise <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code></p></li>
+<li><p>a generic crate cannot have a serial</p></li>
+</ul>
+<p>After discovery, <code class="docutils literal notranslate"><span class="pre">FPGAArray</span></code> does a final pass: drop unused crates,
+unresolved hostnames, leftover generics and excluded boards, then snapshot
+into sorted <code class="docutils literal notranslate"><span class="pre">self.ib</span></code> / <code class="docutils literal notranslate"><span class="pre">self.ic</span></code>.</p>
+</section>
+<section id="object-graph">
+<h3>Object graph<a class="headerlink" href="#object-graph" title="Link to this heading"></a></h3>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Motherboard.crate          --&gt;  Crate
+Crate.slot[n]              --&gt;  Motherboard
+Motherboard.mezzanine[m]   --&gt;  Mezzanine
+Mezzanine.iceboard         --&gt;  Motherboard
+</pre></div>
+</div>
+<p>Mezzanines are children of motherboards. They are not unique-tracked by serial
+the way boards and crates are.</p>
+</section>
+<section id="specifying-the-map">
+<h3>Specifying the map<a class="headerlink" href="#specifying-the-map" title="Link to this heading"></a></h3>
+<p>Two input forms become the same in-memory map.</p>
+<p>A <strong>string</strong> is convenient for interactive use. Tokens are space-separated.
+A part-number token selects the class (suffix match, so <code class="docutils literal notranslate"><span class="pre">mb</span></code> means
+<code class="docutils literal notranslate"><span class="pre">MGK7MB</span></code>, <code class="docutils literal notranslate"><span class="pre">crs</span></code> means <code class="docutils literal notranslate"><span class="pre">CRS</span></code>, <code class="docutils literal notranslate"><span class="pre">bp16</span></code> means <code class="docutils literal notranslate"><span class="pre">MGK7BP16</span></code>). Following
+tokens are serials, optional <code class="docutils literal notranslate"><span class="pre">serial:slot</span></code> / <code class="docutils literal notranslate"><span class="pre">serial:slot:crate_number</span></code>,
+an IP or hostname, or <code class="docutils literal notranslate"><span class="pre">*</span></code> (wildcard serial).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ca</span> <span class="o">=</span> <span class="k">await</span> <span class="n">FPGAArray</span><span class="p">(</span><span class="s2">"crs 247 224"</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"corr8"</span><span class="p">)</span>
+<span class="n">ca</span> <span class="o">=</span> <span class="k">await</span> <span class="n">FPGAArray</span><span class="p">(</span><span class="s2">"mb 003 007"</span><span class="p">)</span>
+<span class="n">ca</span> <span class="o">=</span> <span class="k">await</span> <span class="n">FPGAArray</span><span class="p">(</span><span class="s2">"bp16 12:0 13:1"</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"shuffle512"</span><span class="p">)</span>
+<span class="n">ca</span> <span class="o">=</span> <span class="k">await</span> <span class="n">FPGAArray</span><span class="p">(</span><span class="s2">"10.10.3.7"</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"corr16"</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A <strong>list of dicts</strong> (including YAML) can pass more than identity. Each entry
+is <code class="docutils literal notranslate"><span class="pre">{class,</span> <span class="pre">serial,</span> <span class="pre">hostname,</span> <span class="pre">slot,</span> <span class="pre">crate_number,</span> <span class="pre">...}</span></code>. Extra keys go to
+the object (<code class="docutils literal notranslate"><span class="pre">extra_hwm_args</span></code>) so platform or firmware init can receive them
+— for example <code class="docutils literal notranslate"><span class="pre">fpga_ip_addr</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">hwm</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">{</span><span class="s2">"class"</span><span class="p">:</span> <span class="s2">"IceCrate_MGK7BP16"</span><span class="p">,</span> <span class="s2">"serial"</span><span class="p">:</span> <span class="s2">"003"</span><span class="p">,</span> <span class="s2">"crate_number"</span><span class="p">:</span> <span class="mi">0</span><span class="p">},</span>
+    <span class="p">{</span><span class="s2">"class"</span><span class="p">:</span> <span class="s2">"IceBoard"</span><span class="p">,</span> <span class="s2">"serial"</span><span class="p">:</span> <span class="s2">"0234"</span><span class="p">,</span> <span class="s2">"hostname"</span><span class="p">:</span> <span class="s2">"10.10.10.5"</span><span class="p">,</span>
+     <span class="s2">"slot"</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">"crate_number"</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">"fpga_ip_addr"</span><span class="p">:</span> <span class="s2">"10.10.3.5"</span><span class="p">},</span>
+<span class="p">]</span>
+<span class="n">ca</span> <span class="o">=</span> <span class="k">await</span> <span class="n">FPGAArray</span><span class="p">(</span><span class="n">hwm</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"corr16"</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>String syntax for operators is also described in
+<a class="reference internal" href="../user_guide/interactive_operation.html"><span class="doc">Interactive operation</span></a>.</p>
+</section>
+</section>
+<section id="populating-the-map">
+<h2>Populating the map<a class="headerlink" href="#populating-the-map" title="Link to this heading"></a></h2>
+<p>After placeholders exist, two stages complete the map: <strong>network discovery</strong>
+(find a hostname or IP) then <strong>self-discovery</strong> (ask the board for serial,
+slot, crate and mezzanines). Boards are grouped by
+<code class="docutils literal notranslate"><span class="pre">get_network_discovery_function()</span></code>, so a mixed IceBoard and CRS array uses
+the right protocol for each.</p>
+<section id="network-discovery">
+<h3>Network discovery<a class="headerlink" href="#network-discovery" title="Link to this heading"></a></h3>
+<p>Network discovery runs <strong>only</strong> for boards and crates whose hostname the user
+did not supply — typically those named by serial or crate. If the hardware
+map already has a hostname or IP, that board is skipped here; self-discovery
+later fills identity.</p>
+<p>The approach is platform-dependent.</p>
+<p><strong>IceBoard</strong> advertises itself with mDNS / DNS-SD
+(<code class="docutils literal notranslate"><span class="pre">_tuber-jsonrpc._tcp.local.</span></code>), browsed with zeroconf. TXT records carry
+motherboard part and serial, and backplane part, serial and slot. The
+hostname is <code class="docutils literal notranslate"><span class="pre">iceboardNNNN.local</span></code>. There is no IP scan. Tuber is the RPC
+used after the board is found, not the discovery protocol.</p>
+<p><strong>CRS</strong> broadcasts UDP beacons on port 9875. The host sends <code class="docutils literal notranslate"><span class="pre">BEACONREQ</span></code>;
+boards reply <code class="docutils literal notranslate"><span class="pre">FWREQ</span></code> (still in U-Boot) or <code class="docutils literal notranslate"><span class="pre">TCPIPE</span></code>. Headers carry
+product, serial, crate, backplane and slot. Boards and the host must be on
+the same L2 broadcast domain. Avahi is not required.</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 22.0%" />
+<col style="width: 39.0%" />
+<col style="width: 39.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"></th>
+<th class="head"><p>IceBoard</p></th>
+<th class="head"><p>CRS</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Advertise</p></td>
+<td><p>mDNS <code class="docutils literal notranslate"><span class="pre">_tuber-jsonrpc._tcp</span></code></p></td>
+<td><p>UDP broadcast beacons</p></td>
+</tr>
+<tr class="row-odd"><td><p>Port</p></td>
+<td><p>5353 (multicast)</p></td>
+<td><p>9875 (broadcast; <code class="docutils literal notranslate"><span class="pre">BEACONREQ</span></code> solicits)</p></td>
+</tr>
+<tr class="row-even"><td><p>Board software</p></td>
+<td><p>ARM Linux + Tuber already up</p></td>
+<td><p>U-Boot (<code class="docutils literal notranslate"><span class="pre">FWREQ</span></code>) or TCPipe (<code class="docutils literal notranslate"><span class="pre">TCPIPE</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Extra step</p></td>
+<td><p>none</p></td>
+<td><p>upload <code class="docutils literal notranslate"><span class="pre">tcpipe_crs.elf</span></code> if still in U-Boot</p></td>
+</tr>
+<tr class="row-even"><td><p>Control plane after open</p></td>
+<td><p>HTTP Tuber</p></td>
+<td><p>TCP TCPipe port 7</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="self-discovery">
+<h3>Self-discovery<a class="headerlink" href="#self-discovery" title="Link to this heading"></a></h3>
+<p>Once every remaining board has a hostname, <code class="docutils literal notranslate"><span class="pre">FPGAArray</span></code> opens the platform
+and asks each board for what the map still lacks:
+<code class="docutils literal notranslate"><span class="pre">discover_serial_async</span></code>, <code class="docutils literal notranslate"><span class="pre">discover_slot_async</span></code>,
+<code class="docutils literal notranslate"><span class="pre">discover_crate_async</span></code>, <code class="docutils literal notranslate"><span class="pre">discover_mezzanines_async</span></code>.</p>
+<ul class="simple">
+<li><p><strong>IceBoard</strong> reads motherboard and backplane IPMI over Tuber, then FMC
+mezzanine EEPROMs.</p></li>
+<li><p><strong>CRS</strong> reads the same IPMI fields over TCPipe. Mezzanine discovery is a
+no-op. If the board is still in U-Boot, <code class="docutils literal notranslate"><span class="pre">set_platform_firmware()</span></code> uploads
+<code class="docutils literal notranslate"><span class="pre">tcpipe_crs.elf</span></code> between network discovery and open.</p></li>
+</ul>
+<p>Crate and slot information from mDNS TXT or CRS beacons is confirmed at this
+step, not always invented. Boards given only as an IP rely on self-discovery
+for serial, crate and slot.</p>
+</section>
+</section>
+<section id="initialization">
+<h2>Initialization<a class="headerlink" href="#initialization" title="Link to this heading"></a></h2>
+<p><a class="reference internal" href="../_autosummaries/pychfpga.fpga_array.html#pychfpga.fpga_array.FPGAArray" title="pychfpga.fpga_array.FPGAArray"><code class="xref py py-class docutils literal notranslate"><span class="pre">FPGAArray</span></code></a> is awaitable. Construction only stores
+arguments; hardware work starts when the object is awaited:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">ca</span> <span class="o">=</span> <span class="k">await</span> <span class="n">FPGAArray</span><span class="p">(</span><span class="s2">"crs 77"</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">"corr8"</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Once the hardware map is complete, <code class="docutils literal notranslate"><span class="pre">FPGAArray</span></code> snapshots <code class="docutils literal notranslate"><span class="pre">self.ib</span></code> /
+<code class="docutils literal notranslate"><span class="pre">self.ic</span></code> and drives a four-step contract that every motherboard
+implements:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">open_platform_async()</span></code> — talk to the on-board processor; platform
+methods become usable.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">set_fpga_bitstream_async()</span></code> — program the FPGA. <code class="docutils literal notranslate"><span class="pre">mb.fpga</span></code> is created
+but not yet opened.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">open_fpga_async()</span></code> — open MMI, instantiate firmware submodule objects.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">init_fpga_async()</span></code> — put the firmware into the requested operational
+state.</p></li>
+</ol>
+<p>The <code class="docutils literal notranslate"><span class="pre">init</span></code> argument selects how far to go (when <code class="docutils literal notranslate"><span class="pre">mode</span></code> is set it defaults
+to 3; <code class="docutils literal notranslate"><span class="pre">prog</span></code> defaults to 2):</p>
+<ul class="simple">
+<li><p><strong>0</strong> — map and <code class="docutils literal notranslate"><span class="pre">open_platform_async</span></code> only</p></li>
+<li><p><strong>1</strong> — also program the FPGA (<code class="docutils literal notranslate"><span class="pre">prog</span></code>) and create <code class="docutils literal notranslate"><span class="pre">mb.fpga</span></code></p></li>
+<li><p><strong>2</strong> — also <code class="docutils literal notranslate"><span class="pre">open_fpga_async</span></code></p></li>
+<li><p><strong>3</strong> — also firmware-level <code class="docutils literal notranslate"><span class="pre">array_init_async</span></code></p></li>
+</ul>
+<section id="role-of-the-platform">
+<h3>Role of the platform<a class="headerlink" href="#role-of-the-platform" title="Link to this heading"></a></h3>
+<p>Platform code owns the processor link and the programming path only.</p>
+<ul class="simple">
+<li><p><strong>IceBoard</strong> — Tuber over HTTP. The ARM Linux image is assumed already
+running. The bitstream is sent through the ARM.</p></li>
+<li><p><strong>CRS</strong> — TCPipe over TCP port 7. If the board is still in U-Boot, platform
+firmware (<code class="docutils literal notranslate"><span class="pre">tcpipe_crs.elf</span></code>) is uploaded first. The HMC7044 PLL is
+initialized before the bitstream so the FPGA comes up on the right clocks.</p></li>
+</ul>
+</section>
+<section id="role-of-the-firmware">
+<h3>Role of the firmware<a class="headerlink" href="#role-of-the-firmware" title="Link to this heading"></a></h3>
+<p><a class="reference internal" href="../_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga.html#pychfpga.fpga_firmware.chfpga.chfpga.chFPGA" title="pychfpga.fpga_firmware.chfpga.chfpga.chFPGA"><code class="xref py py-class docutils literal notranslate"><span class="pre">chFPGA</span></code></a> is the Python handler for
+the bitstream, not a motherboard. Firmware-level
+<code class="docutils literal notranslate"><span class="pre">array_init_async</span></code> (on <a class="reference internal" href="../_autosummaries/pychfpga.fpga_firmware.chfpga.chfpga_array_methods.html#pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods" title="pychfpga.fpga_firmware.chfpga.chfpga_array_methods.chFPGAArrayMethods"><code class="xref py py-class docutils literal notranslate"><span class="pre">chFPGAArrayMethods</span></code></a>)
+initializes channelizers and corner-turn engines, calls <code class="docutils literal notranslate"><span class="pre">ic.init()</span></code> on
+crates, sets the sync method, then applies the operational mode.</p>
+<p>Bitstream programming, MMI open, and the program/open retry loop stay in
+<code class="docutils literal notranslate"><span class="pre">FPGAArray</span></code>.</p>
+</section>
+</section>
+<section id="firmware-management">
+<h2>Firmware management<a class="headerlink" href="#firmware-management" title="Link to this heading"></a></h2>
+<p>Operational <code class="docutils literal notranslate"><span class="pre">mode</span></code> selects both the <code class="docutils literal notranslate"><span class="pre">.bit</span></code> file <strong>and</strong> the Python
+firmware class plus its init parameters (sampling frequency, MMI transport,
+…). <code class="docutils literal notranslate"><span class="pre">bitfile=</span></code> still requires <code class="docutils literal notranslate"><span class="pre">mode</span></code>: the file is the bitstream, <code class="docutils literal notranslate"><span class="pre">mode</span></code>
+is how Python talks to it.</p>
+<p><a class="reference internal" href="../_autosummaries/pychfpga.fpga_firmware.fpga_firmware.html#pychfpga.fpga_firmware.fpga_firmware.FPGAFirmware.get_firmware" title="pychfpga.fpga_firmware.fpga_firmware.FPGAFirmware.get_firmware"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_firmware()</span></code></a> looks
+up <code class="docutils literal notranslate"><span class="pre">(platform</span> <span class="pre">part_number,</span> <span class="pre">mode)</span></code> in every
+<a class="reference internal" href="../_autosummaries/pychfpga.fpga_firmware.fpga_firmware.html#pychfpga.fpga_firmware.fpga_firmware.FPGAFirmware" title="pychfpga.fpga_firmware.fpga_firmware.FPGAFirmware"><code class="xref py py-class docutils literal notranslate"><span class="pre">FPGAFirmware</span></code></a> subclass
+<code class="docutils literal notranslate"><span class="pre">PLATFORM_SUPPORT</span></code> table. The chFPGA table and the platform/mode/bitstream
+list are in <a class="reference internal" href="../introduction.html"><span class="doc">Introduction</span></a>.</p>
+<p>Bitstreams live in <code class="docutils literal notranslate"><span class="pre">pychfpga/fpga_firmware/bitstreams/</span></code> and are stored with
+Git LFS. CRC32 and MD5 are computed on the raw payload. IceBoard can skip
+reprogramming when the on-FPGA CRC already matches (<code class="docutils literal notranslate"><span class="pre">prog=1</span></code>). CRS cannot
+reliably detect an already-programmed FPGA, so <code class="docutils literal notranslate"><span class="pre">prog=2</span></code> (always program) is
+the practical clean-start path.</p>
+<p>After upload, <code class="docutils literal notranslate"><span class="pre">mb.fpga</span> <span class="pre">=</span> <span class="pre">chFPGA(motherboard,</span> <span class="pre">mode,</span> <span class="pre">**fw_params)</span></code> with no
+FPGA I/O yet. <code class="docutils literal notranslate"><span class="pre">open_async</span></code> opens MMI (UDP on IceBoard, TCPipe on CRS),
+checks cookie <code class="docutils literal notranslate"><span class="pre">0x42</span></code>, and instantiates GPIO, channelizers, CT and correlator
+objects from the geometry the FPGA reports.</p>
+<p>ARM / platform firmware is separate from the FPGA bitstream: IceBoard Tuber
+is already running; CRS may still need <code class="docutils literal notranslate"><span class="pre">tcpipe_crs.elf</span></code>.</p>
+</section>
+<section id="method-visibility">
+<h2>Method visibility<a class="headerlink" href="#method-visibility" title="Link to this heading"></a></h2>
+<p>There are three access paths. Methods are not mixed into <code class="docutils literal notranslate"><span class="pre">FPGAArray</span></code> as a
+single class.</p>
+<section id="platform-methods">
+<h3>Platform methods<a class="headerlink" href="#platform-methods" title="Link to this heading"></a></h3>
+<p>These live on the motherboard object (<code class="docutils literal notranslate"><span class="pre">IceBoard</span></code>, <code class="docutils literal notranslate"><span class="pre">CRS</span></code>, …): open the
+platform, program the FPGA, I2C, sensors, Tuber or TCPipe.</p>
+<p>IceBoard installs ARM Tuber methods as instance attributes after
+<code class="docutils literal notranslate"><span class="pre">open_platform_async</span></code>. CRS uses explicit TCPipe RPCs, not Tuber.</p>
+</section>
+<section id="firmware-methods">
+<h3>Firmware methods<a class="headerlink" href="#firmware-methods" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">Motherboard.__getattr__</span></code> forwards unknown names to <code class="docutils literal notranslate"><span class="pre">self.fpga</span></code> once it
+exists, so <code class="docutils literal notranslate"><span class="pre">mb.GPIO</span></code>, <code class="docutils literal notranslate"><span class="pre">mb.chan</span></code> and <code class="docutils literal notranslate"><span class="pre">mb.CT</span></code> are firmware objects. Platform attributes win if both define the
+same name. <code class="docutils literal notranslate"><span class="pre">__dir__</span></code> unions both, which is why tab-complete on a board
+shows firmware names.</p>
+</section>
+<section id="array-methods">
+<h3>Array methods<a class="headerlink" href="#array-methods" title="Link to this heading"></a></h3>
+<p>Array-wide methods appear on <code class="docutils literal notranslate"><span class="pre">ca</span></code> through
+<a class="reference internal" href="../_autosummaries/pychfpga.common.array_methods.html#pychfpga.common.array_methods.ArrayMethods" title="pychfpga.common.array_methods.ArrayMethods"><code class="xref py py-class docutils literal notranslate"><span class="pre">ArrayMethods</span></code></a> provider classes, not
+mixins. Each motherboard advertises a set of providers. <code class="docutils literal notranslate"><span class="pre">FPGAArray</span></code> takes
+the <strong>intersection</strong> (a method is array-wide only if every board advertises
+that provider) and instantiates one provider bound to the array.</p>
+<p>Firmware registers providers: <code class="docutils literal notranslate"><span class="pre">chFPGAArrayMethods</span></code> from the <code class="docutils literal notranslate"><span class="pre">chFPGA</span></code>
+class, then extra CT / 100G providers during <code class="docutils literal notranslate"><span class="pre">open_async</span></code> (BCT, UCT, CGE).
+Duplicate method names across providers raise.</p>
+</section>
+<section id="ccoll-fan-out">
+<h3>Ccoll fan-out<a class="headerlink" href="#ccoll-fan-out" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">ca.ib</span></code> and <code class="docutils literal notranslate"><span class="pre">ca.ic</span></code> are <a class="reference internal" href="../_autosummaries/pychfpga.common.ccoll.html#pychfpga.common.ccoll.Ccoll" title="pychfpga.common.ccoll.Ccoll"><code class="xref py py-class docutils literal notranslate"><span class="pre">Ccoll</span></code></a> collections.
+Attribute access and calls fan out to every member, concurrently for
+coroutines:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">await</span> <span class="n">ca</span><span class="o">.</span><span class="n">ib</span><span class="o">.</span><span class="n">set_fpga_bitstream_async</span><span class="p">(</span><span class="n">mode</span><span class="p">,</span> <span class="n">force</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># same method, every board</span>
+<span class="k">await</span> <span class="n">ca</span><span class="o">.</span><span class="n">sync_async</span><span class="p">()</span>                                   <span class="c1"># one coordinated array method</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">Ccoll</span></code> is “call the same method on each object”. Array methods coordinate
+the array (one sync time, one frequency map, crate-aware shuffle).</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 40.0%" />
+<col style="width: 60.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>You write</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ca.ib</span></code> / <code class="docutils literal notranslate"><span class="pre">ca.ic</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Ccoll</span></code> of motherboards / crates</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ca.ib[0]</span></code> / <code class="docutils literal notranslate"><span class="pre">ca.get_iceboard(...)</span></code></p></td>
+<td><p>one motherboard</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ca.ib.set_fpga_bitstream_async(...)</span></code></p></td>
+<td><p>platform method on every board</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ca.ib.GPIO</span></code> / <code class="docutils literal notranslate"><span class="pre">ca.ib.chan</span></code></p></td>
+<td><p>firmware objects on every board</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ca.sync_async()</span></code></p></td>
+<td><p>array-wide coordinated sync</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ca.set_operational_mode_async('corr8')</span></code></p></td>
+<td><p>array-wide operational mode</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="state-management">
+<h2>State management<a class="headerlink" href="#state-management" title="Link to this heading"></a></h2>
+<p>Firmware modules expose durable, semantic configuration through a shared
+<code class="docutils literal notranslate"><span class="pre">State</span></code> tree (dotted access, <code class="docutils literal notranslate"><span class="pre">as_dict()</span></code>, snapshot-based
+<code class="docutils literal notranslate"><span class="pre">ack()</span></code> / <code class="docutils literal notranslate"><span class="pre">has_changed()</span></code>). See <a class="reference internal" href="firmware_state.html"><span class="doc">chFPGA state tree</span></a>.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../platforms/aux/gps.html" class="btn btn-neutral float-left" title="GPS" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="workflow.html" class="btn btn-neutral float-right" title="Branches, releases and tags" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024 McGill University.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>crs_discovery.py &mdash; pychfpga User Manual (jfc/dev @ 53a6898b) 1.3.4.dev819+ice.co.g53a6898bd documentation</title>
+  <title>crs_discovery.py &mdash; pychfpga User Manual (jfc/dev @ c6d8416c) 1.3.4.dev828+ice.co.gc6d8416cb documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
@@ -15,7 +15,7 @@
     <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
       <script src="../_static/jquery.js?v=5d32c60e"></script>
       <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../_static/documentation_options.js?v=50c405aa"></script>
+      <script src="../_static/documentation_options.js?v=95768dbe"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/js/theme.js"></script>
@@ -70,6 +70,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/principles.html">Principles of operation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../development/workflow.html">Branches, releases and tags</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../development/firmware_state.html">chFPGA state tree</a></li>
 </ul>
@@ -183,7 +184,7 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../index.html">pychfpga User Manual (jfc/dev @ 53a6898b)</a>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ c6d8416c)</a>
       </nav>
 
       <div class="wy-nav-content">
@@ -235,7 +236,7 @@
 <td><p>Upload platform firmware to U-Boot boards (parallel async netconsole sessions).</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.hardware.crs.crs_discovery.CRSDiscovery" title="pychfpga.hardware.crs.crs_discovery.CRSDiscovery"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CRSDiscovery</span></code></a></p></td>
-<td><p></p></td>
+<td><p>Discover CRS boards and crates via U-Boot and tcpipe beacons, and load ARM firmware.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#pychfpga.hardware.crs.crs_discovery.HTTPFirmwareServer" title="pychfpga.hardware.crs.crs_discovery.HTTPFirmwareServer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">HTTPFirmwareServer</span></code></a></p></td>
 <td><p>Async HTTP server for a single firmware ELF (aiohttp, no threads).</p></td>
@@ -327,6 +328,7 @@ match the ELF being loaded.</p>
 <dt class="sig sig-object py" id="pychfpga.hardware.crs.crs_discovery.CRSDiscovery">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.hardware.crs.crs_discovery.</span></span><span class="sig-name descname"><span class="pre">CRSDiscovery</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">board_targets</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">crate_targets</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.crs.crs_discovery.CRSDiscovery" title="Link to this definition"></a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Discover CRS boards and crates via U-Boot and tcpipe beacons, and load ARM firmware.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="pychfpga.hardware.crs.crs_discovery.CRSDiscovery.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">board_targets</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">crate_targets</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeout</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.hardware.crs.crs_discovery.CRSDiscovery.__init__" title="Link to this definition"></a></dt>

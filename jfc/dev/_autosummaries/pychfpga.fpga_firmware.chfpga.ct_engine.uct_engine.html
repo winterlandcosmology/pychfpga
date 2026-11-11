@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>uct_engine.py &mdash; pychfpga User Manual (jfc/dev @ 53a6898b) 1.3.4.dev819+ice.co.g53a6898bd documentation</title>
+  <title>uct_engine.py &mdash; pychfpga User Manual (jfc/dev @ c6d8416c) 1.3.4.dev828+ice.co.gc6d8416cb documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=79dfdd86" />
@@ -15,7 +15,7 @@
     <link rel="shortcut icon" href="../_static/chime_favicon.png"/>
       <script src="../_static/jquery.js?v=5d32c60e"></script>
       <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
-      <script src="../_static/documentation_options.js?v=50c405aa"></script>
+      <script src="../_static/documentation_options.js?v=95768dbe"></script>
       <script src="../_static/doctools.js?v=fd6eb6e6"></script>
       <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/js/theme.js"></script>
@@ -70,6 +70,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Development</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="../development/principles.html">Principles of operation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../development/workflow.html">Branches, releases and tags</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../development/firmware_state.html">chFPGA state tree</a></li>
 </ul>
@@ -152,7 +153,7 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../index.html">pychfpga User Manual (jfc/dev @ 53a6898b)</a>
+          <a href="../index.html">pychfpga User Manual (jfc/dev @ c6d8416c)</a>
       </nav>
 
       <div class="wy-nav-content">
@@ -178,7 +179,7 @@
   <section id="uct-engine-py">
 <h1><a class="reference internal" href="#module-pychfpga.fpga_firmware.chfpga.ct_engine.uct_engine" title="pychfpga.fpga_firmware.chfpga.ct_engine.uct_engine"><code class="xref py py-mod docutils literal notranslate"><span class="pre">uct_engine.py</span></code></a><a class="headerlink" href="#uct-engine-py" title="Link to this heading"></a></h1>
 <dl class="simple" id="module-pychfpga.fpga_firmware.chfpga.ct_engine.uct_engine">
-<dt>cge.py module</dt><dd><p>Implements interface to the 100G Ethernet FPGA module</p>
+<dt>uct_engine.py module</dt><dd><p>Implements the Ultrascale Corner-Turn (UCT) FPGA engine.</p>
 </dd>
 </dl>
 <div class="autosummary-block docutils container">
@@ -195,7 +196,7 @@
 <td><p></p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#pychfpga.fpga_firmware.chfpga.ct_engine.uct_engine.UCTEngine" title="pychfpga.fpga_firmware.chfpga.ct_engine.uct_engine.UCTEngine"><code class="xref py py-obj docutils literal notranslate"><span class="pre">UCTEngine</span></code></a></p></td>
-<td><p></p></td>
+<td><p>Ultrascale corner-turn engine: CT1/CT2/CT3 registers and backplane 25G links.</p></td>
 </tr>
 </tbody>
 </table>
@@ -1125,6 +1126,7 @@ name of the bitfield.</p></li>
 <dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.ct_engine.uct_engine.UCTEngine">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">pychfpga.fpga_firmware.chfpga.ct_engine.uct_engine.</span></span><span class="sig-name descname"><span class="pre">UCTEngine</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">router</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">router_port</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.ct_engine.uct_engine.UCTEngine" title="Link to this definition"></a></dt>
 <dd><p>Bases: <a class="reference internal" href="pychfpga.fpga_firmware.chfpga.mmi.html#pychfpga.fpga_firmware.chfpga.mmi.MMIRouter" title="pychfpga.fpga_firmware.chfpga.mmi.MMIRouter"><code class="xref py py-class docutils literal notranslate"><span class="pre">MMIRouter</span></code></a></p>
+<p>Ultrascale corner-turn engine: CT1/CT2/CT3 registers and backplane 25G links.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="pychfpga.fpga_firmware.chfpga.ct_engine.uct_engine.UCTEngine.ADDRESS_WIDTH">
 <span class="sig-name descname"><span class="pre">ADDRESS_WIDTH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#pychfpga.fpga_firmware.chfpga.ct_engine.uct_engine.UCTEngine.ADDRESS_WIDTH" title="Link to this definition"></a></dt>
