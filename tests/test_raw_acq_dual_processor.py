@@ -21,7 +21,10 @@ from test_raw_data_processor import (
 
 def make_dual(stream_ids=(10, 11)):
     pr = DummyPacketReceiver(n_packets=16, max_packet_size=64)
-    cfg = default_config(stream_ids=stream_ids, packet_cookie=PACKET_COOKIE_ADC)
+    cfg = default_config(
+        stream_ids=stream_ids,
+        packet_cookie=[PACKET_COOKIE_ADC, PACKET_COOKIE_FFT],
+    )
     cfg["capture_format"] = [capture_format_for_tests("8"), capture_format_for_tests("8")]
     proc = RawDataPacketProcessor(
         pr, config_getter=config_getter_from_mapping(cfg), receive_window=3

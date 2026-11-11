@@ -60,6 +60,7 @@ from .f_engine import prober
 
 from .ct_engine import uct_engine
 from .ct_engine import bct_engine
+from .ct_engine import ct_prober
 from .ct_engine import upack
 from .ct_engine import gpu
 from .ct_engine import cge
@@ -201,6 +202,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             'GPU': 3,
             'CORR': 4,
             'UPACK': 5,
+            'CT_PROBER': 6,  # Corner-turn output capture probe (ICE CT_LEVEL=3)
             'UCAP': 7
         }
 
@@ -678,6 +680,12 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 else:
                     raise RuntimeError(f'Unknown feature list for PLATFORM_ID = {self.PLATFORM_ID}')
 
+                # The corner-turn output probe is built only into the ICE CT_LEVEL=3 bitstream.
+                # GPIO has no dedicated bit for it; CT_LEVEL distinguishes that bitstream from ICE corr16.
+                self.HAS_CT_CAPTURE = (
+                    self.PLATFORM_ID in (self._PLATFORM_ID_MGK7MB_REV0, self._PLATFORM_ID_MGK7MB_REV2)
+                    and int(self.CT_LEVEL) == 3
+                )
 
                 # Set platform/implementation-specific features & constants based on values reported by the FPGA GPIO module
                 #
@@ -871,6 +879,18 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 elif self.CAPTURE_TYPE !='PROBER':
                     raise RuntimeError(f'Unknown Data capture type {self.CAPTURE_TYPE}')
 
+                # Construction does not touch the bus. The probe stays parked at its power-on default.
+                if self.HAS_CT_CAPTURE:
+                    self.logger.debug(f'{self!r}: === Instantiating CT capture probe')
+                    self.CT_PROBER = ct_prober.CTProber(
+                        router=self.top_router,
+                        router_port='CT_PROBER',
+                        instance_number=0,
+                        config=self.config.add("ct_prober"),
+                    )
+                else:
+                    self.CT_PROBER = None
+
 
                 # ---------------------------------------------------------------------
                 # Instantiate ADC board hardware ressource handlers objects
@@ -993,8 +1013,15 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self.FRAME_PERIOD = float(self.FRAME_LENGTH) / self._sampling_frequency
         self.FRAME_RATE = 1 / self.FRAME_PERIOD
 
-        from pychfpga.common.raw_data_packet_processor import PACKET_COOKIE_ADC, PACKET_COOKIE_FFT
+        from pychfpga.common.raw_data_packet_processor import (
+            PACKET_COOKIE_ADC,
+            PACKET_COOKIE_CT,
+            PACKET_COOKIE_FFT,
+        )
         bytes_per_frame = int(self.ADC_BYTES_PER_SAMPLE * self.ADC_SAMPLES_PER_FRAME)
+        packet_cookie = [PACKET_COOKIE_ADC, PACKET_COOKIE_FFT]
+        if self.HAS_CT_CAPTURE:
+            packet_cookie.append(PACKET_COOKIE_CT)
         self.config.update(
             capture_engine=self.CAPTURE_TYPE,
             adc_bits_per_sample=int(self.ADC_BITS_PER_SAMPLE),
@@ -1006,7 +1033,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             capture_bits_per_word=128 if self.CAPTURE_TYPE == "UCAP" else 32,
             subframes_per_frame=4 if self.CAPTURE_TYPE == "UCAP" else 1,
             packet_header_format="raw-v1",
-            packet_cookie=[PACKET_COOKIE_ADC, PACKET_COOKIE_FFT], # cookies for both data sources
+            packet_cookie=packet_cookie,
             sample_freq_mhz=float(self._sampling_frequency) / 1e6,
             platform_id=int(self.PLATFORM_ID),
             channels=tuple(self.default_channels),
@@ -2347,6 +2374,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self.chan.update_config()
         if self.CT is not None:
             self.CT.update_config()
+        if getattr(self, "CT_PROBER", None) is not None:
+            self.CT_PROBER.update_config()
         if self.CORR is not None:
             self.CORR.update_config()
         return self.config

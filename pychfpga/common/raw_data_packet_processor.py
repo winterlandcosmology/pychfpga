@@ -11,9 +11,10 @@ from .state import State
 
 PACKET_COOKIE_ADC = 0xA0
 PACKET_COOKIE_FFT = 0xA1
+PACKET_COOKIE_CT = 0xA2  # corner-turn output capture probe
 PACKET_COOKIE_MASK = 0xFE
 RAW_SOURCE_EMPTY = 255
-NUM_SOURCES = 2
+NUM_SOURCES = 3
 
 
 def decode_format_string(format):
@@ -147,8 +148,10 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.config = None
         self.packet_cookie_mask = PACKET_COOKIE_MASK
         self.source_target_mode = np.zeros((NUM_SOURCES,), dtype=np.uint8)
-        self._capture_format = [None, None]
-        self._fmt_scratch = [{}, {}]
+        self._capture_format = [None] * NUM_SOURCES
+        self._fmt_scratch = [{} for _ in range(NUM_SOURCES)]
+        self.cookie_source_map = np.full(256, -1, dtype=np.int8)
+        self._packet_cookies = None
         super().__init__(packet_receiver, receive_window, verbose)
 
     def init(self):
@@ -187,7 +190,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.pkt_cookie = np.empty((n_packets,), dtype=np.uint8)
         self.pkt_frame = np.empty((n_packets,), dtype=np.uint32) # same as pkt_off  into the data buffer for each packet
         self.pkt_subframe = np.empty((n_packets,), dtype=np.uint32) # must be wide enough to compute the offset into the data buffer for each packet
-        # self.pkt_source = np.empty((n_packets,), dtype=np.uint8)
+        self.pkt_source = np.empty((n_packets,), dtype=np.int8)  # source index from the cookie lookup (-1 = unknown)
 
         self.pkt_six = np.empty((n_packets,), dtype=np.uint16)
         self.pkt_off = np.empty((n_packets,), dtype=np.uint32)
@@ -196,11 +199,33 @@ class RawDataPacketProcessor(PacketProcessorBase):
         self.raw_data_buf = np.empty(0, dtype=np.uint8)
         self.raw_data_count_buf = np.empty(0, dtype=np.int64)
         self.raw_source_buf = np.empty(0, dtype=np.uint8)
-        self.formatted_data_bufs = [np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)]
+        self.formatted_data_bufs = [np.empty(0, dtype=np.uint8) for _ in range(NUM_SOURCES)]
         self.fmt_cdata_buf1_0, self.fmt_cdata_buf1_1 = np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)
         self.fmt_cdata_buf2_0, self.fmt_cdata_buf2_1 = np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)
-        self.fmt_cdata1 = [None, None]
-        self.fmt_cdata2 = [None, None]
+        self.fmt_cdata_buf1_2, self.fmt_cdata_buf2_2 = np.empty(0, dtype=np.uint8), np.empty(0, dtype=np.uint8)
+        self.fmt_cdata1 = [None] * NUM_SOURCES
+        self.fmt_cdata2 = [None] * NUM_SOURCES
+
+    def _install_packet_cookies(self, state):
+        """Install the cookie-to-source map once, and reject a later change."""
+        if not state.has_attr("packet_cookie"):
+            raise ValueError(
+                "capture config is missing packet_cookie; chFPGA must list the cookies this capture accepts"
+            )
+        cookies = tuple(state.packet_cookie)
+        if len(cookies) > NUM_SOURCES:
+            raise ValueError(
+                f"packet_cookie lists {len(cookies)} cookies but only "
+                f"{NUM_SOURCES} capture sources are supported")
+        if self._packet_cookies is None:
+            self._packet_cookies = cookies
+            self.cookie_source_map = np.full(256, -1, dtype=np.int8)
+            self.cookie_source_map[np.asarray(cookies, dtype=np.intp)] = np.arange(len(cookies), dtype=np.int8)
+        elif cookies != self._packet_cookies:
+            raise RuntimeError(
+                "packet_cookie is fixed for this capture and cannot change during operation "
+                f"(was {list(self._packet_cookies)}, got {list(cookies)})"
+            )
 
     def update_config(self):
         source = self._config_getter()
@@ -294,9 +319,15 @@ class RawDataPacketProcessor(PacketProcessorBase):
 
             state.ack(static_state_attrs, context=static_state_attrs)
 
+        # packet_cookie is fixed when the firmware config is first built
+        # (ICE CT_LEVEL=3 adds 0xA2; every other build lists the two channelizer
+        # cookies). It is not part of the capture updates applied later.
+        self._install_packet_cookies(state)
+
         dynamic_state_attrs = (
             "capture_format0",
             "capture_format1",
+            "capture_format2",
         )
 
         for source, cf in enumerate(state.capture_format):
@@ -306,7 +337,21 @@ class RawDataPacketProcessor(PacketProcessorBase):
                 cf = State(cf)
                 state.capture_format[source] = cf
             if cf.has_changed(context=dynamic_state_attrs[source]):
-                if cf.fmt_is_complex:
+                if getattr(cf, "fmt_is_ct_data", False):
+                    # Geometry is published with the capture, after this slot exists.
+                    # Leave the context unacked so the buffer is sized on the next update.
+                    if not cf.has_attr("fmt_data_words"):
+                        continue
+                    # One (4+4)-bit complex value per payload byte. The 4-word
+                    # CT header, optional flags, and trailer are stripped later.
+                    cdata1_dims = (
+                        self.max_timestamps * self.FRAMES_PER_BURST,
+                        self.NCHAN,
+                        4 * int(cf.fmt_data_words),
+                    )
+                    self.fmt_cdata1[source] = self.resize_buffer(
+                        f"fmt_cdata_buf1_{source}", cdata1_dims, element_dtype=np.complex64)
+                elif cf.fmt_is_complex:
                     fmt_bus_width = int(cf.fmt_bus_width)
                     fmt_data_width = int(cf.fmt_data_width)
                     bytes_per_integer = math.ceil(fmt_bus_width / 8)
@@ -368,9 +413,49 @@ class RawDataPacketProcessor(PacketProcessorBase):
         if format is not None:
             cf = decode_format_string(format)
         else:
-            cf = self.config.capture_format[source]
-            if cf is not None and not isinstance(cf, State):
+            formats = self.config.capture_format
+            if not 0 <= source < len(formats) or formats[source] is None:
+                raise ValueError(
+                    f"No capture format is configured for source {source}. "
+                    f"Source 2 (CT, cookie 0xA2) requires an active "
+                    f"start_data_capture(source='ct') on an ICE corner-turn "
+                    f"firmware; this configuration has {len(formats)} source(s).")
+            cf = formats[source]
+            if not isinstance(cf, State):
                 cf = State(cf)
+
+        if getattr(cf, "fmt_is_ct_data", False):
+            # Each burst row holds FRAMES_PER_BURST complete CT packets of
+            # big-endian 32-bit words. Strip the header and everything after
+            # the data block, then unpack the (4+4)-bit complex bytes.
+            if not getattr(cf, "fmt_four_bits", True):
+                raise NotImplementedError(
+                    "8-bit corner-turn payload decode is not implemented; "
+                    "use format='32' to read the raw packet words")
+            n_ts, nchan, nbytes_burst = raw_data.shape
+            frames_per_burst = int(self.FRAMES_PER_BURST)
+            words_per_packet = nbytes_burst // frames_per_burst // 4
+            header_words = int(getattr(cf, "fmt_header_words", 4))
+            data_words = int(cf.fmt_data_words)
+            w = raw_data.view(">u4").reshape(n_ts, nchan, frames_per_burst, words_per_packet)
+            payload = w[..., header_words:header_words + data_words]
+            # Channel 0 of a bin word sits in the LSBs. Byteswap so bytes
+            # come out in logical channel order.
+            b = np.ascontiguousarray(payload.astype("<u4")).view(np.uint8)
+            b = b.reshape(n_ts, nchan, frames_per_burst, 4 * data_words)
+            if getattr(cf, "use_offset_encoding", False):
+                b = b ^ np.uint8(0x88)
+            s = b.view(np.int8)
+            s = s.transpose(0, 2, 1, 3).reshape(n_ts * frames_per_burst, nchan, 4 * data_words)
+            cdata = self.fmt_cdata1[source][:n_ts * frames_per_burst]
+            np.copyto(cdata.real, s >> 4)
+            np.copyto(cdata.imag, np.left_shift(s, 4).astype(np.int8) >> 4)
+            frame_offsets = np.arange(frames_per_burst, dtype=ts.dtype)
+            ts = (ts[:, None] + frame_offsets[None, :]).reshape(-1)
+            sources = sources.swapaxes(-1, -2).reshape(n_ts * frames_per_burst, -1)
+            counts = counts.swapaxes(-1, -2).reshape(n_ts * frames_per_burst, -1) * (sources == source)
+            return ts, cdata, counts
+
         base = cf.fmt_bus_width
         is_complex = cf.fmt_is_complex
         if complex_override is not None:
@@ -529,9 +614,10 @@ class RawDataPacketProcessor(PacketProcessorBase):
         bix_mask = self.bix_mask[:n]
         temp_mask = self.tmp_mask[:n]
 
-        # Filter out packets with the wrong cookie or packet size
-        np.bitwise_and(self.buf_cookie[:n], self.PACKET_COOKIE_MASK, out=self.pkt_cookie[:n])
-        np.equal(self.pkt_cookie[:n], self.PACKET_COOKIE, out=bix_mask)
+        # Cookie lookup yields the source index (0xA0 -> 0, 0xA1 -> 1,
+        # 0xA2 -> 2 when configured). -1 drops the packet.
+        np.take(self.cookie_source_map, self.buf_cookie[:n], out=self.pkt_source[:n])
+        np.greater_equal(self.pkt_source[:n], 0, out=bix_mask)
         np.equal(self.pr.pkt_len[:n], self.PACKET_SIZE, out=temp_mask[:n], where=bix_mask)
         np.bitwise_and(bix_mask, temp_mask[:n], out=bix_mask)
         n_cookie = int(bix_mask.sum()) if self.verbose >= 2 else 0
@@ -641,7 +727,7 @@ class RawDataPacketProcessor(PacketProcessorBase):
             self.pkt_off[bix, None] + np.arange(self.BYTES_PER_SUBFRAME, dtype=self.pkt_off.dtype),
         ] = self.buf_data[bix, :self.BYTES_PER_SUBFRAME] # copy the payload bytes from the UDP buffer to the output buffer
 
-        self.raw_source[tix, self.pkt_six[bix], self.pkt_frame[bix]] = self.buf_cookie[bix] & 1
+        self.raw_source[tix, self.pkt_six[bix], self.pkt_frame[bix]] = self.pkt_source[bix]
 
         # Update the raw data count and raw data complete arrays
         np.add.at(self.raw_data_count, (tix, self.pkt_six[bix], self.pkt_frame[bix]), 1)

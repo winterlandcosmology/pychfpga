@@ -1762,7 +1762,10 @@ class chFPGAArrayMethods(ArrayMethods):
             State: Array-wide raw config, including ``source``,
             ``channels``, ``stream_ids``, ``frames_per_burst``,
             ``subframes_per_frame``, ``target_mode``, ``fft_bin_map``, and
-            ``capture_format[0/1]`` (funcgen vs scaler).
+            ``capture_format[0/1]`` (funcgen vs scaler) and, on an ICE
+            ``CT_LEVEL`` 3 board, ``capture_format[2]`` (corner-turn probe).
+            ``fmt_is_ct_data`` is true only on that third entry. ``packet_cookie``
+            is taken from the boards.
 
         Raises:
 
@@ -1801,6 +1804,7 @@ class chFPGAArrayMethods(ArrayMethods):
                 bytes_per_frame=bytes_per_frame,
                 subframes_per_frame=subframes_per_frame,
                 bytes_per_subframe=bytes_per_frame // subframes_per_frame,
+                packet_cookie=list(State.get_common_attr(cfgs, "packet_cookie")),
             )
             self._raw_data_config.capture_format = [State(), State()]
 
@@ -1869,8 +1873,14 @@ class chFPGAArrayMethods(ArrayMethods):
             target_mode=target_mode,
             fft_bin_map=fft_bin_map,
         )
-        self._raw_data_config.capture_format[0]=State.get_common_attr(funcgen_cfgs, "capture_format")
-        self._raw_data_config.capture_format[1]=State.get_common_attr(scaler_cfgs, "capture_format")
+        self._raw_data_config.capture_format[0] = State.get_common_attr(funcgen_cfgs, "capture_format")
+        self._raw_data_config.capture_format[1] = State.get_common_attr(scaler_cfgs, "capture_format")
+
+        # If we have a CT capture engine, set the format flag on that engien so we know how to decode it
+        if len(self._raw_data_config.capture_format) >= 2:
+            ct_cfgs = [fpga.CT_PROBER.config for fpga in fpgas]
+            self._raw_data_config.capture_format[2]=State.get_common_attr(ct_cfgs, "capture_format")
+
 
         # Acknowledge the configs of each board so we don't trigger an update if none of the boards have changed their configs since the last time
         for mb in boards:
