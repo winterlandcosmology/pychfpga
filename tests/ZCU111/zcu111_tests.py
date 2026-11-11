@@ -130,11 +130,10 @@ class TestZCU111(TestUtils):
         mb = self.get_motherboard(**cfg.fpga_array_params)
 
         sg.set_amplitude(cfg.rf_ampl, 'dBm')
-
-        for f in cfg.rf_freqs:
         sg.set_output_enable(True)
 
-        sg.set_frequency()
+        for f in cfg.rf_freqs:
+            sg.set_frequency(f)
 
         print('nice plot below!')
         with xr.figcontext(f'{sg} - {mb}'):
