@@ -3027,9 +3027,10 @@ class FPGAMasterAsyncRESTClient(AsyncRESTClient):
         hwm = await self.get('get-hw-map')
         # Save hardware map
         time_str = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
-        pickle.dump(hwm, open( f'/home/chime/ch_acq/{time_str}_hardware_map.pkl', 'wb'))
+        with open(f'/home/chime/ch_acq/{time_str}_hardware_map.pkl', 'wb') as f:
+            pickle.dump(hwm, f)
         # Print hardware map
-        for key in np.sort(hwm.keys()):
+        for key in sorted(hwm):
             print(f'{key}: {hwm[key]}')
         return hwm
 
