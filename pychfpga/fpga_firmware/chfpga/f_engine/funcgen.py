@@ -109,8 +109,8 @@ class FUNCGEN(MMI):
         v = np.zeros(self.NB, dtype=self.dtype)
         v_real = np.zeros(self.NB // 2, dtype=self.dtype)
         v_imag = np.zeros(self.NB // 2, dtype=self.dtype)
-        v_real[freq_test_bins] = freq_pattern_real[:N]
-        v_imag[freq_test_bins] = freq_pattern_imag[:N]
+        v_real[freq_test_bins[:N]] = freq_pattern_real[:N]
+        v_imag[freq_test_bins[:N]] = freq_pattern_imag[:N]
         v[::2] = v_real
         v[1::2] = v_imag
         return v
