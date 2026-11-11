@@ -374,7 +374,9 @@ class Motherboard(HardwareMap):
         hostname = hostname or self.hostname
         slot = slot if slot is not None else self.slot
         subarray = subarray if subarray is not None else self.subarray
-        crate_number = self.get_crate_number()
+        # Use the argument when given. A new board has no crate yet, so falling
+        # back to get_crate_number() first would drop a hostname:slot:crate entry.
+        crate_number = crate_number if crate_number is not None else self.get_crate_number()
         extra_hwm_args = {**self.extra_hwm_args, **kwargs}
         if new_class and self.__class__ is not new_class:
             self.logger.debug(f"update_instance: Creating new instance with {new_class.__name__}(serial={serial}, hostname={hostname}, slot={slot}, subarray={subarray}, **{extra_hwm_args})")
