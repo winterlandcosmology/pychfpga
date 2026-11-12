@@ -75,7 +75,8 @@ f_engine_tests:
     eth_interface: 'eno1' # Check if correct. Name of ethernet interface on which the crate is connected. Used to check jumbo frames.
     ps_voltage: 20  # Volts. Voltage to set on the F-Engine power supply
     ps_current: 76   # Amps. Maximum current limit to set on the F-Engine power supply
-    ps_t_sleep: 60 # Time in seconds to let the power supply sleep upon power cycle to allow crate to boot
+    ps_off_dwell: 8 # Seconds the output must stay off before it is turned back on
+    ps_t_sleep: 190 # Seconds to wait after power-on. The ARM boot takes 2-3 minutes; a shorter wait races it.
     fpga_array_params:
       # hwm: 'bp16 25:0' # McGill kitchen test rack top
       hwm: 'bp16 29:0' # McGill kitchen test rack bottom
@@ -110,17 +111,19 @@ f_engine_tests:
 
   ps_connection_test:
     n_ps_cycles: 50  
-    on_time: 120 #seconds
-    off_time: 10
+    on_time: 200 # seconds. Must be >= ps_t_sleep so every cycle finishes a cold boot.
+    off_time: 10 # seconds. Must be >= ps_off_dwell.
+    min_boot_current: 8 # Amps. A booted crate draws at least this; an on-but-dead crate does not.
         
   crate_init:
 
   backplane_err:
-    n_checks: 10
+    n_checks: 60 # 10 missed an intermittent single-link CRC
     t_sleep: 1
 
   sync_test:
     n_syncs: 100
+    max_sync_time_difference: 100 # ns. Passed to sync_async. None would fall back to a hard-coded 20 ns.
 
   network_test:
     n_cycles: 10
@@ -135,7 +138,7 @@ f_engine_tests:
       ignore_missing_boards: False # only for KKO F-Engine
       mode: 'shuffle256' # All else
       sync_method: 'local'
-      mdns_timeout: 20
+      mdns_timeout: 40
 
   clock_test:
     integration_period: 0.001
@@ -144,6 +147,8 @@ f_engine_tests:
     powerup_delay: 5
 
   sync_delay_test:
+    trials: 10
+    verbose: 1
 
   adc_eye_test:
     n_checks: 50

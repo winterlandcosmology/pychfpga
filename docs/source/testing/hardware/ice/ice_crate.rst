@@ -11,14 +11,18 @@ supply and GPS). The tests, in menu order, are:
 - Power supply connection
 - Crate initialization: every board in the hardware map is found, every FPGA is programmed, and
   the crate synchronizes
-- Backplane errors, from ``print_shuffle_status``
-- IRIG-B synchronization, repeated for the number of tries set in the configuration
+- Backplane and corner-turn health, from ``ct_health.measure_crate_health`` (lock, CRC, aligner
+  stickies, packet errors, and advancing frame counters on every board)
+- IRIG-B synchronization, repeated for the number of tries set in the configuration, with the
+  configured frame-0 alignment limit
 - ADC clocks on every motherboard and mezzanine (200 MHz, within the configured tolerance), and
   the same check with a power cycle between passes
-- ADC synchronization delays
+- ADC synchronization delays, measured by ``check_sync_delays`` rather than judged by the operator
 - ADC eye diagrams
 - Network: repeated power cycles, counting missing slots and errors
-- Power cycle: repeated initializations, counting ADC clock and UDP errors
+- Power cycle: repeated initializations, counting ADC clock, UDP, and corner-turn health errors
+- ADC ramp: every channel through the firmware ramp checker. The menu entry was already present;
+  the test method is ``test_crate_ramp``.
 
 Running the tests
 =================

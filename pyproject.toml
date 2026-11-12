@@ -136,7 +136,7 @@ errors-only = true
 
     qc = [
         # Private packages
-        "wtl.pytest-xreport @ git+https://git@bitbucket.org/winterlandcosmology/wtl.pytest-xreport.git@1.3",
+        "wtl.pytest-xreport @ git+https://git@bitbucket.org/winterlandcosmology/wtl.pytest-xreport.git@1.4",
         "labpy @ git+https://git@bitbucket.org/winterlandcosmology/labpy.git@qc",
         "psucontrol @ git+https://github.com/t0/psucontrol.git@main",  # CRS crate PSU control in qc/CRS_crate
 
