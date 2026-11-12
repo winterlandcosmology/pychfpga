@@ -247,15 +247,19 @@ header, and the decoded samples against the host model of the first crossbar. A 
 marked ``ct_flags``, turns packet flags on and checks the data-flags, frame-flags, and trailer
 words.
 
-The parameters live under ``test_config`` in ``config_ice.yaml`` and ``config_crs.yaml``
-(``global_lane``, ``global_fpp``, and the per-test blocks). They are what pytest uses to build
-the cases. The tests themselves decide whether the connected firmware can run them.
+The parameters live under ``test_config`` in ``config_ice.yaml`` (``global_lane``,
+``global_fpp``, and the per-test blocks). ``config_crs.yaml`` does not define them.
+Its ``skip_tests`` entry skips every probe test except
+``test_ct_source_rejected_without_probe`` before pytest builds the cases, so a CRS run
+does not connect for the ones it cannot execute.
 
 Shuffle256 crate
 ================
 
-``ct_shuffle256_test.py``. A 16-board ICE crate in mode ``shuffle256``. The file skips, without
-connecting, unless ``connection_config.mode`` is ``shuffle256``. Use
+``ct_shuffle256_test.py``. A 16-board ICE crate in mode ``shuffle256``.
+``config_crs.yaml`` lists this file under ``skip_tests``, so a CRS run skips it before
+connecting. Any other config skips it, still without connecting, unless
+``connection_config.mode`` is ``shuffle256``. Use
 ``firmware_tests/config_ice_crate.yaml`` and edit its ``hwm`` to the crate's backplane serial.
 That file does not set ``bitfile``; the platform table loads ``chfpga_ice_ct_pbg_sep24.bit``.
 

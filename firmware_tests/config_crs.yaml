@@ -97,32 +97,11 @@ test_config:
     channel1: range(NUM_CHANNELS)
     #correlator test functions with parameters
 
-    # Corner-turn capture tests (ct_prober_test.py, ct_shuffle256_test.py).
-    # Collected here so the suite still collects; the tests skip on CRS
-    # (no corner-turn probe, and mode is not shuffle256).
-    global_lane: [0]
-    global_fpp: [1, 2]
-    lane_readback:
-        lanes: [[0, 3, 7]]
-    lane_switch:
-        target_lane: [3]
-    corner_turn_shuffle16:
-        lane: [0, 1, 2, 3, 4, 5, 6, 7]
-        waveform: ['ramp', 'channel_id', 'noise']
-    flags_packet_size:
-        lane: [0, 3, 7]
-    flags_data_decode:
-        lane: [0]
-        waveform: ['ramp']
-    frame_flags_adc_mask:
-        lane: [0, 5]
-    frame_flags_fft_mask:
-        lane: [0]
-    data_flags_as_built:
-        lane: [0, 1, 2, 3, 4, 5, 6, 7]
-    global_s256_slot: [1]
-    global_s256_lane: [0]
-    corner_turn_shuffle256:
-        waveform: ['slot_channel_id']
-    frame_flags_shuffle256:
-        s256_lane: [0]
+    # Corner-turn tests do not apply to a UCT bitstream. They are skipped
+    # before parametrization, so this file does not carry their lane lists.
+    # The rejection test still runs: it checks that start_ct_capture fails
+    # when the probe is absent.
+    skip_tests:
+        ct_shuffle256_test: all
+        ct_prober_test:
+            except: [test_ct_source_rejected_without_probe]

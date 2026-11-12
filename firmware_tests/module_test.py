@@ -184,15 +184,43 @@ class TestModule:
                 fixtures.update(argnames)
         return fixtures
 
+    def _config_skips_test(self, test_config, metafunc, func_name):
+        """True when ``test_config.skip_tests`` drops this test before parametrization.
+
+        ``skip_tests`` is keyed by the test file stem. ``all`` skips every test
+        in that file. ``except`` skips every test except the named functions.
+        A file that is absent is not skipped.
+        """
+        skip = test_config.get('skip_tests')
+        if not skip:
+            return False
+        module = metafunc.definition.path.stem
+        if module not in skip:
+            return False
+        entry = skip[module]
+        if entry == 'all':
+            return True
+        kept = entry.get('except') if hasattr(entry, 'get') else None
+        if kept is None:
+            return False
+        return func_name not in list(kept)
+
     def pytest_generate_tests(self, metafunc):
         """ This pytest hook is called before each test to allow dynamic generation of test parameters.
 
-        It parameterises each argument corresponding to a parameter in the config file with an arbitrary python expression from that file
+        It parameterises each argument corresponding to a parameter in the config file with an arbitrary python expression from that file.
+        A test named by ``test_config.skip_tests`` is marked skipped and is not parametrized, so a config that does not define its arguments can still collect it.
         """
         xr = get_xr_from(metafunc)
         test_config = xr.config.test_config
+        func_name = metafunc.function.__name__
+        if self._config_skips_test(test_config, metafunc, func_name):
+            pytest.mark.skip(
+                reason=f"{func_name} is listed in test_config.skip_tests"
+            )(metafunc.function)
+            return
         widths = self.collection_constants(test_config)
-        test_name = metafunc.function.__name__[5:] #get rid of test_ prefix
+        test_name = func_name[5:] #get rid of test_ prefix
         explicit_fixtures = self._explicit_parametrize_fixtures(metafunc)
         for fixture in metafunc.fixturenames:
             if fixture in explicit_fixtures:
