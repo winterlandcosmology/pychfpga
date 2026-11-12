@@ -39,7 +39,7 @@ To run scripts::
 
     uv run raw_acq # start the raw acquisition server
     uv run fpga_master # start the FPGA master server
-    uv run crs_discovery # list the CRS boards on the network
+    uv run crs_discover # list the CRS boards on the network
 
 If you want to use interactive sessions, install and run the interactive tools:
 

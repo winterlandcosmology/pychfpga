@@ -19,16 +19,21 @@ branch and a folder: ``develop/crs_ct`` cannot be created while a branch ``devel
 ``jfc/dev/crs_ct`` cannot coexist with ``jfc/dev``. Use prefixes only as folders, or rename the
 base branch first.
 
-Releases are made from ``main``, ``master`` or ``deploy``.
+Release branch
+==============
+
+The release branch is ``deploy``.
+
 
 Development process
--------------------
+===================
+
 
 #. Branch from the latest release branch.
 #. Make the changes. Commit often, with concise messages.
 #. Run the tests for the target platform (see :doc:`../testing/firmware`).
 #. Merge the latest release branch into yours if it has moved, and test again.
-#. Merge into the release branch and push it.
+#. Merge into the release branch and push it if you are the release manager, otherwise issue a pull request.
 #. Tag the release commit (see below) and push the tag.
 
 Release tags
