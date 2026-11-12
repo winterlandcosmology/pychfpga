@@ -468,7 +468,7 @@ class ShuffleCrossbar(MMI):
             bs.FIFO_OVERFLOW_RESET = 1
             bs.FIFO_OVERFLOW_RESET = 0
 
-    def print_crossbar_monitor(self, reset=True):
+    async def print_crossbar_monitor(self, reset=True):
 
         if reset:
             self.reset_stats()
@@ -478,13 +478,13 @@ class ShuffleCrossbar(MMI):
         lane_map = self.get_lane_map()
         rx_lane_group = {2: 'pcb', 3: 'qsfp'}[self.crossbar_level]
         active_slots = set(self.fpga.crate.slot.keys())
-        rx_errors = self.fpga.BP_SHUFFLE.get_rx_lane_monitor('ERROR_CTR', lane_group=rx_lane_group)
-        rx_max_frame = self.fpga.BP_SHUFFLE.get_rx_lane_monitor('MAX_FRAME_LENGTH', lane_group=rx_lane_group)
-        rx_min_frame = self.fpga.BP_SHUFFLE.get_rx_lane_monitor('MIN_FRAME_LENGTH', lane_group=rx_lane_group)
+        (rx_errors, rx_max_frame, rx_min_frame) = await self.fpga.BP_SHUFFLE.get_rx_lane_monitor(
+            ['ERROR_CTR', 'MAX_FRAME_LENGTH', 'MIN_FRAME_LENGTH'],
+            lane_group=rx_lane_group)
 
         stream_id = self.capture_stream_id()
         stream_id = [stream_id[lane] for lane in lane_map]
-        frame_number = self.capture_frame_number()
+        frame_number = await self.capture_frame_number()
         frame_ref = frame_number[0]
         frame_number = [frame_number[lane] for lane in lane_map]
 
@@ -528,9 +528,10 @@ class ShuffleCrossbar(MMI):
         # align_detect = [align_detect[lane] for lane in lane_map]
         # remap_detect = self.get_lane_monitor('REMAP_DETECT')
         # print '%25s: %s' % ('IN/ALGN/REMAP DETECT', ' '.join(' %i/%i/%i' % (input_detect[lane], align_detect[lane], remap_detect[lane]) for lane in lane_range))
-        for name in ['MISSING_FRAME', 'BAD_FRAME_LENGTH', 'ALIGN_FIFO_OVERFLOW',
-                     'DATA_TIMEOUT', 'BAD_TVALID', 'BAD_TLAST']:
-            value = self.get_lane_monitor(name)
+        flag_names = ['MISSING_FRAME', 'BAD_FRAME_LENGTH', 'ALIGN_FIFO_OVERFLOW',
+                      'DATA_TIMEOUT', 'BAD_TVALID', 'BAD_TLAST']
+        flag_values = await self.get_lane_monitor(flag_names)
+        for name, value in zip(flag_names, flag_values):
             print(
                 f"{name:>25}: "
                 f"{' '.join(('-', 'ERR!')[bool(value[lane])].rjust(6) for lane in lane_map)}"
@@ -538,7 +539,7 @@ class ShuffleCrossbar(MMI):
         input_frame_ctr = []
         align_frame_ctr = []
         delay = []
-        fifo_tfirst = self.get_lane_monitor('FIFO_TFIRST')
+        fifo_tfirst = await self.get_lane_monitor('FIFO_TFIRST')
         fifo_count = []
         for lane in lane_range:
             self.LANE_MONITOR_SEL = lane

@@ -709,7 +709,7 @@ class BCTArrayMethods(ArrayMethods):
                 origin='lower', extent=(-32, 32, -128, 128), aspect='auto', vmin=-12, vmax=1)
         plt.draw()
 
-    def print_crossbar2_frame_info(self, reset_stats=False, grid=True, width=180):
+    async def print_crossbar2_frame_info(self, reset_stats=False, grid=True, width=180):
         slots = Ccoll(self.ib, self.ib.slot)  # Get iceboards indexed by slot number
 
         crate = set(slots.crate)
@@ -731,30 +731,38 @@ class BCTArrayMethods(ArrayMethods):
             if dest_slot in slots.keys():
                 cb = slots[dest_slot].CROSSBAR2
                 bp = slots[dest_slot].BP_SHUFFLE
-                bin_sel = cb.BIN_SEL[0]
                 shuffle_to_bin_sel_lane_map = cb.get_reverse_lane_map()
                 remapped_direct_lane = shuffle_to_bin_sel_lane_map[0]
                 if reset_stats:
                     bp.reset_stats()
-                stream_ids = bin_sel.capture_stream_id()
-                frame_number = bin_sel.capture_frame_number()
+                # Header capture lives on the crossbar. The bin selector no
+                # longer has these methods, and the reads are coroutines.
+                stream_ids = cb.capture_stream_id()
+                frame_number = await cb.capture_frame_number()
                 frame_number = [f - frame_number[remapped_direct_lane] for f in frame_number]
                 captured_source = {remapped_dest_lane: (((s >> 4) & 0xF) + 1, (s & 0xF))
                                    for remapped_dest_lane, s in enumerate(stream_ids)}
                 computed_source = {shuffle_to_bin_sel_lane_map[dest_lane]: crate.get_matching_tx((dest_slot, dest_lane))
                                    for dest_lane in lane_range}
-                valid_source = {shuffle_to_bin_sel_lane_map[dest_lane]: v
-                                for dest_lane, v in enumerate(cb.get_lane_monitor('INPUT_DETECT'))}
+                # INPUT_FRAME_CTR is the "has this lane delivered a frame" flag.
+                # There is no INPUT_DETECT monitor, and the RX overflow flag is
+                # RX_FIFO_OVERFLOW.
+                (input_frame_ctr, missing, align_ovf) = await cb.get_lane_monitor(
+                    ['INPUT_FRAME_CTR', 'MISSING_FRAME', 'ALIGN_FIFO_OVERFLOW'])
+                (rx_err, rx_ovf, rx_maxlen) = await bp.get_rx_lane_monitor(
+                    ['ERROR_CTR', 'RX_FIFO_OVERFLOW', 'MAX_FRAME_LENGTH'])
+                valid_source = {shuffle_to_bin_sel_lane_map[dest_lane]: bool(v)
+                                for dest_lane, v in enumerate(input_frame_ctr)}
                 missing_frame = {shuffle_to_bin_sel_lane_map[dest_lane]: v
-                                 for dest_lane, v in enumerate(cb.get_lane_monitor('MISSING_FRAME'))}
+                                 for dest_lane, v in enumerate(missing)}
                 align_fifo_overflow = {shuffle_to_bin_sel_lane_map[dest_lane]: v
-                                       for dest_lane, v in enumerate(cb.get_lane_monitor('ALIGN_FIFO_OVERFLOW'))}
+                                       for dest_lane, v in enumerate(align_ovf)}
                 rx_errors = {shuffle_to_bin_sel_lane_map[dest_lane]: v
-                             for dest_lane, v in enumerate(bp.get_rx_lane_monitor('ERROR_CTR'))}
+                             for dest_lane, v in enumerate(rx_err)}
                 rx_fifo_overflow = {shuffle_to_bin_sel_lane_map[dest_lane]: v
-                                    for dest_lane, v in enumerate(bp.get_rx_lane_monitor('FIFO_OVERFLOW'))}
+                                    for dest_lane, v in enumerate(rx_ovf)}
                 rx_max_frame_length = {shuffle_to_bin_sel_lane_map[dest_lane]: v
-                                       for dest_lane, v in enumerate(bp.get_rx_lane_monitor('MAX_FRAME_LENGTH'))}
+                                       for dest_lane, v in enumerate(rx_maxlen)}
 
             else:
                 captured_source = {dest_lane: None for dest_lane in lane_range}
@@ -1023,7 +1031,7 @@ class BCTArrayMethods(ArrayMethods):
         info = await self.get_corner_turn_engine_status_async(reset_stats=reset_stats)
         self._print_shuffle_status(info, verbose=verbose, grid=grid)
 
-    def print_rx_err_map(
+    async def print_rx_err_map(
             self,
             icecrates=None,
             reset_stats=0,
@@ -1089,7 +1097,7 @@ class BCTArrayMethods(ArrayMethods):
 
         if dfe_reset:
             gtx.reset_rx_equalizer()
-            time.sleep(0.1)
+            await asyncio.sleep(0.1)
 
         if reset_stats:
             self.ib.BP_SHUFFLE.reset_stats()
@@ -1099,7 +1107,7 @@ class BCTArrayMethods(ArrayMethods):
         finished = False
         try:
             while not finished:
-                time.sleep(abs(delay))
+                await asyncio.sleep(abs(delay))
                 dt = time.time() - t0
                 print('At', time.asctime(), f'({datetime.timedelta(seconds=dt)} seconds since the method call)')
                 for i, cr in enumerate(icecrates):
@@ -1108,7 +1116,8 @@ class BCTArrayMethods(ArrayMethods):
                     worst_err = 0
                     worst_det = 1
                     for slot, mb in cr.slot.items():
-                        errs, det = mb.BP_SHUFFLE.get_rx_lane_monitor(['ERROR_CTR', 'FRAME_DETECT'], lane_group='pcb')
+                        errs, det = await mb.BP_SHUFFLE.get_rx_lane_monitor(
+                            ['ERROR_CTR', 'FRAME_DETECT'], lane_group='pcb')
                         worst_err = max(worst_err, max(errs))
                         worst_det = min(worst_det, min(det))
 
