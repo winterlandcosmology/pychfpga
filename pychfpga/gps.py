@@ -632,7 +632,7 @@ class SpectrumInstrumentsTM4D(SocketContext):
             int: timing mode:
                 0: IRIG-B002/B122 (no BCD year)
                 1: NASA-36
-                3: IRIG-B007/B127 (with BCD year & SBS)
+                2: IRIG-B007/B127 (with BCD year & SBS)
         """
         (mode, ) = self.query('71', reply)
         time_code_format = int(mode)
