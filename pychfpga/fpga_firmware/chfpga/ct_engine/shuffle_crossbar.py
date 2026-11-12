@@ -472,13 +472,13 @@ class ShuffleCrossbar(MMI):
 
         if reset:
             self.reset_stats()
-            self.fpga.BP_SHUFFLE.reset_stats()
+            self.fpga.CT.BP_SHUFFLE.reset_stats()
 
         lane_range = list(range(self.NUMBER_OF_CROSSBAR_INPUTS))
         lane_map = self.get_lane_map()
         rx_lane_group = {2: 'pcb', 3: 'qsfp'}[self.crossbar_level]
         active_slots = set(self.fpga.crate.slot.keys())
-        (rx_errors, rx_max_frame, rx_min_frame) = await self.fpga.BP_SHUFFLE.get_rx_lane_monitor(
+        (rx_errors, rx_max_frame, rx_min_frame) = await self.fpga.CT.BP_SHUFFLE.get_rx_lane_monitor(
             ['ERROR_CTR', 'MAX_FRAME_LENGTH', 'MIN_FRAME_LENGTH'],
             lane_group=rx_lane_group)
 

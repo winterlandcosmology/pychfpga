@@ -173,7 +173,7 @@ class Shuffle(xglink.XGLinkArray):
                         (tx_slot, tx_lane) = self.get_matching_tx_node_id((rx_slot + 1, rx_lane))
                         tx_id = (crate, tx_slot - 1, tx_lane)
                         tx_ib = self.fpga.crate.slot.get(tx_slot, None)
-                        tx_gtx = tx_ib.BP_SHUFFLE.get_gtx(tx_lane, group) if tx_ib else None
+                        tx_gtx = tx_ib.CT.BP_SHUFFLE.get_gtx(tx_lane, group) if tx_ib else None
                         links[(group, tx_id, rx_id)] = (tx_gtx, rx_gtx)  # No transmitter
 
                         # Add the link connected to the transmitter side of the GTX
@@ -183,7 +183,7 @@ class Shuffle(xglink.XGLinkArray):
                         (rx_slot, rx_lane) = self.get_matching_rx_node_id((tx_slot + 1, tx_lane))
                         rx_id = (crate, rx_slot - 1, rx_lane)
                         rx_ib = self.fpga.crate.slot.get(rx_slot, None)
-                        rx_gtx = rx_ib.BP_SHUFFLE.get_gtx(rx_lane, group) if rx_ib else None
+                        rx_gtx = rx_ib.CT.BP_SHUFFLE.get_gtx(rx_lane, group) if rx_ib else None
                         links[(group, tx_id, rx_id)] = (tx_gtx, rx_gtx)
 
                     else:  # if a direct internal link or a software bypass

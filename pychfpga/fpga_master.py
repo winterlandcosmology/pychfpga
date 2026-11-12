@@ -2868,13 +2868,13 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
         if self.fpga_master and self.fpga_master.state == 'on' and self.fpga_master.fpgas:
             if ib_serial:
                 ib = self.fpga_master.fpgas.ib.get(serial=ib_serial)
-                ib.BP_SHUFFLE.set_tx_power(int(power), link_type)
+                ib.CT.BP_SHUFFLE.set_tx_power(int(power), link_type)
                 self.log.info(
                     f'{self!r}: Set gtx power level of '
                     f'FCC{ib.get_crate_number(default=0):02d}{ib.slot-1:02d} (SN{ib.serial}) to {power}.')
 
             else:
-                self.fpga_master.fpgas.ib.BP_SHUFFLE.set_tx_power(int(power), link_type)
+                self.fpga_master.fpgas.ib.CT.BP_SHUFFLE.set_tx_power(int(power), link_type)
                 self.log.info(f'{self!r}: Set gtx power level to {power} of on all Iceboards.')
 
 

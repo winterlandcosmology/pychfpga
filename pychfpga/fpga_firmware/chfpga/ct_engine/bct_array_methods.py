@@ -122,7 +122,7 @@ class BCTArrayMethods(ArrayMethods):
         for mb in self.ib:
             # extract channels for this motherboard only
             cb1_in = {ch: chan_map[(crate, slot, ch)] for (crate, slot, ch) in mb.get_channel_ids()}
-            for lane, data in mb.CROSSBAR.map(cb1_in).items():
+            for lane, data in mb.CT.CROSSBAR.map(cb1_in).items():
                 cb1_out[mb.get_id(lane)] = data
 
         # Apply pcb shuffling
@@ -141,16 +141,16 @@ class BCTArrayMethods(ArrayMethods):
             (crate, slot) = mb.get_id()
             # extract channels for this motherboard only
             cb2_in = {lane: pcb_shuffle_out[(crate, slot, lane)]
-                      for lane in range(mb.BP_SHUFFLE.NUMBER_OF_PCB_LANES)}
-            for lane, data in mb.CROSSBAR2.map(cb2_in).items():
+                      for lane in range(mb.CT.BP_SHUFFLE.NUMBER_OF_PCB_LANES)}
+            for lane, data in mb.CT.CROSSBAR2.map(cb2_in).items():
                 cb2_out[(crate, slot, lane)] = data
 
         # Apply QSFP shuffling
         qsfp_shuffle_out = {}
         for mb in self.ib:
             (crate, slot) = mb.get_id()
-            bypass = mb.BP_SHUFFLE.BYPASS_QSFP_SHUFFLE
-            number_of_qsfp_lanes = mb.BP_SHUFFLE.NUMBER_OF_QSFP_LANES
+            bypass = mb.CT.BP_SHUFFLE.BYPASS_QSFP_SHUFFLE
+            number_of_qsfp_lanes = mb.CT.BP_SHUFFLE.NUMBER_OF_QSFP_LANES
             for rx_lane in range(number_of_qsfp_lanes):
                 if bypass:
                     qsfp_shuffle_out[(crate, slot, rx_lane)] = cb2_out[(crate, slot, rx_lane)]
@@ -165,8 +165,8 @@ class BCTArrayMethods(ArrayMethods):
             (crate, slot) = mb.get_id()
             # extract channels for this motherboard only
             cb_in = {lane: qsfp_shuffle_out[(crate, slot, lane)]
-                     for lane in range(mb.BP_SHUFFLE.NUMBER_OF_QSFP_LANES)}
-            for lane, data in mb.CROSSBAR3.map(cb_in).items():
+                     for lane in range(mb.CT.BP_SHUFFLE.NUMBER_OF_QSFP_LANES)}
+            for lane, data in mb.CT.CROSSBAR3.map(cb_in).items():
                 cb3_out[(crate, slot, lane)] = data
 
         return cb3_out
@@ -219,7 +219,7 @@ class BCTArrayMethods(ArrayMethods):
         """
 
         for mb in self.ib:
-            for cb in [mb.CROSSBAR, mb.CROSSBAR2, mb.CROSSBAR3]:
+            for cb in [mb.CT.CROSSBAR, mb.CT.CROSSBAR2, mb.CT.CROSSBAR3]:
                 if cb:  # make sure the crossbar exists in this firmware
                     cb.reset_stats()
 
@@ -228,8 +228,8 @@ class BCTArrayMethods(ArrayMethods):
         """
 
         for mb in self.ib:
-            if mb.BP_SHUFFLE:  # makesure we have a shuffle block in this firmware
-                mb.BP_SHUFFLE.reset_stats()
+            if mb.CT.BP_SHUFFLE:  # makesure we have a shuffle block in this firmware
+                mb.CT.BP_SHUFFLE.reset_stats()
 
     # ------------------------------------------------------------------
     # Debugging / QC (notebooks, crate tests, BER/eye; not on CRS)
@@ -269,8 +269,8 @@ class BCTArrayMethods(ArrayMethods):
 
         print('Setting Transmitted ID')
         for mb in array:
-            mb.BP_SHUFFLE.TX_DATA_MSB = 0xFF00 + mb.slot
-            for gtx_number, g in enumerate(mb.BP_SHUFFLE.gtx):
+            mb.CT.BP_SHUFFLE.TX_DATA_MSB = 0xFF00 + mb.slot
+            for gtx_number, g in enumerate(mb.CT.BP_SHUFFLE.gtx):
                 g.SOURCE_SEL = 1  # 0:Send TXDATA , 1: SEND 10G Ethernet test packet
                 g.LOOPBACK = 0
                 g.TXPRBSSEL = 0
@@ -296,7 +296,7 @@ class BCTArrayMethods(ArrayMethods):
 
         print('Resetting the GTXes')
         for mb in array:
-            for g in mb.BP_SHUFFLE.gtx:
+            for g in mb.CT.BP_SHUFFLE.gtx:
                 g.RXDFELPMRESET = 1
                 g.RXDFELPMRESET = 0
             time.sleep(0.1)
@@ -310,7 +310,7 @@ class BCTArrayMethods(ArrayMethods):
             dest_slot = mb.slot
             serial_number[dest_slot - 1] = mb.serial
             # JM: Fixed this below bc was getting an error. JF please check
-            for gtx_number, g in enumerate(mb.BP_SHUFFLE.gtx[0:mb.BP_SHUFFLE.NUMBER_OF_PCB_LINKS]):
+            for gtx_number, g in enumerate(mb.CT.BP_SHUFFLE.gtx[0:mb.CT.BP_SHUFFLE.NUMBER_OF_PCB_LINKS]):
                 dest_lane = gtx_number + 1
                 dest = (dest_slot, dest_lane)
                 expected_source = mb.crate.get_matching_tx(dest)
@@ -378,7 +378,7 @@ class BCTArrayMethods(ArrayMethods):
         """
         link_map = {}
         for mb in self.ib:
-            link_map.update(mb.BP_SHUFFLE.get_link_map('pcb'))
+            link_map.update(mb.CT.BP_SHUFFLE.get_link_map('pcb'))
         return link_map
 
     def get_backplane_qsfp_links(self):
@@ -433,8 +433,8 @@ class BCTArrayMethods(ArrayMethods):
             ic1 = crate_map[dest_crate]
             if (source_slot not in ic0.slot) or (dest_slot not in ic1.slot):
                 continue
-            bp0 = ic0.slot[source_slot].BP_SHUFFLE
-            bp1 = ic1.slot[dest_slot].BP_SHUFFLE
+            bp0 = ic0.slot[source_slot].CT.BP_SHUFFLE
+            bp1 = ic1.slot[dest_slot].CT.BP_SHUFFLE
             # Append entry. We convert from gtx index to logical lane #
             links.append((
                 link_type,
@@ -455,7 +455,7 @@ class BCTArrayMethods(ArrayMethods):
         """
         qsfp_link_map = {}
         for mb in self.ib:
-            qsfp_link_map.update(mb.BP_SHUFFLE.get_link_map('qsfp'))
+            qsfp_link_map.update(mb.CT.BP_SHUFFLE.get_link_map('qsfp'))
 
         if not resolve:
             return qsfp_link_map
@@ -463,7 +463,7 @@ class BCTArrayMethods(ArrayMethods):
         # Ask each board a map that describe how each logical link is connected to the backplane links
         bp_to_logical_link_map = {}
         for mb in self.ib:
-            bp_to_logical_link_map.update(mb.BP_SHUFFLE.get_bp_to_logical_link_map('qsfp'))
+            bp_to_logical_link_map.update(mb.CT.BP_SHUFFLE.get_bp_to_logical_link_map('qsfp'))
 
         # Ask each crate the map that matches backplane links to cable ids
         # (this takes time: we need to read the cable identification)
@@ -678,7 +678,7 @@ class BCTArrayMethods(ArrayMethods):
         for link in link_map:
             ((from_slot, from_lane), (to_slot, to_lane)) = link
             print(f"###### running from slot {int(from_slot)} lane {int(from_lane)} to slot {int(to_slot)} lane {int(to_lane)} #######")
-            gtx = self.ib.get(slot=to_slot).BP_SHUFFLE.gtx[to_lane - 1]
+            gtx = self.ib.get(slot=to_slot).CT.BP_SHUFFLE.gtx[to_lane - 1]
             e = gtx.get_eye_diagram(list(range(-32, 32, h_step)), list(range(-127, 128, v_step)))
             eye_matrix[link] = e
         return eye_matrix
@@ -742,8 +742,8 @@ class BCTArrayMethods(ArrayMethods):
         expected_bp_frame_size = 37
         for dest_slot in slot_range:
             if dest_slot in slots.keys():
-                cb = slots[dest_slot].CROSSBAR2
-                bp = slots[dest_slot].BP_SHUFFLE
+                cb = slots[dest_slot].CT.CROSSBAR2
+                bp = slots[dest_slot].CT.BP_SHUFFLE
                 shuffle_to_bin_sel_lane_map = cb.get_reverse_lane_map()
                 remapped_direct_lane = shuffle_to_bin_sel_lane_map[0]
                 if reset_stats:
@@ -908,14 +908,14 @@ class BCTArrayMethods(ArrayMethods):
                 slot['mb'] = mb  # motherboard object in this slot
                 slot['serial'] = mb.serial  # motherboard object in this slot
                 # Gather status from the backplane PCB and QSFP links
-                for lane_group in mb.BP_SHUFFLE.lane_group_names:
+                for lane_group in mb.CT.BP_SHUFFLE.lane_group_names:
                     subsystem_name = f'BP {lane_group.upper()}'
                     slot['subsystems'][subsystem_name] = subsystem = {}  # {lane:status_dict, ...}
                     subsystem['lanes'] = {}
                     if reset_stats:
-                        mb.BP_SHUFFLE.reset_stats()
+                        mb.CT.BP_SHUFFLE.reset_stats()
                     # ee: list of N error status dicts  [lane0_errors, lane1 errors, ...]
-                    status_dicts = await mb.BP_SHUFFLE.get_bp_rx_status(lane_group)
+                    status_dicts = await mb.CT.BP_SHUFFLE.get_bp_rx_status(lane_group)
                     for lane_number, status_dict in enumerate(status_dicts):
                         subsystem['lanes'][lane_number] = lane = {}
                         lane['status'] = bool(status_dict) # True if there were any error flags returned for this lane
@@ -931,7 +931,7 @@ class BCTArrayMethods(ArrayMethods):
                     # errs.append(ee)
 
                 # Gather status from the crossbars
-                for subsystem_prefix, cb in (('CB2', mb.CROSSBAR2), ('CB3', mb.CROSSBAR3)):
+                for subsystem_prefix, cb in (('CB2', mb.CT.CROSSBAR2), ('CB3', mb.CT.CROSSBAR3)):
                     if reset_stats:
                         cb.reset_stats()
 
@@ -1091,7 +1091,7 @@ class BCTArrayMethods(ArrayMethods):
             icecrates = self.ic
 
         ibs = Ccoll.chain(*icecrates.slot.item_values())
-        gtx = Ccoll.chain(*ibs.BP_SHUFFLE.gtx)
+        gtx = Ccoll.chain(*ibs.CT.BP_SHUFFLE.gtx)
 
         time_without_error = [None] * len(icecrates)
         has_errors = [False] * len(icecrates)
@@ -1100,7 +1100,7 @@ class BCTArrayMethods(ArrayMethods):
             gtx.RXLPMEN = lpm
 
         if tx_power is not None:
-            ibs.BP_SHUFFLE.set_tx_power(tx_power)
+            ibs.CT.BP_SHUFFLE.set_tx_power(tx_power)
 
         if tx_precursor is not None:
             gtx.TXPRECURSOR = tx_precursor
@@ -1113,7 +1113,7 @@ class BCTArrayMethods(ArrayMethods):
             await asyncio.sleep(0.1)
 
         if reset_stats:
-            self.ib.BP_SHUFFLE.reset_stats()
+            self.ib.CT.BP_SHUFFLE.reset_stats()
 
         t0 = time.time()
 
@@ -1129,7 +1129,7 @@ class BCTArrayMethods(ArrayMethods):
                     worst_err = 0
                     worst_det = 1
                     for slot, mb in cr.slot.items():
-                        errs, det = await mb.BP_SHUFFLE.get_rx_lane_monitor(
+                        errs, det = await mb.CT.BP_SHUFFLE.get_rx_lane_monitor(
                             ['ERROR_CTR', 'FRAME_DETECT'], lane_group='pcb')
                         worst_err = max(worst_err, max(errs))
                         worst_det = min(worst_det, min(det))
@@ -1142,7 +1142,7 @@ class BCTArrayMethods(ArrayMethods):
 
                         for lane in range(16):
                             rx_lane_id = (slot, lane)
-                            tx_lane = mb.BP_SHUFFLE.get_matching_tx_node_id(rx_lane_id)
+                            tx_lane = mb.CT.BP_SHUFFLE.get_matching_tx_node_id(rx_lane_id)
                             err_map[rx_lane_id[0] - 1][tx_lane[0] - 1] = (
                                 errs[lane] if errs[lane] else '!DET' if not det[lane] else '-')
                             # print '%s -> %s = %i' % (tx_lane, rx_lane_id, errs[lane])

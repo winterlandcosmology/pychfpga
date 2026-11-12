@@ -4244,7 +4244,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         return chan_data_width
 
     def configure_crossbar(self, *args, **kwargs):
-        self.CROSSBAR.configure(*args, **kwargs)
+        self.CT.CROSSBAR.configure(*args, **kwargs)
 
     def set_offset_binary_encoding(self, offset=True, channels=None):
         """
@@ -4293,7 +4293,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         else:
             # Set the scaler to use offset binary
             for output in crossbar_outputs:
-                self.CROSSBAR[output].CH_DIST.SEND_FLAGS = send_flags
+                self.CT.CROSSBAR[output].SEND_FLAGS = send_flags
             if sync:
                 self.sync()
 
@@ -5068,12 +5068,13 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
 
     async def get_bp_shuffle_metrics_async(self, reset=True):
-        if not self.is_open() or not hasattr(self, 'BP_SHUFFLE') or not self.BP_SHUFFLE:
+        bp = getattr(getattr(self, 'CT', None), 'BP_SHUFFLE', None)
+        if not self.is_open() or not bp:
             return Metrics()
         try:
             await self.clear_fpga_udp_errors()
             # await self.check_command_count(reset=True)
-            metrics = await self.BP_SHUFFLE.get_metrics(reset=reset)
+            metrics = await bp.get_metrics(reset=reset)
         except IOError as e:
             self.logger.error(f'{self!r}: Error getting FPGA backplane link metrics. Error is {e!r}')
             metrics = Metrics()
