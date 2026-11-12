@@ -307,6 +307,26 @@ class SpectrumInstrumentsTM4D(SocketContext):
         """
         self.command('23', int(bool(enable)))
 
+    def set_outputs_on_powerup(self, mode: int):
+        """ Enables or disables signal multiplexers on power-up.
+
+        TM-4 command #30. Mode 3 starts the Mux1/Mux2 outputs, the Time Port
+        messages and the IRIG-B output at power-up instead of waiting for GPS
+        Time Valid, so the clock can supply the 10 MHz reference and IRIG-B
+        without an antenna lock.
+
+        Parameters:
+            mode (int)
+                0: Mux1/Mux2, serial Time Port messages, and optional IRIG-B
+                   begin when Time Valid is first achieved.
+                1: Mux1/Mux2 outputs begin immediately upon power-up.
+                2: Mux1/Mux2 and serial Time Port messages begin immediately
+                   upon power-up.
+                3: Mux1/Mux2, Time Port messages, and optional IRIG-B begin
+                   immediately upon power-up.
+        """
+        self.command('30', int(mode))
+
     def set_pps_output_source(self, source):
         """ Sets the source of the Pulse-Per-Second (PPS) signal.
 

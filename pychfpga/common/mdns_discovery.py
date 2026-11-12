@@ -282,7 +282,10 @@ async def mdns_discover(
         try:
             zeroconf = AsyncZeroconf(
                 ip_version=IPVersion.V4Only,
-                unicast=True  # seems to prevent ICMP error on replies, but might just be luck
+                # Standard multicast replies. unicast=True (requesting unicast
+                # replies) was tried to avoid ICMP errors on replies, but on some
+                # hosts it finds no boards at all. Multicast replies do.
+                unicast=False
                 )
             # `_tcpipe._tcp.local.` is no longer registered by the firmware,
             # so we only browse for the JSON-RPC service.
