@@ -2,7 +2,6 @@ import logging
 import numpy as np
 from pychfpga.fpga_array import FPGAArray
 from pychfpga.fpga_firmware.chfpga.ct_engine.chan_bin_sel import pack_frame_flags_word
-from pychfpga.fpga_firmware.chfpga import ct_health
 import pytest
 import asyncio
 from wtl.pytest_xreport import xr, get_xr_from
@@ -312,12 +311,11 @@ class TestCTShuffle256(TestModule):
         '''One full health pass: clear all monitors, let them re-accumulate on
         live traffic for 0.5 s, then read every stage. Returns the failure list.
 
-        The measurement itself lives in
-        :mod:`pychfpga.fpga_firmware.chfpga.ct_health` so that the crate
-        pre-deployment QC suite (qc/ICE_crate) judges crate health by exactly
-        the same criteria as this suite.
+        The measurement is :meth:`BCTArrayMethods.measure_crate_health`, the
+        same method the crate pre-deployment QC suite calls, so both judge
+        the crate by the same criteria.
         '''
-        return await ct_health.measure_crate_health(boards, populated, logger)
+        return await self.array.measure_crate_health(boards, populated, logger)
 
     @pytest.mark.ct_shuffle256
     async def test_crate_health(self, crate_setup, xr):

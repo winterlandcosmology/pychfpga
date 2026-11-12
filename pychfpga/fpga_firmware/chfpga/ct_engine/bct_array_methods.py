@@ -10,6 +10,19 @@ import numpy as np
 from pychfpga.common import Ccoll
 from pychfpga.common.array_methods import ArrayMethods
 
+# Aligner stickies read from both shuffle crossbars, with the physical meaning
+# used to explain a failure to someone who cannot attach a debugger to the crate.
+_LANE_MONITOR_NAMES = ['BAD_TLAST', 'BAD_TVALID', 'BAD_FRAME_LENGTH',
+                       'MISSING_FRAME', 'ALIGN_FIFO_OVERFLOW']
+
+_LANE_MONITOR_HINTS = {
+    'MISSING_FRAME': 'lane delivers no frames inside the SOF window',
+    'BAD_TLAST': 'misaligned end-of-frame',
+    'BAD_TVALID': 'lane dropped valid mid-frame',
+    'BAD_FRAME_LENGTH': 'data discarded by the aligner',
+    'ALIGN_FIFO_OVERFLOW': 'aligner FIFO overflow',
+}
+
 
 class BCTArrayMethods(ArrayMethods):
     """Array-wide methods for BCT (Ice shuffle / corr16) arrays."""
@@ -1152,3 +1165,163 @@ class BCTArrayMethods(ArrayMethods):
                     break
         except KeyboardInterrupt:
             pass
+
+    def populated_slots(self, boards):
+        """Return the set of slot numbers occupied by `boards`."""
+        return {mb.slot for mb in boards}
+
+    def require_bct_corner_turn(self, boards):
+        """Raise unless every board exposes the backplane corner-turn engine.
+
+        ``BP_SHUFFLE``, ``CROSSBAR2`` and ``CROSSBAR3`` live on the board's
+        corner-turn engine (``board.CT``), and only on a BCT bitstream. On a
+        UCT build — the CRS ``shuffle8``/``chan8`` firmware — they are absent,
+        and reading them raises a bare ``AttributeError``. Fail with the
+        platform and capability named instead.
+        """
+        for mb in boards:
+            ct = getattr(mb, 'CT', None)
+            bp = getattr(ct, 'BP_SHUFFLE', None) if ct is not None else None
+            ct_type = getattr(mb, 'CT_TYPE', None)
+            if bp is None or ct_type != 'BCT':
+                raise RuntimeError(
+                    f'{mb!r} (slot {getattr(mb, "slot", "?")}) reports corner-turn type '
+                    f'{ct_type!r}, not "BCT": it has no CT.BP_SHUFFLE/CROSSBAR2/CROSSBAR3 to '
+                    f'measure. Crate backplane health is a BCT-bitstream feature '
+                    f'(ICE shuffle16/128/256/512); it is neither implemented nor '
+                    f'generated for UCT builds such as the CRS shuffle8/chan8 firmware.')
+
+    async def measure_crate_health(self, boards=None, populated=None, logger=None):
+        """One full health pass over a populated crate.
+
+        Clears every monitor, lets them re-accumulate on live traffic for 0.5 s,
+        then reads each stage. Returns the list of failure descriptions; an empty
+        list means the crate is healthy.
+
+        Backplane link health is ``gtx[n].BLOCK_LOCK`` (64b66b sync).
+        ``RX_RESETDONE`` is timer-based and asserts with no cable attached, so
+        it is never used. ``MISSING_FRAME`` is the real lane-absent flag.
+        ``DATA_TIMEOUT_MON``, ``HAD_TIMEOUT``, ``CAPTURE_DONE`` and
+        ``TIMEOUT_PERIOD`` are not driven by the firmware and are not read
+        here. ``PACKET_ERROR_CTR`` is indexed by ``LANE_MONITOR_SEL`` and only
+        selections 0..7 are valid. Both crossbars' packet-error counters are
+        asserted on: before ``chfpga_ice_ct_pbg_sep24`` the CROSSBAR3 counter
+        saturated unconditionally and had to be skipped; the sep24 trailer fix
+        made it a real error indicator again.
+
+        Only the boards' monitor plane is written (counter/sticky resets); no
+        datapath or configuration register is touched.
+
+        The shuffle blocks are ``board.CT.BP_SHUFFLE``, ``board.CT.CROSSBAR2``
+        and ``board.CT.CROSSBAR3``.
+
+        Parameters:
+
+            boards (iterable): the crate's motherboards. Defaults to this
+                array's ``ib``.
+
+            populated (set): slot numbers that hold a board. Lanes fed by an
+                empty slot are skipped rather than reported. Defaults to the
+                slots of `boards`.
+
+            logger (logging.Logger): where the per-board monitor readings are
+                logged at INFO. Defaults to this provider's logger.
+        """
+        if boards is None:
+            boards = self.ib
+        boards = sorted(boards, key=lambda m: m.slot)
+        if populated is None:
+            populated = self.populated_slots(boards)
+        if logger is None:
+            logger = self.logger
+        self.require_bct_corner_turn(boards)
+
+        failures = []
+
+        for mb in boards:
+            bp = mb.CT.BP_SHUFFLE
+            bp.reset_stats()
+            for cb in (mb.CT.CROSSBAR2, mb.CT.CROSSBAR3):
+                cb.LANE_MONITOR_RESET = 1
+                cb.LANE_MONITOR_RESET = 0
+        await asyncio.sleep(0.5)  # let counters/stickies re-accumulate on live traffic
+
+        ctrs_before = {}
+        for mb in boards:
+            bp = mb.CT.BP_SHUFFLE
+            for lane in range(1, 16):  # lane 0 is the internal bypass (no GTX)
+                tx_slot, tx_lane = mb.crate.get_matching_tx((mb.slot, lane))
+                if tx_slot not in populated:
+                    continue
+                gtx = bp.gtx_map['pcb'][lane]
+                if not int(gtx.BLOCK_LOCK):
+                    failures.append(
+                        f"[slot {mb.slot}] BP pcb lane {lane}: BLOCK_LOCK=0 "
+                        f"(fed by slot {tx_slot} lane {tx_lane}) - 64b66b sync not "
+                        f"achieved; check that link/transmitter")
+            err, rxovf, fdet, minlen, maxlen = await bp.get_rx_lane_monitor(
+                ('ERROR_CTR', 'RX_FIFO_OVERFLOW', 'FRAME_DETECT',
+                 'MIN_FRAME_LENGTH', 'MAX_FRAME_LENGTH'), 'pcb')
+            logger.info(f"[slot {mb.slot}] BP pcb monitors: err={err} rx_fifo_ovf={rxovf} "
+                        f"frame_detect={fdet} min_len={minlen} max_len={maxlen}")
+            for lane in range(16):
+                if lane > 0:
+                    tx_slot, _ = mb.crate.get_matching_tx((mb.slot, lane))
+                    if tx_slot not in populated:
+                        continue
+                where = f"[slot {mb.slot}] BP pcb lane {lane}"
+                if err[lane]:
+                    failures.append(f"{where}: {err[lane]} CRC/frame errors on the backplane link")
+                if rxovf[lane]:
+                    failures.append(f"{where}: RX FIFO overflow (downstream crossbar not draining)")
+                if not fdet[lane]:
+                    failures.append(f"{where}: no frames detected (source board not streaming)")
+                if minlen[lane] != maxlen[lane]:
+                    failures.append(f"{where}: frame length varies "
+                                    f"({minlen[lane]}..{maxlen[lane]} words) - corrupted stream")
+
+            for name, cb, n_outputs in (('CROSSBAR2', mb.CT.CROSSBAR2, 8),
+                                        ('CROSSBAR3', mb.CT.CROSSBAR3, 8)):
+                mons = await cb.get_lane_monitor(_LANE_MONITOR_NAMES)
+                logger.info(f"[slot {mb.slot}] {name} monitors: "
+                            + ' '.join(f'{n}={v}' for n, v in zip(_LANE_MONITOR_NAMES, mons)))
+                for mon_name, values in zip(_LANE_MONITOR_NAMES, mons):
+                    for lane, v in enumerate(values):
+                        if v:
+                            failures.append(f"[slot {mb.slot}] {name} input lane {lane}: "
+                                            f"{mon_name}={v} - {_LANE_MONITOR_HINTS[mon_name]}")
+                # PACKET_ERROR_CTR is indexed by LANE_MONITOR_SEL and only
+                # lanes 0..7 are valid (higher selects read out of range).
+                for sel in range(n_outputs):
+                    cb.LANE_MONITOR_SEL = sel
+                    v = int(cb.PACKET_ERROR_CTR)
+                    if v:
+                        failures.append(f"[slot {mb.slot}] {name} lane {sel}: "
+                                        f"PACKET_ERROR_CTR={v} (CRC/length/alignment errors)")
+                cb.LANE_MONITOR_SEL = 0
+                ctrs_before[(mb.slot, name)] = (int(cb.INPUT_FRAME_CTR),
+                                                int(cb.ALIGN_FRAME_CTR),
+                                                int(cb.OUTPUT_FRAME_CTR))
+        await asyncio.sleep(0.3)
+        ctr_regs = {'INPUT': 'INPUT_FRAME_CTR', 'ALIGN': 'ALIGN_FRAME_CTR',
+                    'OUTPUT': 'OUTPUT_FRAME_CTR'}
+        for mb in boards:
+            for name, cb in (('CROSSBAR2', mb.CT.CROSSBAR2), ('CROSSBAR3', mb.CT.CROSSBAR3)):
+                for ctr_name, before in zip(('INPUT', 'ALIGN', 'OUTPUT'),
+                                            ctrs_before[(mb.slot, name)]):
+                    # These counters are 8-bit and free-running at ~200k counts/s,
+                    # so a healthy counter matches its earlier reading by
+                    # wraparound coincidence with probability 1/256 - across the
+                    # 96 counters read here, roughly every third pass would flag
+                    # one spuriously. A genuinely stalled counter stays equal on
+                    # every re-read, so require the match to survive a retry
+                    # (two coincidences compound to ~1.5e-5 per counter).
+                    value = int(getattr(cb, ctr_regs[ctr_name]))
+                    if value == before:
+                        await asyncio.sleep(0.05)
+                        value = int(getattr(cb, ctr_regs[ctr_name]))
+                    if value == before:
+                        failures.append(f"[slot {mb.slot}] {name} {ctr_name}_FRAME_CTR static "
+                                        f"at {before} - no dataflow through this stage")
+
+        return failures

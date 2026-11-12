@@ -18,7 +18,6 @@ from wtl.namespace import NameSpace
 from wtl.pytest_xreport import xr, TestMenu
 import pychfpga
 from pychfpga import fpga_array
-from pychfpga.fpga_firmware.chfpga import ct_health
 import labpy
 import os
 
@@ -310,7 +309,7 @@ class TestPreDeploymentCrate(TestUtils):
         QC002: Backplane error test: the backplane links and both shuffle
         crossbars must be error-free on every board.
 
-        Each pass is ``ct_health.measure_crate_health``: clear the monitors,
+        Each pass is ``ca.measure_crate_health``: clear the monitors,
         let them re-accumulate, then read lock, CRC, aligner stickies, packet
         errors, and whether the frame counters advance. The old walk of
         ``get_corner_turn_engine_status_async(reset_stats=True)`` cleared the
@@ -1091,7 +1090,7 @@ class TestPreDeploymentCrate(TestUtils):
         test uses. This suite has no running event loop, so the coroutine is
         driven with ``asyncio.run``, like the other async board calls here.
         """
-        return asyncio.run(ct_health.measure_crate_health(self.ca.ib))
+        return asyncio.run(self.ca.measure_crate_health(self.ca.ib))
 
 
 if __name__ == '__main__':

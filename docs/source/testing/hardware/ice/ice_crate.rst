@@ -11,7 +11,7 @@ supply and GPS). The tests, in menu order, are:
 - Power supply connection
 - Crate initialization: every board in the hardware map is found, every FPGA is programmed, and
   the crate synchronizes
-- Backplane and corner-turn health, from ``ct_health.measure_crate_health`` (lock, CRC, aligner
+- Backplane and corner-turn health, from ``ca.measure_crate_health`` (lock, CRC, aligner
   stickies, packet errors, and advancing frame counters on every board)
 - IRIG-B synchronization, repeated for the number of tries set in the configuration, with the
   configured frame-0 alignment limit

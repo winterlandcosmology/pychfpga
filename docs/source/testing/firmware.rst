@@ -270,4 +270,4 @@ That file does not set ``bitfile``; the platform table loads ``chfpga_ice_ct_pbg
 Run the tests in file order and stop at the first failure. They check backplane lock and the
 two shuffle crossbars, then packet geometry, the byte-exact corner-turn output, frame flags,
 and the GPU link. Crossbar objects are ``board.CT.CROSSBAR2`` and ``board.CT.CROSSBAR3``.
-The crate health check is ``ct_health.measure_crate_health``.
+The crate health check is ``array.measure_crate_health`` on the corner-turn array methods.
