@@ -73,3 +73,33 @@ test_config:
         expected_overflows_per_frame: [0, 1, 1000, 2000]
         stats_frames: [10]
         mode: ['word_ctr_buffer_flags', 'frame8', 'frame4']
+
+    # Corner-turn capture tests (ct_prober_test.py, ct_shuffle256_test.py).
+    # Collected on every config; the tests skip unless the firmware has a
+    # corner-turn probe and, for the crate file, mode is shuffle256.
+    global_lane: [0]
+    global_fpp: [1, 2]
+    lane_readback:
+        lanes: [[0, 3, 7]]
+    lane_switch:
+        target_lane: [3]
+    corner_turn_shuffle16:
+        lane: [0, 1, 2, 3, 4, 5, 6, 7]
+        waveform: ['ramp', 'channel_id', 'noise']
+    flags_packet_size:
+        lane: [0, 3, 7]
+    flags_data_decode:
+        lane: [0]
+        waveform: ['ramp']
+    frame_flags_adc_mask:
+        lane: [0, 5]
+    frame_flags_fft_mask:
+        lane: [0]
+    data_flags_as_built:
+        lane: [0, 1, 2, 3, 4, 5, 6, 7]
+    global_s256_slot: [1]
+    global_s256_lane: [0]
+    corner_turn_shuffle256:
+        waveform: ['slot_channel_id']
+    frame_flags_shuffle256:
+        s256_lane: [0]

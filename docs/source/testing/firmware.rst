@@ -49,7 +49,7 @@ when it contains those words:
 ``-m`` selects by marker instead of by name. The markers are listed in
 ``firmware_tests/pytest.ini`` (``funcgen``, ``funcgen_patterns``, ``funcgen_noise_gen``,
 ``funcgen_counters``, ``fft``, ``scaler``, ``complex``, ``floating``, ``statistical``,
-``corr``):
+``corr``, ``ct_prober``, ``ct_flags``, ``ct_shuffle256``):
 
 .. code-block:: bash
 
@@ -232,3 +232,38 @@ Cross-correlation
 Not covered: the check that the number of received correlator packets equals the number expected
 is commented out. Injection through a real FFT (instead of the bypass) is not part of this file;
 that is what the FFT tests do.
+
+Corner-turn capture probe
+=========================
+
+``ct_prober_test.py``. These tests need a bitstream that implements the corner-turn capture
+probe (an ICE board with corner-turn level 3). On any other firmware every test in this file
+skips, except ``test_ct_source_rejected_without_probe``, which checks that ``start_ct_capture``
+raises when the probe is absent.
+
+The probe snapshots one corner-turn output lane and sends those packets on the capture link
+with cookie ``0xA2``. The tests check the lane select, the burst-length limit, the packet
+header, and the decoded samples against the host model of the first crossbar. A second group,
+marked ``ct_flags``, turns packet flags on and checks the data-flags, frame-flags, and trailer
+words.
+
+The parameters live under ``test_config`` in ``config_ice.yaml`` and ``config_crs.yaml``
+(``global_lane``, ``global_fpp``, and the per-test blocks). They are what pytest uses to build
+the cases. The tests themselves decide whether the connected firmware can run them.
+
+Shuffle256 crate
+================
+
+``ct_shuffle256_test.py``. A 16-board ICE crate in mode ``shuffle256``. The file skips, without
+connecting, unless ``connection_config.mode`` is ``shuffle256``. Use
+``firmware_tests/config_ice_crate.yaml`` and edit its ``hwm`` to the crate's backplane serial.
+That file does not set ``bitfile``; the platform table loads ``chfpga_ice_ct_pbg_sep24.bit``.
+
+.. code-block:: bash
+
+    pytest --xreport-config=config_ice_crate.yaml ct_shuffle256_test.py -v
+
+Run the tests in file order and stop at the first failure. They check backplane lock and the
+two shuffle crossbars, then packet geometry, the byte-exact corner-turn output, frame flags,
+and the GPU link. Crossbar objects are ``board.CT.CROSSBAR2`` and ``board.CT.CROSSBAR3``.
+The crate health check is ``ct_health.measure_crate_health``.

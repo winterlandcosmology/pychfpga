@@ -1,0 +1,54 @@
+# Configuration for the shuffle256 crate tests (ct_shuffle256_test.py).
+#
+# Run ONLY the crate test file with this config (the other suites are
+# single-board and would misbehave against a crate):
+#
+#   pytest --xreport-config=config_ice_crate.yaml --log-cli-level=INFO ct_shuffle256_test.py
+#
+# Run the tests stage by stage in file order (health -> alignment ->
+# geometry -> algorithm -> flags -> gpu) and stop at the first failure; see
+# the module docstring of ct_shuffle256_test.py for the exact commands.
+
+connection_config:
+    prog: 1                     # 0 - do not reprogram, 1 - reprogram if outdated, 2 - always reprogram
+    mode: 'shuffle256'          # 16-board crate, 3-level corner turn. Do not change.
+    hwm: 'bp16 XX:0'            # EDIT ME: replace XX with the crate's backplane serial
+                                # number (e.g. 'bp16 29:0' = serial 29, crate number 0)
+    # No bitfile: PLATFORM_SUPPORT loads chfpga_ice_ct_pbg_sep24.bit for shuffle.
+    sync_method: 'distributed_time'   # backplane time distribution (production default);
+    sync_source: 'bp_time'            # use 'irigb' instead if the crate has an IRIG-B feed
+    mdns_timeout: 40            # crate discovery takes longer than a single board
+    open: 1                     # full bring-up including init_corner_turn
+
+test_config:
+    loglevelconn: "INFO"        # Log level during connection to the crate
+    logleveltest: "INFO"        # INFO (not DEBUG): remote logs must stay readable
+    loglevelrecv: 1             # 0-3
+    conn_scope: "class"         # reuse the (slow) crate connection across tests
+    only_plot: False
+
+    platform: 'ICE-crate'
+
+    # Same geometry as config_ice.yaml. Collection-time eval and the
+    # post-connect constant check both read this block.
+    constants:
+        PLATFORM: MGK7MB
+        ADC_BITS_PER_SAMPLE: 8
+        NUM_CHANNELS: 16
+        SAMPLES_PER_FRAME: 2048
+        NUM_BINS: 1024
+        FFT_WIDTH: 18
+        BINS_PER_WORD: 2
+        CAPTURE_BUS_WIDTH: 32
+        CAPTURE_WIDTH: 4
+
+    sync_max_time_difference: 100  # ns; array-sync frame-0 alignment limit
+
+    #parameters for the shuffle256 crate tests
+    global_s256_slot: range(1, 17)               # MGK7BP16 slots 1-16
+    global_s256_lane: [0, 7]                    # first and last corner-turn output lane
+    corner_turn_shuffle256:
+        waveform: ['slot_channel_id', 'ramp']
+    frame_flags_shuffle256:
+        s256_lane: [0]
+    stream_frame_spread: 2      # max frame-number spread across CB2 input lanes
