@@ -579,6 +579,21 @@ class TestCTShuffle256(TestModule):
                     dups = 1
                     while dups < row.shape[0] and int(row[dups]) == w0:
                         dups += 1
+                    if not np.any(row):
+                        # An all-zero buffer is an empty capture, not a framing
+                        # defect: the probe sent nothing, or the read picked the
+                        # wrong receiver channel (the channel axis carries one
+                        # column per armed probe - see
+                        # ct_common.select_board_channel). Keep it distinct from
+                        # the strobe check below, whose signature is a *real*
+                        # header word repeated 8k+1 times.
+                        failures.append(
+                            f"[slot {slot} lane {lane}] packet {p}: capture buffer "
+                            f"is entirely zero ({row.shape[0]} words) - no packet "
+                            f"reached this row (check the probe is armed and that "
+                            f"the capture read this board's receiver channel); "
+                            f"this is NOT the shared-strobe defect")
+                        continue
                     if w0 & 0xFFFF != 0x14CF or dups != 1:
                         failures.append(
                             f"[slot {slot} lane {lane}] packet {p}: header word "
