@@ -285,6 +285,7 @@ async def mdns_discover(
                 # Standard multicast replies. unicast=True (requesting unicast
                 # replies) was tried to avoid ICMP errors on replies, but on some
                 # hosts it finds no boards at all. Multicast replies do.
+                # unicast=True seemed to prevent ICMP error on replies, but might just be luck
                 unicast=False
                 )
             # `_tcpipe._tcp.local.` is no longer registered by the firmware,

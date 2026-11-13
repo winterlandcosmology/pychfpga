@@ -60,6 +60,20 @@ class TestCTShuffle256(TestModule):
     def get_logger(self):
         return self.logger
 
+    def get_constants(_, board):
+        # Live geometry that TestModule.board_conn cross-checks against the
+        # yaml constants block. CAPTURE_WIDTH is a yaml pin with no live
+        # source, so it is left out (as in fft_test).
+        constants = NameSpace()
+        constants.PLATFORM = board.mb.part_number
+        constants.ADC_BITS_PER_SAMPLE = board.ADC_BITS_PER_SAMPLE
+        constants.NUM_CHANNELS = board.NUMBER_OF_CHANNELIZERS
+        constants.SAMPLES_PER_FRAME = board.ADC_SAMPLES_PER_FRAME
+        constants.NUM_BINS = board.NUMBER_OF_FREQUENCY_BINS
+        constants.BINS_PER_WORD = board.FFT_BINS_PER_WORD
+        constants.CAPTURE_BUS_WIDTH = board.CAPTURE_BUS_WIDTH
+        return constants
+
     def get_widths(_, test_config):
         widths = NameSpace({})
         widths.PLATFORM = test_config.platform[:3]

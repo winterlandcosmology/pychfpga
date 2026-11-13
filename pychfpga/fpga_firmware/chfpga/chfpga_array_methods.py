@@ -1806,7 +1806,9 @@ class chFPGAArrayMethods(ArrayMethods):
                 bytes_per_subframe=bytes_per_frame // subframes_per_frame,
                 packet_cookie=list(State.get_common_attr(cfgs, "packet_cookie")),
             )
-            self._raw_data_config.capture_format = [State(), State()]
+            # One entry per capture source (funcgen, scaler, corner-turn probe),
+            # matching raw_data_packet_processor.NUM_SOURCES.
+            self._raw_data_config.capture_format = [State(), State(), State()]
 
         # Get the type of capture engine so we will gather the raw data config based in the correct parameters. Must be the same for every board.
         capture_engine = State.get_common_attr(cfgs, "capture_engine")
@@ -1877,7 +1879,8 @@ class chFPGAArrayMethods(ArrayMethods):
         self._raw_data_config.capture_format[1] = State.get_common_attr(scaler_cfgs, "capture_format")
 
         # If we have a CT capture engine, set the format flag on that engien so we know how to decode it
-        if len(self._raw_data_config.capture_format) >= 2:
+        # (the probe exists only on ICE corner-turn bitstreams, never on CRS).
+        if all(getattr(fpga, 'CT_PROBER', None) is not None for fpga in fpgas):
             ct_cfgs = [fpga.CT_PROBER.config for fpga in fpgas]
             self._raw_data_config.capture_format[2]=State.get_common_attr(ct_cfgs, "capture_format")
 

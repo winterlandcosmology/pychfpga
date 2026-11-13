@@ -37,7 +37,7 @@ test_config:
         NUM_CHANNELS: 16
         SAMPLES_PER_FRAME: 2048
         NUM_BINS: 1024
-        FFT_WIDTH: 18
+        FFT_WIDTH: 29
         BINS_PER_WORD: 2
         CAPTURE_BUS_WIDTH: 32
         CAPTURE_WIDTH: 4
