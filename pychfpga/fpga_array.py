@@ -79,7 +79,9 @@ class FPGAArray(object):
     #
     # Class-body defaults below ensure the attributes are always defined,
     # even on ``object.__new__(FPGAArray)`` code paths (tests, unpickle).
-    # ``__getattr__`` still guards on ``_ready`` before dispatching array methods.
+    # ``__getattr__`` dispatches array methods only after ``init_async`` has been
+    # entered (``_was_awaited``). A method whose provider is not loaded yet
+    # raises AttributeError.
     # -------------------------------------------------------------------------
 
     # Define defaults for the following class attributes to prevent
@@ -88,7 +90,7 @@ class FPGAArray(object):
     _array_methods = {}
     _array_method_class_sets = ()  # tuple of each motherboard's provider-class frozenset
     _array_method_instances = {}
-    _ready = False
+    _was_awaited = False
 
     def get_array_methods(self):
         """Return array-wide methods available on every motherboard.
@@ -148,7 +150,7 @@ class FPGAArray(object):
 
     def __getattr__(self, name):
         """Dispatch array-wide methods. See :meth:`get_array_method`."""
-        if not self._ready:
+        if not self._was_awaited:
             raise RuntimeError(
                 "FPGAArray is not initialized, probably because it was not await'ed; use "
                 "`ca = await FPGAArray(...)`"
@@ -512,7 +514,7 @@ class FPGAArray(object):
         init_kwargs = {k: v for k, v in locals().items() if k not in ('self', 'kwargs')}
         init_kwargs.update(kwargs)
 
-        self._ready = False  # Indicate that the array is not initialized yet.
+        self._was_awaited = False  # Set when init_async begins. Caller must await this instance.
         self._init_args = ()
         self._init_kwargs = init_kwargs
 
@@ -521,7 +523,6 @@ class FPGAArray(object):
 
     def __await__(self):
         yield from self.init_async(**self._init_kwargs).__await__()  # create a generator that passes-on the init_async yields
-        self._ready = True
         return self
 
 
@@ -533,6 +534,7 @@ class FPGAArray(object):
         forwarded to firmware ``array_init_async``. Constructor parameters
         are documented on :meth:`__init__`.
         """
+        self._was_awaited = True  # Caller entered init_async. Missing providers still raise AttributeError.
         # Hardware-map / discovery params (not forwarded to array_init)
         hwm = kwargs.pop('hwm', None)
         iceboards = kwargs.pop('iceboards', [])
