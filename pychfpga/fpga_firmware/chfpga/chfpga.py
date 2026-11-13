@@ -1013,15 +1013,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self.FRAME_PERIOD = float(self.FRAME_LENGTH) / self._sampling_frequency
         self.FRAME_RATE = 1 / self.FRAME_PERIOD
 
-        from pychfpga.common.raw_data_packet_processor import (
-            PACKET_COOKIE_ADC,
-            PACKET_COOKIE_CT,
-            PACKET_COOKIE_FFT,
-        )
+        from pychfpga.common.raw_data_packet_processor import PACKET_COOKIE_ADC, PACKET_COOKIE_FFT
         bytes_per_frame = int(self.ADC_BYTES_PER_SAMPLE * self.ADC_SAMPLES_PER_FRAME)
-        packet_cookie = [PACKET_COOKIE_ADC, PACKET_COOKIE_FFT]
-        if self.HAS_CT_CAPTURE:
-            packet_cookie.append(PACKET_COOKIE_CT)
         self.config.update(
             capture_engine=self.CAPTURE_TYPE,
             adc_bits_per_sample=int(self.ADC_BITS_PER_SAMPLE),
@@ -1033,7 +1026,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
             capture_bits_per_word=128 if self.CAPTURE_TYPE == "UCAP" else 32,
             subframes_per_frame=4 if self.CAPTURE_TYPE == "UCAP" else 1,
             packet_header_format="raw-v1",
-            packet_cookie=packet_cookie,
+            packet_cookie=[PACKET_COOKIE_ADC, PACKET_COOKIE_FFT], # cookies for both data sources
             sample_freq_mhz=float(self._sampling_frequency) / 1e6,
             platform_id=int(self.PLATFORM_ID),
             channels=tuple(self.default_channels),

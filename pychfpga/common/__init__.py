@@ -7,7 +7,6 @@ from .raw_data_packet_processor import (
     decode_format_string,
     PACKET_COOKIE_ADC,
     PACKET_COOKIE_FFT,
-    PACKET_COOKIE_CT,
 )
 from .raw_frame_receiver import RawFrameReceiver
 from .state import State

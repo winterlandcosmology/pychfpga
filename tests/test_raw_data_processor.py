@@ -6,7 +6,6 @@ import pytest
 
 from pychfpga.common.raw_data_packet_processor import (
     PACKET_COOKIE_ADC,
-    PACKET_COOKIE_CT,
     PACKET_COOKIE_FFT,
     RawDataPacketProcessor,
     decode_format_string,
@@ -803,146 +802,10 @@ def test_serialized_format_change_is_detected_without_raw_realloc():
     assert not processor.config.has_changed(_STATIC_BUFFER_ATTRS, context=_STATIC_BUFFER_ATTRS)
 
 
-# ---------------------------------------------------------------------------
-# Corner-turn capture probe (cookie 0xA2, source index 2)
-# ---------------------------------------------------------------------------
-
-CT_STREAM_ID = 0x015
-CT_HEADER_WORDS = 4
-CT_DATA_WORDS = 2
-CT_WORDS_PER_PACKET = CT_HEADER_WORDS + CT_DATA_WORDS + 1
-
-
-def ct_capture_format(use_offset_encoding=False, four_bits=True):
-    return State(
-        fmt_bus_width=8,
-        fmt_data_width=4,
-        fmt_is_complex=True,
-        fmt_interleave_factor=1,
-        fmt_is_ct_data=True,
-        fmt_header_words=CT_HEADER_WORDS,
-        fmt_data_words=CT_DATA_WORDS,
-        fmt_four_bits=four_bits,
-        fmt_frames_per_packet=1,
-        fmt_bins=CT_DATA_WORDS,
-        fmt_channels_per_bin=4,
-        use_offset_encoding=use_offset_encoding,
-    )
-
-
-def default_ct_config(frames_per_burst=1, **overrides):
-    bytes_per_frame = 4 * CT_WORDS_PER_PACKET
-    state = default_config(
-        source="ct",
-        channels=(),
-        stream_ids=(CT_STREAM_ID,),
-        frames_per_burst=frames_per_burst,
-        samples_per_frame=bytes_per_frame,
-        bytes_per_frame=bytes_per_frame,
-        bytes_per_subframe=bytes_per_frame,
-        capture_bits_per_word=32,
-        capture_format=[None, None, ct_capture_format()],
-        packet_cookie=[PACKET_COOKIE_ADC, PACKET_COOKIE_FFT, PACKET_COOKIE_CT],
-    )
-    state.update(overrides)
-    return state
-
-
-def make_ct_processor(n_packets=16, frames_per_burst=1, receive_window=3, **kwargs):
-    pr = DummyPacketReceiver(n_packets=n_packets, max_packet_size=64)
-    getter = config_getter_from_mapping(default_ct_config(frames_per_burst=frames_per_burst, **kwargs))
-    processor = RawDataPacketProcessor(pr, config_getter=getter, receive_window=receive_window)
-    processor.update_config()
-    return processor, pr
-
-
-def write_ct_packet(
-        processor, pr, ix, ts, burst_index=0, stream_id=CT_STREAM_ID,
-        data_words=(0, 0), pkt_len=None):
-    words = np.zeros(CT_WORDS_PER_PACKET, dtype=np.uint32)
-    words[0] = (stream_id << 16) | (1 << 12) | (CT_HEADER_WORDS << 8) | 0xCF
-    words[3] = int(ts) & 0xFFFFFFFF
-    words[CT_HEADER_WORDS:CT_HEADER_WORDS + CT_DATA_WORDS] = np.asarray(data_words, dtype=np.uint32)
-    pr.buf[ix, 0] = PACKET_COOKIE_CT
-    pr.buf[ix, 1] = ((burst_index & 0xF) << 4) | ((stream_id >> 8) & 0xF)
-    pr.buf[ix, 2] = stream_id & 0xFF
-    pr.buf[ix, 3] = 0
-    pr.buf[ix, 4:10] = np.frombuffer(int(ts).to_bytes(6, "big"), dtype=np.uint8)
-    payload = words.astype(">u4").view(np.uint8)
-    pr.buf[ix, 10:10 + payload.size] = payload
-    pr.pkt_len[ix] = processor.PACKET_SIZE if pkt_len is None else pkt_len
-    pr.n_stored = max(pr.n_stored, ix + 1)
-
-
-def test_ct_cookie_accepted_and_decoded():
-    processor, pr = make_ct_processor()
-    assert processor.PACKET_SIZE == 10 + 4 * CT_WORDS_PER_PACKET
-    write_ct_packet(processor, pr, 0, ts=100, data_words=(0x7F8801F0, 0x12345678))
-    result = process_and_get(processor, source=2)
-    assert result is not None
-    ts, data, counts = result
-    assert data.dtype == np.complex64
-    assert data.shape == (1, 1, 4 * CT_DATA_WORDS)
-    np.testing.assert_array_equal(ts, [100])
-    np.testing.assert_array_equal(counts, [[1]])
-    assert processor.raw_source[0, 0, 0] == 2
-    expected = np.asarray([
-        -1 + 0j, 0 + 1j, -8 - 8j, 7 - 1j,
-        7 - 8j, 5 + 6j, 3 + 4j, 1 + 2j,
-    ], dtype=np.complex64)
-    np.testing.assert_array_equal(data[0, 0], expected)
-
-
-def test_ct_offset_binary_decode():
-    processor, pr = make_ct_processor(
-        capture_format=[None, None, ct_capture_format(use_offset_encoding=True)])
-    write_ct_packet(processor, pr, 0, ts=100, data_words=(0x00F78888, 0))
-    _ts, data, _counts = process_and_get(processor, source=2)
-    expected_first = np.asarray([0 + 0j, 0 + 0j, 7 - 1j, -8 - 8j], dtype=np.complex64)
-    np.testing.assert_array_equal(data[0, 0, :4], expected_first)
-
-
-def test_ct_format32_returns_raw_words():
-    processor, pr = make_ct_processor()
-    write_ct_packet(processor, pr, 0, ts=100, data_words=(0x7F8801F0, 0x12345678))
-    processor.process_udp_packets()
-    _ts, data, _counts = processor.get_formatted_data(
-        slice(0, processor.n_out), source=2, format="32")
-    assert data.shape == (1, 1, CT_WORDS_PER_PACKET)
-    words = data[0, 0].astype(np.int64) & 0xFFFFFFFF
-    assert words[0] & 0xFF == 0xCF
-    assert (words[0] >> 8) & 0xF == CT_HEADER_WORDS
-    assert (words[0] >> 12) & 0xF == 1
-    assert words[0] >> 16 == CT_STREAM_ID
-    assert words[4] == 0x7F8801F0
-    assert words[5] == 0x12345678
-    assert words[6] == 0
-
-
-def test_ct_burst_split_rows_and_timestamps():
-    processor, pr = make_ct_processor(frames_per_burst=2)
-    write_ct_packet(processor, pr, 0, ts=100, burst_index=0, data_words=(0x01010101, 0))
-    write_ct_packet(processor, pr, 1, ts=100, burst_index=1, data_words=(0x02020202, 0))
-    ts, data, counts = process_and_get(processor, source=2)
-    np.testing.assert_array_equal(ts, [100, 101])
-    assert data.shape == (2, 1, 4 * CT_DATA_WORDS)
-    np.testing.assert_array_equal(data[0, 0, :4], np.full(4, 0 + 1j, dtype=np.complex64))
-    np.testing.assert_array_equal(data[1, 0, :4], np.full(4, 0 + 2j, dtype=np.complex64))
-    np.testing.assert_array_equal(counts, [[1], [1]])
-
-
-def test_ct_wrong_length_dropped():
-    processor, pr = make_ct_processor()
-    write_ct_packet(processor, pr, 0, ts=100, pkt_len=processor.PACKET_SIZE - 4)
-    processor.process_udp_packets()
-    assert processor.n_out == 0
-
-
-def test_ct_dropped_by_two_cookie_config():
-    """A config that lists only the channelizer cookies drops 0xA2."""
+def test_ct_cookie_dropped_by_raw_processor():
+    """Cookie 0xA2 is a corner-turn packet, not a raw source."""
     processor, pr = make_processor(n_packets=4)
-    assert list(processor.config.packet_cookie) == [PACKET_COOKIE_ADC, PACKET_COOKIE_FFT]
-    pr.buf[0, 0] = PACKET_COOKIE_CT
+    pr.buf[0, 0] = 0xA2
     pr.buf[0, 1] = (10 >> 8) & 0xF
     pr.buf[0, 2] = 10 & 0xFF
     pr.buf[0, 4:10] = np.frombuffer(int(100).to_bytes(6, "big"), dtype=np.uint8)
@@ -950,29 +813,3 @@ def test_ct_dropped_by_two_cookie_config():
     pr.n_stored = 1
     processor.process_udp_packets()
     assert processor.n_out == 0
-
-
-def test_packet_cookie_cannot_change():
-    processor, _pr = make_processor()
-    processor.config.packet_cookie = [PACKET_COOKIE_ADC]
-    with pytest.raises(RuntimeError, match="cannot change"):
-        processor.update_config()
-
-
-def test_missing_packet_cookie_raises():
-    state = default_config()
-    del state["packet_cookie"]
-    pr = DummyPacketReceiver(n_packets=4)
-    processor = RawDataPacketProcessor(
-        pr, config_getter=config_getter_from_mapping(state), receive_window=3
-    )
-    with pytest.raises(ValueError, match="packet_cookie"):
-        processor.update_config()
-
-
-def test_ct_source2_without_capture_format_raises():
-    processor, pr = make_processor(n_packets=4, stream_ids=(10,), channels=(0,))
-    write_packet(processor, pr, 0, stream_id=10, ts=100)
-    processor.process_udp_packets()
-    with pytest.raises(ValueError, match="No capture format is configured for source 2"):
-        processor.get_formatted_data(slice(0, processor.n_out), source=2)

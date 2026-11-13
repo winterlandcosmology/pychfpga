@@ -472,10 +472,10 @@ class TestCTProber(TestModule):
         logger.debug(f"test_lane_switch: initial_lane={initial_lane} target_lane={target_lane}")
         assert initial_lane == 0
         self.board.CT_PROBER.LANE_SEL = target_lane
-        receiver = await self.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        receiver = await self.ca.get_ct_data_receiver_async(verbose=self.test_config.loglevelrecv)
         receiver.flush()
-        ts, data, counts = receiver.read_raw_frames(ncap=self.NCAP, source=2, format='32',
-                                                    chan_first=False)
+        ts, data, counts = receiver.read_frames(ncap=self.NCAP, format='32',
+                                                chan_first=False)
         switched_lane = (int(data[0, 0, 0]) >> 16) & 0xF
         logger.debug(f"test_lane_switch: switched_lane={switched_lane}")
         assert switched_lane == target_lane, "inner header lane number"
@@ -527,9 +527,9 @@ class TestCTProber(TestModule):
         assert np.unique(payload_bytes).size == 1, "constant input must give a constant payload"
         expected = self._decode_ct_byte(int(payload_bytes[0]), geometry['use_offset_binary'])
 
-        receiver = await self.get_data_receiver(verbose=self.test_config.loglevelrecv)
+        receiver = await self.ca.get_ct_data_receiver_async(verbose=self.test_config.loglevelrecv)
         receiver.flush()
-        ts, data, counts = receiver.read_raw_frames(ncap=self.NCAP, source=2, chan_first=False)
+        ts, data, counts = receiver.read_frames(ncap=self.NCAP, chan_first=False)
         ref_data = np.full(data.shape[2], expected, dtype=np.complex64)
         logger.debug(f"test_constant_pattern_nibble_decode: received_first16={data[0, 0, :16]}")
         logger.debug(f"test_constant_pattern_nibble_decode: reference_first16={ref_data[:16]}")

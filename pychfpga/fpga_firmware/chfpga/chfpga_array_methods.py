@@ -12,6 +12,7 @@ import time
 import numpy as np
 
 from pychfpga.common.array_methods import ArrayMethods
+from pychfpga.common.ct_packet_processor import CTDataReceiver
 from pychfpga.common.raw_frame_receiver import RawFrameReceiver
 from pychfpga.common.state import State
 from pychfpga.common.ucorr_frame_receiver import UCorrFrameReceiver
@@ -62,8 +63,10 @@ class chFPGAArrayMethods(ArrayMethods):
         self._packet_receiver = None
         self._data_recv = None
         self._corr_recv = None
+        self._ct_recv = None
         self._raw_data_config = None
         self._corr_data_config = None
+        self._ct_data_config = None
 
 
     #####################################################
@@ -1583,6 +1586,38 @@ class chFPGAArrayMethods(ArrayMethods):
             self._corr_recv.current_row = 0
         return self._corr_recv
 
+    async def get_ct_data_receiver_async(self, port_number=None, tcp=None, force=False, **kwargs):
+        """Return the corner-turn receiver for the boards whose probe is armed.
+
+        Shares the packet receiver with the raw and correlator readers. The
+        firmware tests park the channelizer before calling this, so the socket
+        is carrying cookie ``0xA2`` only.
+
+        Returns:
+            CTDataReceiver
+
+        Raises:
+            RuntimeError: No corner-turn probe has ``CAPTURE_EN`` set.
+        """
+        if force:
+            self._ct_recv = None
+            self._packet_receiver = None
+        if self.get_ct_data_config() is None:
+            raise RuntimeError(
+                f"{self.fpga_array!r}: no corner-turn probe is capturing"
+            )
+        if not self._ct_recv:
+            pr = await self.get_packet_receiver_async(
+                port_number=port_number, tcp=tcp, force=force
+            )
+            self._ct_recv = CTDataReceiver(
+                pr, config_getter=self.get_ct_data_config, **kwargs
+            )
+        else:
+            await self.get_packet_receiver_async(port_number=port_number, tcp=tcp)
+            self._ct_recv.current_row = 0
+        return self._ct_recv
+
     async def get_system_config_async(self, basic=False):
         """Concurrently get system-configuration info for each FPGA.
 
@@ -1762,10 +1797,7 @@ class chFPGAArrayMethods(ArrayMethods):
             State: Array-wide raw config, including ``source``,
             ``channels``, ``stream_ids``, ``frames_per_burst``,
             ``subframes_per_frame``, ``target_mode``, ``fft_bin_map``, and
-            ``capture_format[0/1]`` (funcgen vs scaler) and, on an ICE
-            ``CT_LEVEL`` 3 board, ``capture_format[2]`` (corner-turn probe).
-            ``fmt_is_ct_data`` is true only on that third entry. ``packet_cookie``
-            is taken from the boards.
+            ``capture_format[0/1]`` (funcgen vs scaler).
 
         Raises:
 
@@ -1804,11 +1836,8 @@ class chFPGAArrayMethods(ArrayMethods):
                 bytes_per_frame=bytes_per_frame,
                 subframes_per_frame=subframes_per_frame,
                 bytes_per_subframe=bytes_per_frame // subframes_per_frame,
-                packet_cookie=list(State.get_common_attr(cfgs, "packet_cookie")),
             )
-            # One entry per capture source (funcgen, scaler, corner-turn probe),
-            # matching raw_data_packet_processor.NUM_SOURCES.
-            self._raw_data_config.capture_format = [State(), State(), State()]
+            self._raw_data_config.capture_format = [State(), State()]
 
         # Get the type of capture engine so we will gather the raw data config based in the correct parameters. Must be the same for every board.
         capture_engine = State.get_common_attr(cfgs, "capture_engine")
@@ -1875,15 +1904,8 @@ class chFPGAArrayMethods(ArrayMethods):
             target_mode=target_mode,
             fft_bin_map=fft_bin_map,
         )
-        self._raw_data_config.capture_format[0] = State.get_common_attr(funcgen_cfgs, "capture_format")
-        self._raw_data_config.capture_format[1] = State.get_common_attr(scaler_cfgs, "capture_format")
-
-        # If we have a CT capture engine, set the format flag on that engien so we know how to decode it
-        # (the probe exists only on ICE corner-turn bitstreams, never on CRS).
-        if all(getattr(fpga, 'CT_PROBER', None) is not None for fpga in fpgas):
-            ct_cfgs = [fpga.CT_PROBER.config for fpga in fpgas]
-            self._raw_data_config.capture_format[2]=State.get_common_attr(ct_cfgs, "capture_format")
-
+        self._raw_data_config.capture_format[0]=State.get_common_attr(funcgen_cfgs, "capture_format")
+        self._raw_data_config.capture_format[1]=State.get_common_attr(scaler_cfgs, "capture_format")
 
         # Acknowledge the configs of each board so we don't trigger an update if none of the boards have changed their configs since the last time
         for mb in boards:
@@ -1960,6 +1982,89 @@ class chFPGAArrayMethods(ArrayMethods):
         for mb in boards:
             mb.fpga.CORR.config.ack(context=ctx)
         return self._corr_data_config
+
+    def get_ct_data_config(self):
+        """Assemble the corner-turn capture config from armed probes.
+
+        Cached until a probe config ``has_changed`` for context
+        ``('get_ct_data_config', self)``, or the set of armed stream ids
+        changes. One stream id per board whose ``CT_PROBER`` has
+        ``CAPTURE_EN`` set, in board order. Packet shape
+        (``words_per_packet``, ``data_words``, ``frames_per_burst``,
+        ``four_bits``, ``use_offset_binary``) must match across those probes.
+
+        Returns:
+
+            State or None: Config for :class:`CTDataReceiver`, or ``None``
+            when no probe is capturing.
+        """
+        probes = [
+            mb.fpga.CT_PROBER
+            for mb in self.ib
+            if getattr(mb.fpga, "CT_PROBER", None) is not None
+            and int(mb.fpga.CT_PROBER.CAPTURE_EN)
+        ]
+        if not probes:
+            return None
+
+        ctx = ("get_ct_data_config", self)
+        cfgs = [probe.update_config() for probe in probes]
+        stream_ids = tuple(int(cfg.stream_id) for cfg in cfgs)
+        if (
+            self._ct_data_config is not None
+            and tuple(self._ct_data_config.stream_ids) == stream_ids
+            and not any(cfg.has_changed(context=ctx) for cfg in cfgs)
+        ):
+            return self._ct_data_config
+
+        shapes = []
+        for probe in probes:
+            geometry = probe.get_packet_geometry()
+            shapes.append(State(
+                words_per_packet=int(geometry["words_per_packet"]),
+                data_words=int(geometry["data_words"]),
+                four_bits=bool(geometry["four_bits"]),
+                use_offset_binary=bool(geometry["use_offset_binary"]),
+                frames_per_burst=int(probe.BURST_LENGTH) + 1,
+            ))
+        words_per_packet = State.get_common_attr(shapes, "words_per_packet")
+        data_words = State.get_common_attr(shapes, "data_words")
+        four_bits = State.get_common_attr(shapes, "four_bits")
+        use_offset_binary = State.get_common_attr(shapes, "use_offset_binary")
+        frames_per_burst = State.get_common_attr(shapes, "frames_per_burst")
+        payload_bytes = 4 * int(words_per_packet)
+
+        if self._ct_data_config is None:
+            self._ct_data_config = State()
+        self._ct_data_config.update(
+            stream_ids=stream_ids,
+            frames_per_burst=int(frames_per_burst),
+            bytes_per_frame=payload_bytes,
+            bytes_per_subframe=payload_bytes,
+            subframes_per_frame=1,
+            bytes_per_sample=4,
+            samples_per_frame=int(words_per_packet),
+            fft_bins_per_word=1,
+            capture_bits_per_word=32,
+            target_mode=0,
+            source=0,
+            header_words=4,
+            data_words=int(data_words),
+            four_bits=bool(four_bits),
+            use_offset_binary=bool(use_offset_binary),
+        )
+        self._ct_data_config.capture_format = [
+            State(
+                fmt_is_complex=False,
+                fmt_bus_width=32,
+                fmt_data_width=32,
+                fmt_interleave_factor=1,
+                use_offset_encoding=False,
+            )
+        ]
+        for cfg in cfgs:
+            cfg.ack(context=ctx)
+        return self._ct_data_config
 
 
     #####################################################

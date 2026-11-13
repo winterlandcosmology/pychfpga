@@ -116,10 +116,10 @@ async def set_capture_ct(board, array, *, ncap=1, lane=0, frames_per_burst=1, fo
     geometry = board.CT_PROBER.get_packet_geometry(lane)
     if logger is not None:
         logger.debug(f"set_capture_ct: geometry={geometry}")
-    receiver = await array.get_data_receiver_async(verbose=recv_verbose)
+    receiver = await array.get_ct_data_receiver_async(verbose=recv_verbose)
     receiver.flush()
-    ts, data, counts = receiver.read_raw_frames(
-        ncap=ncap, source=2, format=format, chan_first=False, split=split)
+    ts, data, counts = receiver.read_frames(
+        ncap=ncap, format=format, chan_first=False, split=split)
     if logger is not None:
         logger.debug(f"set_capture_ct: ts={ts.tolist()} data_shape={data.shape} "
                      f"counts={counts.tolist()}")
