@@ -95,6 +95,37 @@ async def require_ct_dataflow(board, cache, logger, sync=None, key='ct_prober_da
                     "corner-turn dataflow bring-up before running capture tests")
 
 
+def select_board_channel(board, array, data, counts):
+    '''Narrow a crate-wide corner-turn capture to `board`'s own channel.
+
+    ``get_ct_data_config`` builds the receiver's channel axis from every
+    probe whose ``CAPTURE_EN`` is set, one column per armed board in board
+    order, so the width and the meaning of each column depend on which
+    probes happen to be armed. A board is at column 0 only when it is the
+    lowest-numbered armed board; read column 0 unconditionally and a test
+    that captures several boards in one body silently reads a different
+    board (and gets an all-zero column, because `flush` zero-fills the
+    buffer and rows are emitted once they age out of the receive window).
+
+    Both the raw (format='32') and the decoded return paths put the channel
+    on axis 1: data is (rows, nchan, samples) and counts is (rows, nchan).
+    '''
+    config = array.get_ct_data_config()
+    if config is None:
+        return data, counts
+    stream_ids = [int(s) for s in config.stream_ids]
+    if len(stream_ids) <= 1:
+        return data, counts
+    stream_id = int(board.CT_PROBER.get_stream_id())
+    if stream_id not in stream_ids:
+        raise AssertionError(
+            f"{board!r}: the probe's stream id {stream_id:#06x} is not in the "
+            f"receiver's config {[f'{s:#06x}' for s in stream_ids]}; the capture "
+            f"was not armed on this board")
+    six = stream_ids.index(stream_id)
+    return data[:, six:six + 1, ...], counts[:, six:six + 1]
+
+
 async def set_capture_ct(board, array, *, ncap=1, lane=0, frames_per_burst=1, format=None,
                           period=0.01, split=None, recv_verbose=0, logger=None):
     '''Configure a corner-turn capture on `board`'s given lane and read it back.
@@ -106,11 +137,26 @@ async def set_capture_ct(board, array, *, ncap=1, lane=0, frames_per_burst=1, fo
 
     The channelizer probers are parked first (see :func:`start_ct_capture`),
     so the read is only cookie 0xA2.
+
+    `data` and `counts` are always narrowed to `board`'s own channel (see
+    :func:`select_board_channel`), so callers keep seeing a single-board
+    array whatever else is still armed on the crate.
     '''
     if logger is not None:
         logger.debug(f"set_capture_ct: {board!r} lane={lane} ncap={ncap} "
                      f"frames_per_burst={frames_per_burst} period={period} "
                      f"format={format} split={split}")
+    # Park every other probe first. All armed probes share one receiver: one
+    # column of its channel axis each, and one timestamp buffer. A probe left
+    # armed on a board nobody is reading keeps streaming into that shared
+    # socket, and once the arriving timestamps exceed ``max_timestamps`` the
+    # assembler drops the OLDEST ones - so the board under test can vanish
+    # from the emitted rows even when its column is selected correctly.
+    # Capturing one board at a time is this helper's contract; enforce it at
+    # the source rather than relying on the caller's teardown.
+    for mb in array.ib:
+        if mb is not board:
+            _stop_ct_capture(mb)
     start_ct_capture(
         board, period=period, lane=lane, frames_per_burst=frames_per_burst)
     geometry = board.CT_PROBER.get_packet_geometry(lane)
@@ -120,6 +166,7 @@ async def set_capture_ct(board, array, *, ncap=1, lane=0, frames_per_burst=1, fo
     receiver.flush()
     ts, data, counts = receiver.read_frames(
         ncap=ncap, format=format, chan_first=False, split=split)
+    data, counts = select_board_channel(board, array, data, counts)
     if logger is not None:
         logger.debug(f"set_capture_ct: ts={ts.tolist()} data_shape={data.shape} "
                      f"counts={counts.tolist()}")
