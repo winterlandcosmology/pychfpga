@@ -40,6 +40,8 @@ class chFPGA_UDP:
             ip_packed = bytes(self.fpga_ip_addr_fn(*ip_tuple))
             self.fpga_ip_addr = socket.inet_ntoa(ip_packed)
 
+        # None is an explicit request for the crate/slot port. open_async
+        # defaults to 0, which asks the OS for a free reply port.
         if self.local_control_port_number is None:
             if not self.slot or self.mb.get_crate_number() is None:
                 self.local_control_port_number = 0

@@ -1380,7 +1380,7 @@ class chFPGAArrayMethods(ArrayMethods):
     # Data receiver management methods
     #####################################################
 
-    async def get_data_socket_async(self, port_number=None):
+    async def get_data_socket_async(self, port_number=0):
         """Open one UDP data socket and program every board to send to it.
 
         Uses board 0 to bind (or reuse) the socket, then
@@ -1392,9 +1392,10 @@ class chFPGAArrayMethods(ArrayMethods):
 
             port_number (int or None):
 
+                - ``0`` (default): bind an OS-assigned port and program it into
+                  the FPGA.
                 - ``None``: bind the destination port currently programmed in
                   the FPGA; if that port is 0, behave as ``port_number=0``.
-                - ``0``: bind an OS-assigned port and program it into the FPGA.
                 - non-zero: bind that port (raises if already in use).
 
         Returns:
@@ -1434,7 +1435,7 @@ class chFPGAArrayMethods(ArrayMethods):
         ]
 
     async def get_packet_receiver_async(
-        self, port_number=None, *, tcp=None, rcvbuf=8 * 1024 * 1024, force=False
+        self, port_number=0, *, tcp=None, rcvbuf=8 * 1024 * 1024, force=False
     ):
         """Return the shared packet receiver (UDP or TCP), creating it if needed.
 
@@ -1443,11 +1444,12 @@ class chFPGAArrayMethods(ArrayMethods):
         ``RuntimeError`` is raised.
 
         Parameters:
-            port_number (int or None): For UDP: ``None`` opens the FPGA
-                destination port (or behaves as ``0`` if that port is zero);
-                ``0`` binds a random OS port and programs it into the FPGA;
-                non-zero binds that port (raises if already in use). For TCP:
-                board listen port (``None`` uses the default).
+            port_number (int or None): For UDP, ``0`` (default) binds an
+                OS-assigned port and programs it into the FPGA. ``None`` opens
+                the destination port currently programmed in the FPGA (or
+                behaves as ``0`` if that port is zero). A non-zero value binds
+                that port (raises if already in use). For TCP, ``0`` and
+                ``None`` both use the default board listen port.
             tcp (bool or None): If ``True``, use
                 :class:`~pychfpga.common.tcp_packet_receiver.TCPPacketReceiver`.
                 If ``False``, use
@@ -1479,8 +1481,11 @@ class chFPGAArrayMethods(ArrayMethods):
 
         want_tcp = bool(tcp)
         if want_tcp:
+            # 0 is the UDP "ask the OS" default. TCP still listens on its
+            # well-known port unless the caller named one.
+            tcp_port = port_number or None
             socks = self.get_tcp_data_sockets(
-                port_number=port_number, rcvbuf=rcvbuf, force=True
+                port_number=tcp_port, rcvbuf=rcvbuf, force=True
             )
             self._packet_receiver = TCPPacketReceiver(socks)
         else:
@@ -1488,7 +1493,7 @@ class chFPGAArrayMethods(ArrayMethods):
             self._packet_receiver = UDPPacketReceiver(sock)
         return self._packet_receiver
 
-    async def get_data_receiver_async(self, port_number=None, tcp=None, force=False, **kwargs):
+    async def get_data_receiver_async(self, port_number=0, tcp=None, force=False, **kwargs):
         """Returns a raw data receiver for the whole array.
 
         A packet receiver and associated socket(s) will be created if none
@@ -1502,12 +1507,12 @@ class chFPGAArrayMethods(ArrayMethods):
 
         Parameters:
             port_number (int): Port to use if a socket has not already been
-                allocated. For UDP (``tcp=False``): ``None`` opens the FPGA
-                destination port (or behaves as ``0`` if that port is zero);
-                ``0`` binds a random OS port and programs it into the FPGA;
-                non-zero binds that port (raises if already in use). For TCP
-                (``tcp=True``): board listen port; ``None`` uses the default
-                TCPipe TCP data port.
+                allocated. For UDP (``tcp=False``): ``0`` (default) binds an
+                OS-assigned port and programs it into the FPGA; ``None`` opens
+                the destination currently programmed in the FPGA (or behaves
+                as ``0`` if that port is zero); non-zero binds that port
+                (raises if already in use). For TCP (``tcp=True``): ``0`` and
+                ``None`` use the default TCPipe data port.
             tcp (bool or None): If ``True``, use TCP
                 (:class:`~pychfpga.common.tcp_packet_receiver.TCPPacketReceiver`).
                 If ``False``, use UDP
@@ -1541,7 +1546,7 @@ class chFPGAArrayMethods(ArrayMethods):
 
 
 
-    async def get_corr_receiver_async(self, port_number=None, tcp=None, force=False, **kwargs):
+    async def get_corr_receiver_async(self, port_number=0, tcp=None, force=False, **kwargs):
         """Return a correlator frame receiver for the whole array.
 
         A packet receiver and associated socket will be created if none already
@@ -1554,10 +1559,12 @@ class chFPGAArrayMethods(ArrayMethods):
 
         Parameters:
             port_number (int or None): Port for the packet receiver if one
-                has not already been allocated. ``None`` uses the FPGA
-                destination port (or behaves as ``0`` if that is zero);
-                ``0`` binds a random OS port and programs it into the FPGA;
-                non-zero binds that port (raises if already in use).
+                has not already been allocated. ``0`` (default) binds an
+                OS-assigned UDP port and programs it into the FPGA. ``None``
+                uses the destination currently programmed in the FPGA (or
+                behaves as ``0`` if that is zero). A non-zero value binds that
+                port (raises if already in use). For TCP, ``0`` and ``None``
+                use the default listen port.
             tcp (bool or None): If ``True``, use TCP. If ``False``, use UDP.
                 If ``None`` (default), reuse the existing packet receiver's
                 transport, or UDP if none exists.
@@ -1586,12 +1593,14 @@ class chFPGAArrayMethods(ArrayMethods):
             self._corr_recv.current_row = 0
         return self._corr_recv
 
-    async def get_ct_data_receiver_async(self, port_number=None, tcp=None, force=False, **kwargs):
+    async def get_ct_data_receiver_async(self, port_number=0, tcp=None, force=False, **kwargs):
         """Return the corner-turn receiver for the boards whose probe is armed.
 
         Shares the packet receiver with the raw and correlator readers. The
         firmware tests park the channelizer before calling this, so the socket
-        is carrying cookie ``0xA2`` only.
+        is carrying cookie ``0xA2`` only. ``port_number`` defaults to ``0``
+        (an OS-assigned UDP port); ``None`` reuses the port programmed in the
+        FPGA. TCP treats ``0`` and ``None`` as the default listen port.
 
         Returns:
             CTDataReceiver

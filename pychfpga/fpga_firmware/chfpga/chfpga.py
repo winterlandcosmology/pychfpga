@@ -473,7 +473,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
            fpga_ip_addr=None,
            fpga_ip_addr_fn=None, # lambda a, b, c, d: (a, b, 3, d),
            fpga_control_port_number=None,
-           local_control_port_number=None,
+           local_control_port_number=0,
            interface_ip_addr=None,
            udp_retries=10,
            irigb_source=None):
@@ -512,9 +512,10 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
                 the local port number is used.
 
             local_control_port_number (int): UDP port number to use to receive command
-                replies. If 0, the number is allocated randomly by the OS. If
-                None, a fixed number based on the crate_number and a slot number
-                will be used if available.
+                replies. The default ``0`` asks the OS for a free port, so a
+                reply port cannot collide with another board or with the data
+                port. ``None`` still selects ``41000 + 16*crate + (slot - 1)``
+                when the crate and slot are known.
 
             interface_ip_addr (str): IP address of the interface to be used to
                 communicate with both the ARM and FPGA. If `None`, the interface
@@ -3019,7 +3020,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         else:
             raise RuntimeError("Stop data capture only implemented on prober and ucap currently")
 
-    def get_data_socket(self, port_number=None):
+    def get_data_socket(self, port_number=0):
         """
         Return a UDP socket that receives the raw/correlator data.
 
@@ -3032,9 +3033,9 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
             port_number (int): Port number to use:
 
-                - If ``None``, attempts to open a socket at the destination port currently programmed in the FPGA. If that port is zero, act as if ``port_number`` =0.
-                - If zero, open a socket at a random  (OS-provided) port, and set the corresponding destination port in the FPGA.
-                - If non-zero, get a socket bound to the specified port. An exception will be raised if that port is already used by another program.
+                - ``0`` (default): open a socket at an OS-assigned port and program that port into the FPGA. This avoids reusing a leftover destination that may now belong to an MMI socket.
+                - ``None``: open a socket at the destination port currently programmed in the FPGA. If that port is zero, act as if ``port_number`` is 0.
+                - non-zero: get a socket bound to the specified port. An exception will be raised if that port is already used by another program.
 
 
         Returns:
@@ -3043,7 +3044,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         """
         return run_async(self.get_data_socket_async(port_number=port_number))
 
-    async def get_data_socket_async(self, port_number=None):
+    async def get_data_socket_async(self, port_number=0):
         """Async variant of :meth:`get_data_socket`."""
         if port_number is None:
             port_number = await self.get_local_data_port_number_async()
