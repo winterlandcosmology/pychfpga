@@ -11,8 +11,7 @@ encouraged to create a subclass.
 import asyncio
 import datetime
 import base64
-from . import tuber, tworoutine, hw
-from .tuber import run_async
+from . import tuber, hw
 
 class IceCrateBase:
     """
@@ -91,11 +90,10 @@ class TuberIceBoardBase(tuber.TuberObject):
             "I need serial or crate information."
         )
 
-    @tworoutine.tworoutine
-    async def resolve(self):
+    async def resolve_async(self):
         await self._tuber_get_meta_async()
 
-    def set_fpga_bitstream(self, buf):
+    async def set_fpga_bitstream_buffer_async(self, buf):
         """
         Configures the FPGA with the specified buffer.
 
@@ -103,16 +101,16 @@ class TuberIceBoardBase(tuber.TuberObject):
         contains an already loaded .BIT or .BIN file.
         """
         b64_string = base64.b64encode(buf)
-        self._set_fpga_bitstream_base64(b64_string)
+        await self._tuber_set_fpga_bitstream_base64_async(b64_string)
 
-    def _eeprom_write_ipmi(self, part_number, serial_number, product_version):
+    async def _eeprom_write_ipmi_async(self, part_number, serial_number, product_version):
         """Write IPMI-formatted EEPROM for IceBoards.
 
         These fields are read back and parsed by software, so you have
         to get them right or things will misbehave. This method currently
         expects the following formatting:
 
-        >>> m._eeprom_write_ipmi(
+        >>> await m._eeprom_write_ipmi_async(
         ...     part_number="MGK7MB",
         ...     serial_number="004",
         ...     product_version="2")
@@ -144,16 +142,16 @@ class TuberIceBoardBase(tuber.TuberObject):
             # multi=Multi(...), when it's supported by this code
         )
         b64_string = base64.b64encode(fru.encode())
-        return run_async(self._tuber_motherboard_eeprom_write_base64_async(b64_string))
+        return await self._tuber_motherboard_eeprom_write_base64_async(b64_string)
 
-    def _backplane_eeprom_write_ipmi(self, part_number, serial_number, product_version):
+    async def _backplane_eeprom_write_ipmi_async(self, part_number, serial_number, product_version):
         """Write IPMI-formatted EEPROM for IceCrates.
 
         These fields are read back and parsed by software, so you have
         to get them right or things will misbehave. This method currently
         expects the following formatting:
 
-        >>> m._backplane_eeprom_write_ipmi(
+        >>> await m._backplane_eeprom_write_ipmi_async(
         ...     part_number="MGK7BP",
         ...     serial_number="001",
         ...     product_version="00")
@@ -189,7 +187,7 @@ class TuberIceBoardBase(tuber.TuberObject):
             # multi=Multi(...), when it's supported by this code
         )
         b64_string = base64.b64encode(fru.encode())
-        return run_async(self._tuber_backplane_eeprom_write_base64_async(b64_string))
+        return await self._tuber_backplane_eeprom_write_base64_async(b64_string)
 
 
 
@@ -246,7 +244,7 @@ class FMCMezzanineBase():
     def __repr__(self):
         return f"{self.iceboard!r}.{self.__class__.__name__}({self.mezzanine!r},{self.serial!r})"
 
-    def eeprom_write(self, buf):
+    async def eeprom_write_async(self, buf):
         """Writes a collection of bytes to the internal EEPROM.
 
         Don't do this unless you're at McGill, and you're commissioning
@@ -265,7 +263,7 @@ class FMCMezzanineBase():
         than trying to guess what structures belong in here.
         """
         b64_string = base64.b64encode(buf)
-        self.iceboard._mezzanine_eeprom_write_base64(self.mezzanine, b64_string, 0)
+        await self.iceboard._tuber_mezzanine_eeprom_write_base64_async(self.mezzanine, b64_string, 0)
 
 
 # vim: sts=4 ts=4 sw=4 tw=78 smarttab expandtab

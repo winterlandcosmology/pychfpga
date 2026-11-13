@@ -29,7 +29,6 @@ import pychfpga
 
 from pychfpga import fpga_array 
 from pychfpga.common.mdns_discovery import mdns_resolve
-from pychfpga.common import run_async, async_to_sync
 from pychfpga.hardware.interfaces import ipmi_fru
 
 from pychfpga.fpga_firmware import FPGABitstream
@@ -562,7 +561,7 @@ class TestMGK7MBNetwork(TestUtils):
         #if self.ps:
         #    self.ps.set_output(state=False)
 
-    def connect_to_board(self, questions = True, power_up = True, power_down=False, program = False, open_fpga=False, without_serial=False):
+    async def connect_to_board_async(self, questions = True, power_up = True, power_down=False, program = False, open_fpga=False, without_serial=False):
         """
 
         Parameters: 
@@ -614,7 +613,7 @@ class TestMGK7MBNetwork(TestUtils):
            
             
             if ip:
-                ca = fpga_array.FPGAArray(f'MGK7MB {ip}', ping=1, ignore_missing_boards=True)
+                ca = await fpga_array.FPGAArray(f'MGK7MB {ip}', ping=1, ignore_missing_boards=True)
                 if ca.ib:
                     break
             # hwm = f'{self.params.model} {self.params.serial}'
@@ -626,7 +625,7 @@ class TestMGK7MBNetwork(TestUtils):
                 print(f'Trial {count+1}/30: looking for iceboard.local')
                 ip = mdns_resolve('iceboard.local', timeout=2)
                 if ip:
-                    ca = fpga_array.FPGAArray(f'MGK7MB {ip}', ping=1, ignore_missing_boards=True)
+                    ca = await fpga_array.FPGAArray(f'MGK7MB {ip}', ping=1, ignore_missing_boards=True)
                     if ca.ib:
                         break
         else:  # if we reach the end of the loop without break
@@ -643,55 +642,32 @@ class TestMGK7MBNetwork(TestUtils):
 
         print(ib)
 
-        # Monkey-patch the iceboar dobject to add async functions used in our tests 
-        ib.set_fpga_bitstream = async_to_sync(ib.set_fpga_bitstream_async)
-
-        # Add synchronous versions of the async tuber commands for convenience
-        ib.is_fpga_programmed = async_to_sync(ib.tuber_is_fpga_programmed_async)
-        ib.get_clock_source = async_to_sync(ib.tuber_get_clock_source_async)
-        ib.is_mezzanine_present = async_to_sync(ib.tuber_is_mezzanine_present_async)
-        ib.get_motherboard_power = async_to_sync(ib.tuber_get_motherboard_power_async)
-        ib.get_motherboard_current = async_to_sync(ib.tuber_get_motherboard_current_async)
-        ib.get_motherboard_voltage = async_to_sync(ib.tuber_get_motherboard_voltage_async)
-        ib.get_motherboard_temperature = async_to_sync(ib.tuber_get_motherboard_temperature_async)
-        ib.get_mezzanine_voltage = async_to_sync(ib.tuber_get_mezzanine_voltage_async)
-        ib.set_mezzanine_power = async_to_sync(ib.tuber_set_mezzanine_power_async)
-        ib.get_mezzanine_power = async_to_sync(ib.tuber_get_mezzanine_power_async)
-        ib.get_mezzanine_current = async_to_sync(ib.tuber_get_mezzanine_current_async)
-        ib._mezzanine_eeprom_read_base64 = async_to_sync(ib._tuber_mezzanine_eeprom_read_base64_async)
-        ib.is_voltage_nominal = async_to_sync(ib.tuber_is_voltage_nominal_async)
-        ib._motherboard_spi_flash_write_base64 = async_to_sync(ib._tuber_motherboard_spi_flash_write_base64_async)
-        ib._motherboard_eeprom_write_base64 = async_to_sync(ib._tuber_motherboard_eeprom_write_base64_async)
-        ib._get_motherboard_ipmi = async_to_sync(ib._tuber_get_motherboard_ipmi_async)
-        ib.get_motherboard_serial = async_to_sync(ib.tuber_get_motherboard_serial_async)
-        ib.fpga_mmi_read = async_to_sync(ib.fpga_core_reg_spi_read_async) 
-        ib._qsfp_eeprom_read_base64 = async_to_sync(ib._tuber_qsfp_eeprom_read_base64_async)
 
 
 
         
 
         if program:
-            self.prog_fpga(ib)
+            await self.prog_fpga_async(ib)
 
 
         
         if open_fpga:
-            self.open_fpga(ib)
+            await self.open_fpga_async(ib)
 
 
         return (ib, ca)
 
-    def prog_fpga(self, ib):
+    async def prog_fpga_async(self, ib):
 
         print("Programming FPGA. This takes about 20 seconds...")
-        ib.set_fpga_bitstream(firmware_mode = self.cfg.fpga_firmware_mode, force=False)
-        assert ib.is_fpga_programmed(), 'FPGA has not programmed'
+        await ib.set_fpga_bitstream_async(firmware_mode = self.cfg.fpga_firmware_mode, force=False)
+        assert await ib.tuber_is_fpga_programmed_async(), 'FPGA has not programmed'
 
-    def open_fpga(self, ib):
+    async def open_fpga_async(self, ib):
         #Currying function to include ip address lambda function
         ip_fn = lambda a, b, c, d: (a, b, 3, d)
-        run_async(ib.open_fpga_async(verbose=1, fpga_ip_addr_fn = ip_fn)) 
+        await ib.open_fpga_async(verbose=1, fpga_ip_addr_fn = ip_fn) 
         print(f"FPGA: {ib.fpga}")
 
     def get_qfsp_info(self, qsfp):
@@ -714,7 +690,7 @@ class TestMGK7MBNetwork(TestUtils):
         result = p.stdout.readlines()
         return result
 
-    def test_sens(self, xr):
+    async def test_sens(self, xr):
         """
         QC007: Read the onboard power sensors and temperature sensors
 
@@ -742,24 +718,24 @@ class TestMGK7MBNetwork(TestUtils):
 
         print('\n-------------------------------')
         print("Please ensure that the Mezzanines are NOT mounted on the board for this test")
-        ib, _ = self.connect_to_board(questions=self.cfg.ready_check)
+        ib, _ = await self.connect_to_board_async(questions=self.cfg.ready_check)
 
         try:
-            assert not ib.is_mezzanine_present(1), "Mezzanine are NOT supposed to be present for this test, found Mezzanine on Slot 1."
-            assert not ib.is_mezzanine_present(2), "Mezzanine are NOT supposed to be present for this test, found Mezzanine on Slot 2."
+            assert not await ib.tuber_is_mezzanine_present_async(1), "Mezzanine are NOT supposed to be present for this test, found Mezzanine on Slot 1."
+            assert not await ib.tuber_is_mezzanine_present_async(2), "Mezzanine are NOT supposed to be present for this test, found Mezzanine on Slot 2."
 
             print("\nReading Iceboard Power, Current, Voltage & Temperature Sensors")
             power, current, voltage, temp = {}, {}, {}, {}
 
-            totalPower = ib.get_motherboard_power()
+            totalPower = await ib.tuber_get_motherboard_power_async()
             
             
             """
             Was previously:
 
-            power['VCC3V3']     = ib.get_motherboard_power('MOTHERBOARD_RAIL_VCC3V3')
-            current['VCC3V3']       = ib.get_motherboard_current('MOTHERBOARD_RAIL_VCC3V3')
-            voltage['VCC3V3']       = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC3V3')
+            power['VCC3V3']     = await ib.tuber_get_motherboard_power_async('MOTHERBOARD_RAIL_VCC3V3')
+            current['VCC3V3']       = await ib.tuber_get_motherboard_current_async('MOTHERBOARD_RAIL_VCC3V3')
+            voltage['VCC3V3']       = await ib.tuber_get_motherboard_voltage_async('MOTHERBOARD_RAIL_VCC3V3')
 
             For each element in the sensor list. Info moved to test_config.yaml 
 
@@ -771,17 +747,17 @@ class TestMGK7MBNetwork(TestUtils):
             for sensor  in cfg.sensor_names:
                 name = sensor['name']
 
-                power[name]   = ib.get_motherboard_power(sensor['board_name'])
-                current[name] = ib.get_motherboard_current(sensor['board_name'])
-                voltage[name] = ib.get_motherboard_voltage(sensor['board_name'])
+                power[name]   = await ib.tuber_get_motherboard_power_async(sensor['board_name'])
+                current[name] = await ib.tuber_get_motherboard_current_async(sensor['board_name'])
+                voltage[name] = await ib.tuber_get_motherboard_voltage_async(sensor['board_name'])
 
                 table.add_row([name, power[name], voltage[name], current[name]])
 
 
-            temp['POWER']   = ib.get_motherboard_temperature('MOTHERBOARD_TEMPERATURE_POWER')   # between the two 1.0V bucks
-            temp['FPGA']    = ib.get_motherboard_temperature('MOTHERBOARD_TEMPERATURE_FPGA')    # near USER SMA
-            temp['ARM']     = ib.get_motherboard_temperature('MOTHERBOARD_TEMPERATURE_ARM')     # under the CPU shield
-            temp['PHY']     = ib.get_motherboard_temperature('MOTHERBOARD_TEMPERATURE_PHY')     # also under the CPU shield
+            temp['POWER']   = await ib.tuber_get_motherboard_temperature_async('MOTHERBOARD_TEMPERATURE_POWER')   # between the two 1.0V bucks
+            temp['FPGA']    = await ib.tuber_get_motherboard_temperature_async('MOTHERBOARD_TEMPERATURE_FPGA')    # near USER SMA
+            temp['ARM']     = await ib.tuber_get_motherboard_temperature_async('MOTHERBOARD_TEMPERATURE_ARM')     # under the CPU shield
+            temp['PHY']     = await ib.tuber_get_motherboard_temperature_async('MOTHERBOARD_TEMPERATURE_PHY')     # also under the CPU shield
             
             
             for x in temp:
@@ -795,31 +771,31 @@ class TestMGK7MBNetwork(TestUtils):
             test_results.power, test_results.current, test_results.voltage, test_results.temp = power, current, voltage, temp
 
             moffvoltage = {}
-            moffvoltage['VCC3V3']  = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC3V3', 1)  ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC3V3', 2)
-            moffvoltage['VCC12V0'] = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC12V0', 1) ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC12V0', 2)
-            moffvoltage['VADJ']    = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VADJ', 1)    ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VADJ', 2)
+            moffvoltage['VCC3V3']  = await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VCC3V3', 1)  ,   await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VCC3V3', 2)
+            moffvoltage['VCC12V0'] = await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VCC12V0', 1) ,   await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VCC12V0', 2)
+            moffvoltage['VADJ']    = await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VADJ', 1)    ,   await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VADJ', 2)
 
             print("\nMezzanine Voltage:(Slot 1, Slot 2) when turned off")
             for x in moffvoltage:
                 print(x, ':   \t', moffvoltage[x])
 
             print("\nTurning on power to FMC slots")
-            ib.set_mezzanine_power(True,1)
-            ib.set_mezzanine_power(True,2)
+            await ib.tuber_set_mezzanine_power_async(True,1)
+            await ib.tuber_set_mezzanine_power_async(True,2)
             time.sleep(0.1)
-            p1, p2 = ib.get_mezzanine_power(1), ib.get_mezzanine_power(2)
+            p1, p2 = await ib.tuber_get_mezzanine_power_async(1), await ib.tuber_get_mezzanine_power_async(2)
             assert (p1 and p2), f'Mezzanines did not turn on properly! Slot 1: {p1}, Slot 2: {p2}'
 
             print("Reading FMC Slot Current & Voltage Sensors")
             mcurrent, mvoltage = {}, {}
 
-            mcurrent['VCC3V3']  = ib.get_mezzanine_current('MEZZANINE_RAIL_VCC3V3', 1)  ,   ib.get_mezzanine_current('MEZZANINE_RAIL_VCC3V3', 2)
-            mcurrent['VCC12V0'] = ib.get_mezzanine_current('MEZZANINE_RAIL_VCC12V0', 1) ,   ib.get_mezzanine_current('MEZZANINE_RAIL_VCC12V0', 2)
-            mcurrent['VADJ']    = ib.get_mezzanine_current('MEZZANINE_RAIL_VADJ', 1)    ,   ib.get_mezzanine_current('MEZZANINE_RAIL_VADJ', 2)
+            mcurrent['VCC3V3']  = await ib.tuber_get_mezzanine_current_async('MEZZANINE_RAIL_VCC3V3', 1)  ,   await ib.tuber_get_mezzanine_current_async('MEZZANINE_RAIL_VCC3V3', 2)
+            mcurrent['VCC12V0'] = await ib.tuber_get_mezzanine_current_async('MEZZANINE_RAIL_VCC12V0', 1) ,   await ib.tuber_get_mezzanine_current_async('MEZZANINE_RAIL_VCC12V0', 2)
+            mcurrent['VADJ']    = await ib.tuber_get_mezzanine_current_async('MEZZANINE_RAIL_VADJ', 1)    ,   await ib.tuber_get_mezzanine_current_async('MEZZANINE_RAIL_VADJ', 2)
 
-            mvoltage['VCC3V3']  = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC3V3', 1)  ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC3V3', 2)
-            mvoltage['VCC12V0'] = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC12V0', 1) ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC12V0', 2)
-            mvoltage['VADJ']    = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VADJ', 1)    ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VADJ', 2)
+            mvoltage['VCC3V3']  = await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VCC3V3', 1)  ,   await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VCC3V3', 2)
+            mvoltage['VCC12V0'] = await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VCC12V0', 1) ,   await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VCC12V0', 2)
+            mvoltage['VADJ']    = await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VADJ', 1)    ,   await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VADJ', 2)
 
             test_results.mcurrent, test_results.mvoltage = mcurrent, mvoltage
 
@@ -831,10 +807,10 @@ class TestMGK7MBNetwork(TestUtils):
                 print(x, ':   \t', mvoltage[x])
 
             print("Turning off power to FMC slots\n")
-            ib.set_mezzanine_power(False,1)
-            ib.set_mezzanine_power(False,2)
+            await ib.tuber_set_mezzanine_power_async(False,1)
+            await ib.tuber_set_mezzanine_power_async(False,2)
             time.sleep(0.1)
-            p1, p2 = ib.get_mezzanine_power(1), ib.get_mezzanine_power(2)
+            p1, p2 = await ib.tuber_get_mezzanine_power_async(1), await ib.tuber_get_mezzanine_power_async(2)
             assert not (p1 or p2), f'Mezzanines did not turn off properly! Slot 1: {p1}, Slot 2: {p2}'
 
             #assert max( [x for v in moffvoltage.values() for x in v]) < 0.2, "Mezzanines did not turn off properly!  When 'off' voltage measured is greater than 0.2V"
@@ -884,7 +860,7 @@ class TestMGK7MBNetwork(TestUtils):
 
         #Estimate 30 seconds
 
-    def test_ser(self, xr):
+    async def test_ser(self, xr):
         """
         QC006: Program boards EEPROM and Flash with serial number
 
@@ -903,7 +879,7 @@ class TestMGK7MBNetwork(TestUtils):
         test_results = NameSpace()
         passed = False
 
-        ib, _ = self.connect_to_board(questions=True, without_serial=True) # include boards without serial number in search
+        ib, _ = await self.connect_to_board_async(questions=True, without_serial=True) # include boards without serial number in search
 
         question = f'Is this a Rev {cfg.rev} board? [Y/N]'
         if(self.cfg.ready_check):
@@ -937,21 +913,21 @@ class TestMGK7MBNetwork(TestUtils):
 
         print("Programming the EEPROM with the board info (model, serial number etc.)")
         b64_string = base64.b64encode(ipmi.encode())
-        ib._motherboard_spi_flash_write_base64(b64_string)
-        ib._motherboard_eeprom_write_base64(b64_string)
+        await ib._tuber_motherboard_spi_flash_write_base64_async(b64_string)
+        await ib._tuber_motherboard_eeprom_write_base64_async(b64_string)
 
         #SHOULD DO A MOTHERBOARD EEPROM READ HERE - ICECORE NEEDS UPDATE
         print("Power cycling the board")
-        ib, _ = self.connect_to_board(power_down=True, questions=self.cfg.ready_check)
+        ib, _ = await self.connect_to_board_async(power_down=True, questions=self.cfg.ready_check)
 
         #If it fails to connect we don't get this far and test ends
         print("The boards IPMI data is as follows:")
-        print(ib._get_motherboard_ipmi())
-        if ib.get_motherboard_serial() == self.params.serial:
+        print(await ib._tuber_get_motherboard_ipmi_async())
+        if await ib.tuber_get_motherboard_serial_async() == self.params.serial:
             print("\nThe board has the correct serial number programmed")
             passed = True
         else:
-            print(f"\nThe motherboard reports the following serial: {ib.get_motherboard_serial()} which isn't correct")
+            print(f"\nThe motherboard reports the following serial: {await ib.tuber_get_motherboard_serial_async()} which isn't correct")
             passed = False
             assert False, "Serial programmed incorrectly"
         #self.instr.ps.set_output(state=False) # Turn power off
@@ -1020,7 +996,7 @@ class TestMGK7MBNetwork(TestUtils):
     #     assert passed, "Missing I2C devices"
     #     print("All devices are present")
 
-    def test_i2c(self, xr):
+    async def test_i2c(self, xr):
         """
         QC008: Check if all I2C devices are present
 
@@ -1038,7 +1014,7 @@ class TestMGK7MBNetwork(TestUtils):
 
         
         xr.header('Checking I2C devices')
-        (ib, _) = self.connect_to_board(questions=self.cfg.ready_check)
+        (ib, _) = await self.connect_to_board_async(questions=self.cfg.ready_check)
         print("Requesting all the I2C devices found at /sys/bus/i2c/devices on the board")
         cmd = "ls /sys/bus/i2c/devices/"
 
@@ -1076,7 +1052,7 @@ class TestMGK7MBNetwork(TestUtils):
 
 
            
-    def test_clock(self, xr):
+    async def test_clock(self, xr):
         """
         QC?: check if board will boot with backplane clock
 
@@ -1095,8 +1071,8 @@ class TestMGK7MBNetwork(TestUtils):
         passed = False
 
         print("Please power OFF the board, move the clock source jumper to the CRYSTAL position")
-        (ib, ibs) = self.connect_to_board(questions=False)
-        clock_source = ib.get_clock_source()
+        (ib, ibs) = await self.connect_to_board_async(questions=False)
+        clock_source = await ib.tuber_get_clock_source_async()
         #self.instr.ps.set_output(state=False) # Turn power off
 
         if (clock_source == ib.CLOCK_SOURCE.XTAL):
@@ -1109,8 +1085,8 @@ class TestMGK7MBNetwork(TestUtils):
         print("\nPlease turn OFF the board, and move the clock source jumper to the SMA position. ")
         print("Then attach an SMA cable between the front panel clock input and backplane clock out SMA")
 
-        (ib, ibs) = self.connect_to_board(questions = False)
-        clock_source = ib.get_clock_source()
+        (ib, ibs) = await self.connect_to_board_async(questions = False)
+        clock_source = await ib.tuber_get_clock_source_async()
         #self.instr.ps.set_output(state=False) # Turn power off
 
         if (clock_source == ib.CLOCK_SOURCE.SMA):
@@ -1124,8 +1100,8 @@ class TestMGK7MBNetwork(TestUtils):
         print("\nPlease turn OFF the board and move the clock source jumper to the BACKPLANE position. ")
         # print("When done, power ON the board and press ENTER")
 
-        (ib, ibs) = self.connect_to_board(questions = False)
-        clock_source = ib.get_clock_source()
+        (ib, ibs) = await self.connect_to_board_async(questions = False)
+        clock_source = await ib.tuber_get_clock_source_async()
         #self.instr.ps.set_output(state=False) # Turn power off
 
         if (clock_source == ib.CLOCK_SOURCE.BP):
@@ -1139,7 +1115,7 @@ class TestMGK7MBNetwork(TestUtils):
         passed = True
         print("Test passed")
 
-    def test_fpga(self, xr):
+    async def test_fpga(self, xr):
         """
         QC009: check if FPGA can be programmed - I don't think we want to run toptest script
 
@@ -1161,7 +1137,7 @@ class TestMGK7MBNetwork(TestUtils):
         test_results = NameSpace()
         passed = False
 
-        (ib, ibs) = self.connect_to_board(questions=self.cfg.ready_check)
+        (ib, ibs) = await self.connect_to_board_async(questions=self.cfg.ready_check)
 
         print('\n-------------------------------')
         print("Please again ensure that the FPGA heatsink is in place, and with sufficient ventilation")
@@ -1174,25 +1150,25 @@ class TestMGK7MBNetwork(TestUtils):
         
 
         
-        print(f'Before programming the FPGA die temperature is: {ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE):.3f} C')
-        pre_prog_power = ib.get_motherboard_power(ib.RAIL.MB_VCC3V3) + ib.get_motherboard_power(ib.RAIL.MB_VCC12V0) + ib.get_motherboard_power(ib.RAIL.MB_VCC5V5)
+        print(f'Before programming the FPGA die temperature is: {await ib.tuber_get_motherboard_temperature_async(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE):.3f} C')
+        pre_prog_power = await ib.tuber_get_motherboard_power_async(ib.RAIL.MB_VCC3V3) + await ib.tuber_get_motherboard_power_async(ib.RAIL.MB_VCC12V0) + await ib.tuber_get_motherboard_power_async(ib.RAIL.MB_VCC5V5)
         print(f'Before programming the boards power consumption is: {pre_prog_power:.3f} W')
 
-        self.prog_fpga(ib)
+        await self.prog_fpga_async(ib)
 
-        if(ib.is_voltage_nominal() == True):
+        if(await ib.tuber_is_voltage_nominal_async() == True):
             print("\nThe board reports that all the buck regulators have their voltages within 5% tolerance")
         else:
             voltage={}
-            voltage['VCC3V3']       = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC3V3')
-            voltage['VCC12V0']      = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC12V0')
-            voltage['VCC5V5']       = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC5V5')
-            voltage['VCC1V0_GTX']   = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V0_GTX')
-            voltage['VCC1V0']       = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V0')
-            voltage['VCC1V2']       = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V2')
-            voltage['VCC1V5']       = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V5')
-            voltage['VCC1V8']       = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VCC1V8')
-            voltage['VADJ']         = ib.get_motherboard_voltage('MOTHERBOARD_RAIL_VADJ')
+            voltage['VCC3V3']       = await ib.tuber_get_motherboard_voltage_async('MOTHERBOARD_RAIL_VCC3V3')
+            voltage['VCC12V0']      = await ib.tuber_get_motherboard_voltage_async('MOTHERBOARD_RAIL_VCC12V0')
+            voltage['VCC5V5']       = await ib.tuber_get_motherboard_voltage_async('MOTHERBOARD_RAIL_VCC5V5')
+            voltage['VCC1V0_GTX']   = await ib.tuber_get_motherboard_voltage_async('MOTHERBOARD_RAIL_VCC1V0_GTX')
+            voltage['VCC1V0']       = await ib.tuber_get_motherboard_voltage_async('MOTHERBOARD_RAIL_VCC1V0')
+            voltage['VCC1V2']       = await ib.tuber_get_motherboard_voltage_async('MOTHERBOARD_RAIL_VCC1V2')
+            voltage['VCC1V5']       = await ib.tuber_get_motherboard_voltage_async('MOTHERBOARD_RAIL_VCC1V5')
+            voltage['VCC1V8']       = await ib.tuber_get_motherboard_voltage_async('MOTHERBOARD_RAIL_VCC1V8')
+            voltage['VADJ']         = await ib.tuber_get_motherboard_voltage_async('MOTHERBOARD_RAIL_VADJ')
             values_ok=[]
             for x in voltage:
                 values_ok.append(in_range(voltage[x], cfg2.voltage[x]['nom'],cfg2.voltage[x]['pmargin'], cfg2.voltage[x]['amargin']))
@@ -1204,7 +1180,7 @@ class TestMGK7MBNetwork(TestUtils):
             assert False, "One or more of the buck rails reports that its voltage is out of the permitted 5% tollerance margin"
 
         #possible name change 
-        cookie = hex(ib.fpga_mmi_read(ib.FPGA_CORE_FIRMWARE_COOKIE_ADDR))
+        cookie = hex(await ib.fpga_core_reg_spi_read_async(ib.FPGA_CORE_FIRMWARE_COOKIE_ADDR))
         print(f'\nThe FPGA memory map cookie (address 0) is: {cookie}')
 
         if (cookie == '0xbeefface'):
@@ -1215,12 +1191,12 @@ class TestMGK7MBNetwork(TestUtils):
                 pass;
             passed = False
 
-        after_prog_power =  ib.get_motherboard_power(ib.RAIL.MB_VCC3V3) + ib.get_motherboard_power(ib.RAIL.MB_VCC12V0) + ib.get_motherboard_power(ib.RAIL.MB_VCC5V5)
-        print(f'\nAfter programming the FPGA die temperature is: {ib.get_motherboard_temperature(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE):.3f} C')
+        after_prog_power =  await ib.tuber_get_motherboard_power_async(ib.RAIL.MB_VCC3V3) + await ib.tuber_get_motherboard_power_async(ib.RAIL.MB_VCC12V0) + await ib.tuber_get_motherboard_power_async(ib.RAIL.MB_VCC5V5)
+        print(f'\nAfter programming the FPGA die temperature is: {await ib.tuber_get_motherboard_temperature_async(ib.TEMPERATURE_SENSOR.MB_FPGA_DIE):.3f} C')
         print(f'After programming the boards power consumption is: {after_prog_power:.3f} W')
 
         try:
-            self.open_fpga(ib)
+            await self.open_fpga_async(ib)
             #ib._is_core_open
             print("\nDirect FPGA communications established through SFP unit.")
         except:
@@ -1247,14 +1223,14 @@ class TestMGK7MBNetwork(TestUtils):
         ib.set_user_output_source('irigb_gen','sma_a')
         print('\nTime Readout:')
         #ib.set_irigb_source('bp_time')
-        run_async(ib.set_irigb_source_async('bp_time'))
+        await ib.set_irigb_source_async('bp_time')
 
-        print(run_async(ib.get_irigb_time_async()))
+        print(await ib.get_irigb_time_async())
         #self.instr.ps.set_output(state=False) # Turn power off
 
         passed = True
 
-    def test_mezz(self, xr):
+    async def test_mezz(self, xr):
         """
         QC0010: Check basic functionality of mezzanine
 
@@ -1277,10 +1253,10 @@ class TestMGK7MBNetwork(TestUtils):
 
         print('\n-------------------------------')
         print("Please ensure that the Mezzanines ARE mounted on the board for this test.")
-        (ib, ibs) = self.connect_to_board(questions=True, program=True, open_fpga=True)
+        (ib, ibs) = await self.connect_to_board_async(questions=True, program=True, open_fpga=True)
 
-        assert ib.is_mezzanine_present(1), "Did not find Mezzanine on Slot 1."
-        assert ib.is_mezzanine_present(2), "Did not find Mezzanine on Slot 2."
+        assert await ib.tuber_is_mezzanine_present_async(1), "Did not find Mezzanine on Slot 1."
+        assert await ib.tuber_is_mezzanine_present_async(2), "Did not find Mezzanine on Slot 2."
 
         #self.prog_fpga(ib)
         #ib.open_sync()
@@ -1291,27 +1267,27 @@ class TestMGK7MBNetwork(TestUtils):
         #    print("Communications established with FPGA through SFP unit")
 
         for mezz in (1,2):
-            eeprom = base64.b64decode(ib._mezzanine_eeprom_read_base64(mezz))
+            eeprom = base64.b64decode(await ib._tuber_mezzanine_eeprom_read_base64_async(mezz))
             if re.search(b'MGADC08',eeprom):
                 print(f"Read Mezzanine {mezz} EEPROM and detected MGADC08")
             else:
                 print(f"Read Mezzanine {mezz} eeprom and did not find MGADC08 - is mezzanien eeprom programed correctly?")
-            ib.set_mezzanine_power(True , mezz)
+            await ib.tuber_set_mezzanine_power_async(True , mezz)
 
         time.sleep(0.1)
-        p1, p2 = ib.get_mezzanine_power(1), ib.get_mezzanine_power(2)
+        p1, p2 = await ib.tuber_get_mezzanine_power_async(1), await ib.tuber_get_mezzanine_power_async(2)
         assert (p1 and p2), f'Mezzanines did not turn on properly! Slot 1: {p1}, Slot 2: {p2}'
 
         print("Reading FMC Slot Current & Voltage Sensors")
         mcurrent, mvoltage = {}, {}
 
-        mcurrent['VCC3V3']  = ib.get_mezzanine_current('MEZZANINE_RAIL_VCC3V3', 1)  ,   ib.get_mezzanine_current('MEZZANINE_RAIL_VCC3V3', 2)
-        mcurrent['VCC12V0'] = ib.get_mezzanine_current('MEZZANINE_RAIL_VCC12V0', 1) ,   ib.get_mezzanine_current('MEZZANINE_RAIL_VCC12V0', 2)
-        mcurrent['VADJ']    = ib.get_mezzanine_current('MEZZANINE_RAIL_VADJ', 1)    ,   ib.get_mezzanine_current('MEZZANINE_RAIL_VADJ', 2)
+        mcurrent['VCC3V3']  = await ib.tuber_get_mezzanine_current_async('MEZZANINE_RAIL_VCC3V3', 1)  ,   await ib.tuber_get_mezzanine_current_async('MEZZANINE_RAIL_VCC3V3', 2)
+        mcurrent['VCC12V0'] = await ib.tuber_get_mezzanine_current_async('MEZZANINE_RAIL_VCC12V0', 1) ,   await ib.tuber_get_mezzanine_current_async('MEZZANINE_RAIL_VCC12V0', 2)
+        mcurrent['VADJ']    = await ib.tuber_get_mezzanine_current_async('MEZZANINE_RAIL_VADJ', 1)    ,   await ib.tuber_get_mezzanine_current_async('MEZZANINE_RAIL_VADJ', 2)
 
-        mvoltage['VCC3V3']  = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC3V3', 1)  ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC3V3', 2)
-        mvoltage['VCC12V0'] = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC12V0', 1) ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VCC12V0', 2)
-        mvoltage['VADJ']    = ib.get_mezzanine_voltage('MEZZANINE_RAIL_VADJ', 1)    ,   ib.get_mezzanine_voltage('MEZZANINE_RAIL_VADJ', 2)
+        mvoltage['VCC3V3']  = await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VCC3V3', 1)  ,   await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VCC3V3', 2)
+        mvoltage['VCC12V0'] = await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VCC12V0', 1) ,   await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VCC12V0', 2)
+        mvoltage['VADJ']    = await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VADJ', 1)    ,   await ib.tuber_get_mezzanine_voltage_async('MEZZANINE_RAIL_VADJ', 2)
 
         test_results.mcurrent, test_results.mvoltage = mcurrent, mvoltage
 
@@ -1375,7 +1351,7 @@ class TestMGK7MBNetwork(TestUtils):
 
 
 
-    def test_ramp(self, xr):
+    async def test_ramp(self, xr):
         """
         QC0011: Check if high speed data lines of mezzanine function correctly
 
@@ -1405,9 +1381,9 @@ class TestMGK7MBNetwork(TestUtils):
 
         print('\n-------------------------------')
         print("Please ensure mezzanines are loaded, and sufficient cooling for FPGA")
-        (ib, ca) = self.connect_to_board(questions=self.cfg.ready_check, program=True, open_fpga=True)
+        (ib, ca) = await self.connect_to_board_async(questions=self.cfg.ready_check, program=True, open_fpga=True)
 
-        run_async(ib.fpga.init_async()) #temp fix
+        await ib.fpga.init_async() #temp fix
 
         try:
             test_results.data = []
@@ -1426,7 +1402,7 @@ class TestMGK7MBNetwork(TestUtils):
             print('\nOpening data receiver socket')
 
             print(ib.CAPTURE_TYPE)
-            receiver = run_async(ca.get_data_receiver_async())
+            receiver = await ca.get_data_receiver_async()
 
             print('Setting up ramp transmission...')
             ib.set_adcdaq_mode('data')
@@ -1514,7 +1490,7 @@ class TestMGK7MBNetwork(TestUtils):
             #receiver.close()
             xr.save_data(test_results)
 
-    def test_qsfp(self, xr):
+    async def test_qsfp(self, xr):
 
         """
         QC0012: Check that the QSFP cables are detected over I2C and that their eeprom can be read
@@ -1532,7 +1508,7 @@ class TestMGK7MBNetwork(TestUtils):
 
         print('\n-------------------------------')
         print("Please ensure QSFP cable is plugged into the motherboard in both ports, and sufficient cooling for FPGA")
-        (ib, _) = self.connect_to_board(questions=self.cfg.ready_check, program=True, open_fpga=True)
+        (ib, _) = await self.connect_to_board_async(questions=self.cfg.ready_check, program=True, open_fpga=True)
 
         # self.prog_fpga(ib)
         # ib.open_sync()
@@ -1565,7 +1541,7 @@ class TestMGK7MBNetwork(TestUtils):
     
         
 
-    def test_gtx(self, xr):
+    async def test_gtx(self, xr):
         """
         QC0013: Check if high speed links work
 
@@ -1588,7 +1564,7 @@ class TestMGK7MBNetwork(TestUtils):
         print('\n-------------------------------')
         print("Please ensure the QSFP cable is plugged into the motherboard in both ports, and sufficient cooling for FPGA")
         print("The motherboard must be plugged into the one slot backplane")
-        (ib, ibs) = self.connect_to_board(program=True, questions=self.cfg.ready_check, open_fpga=True)
+        (ib, ibs) = await self.connect_to_board_async(program=True, questions=self.cfg.ready_check, open_fpga=True)
 
         #print("Calling ib.open()")
         #ib.open_sync()
@@ -1600,7 +1576,7 @@ class TestMGK7MBNetwork(TestUtils):
         xr.header('Test-Results')
 
         print("\nMeasuring  gtx error rate over a 20 second period ")
-        meas_ber1 = run_async(ibs.get_ber_async(tx_power = cfg.tx_power, print_ = 0, period = 20))
+        meas_ber1 = await ibs.get_ber_async(tx_power = cfg.tx_power, print_ = 0, period = 20)
         #print meas_ber1
 
         bp_rate = True
@@ -1643,7 +1619,7 @@ class TestMGK7MBNetwork(TestUtils):
         assert gpu_rate, 'Bit Error Rate for GPU lanes too high!'
 
         print("\nMeasuring  gtx error rate over a 600 second period")
-        meas_ber2 = run_async(ibs.get_ber_async(tx_power = cfg.tx_power, print_ = 0, period = 600))
+        meas_ber2 = await ibs.get_ber_async(tx_power = cfg.tx_power, print_ = 0, period = 600)
 
         bp_rate = True
         qsfp_rate = True

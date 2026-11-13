@@ -11,7 +11,7 @@ import time
 import re
 import signal
 import socket
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 
 # Pypi packages
 import pytest
@@ -114,13 +114,13 @@ class TestUtils:
         raise PSUError(f'PSU call {getattr(fn, "__name__", fn)!s} failed after '
                        f'{retries} attempts: {last_exc!r}') from last_exc
 
-    @contextmanager
-    def iteration_watchdog(self, timeout, label='Operation'):
+    @asynccontextmanager
+    async def iteration_watchdog(self, timeout, label='Operation'):
         """Abort the enclosed block if it takes longer than `timeout` seconds.
 
         This guards against hardware problems that freeze an iteration: when a
-        board stops responding, a blocking call (e.g. `asyncio.run(...)` on an
-        FPGA transaction) can hang forever and stall the whole test run.
+        board stops responding, a blocking call or an awaited FPGA transaction
+        can hang forever and stall the whole test run.
         Simply measuring elapsed time after the fact cannot help, because
         control never comes back. Instead we arm a SIGALRM timer that fires
         *while* the blocking call is in progress and raises `IterationTimeout`
@@ -148,6 +148,12 @@ class TestUtils:
             platform without SIGALRM) it degrades gracefully to a no-op and
             prints a warning rather than breaking the test.
             Resolution is 1 second, since `signal.alarm()` takes an integer.
+
+            The test shares one event loop with the rest of the session. If the
+            alarm fires while the task is suspended at an ``await``, raising in
+            the handler would escape from the loop itself, so the handler
+            cancels the task instead and the cancellation is turned into
+            `IterationTimeout` here.
         """
 
         timeout = int(timeout) if timeout else 0
@@ -157,10 +163,20 @@ class TestUtils:
             yield
             return
 
+        message = (f'{label} exceeded its {timeout} s time limit and was aborted '
+                   f'(assuming a hardware problem froze the test)')
+        task = asyncio.current_task()
+        loop = asyncio.get_running_loop()
+        fired = False
+
         def _on_timeout(signum, frame):
-            raise IterationTimeout(
-                f'{label} exceeded its {timeout} s time limit and was aborted '
-                f'(assuming a hardware problem froze the test)')
+            nonlocal fired
+            fired = True
+            if asyncio.current_task() is task:
+                # Blocked in synchronous code inside this task.
+                raise IterationTimeout(message)
+            # Suspended at an await: the loop is in select().
+            loop.call_soon_threadsafe(task.cancel)
 
         try:
             previous_handler = signal.signal(signal.SIGALRM, _on_timeout)
@@ -174,6 +190,11 @@ class TestUtils:
         signal.alarm(timeout)
         try:
             yield
+        except asyncio.CancelledError:
+            if not fired:
+                raise
+            task.uncancel()
+            raise IterationTimeout(message) from None
         finally:
             # Always disarm the timer and restore the previous handler, so a
             # pending alarm can never fire during the next iteration or during
@@ -181,7 +202,7 @@ class TestUtils:
             signal.alarm(0)
             signal.signal(signal.SIGALRM, previous_handler)
 
-    def crate_init(self, reset_power = True):
+    async def crate_init_async(self, reset_power = True):
         """
         Run fpga_array, initializing the crate. Recover ca object. Power is reset by default.
         """
@@ -226,7 +247,7 @@ class TestUtils:
 
         # Program the crate
         fpga_array_params = self.cfg.f_engine_tests.global_settings.fpga_array_params
-        ca = asyncio.run(fpga_array.FPGAArray(**fpga_array_params).init())
+        ca = await fpga_array.FPGAArray(**fpga_array_params)
         # ic = ca.ic[0]
         # # set crate model and serial number
         # self.model = ic.part_number
@@ -388,7 +409,7 @@ class TestPreDeploymentCrate(TestUtils):
             test_results.passed = passed
             xr.save_data(test_results)
 
-    def test_init(self, xr):
+    async def test_init(self, xr):
         """
         QC001: Crate initialization test: ensure crate properly intializes
 
@@ -410,7 +431,7 @@ class TestPreDeploymentCrate(TestUtils):
         # Initialize the crate:
         passed = False
         try:
-            self.ca = self.crate_init()
+            self.ca = await self.crate_init_async()
             # If we made it to this point, FPGAs programmed, all boards present in hwm
             # and crate has synced (see test_config.yaml - parameters passed to FPGAArray
             # force all these to be present to return self.ca
@@ -422,7 +443,7 @@ class TestPreDeploymentCrate(TestUtils):
             self.psu.set_power(False) # Turn off power supply
     
             
-    def test_sync(self, xr):
+    async def test_sync(self, xr):
         """
         QC002: Sync/IRIG-B test: stress test of crate sync using IRIG-B
 
@@ -447,11 +468,11 @@ class TestPreDeploymentCrate(TestUtils):
 
         # Initialize the crate
         try:
-            self.ca = self.crate_init()
+            self.ca = await self.crate_init_async()
             for n in range(n_syncs):
                 print(f'Sync {n+1}')
                 try:
-                    asyncio.run(self.ca.sync_async())
+                    await self.ca.sync_async()
                     # If no exception to the above, increment counter:
                     # sync_counter += 1
                 except Exception as e:
@@ -469,7 +490,7 @@ class TestPreDeploymentCrate(TestUtils):
                 self.psu.set_power(False) # Turn off power supply
   
 
-    def test_adc_clocks(self, xr):
+    async def test_adc_clocks(self, xr):
         """
         QC003: ADC clock test: ensure all ADCs get the correct clocks on every channel + power cycling between checks
 
@@ -507,7 +528,7 @@ class TestPreDeploymentCrate(TestUtils):
 
         try:
             # Initialize the crate:
-            self.ca = self.crate_init()
+            self.ca = await self.crate_init_async()
 
             # Iterate through each motherboard. Form a set of unique values of the
             # difference between the measured clock and the expected 200 MHz. To pass,
@@ -547,7 +568,7 @@ class TestPreDeploymentCrate(TestUtils):
                 self.psu.set_power(False) # Turn off power supply
 
 
-    def test_power_cycle(self, xr):
+    async def test_power_cycle(self, xr):
         """
         QC004: Power cycle test: cycle crate initializations, logging ADC clock and UDP errors.
 
@@ -632,13 +653,13 @@ class TestPreDeploymentCrate(TestUtils):
                 # and raises IterationTimeout, caught just below, so a frozen
                 # cycle is abandoned instead of stalling the entire test run.
                 try:
-                    with self.iteration_watchdog(
+                    async with self.iteration_watchdog(
                             iter_timeout,
                             label=f'Power-cycle iteration {n + 1}/{n_cycles}'):
 
                         # Initialize the crate:
                         try:
-                            self.ca = self.crate_init()
+                            self.ca = await self.crate_init_async()
 
                         except IterationTimeout:
                             # Watchdog fired: let it reach the handler below
@@ -646,7 +667,7 @@ class TestPreDeploymentCrate(TestUtils):
                             raise
 
                         except Exception as e:
-                            # PSU-related failures are raised as PSUError (see crate_init /
+                            # PSU-related failures are raised as PSUError (see crate_init_async /
                             # connect_psu) and are counted separately. Anything else is a
                             # genuine FPGA programming / array-init failure.
                             if isinstance(e, PSUError):
@@ -666,7 +687,7 @@ class TestPreDeploymentCrate(TestUtils):
                             # Synchronize crate in its own try/except
                             # clause to catch any sync errors
                             try:
-                                asyncio.run(self.ca.sync_async())
+                                await self.ca.sync_async()
                             except IterationTimeout:
                                 raise
                             except Exception as e:
@@ -700,7 +721,7 @@ class TestPreDeploymentCrate(TestUtils):
                                                 'clk_err_msgs': i.adc_clk_err_msgs})
 
                                     print(f'Checking UDP errors on: {i}')
-                                    asyncio.run(i.get_fpga_udp_metrics_async())
+                                    await i.get_fpga_udp_metrics_async()
                                     udp_temp_errors = i.get_temperatures()
                                     if i.udp_err_ctr != 0:
                                         print(i.udp_err_msgs)
@@ -738,7 +759,7 @@ class TestPreDeploymentCrate(TestUtils):
                                 for i in self.ca.ib:
                                     try:
                                         print(f'Closing UDP connection to slot {i.slot}')
-                                        asyncio.run(i.close_async())
+                                        await i.close_async()
                                     except IterationTimeout:
                                         raise
                                     except Exception as e:

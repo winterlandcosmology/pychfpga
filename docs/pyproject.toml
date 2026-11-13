@@ -23,7 +23,6 @@
         "psutil",
         "zeroconf==0.34.3",
         "ujson",
-        "nest_asyncio",
         "freetype-py",
         "xmodem",
         ]

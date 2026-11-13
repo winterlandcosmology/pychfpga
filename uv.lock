@@ -527,15 +527,6 @@ wheels = [
 ]
 
 [[package]]
-name = "nest-asyncio"
-version = "1.6.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/83/f8/51569ac65d696c8ecbee95938f89d4abf00f47d58d48f6fbabfe8f0baefe/nest_asyncio-1.6.0.tar.gz", hash = "sha256:6f172d5449aca15afd6c646851f4e31e02c598d553a667e38cafa997cfec55fe", size = 7418, upload-time = "2024-01-21T14:25:19.227Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/c4/c2971a3ba4c6103a3d10c4b0f24f461ddc027f0f09763220cf35ca1401b3/nest_asyncio-1.6.0-py3-none-any.whl", hash = "sha256:87af6efd6b5e897c81050477ef65c62e2b2f35d51703cae01aff2905b1852e1c", size = 5195, upload-time = "2024-01-21T14:25:17.223Z" },
-]
-
-[[package]]
 name = "netifaces"
 version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
@@ -694,15 +685,6 @@ wheels = [
 ]
 
 [[package]]
-name = "py"
-version = "1.11.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/98/ff/fec109ceb715d2a6b4c4a85a61af3b40c723a961e8828319fbcb15b868dc/py-1.11.0.tar.gz", hash = "sha256:51c75c4126074b472f746a24399ad32f6053d1b34b68d2fa41e558e6f4a98719", size = 207796, upload-time = "2021-11-04T17:17:01.377Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f6/f0/10642828a8dfb741e5f3fbaac830550a518a775c7fff6f04a007259b0548/py-1.11.0-py2.py3-none-any.whl", hash = "sha256:607c53218732647dff4acdfcd50cb62615cedf612e72d1724fb1a0cc6405b378", size = 98708, upload-time = "2021-11-04T17:17:00.152Z" },
-]
-
-[[package]]
 name = "pychfpga"
 source = { editable = "." }
 dependencies = [
@@ -711,10 +693,8 @@ dependencies = [
     { name = "h5py" },
     { name = "ifaddr" },
     { name = "matplotlib" },
-    { name = "nest-asyncio" },
     { name = "netifaces" },
     { name = "numpy" },
-    { name = "psucontrol" },
     { name = "psutil" },
     { name = "pyyaml" },
     { name = "setuptools" },
@@ -746,7 +726,7 @@ qc = [
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "prettytable" },
-    { name = "py" },
+    { name = "psucontrol" },
     { name = "pyftdi" },
     { name = "pyserial" },
     { name = "pytest" },
@@ -765,14 +745,12 @@ requires-dist = [
     { name = "matplotlib" },
     { name = "matplotlib", marker = "extra == 'ber-dashboard'" },
     { name = "matplotlib", marker = "extra == 'qc'" },
-    { name = "nest-asyncio" },
     { name = "netifaces" },
     { name = "numpy" },
     { name = "numpy", marker = "extra == 'qc'" },
     { name = "prettytable", marker = "extra == 'qc'" },
-    { name = "psucontrol", git = "https://github.com/t0/psucontrol.git?rev=main" },
+    { name = "psucontrol", marker = "extra == 'qc'", git = "https://github.com/t0/psucontrol.git?rev=main" },
     { name = "psutil" },
-    { name = "py", marker = "extra == 'qc'" },
     { name = "pyftdi", marker = "extra == 'qc'" },
     { name = "pyqt6", marker = "extra == 'ber-dashboard'" },
     { name = "pyqtgraph", marker = "extra == 'ber-dashboard'" },
@@ -792,7 +770,7 @@ requires-dist = [
     { name = "wtl-log", git = "https://bitbucket.org/winterlandcosmology/wtl.log.git" },
     { name = "wtl-metrics", git = "https://bitbucket.org/winterlandcosmology/wtl.metrics.git" },
     { name = "wtl-namespace", git = "https://bitbucket.org/winterlandcosmology/wtl.namespace.git" },
-    { name = "wtl-pytest-xreport", marker = "extra == 'qc'", git = "https://bitbucket.org/winterlandcosmology/wtl.pytest-xreport.git?rev=1.3" },
+    { name = "wtl-pytest-xreport", marker = "extra == 'qc'", git = "https://bitbucket.org/winterlandcosmology/wtl.pytest-xreport.git?rev=1.4" },
     { name = "wtl-rest", git = "https://bitbucket.org/winterlandcosmology/wtl.rest.git" },
     { name = "xmodem" },
     { name = "zeroconf", specifier = "==0.34.3" },
@@ -1469,8 +1447,8 @@ dependencies = [
 
 [[package]]
 name = "wtl-pytest-xreport"
-version = "1.3"
-source = { git = "https://bitbucket.org/winterlandcosmology/wtl.pytest-xreport.git?rev=1.3#0cb68bcc92c12418f10cfd5570dce635d3fe90a5" }
+version = "1.4"
+source = { git = "https://bitbucket.org/winterlandcosmology/wtl.pytest-xreport.git?rev=1.4#f6233a4c0f6ff14f6685fd4c145af7e8092a09ae" }
 dependencies = [
     { name = "gitpython" },
     { name = "lxml" },

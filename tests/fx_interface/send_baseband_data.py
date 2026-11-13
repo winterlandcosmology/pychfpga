@@ -1,3 +1,4 @@
+import asyncio
 import numpy as np
 import os
 import h5py
@@ -7,11 +8,11 @@ from pychfpga.fpga_array import FPGAArray
 # =============================
 # Connect to a single CRS board  
 hwm = 'crs 0041'
-ca = FPGAArray(hwm = hwm,
+ca = asyncio.run(FPGAArray(hwm = hwm,
                stderr_log_level = 'debug',
                prog = 2,
                mode = 'shuffle8'
-               )
+               ).init())
 
 #print('')
 #print('Firmware timestamp:')
@@ -39,7 +40,7 @@ i = ca.ib[0]
 
 # Define UCAP object
 ucap = i.UCAP
-u_receiver = ucap.get_data_receiver()
+u_receiver = asyncio.run(ucap.get_data_receiver_async())
 # u_receiver = i.get_data_receiver(port_number = 0, verbose = 1)
 
 # Make sure we can get data from all channels:

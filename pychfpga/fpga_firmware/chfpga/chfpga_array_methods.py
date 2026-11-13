@@ -2183,7 +2183,7 @@ class chFPGAArrayMethods(ArrayMethods):
                     print('None                 ', end=' ')
             print()
 
-    def print_iceboard_temperatures(self):
+    async def print_iceboard_temperatures_async(self):
         """Print FPGA-die temperature for every board as a crate/slot table.
 
         Returns:
@@ -2191,8 +2191,9 @@ class chFPGAArrayMethods(ArrayMethods):
             None
         """
         sensor = self.ib[0].TEMPERATURE_SENSOR.MB_FPGA_DIE
+        temps = await asyncio.gather(*(mb.get_motherboard_temperature_async(sensor) for mb in self.ib))
         self.print_iceboard_table(
-            lambda mb: f'{mb.get_motherboard_temperature(sensor):3.1f}',
+            {mb: f'{t:3.1f}' for mb, t in zip(self.ib, temps)},
             row_labels='FPGA Die Temp')
 
     def print_iceboard_power(self):
@@ -2308,7 +2309,7 @@ class chFPGAArrayMethods(ArrayMethods):
         for i in range(len(ts)):
             print(f'Lane {int(i):02}: Stream ID=0x{sid[i]:02x}, Frame = 0x{ts[i]:02x} (delta = {int(ts[i] - ts[0])})')
 
-    def plot_crate_temperatures(self, figure_number=1):
+    async def plot_crate_temperatures_async(self, figure_number=1):
         """Plot FPGA-die temperature vs slot for every crate.
 
         Parameters:
@@ -2326,7 +2327,7 @@ class chFPGAArrayMethods(ArrayMethods):
         # plt.hold(1)
         for cr in self.ic:
             mb = Ccoll(cr.slot.values())
-            t = mb.get_motherboard_temperature(sensor)
+            t = await asyncio.gather(*(m.get_motherboard_temperature_async(sensor) for m in mb))
             s = mb.slot
             avg_temp = np.average(t)
             h = plt.plot(s, t, label=cr.get_string_id())

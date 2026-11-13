@@ -15,7 +15,6 @@ from wtl.pytest_xreport import xr, run_test_menu
 
 # from icecore.tests.xreport import test_report
 from pychfpga.fpga_array import FPGAArray
-from pychfpga.common.async_utils import run_async
 from pychfpga.hardware.interfaces import ipmi_fru
 
 TEST_CONFIG_FILE = './MGK7BP16/test_config.yaml'
@@ -539,21 +538,21 @@ class TestMGK7BP16Crate:
           #  xr.params.test_locals = locals()
 
 
-    def test_sensor(self, xr):
+    async def test_sensor(self, xr):
         cfg = self.cfg.crate_tests.sensor_test
 
-        ca = FPGAArray(icecrates = xr.params.serial, prog = self.cfg.debug.force_fpga_prog, open = 1)
+        ca = await FPGAArray(icecrates = xr.params.serial, prog = self.cfg.debug.force_fpga_prog, open = 1)
 
         xr.header('Test-Results')
 
         try:
-            voltage = ca.ib[0].get_backplane_voltage()
-            current = ca.ib[0].get_backplane_current()
-            bpTemp1 = ca.ib[0].get_backplane_temperature(ca.ib[0].TEMPERATURE_SENSOR.BP_SLOT1)
-            bpTemp16 = ca.ib[0].get_backplane_temperature(ca.ib[0].TEMPERATURE_SENSOR.BP_SLOT16)
+            voltage = await ca.ib[0].tuber_get_backplane_voltage_async()
+            current = await ca.ib[0].tuber_get_backplane_current_async()
+            bpTemp1 = await ca.ib[0].tuber_get_backplane_temperature_async(ca.ib[0].TEMPERATURE_SENSOR.BP_SLOT1)
+            bpTemp16 = await ca.ib[0].tuber_get_backplane_temperature_async(ca.ib[0].TEMPERATURE_SENSOR.BP_SLOT16)
             #extTemp1 = ca.ib[0].get_backplane_temperature(ca.ib[0].TEMPERATURE_SENSOR.BP_SLOT1_EXTERN)
             #extTemp16 = ca.ib[0].get_backplane_temperature(ca.ib[0].TEMPERATURE_SENSOR.BP_SLOT16_EXTERN)
-            serial = ca.ib[0]._get_backplane_serial()
+            serial = await ca.ib[0]._tuber_get_backplane_serial_async()
 
             print('backplane voltage = ' + repr(voltage))
             print('backplane current = ' + repr(current))
@@ -562,7 +561,7 @@ class TestMGK7BP16Crate:
             #print 'backplane slot1 extern temp = ' + repr(extTemp1)
             #print 'backplane slot16 extern temp = ' + repr(extTemp16)
             print('backplane serial number = ' + repr(serial))
-            ca.print_iceboard_temperatures()
+            await ca.print_iceboard_temperatures_async()
 
             assert input_yes_no('\nIs the above data sensical? Answer Y/N\n'), "User detected error in sensory data!"
             assert (voltage >= cfg.voltage_limits[0] and voltage <= cfg.voltage_limits[1]), "Voltage out of bounds!"
@@ -575,24 +574,24 @@ class TestMGK7BP16Crate:
             xr.params.test_locals = locals()
 
 
-    def test_qsfp(self, xr):
+    async def test_qsfp(self, xr):
         cfg = self.cfg.crate_tests.qsfp_test
 
-        ca = FPGAArray(icecrates = xr.params.serial, prog = self.cfg.debug.force_fpga_prog, open = 1)
+        ca = await FPGAArray(icecrates = xr.params.serial, prog = self.cfg.debug.force_fpga_prog, open = 1)
 
         xr.header('Test-Results')
 
         try:
             qsfpslots = [0]*16
             for i in range(1, 17):
-                if ca.ib[0].is_bp_qsfp_present(i):
+                if await ca.ib[0].tuber_is_bp_qsfp_present_async(i):
                     print("Backplane QSFP module present on slot " + repr(i))
                     qsfpslots[i-1] = 1
                 else:
                     print("Backplane QSFP module NOT present on slot " + repr(i))
 
                 if qsfpslots[i-1]:
-                    print("QSFP module manufactured by: "+ base64.b64decode(ca.ib[0]._bp_qsfp_eeprom_read_base64(i, 148, 16)).strip() + ". Serial number: " + base64.b64decode(ca.ib[0]._bp_qsfp_eeprom_read_base64(i, 196, 16)).strip() + ".")
+                    print("QSFP module manufactured by: "+ base64.b64decode(await ca.ib[0]._tuber_bp_qsfp_eeprom_read_base64_async(i, 148, 16)).strip() + ". Serial number: " + base64.b64decode(await ca.ib[0]._tuber_bp_qsfp_eeprom_read_base64_async(i, 196, 16)).strip() + ".")
 
             for i in range(0, 16):
                 assert qsfpslots[i], "Not all connectors were detected!"
@@ -603,10 +602,10 @@ class TestMGK7BP16Crate:
             xr.params.test_locals = locals()
 
 
-    def test_reset(self, xr):
+    async def test_reset(self, xr):
         cfg = self.cfg.crate_tests.reset_test
 
-        ca = FPGAArray(icecrates = xr.params.serial, prog = self.cfg.debug.force_fpga_prog, open = 1)
+        ca = await FPGAArray(icecrates = xr.params.serial, prog = self.cfg.debug.force_fpga_prog, open = 1)
 
         result = NameSpace()
         result.res = {}
@@ -620,25 +619,25 @@ class TestMGK7BP16Crate:
         try:
             for i in range(0, 16, 2):
                 print(f'Resetting arm on board {i+2}.')
-                ca.ib[i].reset_arm_on_slot(i+2)
-                result.res.off[i+1] = not ca.ib[i+1].ping()
+                await ca.ib[i].tuber_reset_arm_on_slot_async(i+2)
+                result.res.off[i+1] = not await ca.ib[i+1].ping_async()
 
             print("Waiting ...")
             time.sleep(cfg.arm_sleep_time)
 
             for i in range(0, 16, 2):
-                result.res.on[i+1] = ca.ib[i+1].ping()
+                result.res.on[i+1] = await ca.ib[i+1].ping_async()
 
             for i in range(1, 16, 2):
                 print(f'Resetting arm on board {i}.')
-                ca.ib[i].reset_arm_on_slot(i)
-                result.res.off[i-1] = not ca.ib[i-1].ping()
+                await ca.ib[i].tuber_reset_arm_on_slot_async(i)
+                result.res.off[i-1] = not await ca.ib[i-1].ping_async()
 
             print("Waiting ...")
             time.sleep(cfg.arm_sleep_time)
 
             for i in range(1, 16, 2):
-                result.res.on[i-1] = ca.ib[i-1].ping()
+                result.res.on[i-1] = await ca.ib[i-1].ping_async()
 
             xr.header('Test-Results')
             for i in range(0, len(result.res.off)):
@@ -657,29 +656,29 @@ class TestMGK7BP16Crate:
         try:
             for i in range(0, 16, 2):
                 print(f'Turning board {i+2} off.')
-                ca.ib[i].set_power_on_slot(i+2, False)
-                result.onoff.off[i+1] = not ca.ib[i+1].ping()
+                await ca.ib[i].tuber_set_power_on_slot_async(i+2, False)
+                result.onoff.off[i+1] = not await ca.ib[i+1].ping_async()
                 print(f'Turning board {i+2} on.')
-                ca.ib[i].set_power_on_slot(i+2, True)
+                await ca.ib[i].tuber_set_power_on_slot_async(i+2, True)
 
             print("Waiting ...")
             time.sleep(cfg.pow_sleep_time)
 
             for i in range(0, 16, 2):
-                result.onoff.on[i+1] = ca.ib[i+1].ping()
+                result.onoff.on[i+1] = await ca.ib[i+1].ping_async()
 
             for i in range(1, 16, 2):
                 print(f'Turning board {i} off.')
-                ca.ib[i].set_power_on_slot(i, False)
-                result.onoff.off[i-1] = not ca.ib[i-1].ping()
+                await ca.ib[i].tuber_set_power_on_slot_async(i, False)
+                result.onoff.off[i-1] = not await ca.ib[i-1].ping_async()
                 print(f'Turning board {i} on.')
-                ca.ib[i].set_power_on_slot(i, True)
+                await ca.ib[i].tuber_set_power_on_slot_async(i, True)
 
             print("Waiting ...")
             time.sleep(cfg.pow_sleep_time)
 
             for i in range(1, 16, 2):
-                result.onoff.on[i-1] = ca.ib[i-1].ping()
+                result.onoff.on[i-1] = await ca.ib[i-1].ping_async()
 
             xr.header('Test-Results')
             for i in range(0, len(result.onoff.off)):
@@ -694,7 +693,7 @@ class TestMGK7BP16Crate:
             xr.params.test_locals = locals()
 
 
-    def test_bitErrorRate(self, xr):
+    async def test_bitErrorRate(self, xr):
 
         # Useful shortcuts
         cfg = self.cfg.crate_tests.bitErrorRate_test
@@ -713,7 +712,7 @@ class TestMGK7BP16Crate:
             else:
                 print('Wrong input!')
 
-        ca = FPGAArray(icecrates = serials, prog = self.cfg.debug.force_fpga_prog, open = 1)
+        ca = await FPGAArray(icecrates = serials, prog = self.cfg.debug.force_fpga_prog, open = 1)
 
         xr.header('Begin Testing')
         bad_lanes = []
@@ -732,7 +731,7 @@ class TestMGK7BP16Crate:
             link_map.update(ca.get_backplane_qsfp_link_map())
             link_map = {link: gtxes for link, gtxes in list(link_map.items()) if (('int' not in gtxes) and (None not in gtxes))}
 
-            result = run_async(ca.get_ber_async(link_list = link_map, period = cfg.period, print_ = True, tx_init_power=2, tx_power=6, tx_qsfp_power=14, minerrors_toprint=0))
+            result = await ca.get_ber_async(link_list = link_map, period = cfg.period, print_ = True, tx_init_power=2, tx_power=6, tx_qsfp_power=14, minerrors_toprint=0)
             bp_rate = True
             qsfp_rate = True
             #gpu_rate = True
@@ -772,10 +771,10 @@ class TestMGK7BP16Crate:
             xr.save_data(result)
             xr.params.test_locals = locals()
 
-    def test_mezzRamp(self, xr):
+    async def test_mezzRamp(self, xr):
         cfg = self.cfg.crate_tests.mezzRamp_test
 
-        ca = FPGAArray(icecrates = xr.params.serial, prog = self.cfg.debug.force_fpga_prog, open = 1)
+        ca = await FPGAArray(icecrates = xr.params.serial, prog = self.cfg.debug.force_fpga_prog, open = 1)
 
         result = NameSpace()  # test result container
         board = 0
@@ -798,7 +797,7 @@ class TestMGK7BP16Crate:
 
                     delay_table= ib.get_adc_delays()
                     print('Opening data receiver socket')
-                    receiver = run_async(ca.get_data_receiver_async())
+                    receiver = await ca.get_data_receiver_async()
 
                     print('Setting up ramp transmission...')
                     ib.set_adcdaq_mode('data')

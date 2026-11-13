@@ -1,12 +1,16 @@
+import asyncio
 import numpy as np
 import sys
 sys.path.insert(0, '../../../pychfpga/')
 from pocket_correlator import POCKET_CORRELATOR
 
-pc = POCKET_CORRELATOR(hwm = 'crs 0050', stderr_log_level = 'debug', prog = 2)
 
 data_path = '/home/<user>/test_data'
-pc.observe(data_path = data_path,
+
+
+async def main():
+    pc = await POCKET_CORRELATOR(hwm = 'crs 0050', stderr_log_level = 'debug', prog = 2).init()
+    await pc.observe_async(data_path = data_path,
            obs_tag = '_test', 
            digital_gains_path = None, 
            n_vis_per_file = 16,
@@ -21,3 +25,5 @@ pc.observe(data_path = data_path,
            capture_fft_bursts = True,
            n_fft_frames_per_file = 2*5
            )
+
+asyncio.run(main())

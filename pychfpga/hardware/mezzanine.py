@@ -3,7 +3,6 @@ import logging
 
 # Local packages
 from pychfpga.hardware import HardwareMap, Motherboard
-from pychfpga.common.async_utils import run_async, async_to_sync
 
 
 class Mezzanine(HardwareMap):

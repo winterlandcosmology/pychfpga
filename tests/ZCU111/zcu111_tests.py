@@ -33,7 +33,6 @@ from wtl.namespace import NameSpace
 # from wtl.xreport import test_report
 import labpy
 import pychfpga
-from pychfpga import run_async
 
 def wrap(obj, width=80):
     return textwrap.fill(str(obj), width)
@@ -101,10 +100,10 @@ class TestZCU111(TestUtils):
         xr.header('Cleaning up...')
 
 
-    def get_motherboard(self, **kwargs):
+    async def get_motherboard_async(self, **kwargs):
             try:
                 print('Connecting to the ZCU111...')
-                a = pychfpga.FPGAArray(**kwargs)
+                a = await pychfpga.FPGAArray(**kwargs)
             except RuntimeError:  # if we can't find the board
                 a = None
 
@@ -117,7 +116,7 @@ class TestZCU111(TestUtils):
             return mb
 
 
-    def test_histogram(self, xr):
+    async def test_histogram(self, xr):
         """
         Test the histogram return by the ADC.
 
@@ -127,7 +126,7 @@ class TestZCU111(TestUtils):
         # print(f'COnfig is {self.cfg}')
         cfg = self.cfg.adc_tests.test_histogram
         sg = self.get_instrument('sg')
-        mb = self.get_motherboard(**cfg.fpga_array_params)
+        mb = await self.get_motherboard_async(**cfg.fpga_array_params)
 
         sg.set_amplitude(cfg.rf_ampl, 'dBm')
         sg.set_output_enable(True)
@@ -158,7 +157,7 @@ class TestZCU111(TestUtils):
             print()
             print('Testing Mezzanine EEPROM with %r' % ib)
             # Check if PRSNT line is help low
-            tr.is_mezzanine_present = run_async(ib.tuber_is_mezzanine_present_async(self.fmc_slot))
+            tr.is_mezzanine_present = await ib.tuber_is_mezzanine_present_async(self.fmc_slot)
             print()
             print('PRSNT line says that the Mezzanine is present: %s' % bool(tr.is_mezzanine_present))
             assert tr.is_mezzanine_present, 'Mezzanine was not detected on FMC slot %i' % self.fmc_slot
@@ -186,7 +185,7 @@ class TestZCU111(TestUtils):
             # We don't fail on this. This is just for additional info
             print()
             try:
-                tr.eeprom_contents_from_arm = run_async(ib._mezzanine_eeprom_read_async(self.fmc_slot))
+                tr.eeprom_contents_from_arm = await ib._mezzanine_eeprom_read_async(self.fmc_slot)
                 print('EEPROM content read by ARM is:')
                 print(wrap(repr(tr.eeprom_contents_from_arm)))
             except Exception as e:
@@ -195,13 +194,13 @@ class TestZCU111(TestUtils):
             # Attempt to auto-detect the mezzanine type to see if the EEPROM already programmed
             print()
             print('Discovering Mezzanine')
-            run_async(ib.discover_mezzanines_async())
+            await ib.discover_mezzanines_async()
             mezz = ib.mezzanine.get(self.fmc_slot, None)
             print('    Mezzanine is %r:' % mezz)
 
             if mezz:
                 # If a Mezzanine is discovered, it must have valid IPMI data.
-                eeprom_data = run_async(ib._mezzanine_eeprom_read_async(self.fmc_slot))
+                eeprom_data = await ib._mezzanine_eeprom_read_async(self.fmc_slot)
                 ipmi = mezz.decode_eeprom(eeprom_data)  # returns either a Tuber IPMI or a Python IPMI
                 is_mcgill_format = (eeprom_data[0] == 0x0d)
                 tr.old_ipmi = repr(ipmi)
@@ -292,11 +291,11 @@ class TestZCU111(TestUtils):
 
                 print()
                 print('Writing IPMI data (%i bytes) to EEPROM...' % len(encoded_ipmi))
-                run_async(ib._tuber_mezzanine_eeprom_write_base64_async(self.fmc_slot, base64.b64encode(encoded_ipmi), 0))
+                await ib._tuber_mezzanine_eeprom_write_base64_async(self.fmc_slot, base64.b64encode(encoded_ipmi), 0)
                 print('EEPROM WRITTEN with data')
 
                 # read back eeprom
-                read_back = run_async(ib._mezzanine_eeprom_read_async(self.fmc_slot))
+                read_back = await ib._mezzanine_eeprom_read_async(self.fmc_slot)
                 print()
                 print('Read back %i bytes from EEPROM.')
                 tr.read_back = read_back = read_back[:len(encoded_ipmi)]
@@ -312,7 +311,7 @@ class TestZCU111(TestUtils):
             xr.save_data(tr)
             self.dmm_display(xr.pass_fail(passed), 'EEPROM tests')
 
-    def test_power(self, xr):
+    async def test_power(self, xr):
         """
         Runs Mezzanine power test on the IceBoard.
 
@@ -342,11 +341,11 @@ class TestZCU111(TestUtils):
             # Power down mezzanine to get a baseline
             print()
             print('Turning mezzanine power OFF (just in case)')
-            run_async(mezz.set_mezzanine_power_async(False))
+            await mezz.set_mezzanine_power_async(False)
             time.sleep(0.5)
 
             # Check that board power is off. The ARM checks this by looking at the voltage on the 12V_EN output.
-            tr.first_power_off_state = run_async(ib.tuber_get_mezzanine_power_async(self.fmc_slot))
+            tr.first_power_off_state = await ib.tuber_get_mezzanine_power_async(self.fmc_slot)
             assert not tr.first_power_off_state, 'The ARM refused to turn OFF the Mezzanine power !'
 
             # Check that Power Good goes down when board is powered off to make sure we are not stuck to 0
@@ -360,7 +359,7 @@ class TestZCU111(TestUtils):
             # Turn Mezzanine ON
             print()
             print('Turning mezzanine power ON')
-            run_async(mezz.set_mezzanine_power_async(True))
+            await mezz.set_mezzanine_power_async(True)
 
             # Check mezzanine voltages and currents
             print()
@@ -373,8 +372,8 @@ class TestZCU111(TestUtils):
                 ])
             tr.rails = NameSpace()
             for rail_name, limits in list(cfg.rails.items()):
-                V = run_async(ib.tuber_get_mezzanine_voltage_async(mezz_rails[rail_name], self.fmc_slot))
-                I = run_async(ib.tuber_get_mezzanine_current_async(mezz_rails[rail_name], self.fmc_slot))
+                V = await ib.tuber_get_mezzanine_voltage_async(mezz_rails[rail_name], self.fmc_slot)
+                I = await ib.tuber_get_mezzanine_current_async(mezz_rails[rail_name], self.fmc_slot)
                 print(f'Rail {rail_name}: {V:.3f}V@{I:.3f}A,  limits = {limits}')
                 tr.rails[rail_name] = NameSpace(V=V, I=I)  # Namespace to store this rail results
                 if V < limits.vmin or V > limits.vmax or I < limits.imin or I > limits.imax:
@@ -394,16 +393,16 @@ class TestZCU111(TestUtils):
             print('Test ended. Turning mezzanine power OFF')
 
             if mezz:
-                run_async(mezz.set_mezzanine_power_async(False))
-                tr.final_power_off_state = run_async(mezz.get_mezzanine_power_async())
+                await mezz.set_mezzanine_power_async(False)
+                tr.final_power_off_state = await mezz.get_mezzanine_power_async()
                 print('ARM reports that Mezz power is %s' % bool(tr.final_power_off_state))
-                print('ARM reports that Mezz power is %s' % bool(run_async(mezz.get_mezzanine_power_async())))
+                print('ARM reports that Mezz power is %s' % bool(await mezz.get_mezzanine_power_async()))
             if ib:
                 print('GPIO OUT0 reg is', bin(ib.hw._gpio_power.read_reg(10)))
 
             xr.save_data(tr)
 
-    def test_spi_pll(self, xr):
+    async def test_spi_pll(self, xr):
         """
         Runs Mezzanine SPI test using the IceBoard.
 
@@ -445,7 +444,7 @@ class TestZCU111(TestUtils):
         try:
 
             ib, mezz = self._get_iceboard(**cfg.fpga_array)
-            run_async(mezz.set_mezzanine_power_async(True))
+            await mezz.set_mezzanine_power_async(True)
             time.sleep(0.5)
 
             # test IO Expander
@@ -463,7 +462,7 @@ class TestZCU111(TestUtils):
                 print('    after Reset, read 0x%02x' % (r))
                 assert io.read(io.REG_OLATA)==0, 'Mezzanine SPI Reset did not reset the IO Expander registers. '
             print('   IO Expander communication OK')
-            run_async(mezz.init()) # reinitialize mezzanine so other tests will work
+            await mezz.init() # reinitialize mezzanine so other tests will work
 
             # Check PCB temperature
             print()
@@ -544,7 +543,7 @@ class TestZCU111(TestUtils):
 
             ch = 8 if self.fmc_slot==2 else 0 # base channel number for that mezanine
             # ADC PLL lock test
-            run_async(mezz.init())  # reset ADC  to make sure we have the right frequency divider ratio of 2
+            await mezz.init()  # reset ADC  to make sure we have the right frequency divider ratio of 2
             resolution = 2./cfg.pll_gate_time * 8
             err_max = max(cfg.pll_freq_err_max*1e6, resolution) + 1
             print()
@@ -598,7 +597,7 @@ class TestZCU111(TestUtils):
             print()
             print('Test ended. Turning mezzanine power OFF')
             if mezz:
-                run_async(mezz.set_mezzanine_power_async(False))
+                await mezz.set_mezzanine_power_async(False)
             xr.save_data(tr)
 
     def set_adc_delays(self, ib):
@@ -629,7 +628,7 @@ class TestZCU111(TestUtils):
         ib.set_adc_delays(delay_table)
         return delay_table
 
-    def test_ramp(self, xr):
+    async def test_ramp(self, xr):
         cfg = self.cfg.carrier_tests.ramp_test
         plt.ion()
 
@@ -646,14 +645,14 @@ class TestZCU111(TestUtils):
             ib, mezz = self._get_iceboard(**cfg.fpga_array)
 
             print('initializing mezzanine...')
-            mezz.init()
+            await mezz.init()
 
             print('Computing ADC delays...')
             ib.set_adc_delays(compute_delays=2, save_delays=False, check_sync_delays=True, check_adc_delays=20, verbose=0, retry=5)
             delay_table = ib.get_adc_delays()
 
             print('\nOpening data receiver socket')
-            r = run_async(self.ca.get_data_receiver_async())
+            r = await self.ca.get_data_receiver_async()
 
             print('Setting up ramp transmission...')
             # Begin Ramp test
@@ -722,14 +721,14 @@ class TestZCU111(TestUtils):
                 r.close()
             if ib:
                 for m in ib.mezzanine.values():
-                    run_async(m.set_mezzanine_power_async(False))
+                    await m.set_mezzanine_power_async(False)
                 # run_async(mezz.set_mezzanine_power_async(False, 2 if self.fmc_slot==1 else 1))
             xr.save_data(tr)
 
-    def set_mezzanine_power(self, state, slot=None):
-        run_async(self.ib.mezzanine[slot or self.fmc_slot].set_mezzanine_power_async(state))
+    async def set_mezzanine_power_async(self, state, slot=None):
+        await self.ib.mezzanine[slot or self.fmc_slot].set_mezzanine_power_async(state)
 
-    def test_s11(self, xr):
+    async def test_s11(self, xr):
         """
         Runs S11 tests.
 
@@ -766,7 +765,7 @@ class TestZCU111(TestUtils):
             print("Connecting to Iceboard")
             ib, mezz = self._get_iceboard(**cfg.fpga_array)
 
-            r = run_async(self.ca.get_data_receiver_async())
+            r = await self.ca.get_data_receiver_async()
 
             if cfg.adc_trim_value is not None:
                 for adc in mezz.ADC:
@@ -957,7 +956,7 @@ class TestZCU111(TestUtils):
             if r:
                 r.close()
             if mezz:
-                run_async(mezz.set_mezzanine_power_async(False))
+                await mezz.set_mezzanine_power_async(False)
             xr.save_data(tr)
             if self.ps18v:
                 self.ps18v.output(state=False, readonly=False)

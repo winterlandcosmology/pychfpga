@@ -35,7 +35,7 @@ from wtl.metrics import Metrics
 # Local packages
 
 
-from pychfpga.common import State, run_async
+from pychfpga.common import State
 
 from pychfpga.fpga_firmware import FPGAFirmware
 from .chfpga_udp import chFPGA_UDP
@@ -3020,14 +3020,11 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         else:
             raise RuntimeError("Stop data capture only implemented on prober and ucap currently")
 
-    def get_data_socket(self, port_number=0):
+    async def get_data_socket_async(self, port_number=0):
         """
         Return a UDP socket that receives the raw/correlator data.
 
         If the socket does not already exists, the FPGA will be configured to send the data to the returned socket.
-
-        Prefer :meth:`get_data_socket_async` when an event loop is already running
-        (e.g. Jupyter).
 
         Parameters:
 
@@ -3042,10 +3039,6 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
             socket.socket(): a UDP socket.
         """
-        return run_async(self.get_data_socket_async(port_number=port_number))
-
-    async def get_data_socket_async(self, port_number=0):
-        """Async variant of :meth:`get_data_socket`."""
         if port_number is None:
             port_number = await self.get_local_data_port_number_async()
 
@@ -3147,15 +3140,8 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self._tcp_data_socket = sock
         return sock
 
-    def set_data_socket(self, sock, force=False):
-        """ Specified the data socket to which data will be sent.
-
-        Prefer :meth:`set_data_socket_async` when an event loop is already running.
-        """
-        return run_async(self.set_data_socket_async(sock, force=force))
-
     async def set_data_socket_async(self, sock, force=False):
-        """Async variant of :meth:`set_data_socket`."""
+        """ Specified the data socket to which data will be sent."""
         if sock is self._data_socket and not force:
             return
 
@@ -4182,7 +4168,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         return delaytable, stuckbits, bitposgood, problem
 
 
-    def status(self):
+    async def status_async(self):
         """
         """
         self.logger.info(f'{self!r}: ----------- chFPGA status ---------------')
@@ -4192,7 +4178,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         self.logger.info(f'{self!r}:  Number of channelizers with FFT: {len(self.LIST_OF_ANTENNAS_WITH_FFT)} (channels {self.LIST_OF_ANTENNAS_WITH_FFT!s})')
         self.logger.info(f'{self!r}:  Number of correlators: {len(self.LIST_OF_IMPLEMENTED_CORRELATORS)} (correlators {self.LIST_OF_IMPLEMENTED_CORRELATORS!s})')
 
-        self.FreqCtr.status()
+        await self.FreqCtr.status_async()
 
     def set_data_width(self, width):
         """

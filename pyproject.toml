@@ -37,7 +37,6 @@
 
         # PyPi packages
         "aiohttp",  # new, using 3.7.2
-        "nest_asyncio", # new, using 1.4.3 (Tuber)
         "ujson",  # new , using 3.17.2 (Tuber)
         "freetype-py", # For CRS LCD fonts
         "numpy",  # was ==1.15.2, testing 1.19.2

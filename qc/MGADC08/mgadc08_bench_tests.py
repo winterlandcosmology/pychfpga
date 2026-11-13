@@ -30,7 +30,6 @@ import labpy
 import pychfpga
 
 from pychfpga import fpga_array 
-from pychfpga.common import run_async, async_to_sync
 from pychfpga.hardware.ice.icecore import hw
 
 
@@ -413,12 +412,12 @@ class TestMGADC08Carrier(TestUtils):
 
 
 
-    def _get_iceboard(self, **kwargs):
+    async def _get_iceboard_async(self, **kwargs):
             FPGA_IP_SET_FUNCTION = '(a,b,3,d)'
             
             try:
                 print('Connecting to the IceBoard...')
-                a = fpga_array.FPGAArray(**kwargs, fpga_ip_addr_fn=FPGA_IP_SET_FUNCTION, mdns_timeout=1)
+                a = await fpga_array.FPGAArray(**kwargs, fpga_ip_addr_fn=FPGA_IP_SET_FUNCTION, mdns_timeout=1)
             except RuntimeError:  # if we can't find the board
                 a = None
 
@@ -427,7 +426,7 @@ class TestMGADC08Carrier(TestUtils):
                 self.xr.input('Press [ENTER] once board has booted and front LED is green')
                 
                 print('Searching for the IceBoard for up to 70 seconds...')
-                a = fpga_array.FPGAArray(**kwargs, fpga_ip_addr_fn=FPGA_IP_SET_FUNCTION, mdns_timeout=70)
+                a = await fpga_array.FPGAArray(**kwargs, fpga_ip_addr_fn=FPGA_IP_SET_FUNCTION, mdns_timeout=70)
 
             assert len(a.ib), f'No Iceboard was found with parameters {kwargs}'
             assert len(a.ib) == 1, f'One than one Iceboard was found with parameters {kwargs}'
@@ -454,15 +453,15 @@ class TestMGADC08Carrier(TestUtils):
             else:
                 assert serial.lower() == self.serial.lower(), f'The Mezzanine currently under test does not have the correct model and serial numbers (expected {self.model} SN{self.serial}, got {model} SN{serial})'
 
-            run_async(ib.set_fpga_bitstream_async(firmware_mode = 'corr16', force=False)) #needs to be added to the open iceboard funct
+            await ib.set_fpga_bitstream_async(firmware_mode = 'corr16', force=False) #needs to be added to the open iceboard funct
             ip_fn = lambda a, b, c, d: (a, b, 3, d)
-            run_async(ib.open_fpga_async(verbose=1, fpga_ip_addr_fn = ip_fn)) 
+            await ib.open_fpga_async(verbose=1, fpga_ip_addr_fn = ip_fn) 
 
 
             return ib, mezz
 
 
-    def test_eeprom(self, xr):
+    async def test_eeprom(self, xr):
         """
         Runs Mezzanine EEPROM test and programming.
 
@@ -489,7 +488,7 @@ class TestMGADC08Carrier(TestUtils):
             
             try:
                 print('Connecting to the IceBoard...')
-                a = fpga_array.FPGAArray(**cfg.fpga_array, fpga_ip_addr_fn=FPGA_IP_SET_FUNCTION, mdns_timeout=1)
+                a = await fpga_array.FPGAArray(**cfg.fpga_array, fpga_ip_addr_fn=FPGA_IP_SET_FUNCTION, mdns_timeout=1)
             except RuntimeError:  # if we can't find the board
                 a = None
 
@@ -498,21 +497,21 @@ class TestMGADC08Carrier(TestUtils):
                 self.xr.input('Press [ENTER] once board has booted and front LED is green')
                 
                 print('Searching for the IceBoard for up to 70 seconds...')
-                a = fpga_array.FPGAArray(**cfg.fpga_array, fpga_ip_addr_fn=FPGA_IP_SET_FUNCTION, mdns_timeout=70)
+                a = await fpga_array.FPGAArray(**cfg.fpga_array, fpga_ip_addr_fn=FPGA_IP_SET_FUNCTION, mdns_timeout=70)
 
             assert len(a.ib), f'No Iceboard was found with parameters {kwargs}'
             assert len(a.ib) == 1, f'One than one Iceboard was found with parameters {kwargs}'
             ib = a.ib[0]
             self.ca = a
 
-            run_async(ib.set_fpga_bitstream_async(firmware_mode = 'corr16', force=False)) #needs to be added to the open iceboard funct
+            await ib.set_fpga_bitstream_async(firmware_mode = 'corr16', force=False) #needs to be added to the open iceboard funct
             ip_fn = lambda a, b, c, d: (a, b, 3, d)
-            run_async(ib.open_fpga_async(verbose=1, fpga_ip_addr_fn = ip_fn)) 
+            await ib.open_fpga_async(verbose=1, fpga_ip_addr_fn = ip_fn) 
 
             print()
             print(f'Testing Mezzanine EEPROM with {ib!r}')
             # Check if PRSNT line is help low
-            tr.is_mezzanine_present = run_async(ib.tuber_is_mezzanine_present_async(self.fmc_slot))
+            tr.is_mezzanine_present = await ib.tuber_is_mezzanine_present_async(self.fmc_slot)
             print()
             print(f'PRSNT line says that the Mezzanine is present: {bool(tr.is_mezzanine_present)}')
             assert tr.is_mezzanine_present, f'Mezzanine was not detected on FMC slot {self.fmc_slot}'
@@ -542,7 +541,7 @@ class TestMGADC08Carrier(TestUtils):
             # We don't fail on this. This is just for additional info
             print()
             try:
-                tr.eeprom_contents_from_arm = run_async(ib._mezzanine_eeprom_read_async(self.fmc_slot))
+                tr.eeprom_contents_from_arm = await ib._mezzanine_eeprom_read_async(self.fmc_slot)
                 print('EEPROM content read by ARM is:')
                 print(wrap(repr(tr.eeprom_contents_from_arm)))
             except Exception as e:
@@ -551,13 +550,13 @@ class TestMGADC08Carrier(TestUtils):
             # Attempt to auto-detect the mezzanine type to see if the EEPROM already programmed
             print()
             print('Discovering Mezzanine')
-            run_async(ib.discover_mezzanines_async())
+            await ib.discover_mezzanines_async()
             mezz = ib.mezzanine.get(self.fmc_slot, None)
             print(f'    Mezzanine is {mezz!r}:')
 
             if mezz:
                 # If a Mezzanine is discovered, it must have valid IPMI data.
-                eeprom_data = run_async(ib._mezzanine_eeprom_read_async(self.fmc_slot))
+                eeprom_data = await ib._mezzanine_eeprom_read_async(self.fmc_slot)
                 ipmi = mezz.decode_eeprom(eeprom_data)  # returns either a Tuber IPMI or a Python IPMI
                 is_mcgill_format = (eeprom_data[0] == 0x0d)
                 tr.old_ipmi = repr(ipmi)
@@ -648,11 +647,11 @@ class TestMGADC08Carrier(TestUtils):
 
                 print()
                 print(f'Writing IPMI data ({len(encoded_ipmi)} bytes) to EEPROM...')
-                run_async(ib._tuber_mezzanine_eeprom_write_base64_async(self.fmc_slot, base64.b64encode(encoded_ipmi), 0))
+                await ib._tuber_mezzanine_eeprom_write_base64_async(self.fmc_slot, base64.b64encode(encoded_ipmi), 0)
                 print('EEPROM WRITTEN with data')
 
                 # read back eeprom
-                read_back = run_async(ib._mezzanine_eeprom_read_async(self.fmc_slot))
+                read_back = await ib._mezzanine_eeprom_read_async(self.fmc_slot)
                 print()
                 print('Read back %i bytes from EEPROM.')
                 tr.read_back = read_back = read_back[:len(encoded_ipmi)]
@@ -668,7 +667,7 @@ class TestMGADC08Carrier(TestUtils):
             xr.save_data(tr)
             self.dmm_display(dmm, xr.pass_fail(passed), 'EEPROM tests')
 
-    def test_power(self, xr):
+    async def test_power(self, xr):
         """
         Runs Mezzanine power test on the IceBoard.
 
@@ -694,17 +693,17 @@ class TestMGADC08Carrier(TestUtils):
         ib, mezz = (None, None)  # in case we fail finding boards
         passed = False
         try:
-            ib, mezz = self._get_iceboard(**cfg.fpga_array)
-            run_async(ib.fpga.init_async())
+            ib, mezz = await self._get_iceboard_async(**cfg.fpga_array)
+            await ib.fpga.init_async()
 
             # Power down mezzanine to get a baseline
             print()
             print('Turning mezzanine power OFF (just in case)')
-            run_async(mezz.set_mezzanine_power_async(False))
+            await mezz.set_mezzanine_power_async(False)
             time.sleep(0.5)
 
             # Check that board power is off. The ARM checks this by looking at the voltage on the 12V_EN output.
-            tr.first_power_off_state = run_async(ib.tuber_get_mezzanine_power_async(self.fmc_slot))
+            tr.first_power_off_state = await ib.tuber_get_mezzanine_power_async(self.fmc_slot)
 
             assert not tr.first_power_off_state, 'The ARM refused to turn OFF the Mezzanine power !'
 
@@ -725,7 +724,7 @@ class TestMGADC08Carrier(TestUtils):
             # Turn Mezzanine ON
             print()
             print('Turning mezzanine power ON')
-            run_async(mezz.set_mezzanine_power_async(True))
+            await mezz.set_mezzanine_power_async(True)
 
             # Check mezzanine voltages and currents
             print()
@@ -738,8 +737,8 @@ class TestMGADC08Carrier(TestUtils):
                 ])
             tr.rails = NameSpace()
             for rail_name, limits in list(cfg.rails.items()):
-                V = run_async(ib.tuber_get_mezzanine_voltage_async(mezz_rails[rail_name], self.fmc_slot))
-                I = run_async(ib.tuber_get_mezzanine_current_async(mezz_rails[rail_name], self.fmc_slot))
+                V = await ib.tuber_get_mezzanine_voltage_async(mezz_rails[rail_name], self.fmc_slot)
+                I = await ib.tuber_get_mezzanine_current_async(mezz_rails[rail_name], self.fmc_slot)
                 print(f'Rail {rail_name}: {V:.3f}V@{I:.3f}A,  limits = {limits}')
                 tr.rails[rail_name] = NameSpace(V=V, I=I)  # Namespace to store this rail results
                 if V < limits.vmin or V > limits.vmax or I < limits.imin or I > limits.imax:
@@ -759,16 +758,16 @@ class TestMGADC08Carrier(TestUtils):
             print('Test ended. Turning mezzanine power OFF')
 
             if mezz:
-                run_async(mezz.set_mezzanine_power_async(False))
-                tr.final_power_off_state = run_async(mezz.get_mezzanine_power_async())
+                await mezz.set_mezzanine_power_async(False)
+                tr.final_power_off_state = await mezz.get_mezzanine_power_async()
                 print(f'ARM reports that Mezz power is {bool(tr.final_power_off_state)}')
-                print(f'ARM reports that Mezz power is {bool(run_async(mezz.get_mezzanine_power_async()))}')
+                print(f'ARM reports that Mezz power is {bool(await mezz.get_mezzanine_power_async())}')
             if ib:
                 print('GPIO OUT0 reg is', bin(ib._gpio_power.read_reg(10)))
 
             xr.save_data(tr)
 
-    def test_spi_pll(self, xr):
+    async def test_spi_pll(self, xr):
         """
         Runs Mezzanine SPI test using the IceBoard.
 
@@ -810,12 +809,12 @@ class TestMGADC08Carrier(TestUtils):
         try:
             
 
-            ib, mezz = self._get_iceboard(**cfg.fpga_array)
+            ib, mezz = await self._get_iceboard_async(**cfg.fpga_array)
 
             #run_async(ib.fpga.init_async())
 
 
-            run_async(mezz.set_mezzanine_power_async(True))
+            await mezz.set_mezzanine_power_async(True)
             time.sleep(0.5)
 
             # test IO Expander
@@ -833,7 +832,7 @@ class TestMGADC08Carrier(TestUtils):
                 print(f'    after Reset, read 0x{r:02x}')
                 assert io.read(io.REG_OLATA)==0, 'Mezzanine SPI Reset did not reset the IO Expander registers. '
             print('   IO Expander communication OK')
-            run_async(mezz.init()) # reinitialize mezzanine so other tests will work
+            await mezz.init() # reinitialize mezzanine so other tests will work
 
             # Check PCB temperature
             print()
@@ -877,7 +876,7 @@ class TestMGADC08Carrier(TestUtils):
                 assert adc.read(adc.REG_CHANNEL_SELECT) == 0, 'Cannot set ADC register to zero'
                 adc.write(adc.REG_CHANNEL_SELECT, 1)
                 assert adc.read(adc.REG_CHANNEL_SELECT) == 1, 'Cannot set ADC register to 1'
-                run_async(mezz.set_mezzanine_reset_async(state=False))
+                await mezz.set_mezzanine_reset_async(state=False)
                 #assert adc.read(adc.REG_CHANNEL_SELECT) == 0, 'ADC reset did not set ADC register back to zero'
                 print(f'  ADC{i} reset is OK')
 
@@ -914,7 +913,7 @@ class TestMGADC08Carrier(TestUtils):
 
             ch = 8 if self.fmc_slot==2 else 0 # base channel number for that mezanine
             # ADC PLL lock test
-            run_async(mezz.init())  # reset ADC  to make sure we have the right frequency divider ratio of 2
+            await mezz.init()  # reset ADC  to make sure we have the right frequency divider ratio of 2
             resolution = 2./cfg.pll_gate_time * 8
             err_max = max(cfg.pll_freq_err_max*1e6, resolution) + 1
             print()
@@ -969,7 +968,7 @@ class TestMGADC08Carrier(TestUtils):
             print()
             print('Test ended. Turning mezzanine power OFF')
             if mezz:
-                run_async(mezz.set_mezzanine_power_async(False))
+                await mezz.set_mezzanine_power_async(False)
             xr.save_data(tr)
 
     def set_adc_delays(self, ib):
@@ -1000,7 +999,7 @@ class TestMGADC08Carrier(TestUtils):
         ib.set_adc_delays(delay_table)
         return delay_table
 
-    def test_ramp(self, xr):
+    async def test_ramp(self, xr):
         cfg = self.cfg.carrier_tests.ramp_test
         plt.ion()
 
@@ -1018,18 +1017,18 @@ class TestMGADC08Carrier(TestUtils):
             test_results.ramp_ok = []
 
             print('Opening link to IceBoard')
-            ib, mezz = self._get_iceboard(**cfg.fpga_array)
+            ib, mezz = await self._get_iceboard_async(**cfg.fpga_array)
 
             print('initializing mezzanine...')
-            run_async(ib.fpga.init_async()) 
-            mezz.init()
+            await ib.fpga.init_async() 
+            await mezz.init()
 
             print('Computing ADC delays...')
             ib.set_adc_delays(compute_delays=2, save_delays=False, check_sync_delays=True, check_adc_delays=20, verbose=0, retry=5)
             delay_table = ib.get_adc_delays()
 #
             print('\nOpening data receiver socket')
-            receiver = run_async(self.ca.get_data_receiver_async())
+            receiver = await self.ca.get_data_receiver_async()
 
             print('Setting up ramp transmission...')
             # Begin Ramp test
@@ -1099,7 +1098,7 @@ class TestMGADC08Carrier(TestUtils):
                 r.close()
             if ib:
                 for m in ib.mezzanine.values():
-                    run_async(m.set_mezzanine_power_async(False))
+                    await m.set_mezzanine_power_async(False)
                 # run_async(mezz.set_mezzanine_power_async(False, 2 if self.fmc_slot==1 else 1))
             xr.save_data(tr)
             """
@@ -1160,14 +1159,14 @@ class TestMGADC08Carrier(TestUtils):
             print('Test ended. Turning mezzanine power OFF')
             if ib:
                 for m in ib.mezzanine.values():
-                    run_async(m.set_mezzanine_power_async(False))
+                    await m.set_mezzanine_power_async(False)
                 # run_async(mezz.set_mezzanine_power_async(False, 2 if self.fmc_slot==1 else 1))
             xr.save_data(tr)
 
-    def set_mezzanine_power(self, state, slot=None):
-        run_async(self.ib.mezzanine[slot or self.fmc_slot].set_mezzanine_power_async(state))
+    async def set_mezzanine_power_async(self, state, slot=None):
+        await self.ib.mezzanine[slot or self.fmc_slot].set_mezzanine_power_async(state)
 
-    def test_s11(self, xr):
+    async def test_s11(self, xr):
         """
         Runs S11 tests.
 
@@ -1203,14 +1202,14 @@ class TestMGADC08Carrier(TestUtils):
         try:
 
             print("Connecting to Iceboard")
-            ib, mezz = self._get_iceboard(**cfg.fpga_array)
+            ib, mezz = await self._get_iceboard_async(**cfg.fpga_array)
             
-            run_async(ib.fpga.init_async())
-            run_async(mezz.set_mezzanine_power_async(True))
+            await ib.fpga.init_async()
+            await mezz.set_mezzanine_power_async(True)
             
 
 
-            r = run_async(self.ca.get_data_receiver_async())
+            r = await self.ca.get_data_receiver_async()
 
             if cfg.adc_trim_value is not None:
                 for adc in mezz.ADC:
@@ -1422,7 +1421,7 @@ class TestMGADC08Carrier(TestUtils):
             #if r:
             #    r.close()
             if mezz:
-                run_async(mezz.set_mezzanine_power_async(False))
+                await mezz.set_mezzanine_power_async(False)
             xr.save_data(tr)
 
             #if self.ps:

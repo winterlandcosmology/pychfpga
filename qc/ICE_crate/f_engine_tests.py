@@ -108,7 +108,7 @@ class TestUtils:
                 f"Power supply is {status['status']} after being told to turn on "
                 f"- the crate has no power, so no board can be expected to answer.")
 
-    def crate_init(self, reset_power = True):
+    async def crate_init_async(self, reset_power = True):
         """
         Run fpga_array, initializing the crate. Recover ca object. Power is reset by default.
         """
@@ -116,7 +116,7 @@ class TestUtils:
             self.power_cycle()
 
         fpga_array_params = self.cfg.f_engine_tests.global_settings.fpga_array_params
-        ca = asyncio.run(fpga_array.FPGAArray(**fpga_array_params).init())
+        ca = await fpga_array.FPGAArray(**fpga_array_params)
         ic = ca.ic[0]
         # set crate model and serial number
         self.model = ic.part_number
@@ -269,7 +269,7 @@ class TestPreDeploymentCrate(TestUtils):
             # if this test passed, the ps should already be off; if it didn't, it can't be turned off remotely and has to be turned off manually
             # self.ps.set_output(state=False)    
 
-    def test_init(self, xr):
+    async def test_init(self, xr):
         """
         QC001: Crate initialization test: ensure crate properly intializes
 
@@ -292,7 +292,7 @@ class TestPreDeploymentCrate(TestUtils):
         passed = False
         try:
             # input('Turn on the power supply. Press ENTER to continue. (Q:Exit) ')
-            self.ca = self.crate_init()
+            self.ca = await self.crate_init_async()
             # If we made it to this point, FPGAs programmed, all boards present in hwm
             # and crate has synced (see test_config.yaml - parameters passed to FPGAArray
             # force all these to be present to return self.ca
@@ -304,7 +304,7 @@ class TestPreDeploymentCrate(TestUtils):
             #self.ps.set_output(state=False) # Turn off power supply
     
 
-    def test_bperr(self, xr):
+    async def test_bperr(self, xr):
         """
         QC002: Backplane error test: the backplane links and both shuffle
         crossbars must be error-free on every board.
@@ -327,11 +327,11 @@ class TestPreDeploymentCrate(TestUtils):
         bp_errs = []
 
         try:
-            self.ca = self.crate_init()
+            self.ca = await self.crate_init_async()
 
             for n in range(n_checks):
                 time.sleep(t_sleep)
-                errs = self.check_bp_errs()
+                errs = await self.check_bp_errs_async()
                 print(f'Health pass {n + 1}/{n_checks}: {len(errs)} problem(s)')
                 if errs:
                     bp_errs.append((n + 1, errs))
@@ -344,7 +344,7 @@ class TestPreDeploymentCrate(TestUtils):
             xr.save_data(test_results)
             self.power_off_safe()
             
-    def test_sync(self, xr):
+    async def test_sync(self, xr):
         """
         QC003: Sync/IRIG-B test: stress test of crate sync using IRIG-B
 
@@ -371,14 +371,14 @@ class TestPreDeploymentCrate(TestUtils):
         # Initialize the crate
         try:
             # xr.input('Turn on the power supply. Press ENTER to continue. (Q:Exit) ')
-            self.ca = self.crate_init()
+            self.ca = await self.crate_init_async()
             for n in range(n_syncs):
                 print(f'Sync {n+1}')
                 try:
                     # None would fall through to the FPGAArray default and then a
                     # hard-coded 20 ns, so the limit this test enforces would not
                     # be the one in the config.
-                    asyncio.run(self.ca.sync_async(max_sync_time_difference=max_sync_time_difference))
+                    await self.ca.sync_async(max_sync_time_difference=max_sync_time_difference)
                 except Exception as e:
                     exception_fails += 1
                     exception_tags.append([f'Cycle {n}', repr(e)])
@@ -395,7 +395,7 @@ class TestPreDeploymentCrate(TestUtils):
             xr.save_data(test_results)
             self.power_off_safe()
 
-    def test_adc_clocks(self, xr):
+    async def test_adc_clocks(self, xr):
         """
         QC004: ADC clock test: ensure all ADCs get the correct clocks on every channel.
 
@@ -434,7 +434,7 @@ class TestPreDeploymentCrate(TestUtils):
                 
                 # Initialize the crate:
                 try:
-                    self.ca = self.crate_init(reset_power=True)
+                    self.ca = await self.crate_init_async(reset_power=True)
 
                     # if len(self.ca) < 16:
                     #     while True:
@@ -471,7 +471,7 @@ class TestPreDeploymentCrate(TestUtils):
             
             # passed = True
             # Initialize the crate:
-            # self.ca = self.crate_init()
+            # self.ca = await self.crate_init_async()
 
             # Iterate through each motherboard. Form a set of unique values of the
             # difference between the measured clock and the expected 200 MHz. To pass,
@@ -496,7 +496,7 @@ class TestPreDeploymentCrate(TestUtils):
 
         
 
-    def test_adc_clocks_cycled(self, xr):
+    async def test_adc_clocks_cycled(self, xr):
         """
         QC004: ADC clock test: ensure all ADCs get the correct clocks on every channel + power cycling between checks
 
@@ -541,7 +541,7 @@ class TestPreDeploymentCrate(TestUtils):
         passed = False
         try:
             # Initialize the crate:
-            self.ca = self.crate_init()
+            self.ca = await self.crate_init_async()
 
             # Iterate through each motherboard. Form a set of unique values of the
             # difference between the measured clock and the expected 200 MHz. To pass,
@@ -570,7 +570,7 @@ class TestPreDeploymentCrate(TestUtils):
             xr.save_data(test_results)
             self.ps.set_output(state=False) # Turn off power supply
 
-    def test_sync_delays(self, xr):
+    async def test_sync_delays(self, xr):
         """
         QC005: Sync delays test: the ADC SYNC alignment must be stable on every board.
 
@@ -589,7 +589,7 @@ class TestPreDeploymentCrate(TestUtils):
 
         passed = False
         try:
-            self.ca = self.crate_init()
+            self.ca = await self.crate_init_async()
 
             for i in self.ca.ib:
                 print(f'=============================================================')
@@ -619,7 +619,7 @@ class TestPreDeploymentCrate(TestUtils):
             xr.save_data(test_results)
             self.power_off_safe()
 
-    def test_adc_eye(self, xr):
+    async def test_adc_eye(self, xr):
         """
         QC006: ADC eye test: check ADC eye diagrams to ensure stability.
 
@@ -646,7 +646,7 @@ class TestPreDeploymentCrate(TestUtils):
 
         try:
             # input('Turn on the power supply. Press ENTER to continue. (Q:Exit) ')
-            self.ca = self.crate_init()
+            self.ca = await self.crate_init_async()
 
 
             for i in self.ca.ib:
@@ -758,7 +758,7 @@ class TestPreDeploymentCrate(TestUtils):
             self.ps.set_output(state=False) # Turn off power supply
 
 
-    def test_network(self, xr):
+    async def test_network(self, xr):
         xr.header('Network Test')
         cfg = self.cfg.f_engine_tests.network_test
 
@@ -799,9 +799,9 @@ class TestPreDeploymentCrate(TestUtils):
                     print(f'Waiting for {delay} seconds to let the boards boot')
                     time.sleep(delay) # Sleep to let the crate boot
 
-                    # self.ca = self.crate_init()
+                    # self.ca = await self.crate_init_async()
                     fpga_array_params = cfg.fpga_array_params
-                    self.ca = asyncio.run(fpga_array.FPGAArray(**fpga_array_params).init())
+                    self.ca = await fpga_array.FPGAArray(**fpga_array_params)
                     
                     ic = self.ca.ic
                     from pychfpga.hardware import Crate
@@ -851,7 +851,7 @@ class TestPreDeploymentCrate(TestUtils):
 
 
 
-    def test_power_cycle(self, xr):
+    async def test_power_cycle(self, xr):
         """
         QC007: Power cycle test: cycle crate initializations, logging ADC clock and UDP errors.
 
@@ -911,7 +911,7 @@ class TestPreDeploymentCrate(TestUtils):
                 
                 # Initialize the crate:
                 try:
-                    self.ca = self.crate_init()
+                    self.ca = await self.crate_init_async()
              
                 except (RuntimeError, IOError, OSError) as e:
                     
@@ -923,7 +923,7 @@ class TestPreDeploymentCrate(TestUtils):
                 else:
                     # Run the backplane test first (otherwise set_adc_delays makes things too busy and can cause issues)
                     print('Checking backplane errors...')
-                    bp_errs = self.check_bp_errs()
+                    bp_errs = await self.check_bp_errs_async()
                     if len(bp_errs) > 0:
                         print('Got the following backplane errors:')
                         print('bp_errs: ', bp_errs)
@@ -981,7 +981,7 @@ class TestPreDeploymentCrate(TestUtils):
                     for i in self.ca.ib:
                         # Close UDP communication with the iceboard to prevent errors:
                         print(f'Closing UDP connection to slot {i.slot}')
-                        asyncio.run(i.close_async())
+                        await i.close_async()
 
                 print(f'Errors so far at iteration {n + 1}/{n_cycles}: ADC clk errors={clk_fails}, UDP errors={udp_fails}')
                 print(f'init_exceptions={init_exception_fails}, delay_exceptions={delay_fails}, backplane errors={backplane_fails}')
@@ -1024,7 +1024,7 @@ class TestPreDeploymentCrate(TestUtils):
 
            
             
-    def test_crate_ramp(self, xr):
+    async def test_crate_ramp(self, xr):
         """
         QC009: Crate level ramp test: every ADC channel on every board must
         deliver a clean ramp through the firmware ramp checker.
@@ -1043,7 +1043,7 @@ class TestPreDeploymentCrate(TestUtils):
 
         passed = False
         try:
-            self.ca = self.crate_init()
+            self.ca = await self.crate_init_async()
 
             for ice in self.ca.ib:
                 ice.set_adc_delays(compute_delays=2, save_delays=False, check_sync_delays=True,
@@ -1083,14 +1083,13 @@ class TestPreDeploymentCrate(TestUtils):
                 lines.append(f'    ... and {len(errs) - max_shown} more')
         return '\n'.join(lines)
 
-    def check_bp_errs(self):
+    async def check_bp_errs_async(self):
         """Backplane and corner-turn health, shared with the power-cycle test.
 
         ``measure_crate_health`` is the same measurement the shuffle256 firmware
-        test uses. This suite has no running event loop, so the coroutine is
-        driven with ``asyncio.run``, like the other async board calls here.
+        test uses.
         """
-        return asyncio.run(self.ca.measure_crate_health(self.ca.ib))
+        return await self.ca.measure_crate_health(self.ca.ib)
 
 
 if __name__ == '__main__':

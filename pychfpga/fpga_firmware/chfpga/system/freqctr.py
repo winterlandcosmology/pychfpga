@@ -173,7 +173,7 @@ class FreqCtr(MMI):
             await asyncio.sleep(remaining if remaining > 0 else 0.001)
         return self._frequency_from_count(gate_time)
 
-    def status(self):
+    async def status_async(self):
         """
         Prints the Frequency Counter status.
         """
@@ -193,7 +193,7 @@ class FreqCtr(MMI):
         gpu_txclk = self.read_frequency('GPU_TXCLK', gate_time=gate_time)
 
         print('System Frequencies:')
-        print(f'   IceBoard Reference clock source: {fpga.mb.get_iceboard_clock_source_sync()}')
+        print(f'   IceBoard Reference clock source: {await fpga.mb.get_iceboard_clock_source_async()}')
         print(' External clock sources')
         print(f"   RAW CLK (no PLL, SE):     {self.read_frequency('RAW_CLK', gate_time=gate_time) / 1000000.0:7.3f} MHz")
         print(f"   Reference clock (via PLL):{self.read_frequency('CLK10', gate_time=gate_time) / 1000000.0:7.3f} MHz")

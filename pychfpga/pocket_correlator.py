@@ -39,6 +39,7 @@ Some of the function descriptions have been borrowed from the following scripts:
 """
 
 # Import common packages
+import asyncio
 import numpy as np
 import h5py
 import time
@@ -48,7 +49,6 @@ import argparse
 
 # Import custom packages
 from pychfpga import fpga_array
-from pychfpga.common import run_async
 from pychfpga.network_utils import verify_network_settings
 
 class POCKET_CORRELATOR:
@@ -136,14 +136,24 @@ class POCKET_CORRELATOR:
                                     prog = prog,
                                     mode = 'corr8' # Always used corr8 for pocket correlator
                                     )
+        self.ca = ca
+
+    async def init(self):
+        """Open the board and configure the UCAP, FFT and SCALER modules.
+
+        Usage: ``pc = await POCKET_CORRELATOR(hwm='crs 0016').init()``.
+
+        Returns:
+            self
+        """
+        ca = await self.ca
 
         # Define useful objects
-        self.ca = ca
         self.i = ca.ib[0] # we only need to grab the t0.CRS board object
         # self.i.GPIO.HOST_FRAME_READ_RATE = 14
         self.ucap = self.i.UCAP # UCAP module
         self.set_ucap_mode(mode = 0) # by default, capture data from all channels
-        self.u_receiver = self.ucap.get_data_receiver() # instantiate a UCAP data receiver
+        self.u_receiver = await self.ucap.get_data_receiver_async() # instantiate a UCAP data receiver
 
         # Define useful variables
         self.fs = 3200 # MHz - Old firmware: 3000 MHz
@@ -171,8 +181,9 @@ class POCKET_CORRELATOR:
             scaler.SATURATE_ON_MINUS_7 = 1 # this is typically set as default
 
         # Define a bool to check if the correlator is configured; it can be configured
-        # by calling configure_corr(). When the board is initialized, the correlator is not configured.
+        # by calling configure_corr_async(). When the board is initialized, the correlator is not configured.
         self.corr_is_configured = False
+        return self
 
     
     def set_ucap_mode(self, 
@@ -1137,7 +1148,7 @@ class POCKET_CORRELATOR:
         # Return the SCALER data with the frequency bins in the proper order 
         return d_scaler[..., self.bin_map]
 
-    def configure_corr(self,
+    async def configure_corr_async(self,
                        n_firmware_frames = 16384,
                        autocorr_only = 0,
                        no_accum = 0,
@@ -1181,7 +1192,7 @@ class POCKET_CORRELATOR:
 
         # Configure the parameters of the correlator
         self.corr = self.i.CORR # UCORR object
-        self.corr_receiver = run_async(self.ca.get_corr_receiver_async())
+        self.corr_receiver = await self.ca.get_corr_receiver_async()
         self.NCORR_PROD = int(self.NPOLS*(self.NPOLS + 1) // 2)
 
         # Start the correlator
@@ -1232,7 +1243,7 @@ class POCKET_CORRELATOR:
 
         return self.prod
 
-    def read_corr_frames(self,
+    async def read_corr_frames_async(self,
                          data_source = 'adc',
                          fft_bypass = False,
                          scaler_bypass = False,
@@ -1384,7 +1395,7 @@ class POCKET_CORRELATOR:
 
         # Configure correlator if it has not been done so
         if not self.corr_is_configured:
-            self.configure_corr(n_firmware_frames = n_firmware_frames,
+            await self.configure_corr_async(n_firmware_frames = n_firmware_frames,
                                 autocorr_only = autocorr_only,
                                 no_accum = no_accum,
                                 verbose = verbose
@@ -1467,7 +1478,7 @@ class POCKET_CORRELATOR:
 
         return f'{y}{mth}{d}T{h}{m}{s}Z'
 
-    def observe(self, 
+    async def observe_async(self, 
                 data_path = None, # No default data path
                 obs_tag = None, 
                 digital_gains_path = None, 
@@ -1622,7 +1633,7 @@ class POCKET_CORRELATOR:
 
         print('Configuring correlator')
         if not self.corr_is_configured:
-            self.configure_corr(n_firmware_frames = n_firmware_frames,
+            await self.configure_corr_async(n_firmware_frames = n_firmware_frames,
                                 autocorr_only = autocorr_only,
                                 no_accum = no_accum,
                                 )
@@ -1796,7 +1807,7 @@ class POCKET_CORRELATOR:
                     try:
                         
                         # Capture correlated data (note that many default arguments are used here)
-                        t, vis, counts, sat = self.read_corr_frames(data_source = 'adc',
+                        t, vis, counts, sat = await self.read_corr_frames_async(data_source = 'adc',
                                                                     fft_bypass = False,
                                                                     scaler_bypass = False,
                                                                     n_software_frames = n_software_frames,
@@ -1810,7 +1821,7 @@ class POCKET_CORRELATOR:
                         print(f'RuntimeError: {e}')
 
                         # Try capturing data again, this time flushing the buffer
-                        t, vis, counts, sat = self.read_corr_frames(data_source = 'adc',
+                        t, vis, counts, sat = await self.read_corr_frames_async(data_source = 'adc',
                                                                     fft_bypass = False,
                                                                     scaler_bypass = False,
                                                                     n_software_frames = n_software_frames,
@@ -2023,4 +2034,4 @@ def create_pc(args = None):
     return pc
 
 if __name__ == '__main__':
-    pc = create_pc()
+    pc = asyncio.run(create_pc().init())

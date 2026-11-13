@@ -18,7 +18,7 @@ from wtl.metrics import Metrics
 # Local packages
 
 from pychfpga.hardware import Motherboard
-from pychfpga.common import run_async, async_to_sync, Ccoll
+from pychfpga.common import Ccoll
 from pychfpga.hardware.interfaces import TCPipe, TCPipe_I2C, ipmi_fru
 from pychfpga.fpga_firmware import FPGAFirmware
 
@@ -92,9 +92,6 @@ class ZCU111(Motherboard):
 
         self.firmware_crc = None  # temporary local storage of the CRC since we currently can't read it until the firmware is programmed.
 
-
-    def open(self):
-        run_async(self.open_async())
 
 
     async def open_platform_async(self, **kwargs):
@@ -424,11 +421,8 @@ class ZCU111(Motherboard):
     async def get_iceboard_clock_source_async(self):
         return "CRYSTAL"
 
-    def get_iceboard_clock_source_sync(self):
-        return "CRYSTAL"
-
-    def get_motherboard_temperature(self, sensor):
-        """ Synchronous wrapper to return motherboard temperature sensor value.
+    async def get_motherboard_temperature_async(self, sensor):
+        """ Return motherboard temperature sensor value (not available on this platform).
         """
         return None
 

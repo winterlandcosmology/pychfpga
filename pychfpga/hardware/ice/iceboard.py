@@ -18,7 +18,6 @@ from wtl.metrics import Metrics
 # Local packages
 from pychfpga.common import Ccoll
 from pychfpga.fpga_firmware import FPGAFirmware
-from pychfpga.common import run_async, async_to_sync
 from pychfpga.hardware import HardwareMap, Motherboard, Crate, Mezzanine
 from pychfpga.hardware.interfaces import I2CInterface, BSB_MMI  # I2C and Byte-serial interface protocol definition
 
@@ -1375,18 +1374,16 @@ class IceBoard(Motherboard, TuberIceBoardBase):
         """ Returns the clock source curently used by the IceBoard using Tuber"""
         return await self.tuber_get_clock_source_async()
 
-    get_iceboard_clock_source_sync = async_to_sync(get_iceboard_clock_source_async)
-
 
     # -------------------------
     # Motherboard Temperatures
     # -------------------------
 
 
-    def get_motherboard_temperature(self, sensor):
-        """ Get the motherboard temperature sensor value using Tuber (sychrounous wrapper).
+    async def get_motherboard_temperature_async(self, sensor):
+        """ Get the motherboard temperature sensor value using Tuber.
         """
-        return run_async(self.tuber_get_motherboard_temperature_async(sensor))
+        return await self.tuber_get_motherboard_temperature_async(sensor)
 
 
     # def _init_temperature_sensors(self, temperature_sensor_name=None, bit_resolution=12):
@@ -1751,11 +1748,11 @@ class IceBoard(Motherboard, TuberIceBoardBase):
 
         return True
 
-    def print_tuber_methods(self):
+    async def print_tuber_methods_async(self):
         """ Print all the methods and properties provided by the Iceboard's
         ARM processor through the Tuber protocol.
         """
-        (meta, props, methods) = self._tuber_get_meta()  # get the meta info
+        (meta, props, methods) = await self._tuber_get_meta_async()  # get the meta info
         print(f"Methods for tuber object '{self.tuber_objname}':")
         print('-----------------------------------------')
         for method_name, method_properties in sorted(methods.items()):

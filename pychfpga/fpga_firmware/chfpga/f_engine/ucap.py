@@ -282,8 +282,8 @@ class UCAP(MMI):
     # def get_data_receiver(self, packet_receiver):
     #     return RawFrameReceiver(packet_receiver)
 
-    def get_data_receiver(self, sock=None, buffer_length=256):
-        return RawFrameReceiver(sock or self.fpga.get_data_socket(), buffer_length=buffer_length)
+    async def get_data_receiver_async(self, sock=None, buffer_length=256):
+        return RawFrameReceiver(sock or await self.fpga.get_data_socket_async(), buffer_length=buffer_length)
 
 class RawFrameReceiver(object):
     """

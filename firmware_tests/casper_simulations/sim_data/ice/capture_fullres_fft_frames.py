@@ -1,4 +1,5 @@
 from pathlib import Path
+import asyncio
 import os
 import re
 import sys
@@ -121,7 +122,7 @@ def setup_capture(board, channels):
         board.chan[channel].FFT.reset_fft_overflow_count()
 
 
-def capture_one_frame(ca, board, funcgen_input, channels):
+async def capture_one_frame(ca, board, funcgen_input, channels):
     board.stop_data_capture()
     board.reset_scaler_overflow_flags(channels=channels)
     for channel in channels:
@@ -150,8 +151,7 @@ def capture_one_frame(ca, board, funcgen_input, channels):
     )
     board.sync()
 
-    from pychfpga.common import run_async
-    receiver = run_async(ca.get_data_receiver_async(verbose=1))
+    receiver = await ca.get_data_receiver_async(verbose=1)
     receiver.flush()
     ts, data, counts = receiver.read_raw_frames(ncap=NCAP, source=1, chan_first=False)
     return receiver, data[-1, 0, :], int(ts[-1]), counts[-1].tolist(), frames_per_burst
@@ -192,13 +192,13 @@ def downshift_capture(board, receiver, captured):
     )
 
 
-def main():
+async def main():
     if int(FFT_OUTPUT_BITS) <= 0:
         raise RuntimeError(f"FFT_OUTPUT_BITS must be positive, got {FFT_OUTPUT_BITS}")
 
     connection_config = load_yaml_config(f"{CONFIG}:connection_config")
     bs_label = bitstream_label(connection_config)
-    ca = FPGAArray(**connection_config)
+    ca = await FPGAArray(**connection_config)
     board = ca.ib[0]
     channels = [CHANNEL]
 
@@ -231,7 +231,7 @@ def main():
 
     for stem in INPUT_STEMS:
         input_path, funcgen_input = load_funcgen_input(board, stem)
-        receiver, captured, timestamp, count, frames_per_burst = capture_one_frame(ca, board, funcgen_input, channels)
+        receiver, captured, timestamp, count, frames_per_burst = await capture_one_frame(ca, board, funcgen_input, channels)
         (
             real,
             imag,
@@ -273,4 +273,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

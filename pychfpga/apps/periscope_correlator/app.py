@@ -8,6 +8,7 @@ streamed from a t0.CRS board. This application uses PyQt and pyqtgraph
 to display live data, including auto and cross-correlations between
 up to 8 antennas.
 """
+import asyncio
 import sys
 import time
 import numpy as np
@@ -2936,7 +2937,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             QtWidgets.QApplication.processEvents()
             
             hardware_map = f'crs {self.serial_number}'
-            self.pocket_correlator = POCKET_CORRELATOR(hwm=hardware_map, prog=2, stderr_log_level='debug')
+            self.pocket_correlator = asyncio.run(
+                POCKET_CORRELATOR(hwm=hardware_map, prog=2, stderr_log_level='debug').init())
             
             self.setWindowTitle(f"Periscope Correlator - Connected to {self.serial_number}")
             self.status_label.setText("Connection successful. Ready to calibrate and configure.")
@@ -2986,7 +2988,8 @@ class PeriscopeCorrelator(QtWidgets.QMainWindow):
             # Update configuration
             self.config.waterfall_len = self.waterfall_len_spinner.value()
             
-            self.pocket_correlator.configure_corr(autocorr_only=0, no_accum=0, n_firmware_frames=self.config.n_firmware_frames - 1)
+            asyncio.run(self.pocket_correlator.configure_corr_async(
+                autocorr_only=0, no_accum=0, n_firmware_frames=self.config.n_firmware_frames - 1))
 
             sock = self.pocket_correlator.corr_receiver.socket
             sock.settimeout(0.1)
