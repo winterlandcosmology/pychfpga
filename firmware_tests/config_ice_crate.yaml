@@ -12,9 +12,10 @@
 connection_config:
     prog: 1                     # 0 - do not reprogram, 1 - reprogram if outdated, 2 - always reprogram
     mode: 'shuffle256'          # 16-board crate, 3-level corner turn. Do not change.
-    hwm: 'bp16 XX:0'            # EDIT ME: replace XX with the crate's backplane serial
-                                # number (e.g. 'bp16 29:0' = serial 29, crate number 0)
-    bitfile: /home/vbidula/pychfpga/pychfpga/fpga_firmware/bitstreams/chfpga_ice_ct_pbg_aug11.bit
+    hwm: 'bp16 12:0'            # crate backplane serial 12, crate number 0. For another crate,
+                                # replace 12 with its backplane serial number.
+    # No `bitfile`: the mode's default firmware is loaded (chfpga.py PLATFORM_SUPPORT,
+    # currently chfpga_ice_ct_pbg_sep24.bit), the same image a production bring-up uses.
     sync_method: 'distributed_time'   # backplane time distribution (production default);
     sync_source: 'bp_time'            # use 'irigb' instead if the crate has an IRIG-B feed
     mdns_timeout: 40            # crate discovery takes longer than a single board

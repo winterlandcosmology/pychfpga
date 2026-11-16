@@ -13,7 +13,8 @@ model_number: 'MGK7BP16'
 # Driven by pychfpga/hardware/Agilent_N5764A (see CratePowerSupply in
 # f_engine_tests.py). Keys are the CratePowerSupply constructor arguments.
 instruments:
-  ps:     {hostname: '10.10.1.38'}   # Agilent N5764A supply feeding crate 030
+  ps:     {hostname: '10.10.5.1'}    # Agilent N5764A supply feeding crate 012 (field)
+  # ps:   {hostname: '10.10.1.38'}   # Agilent N5764A supply feeding crate 030
   # ps:   {hostname: '10.10.10.234'} # Agilent N5764A, McGill kitchen rack bottom
   # ps:   {hostname: '10.10.10.115'} # Agilent N5764A, McGill kitchen rack top
 ?: &default_fpga_array # Shouldn't really be used
@@ -79,7 +80,8 @@ f_engine_tests:
     ps_t_sleep: 190 # Seconds to wait after power-on for the crate to boot. The ARM boot takes 2-3 min;
                     # a shorter wait races the boot and manufactures spurious init failures.
     fpga_array_params:
-      hwm: 'bp16 30:0' # crate backplane serial 30, crate number 0
+      hwm: 'bp16 12:0' # crate backplane serial 12, crate number 0 (field)
+      # hwm: 'bp16 30:0' # crate backplane serial 30, crate number 0
       # hwm: 'bp16 29:0' # McGill kitchen test rack bottom
       # hwm: 'bp16 25:0' # McGill kitchen test rack top
       # hwm: 'bp16 33:0' # GBO-F-Engine in McGill FRB testbed
@@ -131,7 +133,7 @@ f_engine_tests:
     n_cycles: 10
     t_cycle: 5
     fpga_array_params:
-      hwm: 'bp16 30:0' # crate backplane serial 30, crate number 0
+      hwm: 'bp16 12:0' # crate backplane serial 12, crate number 0 (field)
 
       stderr_log_level: 'info'
       prog: 0
