@@ -38,4 +38,6 @@ test_config:
         waveform: ['slot_channel_id', 'ramp']
     frame_flags_shuffle256:
         s256_lane: [0]
+    lane_id_payload_shuffle256:
+        s256_lane: range(MAX_LANE + 1)          # all 8 lanes: both QSFP cages of every board
     stream_frame_spread: 2      # max frame-number spread across CB2 input lanes

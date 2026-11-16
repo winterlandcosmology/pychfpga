@@ -16,6 +16,64 @@ from pychfpga.common.async_utils import run_async
 from pychfpga.common.udp_packet_receiver import UDPPacketReceiver
 
 
+def lane_id_byte(slot, lane):
+    """Return the shuffle256 lane-ID payload byte of an output lane.
+
+    The byte reads as the hex digits (slot, lane + 1): the high nibble (real
+    part) is the 0-based backplane slot and the low nibble (imaginary part) is
+    lane + 1, so no lane carries 0x00 (a zero-filled buffer) or 0xFF.
+
+    Parameters:
+
+        slot (int): 0-based backplane slot of the transmitting board (0-15)
+
+        lane (int): corner-turn output lane (0-7)
+    """
+    if not (isinstance(slot, (int, np.integer)) and 0 <= slot <= 15):
+        raise ValueError(f'The lane-ID payload needs a numeric 0-based backplane slot 0-15, got {slot!r}')
+    if not (isinstance(lane, (int, np.integer)) and 0 <= lane <= 7):
+        raise ValueError(f'The lane-ID payload needs a corner-turn output lane 0-7, got {lane!r}')
+    return (int(slot) << 4) | (int(lane) + 1)
+
+
+def lane_id_payload(frequency_bins):
+    """Compute the channelizer outputs that make every shuffle256 output lane carry its lane-ID byte.
+
+    Every channel of every board gets the same outputs: each bin carries the
+    `lane_id_byte` of the lane that transports it, so that byte fills the whole
+    data section of the lane (all 256 inputs, all bins, every frame).
+
+    Parameters:
+
+        frequency_bins (dict): {(crate, slot, lane): [bin, ...]}, the live
+            corner-turn map (``FPGAArray.corner_turn_frequency_bins``), with
+            0-based slots.
+
+    Returns:
+
+        (data, lane_bytes): ``data[channel, bin]``, the complex (16, 1024)
+        array for `chFPGA.set_channelizer_outputs`, and
+        ``{(crate, slot, lane): byte}``.
+    """
+    lane_bytes = {}
+    bin_owner = {}
+    for lane_id, bins in frequency_bins.items():
+        lane_bytes[lane_id] = lane_id_byte(*lane_id[1:])
+        for b in bins:
+            if not 0 <= b < 1024:
+                raise ValueError(f'Lane {lane_id} carries bin {b}, outside the channelizer range 0-1023')
+            owner = bin_owner.setdefault(int(b), lane_id)
+            if lane_bytes[owner] != lane_bytes[lane_id]:
+                raise ValueError(f'Bin {b} is carried by lanes {owner} and {lane_id}, which need different '
+                                 f'lane-ID bytes: the lane-ID payload requires each bin on a single (slot, lane)')
+
+    data = np.zeros((16, 1024), np.complex64)
+    for b, lane_id in bin_owner.items():
+        byte = lane_bytes[lane_id]
+        data[:, b] = (((byte >> 4) ^ 8) - 8) + 1j * (((byte & 0xF) ^ 8) - 8)  # signed nibbles
+    return data, lane_bytes
+
+
 class chFPGAArrayMethods(ArrayMethods):
     """Array-wide methods for chFPGA firmware arrays."""
 
@@ -1894,6 +1952,46 @@ class chFPGAArrayMethods(ArrayMethods):
                 cb3_out[(crate, slot, lane)] = data
 
         return cb3_out
+
+    def set_lane_id_payload(self, max_sync_time_difference=100):
+        """
+        Make every shuffle256 output lane send a constant payload that identifies it.
+
+        The FFT and SCALER of every channel are bypassed and fed by the
+        function generator so that every data byte of output lane ``lane`` of
+        the board in 0-based slot ``slot`` equals ``lane_id_byte(slot, lane)``
+        (hex digits ``slot``, ``lane + 1``) on every frame. The packet headers,
+        flags and trailer are not affected. Board init does not clear the FFT
+        bypass: restore the sky data path with a bring-up that reprograms the
+        FPGAs (``prog=2``).
+
+        deployment_scripts/ct_lane_id_payload.py applies this and prints the
+        per-fibre lookup table.
+
+        Parameters:
+
+            max_sync_time_difference (float): limit in ns for the single
+                array-wide sync that follows the programming.
+
+        Returns:
+
+            dict {(crate, slot, lane): byte}
+        """
+        mode = self.fpga_array.mode
+        if mode != 'shuffle256':
+            raise ValueError(f"{self.fpga_array!r}: the lane-ID payload is an ICE-crate corner-turn feature "
+                             f"that requires mode 'shuffle256' (current mode {mode!r})")
+        frequency_bins = getattr(self.fpga_array, 'corner_turn_frequency_bins', None)
+        if not frequency_bins:
+            raise RuntimeError(f"{self.fpga_array!r}: the corner-turn frequency map is missing; open the array "
+                               f"with mode='shuffle256', open=1 first")
+        data, lane_bytes = lane_id_payload(frequency_bins)
+
+        # Apply: never a board-local sync on a crate member, one array-wide sync
+        for mb in self.ib:
+            mb.set_channelizer_outputs(data, local_sync=False)
+        self.sync(max_sync_time_difference=max_sync_time_difference)
+        return lane_bytes
 
     # def get_map(self):
     #     cb1_map = self.CROSSBAR.get_map()

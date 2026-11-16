@@ -31,6 +31,7 @@ is possible. Run stages in file order and stop at the first failure:
     $PYTEST -k test_corner_turn_shuffle256 | tee s256_4_algorithm.log
     $PYTEST -k test_frame_flags_shuffle256 | tee s256_5_flags.log
     $PYTEST -k test_gpu_link_feed_crate    | tee s256_6_gpu.log
+    $PYTEST -k test_lane_id_payload        | tee s256_8_lane_id.log  # leaves the lane-ID payload on
 
 Connecting the FPGAArray with mode='shuffle256' performs the entire crate
 bring-up (init_corner_turn: per-board crossbars, backplane RX enable and TX
@@ -854,3 +855,56 @@ class TestCTShuffle256(TestModule):
                 f"[slot {s256_slot}] 10G TX frame FIFO overflow mask {frame_overflow:#04x}"
             if check == 0:
                 sleep(0.5)
+
+    @pytest.mark.ct_shuffle256
+    def test_lane_id_payload_shuffle256(self, s256_slot, s256_lane, crate_setup, xr):
+        '''
+        Verify the lane-ID payload that the receiver-end fibre checks rely on.
+
+        set_lane_id_payload (the path of deployment_scripts/ct_lane_id_payload.py)
+        bypasses every channel's FFT and SCALER and feeds identical funcgen
+        buffers, so every data byte of output lane k of the board in 0-based
+        slot s must equal lane_id_byte(s, k) on every frame, with all flags
+        and the trailer zero. The crate keeps sending this payload after the
+        test, until a bring-up that reprograms the FPGAs (prog=2): board init
+        does not clear the FFT bypass.
+
+        Parameters:
+            s256_slot (int): backplane slot of the board to capture (1-16)
+
+            s256_lane (int): corner-turn output lane to capture (0-7)
+        '''
+        logger = self.get_logger()
+        mb = self._slot_board(s256_slot)
+        if xr.data.get('s256_stimulus') != 'lane_id':
+            limit = self.test_config.get('sync_max_time_difference', self.SYNC_MAX_TIME_DIFF_DEFAULT)
+            xr.data.s256_lane_bytes = self.array.set_lane_id_payload(max_sync_time_difference=limit)
+            xr.data.s256_stimulus = 'lane_id' # the waveform tests must reprogram
+            xr.data.pop('s256_reference', None)
+        crate, slot0 = mb.get_id()
+        want = xr.data.s256_lane_bytes[(crate, slot0, s256_lane)]
+        where = f"[slot {s256_slot} lane {s256_lane}] lane-ID byte {want:#04x}"
+
+        ts, raw, counts, geometry = self._capture(mb, s256_lane, ncap=10, format='32')
+        cap = self._split_s256_packet(raw[:, 0, :].astype(np.int64) & 0xFFFFFFFF, geometry)
+        logger.info(f"{where}: {cap.data.shape[0]} packets, w0={int(cap.header[0, 0]):#010x}")
+
+        stream_ids = np.unique(cap.header[:, 0] >> 16)
+        assert list(stream_ids) == [self._stream_id16(mb, s256_lane)], \
+            (f"{where}: header stream IDs {[hex(int(s)) for s in stream_ids]}, expected "
+             f"{self._stream_id16(mb, s256_lane):#06x}")
+        packet, word = np.nonzero(cap.data != want * 0x01010101)
+        assert not packet.size, \
+            (f"{where}: {packet.size} of {cap.data.size} data words differ, first at packet "
+             f"{packet[0]} data word {word[0]}: {int(cap.data[packet[0], word[0]]):#010x}, expected "
+             f"{want * 0x01010101:#010x} - check that every board's funcgen replays the lane-ID buffer "
+             f"with the FFT and SCALER bypassed")
+        assert not np.any(cap.data_flags), \
+            f"{where}: nonzero data-flags words {np.unique(cap.data_flags[cap.data_flags != 0])}"
+        flagged = sorted({w + 1 for w in np.nonzero(cap.frame_flags)[2]})
+        assert not flagged, \
+            (f"{where}: frame flags set for source slots {flagged}; the funcgen forces the ADC "
+             f"overflow flag to 0 when replaying its buffer, so those slots are not sending the "
+             f"lane-ID payload")
+        assert not np.any(cap.trailer), \
+            f"{where}: packet-flags trailer {self._decode_packet_flags(cap.trailer[cap.trailer != 0][0])}"
