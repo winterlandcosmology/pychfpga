@@ -169,3 +169,23 @@ three-way `if CAPTURE_TYPE == 'PROBER' ... elif 'UCAP' ... else raise` idiom.
   alone. Captures at frames_per_packet=2 with flags need ~4.8 KB UDP
   packets on the capture path — if geometry tests time out with zero
   packets, check the receiving host's interface MTU (needs ≥ 5000).
+- Receiver-end fibre checks use the lane-ID payload:
+  `deployment_scripts/ct_lane_id_payload.py` (calls
+  `FPGAArray.set_lane_id_payload`) makes every data byte of lane k of 0-based
+  slot s equal `(s << 4) | (k + 1)`. It bypasses only the FFT and SCALER;
+  the corner turn runs as in production. The fibre map and lookup table are
+  in that script and `docs/shuffle256_lane_id_payload.md`, and
+  `test_lane_id_payload_shuffle256` checks the payload through the prober.
+  `chFPGA.set_channelizer_outputs` works again and is crate-safe with
+  `local_sync=False`. It is ICE-only (16 channels, 8-bit samples) and
+  refuses CRS/UCAP boards before any write.
+- Facts confirmed in the chfpgalite RTL:
+  - Lanes 0-3 go to QSFP A and lanes 4-7 to QSFP B (xdc pin constraints);
+    the TX lane order inside a cage is not in the source.
+  - Header word 2 = frame counter [47:32].
+  - 10G words are sent LSB first.
+  - Funcgen buffer mode forces the ADC-overflow flag to 0.
+  - Scaler bypass applies no offset binary.
+  - Board init resets FUNCGEN and SCALER but **not** `FFT.BYPASS`. After any
+    FFT-bypass test (the algorithm/flags stages or the lane-ID payload), only
+    a `prog=2` bring-up restores sky data.
