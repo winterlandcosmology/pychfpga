@@ -41,3 +41,9 @@ test_config:
     lane_id_payload_shuffle256:
         s256_lane: range(MAX_LANE + 1)          # all 8 lanes: both QSFP cages of every board
     stream_frame_spread: 2      # max frame-number spread across CB2 input lanes
+    health_soak_passes: 60      # test_crate_health_soak: independent health passes (~2.5 min);
+                                # one 0.5 s pass misses intermittent single-link CRC faults
+    health_soak_sleep: 1        # seconds of live traffic between soak passes
+    bp_error_rate_window: 60    # test_backplane_error_rate: seconds per counter window
+    bp_error_rate_windows: 30   # 30 x 60 s = 30 min of continuous observation per link
+    bp_error_rate_ber_limit: 1.e-10  # limit and get_ber() conventions of qc/MGK7BP16 test_bitErrorRate

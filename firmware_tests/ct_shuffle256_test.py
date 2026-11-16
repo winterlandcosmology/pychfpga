@@ -25,12 +25,13 @@ is possible. Run stages in file order and stop at the first failure:
 
     PYTEST="<venv>/python -m pytest --xreport-config=config_ice_crate.yaml \
             --log-cli-level=INFO ct_shuffle256_test.py"
-    $PYTEST -k test_crate_health           | tee s256_1_health.log
+    $PYTEST -k test_crate_health           | tee s256_1_health.log  # 1 pass + ~2.5 min soak
     $PYTEST -k test_stream_alignment       | tee s256_2_alignment.log
     $PYTEST -k test_packet_geometry        | tee s256_3_geometry.log
     $PYTEST -k test_corner_turn_shuffle256 | tee s256_4_algorithm.log
     $PYTEST -k test_frame_flags_shuffle256 | tee s256_5_flags.log
     $PYTEST -k test_gpu_link_feed_crate    | tee s256_6_gpu.log
+    $PYTEST -k test_backplane_error_rate   | tee s256_7_ber.log  # optional, ~30 min
     $PYTEST -k test_lane_id_payload        | tee s256_8_lane_id.log  # leaves the lane-ID payload on
 
 Connecting the FPGAArray with mode='shuffle256' performs the entire crate
@@ -355,6 +356,39 @@ class TestCTShuffle256(TestModule):
             except Exception as exc: # diagnostics must never mask the failure
                 logger.warning(f"print_crossbar2_frame_info failed: {exc!r}")
         assert not failures, f"{len(failures)} crate health problem(s):\n" + '\n'.join(failures)
+
+    @pytest.mark.ct_shuffle256
+    def test_crate_health_soak(self, crate_setup, xr):
+        '''
+        Repeat the crate health pass for minutes to catch intermittent link faults.
+
+        test_crate_health observes the crate for one 0.5 s window, which misses
+        a link that corrupts a frame only now and then: on crate 012
+        (2026-10-16) one pass caught 2 CRC errors on slot 2 lane 11 (fed by
+        slot 10) that five later single passes did not reproduce, and on crate
+        030 a 10-pass QC run missed a single-link CRC fault that 60 passes
+        exposed. This runs `health_soak_passes` independent passes (default 60,
+        about 2.5 min - the QC backplane_err standard), `health_soak_sleep`
+        seconds apart, with the same ct_health measurement, and fails if any
+        pass reports a problem. The failure message groups problems by
+        location across passes, so a single flaky link reads differently from
+        a systemic fault.
+        '''
+        logger = self.get_logger()
+        boards = sorted(self.array.ib, key=lambda m: m.slot)
+        populated = self._populated_slots()
+        n_passes = int(self.test_config.get('health_soak_passes', 60))
+        t_sleep = float(self.test_config.get('health_soak_sleep', 1.0))
+
+        pass_failures = {}
+        for n in range(1, n_passes + 1):
+            # Let the crate run between passes so that errors which only
+            # appear under sustained traffic have time to accumulate.
+            sleep(t_sleep)
+            pass_failures[n] = self._measure_crate_health(logger, boards, populated)
+            logger.info(f'health soak pass {n}/{n_passes}: {len(pass_failures[n])} problem(s)')
+        summary = ct_health.summarize_health_passes(pass_failures, n_passes)
+        assert not summary, summary
 
     @pytest.mark.ct_shuffle256
     def test_alignment_window_margin(self, crate_setup, xr):
@@ -855,6 +889,53 @@ class TestCTShuffle256(TestModule):
                 f"[slot {s256_slot}] 10G TX frame FIFO overflow mask {frame_overflow:#04x}"
             if check == 0:
                 sleep(0.5)
+
+    @pytest.mark.ct_shuffle256
+    def test_backplane_error_rate(self, crate_setup, xr):
+        '''
+        Characterize every backplane link's error rate under live traffic for minutes.
+
+        The health tests ask whether any error occurs; this measures how often.
+        Each link's CRC/frame error counter is cleared, left to accumulate for
+        `bp_error_rate_window` seconds (default 60) and read, `bp_error_rate_windows`
+        times (default 30: 30 min of continuous observation). The total is
+        converted to a bit-error-rate equivalent with get_ber()'s conventions
+        (16 bits per counted error, 10 Gb/s per link) and compared with the
+        qc/MGK7BP16 test_bitErrorRate limit `bp_error_rate_ber_limit` (1e-10:
+        fewer than one error per 16 s). That QC test's PRBS measurement gives
+        saturated or fixed-rate counts on ICE GTXes on this branch, for links that
+        are clean under traffic (crate 012, 2026-10-16), so this is the
+        BER-equivalent check. Unlike it, this runs at the operating TX drive and
+        cannot test margin at reduced drive; and a CRC error counts a damaged
+        frame, so a multi-bit burst inside one frame counts once.
+
+        Optional and long: run it on its own with -k test_backplane_error_rate.
+        '''
+        logger = self.get_logger()
+        boards = sorted(self.array.ib, key=lambda m: m.slot)
+        populated = self._populated_slots()
+        window = float(self.test_config.get('bp_error_rate_window', 60))
+        n_windows = int(self.test_config.get('bp_error_rate_windows', 30))
+        ber_limit = float(self.test_config.get('bp_error_rate_ber_limit', 1e-10))
+
+        totals = {}  # (rx_slot, rx_lane) -> [tx_slot, tx_lane, errors, seconds, saturated]
+        for n in range(1, n_windows + 1):
+            errored = []
+            for key, (tx_slot, tx_lane, errors, seconds) in ct_health.measure_link_error_counts(
+                    boards, populated, window).items():
+                total = totals.setdefault(key, [tx_slot, tx_lane, 0, 0.0, False])
+                total[2] += errors
+                total[3] += seconds
+                total[4] |= errors >= ct_health.RX_ERROR_CTR_MAX
+                if errors:
+                    errored.append(f'slot {key[0]} lane {key[1]}: {errors}')
+            logger.info(f'error-rate window {n}/{n_windows} ({window:.0f} s): '
+                        + (', '.join(errored) if errored else 'no errors'))
+        failing, lines = ct_health.summarize_link_error_rates(
+            {key: tuple(total) for key, total in totals.items()}, ber_limit)
+        for line in lines:
+            logger.info(line)
+        assert not failing, '\n'.join(lines)
 
     @pytest.mark.ct_shuffle256
     def test_lane_id_payload_shuffle256(self, s256_slot, s256_lane, crate_setup, xr):

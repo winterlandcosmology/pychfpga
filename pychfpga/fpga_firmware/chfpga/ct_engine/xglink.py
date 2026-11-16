@@ -222,6 +222,10 @@ class GTX(MMI):
         """No-op."""
         return self
 
+    def get_prbs_error_ctr(self):
+        """PRBS checker error count (API parity with :meth:`cge.CGEChannel.get_prbs_error_ctr`)."""
+        return int(self.ERR_CTR)
+
     def init(self):
         """ Initializes the GTX CHANNEL block"""
         # self.logger.info('Initializing GTX_CHANNEL  #%i' % self.instance_number)

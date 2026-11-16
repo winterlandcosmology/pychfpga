@@ -157,6 +157,20 @@ three-way `if CAPTURE_TYPE == 'PROBER' ... elif 'UCAP' ... else raise` idiom.
   broken (8*lane+1 duplicated headers on lanes 1-7, data-polluted trailers
   that saturated CROSSBAR3's PACKET_ERROR_CTR unconditionally, ~1-in-30
   one-word-shifted captures) - do not chase those symptoms on sep24+.
+- One 0.5 s health pass misses intermittent single-link CRC faults (crate
+  012, 2026-10-16: 2 CRC errors on one link in one pass, none in five
+  later passes). `test_crate_health_soak` repeats the shared ct_health pass
+  (`health_soak_passes`, default 60, ~2.5 min, the QC backplane_err
+  standard); `-k test_crate_health` runs the single pass and the soak.
+- The PRBS BER path (`get_ber`, used by qc/MGK7BP16 `test_bitErrorRate`) is
+  not usable on ICE on this branch: the QC test never awaits the coroutine,
+  `get_link_map` always builds the QSFP map (KeyError on a crate without QSFP
+  cables), and once those are bypassed the GTX `ERR_CTR` reads 0xFFFFFFFF or a
+  fixed-rate count on links that are clean under traffic (crate 012,
+  2026-10-16). Use `test_backplane_error_rate` instead: live-traffic CRC
+  counts over 60 s windows (default 30 min), scored with get_ber's
+  conventions against BER 1e-10 (fewer than one error per 16 s per link).
+  The backplane `RX_ERROR_CTR` is 16-bit, saturating at 0xFFFF.
 - CROSSBAR2's SOF window is 100 (the RTL default). The 55 that software
   forced until 2026-09 sat on the measured lane arrival-skew tail (44-57
   ct_clk cycles) and silently dropped ~1% of frames;

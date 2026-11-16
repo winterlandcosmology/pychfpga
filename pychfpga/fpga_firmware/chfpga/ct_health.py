@@ -32,9 +32,11 @@ crate.
 import logging
 
 from pychfpga.common.async_utils import run_async
-from time import sleep
+from time import monotonic, sleep
 
-__all__ = ['measure_crate_health', 'populated_slots', 'require_bct_corner_turn']
+__all__ = ['measure_crate_health', 'populated_slots', 'require_bct_corner_turn',
+           'summarize_health_passes', 'ber_equivalent', 'measure_link_error_counts',
+           'summarize_link_error_rates']
 
 _logger = logging.getLogger(__name__)
 
@@ -196,3 +198,96 @@ def measure_crate_health(boards, populated=None, logger=None):
                                     f"at {before} - no dataflow through this stage")
 
     return failures
+
+
+def summarize_health_passes(pass_failures, n_passes):
+    """Render repeated health passes as one actionable message.
+
+    `pass_failures` maps each pass number to the failure list
+    :func:`measure_crate_health` returned for it. Problems are grouped by
+    location (the text before the first ': '), so a single flaky link - one
+    location in a few passes - reads differently from a systemic fault - many
+    locations at once. Returns an empty string when every pass was clean.
+    """
+    by_location = {}  # location -> [(pass number, detail), ...]
+    for n in sorted(pass_failures):
+        for failure in pass_failures[n]:
+            location, _, detail = failure.partition(': ')
+            by_location.setdefault(location, []).append((n, detail))
+    if not by_location:
+        return ''
+    bad_passes = sum(1 for failures in pass_failures.values() if failures)
+    lines = [f'{len(by_location)} location(s) reported problems in {bad_passes} of '
+             f'{n_passes} health passes:']
+    for location, hits in by_location.items():
+        passes = ', '.join(str(n) for n, _ in hits[:10]) + (', ...' if len(hits) > 10 else '')
+        lines.append(f'  {location}: {len(hits)}/{n_passes} passes ({passes}); '
+                     f'first: {hits[0][1]}')
+    return '\n'.join(lines)
+
+
+# Link error-rate characterization uses get_ber()'s conventions so that a result is
+# directly comparable with the qc/MGK7BP16 test_bitErrorRate limit (BER < 1e-10).
+BER_LINE_RATE = 10e9       # bits/s per backplane link, as get_ber() assumes
+BER_BITS_PER_ERROR = 16    # get_ber() counts each error as a 16-bit word
+RX_ERROR_CTR_MAX = 0xFFFF  # the backplane RX_ERROR_CTR saturates here
+
+
+def ber_equivalent(errors, seconds):
+    """Bit error rate implied by `errors` counted over `seconds`, with get_ber()'s conventions."""
+    return errors * BER_BITS_PER_ERROR / (seconds * BER_LINE_RATE)
+
+
+def measure_link_error_counts(boards, populated=None, window=60.0):
+    """Count CRC/frame errors on every populated backplane PCB link over one window.
+
+    Unlike :func:`measure_crate_health`, which samples 0.5 s per pass, this clears
+    the counters once and reads them after `window` seconds, so every link is
+    observed continuously for a known time. Only the monitor plane is touched
+    (``RESET_STATS``), so this is safe on a live crate.
+
+    Returns ``{(rx_slot, rx_lane): (tx_slot, tx_lane, errors, seconds)}``. An
+    `errors` value of :data:`RX_ERROR_CTR_MAX` means the counter saturated.
+    """
+    boards = sorted(boards, key=lambda m: m.slot)
+    if populated is None:
+        populated = populated_slots(boards)
+    require_bct_corner_turn(boards)
+    t_reset = {}
+    for mb in boards:
+        mb.BP_SHUFFLE.reset_stats()
+        t_reset[mb.slot] = monotonic()
+    sleep(window)
+    counts = {}
+    for mb in boards:
+        err = run_async(mb.BP_SHUFFLE.get_rx_lane_monitor('ERROR_CTR', 'pcb'))
+        seconds = monotonic() - t_reset[mb.slot]
+        for lane in range(1, 16):  # lane 0 is the internal bypass (no backplane link)
+            tx_slot, tx_lane = mb.crate.get_matching_tx((mb.slot, lane))
+            if tx_slot in populated:
+                counts[(mb.slot, lane)] = (tx_slot, tx_lane, int(err[lane]), seconds)
+    return counts
+
+
+def summarize_link_error_rates(totals, ber_limit=1e-10):
+    """Render accumulated link error counts as ``(failing links, report lines)``.
+
+    `totals` maps ``(rx_slot, rx_lane)`` to ``(tx_slot, tx_lane, errors, seconds,
+    saturated)``. A link fails when its BER-equivalent reaches `ber_limit` or its
+    counter saturated in any window; error-free links are counted in the first line.
+    """
+    errored = sorted(((t[2], key) for key, t in totals.items() if t[2]), reverse=True)
+    failing = []
+    lines = []
+    for errors, key in errored:
+        tx_slot, tx_lane, _, seconds, saturated = totals[key]
+        ber = ber_equivalent(errors, seconds)
+        bad = saturated or ber >= ber_limit
+        if bad:
+            failing.append(key)
+        lines.append(f'[slot {key[0]}] BP pcb lane {key[1]} (fed by slot {tx_slot} lane {tx_lane}): '
+                     f'{errors}{"+ (counter saturated)" if saturated else ""} CRC/frame errors in '
+                     f'{seconds:.0f} s, BER-equivalent {ber:.1e}' + (' - OVER THE LIMIT' if bad else ''))
+    lines.insert(0, f'{len(totals)} backplane links: {len(errored)} with errors, {len(failing)} at or '
+                    f'over BER {ber_limit:g}, {len(totals) - len(errored)} error-free')
+    return failing, lines
