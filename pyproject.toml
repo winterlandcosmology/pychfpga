@@ -143,6 +143,7 @@ errors-only = true
         "numpy",
         "matplotlib",
         "prettytable",
+        "roman", # rst2pdf 0.102 imports this; docutils >= 0.21 removed docutils.utils.roman
 
         # test-specific packages
         "pyserial", # (tested with 0.0.97 on Ubuntu) for memtest
