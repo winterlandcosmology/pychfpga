@@ -121,20 +121,22 @@ def measure_crate_health(boards, populated=None, logger=None):
             gtx = bp.gtx_map['pcb'][lane]
             if not int(gtx.BLOCK_LOCK):
                 failures.append(
-                    f"[slot {mb.slot}] BP pcb lane {lane}: BLOCK_LOCK=0 "
-                    f"(fed by slot {tx_slot} lane {tx_lane}) - 64b66b sync not "
-                    f"achieved; check that link/transmitter")
+                    f"[slot {mb.slot}] BP pcb lane {lane} (fed by slot {tx_slot} lane {tx_lane}): "
+                    f"BLOCK_LOCK=0 - 64b66b sync not achieved; check that link/transmitter")
         err, rxovf, fdet, minlen, maxlen = run_async(bp.get_rx_lane_monitor(
             ('ERROR_CTR', 'RX_FIFO_OVERFLOW', 'FRAME_DETECT',
              'MIN_FRAME_LENGTH', 'MAX_FRAME_LENGTH'), 'pcb'))
         logger.info(f"[slot {mb.slot}] BP pcb monitors: err={err} rx_fifo_ovf={rxovf} "
                     f"frame_detect={fdet} min_len={minlen} max_len={maxlen}")
         for lane in range(16):
+            # Name the transmitter so a link fault is actionable from the log alone.
             if lane > 0:
-                tx_slot, _ = mb.crate.get_matching_tx((mb.slot, lane))
+                tx_slot, tx_lane = mb.crate.get_matching_tx((mb.slot, lane))
                 if tx_slot not in populated:
                     continue
-            where = f"[slot {mb.slot}] BP pcb lane {lane}"
+                where = f"[slot {mb.slot}] BP pcb lane {lane} (fed by slot {tx_slot} lane {tx_lane})"
+            else:
+                where = f"[slot {mb.slot}] BP pcb lane 0 (internal bypass)"
             if err[lane]:
                 failures.append(f"{where}: {err[lane]} CRC/frame errors on the backplane link")
             if rxovf[lane]:
@@ -179,10 +181,14 @@ def measure_crate_health(boards, populated=None, logger=None):
                 # wraparound coincidence with probability 1/256 - across the
                 # 96 counters read here, roughly every third pass would flag
                 # one spuriously. A genuinely stalled counter stays equal on
-                # every re-read, so require the match to survive a retry
-                # (two coincidences compound to ~1.5e-5 per counter).
+                # every re-read, so require the match to survive two retries.
+                # One retry (~1.5e-5 per counter) still flagged ~9% of 60-pass
+                # soaks; three coincidences compound to ~6e-8 per counter,
+                # ~3e-4 per 60-pass soak.
                 value = int(getattr(cb, ctr_regs[ctr_name]))
-                if value == before:
+                for _ in range(2):
+                    if value != before:
+                        break
                     sleep(0.05)
                     value = int(getattr(cb, ctr_regs[ctr_name]))
                 if value == before:
