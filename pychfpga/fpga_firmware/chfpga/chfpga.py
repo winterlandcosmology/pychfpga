@@ -2940,28 +2940,69 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         if local_sync:
             self.sync()
 
-    def set_channelizer_outputs(self, data):
+    def set_channelizer_outputs(self, data, local_sync=True):
         """
-        Set the data outputted by the channelizers. FFT and SCALER and bypassed.
+        Set the data outputted by the channelizers. FFT and SCALER are bypassed.
         data(chan, bin) = complex value (4+4) bits
-        """
 
+        Each channel's function generator replays a buffer in which bin ``b``
+        occupies samples 2b (real) and 2b+1 (imaginary); with both bypasses the
+        scaler forwards the top nibble of each sample, so the output byte of
+        bin ``b`` is ``(real << 4) | (imag & 0xF)`` in two's complement.
+
+        Parameters:
+
+            data (ndarray): data[channel, bin] = complex value, with channel 0-15 and bin
+                0-1023. The real and imaginary parts must be integers from -8 to 7.
+
+            local_sync (bool): If True, sync the board after programming. Crate members
+                must pass False and sync the whole array instead: a board-local sync breaks
+                the array-wide frame alignment of the corner turn.
+
+        Returns:
+
+            (16, 2048) int8 array: the function generator buffers that were written.
+        """
+        # The buffers assume the ICE channelizer format (16 channels, 8-bit samples whose
+        # top nibble reaches the bypassed scaler output). Refuse other platforms before any
+        # write, so a CRS board is not left half-configured.
+        if self.CAPTURE_TYPE == 'PROBER':
+            pass
+        elif self.CAPTURE_TYPE == 'UCAP':
+            raise NotImplementedError(
+                f"{self!r}: set_channelizer_outputs supports only the ICE channelizer format "
+                f"(16 channels, 8-bit samples); CRS/UCAP platforms (8 channels, 14-bit "
+                f"samples) are not supported")
+        else:
+            raise RuntimeError(f"{self!r}: set_channelizer_outputs does not support "
+                               f"CAPTURE_TYPE={self.CAPTURE_TYPE!r}")
+        data = np.asarray(data)
+        if data.shape != (16, 1024):
+            raise ValueError(f'data must be indexed as data[channel, bin] with shape (16, 1024), '
+                             f'got shape {data.shape}')
+        parts = np.stack([data.real, data.imag])
+        if np.any(parts != np.round(parts)) or np.any(parts < -8) or np.any(parts > 7):
+            raise ValueError('The real and imaginary parts of data must be integers from -8 to 7 '
+                             '(signed 4+4 bit channelizer output)')
+
+        # Program the bypassed data path, then the buffers
         d = np.zeros((16, 2048), np.int8)
         d[:, 0::2] = data.real
         d[:, 1::2] = data.imag
         d <<= 4
 
         self.set_channelizer(
-            data_source='funcgen',
-            function='AB',
-            a=0,
-            b=0,
             fft_bypass=1,
             scaler_bypass=1,
-            offset_binary_encoding=0)
+            scaler_bypass_data_type=0,
+            offset_binary_encoding=False,
+            local_sync=False)
 
         for ch in range(16):
-            self.set_funcgen_function('arb', channels=[ch], data=d[ch])
+            self.set_funcgen('arb', channels=[ch], left_shift=0, right_shift=0,
+                             data=d[ch].view(np.uint8))
+        if local_sync:
+            self.sync()
         return d
 
     # set_data_path = set_channelizer # for legacy compatibility
