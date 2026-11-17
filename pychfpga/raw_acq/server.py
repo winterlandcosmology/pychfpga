@@ -55,7 +55,7 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
         # Register config with comet broker
         comet_config = config.pop('comet_broker', {})
         enable_comet = comet_config.get('enabled', None)
-        print(f'comet_broker={comet_config}, enabled={enable_comet}')
+        self.log.debug(f'{self!r}: comet_broker={comet_config}, enabled={enable_comet}')
         if enable_comet is None:  # if the comet_broker.enable parameter is not specified
             msg = "Missing config value 'comet_broker.enabled'."
             self.log.error(msg)

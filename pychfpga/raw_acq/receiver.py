@@ -363,7 +363,7 @@ class RawAcqReceiver(object):
                     src_if_addrs[source_key] = ('0.0.0.0', 0)
         else:
             src_if_addrs = await self.ping_sources_async()
-        print('IF addr=', src_if_addrs)
+        self.log.debug(f'{self!r}: Interface address of each data source: {src_if_addrs}')
         failed_src = [src_addr for src_addr, src_if_addr in src_if_addrs.items() if not src_if_addr]
         if failed_src:
             failed_addrs = ','.join(f'{a}:{p}' for a, p in failed_src)
@@ -643,7 +643,7 @@ class RawAcqReceiver(object):
 
         if not self.BUF_SIZE:
             return
-        print('Starting receiver')
+        self.log.debug(f'{self!r}: Receive loop running')
         last_processing_time = time.time()
         while self.started and (stop_condition is None or not stop_condition()):
             try:
