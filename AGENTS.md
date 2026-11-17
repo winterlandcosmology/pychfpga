@@ -95,6 +95,14 @@ three-way `if CAPTURE_TYPE == 'PROBER' ... elif 'UCAP' ... else raise` idiom.
   (`crate_common.py`, `crate_start_shuffle256.py`, `crate_watchdog.py`),
   their `README.md` runbook and `tests/test_deployment_scripts.py` are
   site-local and gitignored: they exist only in the site's working tree.
+- `tm4_time_check.py` (stdlib-only, tested in `tests/test_tm4_time_check.py`)
+  reads the site TM-4 GPS clock (NPort 10.10.8.1:1001) and fails unless it has
+  Time Valid and agrees with the host's UTC. It never changes a setting
+  (`#13` requests only; gps.py `poll_metrics()` sends `#17` and does). The
+  TM-4 cannot be set by hand, only by GPS: from 2026-11-16 it ran without an
+  antenna at 2035-06-25 (+271424896 s), so the IRIG-B time and the correlator
+  files' `irigb_time` were off by that much (correct from `ctime`). The
+  IRIG-B decoder reads the TM-4 correctly; connect the antenna.
 - Site crate: MGK7BP16 SN012, ARMs at fixed addresses (slot N at
   10.10.2.(N-1)), bench supply at 10.10.5.1. The correlator host
   (hirax-corr-00) reaches 10.10.2.x through a router, so mDNS never sees the
