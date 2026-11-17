@@ -181,7 +181,7 @@ CRATE012_CORR16:
         firmware_correlator:
             enable: True
             firmware_integration_period: 16384  # frames; 16384 x 2.56 us = 41.9 ms, ~135 Mbit/s
-            software_integration_period: 12     # x 41.9 ms = 0.503 s per saved integration
+            software_integration_period: 128    # x 41.9 ms = 5.4 s per saved integration (~40 MB/min with 16 inputs)
             hdf5_capture_folder: '%(run_folder)s/corr/%(hdf5_start_time)s'
             hdf5_capture_filename: '%(file_number)04d'
             hdf5_capture_duration: 0            # 0 = write until stopped
