@@ -53,6 +53,8 @@ class UCorrPacketProcessor(PacketProcessorBase):
         self.config = State()
         self.NCHAN = None
         self.NCLK = None
+        self.CORR_ID = np.uint16(0)
+        self.foreign_corr_packets = 0  # packets dropped because their correlator field is not this board's
         self.bin_map = None
         self.prod_map = None
         self.firmware_integ_period = None
@@ -110,6 +112,8 @@ class UCorrPacketProcessor(PacketProcessorBase):
         # get independent parameters from the configuration
         self.NCHAN = state.NCHAN
         self.NCLK = state.NCLK
+        # Software CORR_ID programmed in the board (slot - 1, or 0 without a slot)
+        self.CORR_ID = np.uint16(state.get('CORR_ID', 0) or 0)
 
         self.NPROD = self.NCHAN * (self.NCHAN + 1) // 2
 
@@ -204,6 +208,23 @@ class UCorrPacketProcessor(PacketProcessorBase):
 
         # Decode header fields. stream_id top 5 bits = corr id, low 11 bits = bin index, flags hi nibble = bin_set.
         np.right_shift(self.buf_stream_id[:n], 11, out=self.pkt_corr[:n], where=bix_mask)
+        # The firmware sends CORR_ID + core number (UCMAC44_ARRAY.vhd), so subtract the board's
+        # CORR_ID. This lets a board run in corr16 in any crate slot: CORR_ID is slot - 1, and
+        # without the subtraction only a board in slot 1 or without a slot (CORR_ID = 0) decoded.
+        # Fields below CORR_ID wrap around in uint16 and are rejected with those >= NCORRS.
+        np.subtract(self.pkt_corr[:n], self.CORR_ID, out=self.pkt_corr[:n], where=bix_mask)
+        corr_ok = self.tmp_mask[:n]
+        np.less(self.pkt_corr[:n], self.NCORRS, out=corr_ok, where=bix_mask)
+        np.bitwise_and(corr_ok, bix_mask, out=corr_ok)
+        n_foreign = int(np.count_nonzero(bix_mask)) - int(np.count_nonzero(corr_ok))
+        if n_foreign:
+            if not self.foreign_corr_packets:
+                warnings.warn(
+                    f"UCorrPacketProcessor: dropping correlator packets whose correlator field is "
+                    f"outside CORR_ID {int(self.CORR_ID)} + 0..{self.NCORRS - 1}. Check that "
+                    f"CORR_ID matches the board sending to this receiver.")
+            self.foreign_corr_packets += n_foreign
+            np.copyto(bix_mask, corr_ok)
         np.bitwise_and(self.buf_stream_id[:n], self.bin_mask, out=self.pkt_bin[:n], where=bix_mask)
         np.right_shift(self.buf_flags[:n], 4, out=self.pkt_bin_set[:n], where=bix_mask)
         np.bitwise_and(self.buf_ts[:n], self.ts_mask, out=self.pkt_ts[:n], where=bix_mask)

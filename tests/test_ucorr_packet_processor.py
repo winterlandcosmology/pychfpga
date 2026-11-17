@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from pychfpga.common.ucorr_packet_processor import UCorrPacketProcessor
 
@@ -30,6 +31,61 @@ def test_store_packets_accumulates_repeated_destinations():
     np.testing.assert_array_equal(processor.sat[0, 0, 0, 0, :, 0], [0x40, 0x00])
     np.testing.assert_array_equal(processor.sat[0, 0, 0, 0, :, 1], [0x10, 0x10])
     assert processor.raw_data_count[0] == 2
+
+
+def _filter_ready_processor(corr_fields, corr_id, ncorrs=2, cookies=None):
+    """Processor with header buffers holding one packet per entry of ``corr_fields``."""
+    n = len(corr_fields)
+    processor = UCorrPacketProcessor.__new__(UCorrPacketProcessor)
+    processor.CORR_ID = np.uint16(corr_id)
+    processor.NCORRS = ncorrs
+    processor.foreign_corr_packets = 0
+    processor.bin_mask = np.uint16(0b111_11111111)
+    processor.ts_mask = np.uint64(0xFFFFFFFFFFFF)
+    processor.integ_period = np.uint64(1)
+    processor._last_emitted_ts = np.uint64(0)
+    processor.buf_cookie = np.array(
+        cookies if cookies is not None else [UCorrPacketProcessor.CORR_PACKET_COOKIE] * n,
+        dtype=np.uint8)
+    # stream_id = correlator field << 11 | bin index (the bin index is the packet number here)
+    processor.buf_stream_id = np.array(
+        [(field << 11) | i for i, field in enumerate(corr_fields)], dtype=np.uint16)
+    processor.buf_flags = np.zeros(n, dtype=np.uint8)
+    processor.buf_ts = np.full(n, 5, dtype=np.uint64)
+    processor.bix_mask = np.zeros(n, dtype=bool)
+    processor.tmp_mask = np.zeros(n, dtype=bool)
+    processor.pkt_corr = np.zeros(n, dtype=np.uint16)
+    processor.pkt_bin = np.zeros(n, dtype=np.uint16)
+    processor.pkt_bin_set = np.zeros(n, dtype=np.uint8)
+    processor.pkt_ts = np.zeros(n, dtype=np.uint64)
+    return processor
+
+
+def test_filter_packets_subtracts_board_corr_id():
+    # Board in slot 9: CORR_ID = 8, two cores -> correlator fields 8 and 9 (UCMAC44_ARRAY.vhd).
+    # Fields 7 and 10 belong to other boards; the last packet is not a correlator packet.
+    cookie = UCorrPacketProcessor.CORR_PACKET_COOKIE
+    processor = _filter_ready_processor(
+        [8, 9, 7, 10, 8], corr_id=8, cookies=[cookie, cookie, cookie, cookie, 0])
+
+    with pytest.warns(UserWarning, match="CORR_ID 8"):
+        bix = processor.filter_packets(5)
+
+    np.testing.assert_array_equal(bix, [0, 1])
+    np.testing.assert_array_equal(processor.pkt_corr[bix], [0, 1])
+    np.testing.assert_array_equal(processor.pkt_bin[bix], [0, 1])
+    assert processor.foreign_corr_packets == 2
+
+
+def test_filter_packets_without_corr_id_keeps_core_numbers():
+    # No slot (or slot 1): CORR_ID = 0 and the correlator field is the core number.
+    processor = _filter_ready_processor([0, 1], corr_id=0)
+
+    bix = processor.filter_packets(2)
+
+    np.testing.assert_array_equal(bix, [0, 1])
+    np.testing.assert_array_equal(processor.pkt_corr[bix], [0, 1])
+    assert processor.foreign_corr_packets == 0
 
 
 class _FlushCountingReceiver:

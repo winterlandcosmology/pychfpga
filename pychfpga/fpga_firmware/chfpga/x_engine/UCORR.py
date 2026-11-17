@@ -67,8 +67,12 @@ class UCORR(MMI):
 
     def init(self):
         """ Inisializes all modules of a correlator block."""
-        self.CORR_ID = (self.fpga.slot-1) if self.fpga.slot else 0
+        corr_id = (self.fpga.slot-1) if self.fpga.slot else 0
+        self.CORR_ID = corr_id
         self.config.update(
+            # The receiver subtracts CORR_ID from each packet's correlator field, so a board can
+            # run in corr16 in any crate slot (not only slot 1 or without a slot).
+            CORR_ID=corr_id,
             bins_per_frame=self.fpga.FRAME_LENGTH // 2, # total number of bins at the output of the channelizers
             NCHAN=int(self.NCHAN),
             NCLK=int(self.BIN_DECIMATION_FACTOR * self.NCLK_PER_BIN),  # Number of clocks available to compute all the products. Will reduce the number of required CMACs, but increase the number of products per CMAC
