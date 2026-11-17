@@ -2771,15 +2771,28 @@ class FPGAMasterAsyncRESTServer(AsyncRESTServer):
 
 
     @endpoint('call-fpga-array-method')
-    async def call_fpga_array_method(self, **args):
+    async def call_fpga_array_method(self, method_name, kwargs=None):
         """
-        For debuging: calls any fpga_array method.
+        For debugging: call a public FPGAArray or array-wide method and return its result.
 
+        The request is a JSON POST with the method name and its keyword arguments. Async methods
+        are awaited.
+
+        Example:
+
+            curl -X POST -H "Content-Type: application/json" \\
+                 -d '{"method_name": "get_gains_async", "kwargs": {}}' \\
+                 http://localhost:54321/call-fpga-array-method
         """
-        if not hasattr(self.fpga_master, 'fpgas') or not self.fpga_master.fpgas:
-            handler.write(dict(error='FPGA array is not created yet'))
-            return
-        r = getattr(self.fpga_master.fpgas, args['method_name'])(**args)
+        # Validation
+        if not (self.fpga_master and self.fpga_master.fpgas):
+            return dict(error='FPGA array is not created yet')
+        if method_name.startswith('_'):
+            return dict(error=f'Cannot call private attribute {method_name!r}')
+
+        r = getattr(self.fpga_master.fpgas, method_name)(**(kwargs or {}))
+        if asyncio.iscoroutine(r):
+            r = await r
         return sanitize_for_json(r)
 
 
@@ -3316,6 +3329,12 @@ class FPGAMasterAsyncRESTClient(AsyncRESTClient):
         """
         res = await self.post('load-gains', update_id=update_id, bank=bank, when=when)
         return res
+
+    async def call_fpga_array_method(self, method_name, **kwargs):
+        """
+        For debugging: call a public FPGAArray or array-wide method on the server.
+        """
+        return await self.post('call-fpga-array-method', method_name=method_name, kwargs=kwargs)
 
 def main():
     """ Command-line interface to operate the FPGAMaster server.
