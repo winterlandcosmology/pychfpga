@@ -81,6 +81,9 @@ class RawAcqReceiver(object):
         self.started = False
         self.stream_ids = []
         self.sockets = []  # Empty indicates that the receiver is not started
+        self.data_processing_thread = None
+        self.processing_errors = 0  # packet batches dropped because processing raised
+        self.last_processing_error = None
 
         # Define a lock to control access to data while the receiver thread is populating it
         self.lock = threading.RLock()
@@ -292,6 +295,8 @@ class RawAcqReceiver(object):
         self.packet_max_processing_time = 0
         self.current_processed_packets = 0
         self.packet_current_processing_time = 0
+        self.processing_errors = 0
+        self.last_processing_error = None
 
         #######################################
         # Raw buffer & buffer unpacking objetcs
@@ -705,8 +710,14 @@ class RawAcqReceiver(object):
                 corr.after_process_udp_packets(time.time() - t_corr)
                 corr.consume(corr.get_formatted_data())
         except Exception as e:
-            self.log.error(f'process_packets: exception {e!r}')
-            raise
+            # Drop this batch and keep the receive thread alive. Re-raising here used to end the
+            # thread while status() still reported the receiver as started.
+            self.processing_errors += 1
+            self.last_processing_error = repr(e)
+            self.log.exception(
+                f'{self!r}: process_packets: dropped a batch of {self.n_stored} packets '
+                f'({self.processing_errors} processing errors so far)')
+            return
 
         t3 = time.time()
         self.packet_max_processing_time = max(t3 - t0, self.packet_max_processing_time)
@@ -833,6 +844,10 @@ class RawAcqReceiver(object):
 
     def is_running(self):
         return bool(self.sockets)
+
+    def is_receiving(self):
+        """Return True if the packet receive thread is alive."""
+        return bool(self.data_processing_thread and self.data_processing_thread.is_alive())
 
     async def check_ioloop_response_time_async(self):
         t = time.time()

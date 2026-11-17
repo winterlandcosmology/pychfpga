@@ -143,7 +143,13 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
     @endpoint('status')
     async def status(self):
         self.log.info(f'{self!r}: getting status request')
-        return dict(started=self.receiver.is_running() if self.receiver else False)
+        if not self.receiver:
+            return dict(started=False)
+        return dict(
+            started=self.receiver.is_running(),
+            thread_alive=self.receiver.is_receiving(),
+            processing_errors=self.receiver.processing_errors,
+            last_processing_error=self.receiver.last_processing_error)
 
     @endpoint('get-packets')
     async def get_packets(self):
