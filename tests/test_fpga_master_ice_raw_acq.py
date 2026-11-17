@@ -29,6 +29,7 @@ def load_config(path, name):
         ("config/config_icebox.yaml", "ICEBOX"),
         ("config/example_corr16.yaml", "EXAMPLE"),
         ("config/config_test.yaml", "TEST"),
+        ("config/config_crate012_corr16.yaml", "CRATE012_CORR16"),
     ],
 )
 def test_ice_corr16_configs_enable_raw_acq_with_ping(path, name):

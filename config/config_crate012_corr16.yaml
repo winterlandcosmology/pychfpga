@@ -1,0 +1,214 @@
+# fpga_master configuration: one IceBoard (SN0505, slot 9) of field crate 012
+# (MGK7BP16 SN012) running corr16, clocked from the backplane.
+#
+#   fpga_master config/config_crate012_corr16.yaml:CRATE012_CORR16
+#
+# Derived from config_icebox.yaml (ICEBOX). Keys that no code reads were dropped;
+# see the notes in the conversation/PR for the list.
+#
+# Before running:
+#   - The board's clock jumper must be on BACKPLANE: a board attached to a crate
+#     is refused by set_operational_mode() otherwise.
+#   - If the other 15 boards are streaming shuffle256, bring them up as a
+#     15-board array that excludes slot 9 first; reprogramming this board under a
+#     16-board shuffle256 removes its backplane lanes from every other board.
+#   - Start the crate temperature watchdog.
+
+comet_broker: &comet_broker
+    enabled: False
+    host: recv1
+    port: 12050
+
+CRATE012_CORR16:
+    corr_sn: "CRATE012"
+    corr_name: "CRATE012_SN0505"
+    comment: "corr16 mode, one board (SN0505, crate 012 slot 9), backplane clock"
+
+    # Run and current folders (fields: isotime, corr_name, data_folder, run_name, run_folder)
+    run_name: '{isotime}_{corr_name}'
+    data_folder: '/storage/crate012/corr16'
+    run_folder: '{data_folder}/{run_name}'
+    current_folder: '{data_folder}/current'   # symlink that points to the latest run folder
+
+    input_sn: "{corr_sn}{crate:02d}{slot_zero_based:02d}{input:02d}"
+    input_reorder: null
+    # Translates FPGA channel number into physical board input number
+    input_number_map: [12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3]
+
+    # fpga_master REST server address (overridden by --host/--port)
+    hostname: localhost
+    port: 54321
+
+    comet_broker:
+        <<: *comet_broker
+
+    debug:
+        allow_empty_fpga_array: False   # fail loudly if SN0505 is not reachable
+
+    logging:
+        base_package_name: 'pychfpga'
+        script_name: 'pychfpga.fpga_master'
+        dict_config:
+            formatters:
+                long:
+                    format: "%(asctime)s %(levelname)s %(name)s.%(funcName)s() %(filename)s:%(lineno)d>> %(message)s"
+                    datefmt: "%b %d %H:%M:%S"
+                short:
+                    format: "%(asctime)s %(levelname)s %(name)s: %(message)s"
+                    datefmt: "%H:%M:%S"
+            handlers:
+                stderr:
+                    class: logging.StreamHandler
+                    formatter: short
+                    level: DEBUG
+                syslog:
+                    class: logging.handlers.SysLogHandler
+                    formatter: long
+                    level: DEBUG
+                fm_monitoring_logfile:
+                    class: logging.handlers.RotatingFileHandler
+                    formatter: short
+                    level: INFO
+                    filename: "%(run_folder)s/fpga_master.log"
+                    maxBytes: 10000000
+                    backupCount: 100
+                fm_debug_logfile:
+                    class: logging.handlers.RotatingFileHandler
+                    formatter: long
+                    level: DEBUG
+                    filename: "%(run_folder)s/fpga_master_debug.log"
+                    maxBytes: 10000000
+                    backupCount: 100
+                ra_logfile:
+                    class: logging.handlers.RotatingFileHandler
+                    formatter: long
+                    level: DEBUG
+                    filename: "%(run_folder)s/raw_acq.log"
+                    maxBytes: 10000000
+                    backupCount: 100
+            loggers:
+                pychfpga:
+                    level: DEBUG
+                    handlers: [fm_debug_logfile, fm_monitoring_logfile, stderr, syslog]
+                    propagate: false
+                pychfpga.raw_acq:
+                    level: DEBUG
+                    handlers: [ra_logfile, stderr, syslog]
+                    propagate: false
+        log_levels:
+
+    fpga:
+        fpga_array_params:
+            # Crate named with its number and the board attached to it by IP:slot:crate, so
+            # no crate discovery runs (see AGENTS.md, Deployment scripts). ARM of slot N is
+            # at 10.10.2.(N-1); the FPGA link is at (a,b,3,d) = 10.10.3.8.
+            hwm: 'MGK7BP16 012:0 MGK7MB 10.10.2.8:9:0'
+            # Naming the crate makes FPGAArray require all 16 slots; only slot 9 is used here.
+            ignore_missing_boards: True
+            mode: corr16
+            prog: 2                 # always reprogram (also clears any FFT bypass left by earlier tests)
+            open: 1
+            sync_method: 'distributed_time'  # IRIG-B time from the crate backplane
+            sync_source: 'bp_time'
+            udp_retries: 10
+            fpga_ip_addr_fn: '(a,b,3,d)'
+
+        noise_injection:            # none
+
+        adc_delay_params:           # passed to set_adc_delays()
+            source: 'default'
+            compute_delays: 1
+            save_delays: True
+            check_sync_delays: 0
+            check_adc_delays: 10
+            verbose: 1
+            retry: 5
+
+        channelizer_params:         # passed to set_channelizer()
+            adc_mode: 'data'        # ADC chip mode: 'data', 'ramp' or 'pulse'
+            adc_sampling_mode: 0    # 0: 4-channel, 4: 2-channel A+C
+            adc_bandwidth: 2        # 0: 500 MHz, 1: 600 MHz, 2: 1500 MHz, 3: 2 GHz
+            adcdaq_mode: 'data'     # 'data': from the ADC chip; 'ramp': generated in the FPGA
+            data_source: 'adc'      # 'adc', 'noise', 'funcgen'/'buffer', 'frame8', 'frame4', ...
+            function: 'ramp'        # funcgen waveform (used only when data_source is 'funcgen')
+            funcgen_left_shift: 0
+            funcgen_right_shift: 0
+            fft_bypass: False
+            fft_shift: 1984         # 0b11111000000: last 5 stages, for the jun16 partial-bitgrowth FFT
+            scaler_bypass: False
+            offset_binary_encoding: False  # ICE corr16 has UCORR44, which needs two's complement
+
+        raw_data_capture:
+            capture_source: 'adc'
+            baseline_capture_rate: 10   # frames/s, 0 = disable
+            capture_rate: 23
+            tmux_factor: 0              # single board: no send staggering (see compute_gains below)
+            scaler_cap_data_type: 0
+            frames_per_burst: 1
+
+        reset_stats: True
+
+        initial_gains:              # overwritten by load_initial_gains and compute_gains if enabled
+            - [['*'], [0.0, 20]]
+
+        load_initial_gains: True
+
+        gain_hdf5:
+            output_dir: '{data_folder}/digital_gains/'
+            output_suffix: "digitalgain"
+            search: True
+            max_num: 1
+            max_file_size: 1000000000
+
+        compute_gains:
+            enable: True
+            save_gains: True
+            targets:
+              - ['*']
+            number_of_fft_averages: 100
+            target: 2.1213203436
+            data_capture:
+                capture_source: scaler
+                baseline_capture_rate: 10
+                capture_rate: 10        # sub-period = 2**(capture_rate + 1) frames (5.24 ms)
+                # Must stay 0 in a crate: the send delay is tmux_factor * zero-based slot
+                # (3 * 8 = 24 here), and with the 4-frame bursts the gain capture needs, any
+                # nonzero delay exceeds the 3-frame prober buffer and start_data_capture fails.
+                tmux_factor: 0
+                scaler_cap_data_type: fft_full
+                frames_per_burst: 4
+
+        firmware_correlator:
+            enable: True
+            firmware_integration_period: 16384  # frames; 16384 x 2.56 us = 41.9 ms, ~135 Mbit/s
+            software_integration_period: 12     # x 41.9 ms = 0.503 s per saved integration
+            hdf5_capture_folder: '%(run_folder)s/corr/%(hdf5_start_time)s'
+            hdf5_capture_filename: '%(file_number)04d'
+            hdf5_capture_duration: 0            # 0 = write until stopped
+            hdf5_capture_elements_per_file: 256
+            # int N: inputs 0..N-1; list: those inputs (0-7 = A1-A8, 8-15 = B1-B8)
+            hdf5_capture_n_inputs: 16           # all inputs (testing)
+            autocorr_only: false
+
+    raw_acq:
+        enable: True
+        no_ping: False              # ICE raw_acq needs ping/interface/MAC discovery
+        use_fixed_port_numbers: True
+        servers:
+            'raw_acq0':
+                hostname: localhost # acquisition server is started separately
+                port: 54322
+                receiver_ports:
+                    - {port: 'myport', sources: [{crate: '*', slot: '*'}]}
+        common_config:
+            hdf5_capture_refresh_time: 0
+            hdf5_capture_duration: null     # do not write raw ADC HDF5 data
+            hdf5_capture_folder: '{run_folder}/raw_acq/'
+            hdf5_capture_filename: '{file_number:06d}'
+            hdf5_capture_elements_per_file: 131072
+            metrics_refresh_time: 1
+            adc_rms_refresh_count: 60
+            input_number_map: [12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3]
+            jump_thresholds: [24, 48, 96]
+            comet_broker:
+                <<: *comet_broker
