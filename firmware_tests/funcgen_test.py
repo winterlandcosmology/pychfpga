@@ -98,26 +98,23 @@ class TestFuncgen(TestModule):
             np.testing.assert_array_equal(data, expected_data)
 
     def test_udp_buffers_size(self):
+        from pychfpga.network_utils import check_udp_buffer_settings
         logger = self.get_logger()
-        buff_config = list()
-        logger.debug("Reading system files in /proc/sys/net")
-        with open("/proc/sys/net/core/rmem_max") as file:
-            buff_config.append(int(file.readline()))
-        with open("/proc/sys/net/core/rmem_default") as file:
-            buff_config.append(int(file.readline()))
-        with open("/proc/sys/net/ipv4/udp_mem") as file:
-            for val in file.readline().split():
-                buff_config.append(int(val))
-        with open("/proc/sys/net/ipv4/udp_rmem_min") as file:
-            buff_config.append(int(file.readline()))
+        logger.debug("Checking the UDP buffer sysctl settings")
+        too_low = {param: (current, required)
+                   for param, (is_ok, current, required) in check_udp_buffer_settings().items()
+                   if not is_ok}
 
-        if any(val < 26214400 for val in buff_config):
+        if too_low:
             raise RuntimeError(
-                "The UDP buffers' memory parameters (net.core.rmem_max, net.core.rmem_default, "
-                "net.ipv4.udp_mem, net.ipv4.udp_rmem_min) are too low. Increase them to at least 26214400 "
-                "bytes. \nYou can do it by running:\n"
+                "The UDP buffer settings are too low (net.core.rmem_* and net.ipv4.udp_rmem_min in "
+                "bytes, net.ipv4.udp_mem in pages): "
+                + "; ".join(f"{param}: current {current}, required >= {required}"
+                            for param, (current, required) in too_low.items())
+                + "\nYou can raise the byte settings by running:\n"
                 ">>> sudo sysctl -w net.core.rmem_max=26214400 net.core.rmem_default=26214400 "
-                "net.ipv4.udp_mem='26214400 26214400 26214400' net.ipv4.udp_rmem_min=26214400"
+                "net.ipv4.udp_rmem_min=26214400\n"
+                "Leave net.ipv4.udp_mem at the kernel default unless it is below the required pages."
             )
 
     def test_mtu_size(self, xr):

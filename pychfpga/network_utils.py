@@ -194,20 +194,23 @@ def check_udp_buffer_settings() -> Dict[str, Tuple[bool, int, int]]:
         else:
             results[param] = (False, 0, required)
     
-    # Check udp_mem (has 3 values)
+    # Check udp_mem: [min, pressure, max] in PAGES (not bytes), the system-wide total for all
+    # UDP sockets. One socket buffer of rmem_default bytes needs its size in pages below both the
+    # pressure and the max thresholds; the min threshold does not limit a single socket.
+    required_pages = -(-required_values['rmem_default'] // os.sysconf('SC_PAGE_SIZE'))
     value_str = get_sysctl_value('net.ipv4.udp_mem')
-    if value_str is not None:
-        try:
-            # Handle both space and tab separated values
-            udp_mem_values = [int(x) for x in value_str.split()]
-            # All three values should be >= 26214400
-            required_udp_mem = 26214400
-            is_sufficient = all(val >= required_udp_mem for val in udp_mem_values)
-            results['udp_mem'] = (is_sufficient, udp_mem_values, [required_udp_mem] * 3)
-        except ValueError:
-            results['udp_mem'] = (False, [0, 0, 0], [26214400, 26214400, 26214400])
+    try:
+        # Handle both space and tab separated values
+        udp_mem_values = [int(x) for x in value_str.split()]
+    except (AttributeError, ValueError):  # value_str is None or not numeric
+        udp_mem_values = []
+    if len(udp_mem_values) == 3:
+        is_sufficient = min(udp_mem_values[1:]) >= required_pages
+        # Suggested values never lower the current ones
+        required_udp_mem = [udp_mem_values[0]] + [max(v, required_pages) for v in udp_mem_values[1:]]
+        results['udp_mem'] = (is_sufficient, udp_mem_values, required_udp_mem)
     else:
-        results['udp_mem'] = (False, [0, 0, 0], [26214400, 26214400, 26214400])
+        results['udp_mem'] = (False, [0, 0, 0], [0, required_pages, required_pages])
     
     return results
 
@@ -303,7 +306,7 @@ def verify_network_settings(interface: str = None) -> Tuple[bool, List[str], Lis
             if param == 'udp_mem':
                 current_str = ' '.join(map(str, current))
                 required_str = ' '.join(map(str, required))
-                errors.append(f"UDP memory setting net.ipv4.udp_mem is [{current_str}], should be [{required_str}]")
+                errors.append(f"UDP memory setting net.ipv4.udp_mem is [{current_str}] pages, should be [{required_str}] pages")
                 fix_commands.append(f"sudo sysctl -w net.ipv4.udp_mem='{required_str}'")
             else:
                 sysctl_name = f'net.core.{param}' if param.startswith('rmem') else f'net.ipv4.{param}'
@@ -345,7 +348,7 @@ def show_network_status(interface: str = None) -> None:
         if param == 'udp_mem':
             current_str = ' '.join(map(str, current))
             required_str = ' '.join(map(str, required))
-            print(f"  {status} net.ipv4.udp_mem: [{current_str}] (required: [{required_str}])")
+            print(f"  {status} net.ipv4.udp_mem: [{current_str}] pages (required: [{required_str}] pages)")
         else:
             sysctl_name = f'net.core.{param}' if param.startswith('rmem') else f'net.ipv4.{param}'
             print(f"  {status} {sysctl_name}: {current} (required: >= {required})")

@@ -21,7 +21,6 @@ The following is directly copied from pychfpga/pychfpga/fpga_firmware/chfpga/ct_
 
         sudo sysctl -w net.core.rmem_max=26214400
         sudo sysctl -w net.core.rmem_default=26214400
-        sudo sysctl -w net.ipv4.udp_mem='26214400 26214400 26214400'
         sudo sysctl -w net.ipv4.udp_rmem_min=26214400
 
     Check udp buffers::

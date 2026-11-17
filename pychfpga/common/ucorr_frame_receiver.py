@@ -68,7 +68,6 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
 
         sudo sysctl -w net.core.rmem_max=262144000
         sudo sysctl -w net.core.rmem_default=262144000
-        sudo sysctl -w net.ipv4.udp_mem='26214400 26214400 262144000'
         sudo sysctl -w net.ipv4.udp_rmem_min=262144000
 
     To check UDP buffers::

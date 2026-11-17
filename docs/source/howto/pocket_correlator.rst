@@ -259,7 +259,7 @@ Running the correlator
 
     .. code-block:: bash
 
-        sudo sysctl -w net.core.rmem_max=26214400 net.core.rmem_default=26214400 net.ipv4.udp_mem='26214400 26214400 26214400' net.ipv4.udp_rmem_min=26214400
+        sudo sysctl -w net.core.rmem_max=26214400 net.core.rmem_default=26214400 net.ipv4.udp_rmem_min=26214400
 
 #. | Make sure your DHCP server (e.g. router) has a /16 (255.255.0.0) netmask. Otherwise you won't be able to reach to
    | the FPGA and will get "FPGA command timeout" errors.
