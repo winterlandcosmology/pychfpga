@@ -238,13 +238,18 @@ class RawAcqAsyncRESTServer(AsyncRESTServer):
 
     @endpoint('get-rms')
     async def get_rms(self):
-        adc = self.receiver.processors.get("adc") if self.receiver else None
-        if self.receiver and self.receiver.is_running() and adc is not None:
-            rms = await adc.get_adc_rms_async()
-        else:
-            rms = []  # if the receiver is not ready, return an empty list. This won't cause the caller to crash.
-            # return raw packet processor not yet running")
-        return dict(rms=rms)
+        """Return the latest averaged ADC RMS of each channel.
+
+        Returns ``dict(rms=[(chan_id, timestamp, rms), ...])``. A channel reads ``rms=0.0`` and
+        ``timestamp=0.0`` until ``adc_rms_refresh_count`` complete ADC frames have been received,
+        and is not refreshed while the capture source is not 'adc' (e.g. during the FFT gain
+        capture). Returns ``rms=[]`` if the receiver is not running.
+        """
+        # The ADC processor lives under the raw processor (receiver.processors["raw"].adc)
+        raw_proc = self.receiver.processors.get("raw") if self.receiver else None
+        if raw_proc is None or not self.receiver.is_running():
+            return dict(rms=[])
+        return dict(rms=await raw_proc.adc.get_adc_rms_async())
 
     @endpoint('get-monitoring-data')
     async def get_monitoring_data(self):

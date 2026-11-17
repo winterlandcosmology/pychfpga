@@ -104,6 +104,10 @@ class RawAcqAsyncRESTClient(AsyncRESTClient):
         ix, rms = await self.get('get-fft-rms')
         return (ix, rms)
 
+    async def get_rms(self):
+        """Return the latest averaged ADC RMS as a list of (chan_id, timestamp, rms)."""
+        return (await self.get('get-rms'))['rms']
+
     async def start_raw_hdf5(self,
                              base_dir=None,
                              base_filename=None,
