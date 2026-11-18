@@ -3,8 +3,6 @@ x-pychfpga-build: &pychfpga_build
   dockerfile: Dockerfile
   args:
     PYCHFPGA_VERSION: ${PYCHFPGA_VERSION:-0+docker}
-  ssh:
-    - default=${PYCHFPGA_SSH_KEY_PATH}
 
 services:
   raw_acq:

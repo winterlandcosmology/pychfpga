@@ -254,9 +254,8 @@ Create the local environment file and edit it for the deployment::
 
     cp .env.example .env
 
-``PYCHFPGA_SSH_KEY_PATH`` must be an absolute path to a private SSH key with
-read access to the private Bitbucket dependencies. The key is forwarded by
-BuildKit and is not copied into the image.
+The build needs no credentials: the package and its dependencies are fetched
+from public repositories over HTTPS.
 
 The environment file contains:
 
@@ -269,7 +268,6 @@ The environment file contains:
 - ``PYCHFPGA_WAIT_TIMEOUT``: optional total wait timeout. Leave it empty to
   wait indefinitely; no wait is performed when ``PYCHFPGA_WAIT_HOSTS`` is
   empty.
-- ``PYCHFPGA_SSH_KEY_PATH``: absolute path to the Bitbucket SSH key.
 - ``PYCHFPGA_VERSION``: optional package-version override for image builds.
 
 The raw-acquisition address in the FPGA configuration should use

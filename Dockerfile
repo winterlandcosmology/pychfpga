@@ -25,19 +25,15 @@ RUN set -eux; \
         libffi-dev \
         libhdf5-dev \
         libssl-dev \
-        openssh-client \
         pkg-config; \
     git lfs install; \
-    mkdir -p -m 0700 /root/.ssh; \
-    ssh-keyscan bitbucket.org >> /root/.ssh/known_hosts; \
     rm -rf /var/lib/apt/lists/*
 
 RUN python -m venv "${VIRTUAL_ENV}"
 
 COPY . /build
 
-RUN --mount=type=ssh \
-    set -eux; \
+RUN set -eux; \
     python -m pip install --upgrade pip setuptools wheel; \
     python -m pip install .
 
