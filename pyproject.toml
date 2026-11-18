@@ -28,12 +28,12 @@
         "setuptools-scm>=8.0",
 
         # Private packages
-        "wtl.namespace @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.namespace.git",  # testing 1.1.0
-        "wtl.metrics @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.metrics.git",  # testing 1.1
-        "wtl.log @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.log.git",  # testing 1.1.0
-        "wtl.rest @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.rest.git@1.2.0",
-        "wtl.config @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.config.git@1.1.1",
-        "wtl.h5-archive @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.h5-archive.git",   # was @v1.0.3, testing 1.1.0
+        "wtl.namespace @ git+https://git@bitbucket.org/winterlandcosmology/wtl.namespace.git",  # testing 1.1.0
+        "wtl.metrics @ git+https://git@bitbucket.org/winterlandcosmology/wtl.metrics.git",  # testing 1.1
+        "wtl.log @ git+https://git@bitbucket.org/winterlandcosmology/wtl.log.git",  # testing 1.1.0
+        "wtl.rest @ git+https://git@bitbucket.org/winterlandcosmology/wtl.rest.git", # @1.2.0
+        "wtl.config @ git+https://git@bitbucket.org/winterlandcosmology/wtl.config.git", # @1.1.1
+        "wtl.h5-archive @ git+https://git@bitbucket.org/winterlandcosmology/wtl.h5-archive.git",   # was @v1.0.3, testing 1.1.0
 
         # t0.technology packages
         "psucontrol @ git+https://github.com/t0/psucontrol.git",
@@ -115,8 +115,8 @@ errors-only = true
 
     qc = [
         # Private packages
-        "wtl.pytest-xreport @ git+ssh://git@bitbucket.org/winterlandcosmology/wtl.pytest-xreport.git@jfc/dev",
-        "labpy @ git+ssh://git@bitbucket.org/winterlandcosmology/labpy.git@qc",
+        "wtl.pytest-xreport @ git+https://git@bitbucket.org/winterlandcosmology/wtl.pytest-xreport.git@jfc/dev",
+        "labpy @ git+https://git@bitbucket.org/winterlandcosmology/labpy.git@qc",
 
         # Pypi packages
         "numpy",
