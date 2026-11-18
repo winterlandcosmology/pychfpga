@@ -538,6 +538,20 @@ class FPGAMaster(object):
                 f'with period={period}, sub_period={capture_sub_period}, '
                 f'source={source}, send_delay={send_delay}')
 
+            if gain_capture and fpga.CAPTURE_TYPE == 'PROBER':
+                # PROBER_USER_FLAGS is 1 at power-up. It replaces the low nibble of every
+                # byte the prober captures from the scaler with the TUSER flags, which
+                # corrupts the 24-bit fft_full values the gain calculation measures (RMS
+                # ~25x too high, so gains ~25x too low and an all-zero 4-bit output). It
+                # only affects the prober's capture FIFO, not the scaler's main 4-bit +
+                # flags output to the corner-turn/correlator. Each channel's 4/8-bit mode
+                # is passed back unchanged.
+                for ch in channels:
+                    fpga.set_scaler_eight_bit(
+                        scaler_eight_bit=not fpga.chan[ch].SCALER.FOUR_BITS,
+                        prober_user_flags=False,
+                        channels=[ch])
+
             if period:
                 ib.start_data_capture(
                     period=period,

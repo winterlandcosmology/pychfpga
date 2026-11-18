@@ -302,10 +302,25 @@ class _FakeBoard:
             self._PLATFORM_ID_CRS if capture_type == "UCAP"
             else self._PLATFORM_ID_MGK7MB_REV2)
         self.fpga = self
+        self.UCAP = SimpleNamespace(select_output=lambda output: None)
         self.target_addr = None
         self.capture_source = "mixed"
         self.start_data_capture_calls = []
         self.set_data_capture_calls = []
+        self.set_scaler_eight_bit_calls = []
+        self.calls = []
+        # channel 0 in 4-bit mode, channel 1 in 8-bit mode
+        self.chan = {
+            0: SimpleNamespace(SCALER=SimpleNamespace(FOUR_BITS=1)),
+            1: SimpleNamespace(SCALER=SimpleNamespace(FOUR_BITS=0)),
+        }
+
+    def set_scaler_eight_bit(self, scaler_eight_bit, prober_user_flags=None, channels=None):
+        self.set_scaler_eight_bit_calls.append(
+            dict(scaler_eight_bit=scaler_eight_bit,
+                 prober_user_flags=prober_user_flags,
+                 channels=channels))
+        self.calls.append("set_scaler_eight_bit")
 
     def get_channels(self):
         return [0, 1]
@@ -316,6 +331,7 @@ class _FakeBoard:
 
     def start_data_capture(self, **kwargs):
         self.start_data_capture_calls.append(kwargs)
+        self.calls.append("start_data_capture")
         self.capture_source = kwargs["source"]
 
     def stop_data_capture(self):
@@ -478,6 +494,67 @@ def test_raw_acq_initial_decoder_follows_programmed_gain_profile(monkeypatch):
     assert board.start_data_capture_calls[0]["source"] == "scaler"
     assert board.start_data_capture_calls[0]["data_type"] == "fft_full"
     assert board.set_data_capture_calls == [([0, 1], "scaler", 12)]
+
+
+def _start_with_profile(monkeypatch, board, profile, gain_capture):
+    _FakeRawAcqClient.start_calls = []
+    _FakeRawAcqClient.target_addr = [
+        ((board.hostname, board.port), ("0.0.0.0", 54322, None))
+    ]
+    monkeypatch.setattr(fpga_master_mod, "RawAcqAsyncRESTClient", _FakeRawAcqClient)
+    fm = _master_with_board(board)
+    asyncio.run(fm.start_raw_acq_servers(
+        initial_capture_config=NameSpace(profile),
+        gain_capture=gain_capture))
+
+
+_PROBER_GAIN_PROFILE = {
+    "capture_source": "scaler",
+    "baseline_capture_rate": 10,
+    "capture_rate": 12,
+    "tmux_factor": 3,
+    "scaler_cap_data_type": "fft_full",
+    "frames_per_burst": 4,
+}
+
+
+def test_prober_gain_capture_clears_prober_user_flags(monkeypatch):
+    # PROBER_USER_FLAGS (on at power-up) overwrites the low nibble of every captured byte,
+    # which corrupts the 24-bit fft_full values the gain calculation measures. The gain
+    # capture must clear it on every capture channel, before the capture starts, without
+    # changing each channel's 4/8-bit scaler output mode.
+    board = _FakeBoard("tcpipe", capture_type="PROBER")
+
+    _start_with_profile(monkeypatch, board, _PROBER_GAIN_PROFILE, gain_capture=True)
+
+    assert board.set_scaler_eight_bit_calls == [
+        dict(scaler_eight_bit=False, prober_user_flags=False, channels=[0]),
+        dict(scaler_eight_bit=True, prober_user_flags=False, channels=[1]),
+    ]
+    assert board.calls.index("start_data_capture") > max(
+        i for i, c in enumerate(board.calls) if c == "set_scaler_eight_bit")
+
+
+def test_prober_normal_capture_leaves_prober_user_flags(monkeypatch):
+    board = _FakeBoard("tcpipe", capture_type="PROBER")
+    normal = dict(_PROBER_GAIN_PROFILE, capture_source="adc", scaler_cap_data_type=0,
+                  frames_per_burst=1)
+
+    _start_with_profile(monkeypatch, board, normal, gain_capture=False)
+
+    assert board.start_data_capture_calls
+    assert board.set_scaler_eight_bit_calls == []
+
+
+def test_ucap_gain_capture_leaves_prober_user_flags(monkeypatch):
+    board = _FakeBoard("tcpipe", capture_type="UCAP")
+    ucap_gain = dict(_PROBER_GAIN_PROFILE, scaler_cap_data_type="fft_2x", frames_per_burst=1,
+                     ucap_output="cap", ucap_mode=2)
+
+    _start_with_profile(monkeypatch, board, ucap_gain, gain_capture=True)
+
+    assert board.start_data_capture_calls
+    assert board.set_scaler_eight_bit_calls == []
 
 
 def test_non_prober_raw_acq_does_not_normalize_capture_source(monkeypatch):

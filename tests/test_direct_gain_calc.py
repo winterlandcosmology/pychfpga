@@ -71,6 +71,7 @@ class _FakeProber:
     def __init__(self, reset=0):
         self.reset_writes = []
         self._reset = int(reset)
+        self.PROBER_USER_FLAGS = 1  # power-up default
 
     @property
     def RESET(self):
@@ -174,6 +175,12 @@ class _FakeFPGA:
                 for ch in self.default_channels
             },
         )
+
+    def set_scaler_eight_bit(self, scaler_eight_bit, prober_user_flags=None, channels=None):
+        for ch in channels:
+            self.chan[ch].SCALER.FOUR_BITS = int(not scaler_eight_bit)
+            if prober_user_flags is not None:
+                self.chan[ch].PROBER.PROBER_USER_FLAGS = int(prober_user_flags)
 
     def get_receiver_config(self, channels=None):
         cap_type = int(self.config.chan[int((channels or [0])[0])].scaler.cap_data_type)

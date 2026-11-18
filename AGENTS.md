@@ -211,3 +211,13 @@ three-way `if CAPTURE_TYPE == 'PROBER' ... elif 'UCAP' ... else raise` idiom.
   - Board init resets FUNCGEN and SCALER but **not** `FFT.BYPASS`. After any
     FFT-bypass test (the algorithm/flags stages or the lane-ID payload), only
     a `prog=2` bring-up restores sky data.
+  - `PROBER_USER_FLAGS` is 1 at power-up (`prober.vhd:440-445`): on
+    scaler-source prober captures it overwrites the low nibble of every byte
+    with TUSER flags. Harmless for 4-bit captures (the decoder drops the
+    nibble), but it corrupts every wider scaler capture (fft_full, fft_2x,
+    MSB modes). It only affects the prober's capture FIFO, never the scaler's
+    main 4-bit + TUSER output to the corner turn/correlator. Until 2026-11-18
+    fpga_master left it set, so ICE gain calibration measured an fft_full RMS
+    ~25x too high and set gains ~25x too low (all-zero corr16 data);
+    `start_fpga_raw_data_transmission` now clears it for PROBER gain capture.
+    Firmware tests clear it themselves (`prober_user_flags=False`).
