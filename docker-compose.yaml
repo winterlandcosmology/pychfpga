@@ -1,12 +1,7 @@
-x-pychfpga-build: &pychfpga_build
-  context: .
-  dockerfile: Dockerfile
-  args:
-    PYCHFPGA_VERSION: ${PYCHFPGA_VERSION:-0+docker}
+# Runs the image built by ./docker_build; compose does not build it.
 
 services:
   raw_acq:
-    build: *pychfpga_build
     image: ${PYCHFPGA_IMAGE:-pychfpga:local}
     command: ["pychfpga_raw_acq"]
     network_mode: host
@@ -23,7 +18,6 @@ services:
       start_period: 5s
 
   fpga_master:
-    build: *pychfpga_build
     image: ${PYCHFPGA_IMAGE:-pychfpga:local}
     command: ["/bin/bash", "/pychfpga/docker/start_fpga_master.sh"]
     network_mode: host

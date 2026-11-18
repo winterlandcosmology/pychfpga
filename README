@@ -268,7 +268,8 @@ The environment file contains:
 - ``PYCHFPGA_WAIT_TIMEOUT``: optional total wait timeout. Leave it empty to
   wait indefinitely; no wait is performed when ``PYCHFPGA_WAIT_HOSTS`` is
   empty.
-- ``PYCHFPGA_VERSION``: optional package-version override for image builds.
+- ``PYCHFPGA_VERSION``: optional override of the package version that the
+  build computes from git.
 
 The raw-acquisition address in the FPGA configuration should use
 ``localhost:54322`` because both services use host networking.
@@ -276,21 +277,29 @@ The raw-acquisition address in the FPGA configuration should use
 Building and starting
 ---------------------
 
-Validate the resolved deployment before starting it::
+Build the image (the helper reads ``.env`` automatically)::
+
+    ./docker_build
+
+The image is built from the working tree as it is, with no tag required. Its
+package version is the one ``pip install`` would give this checkout,
+computed by setuptools-scm from git (for example
+``2.1.2.dev70+ice.corr16.gd4c2aea0a``). Modified tracked files add a
+``.dYYYYMMDD`` suffix, and the build prints a warning listing every
+uncommitted or untracked change that goes into the image. The host needs git,
+``setuptools-scm>=8`` (the repository ``.venv`` is used when present,
+otherwise ``python3``) and the git-lfs bitstreams (``git lfs pull``).
+
+``./docker_build`` is a wrapper around ``./scripts/docker/build_image.sh``.
+Set ``PYCHFPGA_ENV_FILE`` to load another environment file.
+
+Validate the resolved deployment, then start both services::
 
     docker compose config
+    docker compose up -d
 
-Build and start both services::
-
-    docker compose up -d --build
-
-The standalone image-build helper reads ``.env`` automatically::
-
-    ./scripts/docker/build_image.sh
-
-Set ``PYCHFPGA_ENV_FILE`` to load another environment file. The legacy
-``./docker_build`` command remains as a compatibility wrapper around the same
-helper.
+Compose only runs the image; rebuild with ``./docker_build`` and run
+``docker compose up -d`` again to deploy a new software state.
 
 Health and operation
 --------------------
