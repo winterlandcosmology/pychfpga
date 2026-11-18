@@ -313,3 +313,10 @@ reports that it is ready. Check service state and logs with::
 
 Both services use the ``unless-stopped`` restart policy, so they resume after
 the Docker daemon or host restarts unless they were explicitly stopped.
+
+If the start of ``fpga_master`` fails, the container does not exit and
+restart, which would reprogram the FPGAs on every attempt. It keeps running,
+unhealthy, with the reason in ``docker compose logs fpga_master``. Fix the
+cause, then start one new attempt with::
+
+    docker compose restart fpga_master
