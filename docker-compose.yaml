@@ -39,4 +39,5 @@ services:
       interval: 10s
       timeout: 5s
       retries: 18
-      start_period: 15s
+      # Covers the wait for the boards to boot plus a full-crate bring-up.
+      start_period: 10m
