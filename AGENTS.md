@@ -83,6 +83,19 @@ three-way `if CAPTURE_TYPE == 'PROBER' ... elif 'UCAP' ... else raise` idiom.
   block in `qc/ICE_crate/f_engine_tests.py`; restoring it needs a
   `setuptools<81` pin. Note the two drivers report supply state differently:
   the in-repo one never returns `'ON'`, only `'OK'`/`'OFF'`/`'ILIMIT'`/`'FAULT'`.
+- Host UDP receive buffers: one recommendation for every mode, defined once in
+  `network_utils.RECOMMENDED_UDP_SYSCTLS` (rmem_max = rmem_default =
+  udp_rmem_min = 256 MiB) and checked by `test_udp_buffers_size` in both
+  funcgen_test.py and ct_shuffle256_test.py (first test there, before any
+  capture). CRS receives data over UDP too, so the same values apply; the
+  TCPipe control link uses tcp_rmem and is unaffected. Derivation: the kernel charges each queued packet's buffer
+  (truesize), not its payload — 4352 B per 690-B UCORR packet on igb/MTU 9000
+  (measured on SN0516, 2026-11-18), so the 208 KiB default holds ~49 packets
+  (2 ms of corr16) and the old 25 MiB ~0.25 s. 256 MiB rides out ~1 s at 1 GbE
+  line rate, the ceiling of every mode. raw_acq and the test receivers never
+  set SO_RCVBUF, so rmem_default is what matters. Check for kernel drops with
+  `RcvbufErrors` in /proc/net/snmp; NIC-level drops show as `missed` in
+  `ip -s link` (raise the ring with `ethtool -G <if> rx <max>`).
 - Crate power cycling in QC goes through `TestUtils.power_cycle()`, which
   honours `ps_off_dwell` (>= 5 s with the output off) and `ps_t_sleep` (the
   crate's ARM boot takes 2-3 minutes). A boot wait shorter than that races the

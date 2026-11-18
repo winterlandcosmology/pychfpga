@@ -255,11 +255,14 @@ Running the correlator
 
    | Run :code:`ifconfig` again to check the MTU.
 
-#. Set proper UDP buffer size on system by running (the following should be a single line command):
+#. Set the UDP receive buffers to the pychfpga recommendation (one value for every mode; derivation in
+   :code:`pychfpga/network_utils.py`, :code:`RECOMMENDED_UDP_SYSCTLS`). The first command applies it now,
+   the second keeps it across reboots:
 
     .. code-block:: bash
 
-        sudo sysctl -w net.core.rmem_max=26214400 net.core.rmem_default=26214400 net.ipv4.udp_rmem_min=26214400
+        sudo sysctl -w net.core.rmem_max=268435456 net.core.rmem_default=268435456 net.ipv4.udp_rmem_min=268435456
+        printf 'net.core.rmem_max = 268435456\nnet.core.rmem_default = 268435456\nnet.ipv4.udp_rmem_min = 268435456\n' | sudo tee /etc/sysctl.d/90-pychfpga-udp.conf
 
 #. | Make sure your DHCP server (e.g. router) has a /16 (255.255.0.0) netmask. Otherwise you won't be able to reach to
    | the FPGA and will get "FPGA command timeout" errors.

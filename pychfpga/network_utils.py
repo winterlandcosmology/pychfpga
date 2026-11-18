@@ -142,19 +142,55 @@ def get_interface_for_ip(target_ip: str) -> Optional[str]:
     return None
 
 
+# One receive-buffer size for every host that receives IceBoard/CRS data, in every mode
+# (corr16, shuffle256, raw ADC/FFT capture, gain calibration). Derivation (SN0516, 2026-11-18):
+#   - The kernel charges a socket for each queued packet's buffer ("truesize"), not its payload:
+#     a 690-byte UCORR packet costs 4352 bytes on an igb NIC at MTU 9000. The old 25 MiB held
+#     ~6000 packets; the 208 KiB kernel default only 49 (2 ms of corr16).
+#   - The worst sustained ingest in any mode is the link itself: crate-wide gain calibration
+#     (fft_full from 16 boards) exceeds 1 GbE. A saturated 1 GbE link with 2-9 KB packets costs
+#     ~230-260 MB of buffer per second; corr16 from one board costs ~106 MB/s.
+#   - 256 MiB rides out ~1 s without reading at 1 GbE line rate (~2.5 s for corr16 alone).
+#     Buffer memory is only used while packets are queued, so idle sockets cost nothing.
+# raw_acq and the firmware-test receivers do not set SO_RCVBUF, so their sockets get
+# net.core.rmem_default: it must be raised, not just rmem_max.
+RECOMMENDED_UDP_RCVBUF_BYTES = 256 * 1024 * 1024
+RECOMMENDED_UDP_SYSCTLS = {
+    'net.core.rmem_max': RECOMMENDED_UDP_RCVBUF_BYTES,
+    'net.core.rmem_default': RECOMMENDED_UDP_RCVBUF_BYTES,
+    'net.ipv4.udp_rmem_min': RECOMMENDED_UDP_RCVBUF_BYTES,
+}
+
+
+def udp_buffer_fix_hint() -> str:
+    """Return the commands that apply the recommended UDP buffer settings now and at boot."""
+    settings = ' '.join(f'{name}={value}' for name, value in RECOMMENDED_UDP_SYSCTLS.items())
+    conf_lines = '\\n'.join(f'{name} = {value}' for name, value in RECOMMENDED_UDP_SYSCTLS.items())
+    return (
+        f"Apply now:      sudo sysctl -w {settings}\n"
+        f"Keep at boot:   printf '{conf_lines}\\n' | sudo tee /etc/sysctl.d/90-pychfpga-udp.conf\n"
+        "Leave net.ipv4.udp_mem at the kernel default unless the check reports it too small.")
+
+
+def udp_buffer_problems() -> List[str]:
+    """Return one line per UDP buffer setting below the recommendation (empty when all are OK)."""
+    problems = []
+    for param, (is_ok, current, required) in check_udp_buffer_settings().items():
+        if not is_ok:
+            unit = 'pages' if param == 'udp_mem' else 'bytes'
+            problems.append(f'{param}: current {current}, required >= {required} ({unit})')
+    return problems
+
+
 def check_udp_buffer_settings() -> Dict[str, Tuple[bool, int, int]]:
     """
-    Check UDP buffer memory settings.
-    
+    Check UDP buffer memory settings against RECOMMENDED_UDP_SYSCTLS.
+
     Returns:
         Dictionary with keys: 'rmem_max', 'rmem_default', 'udp_mem', 'udp_rmem_min'
         Values are tuples of (is_sufficient, current_value, required_value)
     """
-    required_values = {
-        'rmem_max': 26214400,
-        'rmem_default': 26214400,
-        'udp_rmem_min': 26214400
-    }
+    required_values = {name.rsplit('.', 1)[1]: value for name, value in RECOMMENDED_UDP_SYSCTLS.items()}
     
     results = {}
     

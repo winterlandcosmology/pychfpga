@@ -323,6 +323,26 @@ class TestCTShuffle256(TestModule):
         return ct_health.measure_crate_health(boards, populated, logger)
 
     @pytest.mark.ct_shuffle256
+    def test_udp_buffers_size(self):
+        '''
+        Verify the receiving host's UDP buffers meet the pychfpga recommendation.
+
+        Runs first, before any capture (it still goes through the class's crate bring-up, and
+        skips like the rest of the file unless mode='shuffle256'): with the kernel default
+        (208 KiB) a socket holds only ~49 data packets, so captures drop packets in ways that
+        look like firmware faults.
+        Same check as funcgen_test.py; values and derivation in
+        pychfpga.network_utils.RECOMMENDED_UDP_SYSCTLS.
+        '''
+        from pychfpga.network_utils import udp_buffer_problems, udp_buffer_fix_hint
+        self.logger.debug("Checking the UDP buffer sysctl settings")
+        problems = udp_buffer_problems()
+        assert not problems, (
+            "The host UDP receive buffers are below the pychfpga recommendation, so capture "
+            "packets will be dropped by the kernel: " + "; ".join(problems) + "\n"
+            + udp_buffer_fix_hint())
+
+    @pytest.mark.ct_shuffle256
     def test_crate_health(self, crate_setup, xr):
         '''
         Verify the backplane links and both shuffle crossbars are error-free on every board.

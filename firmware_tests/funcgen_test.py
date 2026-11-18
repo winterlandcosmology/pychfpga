@@ -98,24 +98,17 @@ class TestFuncgen(TestModule):
             np.testing.assert_array_equal(data, expected_data)
 
     def test_udp_buffers_size(self):
-        from pychfpga.network_utils import check_udp_buffer_settings
+        # Same check and recommendation as the crate suite (ct_shuffle256_test.py): the values and
+        # their derivation live in pychfpga.network_utils.RECOMMENDED_UDP_SYSCTLS.
+        from pychfpga.network_utils import udp_buffer_problems, udp_buffer_fix_hint
         logger = self.get_logger()
         logger.debug("Checking the UDP buffer sysctl settings")
-        too_low = {param: (current, required)
-                   for param, (is_ok, current, required) in check_udp_buffer_settings().items()
-                   if not is_ok}
-
-        if too_low:
+        problems = udp_buffer_problems()
+        if problems:
             raise RuntimeError(
-                "The UDP buffer settings are too low (net.core.rmem_* and net.ipv4.udp_rmem_min in "
-                "bytes, net.ipv4.udp_mem in pages): "
-                + "; ".join(f"{param}: current {current}, required >= {required}"
-                            for param, (current, required) in too_low.items())
-                + "\nYou can raise the byte settings by running:\n"
-                ">>> sudo sysctl -w net.core.rmem_max=26214400 net.core.rmem_default=26214400 "
-                "net.ipv4.udp_rmem_min=26214400\n"
-                "Leave net.ipv4.udp_mem at the kernel default unless it is below the required pages."
-            )
+                "The host UDP receive buffers are below the pychfpga recommendation, so data "
+                "packets will be dropped by the kernel: " + "; ".join(problems) + "\n"
+                + udp_buffer_fix_hint())
 
     def test_mtu_size(self, xr):
         logger = self.get_logger()

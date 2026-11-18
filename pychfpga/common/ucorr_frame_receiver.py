@@ -64,11 +64,10 @@ class UCorrFrameReceiver(UCorrPacketProcessor):
 
     Insufficient OS buffering is the main cause for UDP packet loss (not the computer speed, not the switches, not Python).
 
-    The UDP buffers shall be increased to reduce packet loss to a minimum::
+    The UDP buffers shall be raised to the pychfpga recommendation (derivation in
+    pychfpga.network_utils.RECOMMENDED_UDP_SYSCTLS)::
 
-        sudo sysctl -w net.core.rmem_max=262144000
-        sudo sysctl -w net.core.rmem_default=262144000
-        sudo sysctl -w net.ipv4.udp_rmem_min=262144000
+        sudo sysctl -w net.core.rmem_max=268435456 net.core.rmem_default=268435456 net.ipv4.udp_rmem_min=268435456
 
     To check UDP buffers::
 

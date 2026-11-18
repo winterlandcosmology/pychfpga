@@ -507,11 +507,10 @@ class CorrFrameReceiver(object):
 
         sudo ifconfig eno1 mtu 9000
 
-    The UDP buffers shall be increased to reduce packet loss to a minimum::
+    The UDP buffers shall be raised to the pychfpga recommendation (derivation in
+    pychfpga.network_utils.RECOMMENDED_UDP_SYSCTLS)::
 
-        sudo sysctl -w net.core.rmem_max=26214400
-        sudo sysctl -w net.core.rmem_default=26214400
-        sudo sysctl -w net.ipv4.udp_rmem_min=26214400
+        sudo sysctl -w net.core.rmem_max=268435456 net.core.rmem_default=268435456 net.ipv4.udp_rmem_min=268435456
 
     Check udp buffers::
 
