@@ -24,6 +24,9 @@ if [[ ! -f "${CONFIG_PATH}" ]]; then
     exit 1
 fi
 
+python /pychfpga/docker/check_fpga_config.py "${CONFIG_PATH}" "${PYCHFPGA_CONFIG_NAME}" \
+    || hold "fpga_master was not started: the configuration check failed."
+
 python /pychfpga/docker/wait_for_iceboards.py
 
 fpga_master "${CONFIG_PATH}:${PYCHFPGA_CONFIG_NAME}" \

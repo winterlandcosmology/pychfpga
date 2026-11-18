@@ -274,6 +274,12 @@ The environment file contains:
 The raw-acquisition address in the FPGA configuration should use
 ``localhost:54322`` because both services use host networking.
 
+Everything ``fpga_master`` writes must be on the ``/data`` mount, or it is
+lost with the container: set ``data_folder`` under ``/data`` and
+``adc_delay_params.delay_table_folder`` to a folder there, as
+``config/docker_example.yaml`` does (``'{data_folder}/adc_delay_tables'``).
+The delay-table folder is checked before ``fpga_master`` starts.
+
 Building and starting
 ---------------------
 
@@ -314,9 +320,10 @@ reports that it is ready. Check service state and logs with::
 Both services use the ``unless-stopped`` restart policy, so they resume after
 the Docker daemon or host restarts unless they were explicitly stopped.
 
-If the start of ``fpga_master`` fails, the container does not exit and
-restart, which would reprogram the FPGAs on every attempt. It keeps running,
-unhealthy, with the reason in ``docker compose logs fpga_master``. Fix the
-cause, then start one new attempt with::
+If the configuration check or the start of ``fpga_master`` fails, the
+container does not exit and restart, which would reprogram the FPGAs on every
+attempt. It keeps running, unhealthy, with the reason in
+``docker compose logs fpga_master``. Fix the cause, then start one new attempt
+with::
 
     docker compose restart fpga_master

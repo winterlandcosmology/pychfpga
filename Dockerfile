@@ -59,7 +59,7 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/venv /opt/venv
-COPY docker/start_fpga_master.sh docker/wait_for_iceboards.py /pychfpga/docker/
+COPY docker/start_fpga_master.sh docker/wait_for_iceboards.py docker/check_fpga_config.py /pychfpga/docker/
 
 EXPOSE 54321 54322 54326/udp 5353/udp 6000-6511/udp
 
