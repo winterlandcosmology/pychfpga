@@ -257,9 +257,8 @@ Create the local environment file and edit it for the deployment::
 
     cp .env.example .env
 
-``PYCHFPGA_SSH_KEY_PATH`` must be an absolute path to a private SSH key with
-read access to the private Bitbucket dependencies. The key is forwarded by
-BuildKit and is not copied into the image.
+The build needs no credentials: the package and its dependencies are fetched
+from public repositories over HTTPS.
 
 The environment file contains:
 
@@ -272,30 +271,44 @@ The environment file contains:
 - ``PYCHFPGA_WAIT_TIMEOUT``: optional total wait timeout. Leave it empty to
   wait indefinitely; no wait is performed when ``PYCHFPGA_WAIT_HOSTS`` is
   empty.
-- ``PYCHFPGA_SSH_KEY_PATH``: absolute path to the Bitbucket SSH key.
-- ``PYCHFPGA_VERSION``: optional package-version override for image builds.
+- ``PYCHFPGA_VERSION``: optional override of the package version that the
+  build computes from git.
 
 The raw-acquisition address in the FPGA configuration should use
 ``localhost:54322`` because both services use host networking.
 
+Everything ``fpga_master`` writes must be on the ``/data`` mount, or it is
+lost with the container: set ``data_folder`` under ``/data`` and
+``adc_delay_params.delay_table_folder`` to a folder there, as
+``config/docker_example.yaml`` does (``'{data_folder}/adc_delay_tables'``).
+The delay-table folder is checked before ``fpga_master`` starts.
+
 Building and starting
 ---------------------
 
-Validate the resolved deployment before starting it::
+Build the image (the helper reads ``.env`` automatically)::
+
+    ./docker_build
+
+The image is built from the working tree as it is, with no tag required. Its
+package version is the one ``pip install`` would give this checkout,
+computed by setuptools-scm from git (for example
+``2.1.2.dev70+ice.corr16.gd4c2aea0a``). Modified tracked files add a
+``.dYYYYMMDD`` suffix, and the build prints a warning listing every
+uncommitted or untracked change that goes into the image. The host needs git,
+``setuptools-scm>=8`` (the repository ``.venv`` is used when present,
+otherwise ``python3``) and the git-lfs bitstreams (``git lfs pull``).
+
+``./docker_build`` is a wrapper around ``./scripts/docker/build_image.sh``.
+Set ``PYCHFPGA_ENV_FILE`` to load another environment file.
+
+Validate the resolved deployment, then start both services::
 
     docker compose config
+    docker compose up -d
 
-Build and start both services::
-
-    docker compose up -d --build
-
-The standalone image-build helper reads ``.env`` automatically::
-
-    ./scripts/docker/build_image.sh
-
-Set ``PYCHFPGA_ENV_FILE`` to load another environment file. The legacy
-``./docker_build`` command remains as a compatibility wrapper around the same
-helper.
+Compose only runs the image; rebuild with ``./docker_build`` and run
+``docker compose up -d`` again to deploy a new software state.
 
 Health and operation
 --------------------
@@ -309,3 +322,12 @@ reports that it is ready. Check service state and logs with::
 
 Both services use the ``unless-stopped`` restart policy, so they resume after
 the Docker daemon or host restarts unless they were explicitly stopped.
+
+``fpga_master`` can take up to 10 minutes to become healthy: it waits for the
+boards to boot, then programs and initializes the whole array. If the
+configuration check or the start fails, the container does not exit and
+restart, which would reprogram the FPGAs on every attempt. It keeps running,
+unhealthy, with the reason in ``docker compose logs fpga_master``. Fix the
+cause, then start one new attempt with::
+
+    docker compose restart fpga_master
