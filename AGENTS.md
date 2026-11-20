@@ -237,8 +237,10 @@ three-way `if CAPTURE_TYPE == 'PROBER' ... elif 'UCAP' ... else raise` idiom.
 
 ## ICE corr16 correlator (UCORR)
 
-- Default corr16 bitstream is `chfpga_ice_corr16_2026_11_18.bit` (since
-  2026-11-18). Earlier corr16 builds (`chfpga_ice_corr16_pbg_jun16.bit` and
+- Default corr16 bitstream is `chfpga_ice_corr16_2026_11_20.bit` (since
+  2026-11-20; adds the saturation flags, below). It superseded
+  `chfpga_ice_corr16_2026_11_18.bit` (readout fix, no flags), which was removed
+  from the repo. Earlier corr16 builds (`chfpga_ice_corr16_pbg_jun16.bit` and
   before) have a UCMAC44_ARRAY readout fault: every bin except the readout
   bin holds only what accumulated between the bank switch and its readout
   (a ramp across the band, ~10% of the true power, independent of the
@@ -251,3 +253,15 @@ three-way `if CAPTURE_TYPE == 'PROBER' ... elif 'UCAP' ... else raise` idiom.
   2048 frames are below the documented minimum and read out incompletely.
   Products are 18-bit and saturate at 131071 (e.g. integ 65536 at the 2.12
   RMS gain target).
+- Saturation flags (2026-11-20 build): bit 0x20 (real) / 0x10 (imag) of
+  byte 4 of each 5-byte product, the bits the decoder already reads. A
+  component is flagged when it sits on a clamp rail (+131071 or -131072, the
+  sticky saturation values), so an exact -131072 sum is flagged too.
+  Verified on SN0516: real and imaginary flags match the expected overflow on
+  every bin (autos and a phase-rotated cross product, N=16384/32768/65535),
+  raw packets included; the 11-18 and earlier builds zero-pad the product
+  (`UCMAC44_ARRAY.vhd:337`) and never set them. Full single-board suite on
+  the 11-20 build: 226 passed, 108 skipped (platform limits), 1 failed only
+  for lack of an external ADC signal. The jfc/merge-vb-ct
+  `test_sat_detection` (FFT-bypassed buffer injection) does not set up its
+  stimulus correctly on ICE on this branch, so it cannot judge the flags.
