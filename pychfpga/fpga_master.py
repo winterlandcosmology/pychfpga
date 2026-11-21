@@ -1556,28 +1556,64 @@ class FPGAMaster(object):
 
     async def stop(self):
         """ Stop the F-engine and the correlator data acquisition processes"""
-        if self.state == 'on':
-            self.state = 'stopping'
-            self.log.info("stopping acquisition")
-            self.iceboard_cb.stop()
-            log.stop_logging(self.logging_handlers) # remove the handlers that were created by setup_logging()
-            reap_cached_sockets()
-
-            # Close interface to gain archive
-            if self.gain_hdf5 is not None:
-                self.log.info(f'{self!r}: closing {self.gain_hdf5.current_file}.')
-                self.gain_hdf5.close_all()
+        if self.state != 'on':
+            return {}
+        self.state = 'stopping'
+        self.log.info("stopping acquisition")
+        # Each step is attempted even if an earlier one fails, so that a single error does not leave
+        # files, sockets or the state behind (previously an exception left the state at 'stopping').
+        failed_steps = []
+        try:
+            # Close interface to gain archive (releases its lock file)
+            try:
+                if self.gain_hdf5 is not None:
+                    self.log.info(f'{self!r}: closing {self.gain_hdf5.current_file}.')
+                    self.gain_hdf5.close_all()
+            except Exception as e:
+                failed_steps.append(f'close gain archive: {e!r}')
+                self.log.exception(f'{self!r}: error closing the gain archive')
+            finally:
                 self.gain_hdf5 = None
 
             # Stop writing raw_acq to hdf5
             while self.raw_acq:
                 server_name, server = self.raw_acq.popitem()
-                msg = await server.stop_raw_hdf5()
-                self.log.info(f'{self!r}: stopping hdf5 writing for {server_name}: {msg}')
+                try:
+                    msg = await server.stop_raw_hdf5()
+                    self.log.info(f'{self!r}: stopping hdf5 writing for {server_name}: {msg}')
+                except Exception as e:
+                    failed_steps.append(f'stop raw_acq hdf5 for {server_name}: {e!r}')
+                    self.log.exception(f'{self!r}: error stopping hdf5 writing for {server_name}')
 
+            # Close the connections to the boards. This replaces `self.iceboard_cb.stop()`:
+            # `iceboard_cb` was a periodic callback from the tornado era that is no longer created,
+            # so the call raised AttributeError and stop() never completed.
+            try:
+                if self.fpgas is not None:
+                    for ib in self.fpgas.ib:
+                        if hasattr(ib, 'close_platform'):
+                            ib.close_platform()
+            except Exception as e:
+                failed_steps.append(f'close board connections: {e!r}')
+                self.log.exception(f'{self!r}: error closing the board connections')
+            finally:
+                self.fpgas = None
+
+            try:
+                reap_cached_sockets()
+            except Exception as e:
+                failed_steps.append(f'reap cached sockets: {e!r}')
+                self.log.exception(f'{self!r}: error closing cached sockets')
+
+            # Remove the handlers created by setup_logging() last, so the steps above are logged
+            try:
+                log.stop_logging(self.logging_handlers)
+            except Exception as e:
+                failed_steps.append(f'stop logging: {e!r}')
+        finally:
             self.start_time = None
             self.state = 'off'
-        return {}
+        return dict(failed_steps=failed_steps) if failed_steps else {}
 
 
     def get_frequency_map(self, format='s:b'):
