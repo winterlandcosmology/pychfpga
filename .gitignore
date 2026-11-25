@@ -41,3 +41,4 @@ tmp_*
 /deployment_scripts/crate_start_shuffle256.py
 /deployment_scripts/crate_watchdog.py
 /tests/test_deployment_scripts.py
+/data_processing
