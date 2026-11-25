@@ -323,7 +323,8 @@ class FPGAMmi(BSB_MMI):
                 elif not error:
                     error = f'{self!r}: Timeout during FPGA command.'
             if retry < 0:
-                return ''
+                self.set_timeout(old_timeout)
+                return b''
 
             if not error:
                 break

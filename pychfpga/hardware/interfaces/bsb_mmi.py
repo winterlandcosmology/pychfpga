@@ -152,10 +152,13 @@ class BSB_MMI:
             # Check command length against platform capability
             # if len(command_bytes) > self.MAX_BSB_COMMAND_PACKET_LENGTH:
             #     raise RuntimeError('BSB read command packet is too large for this platform')
-            rx_buf[offset: offset + read_length] = self._send_command(self.rx_command, read_length, retry, resync)
+            data = self._send_command(self.rx_command, read_length, retry, resync)
+            # retry < 0: single attempt whose reply is deliberately ignored (used to resynchronize
+            # after a UDP stack reset). Return before copying it: the reply may be absent.
             if retry is not None and retry < 0:
-                self.logger.warning(f'{self!r}: FPGA_MMI retry = {retry}')
+                self.logger.debug(f'{self!r}: FPGA_MMI retry = {retry}')
                 return
+            rx_buf[offset: offset + read_length] = data
             if offset + read_length > byte_length:
                 raise IOError(f'{self!r}: mmi.read(): Received too many bytes')
             # dout[offset: offset + read_length] = np.frombuffer(data, dtype=np.uint8)  # store received byte
