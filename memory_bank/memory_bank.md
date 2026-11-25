@@ -1,6 +1,6 @@
-# Cline Development Logbook
+# Memory Bank
 
-This is a running log of development work done with Cline on the pychfpga project.
+This is a running log of development work done with AI tools on the `pychfpga` project.
 
 ---
 
