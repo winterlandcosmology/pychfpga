@@ -265,3 +265,30 @@ three-way `if CAPTURE_TYPE == 'PROBER' ... elif 'UCAP' ... else raise` idiom.
   for lack of an external ADC signal. The jfc/merge-vb-ct
   `test_sat_detection` (FFT-bypassed buffer injection) does not set up its
   stimulus correctly on ICE on this branch, so it cannot judge the flags.
+- Control-link outages (crate 012 slot 8, 2026-11-20 to 25): about every
+  2.5 h the FPGA's UDP control replies arrive with the wrong first byte for
+  ~35 s, mostly 0xCF (the UCORR cookie, 1555 of 1874), at the right reply
+  length. The FPGA's outgoing UDP path is mis-framing (data bytes in control
+  replies); it is digital, not the SFP (no CRC loss, no temperature link).
+  fpga_master recovers with `clear_fpga_udp_errors` (SFP switch + UDP stack
+  reset). Suspected RTL: `udp_mac_tx` sends by frame-FIFO length without
+  checking TLAST, and `bsb_master` ignores TX back-pressure. The recovery
+  logs register 19 (sticky tx/rx_overflow, bits 17/16) before the reset and
+  "Invalid sequence number" messages carry the reply's first bytes: check
+  those at the next outage before chasing the firmware.
+- raw_acq UCORR receiver hardening (after an 18 h loss, 2026-11-24): three
+  mis-framed packets that started with 0xCF carried timestamps more than
+  18 h ahead, took 3 of the 4 assembly rows, and every record kept only its
+  first firmware integration (counts 1024 of 131072). The decoder now
+  requires the exact packet length, drops keys more than `max_timestamps`
+  ahead (following a real jump once a full firmware integration arrives
+  there), and logs incomplete records once a minute (metric
+  `raw_acq_corr_incomplete_integrations`). Reproduce with
+  `tests/test_ucorr_stray_packets.py`.
+- Frame-time capture (`capture_frame_time_async`, every 10 s with IRIG-B
+  sync): register 12 is now written from the IRIG-B source cached by
+  `set_irigb_source_async` (a read-modify-write during an outage could write
+  a garbage source back), with a 0.5 s timeout and one re-arm. The frame
+  trigger `manual_event_sample_trig` has no clock-domain synchroniser in
+  `gpio.vhd` (the refclk trigger does); a likely cause of missed triggers,
+  not confirmed on SN0505 (0 misses in 200).
