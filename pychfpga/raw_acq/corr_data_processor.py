@@ -27,6 +27,9 @@ class CorrDataProcessor(UCorrPacketProcessor):
         self.corr_udp_packets_total = 0
         self.corr_current_udp_packets = 0
         self.corr_integrations_emitted = 0
+        self.corr_incomplete_integrations = 0  # emitted with fewer than expected_packets packets
+        self._incomplete_since_log = 0
+        self._last_incomplete_log = 0.0
         self.corr_hdf5_integrations_written = 0
         self.corr_max_processing_time = 0
         self.corr_current_processing_time = 0
@@ -57,9 +60,27 @@ class CorrDataProcessor(UCorrPacketProcessor):
         """
         if result is not None:
             self.corr_integrations_emitted += len(result[0])
+            self._count_incomplete(result[3])
             if self.hdf5_file is not None:
                 self._write_hdf5_from_result(result)
         return result
+
+    def _count_incomplete(self, counts):
+        """Count integrations emitted with missing packets; log them at most once a minute."""
+        incomplete = counts < self.expected_packets
+        n = int(np.count_nonzero(incomplete))
+        if not n:
+            return
+        self.corr_incomplete_integrations += n
+        self._incomplete_since_log += n
+        now = time.time()
+        if now - self._last_incomplete_log >= 60:
+            self.log.warning(
+                f'{self!r}: {self._incomplete_since_log} correlator integration(s) emitted with '
+                f'missing packets since the last report (lowest count {int(counts[incomplete].min())} '
+                f'of {self.expected_packets})')
+            self._incomplete_since_log = 0
+            self._last_incomplete_log = now
 
     def after_process_udp_packets(self, elapsed):
         """Update correlator timing metrics after UDP assembly."""
@@ -212,6 +233,10 @@ class CorrDataProcessor(UCorrPacketProcessor):
         metrics.add('raw_acq_corr_udp_cookie_packets', value=self.corr_udp_cookie_packets_total)
         metrics.add('raw_acq_corr_udp_packets', value=self.corr_udp_packets_total)
         metrics.add('raw_acq_corr_integrations_emitted', value=self.corr_integrations_emitted)
+        metrics.add('raw_acq_corr_incomplete_integrations', value=self.corr_incomplete_integrations)
+        metrics.add('raw_acq_corr_bad_length_packets', value=self.bad_length_packets)
+        metrics.add('raw_acq_corr_future_packets', value=self.future_packets)
+        metrics.add('raw_acq_corr_foreign_packets', value=self.foreign_corr_packets)
         metrics.add('raw_acq_corr_hdf5_integrations_written', value=self.corr_hdf5_integrations_written)
         # Legacy alias: previously counted HDF5 rows only (misleading when writer failed).
         metrics.add('raw_acq_processed_corr_packets', value=self.corr_hdf5_integrations_written)

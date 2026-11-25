@@ -1,5 +1,6 @@
 """UCORR UDP packet processor."""
 
+import logging
 import math
 import warnings
 from typing import Optional
@@ -8,6 +9,8 @@ import numpy as np
 
 from .packet_processor_base import PacketProcessorBase
 from .state import State
+
+logger = logging.getLogger(__name__)
 
 class UCorrPacketProcessor(PacketProcessorBase):
     """
@@ -55,6 +58,9 @@ class UCorrPacketProcessor(PacketProcessorBase):
         self.NCLK = None
         self.CORR_ID = np.uint16(0)
         self.foreign_corr_packets = 0  # packets dropped because their correlator field is not this board's
+        self.bad_length_packets = 0  # cookie packets dropped because they are not one UCORR packet long
+        self.future_packets = 0  # packets dropped because their integration is too far ahead
+        self._future_streak = 0  # consecutive too-far-ahead packets with nothing inside the window
         self.bin_map = None
         self.prod_map = None
         self.firmware_integ_period = None
@@ -202,9 +208,23 @@ class UCorrPacketProcessor(PacketProcessorBase):
 
     def filter_packets(self, n: int) -> Optional[np.ndarray]:
         """Decode UCORR headers; leave integration index in ``pkt_ts``; return row indices."""
-        # Cookie filter — UCORR packets only. Header layout is fixed so no packet-size check needed.
+        # Cookie filter — UCORR packets only.
         bix_mask = self.bix_mask[:n]
         np.equal(self.buf_cookie[:n], self.CORR_PACKET_COOKIE, out=bix_mask)
+
+        # Length filter: a UCORR packet is exactly one header plus NCMAC products. A datagram that
+        # starts with the cookie but has another length (e.g. mis-framed by the FPGA's outgoing UDP
+        # path) would decode to a garbage timestamp, so it is not trusted.
+        len_ok = self.tmp_mask[:n]
+        np.equal(self.pr.pkt_len[:n], self.packet_dtype.itemsize, out=len_ok)
+        n_bad_length = int(np.count_nonzero(bix_mask)) - int(np.count_nonzero(bix_mask & len_ok))
+        if n_bad_length:
+            if not self.bad_length_packets:
+                warnings.warn(
+                    f"UCorrPacketProcessor: dropping packets that start with the correlator cookie "
+                    f"but are not {self.packet_dtype.itemsize} bytes long.")
+            self.bad_length_packets += n_bad_length
+            np.bitwise_and(bix_mask, len_ok, out=bix_mask)
 
         # Decode header fields. stream_id top 5 bits = corr id, low 11 bits = bin index, flags hi nibble = bin_set.
         np.right_shift(self.buf_stream_id[:n], 11, out=self.pkt_corr[:n], where=bix_mask)
@@ -236,11 +256,62 @@ class UCorrPacketProcessor(PacketProcessorBase):
         np.greater(self.pkt_ts[:n], self._last_emitted_ts, out=tmp_mask, where=bix_mask)
         np.bitwise_and(bix_mask, tmp_mask, out=bix_mask)
 
+        if self._last_emitted_ts:
+            self._reject_future_packets(n)
+
         return np.flatnonzero(bix_mask)
 
+    def _reject_future_packets(self, n: int) -> None:
+        """Drop packets whose integration is more than ``max_timestamps`` past the last emitted one.
+
+        A stray packet with a far-future timestamp holds one of the ``max_timestamps`` assembly
+        rows until real time reaches it. With enough of them every real row is emitted after its
+        first firmware integration and the rest of it is dropped (crate 012, 2026-11-24: 1/128 of
+        the data for 18 h). A real forward jump (data lost for longer than the window) is told
+        apart by its volume: once a full firmware integration (``NPROD_PER_ARRAY`` packets) has
+        arrived beyond the window with nothing inside it, the window moves to it.
+        """
+        bix_mask = self.bix_mask[:n]
+        limit = self._last_emitted_ts + np.uint64(self.max_timestamps)
+        future = self.tmp_mask[:n]
+        np.greater(self.pkt_ts[:n], limit, out=future, where=bix_mask)
+        np.bitwise_and(future, bix_mask, out=future)
+        n_future = int(np.count_nonzero(future))
+
+        if n_future and n_future == int(np.count_nonzero(bix_mask)):
+            self._future_streak += n_future
+            if self._future_streak >= self.NPROD_PER_ARRAY:
+                new_start = self.pkt_ts[:n][future].min()
+                logger.warning(
+                    f"UCorrPacketProcessor: correlator data jumped from integration "
+                    f"{int(self._last_emitted_ts)} to {int(new_start)}; following it.")
+                self._last_emitted_ts = new_start - np.uint64(1)
+                self._future_streak = 0
+                return
+        elif n_future < int(np.count_nonzero(bix_mask)):
+            self._future_streak = 0  # packets inside the window: the stream is where we expect
+
+        if n_future:
+            if not self.future_packets:
+                warnings.warn(
+                    f"UCorrPacketProcessor: dropping correlator packets more than "
+                    f"{self.max_timestamps} integrations ahead of the last emitted one.")
+            self.future_packets += n_future
+            np.logical_and(bix_mask, np.logical_not(future), out=bix_mask)
+
+        # Rows held from before the first emitted integration can be strays too: drop those
+        # beyond the window (they are the last held rows, since ts_array is sorted).
+        if self.carry_len:
+            held = self.ts_array[self.n_ts - self.carry_len:self.n_ts]
+            k = int(np.count_nonzero(held > limit))
+            if k:
+                self.future_packets += int(self.raw_data_count[self.n_ts - k:self.n_ts].sum())
+                self.n_ts -= k
+                self.carry_len -= k
+
     def on_ts_overflow(self, dropped: int) -> None:
-        """Warn when integration keys are dropped because the buffer is full."""
-        warnings.warn(f"UCorrPacketProcessor: {dropped} feel out of the buffer.")
+        """Log when integration keys are dropped because the buffer is full."""
+        logger.warning(f"UCorrPacketProcessor: {dropped} integration(s) fell out of the buffer.")
 
     def init_dest_rows(self, n_ts, cix, carry_tix):
         """Relocate carryover rows to their new rows and zero the rest.
@@ -373,4 +444,5 @@ class UCorrPacketProcessor(PacketProcessorBase):
         self.carry_len = 0
         self.n_out = 0
         self._last_emitted_ts = np.uint64(0)
+        self._future_streak = 0
         self.overrun = 0

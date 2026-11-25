@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -40,6 +42,9 @@ def _filter_ready_processor(corr_fields, corr_id, ncorrs=2, cookies=None):
     processor.CORR_ID = np.uint16(corr_id)
     processor.NCORRS = ncorrs
     processor.foreign_corr_packets = 0
+    processor.bad_length_packets = 0
+    processor.packet_dtype = np.dtype([('packet', np.uint8, 690)])  # one 690-byte UCORR packet
+    processor.pr = SimpleNamespace(pkt_len=np.full(n, 690, dtype=np.uint16))
     processor.bin_mask = np.uint16(0b111_11111111)
     processor.ts_mask = np.uint64(0xFFFFFFFFFFFF)
     processor.integ_period = np.uint64(1)
