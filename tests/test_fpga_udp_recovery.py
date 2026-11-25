@@ -91,3 +91,27 @@ def test_recovery_resynchronizes_the_command_counters(caplog):
     assert (board.mmi.send_counter, board.mmi.recv_counter) == (0x42, 0x41)
     assert board.mmi.error_counter == 0
     assert 'Still obtaining' not in caplog.text
+
+
+def test_status_register_is_logged_before_the_reset(caplog):
+    board = make_board(replies=[socket.timeout(), socket.timeout(), bytes([2, 0x00])])
+
+    with caplog.at_level(logging.WARNING, logger='test_fpga_udp_recovery'):
+        asyncio.run(board.clear_fpga_udp_errors())
+
+    assert 'UDP status before reset: 0x00020003 (tx_overflow=1, rx_overflow=0, link=1, sync=1)' in caplog.text
+    first_reset = caplog.text.index('Resetting FPGA UDP stack')
+    assert caplog.text.index('UDP status before reset') > first_reset  # logged as part of trial 1
+
+
+def test_invalid_sequence_message_includes_the_reply_bytes(caplog):
+    # A reply whose first byte is the correlator data cookie (0xCF) instead of the sequence number.
+    mmi = make_mmi([bytes([0xCF, 0x20, 0x01, 0x02])])
+
+    with caplog.at_level(logging.WARNING):
+        try:
+            mmi._send_command(b"\x41\x06\x00", expected_reply_length=3, retry=1)
+        except IOError:
+            pass
+
+    assert 'first bytes cf200102' in caplog.text

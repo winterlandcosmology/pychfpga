@@ -161,6 +161,8 @@ class chFPGA_UDP:
                 self.logger.warning(f'{self!r}: Resetting FPGA UDP stack (trial #{trial}/{max_trials})')
 
                 if not no_reset:
+                    if trial == 1:
+                        await self.log_udp_status_before_reset()
                     await self.mb.reset_sfp()
                     await asyncio.sleep(0.1)
                     await self.reset_fpga_udp_stack()
@@ -191,6 +193,21 @@ class chFPGA_UDP:
                     self.logger.debug(f'{self!r}: Finished to attempt clearing FPGA UDP errors.')
             else:
                 break
+
+    async def log_udp_status_before_reset(self):
+        """Log the UDP stack status register before a reset clears its sticky error bits.
+
+        Read over the ARM SPI path, which works while the UDP link is failing. Bits 17/16 are the
+        sticky TX/RX FIFO overflow flags (gpio.vhd), cleared by the UDP stack reset.
+        """
+        try:
+            val = await self.mb.fpga_core_reg_spi_read_async(self._SFP_STATUS_ADDR)
+        except Exception as e:  # diagnostics must never block the recovery
+            self.logger.warning(f'{self!r}: Could not read the UDP status before the reset: {e!r}')
+            return
+        self.logger.warning(
+            f'{self!r}: UDP status before reset: 0x{val:08x} (tx_overflow={(val >> 17) & 1}, '
+            f'rx_overflow={(val >> 16) & 1}, link={val & 1}, sync={(val >> 1) & 1})')
 
     async def reset_fpga_udp_stack(self):
         """Reset the FPGA UDP stack via ARM–FPGA SPI (before UDP may be usable)."""

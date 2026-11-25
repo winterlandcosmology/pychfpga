@@ -303,7 +303,7 @@ class FPGAMmi(BSB_MMI):
                             f'Got 0x{seq:02x}, expected '
                             f'0x{self.send_counter & 255:02x} '
                             f'(received {len(data)} bytes, expected '
-                            f'{expected_reply_length + 1}).'
+                            f'{expected_reply_length + 1}, first bytes {bytes(data[:16]).hex()}).'
                         )
                         continue
                     if len(data) != expected_reply_length + 1:
