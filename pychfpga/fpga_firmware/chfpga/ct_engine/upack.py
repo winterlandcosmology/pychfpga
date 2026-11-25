@@ -84,8 +84,8 @@ class UPACK(MMI):
 
         """
 
-        first_bin = 300*8192//1600 # 1536
-        last_bin= 1500*8192//1600  # Last bin is excluded
+        first_bin = 150*8192//1600 # 768
+        last_bin= 1600*8192//1600  # Last bin is excluded
         number_of_bins = last_bin - first_bin
         number_of_packets = 128
         bins_per_packet = number_of_bins // number_of_packets
