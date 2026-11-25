@@ -1677,6 +1677,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
 
         w2 = await self.fpga_core_reg_read_async(self._IRIGB_SAMPLE2_ADDR)
         await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, (w2 & 0x3FFFFFFF) | ((src & 0b011) << 30))
+        self._irigb_source_bits = (src & 0b011) << 30  # used by capture_frame_time_async
         w2 = await self.fpga_core_reg_read_async(self._IRIGB_TARGET0_ADDR)
         await self.fpga_core_reg_write_async(self._IRIGB_TARGET0_ADDR, (w2 & 0x7FFFFFFF) | ((src >> 2) << 31))
 
@@ -2056,7 +2057,7 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         t1 = await self.fpga_core_reg_read_async(self._IRIGB_TARGET1_ADDR)
         return bool(t1 & (1 << 31))
 
-    async def capture_frame_time_async(self, trig=True, format='nano', timeout=5):
+    async def capture_frame_time_async(self, trig=True, format='nano', timeout=0.5):
         """ Captures the IRIG-B of the first sample of the next frame coming
         out of the ADC data acquisition module.
 
@@ -2076,17 +2077,32 @@ class chFPGA(chFPGA_UDP, FPGAFirmware):
         is taken and the time the packet comes out of the data acquistion
         module (due to initial dropping of a few frames and the FIFO filling-
         delay).
+
+        NOTE4: The firmware occasionally misses the capture trigger, so on a timeout the capture
+        is re-armed once before giving up.
         """
         if trig:
-            w2 = await self.fpga_core_reg_read_async(self._IRIGB_SAMPLE2_ADDR)
-            await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, w2 & ~(1 << 28))
-            await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, w2 | (1 << 28))
-            t0 = time.time()
-            while not (await self.fpga_core_reg_read_async(self._IRIGB_TARGET1_ADDR)) & (1 << 30):
-                if time.time() - t0 > timeout:
-                    raise RuntimeError(
-                        'Timeout while waiting for a Frame. Is data flowing '
-                        'out of the ADC data acquisition module?')
+            # Register 12: bits 31:30 IRIG-B source, 29 refclk trigger, 28 frame trigger; the rest
+            # is read-only. Write it from the source set by set_irigb_source_async instead of a
+            # read-modify-write: a bad reply read during a control-link outage would otherwise be
+            # written back and change the IRIG-B source.
+            base = getattr(self, '_irigb_source_bits', None)
+            if base is None:
+                base = (await self.fpga_core_reg_read_async(self._IRIGB_SAMPLE2_ADDR)) & 0xE0000000
+            for attempt in (1, 2):
+                await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, base)
+                await self.fpga_core_reg_write_async(self._IRIGB_SAMPLE2_ADDR, base | (1 << 28))
+                t0 = time.time()
+                while not (await self.fpga_core_reg_read_async(self._IRIGB_TARGET1_ADDR)) & (1 << 30):
+                    if time.time() - t0 > timeout:
+                        break
+                    await asyncio.sleep(0.01)
+                else:
+                    break  # capture done
+            else:
+                raise RuntimeError(
+                    f'Timeout while waiting for a Frame ({timeout} s, re-armed once). Is data '
+                    'flowing out of the ADC data acquisition module?')
         event_number = await self.fpga_core_reg_read_async(self._IRIGB_EVENT_CTR_ADDR)
         event_number += (await self.fpga_core_reg_read_async(self._IRIGB_EVENT_CTR_ADDR2)) << 32
 

@@ -3035,8 +3035,8 @@ class chFPGAArrayMethods(ArrayMethods):
                     metrics.add('fpga_sync_time_integer_second_offset',
                                 (sync_timestamps[i].nano % 1000000000) - 1000000000,
                                 crate=crate, slot=slot)
-                except RuntimeError:
-                    self.logger.error(f'{mb!r}: Timeout while capturing frame time')
+                except RuntimeError as e:
+                    self.logger.error(f'{mb!r}: Frame time capture failed: {e}')
 
         return metrics
 
